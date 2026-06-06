@@ -1,10 +1,11 @@
 # ============================================================
 # 📂 api/company/urls.py
-# 🧠 PrimeyAcc | Company Workspace API URLs V1.8
+# 🧠 PrimeyAcc | Company Workspace API URLs V1.9
 # ------------------------------------------------------------
 # ✅ Central routes for company workspace APIs
 # ✅ Current company endpoint /api/company/me/
 # ✅ Company profile endpoint /api/company/profile/
+# ✅ Company setup endpoint /api/company/setup/
 # ✅ Company permissions endpoint /api/company/permissions/
 # ✅ Company settings endpoint /api/company/settings/
 # ✅ Company branches endpoint /api/company/branches/
@@ -35,6 +36,7 @@ app_name = "company"
 urlpatterns = [
     path("me/", company_me, name="me"),
     path("profile/", company_profile, name="profile"),
+    path("setup/", include("api.company.setup.urls")),
     path("permissions/", include("api.company.permissions.urls")),
     path("settings/", include("api.company.settings.urls")),
     path("branches/", include("api.company.branches.urls")),

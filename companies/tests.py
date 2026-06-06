@@ -1,15 +1,17 @@
 # ============================================================
 # 📂 companies/tests.py
-# 🧠 PrimeyAcc | Companies Tests V1.3
+# 🧠 PrimeyAcc | Companies Tests V1.4
 # ------------------------------------------------------------
 # ✅ CompanySettings tests
 # ✅ Company settings API tests
 # ✅ Company permissions snapshot API tests
+# ✅ Company setup/readiness API tests
 # ✅ Company users/memberships API tests
 # ✅ Branch tenant-isolation tests
 # ✅ /api/company/me/ snapshot tests
 # ✅ /api/company/profile/ snapshot tests
 # ✅ /api/company/permissions/ snapshot tests
+# ✅ /api/company/setup/ readiness snapshot tests
 # ✅ /api/company/settings/ detail/update tests
 # ✅ /api/company/users/ list/create/detail/status tests
 # ✅ /api/company/branches/ list/detail/create tests
@@ -23,6 +25,7 @@
 # - مستخدمو الشركة لا يظهرون إلا لأعضاء نفس الشركة
 # - فروع الشركة لا تظهر إلا لأعضاء نفس الشركة
 # - الصلاحيات والأدوار مصدرها الباكند
+# - تهيئة الشركة وجاهزيتها التشغيلية مصدرها الباكند
 # - الباكند هو مصدر الحقيقة للصلاحيات وعزل الشركات
 # ============================================================
 
@@ -176,6 +179,7 @@ class CompanyWorkspacePhase3Tests(TestCase):
         endpoints = [
             "/api/company/me/",
             "/api/company/profile/",
+            "/api/company/setup/",
             "/api/company/permissions/",
             "/api/company/settings/",
             "/api/company/users/",
@@ -263,6 +267,56 @@ class CompanyWorkspacePhase3Tests(TestCase):
         self.assertIn("ADMIN", data["role_permissions"])
         self.assertIn("company.branches.view", data["role_permissions"]["ADMIN"])
         self.assertIn("company.users.update", data["role_permissions"]["ADMIN"])
+
+    def test_company_setup_overview_returns_readiness_snapshot(self) -> None:
+        """
+        /api/company/setup/ should return setup checklist,
+        readiness score, company summary, settings, branch summary,
+        users summary, and current permissions for the current company only.
+        """
+
+        self.client.force_login(self.user)
+
+        response = self.client.get("/api/company/setup/")
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        data = payload["data"]
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(data["company"]["id"], self.company.id)
+        self.assertEqual(data["company_id"], self.company.id)
+        self.assertEqual(data["membership_id"], self.membership.id)
+        self.assertEqual(data["membership"]["id"], self.membership.id)
+        self.assertEqual(data["current_role"], CompanyRole.OWNER)
+        self.assertIn("*", data["current_permissions"])
+
+        self.assertIsNotNone(data["settings"])
+        self.assertIsNotNone(data["operational_settings"])
+        self.assertEqual(data["settings"]["company_id"], self.company.id)
+
+        self.assertIsNotNone(data["default_branch"])
+        self.assertEqual(data["default_branch"]["id"], self.default_branch.id)
+        self.assertEqual(data["default_branch"]["company_id"], self.company.id)
+
+        self.assertEqual(data["branches_summary"]["total"], 1)
+        self.assertEqual(data["branches_summary"]["active"], 1)
+        self.assertTrue(data["branches_summary"]["default_exists"])
+
+        self.assertEqual(data["users_summary"]["total_memberships"], 2)
+        self.assertEqual(data["users_summary"]["active_memberships"], 2)
+        self.assertEqual(data["users_summary"]["owners"], 1)
+
+        self.assertIn("checklist", data)
+        self.assertIn("readiness", data)
+        self.assertGreaterEqual(data["readiness"]["total_checks"], 1)
+        self.assertIn("is_ready", data["readiness"])
+        self.assertIn("missing_required", data["readiness"])
+
+        checklist_codes = {item["code"] for item in data["checklist"]}
+        self.assertIn("company_name", checklist_codes)
+        self.assertIn("company_code", checklist_codes)
+        self.assertIn("default_branch", checklist_codes)
 
     def test_company_settings_endpoint_returns_current_company_settings(self) -> None:
         """
