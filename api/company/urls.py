@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/urls.py
-# 🧠 PrimeyAcc | Company Workspace API URLs V1.9
+# 🧠 PrimeyAcc | Company Workspace API URLs V2.0
 # ------------------------------------------------------------
 # ✅ Central routes for company workspace APIs
 # ✅ Current company endpoint /api/company/me/
@@ -10,6 +10,7 @@
 # ✅ Company settings endpoint /api/company/settings/
 # ✅ Company branches endpoint /api/company/branches/
 # ✅ Company users endpoint /api/company/users/
+# ✅ Business parties endpoint /api/company/parties/
 # ✅ Company context comes from active CompanyMembership
 # ✅ Views protected by central api/permissions.py guards
 # ------------------------------------------------------------
@@ -41,4 +42,5 @@ urlpatterns = [
     path("settings/", include("api.company.settings.urls")),
     path("branches/", include("api.company.branches.urls")),
     path("users/", include("api.company.users.urls")),
+    path("parties/", include("api.company.parties.urls")),
 ]

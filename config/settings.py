@@ -1,15 +1,24 @@
-"""
-Django settings for PrimeyAcc project.
+# ============================================================
+# 📂 config/settings.py
+# 🧠 PrimeyAcc | Django Project Settings V1.1
+# ------------------------------------------------------------
+# ✅ Django REST Framework configuration
+# ✅ CORS / CSRF configuration for Next.js frontend
+# ✅ dotenv environment loading
+# ✅ SQLite development database with MySQL readiness
+# ✅ PrimeyAcc core apps registration
+# ✅ Phase 4 parties app registration
+# ✅ Saudi Arabia timezone and Arabic language defaults
+# ------------------------------------------------------------
+# القاعدة المعتمدة:
+# - هذا الملف يجهز إعدادات المشروع العامة فقط
+# - لا نضع منطق business داخل settings.py
+# - كل تطبيق PrimeyAcc يضاف داخل PRIMEYACC_APPS
+# - /company يعتمد على CompanyMembership وليس company_id من الفرونت
+# - المرحلة 4 تضيف parties كأساس للعملاء والموردين والأطراف التجارية
+# ============================================================
 
-PrimeyAcc is a multi-company SaaS business management platform.
-This settings file is prepared for Phase 0 foundation:
-- Django REST Framework
-- CORS
-- dotenv
-- PrimeyAcc core apps
-- Safe development defaults
-- Ready for later MariaDB configuration
-"""
+from __future__ import annotations
 
 import os
 from pathlib import Path
@@ -74,6 +83,7 @@ PRIMEYACC_APPS = [
     "permissions",
     "settings_center",
     "audit_logs",
+    "parties",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + PRIMEYACC_APPS
@@ -129,8 +139,8 @@ TEMPLATES = [
 # ---------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------
-# Phase 0 default: SQLite for quick bootstrapping.
-# Later we will switch to MariaDB using .env without changing app logic.
+# Development default: SQLite for quick bootstrapping.
+# Production-ready switch: set DATABASE_ENGINE=mysql in .env.
 
 DATABASE_ENGINE = os.getenv("DATABASE_ENGINE", "sqlite").lower()
 
