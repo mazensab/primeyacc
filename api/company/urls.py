@@ -1,11 +1,12 @@
 # ============================================================
 # 📂 api/company/urls.py
-# 🧠 PrimeyAcc | Company Workspace API URLs V1.3
+# 🧠 PrimeyAcc | Company Workspace API URLs V1.5
 # ------------------------------------------------------------
 # ✅ Central routes for company workspace APIs
 # ✅ Current company endpoint /api/company/me/
 # ✅ Company profile endpoint /api/company/profile/
-# ✅ Reserved for tenant-isolated company APIs
+# ✅ Company branches endpoint /api/company/branches/
+# ✅ Ready for tenant-isolated company settings APIs
 # ✅ Company context comes from active CompanyMembership
 # ✅ Views protected by central api/permissions.py guards
 # ------------------------------------------------------------
@@ -20,7 +21,7 @@
 
 from __future__ import annotations
 
-from django.urls import path
+from django.urls import include, path
 
 from .me import company_me
 from .profile import company_profile
@@ -32,4 +33,5 @@ app_name = "company"
 urlpatterns = [
     path("me/", company_me, name="me"),
     path("profile/", company_profile, name="profile"),
+    path("branches/", include("api.company.branches.urls")),
 ]

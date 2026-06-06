@@ -1,37 +1,53 @@
 # ============================================================
 # 📂 api/company/me.py
-# 🧠 PrimeyAcc | Company Current Tenant API V1.0
+# 🧠 PrimeyAcc | Company Current Tenant API V1.1
 # ------------------------------------------------------------
 # ✅ Current company workspace snapshot
 # ✅ Uses active CompanyMembership only
+# ✅ Returns JSON 401 instead of redirecting to /accounts/login/
+# ✅ Returns membership, role, permissions and company profile
+# ✅ Returns CompanySettings snapshot
+# ✅ Returns default branch snapshot
 # ✅ Tenant isolation foundation for /api/company/
 # ✅ Does not trust company_id from frontend as source of truth
-# ✅ Returns membership, role, permissions and company profile
-# ✅ Protected by authenticated company membership
+# ✅ Protected by authenticated active company membership
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
-# - هذا الملف جزء من المرحلة 2: المستخدمون والعضويات والصلاحيات
 # - /api/company لا يفتح إلا بعضوية شركة فعالة
 # - الشركة الحالية تأتي من CompanyMembership وليس من الفرونت
 # - CompanyMembership هو حد العزل الرسمي للشركات
+# - CompanySettings تخص الشركة الحالية فقط
+# - default_branch يرجع كملخص سريع للمساحة
 # - الباكند هو مصدر الحقيقة للصلاحيات وعزل الشركات
 # ============================================================
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.http import require_GET
 
 from accounts.models import CompanyMembership
 from api.permissions import attach_company_context
+from companies.models import Branch, Company, CompanySettings
 
 
 def _datetime_to_string(value: Any) -> str | None:
     """
     توحيد إخراج التاريخ والوقت للواجهة.
+    """
+
+    if not value:
+        return None
+
+    return value.isoformat()
+
+
+def _time_to_string(value: Any) -> str | None:
+    """
+    توحيد إخراج الوقت للواجهة.
     """
 
     if not value:
@@ -48,7 +64,26 @@ def _money_to_string(value: Any) -> str:
     if value is None:
         return "0.00"
 
-    return f"{value:.2f}"
+    try:
+        return f"{Decimal(str(value)):.2f}"
+    except (InvalidOperation, TypeError, ValueError):
+        return "0.00"
+
+
+def _logo_url(company: Company) -> str | None:
+    """
+    يرجع رابط شعار الشركة بشكل آمن.
+    """
+
+    logo = getattr(company, "logo", None)
+
+    if not logo:
+        return None
+
+    try:
+        return logo.url
+    except ValueError:
+        return None
 
 
 def _user_payload(user: Any) -> dict[str, Any]:
@@ -71,7 +106,7 @@ def _user_payload(user: Any) -> dict[str, Any]:
     }
 
 
-def _company_payload(company: Any) -> dict[str, Any]:
+def _company_payload(company: Company) -> dict[str, Any]:
     """
     يرجع بيانات الشركة الحالية المعزولة حسب العضوية.
     """
@@ -103,10 +138,92 @@ def _company_payload(company: Any) -> dict[str, Any]:
         "short_address": getattr(company, "short_address", ""),
         "national_address_line": getattr(company, "national_address_line", ""),
         "address": getattr(company, "address", ""),
+        "logo_url": _logo_url(company),
         "currency_code": getattr(company, "currency_code", "SAR"),
         "vat_percentage": _money_to_string(getattr(company, "vat_percentage", None)),
         "created_at": _datetime_to_string(getattr(company, "created_at", None)),
         "updated_at": _datetime_to_string(getattr(company, "updated_at", None)),
+    }
+
+
+def _settings_payload(settings_obj: CompanySettings | None) -> dict[str, Any] | None:
+    """
+    يرجع إعدادات الشركة التشغيلية.
+    """
+
+    if not settings_obj:
+        return None
+
+    return {
+        "id": settings_obj.id,
+        "company_id": settings_obj.company_id,
+        "default_language": settings_obj.default_language,
+        "timezone_name": settings_obj.timezone_name,
+        "date_format": settings_obj.date_format,
+        "time_format": settings_obj.time_format,
+        "fiscal_year_start_month": settings_obj.fiscal_year_start_month,
+        "fiscal_year_start_day": settings_obj.fiscal_year_start_day,
+        "invoice_prefix": settings_obj.invoice_prefix,
+        "quotation_prefix": settings_obj.quotation_prefix,
+        "purchase_prefix": settings_obj.purchase_prefix,
+        "receipt_prefix": settings_obj.receipt_prefix,
+        "payment_prefix": settings_obj.payment_prefix,
+        "allow_negative_stock": settings_obj.allow_negative_stock,
+        "enable_inventory_tracking": settings_obj.enable_inventory_tracking,
+        "enable_pos": settings_obj.enable_pos,
+        "enable_purchases": settings_obj.enable_purchases,
+        "enable_hr": settings_obj.enable_hr,
+        "enable_vat": settings_obj.enable_vat,
+        "default_vat_percentage": _money_to_string(settings_obj.default_vat_percentage),
+        "require_customer_for_sales": settings_obj.require_customer_for_sales,
+        "require_supplier_for_purchases": settings_obj.require_supplier_for_purchases,
+        "settings_data": settings_obj.settings_data if isinstance(settings_obj.settings_data, dict) else {},
+        "created_at": _datetime_to_string(settings_obj.created_at),
+        "updated_at": _datetime_to_string(settings_obj.updated_at),
+    }
+
+
+def _branch_payload(branch: Branch | None) -> dict[str, Any] | None:
+    """
+    يرجع ملخص الفرع الافتراضي الحالي.
+    """
+
+    if not branch:
+        return None
+
+    return {
+        "id": branch.id,
+        "company_id": branch.company_id,
+        "name": branch.display_name,
+        "display_name": branch.display_name,
+        "name_ar": branch.name_ar,
+        "name_en": branch.name_en,
+        "branch_code": branch.branch_code,
+        "branch_type": branch.branch_type,
+        "status": branch.status,
+        "is_active": branch.is_active,
+        "is_default": branch.is_default,
+        "manager_name": branch.manager_name,
+        "email": branch.email,
+        "phone": branch.phone,
+        "mobile": branch.mobile,
+        "whatsapp_number": branch.whatsapp_number,
+        "country": branch.country,
+        "city": branch.city,
+        "region": branch.region,
+        "district": branch.district,
+        "street_name": branch.street_name,
+        "building_number": branch.building_number,
+        "postal_code": branch.postal_code,
+        "short_address": branch.short_address,
+        "national_address_line": branch.national_address_line,
+        "address": branch.address,
+        "latitude": str(branch.latitude) if branch.latitude is not None else "",
+        "longitude": str(branch.longitude) if branch.longitude is not None else "",
+        "opening_time": _time_to_string(branch.opening_time),
+        "closing_time": _time_to_string(branch.closing_time),
+        "created_at": _datetime_to_string(branch.created_at),
+        "updated_at": _datetime_to_string(branch.updated_at),
     }
 
 
@@ -134,7 +251,51 @@ def _membership_payload(membership: CompanyMembership) -> dict[str, Any]:
     }
 
 
-@login_required
+def _get_or_create_company_settings(company: Company, request: HttpRequest) -> CompanySettings:
+    """
+    يجلب إعدادات الشركة أو ينشئها بقيم افتراضية آمنة.
+    """
+
+    settings_obj, _created = CompanySettings.objects.get_or_create(
+        company=company,
+        defaults={
+            "default_vat_percentage": getattr(company, "vat_percentage", Decimal("15.00")),
+            "created_by": request.user if getattr(request, "user", None) and request.user.is_authenticated else None,
+            "updated_by": request.user if getattr(request, "user", None) and request.user.is_authenticated else None,
+        },
+    )
+
+    return settings_obj
+
+
+def _get_default_branch(company: Company) -> Branch | None:
+    """
+    يجلب الفرع الافتراضي للشركة الحالية فقط.
+    """
+
+    branch = (
+        Branch.objects.filter(
+            company=company,
+            is_default=True,
+            is_active=True,
+        )
+        .order_by("id")
+        .first()
+    )
+
+    if branch:
+        return branch
+
+    return (
+        Branch.objects.filter(
+            company=company,
+            is_active=True,
+        )
+        .order_by("id")
+        .first()
+    )
+
+
 @require_GET
 def company_me(request: HttpRequest) -> JsonResponse:
     """
@@ -142,6 +303,16 @@ def company_me(request: HttpRequest) -> JsonResponse:
 
     يرجع الشركة الحالية للمستخدم من عضويته الفعالة فقط.
     """
+
+    if not request.user.is_authenticated:
+        return JsonResponse(
+            {
+                "ok": False,
+                "message": "يجب تسجيل الدخول أولًا.",
+                "code": "AUTHENTICATION_REQUIRED",
+            },
+            status=401,
+        )
 
     membership = attach_company_context(request)
 
@@ -167,6 +338,9 @@ def company_me(request: HttpRequest) -> JsonResponse:
             status=403,
         )
 
+    settings_obj = _get_or_create_company_settings(company, request)
+    default_branch = _get_default_branch(company)
+
     return JsonResponse(
         {
             "ok": True,
@@ -174,6 +348,9 @@ def company_me(request: HttpRequest) -> JsonResponse:
             "data": {
                 "user": _user_payload(request.user),
                 "company": _company_payload(company),
+                "settings": _settings_payload(settings_obj),
+                "operational_settings": _settings_payload(settings_obj),
+                "default_branch": _branch_payload(default_branch),
                 "membership": _membership_payload(membership),
                 "company_id": company.id,
                 "membership_id": membership.id,
