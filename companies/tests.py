@@ -1,13 +1,15 @@
 # ============================================================
 # 📂 companies/tests.py
-# 🧠 PrimeyAcc | Companies Tests V1.1
+# 🧠 PrimeyAcc | Companies Tests V1.2
 # ------------------------------------------------------------
 # ✅ CompanySettings tests
 # ✅ Company settings API tests
+# ✅ Company users/memberships API tests
 # ✅ Branch tenant-isolation tests
 # ✅ /api/company/me/ snapshot tests
 # ✅ /api/company/profile/ snapshot tests
 # ✅ /api/company/settings/ detail/update tests
+# ✅ /api/company/users/ list/create/detail/status tests
 # ✅ /api/company/branches/ list/detail/create tests
 # ✅ Ensures unauthenticated APIs return JSON 401
 # ------------------------------------------------------------
@@ -16,6 +18,7 @@
 # - CompanyMembership = حد الوصول الرسمي لمساحة /company
 # - /api/company لا يقبل company_id من الواجهة كمصدر ثقة
 # - CompanySettings تخص الشركة الحالية فقط
+# - مستخدمو الشركة لا يظهرون إلا لأعضاء نفس الشركة
 # - فروع الشركة لا تظهر إلا لأعضاء نفس الشركة
 # - الباكند هو مصدر الحقيقة للصلاحيات وعزل الشركات
 # ============================================================
@@ -36,7 +39,7 @@ User = get_user_model()
 
 class CompanyWorkspacePhase3Tests(TestCase):
     """
-    Tests for Phase 3 company settings and branches foundation.
+    Tests for Phase 3 company settings, branches, and users foundation.
     """
 
     def setUp(self) -> None:
@@ -110,6 +113,32 @@ class CompanyWorkspacePhase3Tests(TestCase):
             job_title="Owner",
         )
 
+        self.company_employee_user = User.objects.create_user(
+            username="company_employee",
+            email="employee@example.com",
+            password="StrongPass123!",
+            first_name="Company",
+            last_name="Employee",
+        )
+
+        self.company_employee_profile = UserProfile.objects.create(
+            user=self.company_employee_user,
+            display_name="Company Employee",
+            default_company=self.company,
+        )
+
+        self.company_employee_membership = CompanyMembership.objects.create(
+            user=self.company_employee_user,
+            company=self.company,
+            role=CompanyRole.EMPLOYEE,
+            status=MembershipStatus.ACTIVE,
+            is_primary=False,
+            job_title="Employee",
+            department="Operations",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
         self.default_branch = Branch.objects.create(
             company=self.company,
             name="Main Branch",
@@ -145,6 +174,8 @@ class CompanyWorkspacePhase3Tests(TestCase):
             "/api/company/me/",
             "/api/company/profile/",
             "/api/company/settings/",
+            "/api/company/users/",
+            f"/api/company/users/{self.membership.id}/",
             "/api/company/branches/",
             f"/api/company/branches/{self.default_branch.id}/",
         ]
@@ -285,6 +316,221 @@ class CompanyWorkspacePhase3Tests(TestCase):
         self.assertEqual(settings_obj.default_language, "en")
         self.assertEqual(settings_obj.invoice_prefix, "SALES")
         self.assertEqual(settings_obj.updated_by_id, self.user.id)
+
+    def test_company_users_list_is_scoped_to_current_company(self) -> None:
+        """
+        Company users list should show only memberships for the current company.
+        """
+
+        self.client.force_login(self.user)
+
+        response = self.client.get("/api/company/users/")
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        results = payload["data"]["results"]
+        result_ids = {item["id"] for item in results}
+
+        self.assertIn(self.membership.id, result_ids)
+        self.assertIn(self.company_employee_membership.id, result_ids)
+        self.assertNotIn(self.other_membership.id, result_ids)
+        self.assertEqual(payload["data"]["company_id"], self.company.id)
+
+    def test_company_user_detail_blocks_cross_company_access(self) -> None:
+        """
+        A user must not access a membership belonging to another company.
+        """
+
+        self.client.force_login(self.user)
+
+        response = self.client.get(f"/api/company/users/{self.other_membership.id}/")
+        self.assertEqual(response.status_code, 404)
+
+        payload = response.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["code"], "COMPANY_MEMBERSHIP_NOT_FOUND")
+
+    def test_owner_can_create_company_user_inside_current_company(self) -> None:
+        """
+        Owner can create a user membership only inside current membership company.
+        company_id from frontend is ignored by design.
+        """
+
+        self.client.force_login(self.user)
+
+        payload = {
+            "company_id": self.other_company.id,
+            "username": "new_company_user",
+            "email": "new-company-user@example.com",
+            "first_name": "New",
+            "last_name": "User",
+            "display_name": "New Company User",
+            "phone": "0500000001",
+            "role": "SALES",
+            "status": "ACTIVE",
+            "job_title": "Sales Representative",
+            "department": "Sales",
+        }
+
+        response = self.client.post(
+            "/api/company/users/create/",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+
+        response_payload = response.json()
+        membership_data = response_payload["data"]["membership"]
+
+        self.assertTrue(response_payload["ok"])
+        self.assertTrue(response_payload["data"]["user_created"])
+        self.assertEqual(membership_data["company_id"], self.company.id)
+        self.assertEqual(membership_data["role"], "SALES")
+        self.assertEqual(membership_data["user"]["email"], "new-company-user@example.com")
+
+        created_user = User.objects.get(username="new_company_user")
+        created_membership = CompanyMembership.objects.get(
+            user=created_user,
+            company=self.company,
+        )
+
+        self.assertEqual(created_membership.company_id, self.company.id)
+        self.assertNotEqual(created_membership.company_id, self.other_company.id)
+
+    def test_duplicate_company_user_membership_is_rejected(self) -> None:
+        """
+        The same user cannot be linked twice to the same company.
+        """
+
+        self.client.force_login(self.user)
+
+        payload = {
+            "username": self.company_employee_user.username,
+            "email": self.company_employee_user.email,
+            "role": "EMPLOYEE",
+        }
+
+        response = self.client.post(
+            "/api/company/users/create/",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+        response_payload = response.json()
+        self.assertFalse(response_payload["ok"])
+        self.assertIn("membership_id", response_payload["errors"])
+
+    def test_owner_can_update_company_user_membership(self) -> None:
+        """
+        Owner can update membership/profile data for a user in the same company.
+        """
+
+        self.client.force_login(self.user)
+
+        payload = {
+            "first_name": "Updated",
+            "last_name": "Employee",
+            "display_name": "Updated Employee",
+            "phone": "0500000099",
+            "role": "MANAGER",
+            "job_title": "Operations Manager",
+            "department": "Operations",
+        }
+
+        response = self.client.patch(
+            f"/api/company/users/{self.company_employee_membership.id}/",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        response_payload = response.json()
+        membership_data = response_payload["data"]["membership"]
+
+        self.assertTrue(response_payload["ok"])
+        self.assertEqual(membership_data["role"], "MANAGER")
+        self.assertEqual(membership_data["job_title"], "Operations Manager")
+        self.assertEqual(membership_data["user"]["first_name"], "Updated")
+        self.assertEqual(membership_data["profile"]["display_name"], "Updated Employee")
+
+        self.company_employee_membership.refresh_from_db()
+        self.company_employee_user.refresh_from_db()
+        self.company_employee_profile.refresh_from_db()
+
+        self.assertEqual(self.company_employee_membership.role, CompanyRole.MANAGER)
+        self.assertEqual(self.company_employee_user.first_name, "Updated")
+        self.assertEqual(self.company_employee_profile.display_name, "Updated Employee")
+
+    def test_user_cannot_change_own_role_or_status(self) -> None:
+        """
+        A current user cannot change their own role/status/is_primary from detail endpoint.
+        """
+
+        self.client.force_login(self.user)
+
+        payload = {
+            "role": "ADMIN",
+            "status": "INACTIVE",
+            "is_primary": False,
+        }
+
+        response = self.client.patch(
+            f"/api/company/users/{self.membership.id}/",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+        response_payload = response.json()
+        self.assertFalse(response_payload["ok"])
+        self.assertIn("membership", response_payload["errors"])
+
+    def test_owner_can_suspend_activate_and_deactivate_company_user(self) -> None:
+        """
+        Owner can safely suspend, activate, and deactivate another membership.
+        """
+
+        self.client.force_login(self.user)
+
+        suspend_response = self.client.post(
+            f"/api/company/users/{self.company_employee_membership.id}/suspend/",
+            data=json.dumps({"reason": "Testing suspension"}),
+            content_type="application/json",
+        )
+        self.assertEqual(suspend_response.status_code, 200)
+
+        self.company_employee_membership.refresh_from_db()
+        self.assertEqual(self.company_employee_membership.status, MembershipStatus.SUSPENDED)
+        self.assertEqual(
+            self.company_employee_membership.suspended_reason,
+            "Testing suspension",
+        )
+
+        activate_response = self.client.post(
+            f"/api/company/users/{self.company_employee_membership.id}/activate/",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(activate_response.status_code, 200)
+
+        self.company_employee_membership.refresh_from_db()
+        self.assertEqual(self.company_employee_membership.status, MembershipStatus.ACTIVE)
+
+        deactivate_response = self.client.post(
+            f"/api/company/users/{self.company_employee_membership.id}/deactivate/",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(deactivate_response.status_code, 200)
+
+        self.company_employee_membership.refresh_from_db()
+        self.assertEqual(self.company_employee_membership.status, MembershipStatus.INACTIVE)
+        self.assertFalse(self.company_employee_membership.is_primary)
 
     def test_branches_list_is_scoped_to_current_company(self) -> None:
         """
