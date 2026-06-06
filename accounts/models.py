@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 accounts/models.py
-# 🧠 PrimeyAcc | Accounts Models V1.2
+# 🧠 PrimeyAcc | Accounts Models V1.3
 # ------------------------------------------------------------
 # ✅ User Profile
 # ✅ Workspace Type Foundation
@@ -10,6 +10,8 @@
 # ✅ Multi-company User Support
 # ✅ Fixed Company Access Resolver
 # ✅ Role-based Permissions Foundation
+# ✅ Company Settings Permissions
+# ✅ Company Branches Permissions
 # ✅ Safe Default Company Membership Resolver
 # ✅ Audit Fields
 # ------------------------------------------------------------
@@ -76,7 +78,7 @@ class MembershipStatus(models.TextChoices):
 # Permissions Foundation
 # ------------------------------------------------------------
 # ملاحظة:
-# هذه الصلاحيات ثابتة الآن لتثبيت المرحلة 2 بدون تعقيد زائد.
+# هذه الصلاحيات ثابتة الآن لتثبيت المرحلة 2/3 بدون تعقيد زائد.
 # لاحقًا يمكن نقلها إلى جداول Role / Permission إذا احتجنا إدارة مرنة من الواجهة.
 # ============================================================
 
@@ -134,6 +136,9 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.users.update",
         "company.settings.view",
         "company.settings.update",
+        "company.branches.view",
+        "company.branches.create",
+        "company.branches.update",
         "company.products.view",
         "company.products.create",
         "company.products.update",
@@ -158,6 +163,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
     ],
     CompanyRole.MANAGER: [
         "company.dashboard.view",
+        "company.settings.view",
+        "company.branches.view",
         "company.products.view",
         "company.customers.view",
         "company.suppliers.view",
@@ -170,6 +177,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
     ],
     CompanyRole.ACCOUNTANT: [
         "company.dashboard.view",
+        "company.settings.view",
+        "company.branches.view",
         "company.customers.view",
         "company.suppliers.view",
         "company.sales.view",
@@ -181,6 +190,7 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
     ],
     CompanyRole.CASHIER: [
         "company.dashboard.view",
+        "company.branches.view",
         "company.products.view",
         "company.customers.view",
         "company.customers.create",
@@ -189,6 +199,7 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
     ],
     CompanyRole.SALES: [
         "company.dashboard.view",
+        "company.branches.view",
         "company.products.view",
         "company.customers.view",
         "company.customers.create",
@@ -197,6 +208,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
     ],
     CompanyRole.INVENTORY: [
         "company.dashboard.view",
+        "company.settings.view",
+        "company.branches.view",
         "company.products.view",
         "company.products.create",
         "company.products.update",
@@ -208,6 +221,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
     ],
     CompanyRole.HR: [
         "company.dashboard.view",
+        "company.settings.view",
+        "company.branches.view",
         "company.users.view",
         "company.users.create",
         "company.users.update",
@@ -221,6 +236,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
     ],
     CompanyRole.VIEWER: [
         "company.dashboard.view",
+        "company.settings.view",
+        "company.branches.view",
         "company.products.view",
         "company.customers.view",
         "company.suppliers.view",
@@ -432,7 +449,7 @@ class UserProfile(models.Model):
             .order_by("-is_primary", "-created_at")
         )
 
-    def get_default_company_membership(self) -> CompanyMembership | None:
+    def get_default_company_membership(self) -> "CompanyMembership | None":
         """
         Resolve the safest default company membership for whoami.
 
