@@ -1,11 +1,13 @@
 # ============================================================
 # 📂 companies/tests.py
-# 🧠 PrimeyAcc | Companies Tests V1.0
+# 🧠 PrimeyAcc | Companies Tests V1.1
 # ------------------------------------------------------------
 # ✅ CompanySettings tests
+# ✅ Company settings API tests
 # ✅ Branch tenant-isolation tests
 # ✅ /api/company/me/ snapshot tests
 # ✅ /api/company/profile/ snapshot tests
+# ✅ /api/company/settings/ detail/update tests
 # ✅ /api/company/branches/ list/detail/create tests
 # ✅ Ensures unauthenticated APIs return JSON 401
 # ------------------------------------------------------------
@@ -13,6 +15,7 @@
 # - Company = حدود العزل الأساسية للنظام
 # - CompanyMembership = حد الوصول الرسمي لمساحة /company
 # - /api/company لا يقبل company_id من الواجهة كمصدر ثقة
+# - CompanySettings تخص الشركة الحالية فقط
 # - فروع الشركة لا تظهر إلا لأعضاء نفس الشركة
 # - الباكند هو مصدر الحقيقة للصلاحيات وعزل الشركات
 # ============================================================
@@ -141,6 +144,7 @@ class CompanyWorkspacePhase3Tests(TestCase):
         endpoints = [
             "/api/company/me/",
             "/api/company/profile/",
+            "/api/company/settings/",
             "/api/company/branches/",
             f"/api/company/branches/{self.default_branch.id}/",
         ]
@@ -197,6 +201,90 @@ class CompanyWorkspacePhase3Tests(TestCase):
         self.assertIsNotNone(data["settings"])
         self.assertIsNotNone(data["operational_settings"])
         self.assertEqual(data["default_branch"]["id"], self.default_branch.id)
+
+    def test_company_settings_endpoint_returns_current_company_settings(self) -> None:
+        """
+        /api/company/settings/ should return settings for the current company only.
+        """
+
+        self.client.force_login(self.user)
+
+        response = self.client.get("/api/company/settings/")
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        data = payload["data"]
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(data["company"]["id"], self.company.id)
+        self.assertEqual(data["company_id"], self.company.id)
+        self.assertEqual(data["membership_id"], self.membership.id)
+        self.assertIsNotNone(data["settings"])
+        self.assertIsNotNone(data["operational_settings"])
+        self.assertEqual(data["settings"]["company_id"], self.company.id)
+
+        self.assertTrue(
+            CompanySettings.objects.filter(company=self.company).exists()
+        )
+
+    def test_owner_can_update_company_settings_endpoint(self) -> None:
+        """
+        Owner can update operational settings for the current company only.
+        """
+
+        self.client.force_login(self.user)
+
+        payload = {
+            "default_language": "en",
+            "timezone_name": "Asia/Riyadh",
+            "date_format": "yyyy-MM-dd",
+            "time_format": "24h",
+            "fiscal_year_start_month": 4,
+            "fiscal_year_start_day": 1,
+            "invoice_prefix": "SALES",
+            "quotation_prefix": "QTN",
+            "purchase_prefix": "BUY",
+            "receipt_prefix": "RCPT",
+            "payment_prefix": "PMT",
+            "allow_negative_stock": False,
+            "enable_inventory_tracking": True,
+            "enable_pos": True,
+            "enable_purchases": True,
+            "enable_hr": True,
+            "enable_vat": True,
+            "default_vat_percentage": "15.00",
+            "require_customer_for_sales": True,
+            "require_supplier_for_purchases": True,
+            "settings_data": {
+                "theme": "premium",
+                "document_template": "default",
+            },
+        }
+
+        response = self.client.patch(
+            "/api/company/settings/",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        response_payload = response.json()
+        settings_data = response_payload["data"]["settings"]
+
+        self.assertTrue(response_payload["ok"])
+        self.assertEqual(settings_data["company_id"], self.company.id)
+        self.assertEqual(settings_data["default_language"], "en")
+        self.assertEqual(settings_data["fiscal_year_start_month"], 4)
+        self.assertEqual(settings_data["invoice_prefix"], "SALES")
+        self.assertTrue(settings_data["enable_hr"])
+        self.assertTrue(settings_data["require_customer_for_sales"])
+        self.assertEqual(settings_data["settings_data"]["theme"], "premium")
+
+        settings_obj = CompanySettings.objects.get(company=self.company)
+        self.assertEqual(settings_obj.default_language, "en")
+        self.assertEqual(settings_obj.invoice_prefix, "SALES")
+        self.assertEqual(settings_obj.updated_by_id, self.user.id)
 
     def test_branches_list_is_scoped_to_current_company(self) -> None:
         """
