@@ -1,17 +1,20 @@
 # ============================================================
 # 📂 api/system/urls.py
-# 🧠 PrimeyAcc | System Workspace API URLs V1.3
+# 🧠 PrimeyAcc | System Workspace API URLs V1.4
 # ------------------------------------------------------------
 # ✅ Central routes for system workspace APIs
 # ✅ Includes system companies APIs
 # ✅ Includes SaaS subscription plans APIs
 # ✅ Includes company subscriptions APIs
+# ✅ Each module owns its own urls.py
+# ✅ Views protected by central api/permissions.py guards
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذا الملف هو نقطة تجميع APIs الخاصة بمساحة النظام
 # - لا نضع منطق business داخل urls.py
 # - كل وحدة داخل /api/system/ يكون لها urls.py مستقل
 # - جميع Views داخل /api/system/ يجب أن تتحقق من can_access_system=True
+# - صلاحيات المرحلة 2 تطبق داخل views عبر api/permissions.py
 # ============================================================
 
 from __future__ import annotations

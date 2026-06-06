@@ -1,15 +1,17 @@
 # ============================================================
 # 📂 api/system/subscriptions/urls.py
-# 🧠 PrimeyAcc | System Company Subscriptions URLs V1.0
+# 🧠 PrimeyAcc | System Company Subscriptions URLs V1.1
 # ------------------------------------------------------------
 # ✅ Routes for system company subscriptions APIs
 # ✅ List, detail, create, renew, cancel, and change plan
-# ✅ Clean endpoint structure for future frontend integration
+# ✅ Clean endpoint structure for frontend integration
 # ✅ Kept under /api/system/subscriptions/
+# ✅ Views protected by central api/permissions.py guards
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذا الملف جزء من المرحلة 1: نواة SaaS
-# - جميع APIs داخل /api/system/ تتطلب can_access_system=True داخل views
+# - تم مراجعته في المرحلة 2 بعد إضافة حراس الصلاحيات
+# - جميع APIs داخل /api/system/subscriptions/ محمية داخل views
 # - لا نضع منطق business داخل urls.py
 # - المسارات تكون واضحة وثابتة للواجهة
 # ============================================================
@@ -35,5 +37,9 @@ urlpatterns = [
     path("<int:subscription_id>/", system_subscription_detail, name="detail"),
     path("<int:subscription_id>/renew/", system_subscription_renew, name="renew"),
     path("<int:subscription_id>/cancel/", system_subscription_cancel, name="cancel"),
-    path("<int:subscription_id>/change-plan/", system_subscription_change_plan, name="change_plan"),
+    path(
+        "<int:subscription_id>/change-plan/",
+        system_subscription_change_plan,
+        name="change_plan",
+    ),
 ]

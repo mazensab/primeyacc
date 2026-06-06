@@ -1,15 +1,19 @@
 # ============================================================
 # 📂 api/system/subscriptions/change_plan.py
-# 🧠 PrimeyAcc | System Company Subscription Change Plan API V1.0
+# 🧠 PrimeyAcc | System Company Subscription Change Plan API V1.1
 # ------------------------------------------------------------
 # ✅ Change company subscription plan from system workspace
 # ✅ Creates a new subscription record instead of mutating history
 # ✅ Safely closes current TRIAL / ACTIVE subscription first
-# ✅ Protected by authenticated system-access users only
+# ✅ Protected by system permission: system.subscriptions.update
+# ✅ Uses central api/permissions.py guard
+# ✅ Safe payload fields based on the current CompanySubscription model
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذا الملف جزء من المرحلة 1: نواة SaaS
+# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
 # - تغيير الباقة ينشئ اشتراكًا جديدًا ولا يعدل السجل القديم
+# - تغيير باقات اشتراكات الشركات لا يسمح لمستخدم company فقط
 # - لا يسمح بأكثر من اشتراك TRIAL أو ACTIVE لنفس الشركة
 # - الدفع والفواتير لها وحدات مستقلة لاحقًا ولا توضع هنا
 # ============================================================
@@ -30,24 +34,8 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
+from api.permissions import user_has_system_permission
 from subscriptions.models import CompanySubscription, SubscriptionPlan
-
-
-def _user_can_access_system(request: HttpRequest) -> bool:
-    """
-    يتحقق من صلاحية دخول مساحة النظام.
-    """
-
-    user = request.user
-
-    if not user.is_authenticated:
-        return False
-
-    if user.is_superuser:
-        return True
-
-    profile = getattr(user, "profile", None)
-    return bool(profile and profile.can_access_system)
 
 
 def _json_body(request: HttpRequest) -> dict[str, Any]:
@@ -66,7 +54,12 @@ def _json_body(request: HttpRequest) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _get_value(request: HttpRequest, payload: dict[str, Any], key: str, default: Any = None) -> Any:
+def _get_value(
+    request: HttpRequest,
+    payload: dict[str, Any],
+    key: str,
+    default: Any = None,
+) -> Any:
     """
     يدعم JSON و form-data بنفس الوقت.
     """
@@ -75,6 +68,14 @@ def _get_value(request: HttpRequest, payload: dict[str, Any], key: str, default:
         return payload.get(key)
 
     return request.POST.get(key, default)
+
+
+def _clean_text(value: Any) -> str:
+    """
+    ينظف النصوص القادمة من الطلب.
+    """
+
+    return str(value or "").strip()
 
 
 def _to_decimal(value: Any, default: str = "0.00") -> Decimal:
@@ -170,6 +171,23 @@ def _datetime_to_string(value: Any) -> str | None:
     return value.isoformat()
 
 
+def _model_has_field(field_name: str) -> bool:
+    """
+    يتحقق من وجود الحقل داخل CompanySubscription.
+    """
+
+    return any(field.name == field_name for field in CompanySubscription._meta.fields)
+
+
+def _filter_subscription_fields(data: dict[str, Any]) -> dict[str, Any]:
+    """
+    يمنع تمرير حقول غير موجودة إلى CompanySubscription.
+    """
+
+    valid_fields = {field.name for field in CompanySubscription._meta.fields}
+    return {key: value for key, value in data.items() if key in valid_fields}
+
+
 def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
     """
     يحول كائن الاشتراك إلى JSON نظيف للواجهة.
@@ -182,10 +200,15 @@ def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
         "id": subscription.id,
         "company": {
             "id": company.id,
-            "name": getattr(company, "name", ""),
-            "code": getattr(company, "code", ""),
+            "name": getattr(company, "display_name", None) or getattr(company, "name", ""),
+            "display_name": getattr(company, "display_name", None) or getattr(company, "name", ""),
+            "company_code": getattr(company, "company_code", ""),
+            "code": getattr(company, "company_code", ""),
             "email": getattr(company, "email", ""),
             "phone": getattr(company, "phone", ""),
+            "mobile": getattr(company, "mobile", ""),
+            "city": getattr(company, "city", ""),
+            "status": getattr(company, "status", ""),
             "is_active": getattr(company, "is_active", True),
         },
         "plan": {
@@ -205,7 +228,7 @@ def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
         "is_expired_by_date": subscription.is_expired_by_date,
         "price": _money_to_string(subscription.price),
         "discount_amount": _money_to_string(subscription.discount_amount),
-        "amount_before_tax": _money_to_string(subscription.amount_before_tax),
+        "amount_before_tax": _money_to_string(getattr(subscription, "amount_before_tax", None)),
         "tax_amount": _money_to_string(subscription.tax_amount),
         "total_amount": _money_to_string(subscription.total_amount),
         "auto_renew": subscription.auto_renew,
@@ -229,21 +252,55 @@ def _get_new_plan(plan_id: Any) -> SubscriptionPlan | None:
         return None
 
 
+def _close_current_subscription(
+    *,
+    subscription: CompanySubscription,
+    new_plan: SubscriptionPlan,
+    acting_user,
+) -> None:
+    """
+    يغلق اشتراكًا حاليًا بشكل آمن عند تغيير الباقة.
+    """
+
+    subscription.status = CompanySubscription.Status.EXPIRED
+    subscription.auto_renew = False
+
+    current_note = _clean_text(getattr(subscription, "notes", ""))
+    close_note = f"تم إغلاق هذا الاشتراك بسبب تغيير الباقة إلى {new_plan.name}."
+    subscription.notes = (
+        f"{current_note}\n\n{close_note}".strip()
+        if current_note
+        else close_note
+    )
+
+    update_fields = ["status", "auto_renew", "notes", "updated_at"]
+
+    if _model_has_field("updated_by"):
+        subscription.updated_by = acting_user
+        update_fields.append("updated_by")
+
+    subscription.save(update_fields=update_fields)
+
+
 @login_required
 @csrf_protect
 @require_POST
-def system_subscription_change_plan(request: HttpRequest, subscription_id: int) -> JsonResponse:
+def system_subscription_change_plan(
+    request: HttpRequest,
+    subscription_id: int,
+) -> JsonResponse:
     """
     POST /api/system/subscriptions/<subscription_id>/change-plan/
 
     يغير باقة اشتراك شركة بإنشاء اشتراك جديد.
     """
 
-    if not _user_can_access_system(request):
+    if not user_has_system_permission(request.user, "system.subscriptions.update"):
         return JsonResponse(
             {
                 "ok": False,
                 "message": "غير مصرح لك بتغيير باقة اشتراكات الشركات.",
+                "code": "SYSTEM_SUBSCRIPTIONS_UPDATE_PERMISSION_REQUIRED",
             },
             status=403,
         )
@@ -289,11 +346,14 @@ def system_subscription_change_plan(request: HttpRequest, subscription_id: int) 
             status=400,
         )
 
-    status = str(
-        _get_value(request, payload, "status", CompanySubscription.Status.ACTIVE) or ""
-    ).strip().upper()
+    status = _clean_text(
+        _get_value(request, payload, "status", CompanySubscription.Status.ACTIVE)
+    ).upper()
 
-    valid_statuses = {CompanySubscription.Status.ACTIVE, CompanySubscription.Status.TRIAL}
+    valid_statuses = {
+        CompanySubscription.Status.ACTIVE,
+        CompanySubscription.Status.TRIAL,
+    }
     if status not in valid_statuses:
         return JsonResponse(
             {
@@ -304,15 +364,14 @@ def system_subscription_change_plan(request: HttpRequest, subscription_id: int) 
             status=400,
         )
 
-    billing_cycle = str(
+    billing_cycle = _clean_text(
         _get_value(
             request,
             payload,
             "billing_cycle",
             old_subscription.billing_cycle,
         )
-        or ""
-    ).strip().upper()
+    ).upper()
 
     valid_cycles = {choice[0] for choice in CompanySubscription.BillingCycle.choices}
     if billing_cycle not in valid_cycles:
@@ -350,6 +409,16 @@ def system_subscription_change_plan(request: HttpRequest, subscription_id: int) 
     if end_date is None:
         end_date = _calculate_default_end_date(start_date, billing_cycle)
 
+    if end_date <= start_date:
+        return JsonResponse(
+            {
+                "ok": False,
+                "message": "تاريخ نهاية الاشتراك يجب أن يكون بعد تاريخ البداية.",
+                "errors": {"end_date": "تاريخ نهاية الاشتراك يجب أن يكون بعد تاريخ البداية."},
+            },
+            status=400,
+        )
+
     default_price = (
         new_plan.yearly_price
         if billing_cycle == CompanySubscription.BillingCycle.YEARLY
@@ -358,12 +427,16 @@ def system_subscription_change_plan(request: HttpRequest, subscription_id: int) 
 
     try:
         price = _to_decimal(_get_value(request, payload, "price", default_price))
-        discount_amount = _to_decimal(_get_value(request, payload, "discount_amount", "0.00"))
+        discount_amount = _to_decimal(
+            _get_value(request, payload, "discount_amount", "0.00")
+        )
         tax_amount = _to_decimal(_get_value(request, payload, "tax_amount", "0.00"))
 
         amount_before_tax = max(price - discount_amount, Decimal("0.00"))
         default_total = amount_before_tax + tax_amount
-        total_amount = _to_decimal(_get_value(request, payload, "total_amount", default_total))
+        total_amount = _to_decimal(
+            _get_value(request, payload, "total_amount", default_total)
+        )
     except ValidationError as exc:
         return JsonResponse(
             {
@@ -378,8 +451,8 @@ def system_subscription_change_plan(request: HttpRequest, subscription_id: int) 
         default=old_subscription.auto_renew,
     )
 
-    note = str(_get_value(request, payload, "notes", "") or "").strip()
-    old_notes = old_subscription.notes.strip()
+    note = _clean_text(_get_value(request, payload, "notes", ""))
+    old_notes = _clean_text(getattr(old_subscription, "notes", ""))
     change_note = f"تغيير الباقة من {old_subscription.plan.name} إلى {new_plan.name}."
 
     new_notes_parts = [change_note]
@@ -401,41 +474,39 @@ def system_subscription_change_plan(request: HttpRequest, subscription_id: int) 
             closed_ids: list[int] = []
 
             for current_subscription in current_subscriptions:
-                current_subscription.status = CompanySubscription.Status.EXPIRED
-                current_subscription.auto_renew = False
-
-                current_note = current_subscription.notes.strip()
-                close_note = f"تم إغلاق هذا الاشتراك بسبب تغيير الباقة إلى {new_plan.name}."
-                current_subscription.notes = (
-                    f"{current_note}\n\n{close_note}".strip()
-                    if current_note
-                    else close_note
-                )
-
-                current_subscription.save(
-                    update_fields=[
-                        "status",
-                        "auto_renew",
-                        "notes",
-                        "updated_at",
-                    ]
+                _close_current_subscription(
+                    subscription=current_subscription,
+                    new_plan=new_plan,
+                    acting_user=request.user,
                 )
                 closed_ids.append(current_subscription.id)
 
+            subscription_data = {
+                "company": old_subscription.company,
+                "plan": new_plan,
+                "status": status,
+                "billing_cycle": billing_cycle,
+                "start_date": start_date,
+                "end_date": end_date,
+                "price": price,
+                "discount_amount": discount_amount,
+                "tax_amount": tax_amount,
+                "total_amount": total_amount,
+                "auto_renew": auto_renew,
+                "notes": f"{old_notes}\n\n{new_notes}".strip() if old_notes else new_notes,
+            }
+
+            if _model_has_field("amount_before_tax"):
+                subscription_data["amount_before_tax"] = amount_before_tax
+
+            if _model_has_field("created_by"):
+                subscription_data["created_by"] = request.user
+
+            if _model_has_field("updated_by"):
+                subscription_data["updated_by"] = request.user
+
             new_subscription = CompanySubscription(
-                company=old_subscription.company,
-                plan=new_plan,
-                status=status,
-                billing_cycle=billing_cycle,
-                start_date=start_date,
-                end_date=end_date,
-                price=price,
-                discount_amount=discount_amount,
-                tax_amount=tax_amount,
-                total_amount=total_amount,
-                auto_renew=auto_renew,
-                notes=f"{old_notes}\n\n{new_notes}".strip() if old_notes else new_notes,
-                created_by=request.user,
+                **_filter_subscription_fields(subscription_data)
             )
             new_subscription.full_clean()
             new_subscription.save()

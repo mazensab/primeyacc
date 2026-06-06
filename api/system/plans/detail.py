@@ -1,15 +1,18 @@
 # ============================================================
 # 📂 api/system/plans/detail.py
-# 🧠 PrimeyAcc | System Subscription Plan Detail API V1.0
+# 🧠 PrimeyAcc | System Subscription Plan Detail API V1.1
 # ------------------------------------------------------------
 # ✅ Retrieve one SaaS subscription plan by ID
 # ✅ Returns usage counters and recent company subscriptions
-# ✅ Protected by authenticated system-access users only
+# ✅ Protected by system permission: system.plans.view
+# ✅ Uses central api/permissions.py guard
 # ✅ Clean payload prepared for future plan details UI
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذا الملف جزء من المرحلة 1: نواة SaaS
+# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
 # - جميع APIs داخل /api/system/ تتطلب can_access_system=True
+# - تفاصيل الباقة لا تظهر لمستخدم company فقط
 # - تفاصيل الباقة تعرض بيانات حقيقية فقط من قاعدة البيانات
 # - لا يتم وضع منطق الدفع أو الفواتير داخل ملف الباقات
 # ============================================================
@@ -24,24 +27,8 @@ from django.http import HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_GET
 
+from api.permissions import user_has_system_permission
 from subscriptions.models import CompanySubscription, SubscriptionPlan
-
-
-def _user_can_access_system(request: HttpRequest) -> bool:
-    """
-    يتحقق من صلاحية دخول مساحة النظام.
-    """
-
-    user = request.user
-
-    if not user.is_authenticated:
-        return False
-
-    if user.is_superuser:
-        return True
-
-    profile = getattr(user, "profile", None)
-    return bool(profile and profile.can_access_system)
 
 
 def _money_to_string(value: Any) -> str:
@@ -53,6 +40,28 @@ def _money_to_string(value: Any) -> str:
         return "0.00"
 
     return f"{value:.2f}"
+
+
+def _datetime_to_string(value: Any) -> str | None:
+    """
+    توحيد إخراج التاريخ والوقت للواجهة.
+    """
+
+    if not value:
+        return None
+
+    return value.isoformat()
+
+
+def _date_to_string(value: Any) -> str | None:
+    """
+    توحيد إخراج التاريخ للواجهة.
+    """
+
+    if not value:
+        return None
+
+    return value.isoformat()
 
 
 def _plan_payload(plan: SubscriptionPlan) -> dict[str, Any]:
@@ -91,8 +100,8 @@ def _plan_payload(plan: SubscriptionPlan) -> dict[str, Any]:
             "cancelled_subscriptions": cancelled_subscriptions,
             "suspended_subscriptions": suspended_subscriptions,
         },
-        "created_at": plan.created_at.isoformat() if plan.created_at else None,
-        "updated_at": plan.updated_at.isoformat() if plan.updated_at else None,
+        "created_at": _datetime_to_string(plan.created_at),
+        "updated_at": _datetime_to_string(plan.updated_at),
     }
 
 
@@ -107,15 +116,19 @@ def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
         "id": subscription.id,
         "company": {
             "id": company.id,
-            "name": company.name,
-            "code": getattr(company, "code", ""),
+            "name": getattr(company, "display_name", None) or company.name,
+            "company_code": getattr(company, "company_code", ""),
+            "code": getattr(company, "company_code", ""),
             "email": getattr(company, "email", ""),
             "phone": getattr(company, "phone", ""),
+            "city": getattr(company, "city", ""),
+            "status": getattr(company, "status", ""),
+            "is_active": getattr(company, "is_active", True),
         },
         "status": subscription.status,
         "billing_cycle": subscription.billing_cycle,
-        "start_date": subscription.start_date.isoformat() if subscription.start_date else None,
-        "end_date": subscription.end_date.isoformat() if subscription.end_date else None,
+        "start_date": _date_to_string(subscription.start_date),
+        "end_date": _date_to_string(subscription.end_date),
         "days_remaining": subscription.days_remaining,
         "price": _money_to_string(subscription.price),
         "discount_amount": _money_to_string(subscription.discount_amount),
@@ -123,7 +136,7 @@ def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
         "total_amount": _money_to_string(subscription.total_amount),
         "auto_renew": subscription.auto_renew,
         "is_current": subscription.is_current,
-        "created_at": subscription.created_at.isoformat() if subscription.created_at else None,
+        "created_at": _datetime_to_string(subscription.created_at),
     }
 
 
@@ -136,11 +149,12 @@ def system_plan_detail(request: HttpRequest, plan_id: int) -> JsonResponse:
     يعرض تفاصيل باقة واحدة مع ملخص الاشتراكات المرتبطة بها.
     """
 
-    if not _user_can_access_system(request):
+    if not user_has_system_permission(request.user, "system.plans.view"):
         return JsonResponse(
             {
                 "ok": False,
                 "message": "غير مصرح لك بالوصول إلى تفاصيل الباقة.",
+                "code": "SYSTEM_PLANS_VIEW_PERMISSION_REQUIRED",
             },
             status=403,
         )

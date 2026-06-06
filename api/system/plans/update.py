@@ -1,15 +1,19 @@
 # ============================================================
 # 📂 api/system/plans/update.py
-# 🧠 PrimeyAcc | System Subscription Plan Update API V1.0
+# 🧠 PrimeyAcc | System Subscription Plan Update API V1.1
 # ------------------------------------------------------------
 # ✅ Update SaaS subscription plans from system workspace
 # ✅ Supports partial updates using PATCH or POST
 # ✅ Validates prices, limits, features, and unique slug
-# ✅ Protected by authenticated system-access users only
+# ✅ Protected by system permission: system.plans.update
+# ✅ Uses central api/permissions.py guard
+# ✅ Safe payload fields based on the current SubscriptionPlan model
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذا الملف جزء من المرحلة 1: نواة SaaS
+# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
 # - جميع APIs داخل /api/system/ تتطلب can_access_system=True
+# - تعديل الباقات لا يسمح لمستخدم company فقط
 # - تعديل الباقة لا يغير الاشتراكات السابقة ماليًا
 # - لا يتم وضع منطق الدفع أو الفواتير داخل ملف الباقات
 # ============================================================
@@ -29,24 +33,8 @@ from django.utils.text import slugify
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
+from api.permissions import user_has_system_permission
 from subscriptions.models import SubscriptionPlan
-
-
-def _user_can_access_system(request: HttpRequest) -> bool:
-    """
-    يتحقق من صلاحية دخول مساحة النظام.
-    """
-
-    user = request.user
-
-    if not user.is_authenticated:
-        return False
-
-    if user.is_superuser:
-        return True
-
-    profile = getattr(user, "profile", None)
-    return bool(profile and profile.can_access_system)
 
 
 def _json_body(request: HttpRequest) -> dict[str, Any]:
@@ -73,7 +61,12 @@ def _has_value(request: HttpRequest, payload: dict[str, Any], key: str) -> bool:
     return key in payload or key in request.POST
 
 
-def _get_value(request: HttpRequest, payload: dict[str, Any], key: str, default: Any = None) -> Any:
+def _get_value(
+    request: HttpRequest,
+    payload: dict[str, Any],
+    key: str,
+    default: Any = None,
+) -> Any:
     """
     يدعم JSON و form-data بنفس الوقت.
     """
@@ -82,6 +75,14 @@ def _get_value(request: HttpRequest, payload: dict[str, Any], key: str, default:
         return payload.get(key)
 
     return request.POST.get(key, default)
+
+
+def _clean_text(value: Any) -> str:
+    """
+    ينظف النصوص القادمة من الطلب.
+    """
+
+    return str(value or "").strip()
 
 
 def _to_decimal(value: Any, default: str = "0.00") -> Decimal:
@@ -171,6 +172,17 @@ def _money_to_string(value: Any) -> str:
     return f"{value:.2f}"
 
 
+def _datetime_to_string(value: Any) -> str | None:
+    """
+    توحيد إخراج التاريخ والوقت للواجهة.
+    """
+
+    if not value:
+        return None
+
+    return value.isoformat()
+
+
 def _plan_payload(plan: SubscriptionPlan) -> dict[str, Any]:
     """
     يحول كائن الباقة إلى JSON نظيف.
@@ -192,8 +204,8 @@ def _plan_payload(plan: SubscriptionPlan) -> dict[str, Any]:
         "is_active": plan.is_active,
         "is_public": plan.is_public,
         "sort_order": plan.sort_order,
-        "created_at": plan.created_at.isoformat() if plan.created_at else None,
-        "updated_at": plan.updated_at.isoformat() if plan.updated_at else None,
+        "created_at": _datetime_to_string(plan.created_at),
+        "updated_at": _datetime_to_string(plan.updated_at),
     }
 
 
@@ -206,6 +218,23 @@ def _normalize_slug(value: str) -> str:
     return slug or "plan"
 
 
+def _model_has_field(field_name: str) -> bool:
+    """
+    يتحقق من وجود الحقل داخل SubscriptionPlan.
+    """
+
+    return any(field.name == field_name for field in SubscriptionPlan._meta.fields)
+
+
+def _set_plan_field(plan: SubscriptionPlan, field_name: str, value: Any) -> None:
+    """
+    يعدل الحقل فقط إذا كان موجودًا في موديل SubscriptionPlan.
+    """
+
+    if _model_has_field(field_name):
+        setattr(plan, field_name, value)
+
+
 @login_required
 @csrf_protect
 @require_http_methods(["POST", "PATCH"])
@@ -216,11 +245,12 @@ def system_plan_update(request: HttpRequest, plan_id: int) -> JsonResponse:
     يعدل بيانات باقة SaaS من مساحة النظام.
     """
 
-    if not _user_can_access_system(request):
+    if not user_has_system_permission(request.user, "system.plans.update"):
         return JsonResponse(
             {
                 "ok": False,
                 "message": "غير مصرح لك بتعديل الباقات.",
+                "code": "SYSTEM_PLANS_UPDATE_PERMISSION_REQUIRED",
             },
             status=403,
         )
@@ -231,7 +261,7 @@ def system_plan_update(request: HttpRequest, plan_id: int) -> JsonResponse:
     try:
         with transaction.atomic():
             if _has_value(request, payload, "name"):
-                name = str(_get_value(request, payload, "name", "") or "").strip()
+                name = _clean_text(_get_value(request, payload, "name", ""))
                 if not name:
                     return JsonResponse(
                         {
@@ -241,10 +271,10 @@ def system_plan_update(request: HttpRequest, plan_id: int) -> JsonResponse:
                         },
                         status=400,
                     )
-                plan.name = name
+                _set_plan_field(plan, "name", name)
 
             if _has_value(request, payload, "code"):
-                code = str(_get_value(request, payload, "code", "") or "").strip().upper()
+                code = _clean_text(_get_value(request, payload, "code", "")).upper()
                 valid_codes = {choice[0] for choice in SubscriptionPlan.PlanCode.choices}
 
                 if code not in valid_codes:
@@ -257,13 +287,17 @@ def system_plan_update(request: HttpRequest, plan_id: int) -> JsonResponse:
                         status=400,
                     )
 
-                plan.code = code
+                _set_plan_field(plan, "code", code)
 
             if _has_value(request, payload, "slug"):
-                requested_slug = str(_get_value(request, payload, "slug", "") or "").strip()
+                requested_slug = _clean_text(_get_value(request, payload, "slug", ""))
                 normalized_slug = _normalize_slug(requested_slug or plan.name)
 
-                if SubscriptionPlan.objects.exclude(id=plan.id).filter(slug=normalized_slug).exists():
+                if (
+                    SubscriptionPlan.objects.exclude(id=plan.id)
+                    .filter(slug=normalized_slug)
+                    .exists()
+                ):
                     return JsonResponse(
                         {
                             "ok": False,
@@ -273,40 +307,108 @@ def system_plan_update(request: HttpRequest, plan_id: int) -> JsonResponse:
                         status=400,
                     )
 
-                plan.slug = normalized_slug
+                _set_plan_field(plan, "slug", normalized_slug)
 
             if _has_value(request, payload, "description"):
-                plan.description = str(_get_value(request, payload, "description", "") or "").strip()
+                _set_plan_field(
+                    plan,
+                    "description",
+                    _clean_text(_get_value(request, payload, "description", "")),
+                )
 
             if _has_value(request, payload, "monthly_price"):
-                plan.monthly_price = _to_decimal(_get_value(request, payload, "monthly_price"))
+                _set_plan_field(
+                    plan,
+                    "monthly_price",
+                    _to_decimal(_get_value(request, payload, "monthly_price")),
+                )
 
             if _has_value(request, payload, "yearly_price"):
-                plan.yearly_price = _to_decimal(_get_value(request, payload, "yearly_price"))
+                _set_plan_field(
+                    plan,
+                    "yearly_price",
+                    _to_decimal(_get_value(request, payload, "yearly_price")),
+                )
 
             if _has_value(request, payload, "max_users"):
-                plan.max_users = _to_positive_int(_get_value(request, payload, "max_users"), default=1)
+                _set_plan_field(
+                    plan,
+                    "max_users",
+                    _to_positive_int(
+                        _get_value(request, payload, "max_users"),
+                        default=1,
+                    ),
+                )
 
             if _has_value(request, payload, "max_branches"):
-                plan.max_branches = _to_positive_int(_get_value(request, payload, "max_branches"), default=1)
+                _set_plan_field(
+                    plan,
+                    "max_branches",
+                    _to_positive_int(
+                        _get_value(request, payload, "max_branches"),
+                        default=1,
+                    ),
+                )
 
             if _has_value(request, payload, "max_warehouses"):
-                plan.max_warehouses = _to_positive_int(_get_value(request, payload, "max_warehouses"), default=0)
+                _set_plan_field(
+                    plan,
+                    "max_warehouses",
+                    _to_positive_int(
+                        _get_value(request, payload, "max_warehouses"),
+                        default=0,
+                    ),
+                )
 
             if _has_value(request, payload, "max_pos"):
-                plan.max_pos = _to_positive_int(_get_value(request, payload, "max_pos"), default=0)
+                _set_plan_field(
+                    plan,
+                    "max_pos",
+                    _to_positive_int(
+                        _get_value(request, payload, "max_pos"),
+                        default=0,
+                    ),
+                )
 
             if _has_value(request, payload, "features"):
-                plan.features = _normalize_features(_get_value(request, payload, "features", []))
+                _set_plan_field(
+                    plan,
+                    "features",
+                    _normalize_features(_get_value(request, payload, "features", [])),
+                )
 
             if _has_value(request, payload, "is_active"):
-                plan.is_active = _to_bool(_get_value(request, payload, "is_active"), default=plan.is_active)
+                _set_plan_field(
+                    plan,
+                    "is_active",
+                    _to_bool(
+                        _get_value(request, payload, "is_active"),
+                        default=getattr(plan, "is_active", True),
+                    ),
+                )
 
             if _has_value(request, payload, "is_public"):
-                plan.is_public = _to_bool(_get_value(request, payload, "is_public"), default=plan.is_public)
+                _set_plan_field(
+                    plan,
+                    "is_public",
+                    _to_bool(
+                        _get_value(request, payload, "is_public"),
+                        default=getattr(plan, "is_public", True),
+                    ),
+                )
 
             if _has_value(request, payload, "sort_order"):
-                plan.sort_order = _to_positive_int(_get_value(request, payload, "sort_order"), default=0)
+                _set_plan_field(
+                    plan,
+                    "sort_order",
+                    _to_positive_int(
+                        _get_value(request, payload, "sort_order"),
+                        default=0,
+                    ),
+                )
+
+            if _model_has_field("updated_by"):
+                _set_plan_field(plan, "updated_by", request.user)
 
             plan.full_clean()
             plan.save()

@@ -1,15 +1,19 @@
 # ============================================================
 # 📂 api/system/subscriptions/create.py
-# 🧠 PrimeyAcc | System Company Subscription Create API V1.0
+# 🧠 PrimeyAcc | System Company Subscription Create API V1.1
 # ------------------------------------------------------------
 # ✅ Create company subscriptions from system workspace
 # ✅ Validates company, plan, dates, billing cycle, and amounts
 # ✅ Prevents duplicate current TRIAL / ACTIVE subscription
-# ✅ Protected by authenticated system-access users only
+# ✅ Protected by system permission: system.subscriptions.create
+# ✅ Uses central api/permissions.py guard
+# ✅ Safe payload fields based on the current CompanySubscription model
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذا الملف جزء من المرحلة 1: نواة SaaS
+# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
 # - جميع APIs داخل /api/system/ تتطلب can_access_system=True
+# - إنشاء اشتراكات الشركات لا يسمح لمستخدم company فقط
 # - لا يسمح بأكثر من اشتراك TRIAL أو ACTIVE لنفس الشركة
 # - الدفع والفواتير لها وحدات مستقلة لاحقًا ولا توضع هنا
 # ============================================================
@@ -29,25 +33,9 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
+from api.permissions import user_has_system_permission
 from companies.models import Company
 from subscriptions.models import CompanySubscription, SubscriptionPlan
-
-
-def _user_can_access_system(request: HttpRequest) -> bool:
-    """
-    يتحقق من صلاحية دخول مساحة النظام.
-    """
-
-    user = request.user
-
-    if not user.is_authenticated:
-        return False
-
-    if user.is_superuser:
-        return True
-
-    profile = getattr(user, "profile", None)
-    return bool(profile and profile.can_access_system)
 
 
 def _json_body(request: HttpRequest) -> dict[str, Any]:
@@ -66,7 +54,12 @@ def _json_body(request: HttpRequest) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _get_value(request: HttpRequest, payload: dict[str, Any], key: str, default: Any = None) -> Any:
+def _get_value(
+    request: HttpRequest,
+    payload: dict[str, Any],
+    key: str,
+    default: Any = None,
+) -> Any:
     """
     يدعم JSON و form-data بنفس الوقت.
     """
@@ -75,6 +68,14 @@ def _get_value(request: HttpRequest, payload: dict[str, Any], key: str, default:
         return payload.get(key)
 
     return request.POST.get(key, default)
+
+
+def _clean_text(value: Any) -> str:
+    """
+    ينظف النصوص القادمة من الطلب.
+    """
+
+    return str(value or "").strip()
 
 
 def _to_decimal(value: Any, default: str = "0.00") -> Decimal:
@@ -170,6 +171,23 @@ def _datetime_to_string(value: Any) -> str | None:
     return value.isoformat()
 
 
+def _model_has_field(field_name: str) -> bool:
+    """
+    يتحقق من وجود الحقل داخل CompanySubscription.
+    """
+
+    return any(field.name == field_name for field in CompanySubscription._meta.fields)
+
+
+def _filter_subscription_fields(data: dict[str, Any]) -> dict[str, Any]:
+    """
+    يمنع تمرير حقول غير موجودة إلى CompanySubscription.
+    """
+
+    valid_fields = {field.name for field in CompanySubscription._meta.fields}
+    return {key: value for key, value in data.items() if key in valid_fields}
+
+
 def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
     """
     يحول كائن الاشتراك إلى JSON نظيف للواجهة.
@@ -177,16 +195,21 @@ def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
 
     company = subscription.company
     plan = subscription.plan
-    created_by = subscription.created_by
+    created_by = getattr(subscription, "created_by", None)
 
     return {
         "id": subscription.id,
         "company": {
             "id": company.id,
-            "name": getattr(company, "name", ""),
-            "code": getattr(company, "code", ""),
+            "name": getattr(company, "display_name", None) or getattr(company, "name", ""),
+            "display_name": getattr(company, "display_name", None) or getattr(company, "name", ""),
+            "company_code": getattr(company, "company_code", ""),
+            "code": getattr(company, "company_code", ""),
             "email": getattr(company, "email", ""),
             "phone": getattr(company, "phone", ""),
+            "mobile": getattr(company, "mobile", ""),
+            "city": getattr(company, "city", ""),
+            "status": getattr(company, "status", ""),
             "is_active": getattr(company, "is_active", True),
         },
         "plan": {
@@ -274,11 +297,12 @@ def system_subscription_create(request: HttpRequest) -> JsonResponse:
     ينشئ اشتراك شركة جديد من مساحة النظام.
     """
 
-    if not _user_can_access_system(request):
+    if not user_has_system_permission(request.user, "system.subscriptions.create"):
         return JsonResponse(
             {
                 "ok": False,
                 "message": "غير مصرح لك بإنشاء اشتراكات الشركات.",
+                "code": "SYSTEM_SUBSCRIPTIONS_CREATE_PERMISSION_REQUIRED",
             },
             status=403,
         )
@@ -317,9 +341,9 @@ def system_subscription_create(request: HttpRequest) -> JsonResponse:
             status=400,
         )
 
-    status = str(
-        _get_value(request, payload, "status", CompanySubscription.Status.TRIAL) or ""
-    ).strip().upper()
+    status = _clean_text(
+        _get_value(request, payload, "status", CompanySubscription.Status.TRIAL)
+    ).upper()
 
     valid_statuses = {choice[0] for choice in CompanySubscription.Status.choices}
     if status not in valid_statuses:
@@ -345,15 +369,14 @@ def system_subscription_create(request: HttpRequest) -> JsonResponse:
                 status=400,
             )
 
-    billing_cycle = str(
+    billing_cycle = _clean_text(
         _get_value(
             request,
             payload,
             "billing_cycle",
             CompanySubscription.BillingCycle.MONTHLY,
         )
-        or ""
-    ).strip().upper()
+    ).upper()
 
     valid_cycles = {choice[0] for choice in CompanySubscription.BillingCycle.choices}
     if billing_cycle not in valid_cycles:
@@ -391,6 +414,16 @@ def system_subscription_create(request: HttpRequest) -> JsonResponse:
     if end_date is None:
         end_date = _calculate_default_end_date(start_date, billing_cycle)
 
+    if end_date <= start_date:
+        return JsonResponse(
+            {
+                "ok": False,
+                "message": "تاريخ نهاية الاشتراك يجب أن يكون بعد تاريخ البداية.",
+                "errors": {"end_date": "تاريخ نهاية الاشتراك يجب أن يكون بعد تاريخ البداية."},
+            },
+            status=400,
+        )
+
     default_price = (
         plan.yearly_price
         if billing_cycle == CompanySubscription.BillingCycle.YEARLY
@@ -399,12 +432,16 @@ def system_subscription_create(request: HttpRequest) -> JsonResponse:
 
     try:
         price = _to_decimal(_get_value(request, payload, "price", default_price))
-        discount_amount = _to_decimal(_get_value(request, payload, "discount_amount", "0.00"))
+        discount_amount = _to_decimal(
+            _get_value(request, payload, "discount_amount", "0.00")
+        )
         tax_amount = _to_decimal(_get_value(request, payload, "tax_amount", "0.00"))
 
         amount_before_tax = max(price - discount_amount, Decimal("0.00"))
         default_total = amount_before_tax + tax_amount
-        total_amount = _to_decimal(_get_value(request, payload, "total_amount", default_total))
+        total_amount = _to_decimal(
+            _get_value(request, payload, "total_amount", default_total)
+        )
     except ValidationError as exc:
         return JsonResponse(
             {
@@ -414,28 +451,44 @@ def system_subscription_create(request: HttpRequest) -> JsonResponse:
             status=400,
         )
 
-    auto_renew = _to_bool(_get_value(request, payload, "auto_renew", False), default=False)
-    notes = str(_get_value(request, payload, "notes", "") or "").strip()
+    auto_renew = _to_bool(
+        _get_value(request, payload, "auto_renew", False),
+        default=False,
+    )
+    notes = _clean_text(_get_value(request, payload, "notes", ""))
 
     try:
         with transaction.atomic():
+            subscription_data = {
+                "company": company,
+                "plan": plan,
+                "status": status,
+                "billing_cycle": billing_cycle,
+                "start_date": start_date,
+                "end_date": end_date,
+                "price": price,
+                "discount_amount": discount_amount,
+                "tax_amount": tax_amount,
+                "total_amount": total_amount,
+                "auto_renew": auto_renew,
+                "notes": notes,
+            }
+
+            if _model_has_field("amount_before_tax"):
+                subscription_data["amount_before_tax"] = amount_before_tax
+
+            if _model_has_field("created_by"):
+                subscription_data["created_by"] = request.user
+
+            if _model_has_field("updated_by"):
+                subscription_data["updated_by"] = request.user
+
             subscription = CompanySubscription(
-                company=company,
-                plan=plan,
-                status=status,
-                billing_cycle=billing_cycle,
-                start_date=start_date,
-                end_date=end_date,
-                price=price,
-                discount_amount=discount_amount,
-                tax_amount=tax_amount,
-                total_amount=total_amount,
-                auto_renew=auto_renew,
-                notes=notes,
-                created_by=request.user,
+                **_filter_subscription_fields(subscription_data)
             )
             subscription.full_clean()
             subscription.save()
+
     except ValidationError as exc:
         return JsonResponse(
             {

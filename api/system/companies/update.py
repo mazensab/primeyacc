@@ -1,16 +1,21 @@
 # ============================================================
 # 📂 api/system/companies/update.py
-# 🧠 PrimeyAcc | System Company Update API V1.1
+# 🧠 PrimeyAcc | System Company Update API V1.2
 # ------------------------------------------------------------
 # ✅ Update tenant company data from system workspace
 # ✅ Supports partial updates using POST or PATCH
 # ✅ Validates company identity, contact, Saudi address, and status
 # ✅ Safe payload fields based on the current Company model
+# ✅ Updates owner CompanyMembership when owner_id is provided
+# ✅ Protected by system permission: system.companies.update
+# ✅ Uses central api/permissions.py guard
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذا الملف جزء من المرحلة 1: نواة SaaS
+# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
 # - Company هي حدود العزل الأساسية للنظام
 # - جميع APIs داخل /api/system/ تتطلب can_access_system=True
+# - تعديل الشركات لا يسمح لمستخدم company فقط
 # - تعديل الاشتراك لا يتم هنا؛ الاشتراك له APIs مستقلة
 # ============================================================
 
@@ -29,27 +34,18 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
+from accounts.models import (
+    CompanyMembership,
+    CompanyRole,
+    MembershipStatus,
+    UserProfile,
+    WorkspaceType,
+)
+from api.permissions import user_has_system_permission
 from companies.models import Company, CompanyActivityProfile, CompanyStatus
 
 
 User = get_user_model()
-
-
-def _user_can_access_system(request: HttpRequest) -> bool:
-    """
-    يتحقق من صلاحية دخول مساحة النظام.
-    """
-
-    user = request.user
-
-    if not user.is_authenticated:
-        return False
-
-    if user.is_superuser:
-        return True
-
-    profile = getattr(user, "profile", None)
-    return bool(profile and profile.can_access_system)
 
 
 def _json_body(request: HttpRequest) -> dict[str, Any]:
@@ -76,7 +72,12 @@ def _has_value(request: HttpRequest, payload: dict[str, Any], key: str) -> bool:
     return key in payload or key in request.POST
 
 
-def _get_value(request: HttpRequest, payload: dict[str, Any], key: str, default: Any = None) -> Any:
+def _get_value(
+    request: HttpRequest,
+    payload: dict[str, Any],
+    key: str,
+    default: Any = None,
+) -> Any:
     """
     يدعم JSON و form-data بنفس الوقت.
     """
@@ -244,6 +245,90 @@ def _company_payload(company: Company) -> dict[str, Any]:
     }
 
 
+def _company_has_field(field_name: str) -> bool:
+    """
+    يتحقق من وجود الحقل داخل Company قبل التعديل.
+    """
+
+    return any(field.name == field_name for field in Company._meta.fields)
+
+
+def _set_company_field(company: Company, field_name: str, value: Any) -> None:
+    """
+    يعدل الحقل فقط إذا كان موجودًا في موديل Company.
+    """
+
+    if _company_has_field(field_name):
+        setattr(company, field_name, value)
+
+
+def _ensure_owner_membership(
+    *,
+    owner: User | None,
+    company: Company,
+    acting_user: User,
+) -> None:
+    """
+    ينشئ أو يحدث عضوية OWNER للمالك إذا تم تحديد owner_id.
+
+    هذه خطوة مهمة حتى يستطيع مالك الشركة الدخول إلى /company.
+    """
+
+    if not owner:
+        return
+
+    profile, _ = UserProfile.objects.get_or_create(
+        user=owner,
+        defaults={
+            "display_name": owner.get_full_name() or owner.get_username(),
+            "default_workspace": WorkspaceType.COMPANY,
+        },
+    )
+
+    if not profile.default_company_id:
+        profile.default_company = company
+        profile.default_workspace = WorkspaceType.COMPANY
+        profile.save(
+            update_fields=[
+                "default_company",
+                "default_workspace",
+                "updated_at",
+            ]
+        )
+
+    membership, created = CompanyMembership.objects.get_or_create(
+        user=owner,
+        company=company,
+        defaults={
+            "role": CompanyRole.OWNER,
+            "status": MembershipStatus.ACTIVE,
+            "is_primary": True,
+            "created_by": acting_user,
+            "updated_by": acting_user,
+        },
+    )
+
+    if not created:
+        membership.role = CompanyRole.OWNER
+        membership.status = MembershipStatus.ACTIVE
+        membership.is_primary = True
+        membership.updated_by = acting_user
+        membership.save(
+            update_fields=[
+                "role",
+                "status",
+                "is_primary",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+    CompanyMembership.objects.filter(
+        user=owner,
+        is_primary=True,
+    ).exclude(id=membership.id).update(is_primary=False)
+
+
 @login_required
 @csrf_protect
 @require_http_methods(["POST", "PATCH"])
@@ -254,11 +339,12 @@ def system_company_update(request: HttpRequest, company_id: int) -> JsonResponse
     يعدل بيانات شركة من مساحة النظام.
     """
 
-    if not _user_can_access_system(request):
+    if not user_has_system_permission(request.user, "system.companies.update"):
         return JsonResponse(
             {
                 "ok": False,
                 "message": "غير مصرح لك بتعديل شركات النظام.",
+                "code": "SYSTEM_COMPANIES_UPDATE_PERMISSION_REQUIRED",
             },
             status=403,
         )
@@ -282,10 +368,18 @@ def system_company_update(request: HttpRequest, company_id: int) -> JsonResponse
                 company.name = name
 
             if _has_value(request, payload, "name_ar"):
-                company.name_ar = _clean_text(_get_value(request, payload, "name_ar"))
+                _set_company_field(
+                    company,
+                    "name_ar",
+                    _clean_text(_get_value(request, payload, "name_ar")),
+                )
 
             if _has_value(request, payload, "name_en"):
-                company.name_en = _clean_text(_get_value(request, payload, "name_en"))
+                _set_company_field(
+                    company,
+                    "name_en",
+                    _clean_text(_get_value(request, payload, "name_en")),
+                )
 
             if _has_value(request, payload, "company_code"):
                 company_code = _clean_text(_get_value(request, payload, "company_code"))
@@ -300,7 +394,11 @@ def system_company_update(request: HttpRequest, company_id: int) -> JsonResponse
                         status=400,
                     )
 
-                if Company.objects.exclude(id=company.id).filter(company_code=company_code).exists():
+                if (
+                    Company.objects.exclude(id=company.id)
+                    .filter(company_code__iexact=company_code)
+                    .exists()
+                ):
                     return JsonResponse(
                         {
                             "ok": False,
@@ -328,7 +426,7 @@ def system_company_update(request: HttpRequest, company_id: int) -> JsonResponse
                         status=400,
                     )
 
-                company.activity_profile = activity_profile
+                _set_company_field(company, "activity_profile", activity_profile)
 
             if _has_value(request, payload, "status"):
                 status = _clean_text(_get_value(request, payload, "status")).upper()
@@ -344,12 +442,16 @@ def system_company_update(request: HttpRequest, company_id: int) -> JsonResponse
                         status=400,
                     )
 
-                company.status = status
+                _set_company_field(company, "status", status)
 
             if _has_value(request, payload, "is_active"):
-                company.is_active = _to_bool(
-                    _get_value(request, payload, "is_active"),
-                    default=company.is_active,
+                _set_company_field(
+                    company,
+                    "is_active",
+                    _to_bool(
+                        _get_value(request, payload, "is_active"),
+                        default=getattr(company, "is_active", True),
+                    ),
                 )
 
             if _has_value(request, payload, "owner_id"):
@@ -366,7 +468,7 @@ def system_company_update(request: HttpRequest, company_id: int) -> JsonResponse
                         status=400,
                     )
 
-                company.owner = owner
+                _set_company_field(company, "owner", owner)
 
             text_fields = [
                 "commercial_registration",
@@ -375,6 +477,7 @@ def system_company_update(request: HttpRequest, company_id: int) -> JsonResponse
                 "phone",
                 "mobile",
                 "whatsapp_number",
+                "website",
                 "country",
                 "building_number",
                 "street_name",
@@ -384,6 +487,7 @@ def system_company_update(request: HttpRequest, company_id: int) -> JsonResponse
                 "postal_code",
                 "short_address",
                 "address",
+                "national_address_line",
                 "currency_code",
                 "notes",
             ]
@@ -393,17 +497,29 @@ def system_company_update(request: HttpRequest, company_id: int) -> JsonResponse
                     value = _clean_text(_get_value(request, payload, field_name))
                     if field_name == "currency_code":
                         value = value or "SAR"
-                    setattr(company, field_name, value)
+                    _set_company_field(company, field_name, value)
 
             if _has_value(request, payload, "vat_percentage"):
-                company.vat_percentage = _to_decimal(
-                    _get_value(request, payload, "vat_percentage"),
-                    default=str(company.vat_percentage),
+                _set_company_field(
+                    company,
+                    "vat_percentage",
+                    _to_decimal(
+                        _get_value(request, payload, "vat_percentage"),
+                        default=str(getattr(company, "vat_percentage", "15.00")),
+                    ),
                 )
 
-            company.updated_by = request.user
+            _set_company_field(company, "updated_by", request.user)
+
             company.full_clean()
             company.save()
+
+            if _has_value(request, payload, "owner_id"):
+                _ensure_owner_membership(
+                    owner=getattr(company, "owner", None),
+                    company=company,
+                    acting_user=request.user,
+                )
 
     except ValidationError as exc:
         return JsonResponse(

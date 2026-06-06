@@ -1,15 +1,19 @@
 # ============================================================
 # 📂 api/system/plans/create.py
-# 🧠 PrimeyAcc | System Subscription Plan Create API V1.0
+# 🧠 PrimeyAcc | System Subscription Plan Create API V1.1
 # ------------------------------------------------------------
 # ✅ Create SaaS subscription plans from system workspace
 # ✅ Validates required fields and financial values
 # ✅ Supports features JSON list safely
-# ✅ Protected by authenticated system-access users only
+# ✅ Protected by system permission: system.plans.create
+# ✅ Uses central api/permissions.py guard
+# ✅ Safe payload fields based on the current SubscriptionPlan model
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذا الملف جزء من المرحلة 1: نواة SaaS
+# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
 # - جميع APIs داخل /api/system/ تتطلب can_access_system=True
+# - إنشاء الباقات لا يسمح لمستخدم company فقط
 # - إنشاء الباقات يتم من بيانات حقيقية فقط بدون mock data
 # - لا يتم وضع منطق الدفع أو الفواتير داخل ملف الباقات
 # ============================================================
@@ -28,24 +32,8 @@ from django.utils.text import slugify
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
+from api.permissions import user_has_system_permission
 from subscriptions.models import SubscriptionPlan
-
-
-def _user_can_access_system(request: HttpRequest) -> bool:
-    """
-    يتحقق من صلاحية دخول مساحة النظام.
-    """
-
-    user = request.user
-
-    if not user.is_authenticated:
-        return False
-
-    if user.is_superuser:
-        return True
-
-    profile = getattr(user, "profile", None)
-    return bool(profile and profile.can_access_system)
 
 
 def _json_body(request: HttpRequest) -> dict[str, Any]:
@@ -64,7 +52,12 @@ def _json_body(request: HttpRequest) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _get_value(request: HttpRequest, payload: dict[str, Any], key: str, default: Any = None) -> Any:
+def _get_value(
+    request: HttpRequest,
+    payload: dict[str, Any],
+    key: str,
+    default: Any = None,
+) -> Any:
     """
     يدعم JSON و form-data بنفس الوقت.
     """
@@ -73,6 +66,14 @@ def _get_value(request: HttpRequest, payload: dict[str, Any], key: str, default:
         return payload.get(key)
 
     return request.POST.get(key, default)
+
+
+def _clean_text(value: Any) -> str:
+    """
+    ينظف النصوص القادمة من الطلب.
+    """
+
+    return str(value or "").strip()
 
 
 def _to_decimal(value: Any, default: str = "0.00") -> Decimal:
@@ -162,6 +163,17 @@ def _money_to_string(value: Any) -> str:
     return f"{value:.2f}"
 
 
+def _datetime_to_string(value: Any) -> str | None:
+    """
+    توحيد إخراج التاريخ والوقت للواجهة.
+    """
+
+    if not value:
+        return None
+
+    return value.isoformat()
+
+
 def _plan_payload(plan: SubscriptionPlan) -> dict[str, Any]:
     """
     يحول كائن الباقة إلى JSON نظيف.
@@ -183,8 +195,8 @@ def _plan_payload(plan: SubscriptionPlan) -> dict[str, Any]:
         "is_active": plan.is_active,
         "is_public": plan.is_public,
         "sort_order": plan.sort_order,
-        "created_at": plan.created_at.isoformat() if plan.created_at else None,
-        "updated_at": plan.updated_at.isoformat() if plan.updated_at else None,
+        "created_at": _datetime_to_string(plan.created_at),
+        "updated_at": _datetime_to_string(plan.updated_at),
     }
 
 
@@ -207,6 +219,23 @@ def _build_unique_slug(name: str, requested_slug: str | None = None) -> str:
     return slug
 
 
+def _model_has_field(field_name: str) -> bool:
+    """
+    يتحقق من وجود الحقل داخل SubscriptionPlan.
+    """
+
+    return any(field.name == field_name for field in SubscriptionPlan._meta.fields)
+
+
+def _filter_plan_fields(data: dict[str, Any]) -> dict[str, Any]:
+    """
+    يمنع تمرير حقول غير موجودة إلى SubscriptionPlan.
+    """
+
+    valid_fields = {field.name for field in SubscriptionPlan._meta.fields}
+    return {key: value for key, value in data.items() if key in valid_fields}
+
+
 @login_required
 @csrf_protect
 @require_POST
@@ -217,21 +246,24 @@ def system_plan_create(request: HttpRequest) -> JsonResponse:
     ينشئ باقة SaaS جديدة من مساحة النظام.
     """
 
-    if not _user_can_access_system(request):
+    if not user_has_system_permission(request.user, "system.plans.create"):
         return JsonResponse(
             {
                 "ok": False,
                 "message": "غير مصرح لك بإنشاء الباقات.",
+                "code": "SYSTEM_PLANS_CREATE_PERMISSION_REQUIRED",
             },
             status=403,
         )
 
     payload = _json_body(request)
 
-    name = str(_get_value(request, payload, "name", "") or "").strip()
-    code = str(_get_value(request, payload, "code", SubscriptionPlan.PlanCode.BASIC) or "").strip().upper()
-    requested_slug = str(_get_value(request, payload, "slug", "") or "").strip()
-    description = str(_get_value(request, payload, "description", "") or "").strip()
+    name = _clean_text(_get_value(request, payload, "name", ""))
+    code = _clean_text(
+        _get_value(request, payload, "code", SubscriptionPlan.PlanCode.BASIC)
+    ).upper()
+    requested_slug = _clean_text(_get_value(request, payload, "slug", ""))
+    description = _clean_text(_get_value(request, payload, "description", ""))
 
     if not name:
         return JsonResponse(
@@ -255,13 +287,32 @@ def system_plan_create(request: HttpRequest) -> JsonResponse:
         )
 
     try:
-        monthly_price = _to_decimal(_get_value(request, payload, "monthly_price", "0.00"))
-        yearly_price = _to_decimal(_get_value(request, payload, "yearly_price", "0.00"))
-        max_users = _to_positive_int(_get_value(request, payload, "max_users", 1), default=1)
-        max_branches = _to_positive_int(_get_value(request, payload, "max_branches", 1), default=1)
-        max_warehouses = _to_positive_int(_get_value(request, payload, "max_warehouses", 0), default=0)
-        max_pos = _to_positive_int(_get_value(request, payload, "max_pos", 0), default=0)
-        sort_order = _to_positive_int(_get_value(request, payload, "sort_order", 0), default=0)
+        monthly_price = _to_decimal(
+            _get_value(request, payload, "monthly_price", "0.00")
+        )
+        yearly_price = _to_decimal(
+            _get_value(request, payload, "yearly_price", "0.00")
+        )
+        max_users = _to_positive_int(
+            _get_value(request, payload, "max_users", 1),
+            default=1,
+        )
+        max_branches = _to_positive_int(
+            _get_value(request, payload, "max_branches", 1),
+            default=1,
+        )
+        max_warehouses = _to_positive_int(
+            _get_value(request, payload, "max_warehouses", 0),
+            default=0,
+        )
+        max_pos = _to_positive_int(
+            _get_value(request, payload, "max_pos", 0),
+            default=0,
+        )
+        sort_order = _to_positive_int(
+            _get_value(request, payload, "sort_order", 0),
+            default=0,
+        )
         features = _normalize_features(_get_value(request, payload, "features", []))
     except ValidationError as exc:
         return JsonResponse(
@@ -272,29 +323,47 @@ def system_plan_create(request: HttpRequest) -> JsonResponse:
             status=400,
         )
 
-    is_active = _to_bool(_get_value(request, payload, "is_active", True), default=True)
-    is_public = _to_bool(_get_value(request, payload, "is_public", True), default=True)
+    is_active = _to_bool(
+        _get_value(request, payload, "is_active", True),
+        default=True,
+    )
+    is_public = _to_bool(
+        _get_value(request, payload, "is_public", True),
+        default=True,
+    )
 
     try:
         with transaction.atomic():
-            plan = SubscriptionPlan(
-                name=name,
-                code=code,
-                slug=_build_unique_slug(name=name, requested_slug=requested_slug),
-                description=description,
-                monthly_price=monthly_price,
-                yearly_price=yearly_price,
-                max_users=max_users,
-                max_branches=max_branches,
-                max_warehouses=max_warehouses,
-                max_pos=max_pos,
-                features=features,
-                is_active=is_active,
-                is_public=is_public,
-                sort_order=sort_order,
-            )
+            plan_data = {
+                "name": name,
+                "code": code,
+                "slug": _build_unique_slug(
+                    name=name,
+                    requested_slug=requested_slug,
+                ),
+                "description": description,
+                "monthly_price": monthly_price,
+                "yearly_price": yearly_price,
+                "max_users": max_users,
+                "max_branches": max_branches,
+                "max_warehouses": max_warehouses,
+                "max_pos": max_pos,
+                "features": features,
+                "is_active": is_active,
+                "is_public": is_public,
+                "sort_order": sort_order,
+            }
+
+            if _model_has_field("created_by"):
+                plan_data["created_by"] = request.user
+
+            if _model_has_field("updated_by"):
+                plan_data["updated_by"] = request.user
+
+            plan = SubscriptionPlan(**_filter_plan_fields(plan_data))
             plan.full_clean()
             plan.save()
+
     except ValidationError as exc:
         return JsonResponse(
             {

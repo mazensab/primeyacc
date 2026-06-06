@@ -1,16 +1,20 @@
 # ============================================================
 # 📂 api/system/companies/detail.py
-# 🧠 PrimeyAcc | System Company Detail API V1.2
+# 🧠 PrimeyAcc | System Company Detail API V1.3
 # ------------------------------------------------------------
 # ✅ Retrieve one tenant company for system workspace
 # ✅ Returns company profile, owner, subscriptions and memberships
 # ✅ Includes current subscription and subscription history
 # ✅ Safe field access based on the current Company model
+# ✅ Protected by system permission: system.companies.view
+# ✅ Uses central api/permissions.py guard
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذا الملف جزء من المرحلة 1: نواة SaaS
+# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
 # - Company هي حدود العزل الأساسية للنظام
 # - جميع APIs داخل /api/system/ تتطلب can_access_system=True
+# - تفاصيل الشركات لا تظهر لمستخدم company فقط
 # - البيانات حقيقية من قاعدة البيانات فقط بدون mock data
 # ============================================================
 
@@ -24,25 +28,9 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_GET
 
 from accounts.models import CompanyMembership
+from api.permissions import user_has_system_permission
 from companies.models import Company
 from subscriptions.models import CompanySubscription
-
-
-def _user_can_access_system(request: HttpRequest) -> bool:
-    """
-    يتحقق من صلاحية دخول مساحة النظام.
-    """
-
-    user = request.user
-
-    if not user.is_authenticated:
-        return False
-
-    if user.is_superuser:
-        return True
-
-    profile = getattr(user, "profile", None)
-    return bool(profile and profile.can_access_system)
 
 
 def _money_to_string(value: Any) -> str:
@@ -120,11 +108,10 @@ def _logo_url(company: Company) -> str | None:
 
 def _membership_is_active(membership: CompanyMembership) -> bool:
     """
-    يحسب هل عضوية المستخدم فعالة اعتمادًا على status الموجود في الموديل.
+    يحسب هل عضوية المستخدم فعالة اعتمادًا على منطق الموديل الرسمي.
     """
 
-    status = str(getattr(membership, "status", "") or "").strip().upper()
-    return status in {"ACTIVE, ENABLED", "APPROVED", "ACTIVE"}
+    return bool(getattr(membership, "is_active_membership", False))
 
 
 def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
@@ -187,6 +174,8 @@ def _membership_payload(membership: CompanyMembership) -> dict[str, Any]:
         "role": getattr(membership, "role", ""),
         "status": getattr(membership, "status", ""),
         "is_active": _membership_is_active(membership),
+        "is_active_membership": _membership_is_active(membership),
+        "permissions": getattr(membership, "company_permissions", []),
         "job_title": getattr(membership, "job_title", ""),
         "department": getattr(membership, "department", ""),
         "is_primary": getattr(membership, "is_primary", False),
@@ -256,14 +245,15 @@ def system_company_detail(request: HttpRequest, company_id: int) -> JsonResponse
     """
     GET /api/system/companies/<company_id>/
 
-    يعرض تفاصيل شركة واحدة لمساحة النظام.
+    يعرض تفاصيل شركة واحدة لمساحة النظام فقط.
     """
 
-    if not _user_can_access_system(request):
+    if not user_has_system_permission(request.user, "system.companies.view"):
         return JsonResponse(
             {
                 "ok": False,
                 "message": "غير مصرح لك بالوصول إلى تفاصيل الشركة.",
+                "code": "SYSTEM_COMPANIES_VIEW_PERMISSION_REQUIRED",
             },
             status=403,
         )

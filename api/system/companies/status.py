@@ -1,17 +1,21 @@
 # ============================================================
 # 📂 api/system/companies/status.py
-# 🧠 PrimeyAcc | System Company Status API V1.2
+# 🧠 PrimeyAcc | System Company Status API V1.3
 # ------------------------------------------------------------
 # ✅ Activate / deactivate tenant companies from system workspace
 # ✅ Suspend / restore companies safely without deleting records
 # ✅ Updates company status and suspension metadata
 # ✅ Safe payload fields based on the current Company model
+# ✅ Protected by system permission: system.companies.status
+# ✅ Uses central api/permissions.py guard
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذا الملف جزء من المرحلة 1: نواة SaaS
+# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
 # - Company هي حدود العزل الأساسية للنظام
 # - إيقاف الشركة لا يحذف بياناتها ولا يلغي اشتراكاتها تلقائيًا
 # - جميع APIs داخل /api/system/ تتطلب can_access_system=True
+# - تغيير حالة الشركة لا يسمح لمستخدم company فقط
 # ============================================================
 
 from __future__ import annotations
@@ -28,24 +32,8 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
+from api.permissions import user_has_system_permission
 from companies.models import Company, CompanyStatus
-
-
-def _user_can_access_system(request: HttpRequest) -> bool:
-    """
-    يتحقق من صلاحية دخول مساحة النظام.
-    """
-
-    user = request.user
-
-    if not user.is_authenticated:
-        return False
-
-    if user.is_superuser:
-        return True
-
-    profile = getattr(user, "profile", None)
-    return bool(profile and profile.can_access_system)
 
 
 def _json_body(request: HttpRequest) -> dict[str, Any]:
@@ -122,6 +110,29 @@ def _datetime_to_string(value: Any) -> str | None:
         return None
 
     return value.isoformat()
+
+
+def _company_has_field(field_name: str) -> bool:
+    """
+    يتحقق من وجود الحقل داخل Company قبل التعديل أو الإخراج الآمن.
+    """
+
+    return any(field.name == field_name for field in Company._meta.fields)
+
+
+def _set_company_field(
+    company: Company,
+    field_name: str,
+    value: Any,
+    update_fields: set[str],
+) -> None:
+    """
+    يعدل الحقل فقط إذا كان موجودًا في موديل Company.
+    """
+
+    if _company_has_field(field_name):
+        setattr(company, field_name, value)
+        update_fields.add(field_name)
 
 
 def _logo_url(company: Company) -> str | None:
@@ -226,11 +237,12 @@ def system_company_status(request: HttpRequest, company_id: int) -> JsonResponse
     - set_status
     """
 
-    if not _user_can_access_system(request):
+    if not user_has_system_permission(request.user, "system.companies.status"):
         return JsonResponse(
             {
                 "ok": False,
                 "message": "غير مصرح لك بتغيير حالة شركات النظام.",
+                "code": "SYSTEM_COMPANIES_STATUS_PERMISSION_REQUIRED",
             },
             status=403,
         )
@@ -242,39 +254,47 @@ def system_company_status(request: HttpRequest, company_id: int) -> JsonResponse
     reason = _clean_text(_get_value(request, payload, "reason"))
 
     valid_statuses = {choice[0] for choice in CompanyStatus.choices}
+    update_fields: set[str] = set()
+    message = "تم تحديث حالة الشركة بنجاح."
 
     try:
         with transaction.atomic():
             if action == "activate":
-                company.is_active = True
-                company.status = CompanyStatus.ACTIVE
-                company.suspended_at = None
-                company.suspended_reason = ""
+                _set_company_field(company, "is_active", True, update_fields)
+                _set_company_field(company, "status", CompanyStatus.ACTIVE, update_fields)
+                _set_company_field(company, "suspended_at", None, update_fields)
+                _set_company_field(company, "suspended_reason", "", update_fields)
                 message = "تم تفعيل الشركة بنجاح."
 
             elif action == "deactivate":
-                company.is_active = False
+                _set_company_field(company, "is_active", False, update_fields)
                 message = "تم إيقاف تفعيل الشركة بنجاح."
 
             elif action == "suspend":
-                company.is_active = False
-                company.status = CompanyStatus.SUSPENDED
-                company.suspended_at = timezone.now()
-                company.suspended_reason = reason or "تم تعليق الشركة من مساحة النظام."
+                _set_company_field(company, "is_active", False, update_fields)
+                _set_company_field(company, "status", CompanyStatus.SUSPENDED, update_fields)
+                _set_company_field(company, "suspended_at", timezone.now(), update_fields)
+                _set_company_field(
+                    company,
+                    "suspended_reason",
+                    reason or "تم تعليق الشركة من مساحة النظام.",
+                    update_fields,
+                )
                 message = "تم تعليق الشركة بنجاح."
 
             elif action == "restore":
-                company.is_active = True
-                company.status = CompanyStatus.ACTIVE
-                company.suspended_at = None
-                company.suspended_reason = ""
+                _set_company_field(company, "is_active", True, update_fields)
+                _set_company_field(company, "status", CompanyStatus.ACTIVE, update_fields)
+                _set_company_field(company, "suspended_at", None, update_fields)
+                _set_company_field(company, "suspended_reason", "", update_fields)
                 message = "تم استعادة الشركة بنجاح."
 
             elif action == "set_active":
-                company.is_active = _to_bool(
-                    _get_value(request, payload, "is_active", company.is_active),
-                    default=company.is_active,
+                is_active = _to_bool(
+                    _get_value(request, payload, "is_active", getattr(company, "is_active", True)),
+                    default=getattr(company, "is_active", True),
                 )
+                _set_company_field(company, "is_active", is_active, update_fields)
                 message = "تم تحديث حالة تفعيل الشركة بنجاح."
 
             elif action == "set_status":
@@ -290,21 +310,29 @@ def system_company_status(request: HttpRequest, company_id: int) -> JsonResponse
                         status=400,
                     )
 
-                company.status = status
+                _set_company_field(company, "status", status, update_fields)
 
                 if status == CompanyStatus.SUSPENDED:
-                    company.is_active = False
-                    company.suspended_at = company.suspended_at or timezone.now()
-                    company.suspended_reason = (
+                    _set_company_field(company, "is_active", False, update_fields)
+                    _set_company_field(
+                        company,
+                        "suspended_at",
+                        getattr(company, "suspended_at", None) or timezone.now(),
+                        update_fields,
+                    )
+                    _set_company_field(
+                        company,
+                        "suspended_reason",
                         reason
-                        or company.suspended_reason
-                        or "تم تعليق الشركة من مساحة النظام."
+                        or getattr(company, "suspended_reason", "")
+                        or "تم تعليق الشركة من مساحة النظام.",
+                        update_fields,
                     )
 
                 if status == CompanyStatus.ACTIVE:
-                    company.is_active = True
-                    company.suspended_at = None
-                    company.suspended_reason = ""
+                    _set_company_field(company, "is_active", True, update_fields)
+                    _set_company_field(company, "suspended_at", None, update_fields)
+                    _set_company_field(company, "suspended_reason", "", update_fields)
 
                 message = "تم تحديث حالة الشركة بنجاح."
 
@@ -320,18 +348,15 @@ def system_company_status(request: HttpRequest, company_id: int) -> JsonResponse
                     status=400,
                 )
 
-            company.updated_by = request.user
+            _set_company_field(company, "updated_by", request.user, update_fields)
+
             company.full_clean()
-            company.save(
-                update_fields=[
-                    "is_active",
-                    "status",
-                    "suspended_at",
-                    "suspended_reason",
-                    "updated_by",
-                    "updated_at",
-                ]
-            )
+
+            if update_fields:
+                update_fields.add("updated_at")
+                company.save(update_fields=list(update_fields))
+            else:
+                company.save()
 
     except ValidationError as exc:
         return JsonResponse(

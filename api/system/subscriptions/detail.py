@@ -1,15 +1,18 @@
 # ============================================================
 # 📂 api/system/subscriptions/detail.py
-# 🧠 PrimeyAcc | System Company Subscription Detail API V1.0
+# 🧠 PrimeyAcc | System Company Subscription Detail API V1.1
 # ------------------------------------------------------------
 # ✅ Retrieve one company subscription for system workspace
 # ✅ Returns company, plan, lifecycle, financial and audit summary
 # ✅ Includes other subscriptions for the same company
-# ✅ Protected by authenticated system-access users only
+# ✅ Protected by system permission: system.subscriptions.view
+# ✅ Uses central api/permissions.py guard
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذا الملف جزء من المرحلة 1: نواة SaaS
+# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
 # - جميع APIs داخل /api/system/ تتطلب can_access_system=True
+# - تفاصيل اشتراكات الشركات لا تظهر لمستخدم company فقط
 # - تفاصيل الاشتراك تعرض بيانات حقيقية فقط من قاعدة البيانات
 # - لا يتم وضع منطق الدفع أو الفواتير داخل ملف تفاصيل الاشتراك
 # ============================================================
@@ -23,24 +26,8 @@ from django.http import HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_GET
 
+from api.permissions import user_has_system_permission
 from subscriptions.models import CompanySubscription
-
-
-def _user_can_access_system(request: HttpRequest) -> bool:
-    """
-    يتحقق من صلاحية دخول مساحة النظام.
-    """
-
-    user = request.user
-
-    if not user.is_authenticated:
-        return False
-
-    if user.is_superuser:
-        return True
-
-    profile = getattr(user, "profile", None)
-    return bool(profile and profile.can_access_system)
 
 
 def _money_to_string(value: Any) -> str:
@@ -85,20 +72,34 @@ def _company_payload(subscription: CompanySubscription) -> dict[str, Any]:
 
     return {
         "id": company.id,
-        "name": getattr(company, "name", ""),
-        "code": getattr(company, "code", ""),
+        "name": getattr(company, "display_name", None) or getattr(company, "name", ""),
+        "display_name": getattr(company, "display_name", None) or getattr(company, "name", ""),
+        "name_ar": getattr(company, "name_ar", ""),
+        "name_en": getattr(company, "name_en", ""),
+        "company_code": getattr(company, "company_code", ""),
+        "code": getattr(company, "company_code", ""),
+        "activity_profile": getattr(company, "activity_profile", ""),
+        "status": getattr(company, "status", ""),
         "email": getattr(company, "email", ""),
         "phone": getattr(company, "phone", ""),
+        "mobile": getattr(company, "mobile", ""),
+        "whatsapp_number": getattr(company, "whatsapp_number", ""),
         "website": getattr(company, "website", ""),
         "commercial_registration": getattr(company, "commercial_registration", ""),
         "tax_number": getattr(company, "tax_number", ""),
         "country": getattr(company, "country", ""),
         "city": getattr(company, "city", ""),
+        "region": getattr(company, "region", ""),
         "district": getattr(company, "district", ""),
-        "street": getattr(company, "street", ""),
+        "street_name": getattr(company, "street_name", ""),
+        "street": getattr(company, "street_name", ""),
         "building_number": getattr(company, "building_number", ""),
         "postal_code": getattr(company, "postal_code", ""),
-        "additional_number": getattr(company, "additional_number", ""),
+        "short_address": getattr(company, "short_address", ""),
+        "national_address_line": getattr(company, "national_address_line", ""),
+        "address": getattr(company, "address", ""),
+        "currency_code": getattr(company, "currency_code", "SAR"),
+        "vat_percentage": _money_to_string(getattr(company, "vat_percentage", None)),
         "is_active": getattr(company, "is_active", True),
         "created_at": _datetime_to_string(getattr(company, "created_at", None)),
         "updated_at": _datetime_to_string(getattr(company, "updated_at", None)),
@@ -210,18 +211,22 @@ def _subscription_summary_payload(subscription: CompanySubscription) -> dict[str
 
 @login_required
 @require_GET
-def system_subscription_detail(request: HttpRequest, subscription_id: int) -> JsonResponse:
+def system_subscription_detail(
+    request: HttpRequest,
+    subscription_id: int,
+) -> JsonResponse:
     """
     GET /api/system/subscriptions/<subscription_id>/
 
-    يعرض تفاصيل اشتراك شركة واحد لمساحة النظام.
+    يعرض تفاصيل اشتراك شركة واحد لمساحة النظام فقط.
     """
 
-    if not _user_can_access_system(request):
+    if not user_has_system_permission(request.user, "system.subscriptions.view"):
         return JsonResponse(
             {
                 "ok": False,
                 "message": "غير مصرح لك بالوصول إلى تفاصيل الاشتراك.",
+                "code": "SYSTEM_SUBSCRIPTIONS_VIEW_PERMISSION_REQUIRED",
             },
             status=403,
         )
@@ -241,9 +246,11 @@ def system_subscription_detail(request: HttpRequest, subscription_id: int) -> Js
         .order_by("-created_at", "-id")
     )
 
+    company_subscriptions_list = list(company_subscriptions)
+
     other_subscriptions = [
         _subscription_summary_payload(item)
-        for item in company_subscriptions
+        for item in company_subscriptions_list
         if item.id != subscription.id
     ]
 
@@ -255,7 +262,7 @@ def system_subscription_detail(request: HttpRequest, subscription_id: int) -> Js
                 "subscription": _subscription_payload(subscription),
                 "company_subscriptions": [
                     _subscription_summary_payload(item)
-                    for item in company_subscriptions
+                    for item in company_subscriptions_list
                 ],
                 "other_subscriptions": other_subscriptions,
             },

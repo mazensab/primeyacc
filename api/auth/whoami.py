@@ -1,12 +1,15 @@
 # ============================================================
 # 📂 api/auth/whoami.py
-# 🧠 PrimeyAcc | Auth Whoami API V1
+# 🧠 PrimeyAcc | Auth Whoami API V2
 # ------------------------------------------------------------
 # ✅ Current User Session Snapshot
 # ✅ System Access Detection
 # ✅ Company Access Detection
-# ✅ Default Company Snapshot
-# ✅ Company Memberships Snapshot
+# ✅ System Permissions Snapshot
+# ✅ Company Permissions Snapshot
+# ✅ Safe Current Company Resolver
+# ✅ Active Company Memberships Only
+# ✅ Workspace / Dashboard Path Resolver
 # ✅ Anonymous-safe Response
 # ✅ Session Auth Compatible
 # ------------------------------------------------------------
@@ -17,6 +20,7 @@
 # - /system لا يفتح إلا لمستخدم نظام مصرح
 # - /company لا يفتح إلا بعضوية شركة فعالة
 # - الباكند هو مصدر الحقيقة للصلاحيات وعزل الشركات
+# - whoami هو مصدر الحقيقة للواجهة
 # ============================================================
 
 from __future__ import annotations
@@ -28,7 +32,13 @@ from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from accounts.models import CompanyMembership, UserProfile
+from accounts.models import CompanyMembership, UserProfile, WorkspaceType
+
+
+def _safe_str(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value)
 
 
 def _company_payload(company) -> dict[str, Any] | None:
@@ -49,7 +59,7 @@ def _company_payload(company) -> dict[str, Any] | None:
         "postal_code": company.postal_code,
         "short_address": company.short_address,
         "currency_code": company.currency_code,
-        "vat_percentage": str(company.vat_percentage),
+        "vat_percentage": _safe_str(company.vat_percentage),
     }
 
 
@@ -63,14 +73,69 @@ def _membership_payload(membership: CompanyMembership) -> dict[str, Any]:
         "job_title": membership.job_title,
         "department": membership.department,
         "is_active_membership": membership.is_active_membership,
+        "permissions": membership.company_permissions,
     }
 
 
+def _resolve_workspace_and_dashboard(
+    *,
+    profile: UserProfile,
+    current_membership: CompanyMembership | None,
+) -> tuple[str | None, str | None]:
+    """
+    Resolve the safest frontend workspace and dashboard path.
+
+    Priority:
+    1. Respect default_workspace if the user can access it.
+    2. Fallback to system if available.
+    3. Fallback to company if available.
+    4. Return None when no workspace is available.
+    """
+    can_access_system = profile.can_access_system
+    can_access_company = bool(current_membership)
+
+    if profile.default_workspace == WorkspaceType.SYSTEM and can_access_system:
+        return WorkspaceType.SYSTEM, "/system"
+
+    if profile.default_workspace == WorkspaceType.COMPANY and can_access_company:
+        return WorkspaceType.COMPANY, "/company"
+
+    if can_access_system:
+        return WorkspaceType.SYSTEM, "/system"
+
+    if can_access_company:
+        return WorkspaceType.COMPANY, "/company"
+
+    return None, None
+
+
 def _profile_payload(profile: UserProfile) -> dict[str, Any]:
-    memberships = (
-        CompanyMembership.objects.select_related("company")
-        .filter(user=profile.user)
-        .order_by("-is_primary", "-created_at")
+    """
+    Build a safe profile payload for the frontend.
+
+    Important:
+    - memberships returned here are active memberships only.
+    - current_company is resolved from CompanyMembership, not direct company access.
+    - inactive/suspended/expired/cancelled companies are not used for /company access.
+    """
+    active_memberships = list(profile.active_company_memberships())
+    current_membership = profile.get_default_company_membership()
+
+    workspace, dashboard_path = _resolve_workspace_and_dashboard(
+        profile=profile,
+        current_membership=current_membership,
+    )
+
+    current_company = (
+        _company_payload(current_membership.company)
+        if current_membership
+        else None
+    )
+
+    current_membership_payload = (
+        _membership_payload(current_membership)
+        if current_membership
+        else None
     )
 
     return {
@@ -78,12 +143,20 @@ def _profile_payload(profile: UserProfile) -> dict[str, Any]:
         "display_name": profile.display_name,
         "status": profile.status,
         "default_workspace": profile.default_workspace,
+        "workspace": workspace,
+        "dashboard_path": dashboard_path,
         "is_system_user": profile.is_system_user,
         "system_role": profile.system_role,
+        "system_permissions": profile.system_permissions,
         "can_access_system": profile.can_access_system,
-        "can_access_company": profile.can_access_company,
-        "default_company": _company_payload(profile.default_company),
-        "memberships": [_membership_payload(membership) for membership in memberships],
+        "can_access_company": bool(current_membership),
+        "default_company": current_company,
+        "current_company": current_company,
+        "current_membership": current_membership_payload,
+        "memberships": [
+            _membership_payload(membership)
+            for membership in active_memberships
+        ],
         "language": profile.language,
         "timezone": profile.timezone,
     }
@@ -100,8 +173,16 @@ def whoami(request: Request) -> Response:
                 "authenticated": False,
                 "user": None,
                 "profile": None,
+                "workspace": None,
+                "dashboard_path": None,
                 "can_access_system": False,
                 "can_access_company": False,
+                "system_permissions": [],
+                "company_permissions": [],
+                "current_company": None,
+                "current_membership": None,
+                "default_company": None,
+                "memberships": [],
             }
         )
 
@@ -113,6 +194,11 @@ def whoami(request: Request) -> Response:
     )
 
     profile_data = _profile_payload(profile)
+
+    company_permissions = []
+    current_membership = profile_data.get("current_membership")
+    if current_membership:
+        company_permissions = current_membership.get("permissions", [])
 
     return Response(
         {
@@ -128,9 +214,15 @@ def whoami(request: Request) -> Response:
                 "is_active": user.is_active,
             },
             "profile": profile_data,
+            "workspace": profile_data["workspace"],
+            "dashboard_path": profile_data["dashboard_path"],
             "can_access_system": profile_data["can_access_system"],
             "can_access_company": profile_data["can_access_company"],
+            "system_permissions": profile_data["system_permissions"],
+            "company_permissions": company_permissions,
             "default_company": profile_data["default_company"],
+            "current_company": profile_data["current_company"],
+            "current_membership": profile_data["current_membership"],
             "memberships": profile_data["memberships"],
         }
     )

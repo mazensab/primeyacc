@@ -1,14 +1,18 @@
 # ============================================================
 # 📂 api/system/subscriptions/cancel.py
-# 🧠 PrimeyAcc | System Company Subscription Cancel API V1.0
+# 🧠 PrimeyAcc | System Company Subscription Cancel API V1.1
 # ------------------------------------------------------------
 # ✅ Cancel company subscriptions from system workspace
 # ✅ Supports cancellation notes and auto-renew disabling
 # ✅ Preserves subscription history without deleting records
-# ✅ Protected by authenticated system-access users only
+# ✅ Protected by system permission: system.subscriptions.cancel
+# ✅ Uses central api/permissions.py guard
+# ✅ Safe update fields based on the current CompanySubscription model
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذا الملف جزء من المرحلة 1: نواة SaaS
+# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
+# - إلغاء اشتراكات الشركات لا يسمح لمستخدم company فقط
 # - إلغاء الاشتراك لا يحذف السجل من قاعدة البيانات
 # - الإلغاء يوقف auto_renew ويحفظ وقت الإلغاء
 # - الدفع والفواتير لها وحدات مستقلة لاحقًا ولا توضع هنا
@@ -27,24 +31,8 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
+from api.permissions import user_has_system_permission
 from subscriptions.models import CompanySubscription
-
-
-def _user_can_access_system(request: HttpRequest) -> bool:
-    """
-    يتحقق من صلاحية دخول مساحة النظام.
-    """
-
-    user = request.user
-
-    if not user.is_authenticated:
-        return False
-
-    if user.is_superuser:
-        return True
-
-    profile = getattr(user, "profile", None)
-    return bool(profile and profile.can_access_system)
 
 
 def _json_body(request: HttpRequest) -> dict[str, Any]:
@@ -63,7 +51,12 @@ def _json_body(request: HttpRequest) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _get_value(request: HttpRequest, payload: dict[str, Any], key: str, default: Any = None) -> Any:
+def _get_value(
+    request: HttpRequest,
+    payload: dict[str, Any],
+    key: str,
+    default: Any = None,
+) -> Any:
     """
     يدعم JSON و form-data بنفس الوقت.
     """
@@ -72,6 +65,14 @@ def _get_value(request: HttpRequest, payload: dict[str, Any], key: str, default:
         return payload.get(key)
 
     return request.POST.get(key, default)
+
+
+def _clean_text(value: Any) -> str:
+    """
+    ينظف النصوص القادمة من الطلب.
+    """
+
+    return str(value or "").strip()
 
 
 def _money_to_string(value: Any) -> str:
@@ -107,6 +108,29 @@ def _datetime_to_string(value: Any) -> str | None:
     return value.isoformat()
 
 
+def _model_has_field(field_name: str) -> bool:
+    """
+    يتحقق من وجود الحقل داخل CompanySubscription.
+    """
+
+    return any(field.name == field_name for field in CompanySubscription._meta.fields)
+
+
+def _set_subscription_field(
+    subscription: CompanySubscription,
+    field_name: str,
+    value: Any,
+    update_fields: set[str],
+) -> None:
+    """
+    يعدل الحقل فقط إذا كان موجودًا في موديل CompanySubscription.
+    """
+
+    if _model_has_field(field_name):
+        setattr(subscription, field_name, value)
+        update_fields.add(field_name)
+
+
 def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
     """
     يحول كائن الاشتراك إلى JSON نظيف للواجهة.
@@ -119,10 +143,15 @@ def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
         "id": subscription.id,
         "company": {
             "id": company.id,
-            "name": getattr(company, "name", ""),
-            "code": getattr(company, "code", ""),
+            "name": getattr(company, "display_name", None) or getattr(company, "name", ""),
+            "display_name": getattr(company, "display_name", None) or getattr(company, "name", ""),
+            "company_code": getattr(company, "company_code", ""),
+            "code": getattr(company, "company_code", ""),
             "email": getattr(company, "email", ""),
             "phone": getattr(company, "phone", ""),
+            "mobile": getattr(company, "mobile", ""),
+            "city": getattr(company, "city", ""),
+            "status": getattr(company, "status", ""),
             "is_active": getattr(company, "is_active", True),
         },
         "plan": {
@@ -140,6 +169,7 @@ def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
         "is_expired_by_date": subscription.is_expired_by_date,
         "price": _money_to_string(subscription.price),
         "discount_amount": _money_to_string(subscription.discount_amount),
+        "amount_before_tax": _money_to_string(subscription.amount_before_tax),
         "tax_amount": _money_to_string(subscription.tax_amount),
         "total_amount": _money_to_string(subscription.total_amount),
         "auto_renew": subscription.auto_renew,
@@ -154,18 +184,22 @@ def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
 @login_required
 @csrf_protect
 @require_POST
-def system_subscription_cancel(request: HttpRequest, subscription_id: int) -> JsonResponse:
+def system_subscription_cancel(
+    request: HttpRequest,
+    subscription_id: int,
+) -> JsonResponse:
     """
     POST /api/system/subscriptions/<subscription_id>/cancel/
 
     يلغي اشتراك شركة من مساحة النظام.
     """
 
-    if not _user_can_access_system(request):
+    if not user_has_system_permission(request.user, "system.subscriptions.cancel"):
         return JsonResponse(
             {
                 "ok": False,
                 "message": "غير مصرح لك بإلغاء اشتراكات الشركات.",
+                "code": "SYSTEM_SUBSCRIPTIONS_CANCEL_PERMISSION_REQUIRED",
             },
             status=403,
         )
@@ -193,31 +227,38 @@ def system_subscription_cancel(request: HttpRequest, subscription_id: int) -> Js
             status=200,
         )
 
-    cancel_note = str(_get_value(request, payload, "notes", "") or "").strip()
+    cancel_note = _clean_text(_get_value(request, payload, "notes", ""))
     now = timezone.now()
 
     with transaction.atomic():
-        subscription.status = CompanySubscription.Status.CANCELLED
-        subscription.auto_renew = False
-        subscription.cancelled_at = now
+        update_fields: set[str] = set()
+
+        _set_subscription_field(
+            subscription,
+            "status",
+            CompanySubscription.Status.CANCELLED,
+            update_fields,
+        )
+        _set_subscription_field(subscription, "auto_renew", False, update_fields)
+        _set_subscription_field(subscription, "cancelled_at", now, update_fields)
 
         if cancel_note:
-            current_notes = subscription.notes.strip()
-            subscription.notes = (
+            current_notes = _clean_text(getattr(subscription, "notes", ""))
+            notes = (
                 f"{current_notes}\n\nسبب الإلغاء: {cancel_note}".strip()
                 if current_notes
                 else f"سبب الإلغاء: {cancel_note}"
             )
+            _set_subscription_field(subscription, "notes", notes, update_fields)
 
-        subscription.save(
-            update_fields=[
-                "status",
-                "auto_renew",
-                "cancelled_at",
-                "notes",
-                "updated_at",
-            ]
-        )
+        if _model_has_field("updated_by"):
+            _set_subscription_field(subscription, "updated_by", request.user, update_fields)
+
+        if update_fields:
+            update_fields.add("updated_at")
+            subscription.save(update_fields=list(update_fields))
+        else:
+            subscription.save()
 
     return JsonResponse(
         {

@@ -1,16 +1,19 @@
 # ============================================================
 # 📂 api/system/companies/list.py
-# 🧠 PrimeyAcc | System Companies List API V1.0
+# 🧠 PrimeyAcc | System Companies List API V1.1
 # ------------------------------------------------------------
 # ✅ List tenant companies for system workspace
 # ✅ Supports search, status, activity, city, region, and active filters
 # ✅ Returns subscription summary for each company
-# ✅ Protected by authenticated system-access users only
+# ✅ Protected by system permission: system.companies.view
+# ✅ Uses central api/permissions.py guard
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذا الملف جزء من المرحلة 1: نواة SaaS
+# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
 # - Company هي حدود العزل الأساسية للنظام
 # - جميع APIs داخل /api/system/ تتطلب can_access_system=True
+# - قائمة كل الشركات لا تظهر لمستخدم company فقط
 # - البيانات حقيقية من قاعدة البيانات فقط بدون mock data
 # ============================================================
 
@@ -24,25 +27,9 @@ from django.db.models import Count, Q, QuerySet
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.http import require_GET
 
+from api.permissions import user_has_system_permission
 from companies.models import Company, CompanyActivityProfile, CompanyStatus
 from subscriptions.models import CompanySubscription
-
-
-def _user_can_access_system(request: HttpRequest) -> bool:
-    """
-    يتحقق من صلاحية دخول مساحة النظام.
-    """
-
-    user = request.user
-
-    if not user.is_authenticated:
-        return False
-
-    if user.is_superuser:
-        return True
-
-    profile = getattr(user, "profile", None)
-    return bool(profile and profile.can_access_system)
 
 
 def _money_to_string(value: Any) -> str:
@@ -290,14 +277,15 @@ def system_companies_list(request: HttpRequest) -> JsonResponse:
     """
     GET /api/system/companies/
 
-    يعرض شركات النظام لمساحة النظام.
+    يعرض شركات النظام لمساحة النظام فقط.
     """
 
-    if not _user_can_access_system(request):
+    if not user_has_system_permission(request.user, "system.companies.view"):
         return JsonResponse(
             {
                 "ok": False,
                 "message": "غير مصرح لك بالوصول إلى شركات النظام.",
+                "code": "SYSTEM_COMPANIES_VIEW_PERMISSION_REQUIRED",
             },
             status=403,
         )

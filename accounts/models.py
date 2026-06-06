@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 accounts/models.py
-# 🧠 PrimeyAcc | Accounts Models V1.1
+# 🧠 PrimeyAcc | Accounts Models V1.2
 # ------------------------------------------------------------
 # ✅ User Profile
 # ✅ Workspace Type Foundation
@@ -9,6 +9,8 @@
 # ✅ System / Company Access Separation
 # ✅ Multi-company User Support
 # ✅ Fixed Company Access Resolver
+# ✅ Role-based Permissions Foundation
+# ✅ Safe Default Company Membership Resolver
 # ✅ Audit Fields
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
@@ -18,6 +20,7 @@
 # - /system لا يفتح إلا لمستخدم نظام مصرح
 # - /company لا يفتح إلا بعضوية شركة فعالة
 # - لا يتم الوصول لبيانات شركة إلا عبر CompanyMembership فعال
+# - whoami هو مصدر الحقيقة للواجهة والصلاحيات
 # ============================================================
 
 from __future__ import annotations
@@ -67,6 +70,175 @@ class MembershipStatus(models.TextChoices):
     INVITED = "INVITED", "Invited"
     SUSPENDED = "SUSPENDED", "Suspended"
     INACTIVE = "INACTIVE", "Inactive"
+
+
+# ============================================================
+# Permissions Foundation
+# ------------------------------------------------------------
+# ملاحظة:
+# هذه الصلاحيات ثابتة الآن لتثبيت المرحلة 2 بدون تعقيد زائد.
+# لاحقًا يمكن نقلها إلى جداول Role / Permission إذا احتجنا إدارة مرنة من الواجهة.
+# ============================================================
+
+SYSTEM_PERMISSION_ALL = "*"
+
+SYSTEM_ROLE_PERMISSIONS: dict[str, list[str]] = {
+    SystemRole.NONE: [],
+    SystemRole.SUPER_ADMIN: [SYSTEM_PERMISSION_ALL],
+    SystemRole.SYSTEM_ADMIN: [
+        "system.dashboard.view",
+        "system.companies.view",
+        "system.companies.create",
+        "system.companies.update",
+        "system.companies.status",
+        "system.plans.view",
+        "system.plans.create",
+        "system.plans.update",
+        "system.subscriptions.view",
+        "system.subscriptions.create",
+        "system.subscriptions.update",
+        "system.subscriptions.renew",
+        "system.subscriptions.cancel",
+        "system.users.view",
+        "system.users.create",
+        "system.users.update",
+        "system.reports.view",
+    ],
+    SystemRole.SUPPORT: [
+        "system.dashboard.view",
+        "system.companies.view",
+        "system.subscriptions.view",
+        "system.users.view",
+    ],
+    SystemRole.BILLING_MANAGER: [
+        "system.dashboard.view",
+        "system.companies.view",
+        "system.plans.view",
+        "system.subscriptions.view",
+        "system.subscriptions.create",
+        "system.subscriptions.update",
+        "system.subscriptions.renew",
+        "system.subscriptions.cancel",
+        "system.reports.view",
+    ],
+}
+
+COMPANY_PERMISSION_ALL = "*"
+
+COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
+    CompanyRole.OWNER: [COMPANY_PERMISSION_ALL],
+    CompanyRole.ADMIN: [
+        "company.dashboard.view",
+        "company.users.view",
+        "company.users.create",
+        "company.users.update",
+        "company.settings.view",
+        "company.settings.update",
+        "company.products.view",
+        "company.products.create",
+        "company.products.update",
+        "company.customers.view",
+        "company.customers.create",
+        "company.customers.update",
+        "company.suppliers.view",
+        "company.suppliers.create",
+        "company.suppliers.update",
+        "company.sales.view",
+        "company.sales.create",
+        "company.sales.update",
+        "company.purchases.view",
+        "company.purchases.create",
+        "company.purchases.update",
+        "company.inventory.view",
+        "company.inventory.update",
+        "company.accounting.view",
+        "company.accounting.create",
+        "company.accounting.update",
+        "company.reports.view",
+    ],
+    CompanyRole.MANAGER: [
+        "company.dashboard.view",
+        "company.products.view",
+        "company.customers.view",
+        "company.suppliers.view",
+        "company.sales.view",
+        "company.sales.create",
+        "company.sales.update",
+        "company.purchases.view",
+        "company.inventory.view",
+        "company.reports.view",
+    ],
+    CompanyRole.ACCOUNTANT: [
+        "company.dashboard.view",
+        "company.customers.view",
+        "company.suppliers.view",
+        "company.sales.view",
+        "company.purchases.view",
+        "company.accounting.view",
+        "company.accounting.create",
+        "company.accounting.update",
+        "company.reports.view",
+    ],
+    CompanyRole.CASHIER: [
+        "company.dashboard.view",
+        "company.products.view",
+        "company.customers.view",
+        "company.customers.create",
+        "company.sales.view",
+        "company.sales.create",
+    ],
+    CompanyRole.SALES: [
+        "company.dashboard.view",
+        "company.products.view",
+        "company.customers.view",
+        "company.customers.create",
+        "company.sales.view",
+        "company.sales.create",
+    ],
+    CompanyRole.INVENTORY: [
+        "company.dashboard.view",
+        "company.products.view",
+        "company.products.create",
+        "company.products.update",
+        "company.suppliers.view",
+        "company.purchases.view",
+        "company.inventory.view",
+        "company.inventory.update",
+        "company.reports.view",
+    ],
+    CompanyRole.HR: [
+        "company.dashboard.view",
+        "company.users.view",
+        "company.users.create",
+        "company.users.update",
+        "company.hr.view",
+        "company.hr.create",
+        "company.hr.update",
+        "company.reports.view",
+    ],
+    CompanyRole.EMPLOYEE: [
+        "company.dashboard.view",
+    ],
+    CompanyRole.VIEWER: [
+        "company.dashboard.view",
+        "company.products.view",
+        "company.customers.view",
+        "company.suppliers.view",
+        "company.sales.view",
+        "company.purchases.view",
+        "company.inventory.view",
+        "company.reports.view",
+    ],
+}
+
+
+def _normalize_permissions(permissions: list[str]) -> list[str]:
+    """
+    Return a sorted unique permissions list.
+
+    Keeping this helper small makes whoami responses stable and predictable.
+    """
+    return sorted(set(permissions or []))
 
 
 class UserProfile(models.Model):
@@ -219,10 +391,34 @@ class UserProfile(models.Model):
         )
 
     @property
+    def system_permissions(self) -> list[str]:
+        """
+        System permissions available to this profile.
+
+        The role is ignored unless can_access_system is true.
+        This prevents inactive/suspended users from carrying permissions.
+        """
+        if not self.can_access_system:
+            return []
+
+        return _normalize_permissions(
+            SYSTEM_ROLE_PERMISSIONS.get(self.system_role, [])
+        )
+
+    @property
     def can_access_company(self) -> bool:
+        return self.active_company_memberships().exists()
+
+    def active_company_memberships(self):
+        """
+        Return only memberships that are valid for /company access.
+
+        This is the official company access boundary.
+        Any /company API should resolve access through this rule or an equivalent service.
+        """
         return (
-            self.status == UserProfileStatus.ACTIVE
-            and self.user.company_memberships.filter(
+            self.user.company_memberships.select_related("company")
+            .filter(
                 status=MembershipStatus.ACTIVE,
                 company__is_active=True,
             )
@@ -233,8 +429,28 @@ class UserProfile(models.Model):
                     CompanyStatus.CANCELLED,
                 ]
             )
-            .exists()
+            .order_by("-is_primary", "-created_at")
         )
+
+    def get_default_company_membership(self) -> CompanyMembership | None:
+        """
+        Resolve the safest default company membership for whoami.
+
+        Priority:
+        1. active membership for default_company
+        2. primary active membership
+        3. latest active membership
+        """
+        memberships = self.active_company_memberships()
+
+        if self.default_company_id:
+            default_membership = memberships.filter(
+                company_id=self.default_company_id
+            ).first()
+            if default_membership:
+                return default_membership
+
+        return memberships.first()
 
     def touch_last_seen(self) -> None:
         self.last_seen_at = timezone.now()
@@ -413,6 +629,30 @@ class CompanyMembership(models.Model):
                 CompanyStatus.CANCELLED,
             ]
         )
+
+    @property
+    def company_permissions(self) -> list[str]:
+        """
+        Company permissions available through this membership.
+
+        The role is ignored unless the membership is active.
+        This protects /company from suspended/inactive memberships.
+        """
+        if not self.is_active_membership:
+            return []
+
+        return _normalize_permissions(
+            COMPANY_ROLE_PERMISSIONS.get(self.role, [])
+        )
+
+    def has_company_permission(self, permission: str) -> bool:
+        """
+        Check one company permission safely.
+
+        OWNER can access everything because it receives '*'.
+        """
+        permissions = self.company_permissions
+        return COMPANY_PERMISSION_ALL in permissions or permission in permissions
 
     def activate(self, user=None) -> None:
         self.status = MembershipStatus.ACTIVE

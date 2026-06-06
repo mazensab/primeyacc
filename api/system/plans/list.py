@@ -1,15 +1,18 @@
 # ============================================================
 # 📂 api/system/plans/list.py
-# 🧠 PrimeyAcc | System Subscription Plans List API V1.0
+# 🧠 PrimeyAcc | System Subscription Plans List API V1.1
 # ------------------------------------------------------------
 # ✅ List SaaS subscription plans for system workspace
 # ✅ Supports search, status filters, public/internal filters
 # ✅ Returns clean API payload for future frontend pages
-# ✅ Protected by authenticated system-access users only
+# ✅ Protected by system permission: system.plans.view
+# ✅ Uses central api/permissions.py guard
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذا الملف جزء من المرحلة 1: نواة SaaS
+# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
 # - جميع APIs داخل /api/system/ تتطلب can_access_system=True
+# - إدارة الباقات لا تظهر لمستخدم company فقط
 # - لا يتم عرض نصوص تقنية في الواجهة لاحقًا
 # - البيانات حقيقية من قاعدة البيانات فقط بدون mock data
 # ============================================================
@@ -23,27 +26,8 @@ from django.db.models import Count, Q, QuerySet
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.http import require_GET
 
+from api.permissions import user_has_system_permission
 from subscriptions.models import SubscriptionPlan
-
-
-def _user_can_access_system(request: HttpRequest) -> bool:
-    """
-    يتحقق من صلاحية دخول مساحة النظام.
-
-    Phase 0 أنشأ UserProfile وفيه can_access_system.
-    superuser يعتبر مسموحًا له دائمًا.
-    """
-
-    user = request.user
-
-    if not user.is_authenticated:
-        return False
-
-    if user.is_superuser:
-        return True
-
-    profile = getattr(user, "profile", None)
-    return bool(profile and profile.can_access_system)
 
 
 def _money_to_string(value: Any) -> str:
@@ -55,6 +39,17 @@ def _money_to_string(value: Any) -> str:
         return "0.00"
 
     return f"{value:.2f}"
+
+
+def _datetime_to_string(value: Any) -> str | None:
+    """
+    توحيد إخراج التاريخ والوقت للواجهة.
+    """
+
+    if not value:
+        return None
+
+    return value.isoformat()
 
 
 def _plan_payload(plan: SubscriptionPlan) -> dict[str, Any]:
@@ -81,12 +76,15 @@ def _plan_payload(plan: SubscriptionPlan) -> dict[str, Any]:
         "is_public": plan.is_public,
         "sort_order": plan.sort_order,
         "companies_count": companies_count,
-        "created_at": plan.created_at.isoformat() if plan.created_at else None,
-        "updated_at": plan.updated_at.isoformat() if plan.updated_at else None,
+        "created_at": _datetime_to_string(plan.created_at),
+        "updated_at": _datetime_to_string(plan.updated_at),
     }
 
 
-def _apply_filters(request: HttpRequest, queryset: QuerySet[SubscriptionPlan]) -> QuerySet[SubscriptionPlan]:
+def _apply_filters(
+    request: HttpRequest,
+    queryset: QuerySet[SubscriptionPlan],
+) -> QuerySet[SubscriptionPlan]:
     """
     يطبق البحث والفلاتر القادمة من Query Params.
     """
@@ -111,7 +109,7 @@ def _apply_filters(request: HttpRequest, queryset: QuerySet[SubscriptionPlan]) -
         queryset = queryset.filter(is_public=(visibility == "public"))
 
     if code:
-        queryset = queryset.filter(code=code)
+        queryset = queryset.filter(code__iexact=code)
 
     return queryset
 
@@ -122,14 +120,15 @@ def system_plans_list(request: HttpRequest) -> JsonResponse:
     """
     GET /api/system/plans/
 
-    يعرض باقات الاشتراك لمساحة النظام.
+    يعرض باقات الاشتراك لمساحة النظام فقط.
     """
 
-    if not _user_can_access_system(request):
+    if not user_has_system_permission(request.user, "system.plans.view"):
         return JsonResponse(
             {
                 "ok": False,
                 "message": "غير مصرح لك بالوصول إلى باقات النظام.",
+                "code": "SYSTEM_PLANS_VIEW_PERMISSION_REQUIRED",
             },
             status=403,
         )

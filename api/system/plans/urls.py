@@ -1,15 +1,17 @@
 # ============================================================
 # 📂 api/system/plans/urls.py
-# 🧠 PrimeyAcc | System Subscription Plans URLs V1.0
+# 🧠 PrimeyAcc | System Subscription Plans URLs V1.1
 # ------------------------------------------------------------
 # ✅ Routes for system SaaS subscription plans
 # ✅ List, detail, create, update, and status actions
-# ✅ Clean endpoint structure for future frontend integration
+# ✅ Clean endpoint structure for frontend integration
 # ✅ Kept under /api/system/plans/
+# ✅ Views protected by central api/permissions.py guards
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذا الملف جزء من المرحلة 1: نواة SaaS
-# - جميع APIs داخل /api/system/ تتطلب can_access_system=True داخل views
+# - تم مراجعته في المرحلة 2 بعد إضافة حراس الصلاحيات
+# - جميع APIs داخل /api/system/plans/ محمية داخل views
 # - لا نضع منطق business داخل urls.py
 # - المسارات تكون واضحة وثابتة للواجهة
 # ============================================================
@@ -26,6 +28,7 @@ from .update import system_plan_update
 
 
 app_name = "system_plans"
+
 
 urlpatterns = [
     path("", system_plans_list, name="list"),

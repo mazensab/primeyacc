@@ -1,17 +1,23 @@
 # ============================================================
 # 📂 api/system/companies/create.py
-# 🧠 PrimeyAcc | System Company Create API V1.1
+# 🧠 PrimeyAcc | System Company Create API V1.2
 # ------------------------------------------------------------
 # ✅ Create tenant companies from system workspace
 # ✅ Validates company identity, contact, Saudi address, and status
 # ✅ Supports optional owner assignment
+# ✅ Creates owner CompanyMembership when owner_id is provided
 # ✅ Safe fields based on the current Company model
+# ✅ Protected by system permission: system.companies.create
+# ✅ Uses central api/permissions.py guard
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذا الملف جزء من المرحلة 1: نواة SaaS
+# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
 # - Company هي حدود العزل الأساسية للنظام
 # - جميع APIs داخل /api/system/ تتطلب can_access_system=True
+# - إنشاء الشركات لا يسمح لمستخدم company فقط
 # - إنشاء الاشتراك للشركة يتم عبر subscriptions APIs وليس هنا
+# - عند تحديد owner_id يتم إنشاء عضوية OWNER للمالك داخل الشركة
 # ============================================================
 
 from __future__ import annotations
@@ -28,27 +34,18 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
+from accounts.models import (
+    CompanyMembership,
+    CompanyRole,
+    MembershipStatus,
+    UserProfile,
+    WorkspaceType,
+)
+from api.permissions import user_has_system_permission
 from companies.models import Company, CompanyActivityProfile, CompanyStatus
 
 
 User = get_user_model()
-
-
-def _user_can_access_system(request: HttpRequest) -> bool:
-    """
-    يتحقق من صلاحية دخول مساحة النظام.
-    """
-
-    user = request.user
-
-    if not user.is_authenticated:
-        return False
-
-    if user.is_superuser:
-        return True
-
-    profile = getattr(user, "profile", None)
-    return bool(profile and profile.can_access_system)
 
 
 def _json_body(request: HttpRequest) -> dict[str, Any]:
@@ -239,6 +236,84 @@ def _company_payload(company: Company) -> dict[str, Any]:
     }
 
 
+def _filter_company_fields(data: dict[str, Any]) -> dict[str, Any]:
+    """
+    يمنع تمرير حقول غير موجودة إلى Company.
+
+    هذا يجعل الملف آمنًا مع أي اختلاف بسيط في موديل Company الحالي.
+    """
+
+    valid_fields = {field.name for field in Company._meta.fields}
+    return {key: value for key, value in data.items() if key in valid_fields}
+
+
+def _ensure_owner_membership(
+    *,
+    owner: User | None,
+    company: Company,
+    acting_user: User,
+) -> None:
+    """
+    ينشئ عضوية OWNER للمالك إذا تم تحديد owner_id.
+
+    هذه خطوة مهمة للمرحلة 2 حتى يستطيع مالك الشركة الدخول إلى /company.
+    """
+
+    if not owner:
+        return
+
+    profile, _ = UserProfile.objects.get_or_create(
+        user=owner,
+        defaults={
+            "display_name": owner.get_full_name() or owner.get_username(),
+            "default_workspace": WorkspaceType.COMPANY,
+        },
+    )
+
+    if not profile.default_company_id:
+        profile.default_company = company
+        profile.default_workspace = WorkspaceType.COMPANY
+        profile.save(
+            update_fields=[
+                "default_company",
+                "default_workspace",
+                "updated_at",
+            ]
+        )
+
+    membership, created = CompanyMembership.objects.get_or_create(
+        user=owner,
+        company=company,
+        defaults={
+            "role": CompanyRole.OWNER,
+            "status": MembershipStatus.ACTIVE,
+            "is_primary": True,
+            "created_by": acting_user,
+            "updated_by": acting_user,
+        },
+    )
+
+    if not created:
+        membership.role = CompanyRole.OWNER
+        membership.status = MembershipStatus.ACTIVE
+        membership.is_primary = True
+        membership.updated_by = acting_user
+        membership.save(
+            update_fields=[
+                "role",
+                "status",
+                "is_primary",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+    CompanyMembership.objects.filter(
+        user=owner,
+        is_primary=True,
+    ).exclude(id=membership.id).update(is_primary=False)
+
+
 @login_required
 @csrf_protect
 @require_POST
@@ -249,11 +324,12 @@ def system_company_create(request: HttpRequest) -> JsonResponse:
     ينشئ شركة جديدة من مساحة النظام.
     """
 
-    if not _user_can_access_system(request):
+    if not user_has_system_permission(request.user, "system.companies.create"):
         return JsonResponse(
             {
                 "ok": False,
                 "message": "غير مصرح لك بإنشاء شركات النظام.",
+                "code": "SYSTEM_COMPANIES_CREATE_PERMISSION_REQUIRED",
             },
             status=403,
         )
@@ -285,7 +361,7 @@ def system_company_create(request: HttpRequest) -> JsonResponse:
             status=400,
         )
 
-    if Company.objects.filter(company_code=company_code).exists():
+    if Company.objects.filter(company_code__iexact=company_code).exists():
         return JsonResponse(
             {
                 "ok": False,
@@ -364,56 +440,64 @@ def system_company_create(request: HttpRequest) -> JsonResponse:
 
     try:
         with transaction.atomic():
-            company = Company(
-                name=name,
-                name_ar=name_ar,
-                name_en=name_en,
-                company_code=company_code,
-                activity_profile=activity_profile,
-                status=status,
-                is_active=_to_bool(
+            company_data = {
+                "name": name,
+                "name_ar": name_ar,
+                "name_en": name_en,
+                "company_code": company_code,
+                "activity_profile": activity_profile,
+                "status": status,
+                "is_active": _to_bool(
                     _get_value(request, payload, "is_active", True),
                     default=True,
                 ),
-                commercial_registration=_clean_text(
+                "commercial_registration": _clean_text(
                     _get_value(request, payload, "commercial_registration")
                 ),
-                tax_number=_clean_text(_get_value(request, payload, "tax_number")),
-                email=_clean_text(_get_value(request, payload, "email")),
-                phone=_clean_text(_get_value(request, payload, "phone")),
-                mobile=_clean_text(_get_value(request, payload, "mobile")),
-                whatsapp_number=_clean_text(
+                "tax_number": _clean_text(_get_value(request, payload, "tax_number")),
+                "email": _clean_text(_get_value(request, payload, "email")),
+                "phone": _clean_text(_get_value(request, payload, "phone")),
+                "mobile": _clean_text(_get_value(request, payload, "mobile")),
+                "whatsapp_number": _clean_text(
                     _get_value(request, payload, "whatsapp_number")
                 ),
-                country=_clean_text(
+                "website": _clean_text(_get_value(request, payload, "website")),
+                "country": _clean_text(
                     _get_value(request, payload, "country", "Saudi Arabia")
                 )
                 or "Saudi Arabia",
-                building_number=_clean_text(
+                "building_number": _clean_text(
                     _get_value(request, payload, "building_number")
                 ),
-                street_name=_clean_text(_get_value(request, payload, "street_name")),
-                district=_clean_text(_get_value(request, payload, "district")),
-                city=_clean_text(_get_value(request, payload, "city")),
-                region=_clean_text(_get_value(request, payload, "region")),
-                postal_code=_clean_text(_get_value(request, payload, "postal_code")),
-                short_address=_clean_text(
+                "street_name": _clean_text(_get_value(request, payload, "street_name")),
+                "district": _clean_text(_get_value(request, payload, "district")),
+                "city": _clean_text(_get_value(request, payload, "city")),
+                "region": _clean_text(_get_value(request, payload, "region")),
+                "postal_code": _clean_text(_get_value(request, payload, "postal_code")),
+                "short_address": _clean_text(
                     _get_value(request, payload, "short_address")
                 ),
-                address=_clean_text(_get_value(request, payload, "address")),
-                currency_code=_clean_text(
+                "address": _clean_text(_get_value(request, payload, "address")),
+                "currency_code": _clean_text(
                     _get_value(request, payload, "currency_code", "SAR")
                 )
                 or "SAR",
-                vat_percentage=vat_percentage,
-                notes=_clean_text(_get_value(request, payload, "notes")),
-                owner=owner,
-                created_by=request.user,
-                updated_by=request.user,
-            )
+                "vat_percentage": vat_percentage,
+                "notes": _clean_text(_get_value(request, payload, "notes")),
+                "owner": owner,
+                "created_by": request.user,
+                "updated_by": request.user,
+            }
 
+            company = Company(**_filter_company_fields(company_data))
             company.full_clean()
             company.save()
+
+            _ensure_owner_membership(
+                owner=owner,
+                company=company,
+                acting_user=request.user,
+            )
 
     except ValidationError as exc:
         return JsonResponse(
@@ -429,15 +513,6 @@ def system_company_create(request: HttpRequest) -> JsonResponse:
             {
                 "ok": False,
                 "message": "تعذر إنشاء الشركة بسبب تكرار بيانات فريدة.",
-            },
-            status=400,
-        )
-    except TypeError as exc:
-        return JsonResponse(
-            {
-                "ok": False,
-                "message": "تعذر إنشاء الشركة بسبب حقل غير مدعوم في موديل الشركة.",
-                "errors": {"model": str(exc)},
             },
             status=400,
         )
