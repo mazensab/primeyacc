@@ -1,13 +1,15 @@
 # ============================================================
 # 📂 companies/tests.py
-# 🧠 PrimeyAcc | Companies Tests V1.2
+# 🧠 PrimeyAcc | Companies Tests V1.3
 # ------------------------------------------------------------
 # ✅ CompanySettings tests
 # ✅ Company settings API tests
+# ✅ Company permissions snapshot API tests
 # ✅ Company users/memberships API tests
 # ✅ Branch tenant-isolation tests
 # ✅ /api/company/me/ snapshot tests
 # ✅ /api/company/profile/ snapshot tests
+# ✅ /api/company/permissions/ snapshot tests
 # ✅ /api/company/settings/ detail/update tests
 # ✅ /api/company/users/ list/create/detail/status tests
 # ✅ /api/company/branches/ list/detail/create tests
@@ -20,6 +22,7 @@
 # - CompanySettings تخص الشركة الحالية فقط
 # - مستخدمو الشركة لا يظهرون إلا لأعضاء نفس الشركة
 # - فروع الشركة لا تظهر إلا لأعضاء نفس الشركة
+# - الصلاحيات والأدوار مصدرها الباكند
 # - الباكند هو مصدر الحقيقة للصلاحيات وعزل الشركات
 # ============================================================
 
@@ -39,7 +42,7 @@ User = get_user_model()
 
 class CompanyWorkspacePhase3Tests(TestCase):
     """
-    Tests for Phase 3 company settings, branches, and users foundation.
+    Tests for Phase 3 company settings, branches, users, and permissions foundation.
     """
 
     def setUp(self) -> None:
@@ -173,6 +176,7 @@ class CompanyWorkspacePhase3Tests(TestCase):
         endpoints = [
             "/api/company/me/",
             "/api/company/profile/",
+            "/api/company/permissions/",
             "/api/company/settings/",
             "/api/company/users/",
             f"/api/company/users/{self.membership.id}/",
@@ -232,6 +236,33 @@ class CompanyWorkspacePhase3Tests(TestCase):
         self.assertIsNotNone(data["settings"])
         self.assertIsNotNone(data["operational_settings"])
         self.assertEqual(data["default_branch"]["id"], self.default_branch.id)
+
+    def test_company_permissions_snapshot_returns_roles_and_permissions(self) -> None:
+        """
+        /api/company/permissions/ should return current role,
+        permissions, roles list, and known permissions from backend.
+        """
+
+        self.client.force_login(self.user)
+
+        response = self.client.get("/api/company/permissions/")
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        data = payload["data"]
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(data["company"]["id"], self.company.id)
+        self.assertEqual(data["company_id"], self.company.id)
+        self.assertEqual(data["membership_id"], self.membership.id)
+        self.assertEqual(data["current_role"], CompanyRole.OWNER)
+        self.assertIn("*", data["current_permissions"])
+        self.assertIn("roles", data)
+        self.assertIn("role_permissions", data)
+        self.assertIn("permissions", data)
+        self.assertIn("ADMIN", data["role_permissions"])
+        self.assertIn("company.branches.view", data["role_permissions"]["ADMIN"])
+        self.assertIn("company.users.update", data["role_permissions"]["ADMIN"])
 
     def test_company_settings_endpoint_returns_current_company_settings(self) -> None:
         """
