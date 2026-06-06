@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 parties/tests.py
-# 🧠 PrimeyAcc | Business Parties Tests V1.1
+# 🧠 PrimeyAcc | Business Parties Tests V1.2
 # ------------------------------------------------------------
 # ✅ Guest protection test for /api/company/parties/
 # ✅ Company tenant isolation tests
@@ -9,6 +9,8 @@
 # ✅ Branch ownership validation tests
 # ✅ Frontend company_id trust prevention test
 # ✅ Status action test
+# ✅ Customers aliases tests
+# ✅ Suppliers aliases tests
 # ✅ Fixed Company.company_code unique test setup
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
@@ -16,6 +18,7 @@
 # - الشركة الحالية تؤخذ من CompanyMembership
 # - كل طرف تجاري يجب أن يبقى معزولًا داخل شركته
 # - أي branch_id يجب أن يكون تابعًا لنفس الشركة الحالية
+# - /customers و /suppliers مجرد aliases فوق BusinessParty
 # ============================================================
 
 from __future__ import annotations
@@ -266,7 +269,7 @@ class BusinessPartyAPITests(TestCase):
         return response.data["results"]["results"]
 
     # ========================================================
-    # Tests
+    # Business parties foundation tests
     # ========================================================
 
     def test_guest_cannot_access_company_parties_list(self) -> None:
@@ -391,3 +394,240 @@ class BusinessPartyAPITests(TestCase):
 
         self.supplier_b.refresh_from_db()
         self.assertEqual(self.supplier_b.status, BusinessPartyStatus.ACTIVE)
+
+    # ========================================================
+    # Customers aliases tests
+    # ========================================================
+
+    def test_customers_alias_lists_only_customers_and_both(self) -> None:
+        self._login_as_company_a()
+
+        both_party = BusinessParty.objects.create(
+            company=self.company_a,
+            branch=self.branch_a,
+            party_type=BusinessPartyType.BOTH,
+            party_kind=BusinessPartyKind.ORGANIZATION,
+            status=BusinessPartyStatus.ACTIVE,
+            code="BOTH-A-CUSTOMER",
+            display_name="Both Party A",
+            mobile="0500000003",
+            city="Jeddah",
+            created_by=self.user_a,
+            updated_by=self.user_a,
+        )
+        supplier_a = BusinessParty.objects.create(
+            company=self.company_a,
+            branch=self.branch_a,
+            party_type=BusinessPartyType.SUPPLIER,
+            party_kind=BusinessPartyKind.ORGANIZATION,
+            status=BusinessPartyStatus.ACTIVE,
+            code="SUP-A-ONLY",
+            display_name="Supplier A Only",
+            mobile="0500000004",
+            city="Jeddah",
+            created_by=self.user_a,
+            updated_by=self.user_a,
+        )
+
+        response = self.client.get("/api/company/customers/")
+
+        self.assertEqual(response.status_code, 200)
+
+        items = self._party_items_from_list_response(response)
+        names = {
+            item["display_name"]
+            for item in items
+        }
+
+        self.assertIn("Customer A", names)
+        self.assertIn(both_party.display_name, names)
+        self.assertNotIn(supplier_a.display_name, names)
+        self.assertNotIn("Supplier B", names)
+
+    def test_customers_alias_create_forces_customer_type_and_ignores_company_id(self) -> None:
+        self._login_as_company_a()
+
+        response = self.client.post(
+            "/api/company/customers/create/",
+            data={
+                "company_id": self.company_b.id,
+                "branch_id": self.branch_a.id,
+                "party_type": BusinessPartyType.SUPPLIER,
+                "code": "CUS-ALIAS-A",
+                "display_name": "Customer Alias A",
+                "mobile": "0555555570",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+
+        party = BusinessParty.objects.get(code="CUS-ALIAS-A")
+        self.assertEqual(party.company_id, self.company_a.id)
+        self.assertEqual(party.party_type, BusinessPartyType.CUSTOMER)
+
+    def test_customer_alias_detail_accepts_customer_and_rejects_supplier_only(self) -> None:
+        self._login_as_company_a()
+
+        supplier_only = BusinessParty.objects.create(
+            company=self.company_a,
+            branch=self.branch_a,
+            party_type=BusinessPartyType.SUPPLIER,
+            party_kind=BusinessPartyKind.ORGANIZATION,
+            status=BusinessPartyStatus.ACTIVE,
+            code="SUP-ONLY-DETAIL",
+            display_name="Supplier Only Detail",
+            mobile="0500000007",
+            city="Jeddah",
+            created_by=self.user_a,
+            updated_by=self.user_a,
+        )
+
+        ok_response = self.client.get(
+            f"/api/company/customers/{self.customer_a.id}/"
+        )
+        blocked_response = self.client.get(
+            f"/api/company/customers/{supplier_only.id}/"
+        )
+
+        self.assertEqual(ok_response.status_code, 200)
+        self.assertEqual(blocked_response.status_code, 404)
+
+    def test_customer_alias_status_deactivates_customer(self) -> None:
+        self._login_as_company_a()
+
+        response = self.client.post(
+            f"/api/company/customers/{self.customer_a.id}/deactivate/",
+            data={},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        self.customer_a.refresh_from_db()
+        self.assertEqual(self.customer_a.status, BusinessPartyStatus.INACTIVE)
+
+    # ========================================================
+    # Suppliers aliases tests
+    # ========================================================
+
+    def test_suppliers_alias_lists_only_suppliers_and_both(self) -> None:
+        self._login_as_company_a()
+
+        both_party = BusinessParty.objects.create(
+            company=self.company_a,
+            branch=self.branch_a,
+            party_type=BusinessPartyType.BOTH,
+            party_kind=BusinessPartyKind.ORGANIZATION,
+            status=BusinessPartyStatus.ACTIVE,
+            code="BOTH-A-SUPPLIER",
+            display_name="Both Supplier A",
+            mobile="0500000005",
+            city="Jeddah",
+            created_by=self.user_a,
+            updated_by=self.user_a,
+        )
+        customer_only = BusinessParty.objects.create(
+            company=self.company_a,
+            branch=self.branch_a,
+            party_type=BusinessPartyType.CUSTOMER,
+            party_kind=BusinessPartyKind.INDIVIDUAL,
+            status=BusinessPartyStatus.ACTIVE,
+            code="CUS-ONLY-A",
+            display_name="Customer A Only",
+            mobile="0500000006",
+            city="Jeddah",
+            created_by=self.user_a,
+            updated_by=self.user_a,
+        )
+
+        response = self.client.get("/api/company/suppliers/")
+
+        self.assertEqual(response.status_code, 200)
+
+        items = self._party_items_from_list_response(response)
+        names = {
+            item["display_name"]
+            for item in items
+        }
+
+        self.assertIn(both_party.display_name, names)
+        self.assertNotIn(customer_only.display_name, names)
+        self.assertNotIn("Supplier B", names)
+
+    def test_suppliers_alias_create_forces_supplier_type_and_ignores_company_id(self) -> None:
+        self._login_as_company_a()
+
+        response = self.client.post(
+            "/api/company/suppliers/create/",
+            data={
+                "company_id": self.company_b.id,
+                "branch_id": self.branch_a.id,
+                "party_type": BusinessPartyType.CUSTOMER,
+                "code": "SUP-ALIAS-A",
+                "display_name": "Supplier Alias A",
+                "mobile": "0555555571",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+
+        party = BusinessParty.objects.get(code="SUP-ALIAS-A")
+        self.assertEqual(party.company_id, self.company_a.id)
+        self.assertEqual(party.party_type, BusinessPartyType.SUPPLIER)
+
+    def test_supplier_alias_detail_accepts_supplier_and_rejects_customer_only(self) -> None:
+        self._login_as_company_a()
+
+        supplier_a = BusinessParty.objects.create(
+            company=self.company_a,
+            branch=self.branch_a,
+            party_type=BusinessPartyType.SUPPLIER,
+            party_kind=BusinessPartyKind.ORGANIZATION,
+            status=BusinessPartyStatus.ACTIVE,
+            code="SUP-A-DETAIL",
+            display_name="Supplier A Detail",
+            mobile="0500000008",
+            city="Jeddah",
+            created_by=self.user_a,
+            updated_by=self.user_a,
+        )
+
+        ok_response = self.client.get(
+            f"/api/company/suppliers/{supplier_a.id}/"
+        )
+        blocked_response = self.client.get(
+            f"/api/company/suppliers/{self.customer_a.id}/"
+        )
+
+        self.assertEqual(ok_response.status_code, 200)
+        self.assertEqual(blocked_response.status_code, 404)
+
+    def test_supplier_alias_status_deactivates_supplier(self) -> None:
+        self._login_as_company_a()
+
+        supplier_a = BusinessParty.objects.create(
+            company=self.company_a,
+            branch=self.branch_a,
+            party_type=BusinessPartyType.SUPPLIER,
+            party_kind=BusinessPartyKind.ORGANIZATION,
+            status=BusinessPartyStatus.ACTIVE,
+            code="SUP-A-STATUS",
+            display_name="Supplier A Status",
+            mobile="0500000009",
+            city="Jeddah",
+            created_by=self.user_a,
+            updated_by=self.user_a,
+        )
+
+        response = self.client.post(
+            f"/api/company/suppliers/{supplier_a.id}/deactivate/",
+            data={},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        supplier_a.refresh_from_db()
+        self.assertEqual(supplier_a.status, BusinessPartyStatus.INACTIVE)
