@@ -1,19 +1,22 @@
 # ============================================================
 # 📂 sales/tests.py
-# 🧠 PrimeyAcc | Sales Tests V1.0
+# 🧠 PrimeyAcc | Sales Tests V1.1
 # ------------------------------------------------------------
 # ✅ Sales invoice model tests
 # ✅ Sales invoice services tests
+# ✅ Sales invoice API tests
 # ✅ Tenant isolation validation
 # ✅ Customer validation
 # ✅ Catalog item validation
 # ✅ Totals calculation
 # ✅ Issue / cancel lifecycle
+# ✅ Company permissions through CompanyMembership
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
-# - نختبر الأساس قبل بناء APIs
-# - لا نعتمد على company_id من الواجهة
+# - نختبر الأساس قبل إغلاق APIs
+# - لا نعتمد على company_id من الواجهة كمصدر ثقة
 # - كل فاتورة وبند يجب أن يبقيا داخل نفس الشركة
+# - APIs يجب أن تعتمد على CompanyMembership/request.company
 # - هذه المرحلة لا تختبر محاسبة أو مخزون أو مدفوعات
 # ============================================================
 
@@ -26,6 +29,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 
+from accounts.models import CompanyMembership, CompanyRole, MembershipStatus
 from catalog.models import CatalogItem, CatalogItemStatus, CatalogItemType, CatalogUnit
 from companies.models import Branch, Company, CompanySettings
 from parties.models import BusinessParty, BusinessPartyStatus, BusinessPartyType
@@ -63,6 +67,18 @@ class SalesTestCase(TestCase):
             password="StrongPass123!",
         )
 
+        self.other_user = User.objects.create_user(
+            username="other_sales_owner",
+            email="other_sales_owner@example.com",
+            password="StrongPass123!",
+        )
+
+        self.viewer_user = User.objects.create_user(
+            username="sales_viewer",
+            email="sales_viewer@example.com",
+            password="StrongPass123!",
+        )
+
         self.company = Company.objects.create(
             name="Primey Sales Company",
             company_code="SALES-001",
@@ -88,7 +104,41 @@ class SalesTestCase(TestCase):
             is_active=True,
             currency_code="SAR",
             vat_percentage=Decimal("15.00"),
-            owner=self.user,
+            owner=self.other_user,
+            created_by=self.other_user,
+        )
+
+        CompanySettings.objects.create(
+            company=self.other_company,
+            invoice_prefix="OTH",
+            created_by=self.other_user,
+            updated_by=self.other_user,
+        )
+
+        self.membership = CompanyMembership.objects.create(
+            user=self.user,
+            company=self.company,
+            role=CompanyRole.OWNER,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+            created_by=self.user,
+        )
+
+        self.other_membership = CompanyMembership.objects.create(
+            user=self.other_user,
+            company=self.other_company,
+            role=CompanyRole.OWNER,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+            created_by=self.other_user,
+        )
+
+        self.viewer_membership = CompanyMembership.objects.create(
+            user=self.viewer_user,
+            company=self.company,
+            role=CompanyRole.VIEWER,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
             created_by=self.user,
         )
 
@@ -109,7 +159,7 @@ class SalesTestCase(TestCase):
             is_default=True,
             is_active=True,
             status="ACTIVE",
-            created_by=self.user,
+            created_by=self.other_user,
         )
 
         self.customer = BusinessParty.objects.create(
@@ -141,7 +191,7 @@ class SalesTestCase(TestCase):
             status=BusinessPartyStatus.ACTIVE,
             code="CUS-999",
             display_name="Other Customer",
-            created_by=self.user,
+            created_by=self.other_user,
         )
 
         self.unit = CatalogUnit.objects.create(
@@ -150,6 +200,14 @@ class SalesTestCase(TestCase):
             name="Piece",
             symbol="pcs",
             created_by=self.user,
+        )
+
+        self.other_unit = CatalogUnit.objects.create(
+            company=self.other_company,
+            code="OPCS",
+            name="Other Piece",
+            symbol="opcs",
+            created_by=self.other_user,
         )
 
         self.item = CatalogItem.objects.create(
@@ -182,6 +240,7 @@ class SalesTestCase(TestCase):
 
         self.other_item = CatalogItem.objects.create(
             company=self.other_company,
+            unit=self.other_unit,
             item_type=CatalogItemType.PRODUCT,
             status=CatalogItemStatus.ACTIVE,
             code="ITEM-999",
@@ -190,7 +249,7 @@ class SalesTestCase(TestCase):
             taxable=True,
             tax_rate=Decimal("15.00"),
             is_sellable=True,
-            created_by=self.user,
+            created_by=self.other_user,
         )
 
 
@@ -522,3 +581,319 @@ class SalesServicesTests(SalesTestCase):
         self.assertEqual(len(data["items"]), 1)
         self.assertEqual(data["items"][0]["item_name"], "Sales Item")
         self.assertEqual(data["total_amount"], "115.00")
+
+
+class SalesInvoicesAPITests(SalesTestCase):
+    """
+    Tests for /api/company/sales/invoices/ endpoints.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.user)
+
+    def _create_invoice_for_api(self) -> SalesInvoice:
+        return create_sales_invoice(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            items=[
+                {
+                    "catalog_item_id": self.item.id,
+                    "quantity": "1",
+                }
+            ],
+            public_notes="API test invoice",
+        )
+
+    def test_sales_invoices_list_returns_current_company_only(self):
+        invoice = self._create_invoice_for_api()
+
+        create_sales_invoice(
+            company=self.other_company,
+            user=self.other_user,
+            customer_id=self.other_customer.id,
+            items=[
+                {
+                    "catalog_item_id": self.other_item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        response = self.client.get("/api/company/sales/invoices/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["results"][0]["id"], invoice.id)
+        self.assertEqual(payload["results"][0]["company_id"], self.company.id)
+
+    def test_sales_invoices_list_supports_search(self):
+        invoice = self._create_invoice_for_api()
+
+        response = self.client.get(
+            "/api/company/sales/invoices/",
+            {
+                "search": invoice.invoice_number,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["results"][0]["invoice_number"], invoice.invoice_number)
+
+    def test_sales_invoice_create_endpoint_creates_draft_invoice(self):
+        response = self.client.post(
+            "/api/company/sales/invoices/create/",
+            data={
+                "customer_id": self.customer.id,
+                "items": [
+                    {
+                        "catalog_item_id": self.item.id,
+                        "quantity": "2",
+                        "discount_amount": "10.00",
+                    }
+                ],
+                "public_notes": "Created from API",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["invoice"]["status"], SalesInvoiceStatus.DRAFT)
+        self.assertEqual(payload["invoice"]["customer"]["id"], self.customer.id)
+        self.assertEqual(payload["invoice"]["total_amount"], "218.50")
+        self.assertEqual(len(payload["invoice"]["items"]), 1)
+
+        invoice = SalesInvoice.objects.get(id=payload["invoice"]["id"])
+        self.assertEqual(invoice.company, self.company)
+        self.assertEqual(invoice.created_by, self.user)
+
+    def test_sales_invoice_create_endpoint_can_issue_now(self):
+        response = self.client.post(
+            "/api/company/sales/invoices/create/",
+            data={
+                "customer_id": self.customer.id,
+                "issue_now": True,
+                "items": [
+                    {
+                        "catalog_item_id": self.item.id,
+                        "quantity": "1",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["invoice"]["status"], SalesInvoiceStatus.ISSUED)
+        self.assertIsNotNone(payload["invoice"]["issued_at"])
+
+    def test_sales_invoice_create_rejects_other_company_catalog_item(self):
+        response = self.client.post(
+            "/api/company/sales/invoices/create/",
+            data={
+                "customer_id": self.customer.id,
+                "items": [
+                    {
+                        "catalog_item_id": self.other_item.id,
+                        "quantity": "1",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.json()
+
+        self.assertFalse(payload["success"])
+
+    def test_sales_invoice_detail_endpoint_returns_items(self):
+        invoice = self._create_invoice_for_api()
+
+        response = self.client.get(f"/api/company/sales/invoices/{invoice.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["invoice"]["id"], invoice.id)
+        self.assertEqual(len(payload["invoice"]["items"]), 1)
+        self.assertEqual(payload["invoice"]["items"][0]["item_name"], "Sales Item")
+
+    def test_sales_invoice_detail_blocks_cross_company_access(self):
+        other_invoice = create_sales_invoice(
+            company=self.other_company,
+            user=self.other_user,
+            customer_id=self.other_customer.id,
+            items=[
+                {
+                    "catalog_item_id": self.other_item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        response = self.client.get(f"/api/company/sales/invoices/{other_invoice.id}/")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_sales_invoice_update_endpoint_updates_draft_invoice(self):
+        invoice = self._create_invoice_for_api()
+
+        response = self.client.patch(
+            f"/api/company/sales/invoices/{invoice.id}/update/",
+            data={
+                "public_notes": "Updated notes",
+                "items": [
+                    {
+                        "catalog_item_id": self.service.id,
+                        "quantity": "1",
+                        "unit_price": "250.00",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["invoice"]["public_notes"], "Updated notes")
+        self.assertEqual(len(payload["invoice"]["items"]), 1)
+        self.assertEqual(payload["invoice"]["items"][0]["item_name"], "Consulting Service")
+        self.assertEqual(payload["invoice"]["total_amount"], "287.50")
+
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.public_notes, "Updated notes")
+        self.assertEqual(invoice.items.count(), 1)
+
+    def test_sales_invoice_update_rejects_issued_invoice(self):
+        invoice = self._create_invoice_for_api()
+        issue_sales_invoice(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+        )
+
+        response = self.client.patch(
+            f"/api/company/sales/invoices/{invoice.id}/update/",
+            data={
+                "public_notes": "Should fail",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.json()
+
+        self.assertFalse(payload["success"])
+
+    def test_sales_invoice_issue_endpoint_issues_invoice(self):
+        invoice = self._create_invoice_for_api()
+
+        response = self.client.post(f"/api/company/sales/invoices/{invoice.id}/issue/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["invoice"]["status"], SalesInvoiceStatus.ISSUED)
+        self.assertIsNotNone(payload["invoice"]["issued_at"])
+
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status, SalesInvoiceStatus.ISSUED)
+        self.assertEqual(invoice.issued_by, self.user)
+
+    def test_sales_invoice_issue_rejects_empty_invoice(self):
+        invoice = create_sales_invoice(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            items=[],
+        )
+
+        response = self.client.post(f"/api/company/sales/invoices/{invoice.id}/issue/")
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.json()
+
+        self.assertFalse(payload["success"])
+
+    def test_sales_invoice_cancel_endpoint_cancels_issued_invoice(self):
+        invoice = self._create_invoice_for_api()
+        issue_sales_invoice(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+        )
+
+        response = self.client.post(
+            f"/api/company/sales/invoices/{invoice.id}/cancel/",
+            data={
+                "reason": "API cancellation",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["invoice"]["status"], SalesInvoiceStatus.CANCELLED)
+        self.assertEqual(payload["invoice"]["cancelled_reason"], "API cancellation")
+
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status, SalesInvoiceStatus.CANCELLED)
+        self.assertEqual(invoice.cancelled_by, self.user)
+
+    def test_sales_invoice_cancel_rejects_draft_invoice(self):
+        invoice = self._create_invoice_for_api()
+
+        response = self.client.post(
+            f"/api/company/sales/invoices/{invoice.id}/cancel/",
+            data={
+                "reason": "Should fail",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.json()
+
+        self.assertFalse(payload["success"])
+
+    def test_viewer_can_list_but_cannot_create_invoice(self):
+        self.client.force_login(self.viewer_user)
+
+        list_response = self.client.get("/api/company/sales/invoices/")
+        self.assertEqual(list_response.status_code, 200)
+
+        create_response = self.client.post(
+            "/api/company/sales/invoices/create/",
+            data={
+                "customer_id": self.customer.id,
+                "items": [
+                    {
+                        "catalog_item_id": self.item.id,
+                        "quantity": "1",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(create_response.status_code, 403)
