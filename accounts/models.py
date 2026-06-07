@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 accounts/models.py
-# 🧠 PrimeyAcc | Accounts Models V1.3
+# 🧠 PrimeyAcc | Accounts Models V1.4
 # ------------------------------------------------------------
 # ✅ User Profile
 # ✅ Workspace Type Foundation
@@ -12,6 +12,7 @@
 # ✅ Role-based Permissions Foundation
 # ✅ Company Settings Permissions
 # ✅ Company Branches Permissions
+# ✅ Company Catalog Permissions
 # ✅ Safe Default Company Membership Resolver
 # ✅ Audit Fields
 # ------------------------------------------------------------
@@ -23,6 +24,7 @@
 # - /company لا يفتح إلا بعضوية شركة فعالة
 # - لا يتم الوصول لبيانات شركة إلا عبر CompanyMembership فعال
 # - whoami هو مصدر الحقيقة للواجهة والصلاحيات
+# - كتالوج الشركة يحتاج صلاحيات منفصلة للتصنيفات والوحدات والمنتجات
 # ============================================================
 
 from __future__ import annotations
@@ -78,7 +80,7 @@ class MembershipStatus(models.TextChoices):
 # Permissions Foundation
 # ------------------------------------------------------------
 # ملاحظة:
-# هذه الصلاحيات ثابتة الآن لتثبيت المرحلة 2/3 بدون تعقيد زائد.
+# هذه الصلاحيات ثابتة الآن لتثبيت المراحل بدون تعقيد زائد.
 # لاحقًا يمكن نقلها إلى جداول Role / Permission إذا احتجنا إدارة مرنة من الواجهة.
 # ============================================================
 
@@ -139,6 +141,12 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.branches.view",
         "company.branches.create",
         "company.branches.update",
+        "company.categories.view",
+        "company.categories.create",
+        "company.categories.update",
+        "company.units.view",
+        "company.units.create",
+        "company.units.update",
         "company.products.view",
         "company.products.create",
         "company.products.update",
@@ -165,6 +173,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.dashboard.view",
         "company.settings.view",
         "company.branches.view",
+        "company.categories.view",
+        "company.units.view",
         "company.products.view",
         "company.customers.view",
         "company.suppliers.view",
@@ -179,6 +189,9 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.dashboard.view",
         "company.settings.view",
         "company.branches.view",
+        "company.categories.view",
+        "company.units.view",
+        "company.products.view",
         "company.customers.view",
         "company.suppliers.view",
         "company.sales.view",
@@ -191,6 +204,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
     CompanyRole.CASHIER: [
         "company.dashboard.view",
         "company.branches.view",
+        "company.categories.view",
+        "company.units.view",
         "company.products.view",
         "company.customers.view",
         "company.customers.create",
@@ -200,6 +215,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
     CompanyRole.SALES: [
         "company.dashboard.view",
         "company.branches.view",
+        "company.categories.view",
+        "company.units.view",
         "company.products.view",
         "company.customers.view",
         "company.customers.create",
@@ -210,6 +227,12 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.dashboard.view",
         "company.settings.view",
         "company.branches.view",
+        "company.categories.view",
+        "company.categories.create",
+        "company.categories.update",
+        "company.units.view",
+        "company.units.create",
+        "company.units.update",
         "company.products.view",
         "company.products.create",
         "company.products.update",
@@ -238,6 +261,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.dashboard.view",
         "company.settings.view",
         "company.branches.view",
+        "company.categories.view",
+        "company.units.view",
         "company.products.view",
         "company.customers.view",
         "company.suppliers.view",

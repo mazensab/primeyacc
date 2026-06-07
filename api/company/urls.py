@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/urls.py
-# 🧠 PrimeyAcc | Company Workspace API URLs V2.2
+# 🧠 PrimeyAcc | Company Workspace API URLs V2.5
 # ------------------------------------------------------------
 # ✅ Central routes for company workspace APIs
 # ✅ Current company endpoint /api/company/me/
@@ -13,6 +13,9 @@
 # ✅ Business parties endpoint /api/company/parties/
 # ✅ Customers alias endpoint /api/company/customers/
 # ✅ Suppliers alias endpoint /api/company/suppliers/
+# ✅ Catalog categories endpoint /api/company/categories/
+# ✅ Catalog units endpoint /api/company/units/
+# ✅ Catalog products/services endpoint /api/company/products/
 # ✅ Company context comes from active CompanyMembership
 # ✅ Views protected by central api/permissions.py guards
 # ------------------------------------------------------------
@@ -23,6 +26,8 @@
 # - جميع Views داخل /api/company/ يجب أن تستخدم api/permissions.py
 # - الشركة الحالية لا تؤخذ من الفرونت كمصدر ثقة
 # - CompanyMembership هو حد العزل الرسمي للشركات
+# - كتالوج الشركة داخل /company معزول حسب الشركة الحالية فقط
+# - CatalogItem هو الأساس الموحد للمنتجات والخدمات
 # ============================================================
 
 from __future__ import annotations
@@ -47,4 +52,7 @@ urlpatterns = [
     path("parties/", include("api.company.parties.urls")),
     path("customers/", include("api.company.customers.urls")),
     path("suppliers/", include("api.company.suppliers.urls")),
+    path("categories/", include("api.company.categories.urls")),
+    path("units/", include("api.company.units.urls")),
+    path("products/", include("api.company.products.urls")),
 ]

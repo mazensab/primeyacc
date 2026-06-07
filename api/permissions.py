@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/permissions.py
-# 🧠 PrimeyAcc | API Permissions & Tenant Access V1
+# 🧠 PrimeyAcc | API Permissions & Tenant Access V1.2
 # ------------------------------------------------------------
 # ✅ System API Guard
 # ✅ Company API Guard
@@ -9,6 +9,8 @@
 # ✅ Company Tenant Isolation Foundation
 # ✅ DRF Permission Classes
 # ✅ Function Helpers for Views
+# ✅ Safe fallback to active CompanyMembership when UserProfile is missing
+# ✅ Fixed permission attribute lookup for DRF function-based views
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - /api/system لا يدخله إلا مستخدم نظام مصرح
@@ -16,6 +18,8 @@
 # - الشركة الحالية لا تؤخذ من الفرونت كمصدر ثقة
 # - CompanyMembership هو حد العزل الرسمي للشركات
 # - whoami يعرض الصلاحيات، وهذا الملف يطبقها فعليًا
+# - لا يتم إنشاء UserProfile تلقائيًا داخل guards
+# - required_*_permission(s) يجب أن تعمل مع @api_view function views
 # ============================================================
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.contrib.auth.models import AnonymousUser
+from django.db.models import QuerySet
 from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 
@@ -30,8 +35,10 @@ from accounts.models import (
     COMPANY_PERMISSION_ALL,
     SYSTEM_PERMISSION_ALL,
     CompanyMembership,
+    MembershipStatus,
     UserProfile,
 )
+from companies.models import CompanyStatus
 
 
 # ============================================================
@@ -52,6 +59,59 @@ def get_user_profile(user) -> UserProfile | None:
     return getattr(user, "primeyacc_profile", None)
 
 
+def get_active_company_memberships(user) -> QuerySet[CompanyMembership]:
+    """
+    Return active company memberships for an authenticated user.
+
+    CompanyMembership is the official /company access boundary.
+    UserProfile is preferred when available, but /company access must still
+    be resolvable from active memberships without silently creating profiles.
+    """
+    return (
+        CompanyMembership.objects.select_related("company")
+        .filter(
+            user=user,
+            status=MembershipStatus.ACTIVE,
+            company__is_active=True,
+        )
+        .exclude(
+            company__status__in=[
+                CompanyStatus.SUSPENDED,
+                CompanyStatus.EXPIRED,
+                CompanyStatus.CANCELLED,
+            ]
+        )
+        .order_by("-is_primary", "-created_at")
+    )
+
+
+def get_requested_company_id(request: Request) -> int | None:
+    """
+    Read requested company selector safely.
+
+    This value is only a selector. It is trusted only if the user has a
+    matching active CompanyMembership.
+    """
+    raw_company_id = (
+        request.headers.get("X-Company-ID")
+        or request.query_params.get("company_id")
+    )
+
+    if raw_company_id in [None, ""] and request.method not in ["GET", "HEAD", "OPTIONS"]:
+        try:
+            raw_company_id = request.data.get("company_id")
+        except Exception:
+            raw_company_id = None
+
+    if raw_company_id in [None, ""]:
+        return None
+
+    try:
+        return int(raw_company_id)
+    except (TypeError, ValueError):
+        return None
+
+
 def get_current_company_membership(
     request: Request,
 ) -> CompanyMembership | None:
@@ -60,41 +120,42 @@ def get_current_company_membership(
 
     Priority:
     1. X-Company-ID header if it belongs to an active membership.
-    2. company_id query param if it belongs to an active membership.
-    3. profile default active membership.
+    2. company_id query/body selector if it belongs to an active membership.
+    3. profile default active membership when UserProfile exists.
+    4. primary/latest active CompanyMembership fallback.
 
     Important:
     The provided company_id is only a selector.
     It is never trusted unless a matching active CompanyMembership exists.
     """
-    profile = get_user_profile(request.user)
-    if not profile:
+    user = request.user
+
+    if not user or isinstance(user, AnonymousUser) or not user.is_authenticated:
         return None
 
-    memberships = profile.active_company_memberships()
+    profile = get_user_profile(user)
 
-    requested_company_id = (
-        request.headers.get("X-Company-ID")
-        or request.query_params.get("company_id")
-        or request.data.get("company_id")
-        if hasattr(request, "data")
-        else None
-    )
+    if profile:
+        memberships = profile.active_company_memberships()
+    else:
+        memberships = get_active_company_memberships(user)
+
+    requested_company_id = get_requested_company_id(request)
 
     if requested_company_id:
-        try:
-            requested_company_id_int = int(requested_company_id)
-        except (TypeError, ValueError):
-            requested_company_id_int = None
+        membership = memberships.filter(
+            company_id=requested_company_id,
+        ).first()
 
-        if requested_company_id_int:
-            membership = memberships.filter(
-                company_id=requested_company_id_int
-            ).first()
-            if membership:
-                return membership
+        if membership:
+            return membership
 
-    return profile.get_default_company_membership()
+    if profile:
+        default_membership = profile.get_default_company_membership()
+        if default_membership:
+            return default_membership
+
+    return memberships.first()
 
 
 def get_current_company(request: Request):
@@ -127,6 +188,54 @@ def attach_company_context(request: Request) -> CompanyMembership | None:
     setattr(request, "company", membership.company if membership else None)
 
     return membership
+
+
+# ============================================================
+# Permission Attribute Resolver
+# ============================================================
+
+def get_view_required_attribute(
+    *,
+    request: Request,
+    view: Any,
+    attribute_name: str,
+    default: Any,
+) -> Any:
+    """
+    Resolve required permission attributes safely for both DRF class views
+    and @api_view function-based views.
+
+    Why:
+    With @api_view, custom attributes such as required_company_permissions
+    may exist on the resolved function instead of the APIView instance.
+    This helper checks all practical locations.
+    """
+    value = getattr(view, attribute_name, None)
+    if value not in [None, ""]:
+        return value
+
+    view_class = getattr(view, "__class__", None)
+    if view_class:
+        value = getattr(view_class, attribute_name, None)
+        if value not in [None, ""]:
+            return value
+
+    django_request = getattr(request, "_request", None)
+    resolver_match = getattr(django_request, "resolver_match", None)
+    resolved_func = getattr(resolver_match, "func", None)
+
+    if resolved_func:
+        value = getattr(resolved_func, attribute_name, None)
+        if value not in [None, ""]:
+            return value
+
+        resolved_cls = getattr(resolved_func, "cls", None)
+        if resolved_cls:
+            value = getattr(resolved_cls, attribute_name, None)
+            if value not in [None, ""]:
+                return value
+
+    return default
 
 
 # ============================================================
@@ -171,6 +280,9 @@ def request_has_company_permission(
 class IsAuthenticatedPrimeyUser(BasePermission):
     """
     Basic authenticated PrimeyAcc user guard.
+
+    This guard requires UserProfile because it represents PrimeyAcc user
+    initialization, not tenant membership access.
     """
 
     message = "Authentication is required."
@@ -207,7 +319,12 @@ class HasSystemPermission(BasePermission):
     message = "You do not have the required system permission."
 
     def has_permission(self, request: Request, view: Any) -> bool:
-        required_permission = getattr(view, "required_system_permission", None)
+        required_permission = get_view_required_attribute(
+            request=request,
+            view=view,
+            attribute_name="required_system_permission",
+            default=None,
+        )
 
         if not required_permission:
             return user_can_access_system(request.user)
@@ -232,7 +349,12 @@ class HasAnySystemPermission(BasePermission):
     message = "You do not have any of the required system permissions."
 
     def has_permission(self, request: Request, view: Any) -> bool:
-        required_permissions = getattr(view, "required_system_permissions", [])
+        required_permissions = get_view_required_attribute(
+            request=request,
+            view=view,
+            attribute_name="required_system_permissions",
+            default=[],
+        )
 
         if not required_permissions:
             return user_can_access_system(request.user)
@@ -273,7 +395,12 @@ class HasCompanyPermission(BasePermission):
         if not membership:
             return False
 
-        required_permission = getattr(view, "required_company_permission", None)
+        required_permission = get_view_required_attribute(
+            request=request,
+            view=view,
+            attribute_name="required_company_permission",
+            default=None,
+        )
 
         if not required_permission:
             return membership.is_active_membership
@@ -299,7 +426,12 @@ class HasAnyCompanyPermission(BasePermission):
         if not membership:
             return False
 
-        required_permissions = getattr(view, "required_company_permissions", [])
+        required_permissions = get_view_required_attribute(
+            request=request,
+            view=view,
+            attribute_name="required_company_permissions",
+            default=[],
+        )
 
         if not required_permissions:
             return membership.is_active_membership
