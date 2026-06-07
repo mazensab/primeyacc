@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 accounts/models.py
-# 🧠 PrimeyAcc | Accounts Models V1.4
+# 🧠 PrimeyAcc | Accounts Models V1.5
 # ------------------------------------------------------------
 # ✅ User Profile
 # ✅ Workspace Type Foundation
@@ -13,6 +13,7 @@
 # ✅ Company Settings Permissions
 # ✅ Company Branches Permissions
 # ✅ Company Catalog Permissions
+# ✅ Company Sales Invoices Permissions
 # ✅ Safe Default Company Membership Resolver
 # ✅ Audit Fields
 # ------------------------------------------------------------
@@ -25,6 +26,7 @@
 # - لا يتم الوصول لبيانات شركة إلا عبر CompanyMembership فعال
 # - whoami هو مصدر الحقيقة للواجهة والصلاحيات
 # - كتالوج الشركة يحتاج صلاحيات منفصلة للتصنيفات والوحدات والمنتجات
+# - فواتير المبيعات لها صلاحيات دقيقة منفصلة داخل company.sales.invoices
 # ============================================================
 
 from __future__ import annotations
@@ -159,6 +161,11 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.view",
         "company.sales.create",
         "company.sales.update",
+        "company.sales.invoices.view",
+        "company.sales.invoices.create",
+        "company.sales.invoices.update",
+        "company.sales.invoices.issue",
+        "company.sales.invoices.cancel",
         "company.purchases.view",
         "company.purchases.create",
         "company.purchases.update",
@@ -181,6 +188,11 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.view",
         "company.sales.create",
         "company.sales.update",
+        "company.sales.invoices.view",
+        "company.sales.invoices.create",
+        "company.sales.invoices.update",
+        "company.sales.invoices.issue",
+        "company.sales.invoices.cancel",
         "company.purchases.view",
         "company.inventory.view",
         "company.reports.view",
@@ -195,6 +207,9 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.customers.view",
         "company.suppliers.view",
         "company.sales.view",
+        "company.sales.invoices.view",
+        "company.sales.invoices.issue",
+        "company.sales.invoices.cancel",
         "company.purchases.view",
         "company.accounting.view",
         "company.accounting.create",
@@ -211,6 +226,9 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.customers.create",
         "company.sales.view",
         "company.sales.create",
+        "company.sales.invoices.view",
+        "company.sales.invoices.create",
+        "company.sales.invoices.issue",
     ],
     CompanyRole.SALES: [
         "company.dashboard.view",
@@ -222,6 +240,11 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.customers.create",
         "company.sales.view",
         "company.sales.create",
+        "company.sales.update",
+        "company.sales.invoices.view",
+        "company.sales.invoices.create",
+        "company.sales.invoices.update",
+        "company.sales.invoices.issue",
     ],
     CompanyRole.INVENTORY: [
         "company.dashboard.view",
@@ -267,6 +290,7 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.customers.view",
         "company.suppliers.view",
         "company.sales.view",
+        "company.sales.invoices.view",
         "company.purchases.view",
         "company.inventory.view",
         "company.reports.view",

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/permissions.py
-# 🧠 PrimeyAcc | API Permissions & Tenant Access V1.2
+# 🧠 PrimeyAcc | API Permissions & Tenant Access V1.3
 # ------------------------------------------------------------
 # ✅ System API Guard
 # ✅ Company API Guard
@@ -11,6 +11,7 @@
 # ✅ Function Helpers for Views
 # ✅ Safe fallback to active CompanyMembership when UserProfile is missing
 # ✅ Fixed permission attribute lookup for DRF function-based views
+# ✅ Safe request query support for DRF Request and Django WSGIRequest
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - /api/system لا يدخله إلا مستخدم نظام مصرح
@@ -20,6 +21,7 @@
 # - whoami يعرض الصلاحيات، وهذا الملف يطبقها فعليًا
 # - لا يتم إنشاء UserProfile تلقائيًا داخل guards
 # - required_*_permission(s) يجب أن تعمل مع @api_view function views
+# - request قد يكون DRF Request أو Django WSGIRequest، لذلك لا نعتمد على query_params فقط
 # ============================================================
 
 from __future__ import annotations
@@ -85,23 +87,102 @@ def get_active_company_memberships(user) -> QuerySet[CompanyMembership]:
     )
 
 
+def _get_request_query_value(request: Request, key: str) -> Any:
+    """
+    Read query value safely from DRF Request or Django WSGIRequest.
+
+    DRF Request:
+        request.query_params
+
+    Django WSGIRequest:
+        request.GET
+
+    Some existing PrimeyAcc company endpoints are regular Django function
+    views, so tests can pass WSGIRequest without query_params.
+    """
+    query_params = getattr(request, "query_params", None)
+    if query_params is not None:
+        value = query_params.get(key)
+        if value not in [None, ""]:
+            return value
+
+    get_params = getattr(request, "GET", None)
+    if get_params is not None:
+        value = get_params.get(key)
+        if value not in [None, ""]:
+            return value
+
+    django_request = getattr(request, "_request", None)
+    if django_request is not None:
+        django_get_params = getattr(django_request, "GET", None)
+        if django_get_params is not None:
+            value = django_get_params.get(key)
+            if value not in [None, ""]:
+                return value
+
+    return None
+
+
+def _get_request_data_value(request: Request, key: str) -> Any:
+    """
+    Read body value safely from DRF Request or Django WSGIRequest.
+
+    DRF Request:
+        request.data
+
+    Django WSGIRequest:
+        request.POST
+
+    JSON parsing for raw WSGIRequest bodies should remain in the view layer.
+    This helper only reads already-parsed request data safely.
+    """
+    data = getattr(request, "data", None)
+    if data is not None:
+        try:
+            value = data.get(key)
+            if value not in [None, ""]:
+                return value
+        except Exception:
+            pass
+
+    post_data = getattr(request, "POST", None)
+    if post_data is not None:
+        value = post_data.get(key)
+        if value not in [None, ""]:
+            return value
+
+    django_request = getattr(request, "_request", None)
+    if django_request is not None:
+        django_post_data = getattr(django_request, "POST", None)
+        if django_post_data is not None:
+            value = django_post_data.get(key)
+            if value not in [None, ""]:
+                return value
+
+    return None
+
+
 def get_requested_company_id(request: Request) -> int | None:
     """
     Read requested company selector safely.
 
     This value is only a selector. It is trusted only if the user has a
     matching active CompanyMembership.
+
+    Supports both:
+    - DRF Request
+    - Django WSGIRequest
     """
+    headers = getattr(request, "headers", {}) or {}
+
     raw_company_id = (
-        request.headers.get("X-Company-ID")
-        or request.query_params.get("company_id")
+        headers.get("X-Company-ID")
+        or _get_request_query_value(request, "company_id")
     )
 
-    if raw_company_id in [None, ""] and request.method not in ["GET", "HEAD", "OPTIONS"]:
-        try:
-            raw_company_id = request.data.get("company_id")
-        except Exception:
-            raw_company_id = None
+    method = getattr(request, "method", "GET")
+    if raw_company_id in [None, ""] and method not in ["GET", "HEAD", "OPTIONS"]:
+        raw_company_id = _get_request_data_value(request, "company_id")
 
     if raw_company_id in [None, ""]:
         return None
@@ -222,6 +303,10 @@ def get_view_required_attribute(
 
     django_request = getattr(request, "_request", None)
     resolver_match = getattr(django_request, "resolver_match", None)
+
+    if resolver_match is None:
+        resolver_match = getattr(request, "resolver_match", None)
+
     resolved_func = getattr(resolver_match, "func", None)
 
     if resolved_func:

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 config/settings.py
-# 🧠 PrimeyAcc | Django Project Settings V1.2
+# 🧠 PrimeyAcc | Django Project Settings V1.3
 # ------------------------------------------------------------
 # ✅ Django REST Framework configuration
 # ✅ CORS / CSRF configuration for Next.js frontend
@@ -9,6 +9,7 @@
 # ✅ PrimeyAcc core apps registration
 # ✅ Phase 4 parties app registration
 # ✅ Phase 5 catalog app registration
+# ✅ Phase 6 sales app registration
 # ✅ Saudi Arabia timezone and Arabic language defaults
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
@@ -18,6 +19,7 @@
 # - /company يعتمد على CompanyMembership وليس company_id من الفرونت
 # - المرحلة 4 تضيف parties كأساس للعملاء والموردين والأطراف التجارية
 # - المرحلة 5 تضيف catalog كأساس للمنتجات والخدمات والتصنيفات والوحدات
+# - المرحلة 6 تضيف sales كأساس للمبيعات والفواتير داخل /company
 # ============================================================
 
 from __future__ import annotations
@@ -87,6 +89,7 @@ PRIMEYACC_APPS = [
     "audit_logs",
     "parties",
     "catalog",
+    "sales",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + PRIMEYACC_APPS
