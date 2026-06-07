@@ -90,6 +90,7 @@ PRIMEYACC_APPS = [
     "parties",
     "catalog",
     "sales",
+    "purchases",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + PRIMEYACC_APPS

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 accounts/models.py
-# 🧠 PrimeyAcc | Accounts Models V1.5
+# 🧠 PrimeyAcc | Accounts Models V1.6
 # ------------------------------------------------------------
 # ✅ User Profile
 # ✅ Workspace Type Foundation
@@ -14,6 +14,7 @@
 # ✅ Company Branches Permissions
 # ✅ Company Catalog Permissions
 # ✅ Company Sales Invoices Permissions
+# ✅ Company Purchases Bills Permissions
 # ✅ Safe Default Company Membership Resolver
 # ✅ Audit Fields
 # ------------------------------------------------------------
@@ -27,6 +28,7 @@
 # - whoami هو مصدر الحقيقة للواجهة والصلاحيات
 # - كتالوج الشركة يحتاج صلاحيات منفصلة للتصنيفات والوحدات والمنتجات
 # - فواتير المبيعات لها صلاحيات دقيقة منفصلة داخل company.sales.invoices
+# - فواتير الموردين لها صلاحيات دقيقة منفصلة داخل company.purchases.bills
 # ============================================================
 
 from __future__ import annotations
@@ -169,6 +171,11 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.purchases.view",
         "company.purchases.create",
         "company.purchases.update",
+        "company.purchases.bills.view",
+        "company.purchases.bills.create",
+        "company.purchases.bills.update",
+        "company.purchases.bills.post",
+        "company.purchases.bills.cancel",
         "company.inventory.view",
         "company.inventory.update",
         "company.accounting.view",
@@ -194,6 +201,13 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.invoices.issue",
         "company.sales.invoices.cancel",
         "company.purchases.view",
+        "company.purchases.create",
+        "company.purchases.update",
+        "company.purchases.bills.view",
+        "company.purchases.bills.create",
+        "company.purchases.bills.update",
+        "company.purchases.bills.post",
+        "company.purchases.bills.cancel",
         "company.inventory.view",
         "company.reports.view",
     ],
@@ -211,6 +225,13 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.invoices.issue",
         "company.sales.invoices.cancel",
         "company.purchases.view",
+        "company.purchases.create",
+        "company.purchases.update",
+        "company.purchases.bills.view",
+        "company.purchases.bills.create",
+        "company.purchases.bills.update",
+        "company.purchases.bills.post",
+        "company.purchases.bills.cancel",
         "company.accounting.view",
         "company.accounting.create",
         "company.accounting.update",
@@ -261,6 +282,12 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.products.update",
         "company.suppliers.view",
         "company.purchases.view",
+        "company.purchases.create",
+        "company.purchases.update",
+        "company.purchases.bills.view",
+        "company.purchases.bills.create",
+        "company.purchases.bills.update",
+        "company.purchases.bills.post",
         "company.inventory.view",
         "company.inventory.update",
         "company.reports.view",
@@ -292,6 +319,7 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.view",
         "company.sales.invoices.view",
         "company.purchases.view",
+        "company.purchases.bills.view",
         "company.inventory.view",
         "company.reports.view",
     ],
