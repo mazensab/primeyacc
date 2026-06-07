@@ -1,10 +1,11 @@
 # ============================================================
 # 📂 sales/tests.py
-# 🧠 PrimeyAcc | Sales Tests V1.1
+# 🧠 PrimeyAcc | Sales Tests V1.2
 # ------------------------------------------------------------
 # ✅ Sales invoice model tests
 # ✅ Sales invoice services tests
 # ✅ Sales invoice API tests
+# ✅ Sales invoices summary API tests
 # ✅ Tenant isolation validation
 # ✅ Customer validation
 # ✅ Catalog item validation
@@ -897,3 +898,91 @@ class SalesInvoicesAPITests(SalesTestCase):
         )
 
         self.assertEqual(create_response.status_code, 403)
+
+    def test_sales_invoices_summary_endpoint_returns_company_metrics(self):
+        draft_invoice = self._create_invoice_for_api()
+
+        issued_invoice = create_sales_invoice(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            items=[
+                {
+                    "catalog_item_id": self.service.id,
+                    "quantity": "1",
+                    "unit_price": "250.00",
+                }
+            ],
+        )
+        issue_sales_invoice(
+            company=self.company,
+            invoice=issued_invoice,
+            user=self.user,
+        )
+
+        create_sales_invoice(
+            company=self.other_company,
+            user=self.other_user,
+            customer_id=self.other_customer.id,
+            items=[
+                {
+                    "catalog_item_id": self.other_item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        response = self.client.get("/api/company/sales/invoices/summary/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["company"]["id"], self.company.id)
+        self.assertEqual(payload["summary"]["total_invoices"], 2)
+        self.assertEqual(payload["summary"]["draft_invoices"], 1)
+        self.assertEqual(payload["summary"]["issued_invoices"], 1)
+        self.assertEqual(payload["summary"]["cancelled_invoices"], 0)
+
+        self.assertEqual(payload["summary"]["all_totals"]["total_amount"], "402.50")
+        self.assertEqual(payload["summary"]["issued_totals"]["total_amount"], "287.50")
+        self.assertEqual(payload["summary"]["outstanding_totals"]["balance_due"], "402.50")
+
+        invoice_ids = {draft_invoice.id, issued_invoice.id}
+        self.assertEqual(
+            SalesInvoice.objects.filter(company=self.company, id__in=invoice_ids).count(),
+            2,
+        )
+
+    def test_sales_invoices_summary_endpoint_supports_date_filter(self):
+        today_invoice = self._create_invoice_for_api()
+
+        old_invoice = create_sales_invoice(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            invoice_date="2026-01-01",
+            items=[
+                {
+                    "catalog_item_id": self.item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        response = self.client.get(
+            "/api/company/sales/invoices/summary/",
+            {
+                "date_from": str(timezone.localdate()),
+                "date_to": str(timezone.localdate()),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["summary"]["total_invoices"], 1)
+        self.assertEqual(payload["summary"]["all_totals"]["total_amount"], "115.00")
+
+        self.assertNotEqual(today_invoice.id, old_invoice.id)

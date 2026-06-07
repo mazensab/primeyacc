@@ -1,9 +1,10 @@
 # ============================================================
 # 📂 sales/services.py
-# 🧠 PrimeyAcc | Sales Services V1.0
+# 🧠 PrimeyAcc | Sales Services V1.1
 # ------------------------------------------------------------
 # ✅ Company-scoped invoice helpers
 # ✅ Invoice number generation
+# ✅ Safe invoice/due date normalization
 # ✅ Default branch resolver
 # ✅ Customer / catalog item tenant validation
 # ✅ Draft invoice creation
@@ -16,12 +17,14 @@
 # - APIs تستدعي هذه الخدمات بدل تكرار المنطق
 # - لا نثق بأي company_id قادم من الفرونت
 # - الشركة يجب أن تأتي من عضوية المستخدم أو context الخاص بـ /company
+# - invoice_date و due_date قد تصل من الواجهة كنص YYYY-MM-DD ويجب تطبيعها هنا
 # - هذه المرحلة لا تنشئ قيود محاسبية ولا حركات مخزون
 # ============================================================
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -64,6 +67,48 @@ def normalize_text(value: Any) -> str:
     Normalize a text value safely.
     """
     return str(value or "").strip()
+
+
+def normalize_invoice_date(value: Any, *, field_name: str = "invoice_date", default_today: bool = False) -> date | None:
+    """
+    Normalize invoice date values safely.
+
+    Accepts:
+    - None / empty string
+    - datetime.date
+    - datetime.datetime
+    - "YYYY-MM-DD"
+
+    Raises ValidationError for unsupported formats.
+    """
+    if value in [None, ""]:
+        return timezone.localdate() if default_today else None
+
+    if isinstance(value, datetime):
+        return value.date()
+
+    if isinstance(value, date):
+        return value
+
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return timezone.localdate() if default_today else None
+
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            raise ValidationError(
+                {
+                    field_name: "Date must be in YYYY-MM-DD format.",
+                }
+            )
+
+    raise ValidationError(
+        {
+            field_name: "Invalid date value.",
+        }
+    )
 
 
 def get_default_branch(company: Company) -> Branch | None:
@@ -177,7 +222,11 @@ def generate_invoice_number(company: Company, invoice_date=None) -> str:
 
     Later we can replace this with a dedicated sequence model per company/branch.
     """
-    invoice_date = invoice_date or timezone.localdate()
+    invoice_date = normalize_invoice_date(
+        invoice_date,
+        field_name="invoice_date",
+        default_today=True,
+    )
     year = invoice_date.year
 
     prefix = "INV"
@@ -259,7 +308,17 @@ def create_sales_invoice(
     if not company:
         raise ValidationError({"company": "Company context is required."})
 
-    invoice_date = invoice_date or timezone.localdate()
+    invoice_date = normalize_invoice_date(
+        invoice_date,
+        field_name="invoice_date",
+        default_today=True,
+    )
+    due_date = normalize_invoice_date(
+        due_date,
+        field_name="due_date",
+        default_today=False,
+    )
+
     branch = resolve_company_branch(company, branch_id)
     customer = resolve_customer(company, customer_id)
 
