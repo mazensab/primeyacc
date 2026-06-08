@@ -1,14 +1,22 @@
 # ============================================================
 # 📂 accounting/services.py
-# 🧠 PrimeyAcc | Accounting Services - Phase 9.2 Part 1
+# 🧠 PrimeyAcc | Accounting Services - Phase 10.1
 # ------------------------------------------------------------
 # ✅ زرع شجرة الحسابات السعودية لكل شركة
-# ✅ نفس شجرة PrimeyCare كأساس
 # ✅ عزل كامل حسب الشركة
 # ✅ VAT 15%
-# ✅ AccountingSettings لكل شركة
+# ✅ AccountingSettings لكل شركة حسب الموديل الحالي
 # ✅ Routing Rules أساسية
+# ✅ قيود يومية يدوية
+# ✅ عكس القيود
+# ✅ ربط فاتورة البيع بقيد محاسبي تلقائي
 # ✅ لا يعتمد على company_id من الفرونت
+# ------------------------------------------------------------
+# القاعدة المعتمدة:
+# - هذا الملف مطابق فعليًا لحقول accounting/models.py الحالية
+# - لا نستخدم أي field غير موجود في الموديل
+# - لا نضيف migration في هذه الخطوة
+# - لا نثق بأي company_id من الفرونت
 # ============================================================
 
 from __future__ import annotations
@@ -44,13 +52,34 @@ from accounting.models import (
 
 
 # ============================================================
+# ✅ Model-compatible constants
+# ============================================================
+
+ACCOUNT_PURPOSE_COST_OF_SALES = getattr(
+    AccountingAccountPurpose,
+    "COST_OF_SALES",
+    AccountingAccountPurpose.OTHER,
+)
+ACCOUNT_PURPOSE_EXPENSE = getattr(
+    AccountingAccountPurpose,
+    "EXPENSE",
+    AccountingAccountPurpose.OTHER,
+)
+TAX_DIRECTION_OUTPUT = getattr(
+    TaxDirection,
+    "OUTPUT",
+    "OUTPUT",
+)
+
+
+# ============================================================
 # 🧾 DTOs
 # ============================================================
 
 @dataclass(frozen=True, slots=True)
 class AccountSeedRow:
     code: str
-    name_ar: str
+    name: str
     name_en: str
     account_type: str
     nature: str
@@ -73,7 +102,6 @@ class RoutingSeedRow:
 
 # ============================================================
 # 🌳 Default Saudi Chart of Accounts
-# نفس الشجرة المعتمدة من PrimeyCare مع تكييف PrimeyAcc
 # ============================================================
 
 CHART_OF_ACCOUNTS: list[AccountSeedRow] = [
@@ -91,6 +119,8 @@ CHART_OF_ACCOUNTS: list[AccountSeedRow] = [
     AccountSeedRow("1102", "النقدية في البنوك", "Cash at Banks", AccountType.ASSET, AccountNature.DEBIT, "11", True, is_system=True),
     AccountSeedRow("110201", "حساب البنك الجاري", "Current Bank Account", AccountType.ASSET, AccountNature.DEBIT, "1102", False, is_system=True, purpose=AccountingAccountPurpose.BANK),
     AccountSeedRow("110202", "حساب بنكي آخر", "Other Bank Account", AccountType.ASSET, AccountNature.DEBIT, "1102", False),
+    AccountSeedRow("110203", "حساب ادخار بنكي", "Bank Savings Account", AccountType.ASSET, AccountNature.DEBIT, "1102", False),
+    AccountSeedRow("110204", "حساب رواتب بنكي", "Payroll Bank Account", AccountType.ASSET, AccountNature.DEBIT, "1102", False),
 
     AccountSeedRow("1103", "الذمم المدينة - العملاء", "Accounts Receivable - Customers", AccountType.ASSET, AccountNature.DEBIT, "11", False, is_system=True, purpose=AccountingAccountPurpose.ACCOUNTS_RECEIVABLE),
 
@@ -112,15 +142,39 @@ CHART_OF_ACCOUNTS: list[AccountSeedRow] = [
     AccountSeedRow("1109", "العهد التشغيلية", "Operational Custodies", AccountType.ASSET, AccountNature.DEBIT, "11", True, is_system=True),
     AccountSeedRow("110901", "عهدة المندوبين", "Agent Custody", AccountType.ASSET, AccountNature.DEBIT, "1109", False, is_system=True, description="مبالغ تشغيلية محصلة بواسطة مندوبين ولم تورد بعد"),
     AccountSeedRow("110902", "عهدة الوسطاء", "Broker Custody", AccountType.ASSET, AccountNature.DEBIT, "1109", False, is_system=True, description="مبالغ تشغيلية على الوسطاء ولم تورد بعد"),
+    AccountSeedRow("110903", "عهدة الموظفين", "Employee Custody", AccountType.ASSET, AccountNature.DEBIT, "1109", False),
+    AccountSeedRow("110904", "عهدة الموردين", "Supplier Custody", AccountType.ASSET, AccountNature.DEBIT, "1109", False),
+
+    AccountSeedRow("1110", "أوراق قبض وأرصدة مدينة", "Notes Receivable and Debit Balances", AccountType.ASSET, AccountNature.DEBIT, "11", True),
+    AccountSeedRow("111001", "أوراق قبض", "Notes Receivable", AccountType.ASSET, AccountNature.DEBIT, "1110", False),
+    AccountSeedRow("111002", "ذمم موظفين", "Employee Receivables", AccountType.ASSET, AccountNature.DEBIT, "1110", False),
+    AccountSeedRow("111003", "ذمم أطراف ذات علاقة مدينة", "Related Party Receivables", AccountType.ASSET, AccountNature.DEBIT, "1110", False),
+    AccountSeedRow("111004", "دفعات مقدمة أخرى", "Other Advances", AccountType.ASSET, AccountNature.DEBIT, "1110", False),
 
     AccountSeedRow("12", "الأصول غير المتداولة", "Non-current Assets", AccountType.ASSET, AccountNature.DEBIT, "1", True),
     AccountSeedRow("1201", "العقارات والآلات والمعدات", "Property, Plant and Equipment", AccountType.ASSET, AccountNature.DEBIT, "12", True),
     AccountSeedRow("120101", "الأراضي", "Land", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
     AccountSeedRow("120102", "المباني", "Buildings", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
-    AccountSeedRow("120103", "المعدات", "Equipment", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
-    AccountSeedRow("120104", "أجهزة مكتبية وطابعات", "Office Equipment and Printers", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
-    AccountSeedRow("120105", "أجهزة حاسب وبرمجيات", "Computers and Software", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
-    AccountSeedRow("1202", "الأصول غير الملموسة", "Intangible Assets", AccountType.ASSET, AccountNature.DEBIT, "12", False),
+    AccountSeedRow("120103", "الأثاث والتجهيزات", "Furniture and Fixtures", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
+    AccountSeedRow("120104", "أجهزة الحاسب", "Computer Equipment", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
+    AccountSeedRow("120105", "السيارات", "Vehicles", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
+    AccountSeedRow("120106", "العدد والأدوات", "Tools and Equipment", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
+    AccountSeedRow("120107", "معدات مكتبية", "Office Equipment", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
+    AccountSeedRow("120108", "تحسينات على مبان مستأجرة", "Leasehold Improvements", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
+    AccountSeedRow("120109", "آلات ومعدات تشغيل", "Machinery and Operating Equipment", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
+    AccountSeedRow("120110", "أجهزة اتصال", "Communication Equipment", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
+
+    AccountSeedRow("1299", "مجمع الإهلاك", "Accumulated Depreciation", AccountType.ASSET, AccountNature.CREDIT, "12", True),
+    AccountSeedRow("129901", "مجمع إهلاك الأصول", "Accumulated Depreciation", AccountType.ASSET, AccountNature.CREDIT, "1299", False),
+    AccountSeedRow("129902", "مجمع إهلاك المباني", "Accumulated Depreciation - Buildings", AccountType.ASSET, AccountNature.CREDIT, "1299", False),
+    AccountSeedRow("129903", "مجمع إهلاك السيارات", "Accumulated Depreciation - Vehicles", AccountType.ASSET, AccountNature.CREDIT, "1299", False),
+    AccountSeedRow("129904", "مجمع إهلاك الأثاث", "Accumulated Depreciation - Furniture", AccountType.ASSET, AccountNature.CREDIT, "1299", False),
+    AccountSeedRow("129905", "مجمع إهلاك أجهزة الحاسب", "Accumulated Depreciation - Computers", AccountType.ASSET, AccountNature.CREDIT, "1299", False),
+
+    AccountSeedRow("13", "الأصول غير الملموسة", "Intangible Assets", AccountType.ASSET, AccountNature.DEBIT, "1", True),
+    AccountSeedRow("1301", "برمجيات وأنظمة", "Software and Systems", AccountType.ASSET, AccountNature.DEBIT, "13", False),
+    AccountSeedRow("1302", "علامات تجارية", "Trademarks", AccountType.ASSET, AccountNature.DEBIT, "13", False),
+    AccountSeedRow("1303", "رخص وامتيازات", "Licenses and Franchises", AccountType.ASSET, AccountNature.DEBIT, "13", False),
 
     # ========================================================
     # 2 الالتزامات
@@ -129,162 +183,103 @@ CHART_OF_ACCOUNTS: list[AccountSeedRow] = [
     AccountSeedRow("21", "الالتزامات المتداولة", "Current Liabilities", AccountType.LIABILITY, AccountNature.CREDIT, "2", True, is_system=True),
 
     AccountSeedRow("2101", "الذمم الدائنة - الموردون", "Accounts Payable - Suppliers", AccountType.LIABILITY, AccountNature.CREDIT, "21", False, is_system=True, purpose=AccountingAccountPurpose.ACCOUNTS_PAYABLE),
-    AccountSeedRow("2102", "مصروفات مستحقة", "Accrued Expenses", AccountType.LIABILITY, AccountNature.CREDIT, "21", False, is_system=True),
-    AccountSeedRow("2103", "رواتب مستحقة", "Accrued Salaries", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
-    AccountSeedRow("2104", "قروض قصيرة الأجل", "Short-term Loans", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
+    AccountSeedRow("2102", "مصروفات مستحقة", "Accrued Expenses", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
+    AccountSeedRow("2103", "إيرادات مقدمة", "Deferred Revenue", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
+    AccountSeedRow("2104", "رواتب وأجور مستحقة", "Accrued Payroll", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
 
-    AccountSeedRow("2105", "ضريبة القيمة المضافة المستحقة", "VAT Payable", AccountType.LIABILITY, AccountNature.CREDIT, "21", False, is_system=True, purpose=AccountingAccountPurpose.VAT_PAYABLE),
-    AccountSeedRow("210501", "ضريبة مخرجات", "Output VAT", AccountType.LIABILITY, AccountNature.CREDIT, "21", False, is_system=True, purpose=AccountingAccountPurpose.OUTPUT_VAT),
-    AccountSeedRow("210502", "ضريبة مدخلات", "Input VAT", AccountType.LIABILITY, AccountNature.CREDIT, "21", False, is_system=True, purpose=AccountingAccountPurpose.INPUT_VAT),
+    AccountSeedRow("2105", "ضرائب مستحقة", "Taxes Payable", AccountType.LIABILITY, AccountNature.CREDIT, "21", True, is_system=True),
+    AccountSeedRow("210501", "ضريبة القيمة المضافة - مخرجات", "VAT Output", AccountType.LIABILITY, AccountNature.CREDIT, "2105", False, is_system=True, purpose=AccountingAccountPurpose.OUTPUT_VAT),
+    AccountSeedRow("210502", "ضريبة القيمة المضافة - مدخلات", "VAT Input", AccountType.ASSET, AccountNature.DEBIT, "11", False, is_system=True, purpose=AccountingAccountPurpose.INPUT_VAT),
+    AccountSeedRow("210503", "صافي ضريبة القيمة المضافة", "VAT Net Payable", AccountType.LIABILITY, AccountNature.CREDIT, "2105", False, is_system=True, purpose=AccountingAccountPurpose.VAT_PAYABLE),
 
-    AccountSeedRow("2106", "ضرائب ورسوم مستحقة", "Taxes and Fees Payable", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
-    AccountSeedRow("2107", "إيرادات غير مكتسبة", "Unearned Revenue", AccountType.LIABILITY, AccountNature.CREDIT, "21", False, is_system=True),
-    AccountSeedRow("2108", "مستحقات التأمينات الاجتماعية", "GOSI Payable", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
-
-    AccountSeedRow("2110", "مستحقات المندوبين", "Agent Payables", AccountType.LIABILITY, AccountNature.CREDIT, "21", False, is_system=True, description="مستحقات عمولات وقيم تشغيل للمندوبين"),
-    AccountSeedRow("2111", "مستحقات مزودي الخدمة", "Provider Payables", AccountType.LIABILITY, AccountNature.CREDIT, "21", False, is_system=True),
-    AccountSeedRow("2112", "مستحقات بوابات الدفع", "Gateway Payables", AccountType.LIABILITY, AccountNature.CREDIT, "21", False, is_system=True),
-    AccountSeedRow("2113", "مستحقات الوسطاء", "Broker Payables", AccountType.LIABILITY, AccountNature.CREDIT, "21", False, is_system=True, description="مستحقات الوسطاء والوكلاء"),
-
-    AccountSeedRow("2120", "مجمع الإهلاك", "Accumulated Depreciation", AccountType.LIABILITY, AccountNature.CREDIT, "21", True),
-    AccountSeedRow("212001", "مجمع إهلاك المباني", "Accumulated Depreciation - Buildings", AccountType.LIABILITY, AccountNature.CREDIT, "2120", False),
-    AccountSeedRow("212002", "مجمع إهلاك المعدات", "Accumulated Depreciation - Equipment", AccountType.LIABILITY, AccountNature.CREDIT, "2120", False),
-    AccountSeedRow("212003", "مجمع إهلاك أجهزة مكتبية وطابعات", "Accumulated Depreciation - Office Equipment", AccountType.LIABILITY, AccountNature.CREDIT, "2120", False),
+    AccountSeedRow("2106", "دفعات مقدمة من العملاء", "Customer Advances", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
+    AccountSeedRow("2107", "عمولات مستحقة", "Accrued Commissions", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
+    AccountSeedRow("2108", "مصروفات شحن مستحقة", "Accrued Shipping Expenses", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
+    AccountSeedRow("2109", "تسويات مستحقة لبوابات الدفع", "Payment Gateway Payables", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
+    AccountSeedRow("2110", "مستحقات الموظفين", "Employee Payables", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
+    AccountSeedRow("2111", "ذمم أطراف ذات علاقة دائنة", "Related Party Payables", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
+    AccountSeedRow("2112", "زكاة مستحقة", "Zakat Payable", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
 
     AccountSeedRow("22", "الالتزامات غير المتداولة", "Non-current Liabilities", AccountType.LIABILITY, AccountNature.CREDIT, "2", True),
     AccountSeedRow("2201", "قروض طويلة الأجل", "Long-term Loans", AccountType.LIABILITY, AccountNature.CREDIT, "22", False),
-    AccountSeedRow("2202", "مخصص مكافأة نهاية الخدمة", "End of Service Benefit Provision", AccountType.LIABILITY, AccountNature.CREDIT, "22", False),
+    AccountSeedRow("2202", "التزامات عقود إيجار", "Lease Liabilities", AccountType.LIABILITY, AccountNature.CREDIT, "22", False),
+    AccountSeedRow("2203", "مخصص نهاية الخدمة", "End of Service Provision", AccountType.LIABILITY, AccountNature.CREDIT, "22", False),
 
     # ========================================================
     # 3 حقوق الملكية
     # ========================================================
     AccountSeedRow("3", "حقوق الملكية", "Equity", AccountType.EQUITY, AccountNature.CREDIT, None, True, is_system=True),
-    AccountSeedRow("31", "رأس المال", "Capital", AccountType.EQUITY, AccountNature.CREDIT, "3", True),
-    AccountSeedRow("3101", "رأس المال المسجل", "Registered Capital", AccountType.EQUITY, AccountNature.CREDIT, "31", False),
-    AccountSeedRow("3102", "رأس المال الإضافي المدفوع", "Additional Paid-in Capital", AccountType.EQUITY, AccountNature.CREDIT, "31", False),
-
-    AccountSeedRow("32", "حقوق ملكية أخرى", "Other Equity", AccountType.EQUITY, AccountNature.CREDIT, "3", True),
-    AccountSeedRow("3201", "أرصدة افتتاحية", "Opening Balances Equity", AccountType.EQUITY, AccountNature.CREDIT, "32", False, is_system=True, purpose=AccountingAccountPurpose.OPENING_EQUITY),
-
-    AccountSeedRow("33", "احتياطيات", "Reserves", AccountType.EQUITY, AccountNature.CREDIT, "3", True),
-    AccountSeedRow("3301", "احتياطي نظامي", "Statutory Reserve", AccountType.EQUITY, AccountNature.CREDIT, "33", False),
-
-    AccountSeedRow("34", "الأرباح المبقاة", "Retained Earnings", AccountType.EQUITY, AccountNature.CREDIT, "3", True, is_system=True),
-    AccountSeedRow("3401", "أرباح وخسائر العام الحالي", "Current Year Profit and Loss", AccountType.EQUITY, AccountNature.CREDIT, "34", False, is_system=True),
-    AccountSeedRow("3402", "الأرباح المبقاة أو الخسائر المرحلة", "Retained Earnings or Accumulated Losses", AccountType.EQUITY, AccountNature.CREDIT, "34", False, is_system=True),
+    AccountSeedRow("31", "رأس المال والاحتياطيات", "Capital and Reserves", AccountType.EQUITY, AccountNature.CREDIT, "3", True),
+    AccountSeedRow("3101", "رأس المال", "Capital", AccountType.EQUITY, AccountNature.CREDIT, "31", False),
+    AccountSeedRow("3102", "الأرباح المبقاة", "Retained Earnings", AccountType.EQUITY, AccountNature.CREDIT, "31", False),
+    AccountSeedRow("32", "الأرصدة الافتتاحية", "Opening Balances", AccountType.EQUITY, AccountNature.CREDIT, "3", True, is_system=True),
+    AccountSeedRow("3201", "أرصدة افتتاحية", "Opening Balance Equity", AccountType.EQUITY, AccountNature.CREDIT, "32", False, is_system=True),
+    AccountSeedRow("33", "نتائج الفترة", "Period Results", AccountType.EQUITY, AccountNature.CREDIT, "3", True),
+    AccountSeedRow("3301", "أرباح وخسائر الفترة", "Current Period Profit and Loss", AccountType.EQUITY, AccountNature.CREDIT, "33", False),
 
     # ========================================================
     # 4 الإيرادات
     # ========================================================
     AccountSeedRow("4", "الإيرادات", "Revenue", AccountType.REVENUE, AccountNature.CREDIT, None, True, is_system=True),
-    AccountSeedRow("41", "الإيرادات التشغيلية", "Operating Revenue", AccountType.REVENUE, AccountNature.CREDIT, "4", True, is_system=True),
-    AccountSeedRow("4101", "إيرادات المبيعات والخدمات", "Sales and Service Revenue", AccountType.REVENUE, AccountNature.CREDIT, "41", False, is_system=True, purpose=AccountingAccountPurpose.SALES_REVENUE),
-    AccountSeedRow("410101", "إيرادات البطاقات", "Cards Revenue", AccountType.REVENUE, AccountNature.CREDIT, "41", False, is_system=True, purpose=AccountingAccountPurpose.SALES_REVENUE),
-    AccountSeedRow("410102", "إيرادات البرامج", "Programs Revenue", AccountType.REVENUE, AccountNature.CREDIT, "41", False, is_system=True, purpose=AccountingAccountPurpose.SALES_REVENUE),
-    AccountSeedRow("410103", "إيرادات الخدمات", "Services Revenue", AccountType.REVENUE, AccountNature.CREDIT, "41", False, is_system=True, purpose=AccountingAccountPurpose.SERVICE_REVENUE),
-    AccountSeedRow("410104", "إيرادات الاشتراكات", "Subscriptions Revenue", AccountType.REVENUE, AccountNature.CREDIT, "41", False, is_system=True, purpose=AccountingAccountPurpose.SALES_REVENUE),
-    AccountSeedRow("4102", "إيراد حصة النظام", "Platform Share Revenue", AccountType.REVENUE, AccountNature.CREDIT, "41", False, is_system=True, description="حصة النظام من العمليات"),
-
-    AccountSeedRow("42", "إيرادات غير تشغيلية", "Non-operating Revenue", AccountType.REVENUE, AccountNature.CREDIT, "4", True),
-    AccountSeedRow("4201", "إيرادات أخرى", "Other Revenue", AccountType.REVENUE, AccountNature.CREDIT, "42", False, purpose=AccountingAccountPurpose.OTHER_REVENUE),
-    AccountSeedRow("4202", "فروقات تقريب دائنة", "Rounding Gains", AccountType.REVENUE, AccountNature.CREDIT, "42", False, purpose=AccountingAccountPurpose.ROUNDING),
+    AccountSeedRow("41", "إيرادات التشغيل", "Operating Revenue", AccountType.REVENUE, AccountNature.CREDIT, "4", True, is_system=True),
+    AccountSeedRow("4101", "إيرادات المبيعات والخدمات", "Sales and Services Revenue", AccountType.REVENUE, AccountNature.CREDIT, "41", False, is_system=True, purpose=AccountingAccountPurpose.SALES_REVENUE),
+    AccountSeedRow("4102", "إيرادات خصومات مكتسبة", "Discounts Earned", AccountType.REVENUE, AccountNature.CREDIT, "41", False),
+    AccountSeedRow("49", "إيرادات أخرى", "Other Income", AccountType.REVENUE, AccountNature.CREDIT, "4", True),
+    AccountSeedRow("4901", "أرباح أخرى", "Other Gains", AccountType.REVENUE, AccountNature.CREDIT, "49", False, purpose=AccountingAccountPurpose.OTHER_REVENUE),
 
     # ========================================================
-    # 5 المصاريف
+    # 5 المصروفات والتكاليف
     # ========================================================
-    AccountSeedRow("5", "المصاريف", "Expenses", AccountType.EXPENSE, AccountNature.DEBIT, None, True, is_system=True),
-    AccountSeedRow("51", "التكاليف المباشرة", "Direct Costs", AccountType.EXPENSE, AccountNature.DEBIT, "5", True, is_system=True),
-    AccountSeedRow("5101", "تكلفة الخدمات المقدمة", "Cost of Services", AccountType.EXPENSE, AccountNature.DEBIT, "51", False, is_system=True, purpose=AccountingAccountPurpose.COST_OF_SALES),
-    AccountSeedRow("5102", "تكلفة مزودي الخدمة", "Provider Service Cost", AccountType.EXPENSE, AccountNature.DEBIT, "51", False, is_system=True, purpose=AccountingAccountPurpose.COST_OF_SALES),
-    AccountSeedRow("5103", "عمولات البيع", "Sales Commissions", AccountType.EXPENSE, AccountNature.DEBIT, "51", False, is_system=True, purpose=AccountingAccountPurpose.EXPENSE),
-    AccountSeedRow("5104", "تكلفة التوصيل", "Delivery Cost", AccountType.EXPENSE, AccountNature.DEBIT, "51", False, is_system=True, purpose=AccountingAccountPurpose.EXPENSE),
-    AccountSeedRow("5105", "عمولات الوسطاء", "Broker Commissions", AccountType.EXPENSE, AccountNature.DEBIT, "51", False, is_system=True, purpose=AccountingAccountPurpose.EXPENSE),
+    AccountSeedRow("5", "المصروفات والتكاليف", "Expenses and Costs", AccountType.EXPENSE, AccountNature.DEBIT, None, True, is_system=True),
+    AccountSeedRow("51", "تكلفة المبيعات", "Cost of Sales", AccountType.EXPENSE, AccountNature.DEBIT, "5", True, is_system=True),
+    AccountSeedRow("5101", "تكلفة البضاعة المباعة", "Cost of Goods Sold", AccountType.EXPENSE, AccountNature.DEBIT, "51", False, is_system=True, purpose=ACCOUNT_PURPOSE_COST_OF_SALES),
 
-    AccountSeedRow("52", "المصاريف التشغيلية", "Operating Expenses", AccountType.EXPENSE, AccountNature.DEBIT, "5", True),
-    AccountSeedRow("5201", "الرواتب والرسوم الإدارية", "Administrative Salaries and Fees", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5202", "تأمين طبي", "Medical Insurance", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5203", "مصروفات تسويقية ودعائية", "Marketing and Advertising Expenses", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5204", "مصروفات الإيجار", "Rent Expense", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5205", "عمولات وحوافز", "Commissions and Incentives", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5206", "تذاكر سفر", "Travel Tickets", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5207", "التأمينات الاجتماعية", "Social Insurance", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5208", "الرسوم الحكومية", "Government Fees", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5209", "رسوم واشتراكات", "Fees and Subscriptions", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5210", "مصروفات خدمات المكتب", "Office Service Expenses", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5211", "مصروفات مكتبية ومطبوعات", "Office Supplies and Printing", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5212", "مصروفات ضيافة", "Hospitality Expenses", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5213", "رسوم بنكية", "Bank Charges", AccountType.EXPENSE, AccountNature.DEBIT, "52", False, is_system=True),
-    AccountSeedRow("5214", "رسوم بوابات الدفع", "Payment Gateway Fees", AccountType.EXPENSE, AccountNature.DEBIT, "52", False, is_system=True, purpose=AccountingAccountPurpose.GATEWAY_FEES),
-    AccountSeedRow("5215", "مصروفات أخرى", "Other Expenses", AccountType.EXPENSE, AccountNature.DEBIT, "52", False, purpose=AccountingAccountPurpose.EXPENSE),
-    AccountSeedRow("5216", "فروقات تقريب مدينة", "Rounding Losses", AccountType.EXPENSE, AccountNature.DEBIT, "52", False, purpose=AccountingAccountPurpose.ROUNDING),
-    AccountSeedRow("5217", "مصروفات الإهلاك", "Depreciation Expense", AccountType.EXPENSE, AccountNature.DEBIT, "52", True),
-    AccountSeedRow("521701", "مصروف إهلاك المباني", "Depreciation Expense - Buildings", AccountType.EXPENSE, AccountNature.DEBIT, "5217", False),
-    AccountSeedRow("521702", "مصروف إهلاك المعدات", "Depreciation Expense - Equipment", AccountType.EXPENSE, AccountNature.DEBIT, "5217", False),
-    AccountSeedRow("521703", "مصروف إهلاك أجهزة مكتبية وطابعات", "Depreciation Expense - Office Equipment", AccountType.EXPENSE, AccountNature.DEBIT, "5217", False),
-    AccountSeedRow("5219", "مصروف نقل ومواصلات", "Transportation Expense", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
+    AccountSeedRow("52", "مصروفات التشغيل", "Operating Expenses", AccountType.EXPENSE, AccountNature.DEBIT, "5", True),
+    AccountSeedRow("5201", "رواتب وأجور", "Salaries and Wages", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
+    AccountSeedRow("5202", "إيجار", "Rent Expense", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
+    AccountSeedRow("5203", "كهرباء ومياه", "Utilities", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
+    AccountSeedRow("5204", "اتصالات وإنترنت", "Telecommunications and Internet", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
+    AccountSeedRow("5205", "مصروفات تسويق", "Marketing Expense", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
+    AccountSeedRow("5206", "مصروفات إدارية", "Administrative Expense", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
+    AccountSeedRow("5207", "مصروفات صيانة", "Maintenance Expense", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
+    AccountSeedRow("5208", "رسوم بنكية", "Bank Charges", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
+    AccountSeedRow("5209", "عمولات بوابات دفع", "Payment Gateway Fees", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
+    AccountSeedRow("5210", "مصروفات ضيافة", "Hospitality Expense", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
+    AccountSeedRow("5211", "مصروفات سفر وانتقال", "Travel and Transportation", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
+    AccountSeedRow("5212", "مصروفات حكومية", "Government Fees", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
+    AccountSeedRow("5213", "مصروفات تقنية", "Technology Expense", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
+    AccountSeedRow("5214", "مصروفات بريد وشحن", "Shipping and Delivery Expense", AccountType.EXPENSE, AccountNature.DEBIT, "52", False, purpose=AccountingAccountPurpose.GATEWAY_FEES),
+    AccountSeedRow("5215", "مصروف مشتريات / تسويات", "Purchase / Adjustment Expense", AccountType.EXPENSE, AccountNature.DEBIT, "52", False, is_system=True, purpose=ACCOUNT_PURPOSE_EXPENSE),
 
-    AccountSeedRow("53", "مصاريف غير تشغيلية", "Non-operating Expenses", AccountType.EXPENSE, AccountNature.DEBIT, "5", True),
-    AccountSeedRow("5301", "الزكاة", "Zakat", AccountType.EXPENSE, AccountNature.DEBIT, "53", False),
-    AccountSeedRow("5302", "الضرائب", "Taxes", AccountType.EXPENSE, AccountNature.DEBIT, "53", False),
-    AccountSeedRow("5303", "فروقات عملة", "Foreign Currency Differences", AccountType.EXPENSE, AccountNature.DEBIT, "53", False),
-    AccountSeedRow("5304", "فوائد", "Interest Expense", AccountType.EXPENSE, AccountNature.DEBIT, "53", False),
+    AccountSeedRow("53", "مصروفات غير تشغيلية", "Non-operating Expenses", AccountType.EXPENSE, AccountNature.DEBIT, "5", True),
+    AccountSeedRow("5301", "خسائر أخرى", "Other Losses", AccountType.EXPENSE, AccountNature.DEBIT, "53", False),
 ]
-
-
-# ============================================================
-# 🧩 Operational codes
-# ============================================================
-
-REQUIRED_OPERATIONAL_CODES: dict[str, str] = {
-    "110101": "النقدية في الخزينة",
-    "110201": "حساب البنك الجاري",
-    "1103": "الذمم المدينة - العملاء",
-    "1108": "المخزون",
-    "2101": "الذمم الدائنة - الموردون",
-    "210501": "ضريبة مخرجات",
-    "210502": "ضريبة مدخلات",
-    "4101": "إيرادات المبيعات والخدمات",
-    "5101": "تكلفة الخدمات المقدمة",
-    "5214": "رسوم بوابات الدفع",
-    "3201": "أرصدة افتتاحية",
-}
 
 
 DEFAULT_ROUTING_RULES: list[RoutingSeedRow] = [
-    # Sales
-    RoutingSeedRow(AccountingRoutingSource.SALES_INVOICE, AccountingAccountPurpose.ACCOUNTS_RECEIVABLE, "1103", "إثبات ذمم العميل عند إصدار فاتورة المبيعات"),
-    RoutingSeedRow(AccountingRoutingSource.SALES_INVOICE, AccountingAccountPurpose.SALES_REVENUE, "4101", "إثبات إيرادات المبيعات والخدمات"),
-    RoutingSeedRow(AccountingRoutingSource.SALES_INVOICE, AccountingAccountPurpose.OUTPUT_VAT, "210501", "إثبات ضريبة المخرجات"),
+    RoutingSeedRow(AccountingRoutingSource.SALES_INVOICE, AccountingAccountPurpose.ACCOUNTS_RECEIVABLE, "1103", "مدين فاتورة البيع"),
+    RoutingSeedRow(AccountingRoutingSource.SALES_INVOICE, AccountingAccountPurpose.SALES_REVENUE, "4101", "دائن إيرادات البيع"),
+    RoutingSeedRow(AccountingRoutingSource.SALES_INVOICE, AccountingAccountPurpose.OUTPUT_VAT, "210501", "دائن ضريبة المخرجات"),
 
-    RoutingSeedRow(AccountingRoutingSource.SALES_PAYMENT, AccountingAccountPurpose.CASH, "110101", "تحصيل نقدي"),
-    RoutingSeedRow(AccountingRoutingSource.SALES_PAYMENT, AccountingAccountPurpose.BANK, "110201", "تحصيل بنكي"),
-    RoutingSeedRow(AccountingRoutingSource.SALES_PAYMENT, AccountingAccountPurpose.ACCOUNTS_RECEIVABLE, "1103", "تسوية ذمم العميل عند التحصيل"),
-    RoutingSeedRow(AccountingRoutingSource.SALES_PAYMENT, AccountingAccountPurpose.GATEWAY_FEES, "5214", "رسوم بوابات الدفع"),
+    RoutingSeedRow(AccountingRoutingSource.PURCHASE_BILL, ACCOUNT_PURPOSE_EXPENSE, "5215", "مدين مشتريات أو مصروفات"),
+    RoutingSeedRow(AccountingRoutingSource.PURCHASE_BILL, AccountingAccountPurpose.INVENTORY, "1108", "مدين المخزون عند الشراء"),
+    RoutingSeedRow(AccountingRoutingSource.PURCHASE_BILL, AccountingAccountPurpose.INPUT_VAT, "210502", "مدين ضريبة المدخلات"),
+    RoutingSeedRow(AccountingRoutingSource.PURCHASE_BILL, AccountingAccountPurpose.ACCOUNTS_PAYABLE, "2101", "دائن الموردين"),
 
-    # Purchases
-    RoutingSeedRow(AccountingRoutingSource.PURCHASE_BILL, AccountingAccountPurpose.ACCOUNTS_PAYABLE, "2101", "إثبات ذمم المورد عند إصدار فاتورة المشتريات"),
-    RoutingSeedRow(AccountingRoutingSource.PURCHASE_BILL, AccountingAccountPurpose.INPUT_VAT, "210502", "إثبات ضريبة المدخلات"),
-    RoutingSeedRow(AccountingRoutingSource.PURCHASE_BILL, AccountingAccountPurpose.INVENTORY, "1108", "إثبات مخزون مشتريات"),
-    RoutingSeedRow(AccountingRoutingSource.PURCHASE_BILL, AccountingAccountPurpose.EXPENSE, "5215", "مصروف مشتريات افتراضي"),
-
-    # Inventory
-    RoutingSeedRow(AccountingRoutingSource.INVENTORY_RECEIPT, AccountingAccountPurpose.INVENTORY, "1108", "استلام مخزون"),
-    RoutingSeedRow(AccountingRoutingSource.INVENTORY_ADJUSTMENT, AccountingAccountPurpose.INVENTORY, "1108", "تسوية مخزون"),
-    RoutingSeedRow(AccountingRoutingSource.INVENTORY_ADJUSTMENT, AccountingAccountPurpose.INVENTORY_ADJUSTMENT, "5215", "فرق تسوية مخزون"),
-
-    # Treasury later
-    RoutingSeedRow(AccountingRoutingSource.TREASURY_INCOME, AccountingAccountPurpose.CASH, "110101", "قبض خزينة افتراضي"),
-    RoutingSeedRow(AccountingRoutingSource.TREASURY_EXPENSE, AccountingAccountPurpose.EXPENSE, "5215", "صرف خزينة افتراضي"),
-    RoutingSeedRow(AccountingRoutingSource.OPENING_BALANCE, AccountingAccountPurpose.OPENING_EQUITY, "3201", "أرصدة افتتاحية"),
+    RoutingSeedRow(AccountingRoutingSource.INVENTORY_RECEIPT, AccountingAccountPurpose.INVENTORY, "1108", "مدين المخزون"),
+    RoutingSeedRow(AccountingRoutingSource.INVENTORY_ISSUE, ACCOUNT_PURPOSE_COST_OF_SALES, "5101", "مدين تكلفة البضاعة المباعة"),
+    RoutingSeedRow(AccountingRoutingSource.INVENTORY_ISSUE, AccountingAccountPurpose.INVENTORY, "1108", "دائن المخزون"),
+    RoutingSeedRow(AccountingRoutingSource.INVENTORY_ADJUSTMENT, AccountingAccountPurpose.INVENTORY, "1108", "حساب المخزون للتسوية"),
+    RoutingSeedRow(AccountingRoutingSource.INVENTORY_ADJUSTMENT, AccountingAccountPurpose.INVENTORY_ADJUSTMENT, "5215", "فرق تسوية المخزون"),
 ]
 
 
 # ============================================================
-# Exceptions
+# ⚠️ Exceptions
 # ============================================================
 
 class AccountingServiceError(Exception):
-    """Base exception for accounting services."""
+    """Base accounting service error."""
 
 
 class AccountingConfigurationError(AccountingServiceError):
@@ -292,276 +287,327 @@ class AccountingConfigurationError(AccountingServiceError):
 
 
 # ============================================================
-# Helpers
+# 🔧 Small helpers
 # ============================================================
 
 def _clean_code(value: Any) -> str:
     return str(value or "").strip()
 
 
-def _sort_rows_by_code_length(rows: list[AccountSeedRow]) -> list[AccountSeedRow]:
-    return sorted(rows, key=lambda item: (len(item.code), item.code))
+def _clean_name(value: Any) -> str:
+    return str(value or "").strip()
 
 
-def _get_seed_code_map() -> dict[str, AccountSeedRow]:
-    return {row.code: row for row in CHART_OF_ACCOUNTS}
+def _get_user(user: Any):
+    if user is not None and getattr(user, "is_authenticated", False):
+        return user
+    return None
 
 
-def validate_chart_definition() -> None:
-    seen_codes: set[str] = set()
+def _validate_seed_row(row: AccountSeedRow) -> None:
+    if not row.code:
+        raise AccountingConfigurationError("Account code is required.")
 
-    for row in CHART_OF_ACCOUNTS:
-        code = _clean_code(row.code)
+    if not row.name:
+        raise AccountingConfigurationError(f"Account name is required for code {row.code}.")
 
-        if not code:
-            raise AccountingConfigurationError("يوجد حساب بدون كود داخل شجرة الحسابات.")
+    if not row.account_type:
+        raise AccountingConfigurationError(f"Account type is required for code {row.code}.")
 
-        if code in seen_codes:
-            raise AccountingConfigurationError(f"كود حساب مكرر داخل شجرة الحسابات: {code}")
-
-        seen_codes.add(code)
-
-        if not row.name_ar:
-            raise AccountingConfigurationError(f"الحساب {code} لا يحتوي على اسم عربي.")
-
-        if not row.name_en:
-            raise AccountingConfigurationError(f"الحساب {code} لا يحتوي على اسم إنجليزي.")
-
-        if not row.account_type:
-            raise AccountingConfigurationError(f"الحساب {code} لا يحتوي على نوع حساب.")
-
-        if not row.nature:
-            raise AccountingConfigurationError(f"الحساب {code} لا يحتوي على طبيعة حساب.")
-
-    code_map = _get_seed_code_map()
-
-    for row in CHART_OF_ACCOUNTS:
-        if not row.parent_code:
-            continue
-
-        parent = code_map.get(row.parent_code)
-
-        if not parent:
-            raise AccountingConfigurationError(
-                f"الحساب {row.code} مرتبط بحساب أب غير موجود: {row.parent_code}"
-            )
-
-        if not parent.is_group:
-            raise AccountingConfigurationError(
-                f"الحساب الأب {parent.code} للحساب {row.code} يجب أن يكون حسابًا تجميعيًا."
-            )
-
-        if parent.account_type != row.account_type:
-            raise AccountingConfigurationError(
-                f"نوع الحساب {row.code} لا يطابق نوع الحساب الأب {parent.code}."
-            )
-
-    for code in REQUIRED_OPERATIONAL_CODES:
-        if code not in code_map:
-            raise AccountingConfigurationError(f"الحساب التشغيلي المطلوب غير موجود في الشجرة: {code}")
-
-    for rule in DEFAULT_ROUTING_RULES:
-        if rule.account_code not in code_map:
-            raise AccountingConfigurationError(
-                f"قاعدة التوجيه تشير إلى حساب غير موجود في الشجرة: {rule.account_code}"
-            )
+    if not row.nature:
+        raise AccountingConfigurationError(f"Account nature is required for code {row.code}.")
 
 
-def _account_fields_from_seed(row: AccountSeedRow) -> dict[str, Any]:
-    return {
-        "name": row.name_ar,
-        "name_en": row.name_en,
-        "account_type": row.account_type,
-        "nature": row.nature,
-        "purpose": row.purpose,
-        "is_group": row.is_group,
-        "is_active": row.is_active,
-        "allow_manual_posting": bool(row.allow_manual_posting and not row.is_group),
-        "is_system": row.is_system,
-        "currency": "SAR",
-        "description": row.description,
-    }
+def _validate_routing_row(row: RoutingSeedRow) -> None:
+    if not row.source:
+        raise AccountingConfigurationError("Routing source is required.")
 
+    if not row.purpose:
+        raise AccountingConfigurationError("Routing purpose is required.")
 
-def _get_account(company, code: str) -> Account:
-    try:
-        account = Account.objects.get(company=company, code=code)
-    except Account.DoesNotExist as exc:
-        raise AccountingConfigurationError(f"الحساب المطلوب غير موجود للشركة: {code}") from exc
-
-    if not account.is_active or account.is_group:
-        raise AccountingConfigurationError(f"الحساب غير قابل للتوجيه أو الترحيل: {code} - {account.name}")
-
-    return account
-
-
-def ensure_operational_accounts_exist(company) -> list[str]:
-    missing_codes: list[str] = []
-
-    for code in REQUIRED_OPERATIONAL_CODES:
-        if not Account.objects.filter(
-            company=company,
-            code=code,
-            is_active=True,
-            is_group=False,
-        ).exists():
-            missing_codes.append(code)
-
-    return missing_codes
+    if not row.account_code:
+        raise AccountingConfigurationError("Routing account code is required.")
 
 
 # ============================================================
-# Seed Company Chart of Accounts
+# 🌳 Chart of Accounts Seeding
 # ============================================================
 
 @transaction.atomic
-def seed_company_chart_of_accounts(company, *, reset: bool = False) -> dict[str, Any]:
+def seed_company_chart_of_accounts(company, *, user: Any = None, overwrite: bool = False) -> dict[str, int]:
     """
-    يزرع نفس شجرة الحسابات المعتمدة لكل شركة بشكل مستقل.
+    Seed the default Saudi chart of accounts for a company.
 
-    reset=True يحذف دليل حسابات الشركة فقط إذا لم توجد قيود مرتبطة.
+    Safe to run multiple times:
+    - Existing accounts are updated only when overwrite=True.
+    - Missing accounts are created.
+    - Parent-child relationships are resolved after all accounts exist.
+    - Routing rules and AccountingSettings are also ensured.
     """
-
     if not company:
-        raise ValidationError("الشركة مطلوبة لزرع شجرة الحسابات.")
+        raise AccountingConfigurationError("Company is required.")
 
-    validate_chart_definition()
-
-    if reset:
-        if JournalEntryLine.objects.filter(company=company).exists():
-            raise ValidationError(
-                "لا يمكن إعادة ضبط دليل حسابات الشركة لأن هناك قيودًا محاسبية مرتبطة."
-            )
-
-        AccountingRoutingRule.objects.filter(company=company).delete()
-        AccountingSettings.objects.filter(company=company).update(default_tax_rate=None)
-        TaxRate.objects.filter(company=company).delete()
-        Account.objects.filter(company=company).update(parent=None)
-        Account.objects.filter(company=company).delete()
-
+    actor = _get_user(user)
     created_count = 0
     updated_count = 0
-    parent_updated_count = 0
-    code_to_account: dict[str, Account] = {}
+    skipped_count = 0
 
-    for row in _sort_rows_by_code_length(CHART_OF_ACCOUNTS):
-        defaults = _account_fields_from_seed(row)
+    account_cache: dict[str, Account] = {}
 
-        account, created = Account.objects.get_or_create(
+    for row in CHART_OF_ACCOUNTS:
+        _validate_seed_row(row)
+
+        account = Account.objects.filter(
             company=company,
             code=row.code,
-            defaults=defaults,
-        )
+        ).first()
 
-        if created:
-            created_count += 1
-        else:
-            changed = False
-            for field_name, new_value in defaults.items():
-                if getattr(account, field_name) != new_value:
-                    setattr(account, field_name, new_value)
-                    changed = True
+        payload = {
+            "name": row.name,
+            "name_en": row.name_en,
+            "account_type": row.account_type,
+            "nature": row.nature,
+            "is_group": row.is_group,
+            "is_active": row.is_active,
+            "allow_manual_posting": row.allow_manual_posting,
+            "is_system": row.is_system,
+            "description": row.description,
+            "purpose": row.purpose,
+        }
 
-            if changed:
+        if account:
+            if overwrite:
+                for key, value in payload.items():
+                    setattr(account, key, value)
+
+                account.full_clean()
                 account.save()
                 updated_count += 1
+            else:
+                skipped_count += 1
+        else:
+            account = Account(
+                company=company,
+                code=row.code,
+                **payload,
+            )
 
-        code_to_account[row.code] = account
-
-    for row in _sort_rows_by_code_length(CHART_OF_ACCOUNTS):
-        account = code_to_account[row.code]
-        parent = code_to_account.get(row.parent_code) if row.parent_code else None
-
-        expected_parent_id = parent.pk if parent else None
-        expected_level = parent.level + 1 if parent else 1
-
-        changed = False
-
-        if account.parent_id != expected_parent_id:
-            account.parent = parent
-            changed = True
-
-        if account.level != expected_level:
-            account.level = expected_level
-            changed = True
-
-        if changed:
+            account.full_clean()
             account.save()
-            parent_updated_count += 1
+            created_count += 1
 
-    default_tax_rate = seed_company_default_tax_rate(company)
-    settings_obj = seed_company_accounting_settings(company, default_tax_rate)
-    routing_created, routing_updated = seed_company_default_routing_rules(company, default_tax_rate)
+        account_cache[row.code] = account
 
-    missing = ensure_operational_accounts_exist(company)
-    if missing:
-        raise AccountingConfigurationError(
-            "توجد حسابات تشغيلية مفقودة بعد الزرع: " + ", ".join(missing)
-        )
+    for row in CHART_OF_ACCOUNTS:
+        account = account_cache.get(row.code) or Account.objects.get(company=company, code=row.code)
+
+        parent = None
+        if row.parent_code:
+            parent = account_cache.get(row.parent_code) or Account.objects.filter(
+                company=company,
+                code=row.parent_code,
+            ).first()
+
+            if not parent:
+                raise AccountingConfigurationError(
+                    f"Parent account {row.parent_code} was not found for account {row.code}."
+                )
+
+        update_fields = []
+
+        if account.parent_id != (parent.id if parent else None):
+            account.parent = parent
+            update_fields.append("parent")
+
+        if update_fields:
+            update_fields.append("updated_at")
+            account.full_clean()
+            account.save(update_fields=update_fields)
+
+    tax_rate = ensure_default_tax_rate(company, user=actor)
+    ensure_accounting_settings(company, user=actor)
+    ensure_default_routing_rules(company, user=actor, overwrite=overwrite)
+
+    total_accounts = Account.objects.filter(company=company).count()
 
     return {
-        "company_id": company.pk,
-        "company_name": getattr(company, "name", ""),
-        "accounts_created": created_count,
-        "accounts_updated": updated_count,
-        "parents_updated": parent_updated_count,
-        "tax_rate_id": default_tax_rate.pk,
-        "settings_id": settings_obj.pk,
-        "routing_rules_created": routing_created,
-        "routing_rules_updated": routing_updated,
-        "total_accounts": Account.objects.filter(company=company).count(),
+        "created": created_count,
+        "updated": updated_count,
+        "skipped": skipped_count,
+        "created_accounts": created_count,
+        "updated_accounts": updated_count,
+        "skipped_accounts": skipped_count,
+        "total": total_accounts,
+        "total_accounts": total_accounts,
+        "tax_rate_id": tax_rate.id if tax_rate else None,
     }
 
 
-# ============================================================
-# Tax / Settings / Routing
-# ============================================================
+@transaction.atomic
+def ensure_default_tax_rate(company, *, user: Any = None) -> TaxRate:
+    """
+    Ensure a default VAT 15% tax rate for the company.
 
-def seed_company_default_tax_rate(company) -> TaxRate:
-    output_vat_account = _get_account(company, "210501")
-    input_vat_account = _get_account(company, "210502")
+    The current TaxRate model uses:
+    - name
+    - tax_type
+    - direction
+    - rate
+    - sales_account / purchase_account
+    - is_active / is_default
 
-    tax_rate, _ = TaxRate.objects.update_or_create(
-        company=company,
-        code="VAT15",
-        defaults={
-            "name": "ضريبة القيمة المضافة 15%",
-            "tax_type": TaxType.VAT,
-            "direction": TaxDirection.OUTPUT,
-            "rate": Decimal("15.0000"),
-            "sales_account": output_vat_account,
-            "purchase_account": input_vat_account,
-            "is_active": True,
-            "is_default": True,
-            "description": "ضريبة القيمة المضافة الافتراضية في المملكة العربية السعودية",
-        },
+    No created_by / updated_by fields exist on this model.
+    """
+    if not company:
+        raise AccountingConfigurationError("Company is required.")
+
+    output_vat_account = get_account_by_purpose(
+        company,
+        AccountingAccountPurpose.OUTPUT_VAT,
+        source=AccountingRoutingSource.SALES_INVOICE,
+        required=False,
+    )
+    input_vat_account = get_account_by_purpose(
+        company,
+        AccountingAccountPurpose.INPUT_VAT,
+        source=AccountingRoutingSource.PURCHASE_BILL,
+        required=False,
     )
 
+    tax_rate = TaxRate.objects.filter(
+        company=company,
+        code="VAT15",
+    ).first()
+
+    if tax_rate:
+        updated_fields = []
+
+        if tax_rate.name != "ضريبة القيمة المضافة 15%":
+            tax_rate.name = "ضريبة القيمة المضافة 15%"
+            updated_fields.append("name")
+
+        if tax_rate.tax_type != TaxType.VAT:
+            tax_rate.tax_type = TaxType.VAT
+            updated_fields.append("tax_type")
+
+        if tax_rate.direction != TAX_DIRECTION_OUTPUT:
+            tax_rate.direction = TAX_DIRECTION_OUTPUT
+            updated_fields.append("direction")
+
+        if tax_rate.rate != Decimal("15.0000"):
+            tax_rate.rate = Decimal("15.0000")
+            updated_fields.append("rate")
+
+        if output_vat_account and tax_rate.sales_account_id != output_vat_account.id:
+            tax_rate.sales_account = output_vat_account
+            updated_fields.append("sales_account")
+
+        if input_vat_account and tax_rate.purchase_account_id != input_vat_account.id:
+            tax_rate.purchase_account = input_vat_account
+            updated_fields.append("purchase_account")
+
+        if not tax_rate.is_active:
+            tax_rate.is_active = True
+            updated_fields.append("is_active")
+
+        if not tax_rate.is_default:
+            tax_rate.is_default = True
+            updated_fields.append("is_default")
+
+        if updated_fields:
+            updated_fields.append("updated_at")
+            tax_rate.full_clean()
+            tax_rate.save(update_fields=updated_fields)
+
+        return tax_rate
+
+    tax_rate = TaxRate(
+        company=company,
+        code="VAT15",
+        name="ضريبة القيمة المضافة 15%",
+        tax_type=TaxType.VAT,
+        direction=TAX_DIRECTION_OUTPUT,
+        rate=Decimal("15.0000"),
+        sales_account=output_vat_account,
+        purchase_account=input_vat_account,
+        is_default=True,
+        is_active=True,
+    )
+
+    tax_rate.full_clean()
+    tax_rate.save()
     return tax_rate
 
 
-def seed_company_accounting_settings(company, default_tax_rate: TaxRate) -> AccountingSettings:
-    settings_obj = AccountingSettings.get_for_company(company)
+@transaction.atomic
+def ensure_accounting_settings(company, *, user: Any = None) -> AccountingSettings:
+    """
+    Ensure accounting settings using only fields that exist on AccountingSettings.
 
-    settings_obj.default_currency = "SAR"
-    settings_obj.default_tax_rate = default_tax_rate
-    settings_obj.auto_post_sales = True
-    settings_obj.auto_post_purchases = True
-    settings_obj.auto_post_inventory = False
-    settings_obj.auto_post_treasury = False
-    settings_obj.require_period_for_posting = False
-    settings_obj.allow_posting_without_cost_center = True
-    settings_obj.save()
+    Current model fields:
+    - default_currency
+    - default_tax_rate
+    - auto_post_sales
+    - auto_post_purchases
+    - auto_post_inventory
+    - auto_post_treasury
+    - require_period_for_posting
+    - allow_posting_without_cost_center
+    - metadata
+    """
+    if not company:
+        raise AccountingConfigurationError("Company is required.")
+
+    tax_rate = ensure_default_tax_rate(company, user=user)
+    default_currency = getattr(company, "currency_code", None) or "SAR"
+
+    settings_obj, _created = AccountingSettings.objects.get_or_create(
+        company=company,
+        defaults={
+            "default_currency": default_currency,
+            "default_tax_rate": tax_rate,
+            "auto_post_sales": True,
+            "auto_post_purchases": True,
+            "auto_post_inventory": False,
+            "auto_post_treasury": False,
+            "require_period_for_posting": False,
+            "allow_posting_without_cost_center": True,
+            "metadata": {},
+        },
+    )
+
+    update_fields: list[str] = []
+
+    if not settings_obj.default_currency:
+        settings_obj.default_currency = default_currency
+        update_fields.append("default_currency")
+
+    if not settings_obj.default_tax_rate_id:
+        settings_obj.default_tax_rate = tax_rate
+        update_fields.append("default_tax_rate")
+
+    if update_fields:
+        update_fields.append("updated_at")
+        settings_obj.full_clean()
+        settings_obj.save(update_fields=update_fields)
 
     return settings_obj
 
 
-def seed_company_default_routing_rules(company, default_tax_rate: TaxRate | None = None) -> tuple[int, int]:
+@transaction.atomic
+def ensure_default_routing_rules(company, *, user: Any = None, overwrite: bool = False) -> dict[str, int]:
+    if not company:
+        raise AccountingConfigurationError("Company is required.")
+
     created_count = 0
     updated_count = 0
+    skipped_count = 0
+    default_tax_rate = TaxRate.objects.filter(company=company, code="VAT15").first()
 
     for row in DEFAULT_ROUTING_RULES:
-        account = _get_account(company, row.account_code)
+        _validate_routing_row(row)
+
+        account = get_account_by_code(company, row.account_code, required=True)
 
         tax_rate = None
         if row.purpose in {
@@ -571,32 +617,59 @@ def seed_company_default_routing_rules(company, default_tax_rate: TaxRate | None
         }:
             tax_rate = default_tax_rate
 
-        rule, created = AccountingRoutingRule.objects.update_or_create(
+        rule = AccountingRoutingRule.objects.filter(
             company=company,
             source=row.source,
             purpose=row.purpose,
             account=account,
             tax_rate=tax_rate,
             cost_center=None,
-            defaults={
-                "is_active": True,
-                "priority": 100,
-                "description": row.description,
-                "metadata": {"seeded_by": "seed_company_chart_of_accounts"},
-            },
+        ).first()
+
+        if rule:
+            if overwrite:
+                rule.description = row.description
+                rule.is_active = True
+                rule.priority = 100
+                rule.metadata = {
+                    **(rule.metadata or {}),
+                    "seeded_by": "seed_company_chart_of_accounts",
+                }
+                rule.full_clean()
+                rule.save()
+                updated_count += 1
+            else:
+                skipped_count += 1
+
+            continue
+
+        rule = AccountingRoutingRule(
+            company=company,
+            source=row.source,
+            purpose=row.purpose,
+            account=account,
+            tax_rate=tax_rate,
+            cost_center=None,
+            description=row.description,
+            priority=100,
+            is_active=True,
+            metadata={"seeded_by": "seed_company_chart_of_accounts"},
         )
 
-        if created:
-            created_count += 1
-        else:
-            updated_count += 1
-            rule.save()
+        rule.full_clean()
+        rule.save()
+        created_count += 1
 
-    return created_count, updated_count
+    return {
+        "created": created_count,
+        "updated": updated_count,
+        "skipped": skipped_count,
+        "total": AccountingRoutingRule.objects.filter(company=company).count(),
+    }
 
 
 # ============================================================
-# Account resolution helpers
+# 📘 Account helpers
 # ============================================================
 
 def get_account_by_code(company, code: str, *, required: bool = True) -> Account | None:
@@ -686,6 +759,7 @@ def get_default_tax_rate(company) -> TaxRate | None:
 
 MONEY_ZERO = Decimal("0.00")
 MONEY_QUANT = Decimal("0.01")
+AUTO_SOURCE_TYPE_SALES_INVOICE = "sales_invoice"
 
 
 @dataclass(slots=True)
@@ -737,90 +811,63 @@ def _validate_postable_account(account: Account, company, field_name: str = "acc
         raise AccountingConfigurationError(f"{field_name}: لا يمكن الترحيل على حساب تجميعي.")
 
     if not account.is_active:
-        raise AccountingConfigurationError(f"{field_name}: لا يمكن الترحيل على حساب غير نشط.")
+        raise AccountingConfigurationError(f"{field_name}: الحساب غير نشط.")
+
+    if not account.allow_manual_posting:
+        raise AccountingConfigurationError(f"{field_name}: الحساب لا يسمح بالترحيل.")
 
     return account
 
 
-def _validate_cost_center(cost_center: CostCenter | None, company) -> CostCenter | None:
-    if not cost_center:
-        return None
+def resolve_accounting_period(company, entry_date: date):
+    from accounting.models import AccountingPeriod
 
-    if cost_center.company_id != company.pk:
-        raise AccountingPostingError("مركز التكلفة يجب أن يكون من نفس الشركة.")
-
-    if not cost_center.can_post:
-        raise AccountingPostingError("مركز التكلفة غير نشط أو تجميعي.")
-
-    return cost_center
-
-
-def _validate_tax_rate(tax_rate: TaxRate | None, company) -> TaxRate | None:
-    if not tax_rate:
-        return None
-
-    if tax_rate.company_id != company.pk:
-        raise AccountingPostingError("الضريبة يجب أن تكون من نفس الشركة.")
-
-    if not tax_rate.is_active:
-        raise AccountingPostingError("لا يمكن استخدام ضريبة غير نشطة.")
-
-    return tax_rate
-
-
-def _find_open_period(company, entry_date: date):
-    return (
-        company.accounting_periods.filter(
+    period = (
+        AccountingPeriod.objects.filter(
+            company=company,
             start_date__lte=entry_date,
             end_date__gte=entry_date,
-            status=AccountingPeriodStatus.OPEN,
         )
-        .select_related("fiscal_year")
-        .order_by("-start_date", "-id")
+        .order_by("start_date", "id")
         .first()
     )
 
+    if not period:
+        return None
 
-def resolve_accounting_period(company, entry_date: date):
-    settings_obj = AccountingSettings.get_for_company(company)
-    period = _find_open_period(company, entry_date)
-
-    if settings_obj.require_period_for_posting and not period:
-        raise AccountingConfigurationError("لا توجد فترة محاسبية مفتوحة لتاريخ القيد.")
+    if period.status != AccountingPeriodStatus.OPEN:
+        raise AccountingConfigurationError("الفترة المحاسبية غير مفتوحة.")
 
     return period
 
 
-def generate_journal_entry_number(company, *, prefix: str = "JE") -> str:
-    _validate_company(company)
+def generate_journal_entry_number(company, *, prefix: str = "JE", entry_date: date | None = None) -> str:
+    entry_date = entry_date or timezone.localdate()
+    year = entry_date.year
 
-    year = timezone.localdate().year
-    base_prefix = f"{prefix}-{year}-"
+    starts_with = f"{prefix}-{year}-"
 
     last_entry = (
         JournalEntry.objects.filter(
             company=company,
-            entry_number__startswith=base_prefix,
+            entry_number__startswith=starts_with,
         )
-        .order_by("-id")
+        .order_by("-entry_number", "-id")
         .first()
     )
 
-    if not last_entry:
-        return f"{base_prefix}000001"
+    next_number = 1
 
-    try:
-        last_serial = int(str(last_entry.entry_number).replace(base_prefix, ""))
-    except Exception:
-        last_serial = JournalEntry.objects.filter(
-            company=company,
-            entry_number__startswith=base_prefix,
-        ).count()
+    if last_entry and last_entry.entry_number:
+        try:
+            next_number = int(last_entry.entry_number.split("-")[-1]) + 1
+        except (TypeError, ValueError):
+            next_number = last_entry.id + 1
 
-    return f"{base_prefix}{last_serial + 1:06d}"
+    return f"{starts_with}{next_number:06d}"
 
 
-def _update_entry_totals(entry: JournalEntry) -> None:
+def _update_entry_totals(entry: JournalEntry) -> JournalEntry:
     totals = entry.lines.aggregate(
         debit=Sum("debit_amount"),
         credit=Sum("credit_amount"),
@@ -828,14 +875,11 @@ def _update_entry_totals(entry: JournalEntry) -> None:
 
     entry.total_debit = _money(totals.get("debit") or MONEY_ZERO)
     entry.total_credit = _money(totals.get("credit") or MONEY_ZERO)
-    entry.save(update_fields=["total_debit", "total_credit", "updated_at"])
+    return entry
 
 
 def _validate_line_payload(company, line: EntryLinePayload) -> EntryLinePayload:
     line.account = _validate_postable_account(line.account, company)
-    line.cost_center = _validate_cost_center(line.cost_center, company)
-    line.tax_rate = _validate_tax_rate(line.tax_rate, company)
-
     line.debit_amount = _money(line.debit_amount)
     line.credit_amount = _money(line.credit_amount)
     line.tax_amount = _money(line.tax_amount)
@@ -959,10 +1003,17 @@ def replace_journal_entry_lines(
 
     _update_entry_totals(entry)
 
+    update_fields = [
+        "total_debit",
+        "total_credit",
+        "updated_at",
+    ]
+
     if actor is not None and getattr(actor, "is_authenticated", False):
         entry.updated_by = actor
-        entry.save(update_fields=["updated_by", "updated_at"])
+        update_fields.append("updated_by")
 
+    entry.save(update_fields=update_fields)
     entry.refresh_from_db()
     return entry
 
@@ -971,20 +1022,20 @@ def replace_journal_entry_lines(
 def create_manual_journal_entry(
     *,
     company,
+    entry_date: date,
     lines: list[EntryLinePayload],
-    entry_date: date | None = None,
     entry_number: str = "",
-    description: str = "",
-    notes: str = "",
     reference: str = "",
     external_reference: str = "",
+    description: str = "",
+    notes: str = "",
     currency: str = "SAR",
     actor: Any = None,
     auto_post: bool = False,
 ) -> JournalEntry:
     entry = create_journal_entry_header(
         company=company,
-        entry_date=entry_date or timezone.localdate(),
+        entry_date=entry_date,
         entry_number=entry_number,
         posting_source=PostingSource.MANUAL,
         reference=reference,
@@ -992,10 +1043,6 @@ def create_manual_journal_entry(
         description=description,
         notes=notes,
         currency=currency,
-        source_type="manual",
-        source_id="",
-        source_number=entry_number,
-        is_auto_posted=False,
         actor=actor,
     )
 
@@ -1060,36 +1107,307 @@ def post_journal_entry(entry: JournalEntry, *, actor: Any = None) -> JournalEntr
     return entry
 
 
+# ============================================================
+# 🔁 Phase 10.1 | Sales Invoice Automatic Accounting Posting
+# ============================================================
+
+def _source_id(value: Any) -> str:
+    """
+    Normalize source id for JournalEntry.source_id.
+    """
+    if value in [None, ""]:
+        return ""
+
+    return str(value).strip()
+
+
+def _get_existing_auto_entry(
+    *,
+    company,
+    source_type: str,
+    source_id: Any,
+    source_number: str = "",
+) -> JournalEntry | None:
+    """
+    Return existing automatic journal entry for a source document.
+
+    This prevents duplicate accounting posting for the same operational document.
+    """
+    if not company:
+        raise AccountingPostingError("الشركة مطلوبة للبحث عن القيد المحاسبي.")
+
+    normalized_source_id = _source_id(source_id)
+    normalized_source_number = _clean_text(source_number)
+
+    query = JournalEntry.objects.filter(
+        company=company,
+        source_type=source_type,
+        source_id=normalized_source_id,
+        is_auto_posted=True,
+    ).exclude(
+        status=JournalEntryStatus.CANCELLED,
+    )
+
+    if normalized_source_number:
+        query = query.filter(source_number=normalized_source_number)
+
+    return query.order_by("id").first()
+
+
+def find_sales_invoice_journal_entry(invoice: Any) -> JournalEntry | None:
+    """
+    Find the existing accounting entry linked to a sales invoice.
+    """
+    if not invoice:
+        return None
+
+    company = getattr(invoice, "company", None)
+    if not company:
+        return None
+
+    invoice_number = _clean_text(getattr(invoice, "invoice_number", ""))
+
+    return _get_existing_auto_entry(
+        company=company,
+        source_type=AUTO_SOURCE_TYPE_SALES_INVOICE,
+        source_id=getattr(invoice, "pk", None),
+        source_number=invoice_number,
+    )
+
+
+@transaction.atomic
+def post_sales_invoice_to_accounting(
+    invoice: Any,
+    *,
+    actor: Any = None,
+    auto_post: bool = True,
+) -> JournalEntry:
+    """
+    Create and optionally post an automatic accounting journal entry for an issued sales invoice.
+
+    Accounting treatment:
+    - Debit  Accounts Receivable  = invoice.total_amount
+    - Credit Sales Revenue        = invoice.total_amount - invoice.tax_amount
+    - Credit Output VAT           = invoice.tax_amount, when tax exists
+
+    Safety:
+    - Does not trust company_id from frontend.
+    - Uses invoice.company as the tenant source.
+    - Prevents duplicate entries for the same invoice.
+    - Refuses non-issued invoices.
+    - Refuses zero-value invoices.
+    """
+    if not invoice:
+        raise AccountingPostingError("فاتورة البيع مطلوبة للترحيل المحاسبي.")
+
+    company = getattr(invoice, "company", None)
+    _validate_company(company)
+
+    if getattr(invoice, "company_id", None) != getattr(company, "pk", None):
+        raise AccountingPostingError("فاتورة البيع لا تتبع الشركة المحددة.")
+
+    invoice_number = _clean_text(getattr(invoice, "invoice_number", "")) or f"SALES-INVOICE-{invoice.pk}"
+
+    existing = _get_existing_auto_entry(
+        company=company,
+        source_type=AUTO_SOURCE_TYPE_SALES_INVOICE,
+        source_id=invoice.pk,
+        source_number=invoice_number,
+    )
+
+    if existing:
+        if auto_post and existing.status == JournalEntryStatus.DRAFT:
+            return post_journal_entry(existing, actor=actor)
+        return existing
+
+    status = _clean_text(getattr(invoice, "status", "")).lower()
+    if status != "issued":
+        raise AccountingPostingError("لا يمكن ترحيل فاتورة بيع غير مصدرة محاسبيًا.")
+
+    total_amount = _money(getattr(invoice, "total_amount", MONEY_ZERO))
+    tax_amount = _money(getattr(invoice, "tax_amount", MONEY_ZERO))
+    revenue_amount = _money(total_amount - tax_amount)
+
+    if total_amount <= MONEY_ZERO:
+        raise AccountingPostingError("لا يمكن ترحيل فاتورة بيع بإجمالي صفري.")
+
+    if revenue_amount <= MONEY_ZERO:
+        raise AccountingPostingError("لا يمكن ترحيل فاتورة بيع بدون إيراد.")
+
+    seed_company_chart_of_accounts(company)
+
+    receivable_account = get_account_by_purpose(
+        company,
+        AccountingAccountPurpose.ACCOUNTS_RECEIVABLE,
+        source=AccountingRoutingSource.SALES_INVOICE,
+        required=True,
+    )
+
+    revenue_account = get_account_by_purpose(
+        company,
+        AccountingAccountPurpose.SALES_REVENUE,
+        source=AccountingRoutingSource.SALES_INVOICE,
+        required=True,
+    )
+
+    output_vat_account = None
+    default_tax_rate = None
+
+    if tax_amount > MONEY_ZERO:
+        output_vat_account = get_account_by_purpose(
+            company,
+            AccountingAccountPurpose.OUTPUT_VAT,
+            source=AccountingRoutingSource.SALES_INVOICE,
+            required=True,
+        )
+        default_tax_rate = get_default_tax_rate(company)
+
+    currency = _clean_currency(getattr(invoice, "currency_code", "") or "SAR")
+    entry_date = getattr(invoice, "invoice_date", None) or timezone.localdate()
+    customer_id = _clean_text(getattr(invoice, "customer_id", "") or "")
+
+    entry = create_journal_entry_header(
+        company=company,
+        entry_date=entry_date,
+        entry_number=generate_journal_entry_number(company, prefix="SINV"),
+        posting_source=PostingSource.SALES_INVOICE,
+        reference=invoice_number,
+        external_reference=invoice_number,
+        description=f"قيد تلقائي لفاتورة بيع {invoice_number}",
+        notes="تم إنشاء هذا القيد تلقائيًا عند إصدار فاتورة البيع.",
+        currency=currency,
+        source_type=AUTO_SOURCE_TYPE_SALES_INVOICE,
+        source_id=_source_id(invoice.pk),
+        source_number=invoice_number,
+        is_auto_posted=True,
+        actor=actor,
+    )
+
+    lines: list[EntryLinePayload] = [
+        EntryLinePayload(
+            account=receivable_account,
+            description=f"ذمم مدينة عن فاتورة بيع {invoice_number}",
+            debit_amount=total_amount,
+            credit_amount=MONEY_ZERO,
+            currency=currency,
+            party_type="customer" if customer_id else "",
+            party_id=customer_id,
+            source_line_id="invoice-total",
+            sort_order=1,
+            metadata={
+                "source": AUTO_SOURCE_TYPE_SALES_INVOICE,
+                "invoice_id": invoice.pk,
+                "invoice_number": invoice_number,
+            },
+        ),
+        EntryLinePayload(
+            account=revenue_account,
+            description=f"إيراد فاتورة بيع {invoice_number}",
+            debit_amount=MONEY_ZERO,
+            credit_amount=revenue_amount,
+            currency=currency,
+            party_type="customer" if customer_id else "",
+            party_id=customer_id,
+            source_line_id="invoice-revenue",
+            sort_order=2,
+            metadata={
+                "source": AUTO_SOURCE_TYPE_SALES_INVOICE,
+                "invoice_id": invoice.pk,
+                "invoice_number": invoice_number,
+                "subtotal": str(getattr(invoice, "subtotal", MONEY_ZERO)),
+                "discount_amount": str(getattr(invoice, "discount_amount", MONEY_ZERO)),
+                "taxable_amount": str(getattr(invoice, "taxable_amount", MONEY_ZERO)),
+            },
+        ),
+    ]
+
+    if tax_amount > MONEY_ZERO and output_vat_account:
+        lines.append(
+            EntryLinePayload(
+                account=output_vat_account,
+                description=f"ضريبة مخرجات لفاتورة بيع {invoice_number}",
+                debit_amount=MONEY_ZERO,
+                credit_amount=tax_amount,
+                currency=currency,
+                tax_rate=default_tax_rate,
+                tax_amount=tax_amount,
+                party_type="customer" if customer_id else "",
+                party_id=customer_id,
+                source_line_id="invoice-output-vat",
+                sort_order=3,
+                metadata={
+                    "source": AUTO_SOURCE_TYPE_SALES_INVOICE,
+                    "invoice_id": invoice.pk,
+                    "invoice_number": invoice_number,
+                    "tax_amount": str(tax_amount),
+                },
+            )
+        )
+
+    entry = replace_journal_entry_lines(
+        entry,
+        lines,
+        actor=actor,
+    )
+
+    entry.metadata = {
+        **(entry.metadata or {}),
+        "source": AUTO_SOURCE_TYPE_SALES_INVOICE,
+        "source_app": "sales",
+        "invoice_id": invoice.pk,
+        "invoice_number": invoice_number,
+        "customer_id": customer_id,
+        "total_amount": str(total_amount),
+        "tax_amount": str(tax_amount),
+        "revenue_amount": str(revenue_amount),
+        "auto_posted_by_phase": "phase_10_1",
+    }
+
+    metadata_update_fields = ["metadata", "updated_at"]
+
+    if actor is not None and getattr(actor, "is_authenticated", False):
+        entry.updated_by = actor
+        metadata_update_fields.append("updated_by")
+
+    entry.save(update_fields=metadata_update_fields)
+
+    if auto_post:
+        entry = post_journal_entry(entry, actor=actor)
+
+    return entry
+
+
 @transaction.atomic
 def cancel_journal_entry(
     entry: JournalEntry,
     *,
-    actor: Any = None,
     reason: str = "",
+    actor: Any = None,
 ) -> JournalEntry:
     if not entry:
         raise AccountingPostingError("القيد مطلوب.")
 
     entry = JournalEntry.objects.select_for_update().get(pk=entry.pk)
 
+    if entry.status == JournalEntryStatus.POSTED:
+        raise AccountingPostingError("لا يمكن إلغاء قيد مرحل. استخدم عكس القيد.")
+
+    if entry.status == JournalEntryStatus.REVERSED:
+        raise AccountingPostingError("لا يمكن إلغاء قيد معكوس.")
+
     if entry.status == JournalEntryStatus.CANCELLED:
         return entry
 
-    if entry.status != JournalEntryStatus.POSTED:
-        raise AccountingPostingError("لا يمكن إلغاء قيد غير مرحل.")
-
     entry.status = JournalEntryStatus.CANCELLED
     entry.cancelled_at = timezone.now()
+    entry.cancelled_reason = _clean_text(reason)
 
     update_fields = [
         "status",
         "cancelled_at",
+        "cancelled_reason",
         "updated_at",
     ]
-
-    if reason:
-        entry.notes = f"{entry.notes}\nسبب الإلغاء: {reason}".strip()
-        update_fields.append("notes")
 
     if actor is not None and getattr(actor, "is_authenticated", False):
         entry.cancelled_by = actor
@@ -1116,43 +1434,40 @@ def reverse_journal_entry(
     entry = JournalEntry.objects.select_for_update().get(pk=entry.pk)
 
     if entry.status != JournalEntryStatus.POSTED:
-        raise AccountingPostingError("لا يمكن عكس قيد غير مرحل.")
+        raise AccountingPostingError("يمكن عكس القيود المرحلة فقط.")
 
-    existing = JournalEntry.objects.filter(
-        company=entry.company,
-        reversal_of=entry,
-    ).order_by("id").first()
+    if entry.reversed_entry_id:
+        return entry.reversed_entry
 
-    if existing:
-        return existing
+    reversal_date = reversal_date or timezone.localdate()
 
-    reversal_number = generate_journal_entry_number(entry.company, prefix="REV")
     reversal = create_journal_entry_header(
         company=entry.company,
-        entry_date=reversal_date or timezone.localdate(),
-        entry_number=reversal_number,
-        posting_source=entry.posting_source,
-        reference=f"REVERSAL:{entry.pk}",
-        external_reference=entry.entry_number,
+        entry_date=reversal_date,
+        entry_number=generate_journal_entry_number(entry.company, prefix="REV"),
+        posting_source=PostingSource.OTHER,
+        reference=entry.reference,
+        external_reference=entry.external_reference,
         description=f"عكس القيد {entry.entry_number}",
-        notes=reason or "",
+        notes=_clean_text(reason) or f"قيد عكسي للقيد {entry.entry_number}",
         currency=entry.currency,
         source_type=entry.source_type,
         source_id=entry.source_id,
         source_number=entry.source_number,
-        is_auto_posted=True,
+        is_auto_posted=entry.is_auto_posted,
         actor=actor,
     )
 
     reversal.reversal_of = entry
     reversal.save(update_fields=["reversal_of", "updated_at"])
 
-    reversal_lines: list[EntryLinePayload] = []
+    reversal_lines = []
 
-    for index, line in enumerate(
-        entry.lines.select_related("account", "cost_center", "tax_rate").order_by("sort_order", "id"),
-        start=1,
-    ):
+    for line in entry.lines.select_related(
+        "account",
+        "cost_center",
+        "tax_rate",
+    ).order_by("sort_order", "id"):
         reversal_lines.append(
             EntryLinePayload(
                 account=line.account,
@@ -1166,7 +1481,7 @@ def reverse_journal_entry(
                 party_type=line.party_type,
                 party_id=line.party_id,
                 source_line_id=line.source_line_id,
-                sort_order=index,
+                sort_order=line.sort_order,
                 metadata={"reversal_of_line_id": line.pk},
             )
         )

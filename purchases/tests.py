@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 purchases/tests.py
-# 🧠 PrimeyAcc | Purchases Tests V1.1
+# 🧠 PrimeyAcc | Purchases Tests V1.2
 # ------------------------------------------------------------
 # ✅ Purchase bill model tests
 # ✅ Purchase bill services tests
@@ -10,6 +10,7 @@
 # ✅ Catalog item validation
 # ✅ Totals calculation
 # ✅ Post / cancel lifecycle
+# ✅ Phase 10.2 automatic accounting posting on post
 # ✅ Company permissions through CompanyMembership
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
@@ -18,7 +19,7 @@
 # - كل فاتورة مشتريات وبند يجب أن يبقيا داخل نفس الشركة
 # - المورد يجب أن يكون SUPPLIER أو BOTH ومن نفس الشركة
 # - الصنف يجب أن يكون من نفس الشركة وقابلًا للشراء
-# - هذه المرحلة لا تختبر محاسبة أو مخزون أو مدفوعات
+# - Phase 10.2 يختبر أن ترحيل فاتورة المورد ينشئ قيدًا محاسبيًا تلقائيًا بدون تكرار
 # ============================================================
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 
+from accounting.models import JournalEntry, JournalEntryStatus
 from accounts.models import CompanyMembership, CompanyRole, MembershipStatus
 from catalog.models import CatalogItem, CatalogItemStatus, CatalogItemType, CatalogUnit
 from companies.models import Branch, Company, CompanySettings
@@ -43,6 +45,7 @@ from purchases.services import (
     get_purchase_item_for_company,
     get_supplier_for_company,
     post_purchase_bill,
+    post_purchase_bill_to_accounting,
     update_purchase_bill,
 )
 
@@ -679,6 +682,54 @@ class PurchaseServicesTests(PurchasesTestCase):
         self.assertEqual(bill.status, PurchaseBillStatus.POSTED)
         self.assertIsNotNone(bill.posted_at)
         self.assertEqual(bill.posted_by, self.user)
+
+    def test_post_purchase_bill_creates_automatic_accounting_entry_once(self):
+        bill = create_purchase_bill(
+            company=self.company,
+            user=self.user,
+            payload={
+                "supplier_id": self.supplier.id,
+                "items": [
+                    {
+                        "item_id": self.item.id,
+                        "quantity": "1",
+                    }
+                ],
+            },
+        )
+
+        bill = post_purchase_bill(
+            bill=bill,
+            user=self.user,
+        )
+
+        bill.refresh_from_db()
+
+        entries = JournalEntry.objects.filter(
+            company=self.company,
+            source_type="purchase_bill",
+            source_id=str(bill.id),
+            source_number=bill.bill_number,
+            is_auto_posted=True,
+        )
+
+        self.assertEqual(entries.count(), 1)
+
+        entry = entries.get()
+        self.assertEqual(entry.status, JournalEntryStatus.POSTED)
+        self.assertEqual(entry.total_debit, bill.total_amount)
+        self.assertEqual(entry.total_credit, bill.total_amount)
+        self.assertEqual(entry.reference, bill.bill_number)
+        self.assertEqual(entry.source_number, bill.bill_number)
+
+        same_entry = post_purchase_bill_to_accounting(
+            bill,
+            actor=self.user,
+            auto_post=True,
+        )
+
+        self.assertEqual(same_entry.id, entry.id)
+        self.assertEqual(entries.count(), 1)
 
     def test_post_purchase_bill_rejects_empty_bill(self):
         bill = PurchaseBill.objects.create(

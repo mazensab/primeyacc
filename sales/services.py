@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 sales/services.py
-# 🧠 PrimeyAcc | Sales Services V1.1
+# 🧠 PrimeyAcc | Sales Services V1.2
 # ------------------------------------------------------------
 # ✅ Company-scoped invoice helpers
 # ✅ Invoice number generation
@@ -10,7 +10,7 @@
 # ✅ Draft invoice creation
 # ✅ Invoice item creation
 # ✅ Issue / cancel helpers
-# ✅ No accounting or inventory posting in Phase 6
+# ✅ Phase 10.1 automatic accounting posting for issued sales invoices
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - الخدمات هنا هي مصدر منطق المبيعات الأساسي
@@ -18,7 +18,8 @@
 # - لا نثق بأي company_id قادم من الفرونت
 # - الشركة يجب أن تأتي من عضوية المستخدم أو context الخاص بـ /company
 # - invoice_date و due_date قد تصل من الواجهة كنص YYYY-MM-DD ويجب تطبيعها هنا
-# - هذه المرحلة لا تنشئ قيود محاسبية ولا حركات مخزون
+# - عند إصدار فاتورة البيع يتم إنشاء قيد محاسبي تلقائي من خلال accounting.services
+# - لا ننشئ حركات مخزون في هذه الخطوة؛ المخزون له جزء لاحق في Phase 10
 # ============================================================
 
 from __future__ import annotations
@@ -32,6 +33,10 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
+from accounting.services import (
+    AccountingServiceError,
+    post_sales_invoice_to_accounting,
+)
 from catalog.models import CatalogItem, CatalogItemStatus
 from companies.models import Branch, Company
 from parties.models import BusinessParty, BusinessPartyStatus, BusinessPartyType
@@ -432,15 +437,37 @@ def issue_sales_invoice(
     user=None,
 ) -> SalesInvoice:
     """
-    Issue a draft invoice.
+    Issue a draft invoice and create its automatic accounting journal entry.
 
-    Phase 6 does not create accounting entries or inventory movements.
+    Phase 10.1:
+    - Sales invoice issue is still handled here as the single source of truth.
+    - Accounting posting is delegated to accounting.services.
+    - If accounting posting fails, the transaction is rolled back and the invoice remains unissued.
     """
+    if not company:
+        raise ValidationError({"company": "Company context is required."})
+
+    if not invoice:
+        raise ValidationError({"invoice": "Invoice is required."})
+
     if invoice.company_id != company.id:
         raise ValidationError({"invoice": "Invoice does not belong to this company."})
 
     invoice.recalculate_totals(save=True)
     invoice.issue(user=user)
+
+    try:
+        post_sales_invoice_to_accounting(
+            invoice,
+            actor=user,
+            auto_post=True,
+        )
+    except AccountingServiceError as exc:
+        raise ValidationError(
+            {
+                "accounting": str(exc),
+            }
+        )
 
     return invoice
 
@@ -455,7 +482,17 @@ def cancel_sales_invoice(
 ) -> SalesInvoice:
     """
     Cancel an issued invoice.
+
+    Phase 10 note:
+    - Reversing/cancelling the linked accounting entry will be handled in a later step.
+    - Current behavior keeps the existing sales cancellation behavior unchanged.
     """
+    if not company:
+        raise ValidationError({"company": "Company context is required."})
+
+    if not invoice:
+        raise ValidationError({"invoice": "Invoice is required."})
+
     if invoice.company_id != company.id:
         raise ValidationError({"invoice": "Invoice does not belong to this company."})
 

@@ -1,10 +1,11 @@
 # ============================================================
 # 📂 inventory/tests.py
-# 🧠 PrimeyAcc | Company Inventory Tests V1.0
+# 🧠 PrimeyAcc | Company Inventory Tests V1.1
 # ------------------------------------------------------------
 # ✅ Warehouse model/service tests
 # ✅ Stock item balance tests
 # ✅ Stock movement posting tests
+# ✅ Phase 10.3 automatic accounting posting on stock movements
 # ✅ Negative stock prevention
 # ✅ Warehouse transfer foundation
 # ✅ Tenant isolation validation
@@ -18,6 +19,7 @@
 # - الخدمات هي مصدر تطبيق أثر المخزون
 # - يمنع الرصيد السالب
 # - لا نربط المشتريات بالمخزون تلقائيًا في هذه المرحلة
+# - Phase 10.3 يثبت أن حركة المخزون المرحلة تنشئ قيدًا محاسبيًا تلقائيًا بدون تكرار
 # ============================================================
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
+from accounting.models import JournalEntry, JournalEntryStatus
 from catalog.models import CatalogItem, CatalogItemType, CatalogUnit
 from companies.models import Branch, Company
 from inventory.models import (
@@ -53,6 +56,7 @@ from inventory.services import (
     get_company_warehouses,
     get_or_create_stock_item,
     issue_stock,
+    post_stock_movement_to_accounting,
     receive_stock,
     set_warehouse_status,
     transfer_stock,
@@ -486,6 +490,99 @@ class StockMovementTests(InventoryTestBase):
         self.assertEqual(stock_item.quantity_on_hand, Decimal("10.0000"))
         self.assertEqual(movement.quantity_before, Decimal("0.0000"))
         self.assertEqual(movement.quantity_after, Decimal("10.0000"))
+
+    def test_stock_movement_creates_automatic_accounting_entry_once(self):
+        movement = receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            item=self.product,
+            quantity="5",
+            unit_cost="10.00",
+            reference_number="REC-AUTO-001",
+            user=self.user,
+        )
+
+        movement.refresh_from_db()
+
+        entries = JournalEntry.objects.filter(
+            company=self.company,
+            source_type="stock_movement",
+            source_id=str(movement.id),
+            source_number=movement.movement_number,
+            is_auto_posted=True,
+        )
+
+        self.assertEqual(entries.count(), 1)
+
+        entry = entries.get()
+        self.assertEqual(entry.status, JournalEntryStatus.POSTED)
+        self.assertEqual(entry.total_debit, movement.total_cost)
+        self.assertEqual(entry.total_credit, movement.total_cost)
+        self.assertEqual(entry.reference, movement.movement_number)
+        self.assertEqual(entry.source_number, movement.movement_number)
+
+        same_entry = post_stock_movement_to_accounting(
+            movement,
+            actor=self.user,
+            auto_post=True,
+        )
+
+        self.assertEqual(same_entry.id, entry.id)
+        self.assertEqual(entries.count(), 1)
+
+    def test_transfer_stock_does_not_create_gl_journal_entries(self):
+        receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            item=self.product,
+            quantity="10",
+            unit_cost="10.00",
+            user=self.user,
+        )
+
+        result = transfer_stock(
+            company=self.company,
+            source_warehouse=self.warehouse,
+            target_warehouse=self.second_warehouse,
+            item=self.product,
+            quantity="4",
+            reference_number="TR-NO-GL-001",
+            user=self.user,
+        )
+
+        outgoing = result["outgoing"]
+        incoming = result["incoming"]
+
+        outgoing_entry = post_stock_movement_to_accounting(
+            outgoing,
+            actor=self.user,
+            auto_post=True,
+        )
+        incoming_entry = post_stock_movement_to_accounting(
+            incoming,
+            actor=self.user,
+            auto_post=True,
+        )
+
+        self.assertIsNone(outgoing_entry)
+        self.assertIsNone(incoming_entry)
+
+        self.assertFalse(
+            JournalEntry.objects.filter(
+                company=self.company,
+                source_type="stock_movement",
+                source_id=str(outgoing.id),
+                is_auto_posted=True,
+            ).exists()
+        )
+        self.assertFalse(
+            JournalEntry.objects.filter(
+                company=self.company,
+                source_type="stock_movement",
+                source_id=str(incoming.id),
+                is_auto_posted=True,
+            ).exists()
+        )
 
     def test_issue_stock_decreases_quantity(self):
         receive_stock(

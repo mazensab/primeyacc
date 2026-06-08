@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 inventory/services.py
-# 🧠 PrimeyAcc | Company Inventory Services V1.0
+# 🧠 PrimeyAcc | Company Inventory Services V1.1
 # ------------------------------------------------------------
 # ✅ Company-scoped warehouse services
 # ✅ Company-scoped stock balance services
@@ -9,6 +9,8 @@
 # ✅ No frontend company_id trust
 # ✅ Prevent negative stock
 # ✅ Catalog item snapshot through StockMovement model
+# ✅ Phase 10.3 automatic accounting posting for stock movements
+# ✅ Duplicate accounting entry prevention
 # ✅ Ready for purchase receiving integration later
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
@@ -18,6 +20,7 @@
 # - الخدمات هي المكان الوحيد لتطبيق أثر حركة المخزون على الرصيد
 # - StockMovement هو الدفتر
 # - StockItem هو الرصيد الحالي
+# - عند ترحيل حركة مخزون مؤثرة ماليًا يتم إنشاء قيد محاسبي تلقائي مرة واحدة فقط
 # ============================================================
 
 from __future__ import annotations
@@ -30,6 +33,23 @@ from django.db import transaction
 from django.db.models import Max, QuerySet
 from django.utils import timezone
 
+from accounting.models import (
+    AccountingAccountPurpose,
+    AccountingRoutingSource,
+    JournalEntry,
+    JournalEntryStatus,
+    PostingSource,
+)
+from accounting.services import (
+    AccountingPostingError,
+    EntryLinePayload,
+    create_journal_entry_header,
+    generate_journal_entry_number,
+    get_account_by_purpose,
+    post_journal_entry,
+    replace_journal_entry_lines,
+    seed_company_chart_of_accounts,
+)
 from catalog.models import CatalogItem, CatalogItemType
 from companies.models import Branch, Company
 
@@ -46,6 +66,57 @@ from .models import (
     WarehouseType,
     quantize_money,
     quantize_quantity,
+)
+
+
+AUTO_SOURCE_TYPE_STOCK_MOVEMENT = "stock_movement"
+
+ACCOUNT_PURPOSE_COST_OF_SALES = getattr(
+    AccountingAccountPurpose,
+    "COST_OF_SALES",
+    AccountingAccountPurpose.OTHER,
+)
+
+ACCOUNT_PURPOSE_INVENTORY_ADJUSTMENT = getattr(
+    AccountingAccountPurpose,
+    "INVENTORY_ADJUSTMENT",
+    AccountingAccountPurpose.OTHER,
+)
+
+ACCOUNT_PURPOSE_OPENING_EQUITY = getattr(
+    AccountingAccountPurpose,
+    "OPENING_EQUITY",
+    AccountingAccountPurpose.OTHER,
+)
+
+ACCOUNT_PURPOSE_SUSPENSE = getattr(
+    AccountingAccountPurpose,
+    "SUSPENSE",
+    AccountingAccountPurpose.OTHER,
+)
+
+POSTING_SOURCE_INVENTORY_RECEIPT = getattr(
+    PostingSource,
+    "INVENTORY_RECEIPT",
+    PostingSource.OTHER,
+)
+
+POSTING_SOURCE_INVENTORY_ISSUE = getattr(
+    PostingSource,
+    "INVENTORY_ISSUE",
+    PostingSource.OTHER,
+)
+
+POSTING_SOURCE_INVENTORY_ADJUSTMENT = getattr(
+    PostingSource,
+    "INVENTORY_ADJUSTMENT",
+    PostingSource.OTHER,
+)
+
+POSTING_SOURCE_INVENTORY_TRANSFER = getattr(
+    PostingSource,
+    "INVENTORY_TRANSFER",
+    PostingSource.OTHER,
 )
 
 
@@ -619,6 +690,405 @@ def create_stock_movement(
     return movement
 
 
+def get_inventory_posting_source(movement: StockMovement) -> str:
+    """
+    Resolve PostingSource for inventory movement.
+    """
+    if movement.movement_type == StockMovementType.IN:
+        return POSTING_SOURCE_INVENTORY_RECEIPT
+
+    if movement.movement_type == StockMovementType.OUT:
+        return POSTING_SOURCE_INVENTORY_ISSUE
+
+    if movement.movement_type == StockMovementType.ADJUSTMENT:
+        return POSTING_SOURCE_INVENTORY_ADJUSTMENT
+
+    if movement.movement_type in [
+        StockMovementType.TRANSFER_IN,
+        StockMovementType.TRANSFER_OUT,
+    ]:
+        return POSTING_SOURCE_INVENTORY_TRANSFER
+
+    return PostingSource.OTHER
+
+
+def get_inventory_routing_source(movement: StockMovement) -> str:
+    """
+    Resolve AccountingRoutingSource for inventory movement.
+    """
+    if movement.movement_type == StockMovementType.IN:
+        return AccountingRoutingSource.INVENTORY_RECEIPT
+
+    if movement.movement_type == StockMovementType.OUT:
+        return AccountingRoutingSource.INVENTORY_ISSUE
+
+    if movement.movement_type == StockMovementType.ADJUSTMENT:
+        return AccountingRoutingSource.INVENTORY_ADJUSTMENT
+
+    if movement.movement_type in [
+        StockMovementType.TRANSFER_IN,
+        StockMovementType.TRANSFER_OUT,
+    ]:
+        return AccountingRoutingSource.INVENTORY_TRANSFER
+
+    return AccountingRoutingSource.OTHER
+
+
+def should_post_stock_movement_to_accounting(movement: StockMovement) -> bool:
+    """
+    Decide whether a stock movement should create a financial journal entry.
+
+    Same-company transfer movements are stock ledger movements only in this
+    foundation. They do not change total inventory value at GL level because
+    the inventory remains owned by the same company.
+    """
+    if movement.movement_type in [
+        StockMovementType.TRANSFER_IN,
+        StockMovementType.TRANSFER_OUT,
+    ]:
+        return False
+
+    return movement.movement_type in [
+        StockMovementType.IN,
+        StockMovementType.OUT,
+        StockMovementType.ADJUSTMENT,
+    ]
+
+
+def source_id(value: Any) -> str:
+    """
+    Normalize source id for JournalEntry.source_id.
+    """
+    if value in [None, ""]:
+        return ""
+
+    return str(value).strip()
+
+
+def get_existing_stock_movement_auto_entry(movement: StockMovement) -> JournalEntry | None:
+    """
+    Return existing automatic journal entry for a stock movement.
+
+    This prevents duplicate accounting posting for the same stock movement.
+    """
+    if not movement:
+        return None
+
+    company = getattr(movement, "company", None)
+
+    if not company:
+        return None
+
+    return (
+        JournalEntry.objects.filter(
+            company=company,
+            source_type=AUTO_SOURCE_TYPE_STOCK_MOVEMENT,
+            source_id=source_id(getattr(movement, "pk", None)),
+            source_number=normalize_text(getattr(movement, "movement_number", "")),
+            is_auto_posted=True,
+        )
+        .exclude(status=JournalEntryStatus.CANCELLED)
+        .order_by("id")
+        .first()
+    )
+
+
+def find_stock_movement_journal_entry(movement: StockMovement) -> JournalEntry | None:
+    """
+    Public helper to find the automatic accounting entry linked to a stock movement.
+    """
+    return get_existing_stock_movement_auto_entry(movement)
+
+
+def get_inventory_offset_account(
+    *,
+    company: Company,
+    movement: StockMovement,
+    routing_source: str,
+):
+    """
+    Resolve the counter account for inventory movement posting.
+
+    Priority:
+    - OUT: cost of sales
+    - ADJUSTMENT: inventory adjustment
+    - IN: inventory adjustment, then opening equity, then suspense
+    """
+    if movement.movement_type == StockMovementType.OUT:
+        account = get_account_by_purpose(
+            company,
+            ACCOUNT_PURPOSE_COST_OF_SALES,
+            source=routing_source,
+            required=False,
+        )
+        if account:
+            return account
+
+    if movement.movement_type == StockMovementType.ADJUSTMENT:
+        account = get_account_by_purpose(
+            company,
+            ACCOUNT_PURPOSE_INVENTORY_ADJUSTMENT,
+            source=routing_source,
+            required=False,
+        )
+        if account:
+            return account
+
+    for purpose in [
+        ACCOUNT_PURPOSE_INVENTORY_ADJUSTMENT,
+        ACCOUNT_PURPOSE_OPENING_EQUITY,
+        ACCOUNT_PURPOSE_SUSPENSE,
+        AccountingAccountPurpose.OTHER,
+    ]:
+        account = get_account_by_purpose(
+            company,
+            purpose,
+            source=routing_source,
+            required=False,
+        )
+        if account:
+            return account
+
+    raise AccountingPostingError("لا يوجد حساب مقابل صالح لترحيل حركة المخزون.")
+
+
+@transaction.atomic
+def post_stock_movement_to_accounting(
+    movement: StockMovement,
+    *,
+    actor: Any = None,
+    auto_post: bool = True,
+) -> JournalEntry | None:
+    """
+    Create and optionally post automatic accounting journal entry for posted stock movement.
+
+    Accounting treatment:
+    - Inventory IN:
+        Debit  Inventory
+        Credit Inventory Adjustment / Opening Equity / Suspense
+
+    - Inventory OUT:
+        Debit  Cost of Sales / Inventory Adjustment
+        Credit Inventory
+
+    - Adjustment IN:
+        Debit  Inventory
+        Credit Inventory Adjustment
+
+    - Adjustment OUT:
+        Debit  Inventory Adjustment
+        Credit Inventory
+
+    - Same-company transfers:
+        No GL journal entry in this foundation.
+
+    Safety:
+    - Uses movement.company as tenant source.
+    - Prevents duplicate entries.
+    - Refuses non-posted movements.
+    - Refuses zero-value movements.
+    """
+    if not movement:
+        raise AccountingPostingError("حركة المخزون مطلوبة للترحيل المحاسبي.")
+
+    company = getattr(movement, "company", None)
+
+    if not company:
+        raise AccountingPostingError("الشركة مطلوبة لترحيل حركة المخزون.")
+
+    if getattr(movement, "company_id", None) != getattr(company, "pk", None):
+        raise AccountingPostingError("حركة المخزون لا تتبع الشركة المحددة.")
+
+    if not should_post_stock_movement_to_accounting(movement):
+        return None
+
+    movement_number = normalize_text(getattr(movement, "movement_number", "")) or f"STOCK-MOVEMENT-{movement.pk}"
+
+    existing = get_existing_stock_movement_auto_entry(movement)
+
+    if existing:
+        if auto_post and existing.status == JournalEntryStatus.DRAFT:
+            return post_journal_entry(existing, actor=actor)
+
+        return existing
+
+    if movement.status != StockMovementStatus.POSTED:
+        raise AccountingPostingError("لا يمكن ترحيل حركة مخزون غير مرحلة.")
+
+    total_cost = quantize_money(getattr(movement, "total_cost", MONEY_ZERO))
+
+    if total_cost <= MONEY_ZERO:
+        return None
+
+    seed_company_chart_of_accounts(company)
+
+    routing_source = get_inventory_routing_source(movement)
+    posting_source = get_inventory_posting_source(movement)
+
+    inventory_account = get_account_by_purpose(
+        company,
+        AccountingAccountPurpose.INVENTORY,
+        source=routing_source,
+        required=True,
+    )
+    offset_account = get_inventory_offset_account(
+        company=company,
+        movement=movement,
+        routing_source=routing_source,
+    )
+
+    currency = normalize_text(getattr(company, "currency_code", "") or "SAR").upper()
+    entry_date = getattr(movement, "movement_date", None) or timezone.localdate()
+    warehouse_id = source_id(getattr(movement, "warehouse_id", None))
+    item_id = source_id(getattr(movement, "item_id", None))
+    reference_number = normalize_text(getattr(movement, "reference_number", ""))
+
+    description = f"قيد تلقائي لحركة مخزون {movement_number}"
+
+    entry = create_journal_entry_header(
+        company=company,
+        entry_date=entry_date,
+        entry_number=generate_journal_entry_number(company, prefix="STK"),
+        posting_source=posting_source,
+        reference=movement_number,
+        external_reference=reference_number or movement_number,
+        description=description,
+        notes="تم إنشاء هذا القيد تلقائيًا عند ترحيل حركة المخزون.",
+        currency=currency,
+        source_type=AUTO_SOURCE_TYPE_STOCK_MOVEMENT,
+        source_id=source_id(movement.pk),
+        source_number=movement_number,
+        is_auto_posted=True,
+        actor=actor,
+    )
+
+    inventory_line_description = f"المخزون عن حركة {movement_number}"
+    offset_line_description = f"الحساب المقابل لحركة مخزون {movement_number}"
+
+    if movement.direction == StockMovementDirection.INCREASE:
+        lines = [
+            EntryLinePayload(
+                account=inventory_account,
+                description=inventory_line_description,
+                debit_amount=total_cost,
+                credit_amount=MONEY_ZERO,
+                currency=currency,
+                source_line_id=f"stock-inventory-{movement.pk}",
+                sort_order=1,
+                metadata={
+                    "source": AUTO_SOURCE_TYPE_STOCK_MOVEMENT,
+                    "movement_id": movement.pk,
+                    "movement_number": movement_number,
+                    "warehouse_id": warehouse_id,
+                    "item_id": item_id,
+                    "direction": movement.direction,
+                    "movement_type": movement.movement_type,
+                    "bucket": "inventory",
+                },
+            ),
+            EntryLinePayload(
+                account=offset_account,
+                description=offset_line_description,
+                debit_amount=MONEY_ZERO,
+                credit_amount=total_cost,
+                currency=currency,
+                source_line_id=f"stock-offset-{movement.pk}",
+                sort_order=2,
+                metadata={
+                    "source": AUTO_SOURCE_TYPE_STOCK_MOVEMENT,
+                    "movement_id": movement.pk,
+                    "movement_number": movement_number,
+                    "warehouse_id": warehouse_id,
+                    "item_id": item_id,
+                    "direction": movement.direction,
+                    "movement_type": movement.movement_type,
+                    "bucket": "offset",
+                },
+            ),
+        ]
+    elif movement.direction == StockMovementDirection.DECREASE:
+        lines = [
+            EntryLinePayload(
+                account=offset_account,
+                description=offset_line_description,
+                debit_amount=total_cost,
+                credit_amount=MONEY_ZERO,
+                currency=currency,
+                source_line_id=f"stock-offset-{movement.pk}",
+                sort_order=1,
+                metadata={
+                    "source": AUTO_SOURCE_TYPE_STOCK_MOVEMENT,
+                    "movement_id": movement.pk,
+                    "movement_number": movement_number,
+                    "warehouse_id": warehouse_id,
+                    "item_id": item_id,
+                    "direction": movement.direction,
+                    "movement_type": movement.movement_type,
+                    "bucket": "offset",
+                },
+            ),
+            EntryLinePayload(
+                account=inventory_account,
+                description=inventory_line_description,
+                debit_amount=MONEY_ZERO,
+                credit_amount=total_cost,
+                currency=currency,
+                source_line_id=f"stock-inventory-{movement.pk}",
+                sort_order=2,
+                metadata={
+                    "source": AUTO_SOURCE_TYPE_STOCK_MOVEMENT,
+                    "movement_id": movement.pk,
+                    "movement_number": movement_number,
+                    "warehouse_id": warehouse_id,
+                    "item_id": item_id,
+                    "direction": movement.direction,
+                    "movement_type": movement.movement_type,
+                    "bucket": "inventory",
+                },
+            ),
+        ]
+    else:
+        raise AccountingPostingError("اتجاه حركة المخزون غير مدعوم محاسبيًا.")
+
+    entry = replace_journal_entry_lines(
+        entry,
+        lines,
+        actor=actor,
+    )
+
+    entry.metadata = {
+        **(entry.metadata or {}),
+        "source": AUTO_SOURCE_TYPE_STOCK_MOVEMENT,
+        "source_app": "inventory",
+        "movement_id": movement.pk,
+        "movement_number": movement_number,
+        "movement_type": movement.movement_type,
+        "direction": movement.direction,
+        "warehouse_id": warehouse_id,
+        "item_id": item_id,
+        "quantity": str(getattr(movement, "quantity", QUANTITY_ZERO)),
+        "unit_cost": str(getattr(movement, "unit_cost", MONEY_ZERO)),
+        "total_cost": str(total_cost),
+        "reference_type": normalize_text(getattr(movement, "reference_type", "")),
+        "reference_id": source_id(getattr(movement, "reference_id", None)),
+        "reference_number": reference_number,
+        "auto_posted_by_phase": "phase_10_3",
+    }
+
+    metadata_update_fields = ["metadata", "updated_at"]
+
+    if actor is not None and getattr(actor, "is_authenticated", False):
+        entry.updated_by = actor
+        metadata_update_fields.append("updated_by")
+
+    entry.save(update_fields=metadata_update_fields)
+
+    if auto_post:
+        entry = post_journal_entry(entry, actor=actor)
+
+    return entry
+
+
 @transaction.atomic
 def post_stock_movement(
     *,
@@ -627,7 +1097,7 @@ def post_stock_movement(
     user=None,
 ) -> StockMovement:
     """
-    Post draft movement and update StockItem balance.
+    Post draft movement, update StockItem balance, and create accounting entry when applicable.
     """
     if movement.company_id != company.id:
         raise ValidationError("Selected stock movement does not belong to this company.")
@@ -709,6 +1179,19 @@ def post_stock_movement(
             "updated_at",
         ]
     )
+
+    try:
+        post_stock_movement_to_accounting(
+            movement,
+            actor=user,
+            auto_post=True,
+        )
+    except AccountingPostingError as exc:
+        raise ValidationError(
+            {
+                "accounting": str(exc),
+            }
+        ) from exc
 
     return movement
 
@@ -868,6 +1351,10 @@ def transfer_stock(
     This foundation creates two posted ledger records:
     - TRANSFER_OUT from source warehouse
     - TRANSFER_IN into target warehouse
+
+    Same-company transfer is inventory ledger movement only here.
+    It does not create GL journal entries because ownership and total inventory
+    value remain inside the same company.
     """
     validate_warehouse_for_company(
         company=company,
