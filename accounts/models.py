@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 accounts/models.py
-# 🧠 PrimeyAcc | Accounts Models V1.8
+# 🧠 PrimeyAcc | Accounts Models V1.9
 # ------------------------------------------------------------
 # ✅ User Profile
 # ✅ Workspace Type Foundation
@@ -17,6 +17,7 @@
 # ✅ Company Purchases Bills Permissions
 # ✅ Company Inventory & Warehouses Permissions
 # ✅ Company Accounting Permissions
+# ✅ Company Treasury & Payments Permissions
 # ✅ Safe Default Company Membership Resolver
 # ✅ Audit Fields
 # ------------------------------------------------------------
@@ -33,6 +34,7 @@
 # - فواتير الموردين لها صلاحيات دقيقة منفصلة داخل company.purchases.bills
 # - المخزون والمستودعات لها صلاحيات دقيقة داخل company.inventory.*
 # - المحاسبة لها صلاحيات دقيقة داخل company.accounting.*
+# - الخزينة والمدفوعات لها صلاحيات دقيقة داخل company.treasury.*
 # ============================================================
 
 from __future__ import annotations
@@ -200,6 +202,15 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.accounting.journals.post",
         "company.accounting.journals.reverse",
         "company.accounting.reports.view",
+        "company.treasury.summary.view",
+        "company.treasury.accounts.view",
+        "company.treasury.accounts.create",
+        "company.treasury.accounts.update",
+        "company.treasury.transactions.view",
+        "company.treasury.transactions.create",
+        "company.treasury.transactions.update",
+        "company.treasury.transactions.post",
+        "company.treasury.transactions.cancel",
         "company.reports.view",
     ],
     CompanyRole.MANAGER: [
@@ -235,6 +246,9 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.accounting.accounts.view",
         "company.accounting.journals.view",
         "company.accounting.reports.view",
+        "company.treasury.summary.view",
+        "company.treasury.accounts.view",
+        "company.treasury.transactions.view",
         "company.reports.view",
     ],
     CompanyRole.ACCOUNTANT: [
@@ -269,6 +283,15 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.accounting.journals.post",
         "company.accounting.journals.reverse",
         "company.accounting.reports.view",
+        "company.treasury.summary.view",
+        "company.treasury.accounts.view",
+        "company.treasury.accounts.create",
+        "company.treasury.accounts.update",
+        "company.treasury.transactions.view",
+        "company.treasury.transactions.create",
+        "company.treasury.transactions.update",
+        "company.treasury.transactions.post",
+        "company.treasury.transactions.cancel",
         "company.reports.view",
     ],
     CompanyRole.CASHIER: [
@@ -284,6 +307,10 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.invoices.view",
         "company.sales.invoices.create",
         "company.sales.invoices.issue",
+        "company.treasury.summary.view",
+        "company.treasury.accounts.view",
+        "company.treasury.transactions.view",
+        "company.treasury.transactions.create",
     ],
     CompanyRole.SALES: [
         "company.dashboard.view",
@@ -300,6 +327,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.invoices.create",
         "company.sales.invoices.update",
         "company.sales.invoices.issue",
+        "company.treasury.accounts.view",
+        "company.treasury.transactions.view",
     ],
     CompanyRole.INVENTORY: [
         "company.dashboard.view",
@@ -330,7 +359,6 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.inventory.warehouses.status",
         "company.inventory.stock.view",
         "company.inventory.movements.view",
-        "company.inventory.movements.create",
         "company.reports.view",
     ],
     CompanyRole.HR: [
@@ -369,6 +397,9 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.accounting.accounts.view",
         "company.accounting.journals.view",
         "company.accounting.reports.view",
+        "company.treasury.summary.view",
+        "company.treasury.accounts.view",
+        "company.treasury.transactions.view",
         "company.reports.view",
     ],
 }

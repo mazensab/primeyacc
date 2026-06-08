@@ -1,0 +1,1161 @@
+# ============================================================
+# 📂 treasury/tests.py
+# 🧠 PrimeyAcc | Treasury & Payments Tests V1.1
+# ------------------------------------------------------------
+# ✅ Phase 11.1 Treasury Accounts Foundation tests
+# ✅ Phase 11.2 Treasury Transactions Foundation tests
+# ✅ Phase 11.3 Treasury APIs Foundation tests
+# ✅ Company isolation validation
+# ✅ Safe posting and balance updates
+# ✅ Negative balance prevention
+# ✅ Duplicate posting prevention
+# ✅ Transfer and cancellation behavior
+# ✅ Treasury summary validation
+# ✅ Treasury accounts API validation
+# ✅ Treasury transactions API validation
+# ✅ Treasury summary API validation
+# ------------------------------------------------------------
+# القاعدة المعمارية المعتمدة:
+# - لا يتم الاعتماد على company_id القادم من الفرونت
+# - كل اختبار يثبت أن الشركة هي نطاق العزل الأساسي
+# - الرصيد لا يتغير عند إنشاء Draft
+# - الرصيد يتغير فقط عند ترحيل الحركة POSTED
+# - لا يسمح بخلط حسابات أو حركات بين شركات مختلفة
+# - APIs تعتمد على request.company من عضوية الشركة الحالية
+# ============================================================
+
+from __future__ import annotations
+
+from decimal import Decimal
+from typing import Any
+
+from django.apps import apps
+from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.db import models
+from django.test import TestCase
+from rest_framework.test import APIClient
+
+from accounts.models import CompanyMembership, CompanyRole, UserProfile
+from .models import TreasuryAccount, TreasuryTransaction
+from .services import (
+    cancel_treasury_transaction,
+    create_treasury_account,
+    create_treasury_transaction,
+    get_treasury_summary,
+    post_treasury_transaction,
+)
+
+
+# ============================================================
+# Shared test factory
+# ============================================================
+
+
+class PrimeyAccTestFactoryMixin:
+    """
+    Shared lightweight factory helpers for PrimeyAcc tests.
+
+    الهدف:
+    بناء شركات ومستخدمين وعضويات بطريقة مرنة لا تكسر الاختبارات
+    عند إضافة حقول اختيارية مستقبلًا على Company.
+    """
+
+    @classmethod
+    def create_company(
+        cls,
+        *,
+        name: str,
+        code: str,
+        email: str,
+    ):
+        """
+        Create a Company record while staying tolerant to future Company model fields.
+        """
+        Company = apps.get_model("companies", "Company")
+
+        explicit_values: dict[str, Any] = {
+            "name": name,
+            "company_name": name,
+            "legal_name": name,
+            "display_name": name,
+            "code": code,
+            "company_code": code,
+            "slug": code.lower(),
+            "email": email,
+            "contact_email": email,
+            "phone": "0500000000",
+            "contact_phone": "0500000000",
+            "city": "Riyadh",
+            "country": "SA",
+            "currency": "SAR",
+            "is_active": True,
+            "can_access_company": True,
+            "can_access_system": False,
+        }
+
+        payload: dict[str, Any] = {}
+
+        for field in Company._meta.fields:
+            if field.primary_key or field.auto_created:
+                continue
+
+            if field.name in explicit_values:
+                payload[field.name] = explicit_values[field.name]
+                continue
+
+            if field.has_default() or field.null or field.blank:
+                continue
+
+            if isinstance(field, models.CharField):
+                payload[field.name] = f"{field.name}-{code}"
+            elif isinstance(field, models.TextField):
+                payload[field.name] = f"{field.name} for {name}"
+            elif isinstance(field, models.EmailField):
+                payload[field.name] = email
+            elif isinstance(field, models.BooleanField):
+                payload[field.name] = True
+            elif isinstance(field, models.IntegerField):
+                payload[field.name] = 1
+            elif isinstance(field, models.DecimalField):
+                payload[field.name] = Decimal("0.00")
+            elif isinstance(field, models.DateField):
+                from django.utils import timezone
+
+                payload[field.name] = timezone.localdate()
+            elif isinstance(field, models.DateTimeField):
+                from django.utils import timezone
+
+                payload[field.name] = timezone.now()
+
+        return Company.objects.create(**payload)
+
+    @classmethod
+    def create_user_with_company_membership(
+        cls,
+        *,
+        username: str,
+        email: str,
+        company,
+        role: str = CompanyRole.ACCOUNTANT,
+    ):
+        """
+        Create user + UserProfile + active CompanyMembership.
+        """
+        User = get_user_model()
+
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password="StrongPass12345",
+        )
+
+        profile, _ = UserProfile.objects.get_or_create(
+            user=user,
+            defaults={
+                "display_name": username,
+                "default_company": company,
+                "is_system_user": False,
+            },
+        )
+        profile.default_company = company
+        profile.save(update_fields=["default_company", "updated_at"])
+
+        CompanyMembership.objects.create(
+            user=user,
+            company=company,
+            role=role,
+            status="ACTIVE",
+            is_primary=True,
+        )
+
+        return user
+
+
+# ============================================================
+# Service tests
+# ============================================================
+
+
+class TreasuryServiceTests(PrimeyAccTestFactoryMixin, TestCase):
+    """
+    Tests for the Phase 11 treasury foundation.
+
+    هذه الاختبارات تبني شركات وحسابات خزينة وحركات مالية
+    وتتحقق من العزل والرصيد والترحيل.
+    """
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        User = get_user_model()
+
+        cls.user = User.objects.create_user(
+            username="treasury_user",
+            email="treasury@example.com",
+            password="StrongPass12345",
+        )
+
+        cls.company_a = cls.create_company(
+            name="PrimeyAcc Company A",
+            code="TST-A",
+            email="company-a@example.com",
+        )
+        cls.company_b = cls.create_company(
+            name="PrimeyAcc Company B",
+            code="TST-B",
+            email="company-b@example.com",
+        )
+
+    def test_create_treasury_account_sets_opening_and_current_balance(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Main Cash",
+            code="cash-main",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="1000.00",
+            is_default=True,
+        )
+
+        self.assertEqual(account.company_id, self.company_a.id)
+        self.assertEqual(account.code, "CASH-MAIN")
+        self.assertEqual(account.currency, "SAR")
+        self.assertEqual(account.opening_balance, Decimal("1000.00"))
+        self.assertEqual(account.current_balance, Decimal("1000.00"))
+        self.assertTrue(account.is_default)
+        self.assertEqual(account.created_by_id, self.user.id)
+
+    def test_duplicate_account_name_is_blocked_inside_same_company(self) -> None:
+        create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Main Bank",
+            code="bank-1",
+            account_type=TreasuryAccount.AccountType.BANK,
+            opening_balance="0",
+            bank_name="Al Rajhi",
+        )
+
+        with self.assertRaises(ValidationError):
+            create_treasury_account(
+                company=self.company_a,
+                user=self.user,
+                name="Main Bank",
+                code="bank-2",
+                account_type=TreasuryAccount.AccountType.BANK,
+                opening_balance="0",
+                bank_name="SNB",
+            )
+
+    def test_same_account_name_is_allowed_in_different_companies(self) -> None:
+        account_a = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Branch Cash",
+            code="branch-cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100",
+        )
+
+        account_b = create_treasury_account(
+            company=self.company_b,
+            user=self.user,
+            name="Branch Cash",
+            code="branch-cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="200",
+        )
+
+        self.assertNotEqual(account_a.company_id, account_b.company_id)
+        self.assertEqual(account_a.name, account_b.name)
+
+    def test_bank_account_requires_bank_name(self) -> None:
+        with self.assertRaises(ValidationError):
+            create_treasury_account(
+                company=self.company_a,
+                user=self.user,
+                name="Bank Without Name",
+                account_type=TreasuryAccount.AccountType.BANK,
+                opening_balance="0",
+            )
+
+    def test_draft_transaction_does_not_change_balance(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Draft Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="500.00",
+        )
+
+        treasury_transaction = create_treasury_transaction(
+            company=self.company_a,
+            account=account,
+            user=self.user,
+            transaction_type=TreasuryTransaction.TransactionType.INFLOW,
+            amount="250.00",
+            description="Draft receipt",
+        )
+
+        account.refresh_from_db()
+        treasury_transaction.refresh_from_db()
+
+        self.assertEqual(treasury_transaction.status, TreasuryTransaction.TransactionStatus.DRAFT)
+        self.assertEqual(account.current_balance, Decimal("500.00"))
+        self.assertIsNone(treasury_transaction.balance_before)
+        self.assertIsNone(treasury_transaction.balance_after)
+
+    def test_post_inflow_increases_balance(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Receipt Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+
+        treasury_transaction = create_treasury_transaction(
+            company=self.company_a,
+            account=account,
+            user=self.user,
+            transaction_type=TreasuryTransaction.TransactionType.INFLOW,
+            amount="75.50",
+            description="Customer receipt",
+        )
+
+        post_treasury_transaction(
+            company=self.company_a,
+            treasury_transaction=treasury_transaction,
+            user=self.user,
+        )
+
+        account.refresh_from_db()
+        treasury_transaction.refresh_from_db()
+
+        self.assertEqual(account.current_balance, Decimal("175.50"))
+        self.assertEqual(treasury_transaction.status, TreasuryTransaction.TransactionStatus.POSTED)
+        self.assertEqual(treasury_transaction.balance_before, Decimal("100.00"))
+        self.assertEqual(treasury_transaction.balance_after, Decimal("175.50"))
+        self.assertEqual(treasury_transaction.posted_by_id, self.user.id)
+
+    def test_post_outflow_decreases_balance(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Payment Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="300.00",
+        )
+
+        treasury_transaction = create_treasury_transaction(
+            company=self.company_a,
+            account=account,
+            user=self.user,
+            transaction_type=TreasuryTransaction.TransactionType.OUTFLOW,
+            amount="125.00",
+            description="Supplier payment",
+        )
+
+        post_treasury_transaction(
+            company=self.company_a,
+            treasury_transaction=treasury_transaction,
+            user=self.user,
+        )
+
+        account.refresh_from_db()
+        treasury_transaction.refresh_from_db()
+
+        self.assertEqual(account.current_balance, Decimal("175.00"))
+        self.assertEqual(treasury_transaction.balance_before, Decimal("300.00"))
+        self.assertEqual(treasury_transaction.balance_after, Decimal("175.00"))
+
+    def test_outflow_is_blocked_when_balance_is_insufficient(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Small Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="50.00",
+        )
+
+        treasury_transaction = create_treasury_transaction(
+            company=self.company_a,
+            account=account,
+            user=self.user,
+            transaction_type=TreasuryTransaction.TransactionType.OUTFLOW,
+            amount="100.00",
+            description="Too large payment",
+        )
+
+        with self.assertRaises(ValidationError):
+            post_treasury_transaction(
+                company=self.company_a,
+                treasury_transaction=treasury_transaction,
+                user=self.user,
+            )
+
+        account.refresh_from_db()
+        treasury_transaction.refresh_from_db()
+
+        self.assertEqual(account.current_balance, Decimal("50.00"))
+        self.assertEqual(treasury_transaction.status, TreasuryTransaction.TransactionStatus.DRAFT)
+
+    def test_posting_same_transaction_twice_does_not_duplicate_balance_effect(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="No Duplicate Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+
+        treasury_transaction = create_treasury_transaction(
+            company=self.company_a,
+            account=account,
+            user=self.user,
+            transaction_type=TreasuryTransaction.TransactionType.INFLOW,
+            amount="40.00",
+        )
+
+        post_treasury_transaction(
+            company=self.company_a,
+            treasury_transaction=treasury_transaction,
+            user=self.user,
+        )
+        post_treasury_transaction(
+            company=self.company_a,
+            treasury_transaction=treasury_transaction,
+            user=self.user,
+        )
+
+        account.refresh_from_db()
+
+        self.assertEqual(account.current_balance, Decimal("140.00"))
+
+    def test_transfer_between_accounts_inside_same_company(self) -> None:
+        source_account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Transfer Source",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="1000.00",
+        )
+
+        target_account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Transfer Target",
+            account_type=TreasuryAccount.AccountType.BANK,
+            opening_balance="50.00",
+            bank_name="SNB",
+        )
+
+        treasury_transaction = create_treasury_transaction(
+            company=self.company_a,
+            account=source_account,
+            counterparty_account=target_account,
+            user=self.user,
+            transaction_type=TreasuryTransaction.TransactionType.TRANSFER,
+            amount="300.00",
+            source_type=TreasuryTransaction.SourceType.TRANSFER,
+            description="Cash to bank transfer",
+        )
+
+        post_treasury_transaction(
+            company=self.company_a,
+            treasury_transaction=treasury_transaction,
+            user=self.user,
+        )
+
+        source_account.refresh_from_db()
+        target_account.refresh_from_db()
+        treasury_transaction.refresh_from_db()
+
+        self.assertEqual(source_account.current_balance, Decimal("700.00"))
+        self.assertEqual(target_account.current_balance, Decimal("350.00"))
+        self.assertEqual(treasury_transaction.status, TreasuryTransaction.TransactionStatus.POSTED)
+
+    def test_cross_company_account_is_blocked_when_creating_transaction(self) -> None:
+        account_b = create_treasury_account(
+            company=self.company_b,
+            user=self.user,
+            name="Other Company Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="500.00",
+        )
+
+        with self.assertRaises(ValidationError):
+            create_treasury_transaction(
+                company=self.company_a,
+                account=account_b,
+                user=self.user,
+                transaction_type=TreasuryTransaction.TransactionType.INFLOW,
+                amount="10.00",
+            )
+
+    def test_cross_company_counterparty_account_is_blocked_for_transfer(self) -> None:
+        source_account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Company A Transfer Source",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="500.00",
+        )
+
+        foreign_target_account = create_treasury_account(
+            company=self.company_b,
+            user=self.user,
+            name="Company B Transfer Target",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="0.00",
+        )
+
+        with self.assertRaises(ValidationError):
+            create_treasury_transaction(
+                company=self.company_a,
+                account=source_account,
+                counterparty_account=foreign_target_account,
+                user=self.user,
+                transaction_type=TreasuryTransaction.TransactionType.TRANSFER,
+                amount="50.00",
+                source_type=TreasuryTransaction.SourceType.TRANSFER,
+            )
+
+    def test_cancel_posted_inflow_reverses_balance(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Cancellation Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="200.00",
+        )
+
+        treasury_transaction = create_treasury_transaction(
+            company=self.company_a,
+            account=account,
+            user=self.user,
+            transaction_type=TreasuryTransaction.TransactionType.INFLOW,
+            amount="80.00",
+        )
+
+        post_treasury_transaction(
+            company=self.company_a,
+            treasury_transaction=treasury_transaction,
+            user=self.user,
+        )
+
+        cancel_treasury_transaction(
+            company=self.company_a,
+            treasury_transaction=treasury_transaction,
+            user=self.user,
+            reason="Wrong receipt",
+        )
+
+        account.refresh_from_db()
+        treasury_transaction.refresh_from_db()
+
+        self.assertEqual(account.current_balance, Decimal("200.00"))
+        self.assertEqual(treasury_transaction.status, TreasuryTransaction.TransactionStatus.CANCELLED)
+        self.assertEqual(treasury_transaction.cancelled_by_id, self.user.id)
+        self.assertEqual(treasury_transaction.cancellation_reason, "Wrong receipt")
+
+    def test_cancel_posted_transfer_reverses_both_accounts(self) -> None:
+        source_account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Cancel Transfer Source",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="600.00",
+        )
+
+        target_account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Cancel Transfer Target",
+            account_type=TreasuryAccount.AccountType.BANK,
+            opening_balance="100.00",
+            bank_name="Alinma",
+        )
+
+        treasury_transaction = create_treasury_transaction(
+            company=self.company_a,
+            account=source_account,
+            counterparty_account=target_account,
+            user=self.user,
+            transaction_type=TreasuryTransaction.TransactionType.TRANSFER,
+            amount="250.00",
+            source_type=TreasuryTransaction.SourceType.TRANSFER,
+        )
+
+        post_treasury_transaction(
+            company=self.company_a,
+            treasury_transaction=treasury_transaction,
+            user=self.user,
+        )
+
+        cancel_treasury_transaction(
+            company=self.company_a,
+            treasury_transaction=treasury_transaction,
+            user=self.user,
+            reason="Transfer cancelled",
+        )
+
+        source_account.refresh_from_db()
+        target_account.refresh_from_db()
+        treasury_transaction.refresh_from_db()
+
+        self.assertEqual(source_account.current_balance, Decimal("600.00"))
+        self.assertEqual(target_account.current_balance, Decimal("100.00"))
+        self.assertEqual(treasury_transaction.status, TreasuryTransaction.TransactionStatus.CANCELLED)
+
+    def test_treasury_summary_returns_company_scoped_metrics(self) -> None:
+        cash_account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Summary Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+
+        bank_account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Summary Bank",
+            account_type=TreasuryAccount.AccountType.BANK,
+            opening_balance="300.00",
+            bank_name="Al Rajhi",
+        )
+
+        other_company_account = create_treasury_account(
+            company=self.company_b,
+            user=self.user,
+            name="Other Summary Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="999.00",
+        )
+
+        inflow = create_treasury_transaction(
+            company=self.company_a,
+            account=cash_account,
+            user=self.user,
+            transaction_type=TreasuryTransaction.TransactionType.INFLOW,
+            amount="50.00",
+        )
+        post_treasury_transaction(
+            company=self.company_a,
+            treasury_transaction=inflow,
+            user=self.user,
+        )
+
+        outflow = create_treasury_transaction(
+            company=self.company_a,
+            account=bank_account,
+            user=self.user,
+            transaction_type=TreasuryTransaction.TransactionType.OUTFLOW,
+            amount="25.00",
+        )
+        post_treasury_transaction(
+            company=self.company_a,
+            treasury_transaction=outflow,
+            user=self.user,
+        )
+
+        create_treasury_transaction(
+            company=self.company_b,
+            account=other_company_account,
+            user=self.user,
+            transaction_type=TreasuryTransaction.TransactionType.INFLOW,
+            amount="500.00",
+        )
+
+        summary = get_treasury_summary(self.company_a)
+
+        self.assertEqual(summary.total_accounts, 2)
+        self.assertEqual(summary.active_accounts, 2)
+        self.assertEqual(summary.inactive_accounts, 0)
+        self.assertEqual(summary.cash_balance, Decimal("150.00"))
+        self.assertEqual(summary.bank_balance, Decimal("275.00"))
+        self.assertEqual(summary.wallet_balance, Decimal("0.00"))
+        self.assertEqual(summary.total_balance, Decimal("425.00"))
+        self.assertEqual(summary.posted_inflows, Decimal("50.00"))
+        self.assertEqual(summary.posted_outflows, Decimal("25.00"))
+        self.assertEqual(summary.posted_transactions, 2)
+        self.assertEqual(summary.draft_transactions, 0)
+        self.assertEqual(summary.cancelled_transactions, 0)
+
+        summary_dict = summary.as_dict()
+        self.assertEqual(summary_dict["total_accounts"], 2)
+        self.assertEqual(summary_dict["total_balance"], Decimal("425.00"))
+
+
+# ============================================================
+# API tests
+# ============================================================
+
+
+class TreasuryAPITests(PrimeyAccTestFactoryMixin, TestCase):
+    """
+    API tests for Phase 11 treasury endpoints.
+
+    هذه الاختبارات تتحقق من أن endpoints تعمل عبر عضوية الشركة الحالية
+    ولا تعتمد على company_id من الفرونت.
+    """
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        cls.company = cls.create_company(
+            name="PrimeyAcc API Company",
+            code="API-A",
+            email="api-company@example.com",
+        )
+        cls.other_company = cls.create_company(
+            name="PrimeyAcc Other API Company",
+            code="API-B",
+            email="api-company-b@example.com",
+        )
+
+        cls.user = cls.create_user_with_company_membership(
+            username="treasury_api_user",
+            email="treasury-api@example.com",
+            company=cls.company,
+            role=CompanyRole.ACCOUNTANT,
+        )
+
+        cls.viewer_user = cls.create_user_with_company_membership(
+            username="treasury_viewer_user",
+            email="treasury-viewer@example.com",
+            company=cls.company,
+            role=CompanyRole.VIEWER,
+        )
+
+    def setUp(self) -> None:
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def test_summary_api_returns_company_scoped_summary(self) -> None:
+        account = create_treasury_account(
+            company=self.company,
+            user=self.user,
+            name="API Summary Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+
+        other_account = create_treasury_account(
+            company=self.other_company,
+            user=self.user,
+            name="Other API Summary Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="999.00",
+        )
+
+        transaction = create_treasury_transaction(
+            company=self.company,
+            account=account,
+            user=self.user,
+            transaction_type=TreasuryTransaction.TransactionType.INFLOW,
+            amount="50.00",
+        )
+        post_treasury_transaction(
+            company=self.company,
+            treasury_transaction=transaction,
+            user=self.user,
+        )
+
+        create_treasury_transaction(
+            company=self.other_company,
+            account=other_account,
+            user=self.user,
+            transaction_type=TreasuryTransaction.TransactionType.INFLOW,
+            amount="300.00",
+        )
+
+        response = self.client.get("/api/company/treasury/summary/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["summary"]["total_accounts"], 1)
+        self.assertEqual(response.data["summary"]["total_balance"], "150.00")
+        self.assertEqual(response.data["summary"]["posted_inflows"], "50.00")
+
+    def test_accounts_list_api_returns_current_company_accounts_only(self) -> None:
+        create_treasury_account(
+            company=self.company,
+            user=self.user,
+            name="API Main Cash",
+            code="api-cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+        create_treasury_account(
+            company=self.other_company,
+            user=self.user,
+            name="Foreign Cash",
+            code="foreign-cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="900.00",
+        )
+
+        response = self.client.get("/api/company/treasury/accounts/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["name"], "API Main Cash")
+        self.assertEqual(response.data["results"][0]["company_id"], self.company.id)
+
+    def test_accounts_create_api_creates_account_for_current_company(self) -> None:
+        response = self.client.post(
+            "/api/company/treasury/accounts/",
+            data={
+                "name": "API Created Bank",
+                "code": "api-bank",
+                "account_type": TreasuryAccount.AccountType.BANK,
+                "opening_balance": "250.00",
+                "bank_name": "SNB",
+                "iban": "SA0380000000608010167519",
+                "is_default": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["item"]["name"], "API Created Bank")
+        self.assertEqual(response.data["item"]["company_id"], self.company.id)
+        self.assertEqual(response.data["item"]["current_balance"], "250.00")
+
+        account = TreasuryAccount.objects.get(id=response.data["item"]["id"])
+        self.assertEqual(account.company_id, self.company.id)
+        self.assertEqual(account.created_by_id, self.user.id)
+
+    def test_account_detail_api_returns_account(self) -> None:
+        account = create_treasury_account(
+            company=self.company,
+            user=self.user,
+            name="API Detail Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="75.00",
+        )
+
+        response = self.client.get(f"/api/company/treasury/accounts/{account.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["item"]["id"], account.id)
+        self.assertEqual(response.data["item"]["name"], "API Detail Cash")
+
+    def test_account_update_api_updates_draft_safe_fields(self) -> None:
+        account = create_treasury_account(
+            company=self.company,
+            user=self.user,
+            name="API Update Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+
+        response = self.client.patch(
+            f"/api/company/treasury/accounts/{account.id}/",
+            data={
+                "name": "API Updated Cash",
+                "notes": "Updated through API",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["item"]["name"], "API Updated Cash")
+
+        account.refresh_from_db()
+        self.assertEqual(account.name, "API Updated Cash")
+        self.assertEqual(account.notes, "Updated through API")
+
+    def test_account_deactivate_api_marks_account_inactive(self) -> None:
+        account = create_treasury_account(
+            company=self.company,
+            user=self.user,
+            name="API Deactivate Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+
+        response = self.client.post(
+            f"/api/company/treasury/accounts/{account.id}/",
+            data={"action": "deactivate"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+
+        account.refresh_from_db()
+        self.assertEqual(account.status, TreasuryAccount.AccountStatus.INACTIVE)
+
+    def test_transactions_list_api_returns_current_company_transactions_only(self) -> None:
+        account = create_treasury_account(
+            company=self.company,
+            user=self.user,
+            name="API Tx Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+        other_account = create_treasury_account(
+            company=self.other_company,
+            user=self.user,
+            name="Other API Tx Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+
+        current_tx = create_treasury_transaction(
+            company=self.company,
+            account=account,
+            user=self.user,
+            transaction_type=TreasuryTransaction.TransactionType.INFLOW,
+            amount="20.00",
+            reference="CURRENT-TX",
+        )
+        create_treasury_transaction(
+            company=self.other_company,
+            account=other_account,
+            user=self.user,
+            transaction_type=TreasuryTransaction.TransactionType.INFLOW,
+            amount="999.00",
+            reference="FOREIGN-TX",
+        )
+
+        response = self.client.get("/api/company/treasury/transactions/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["id"], current_tx.id)
+        self.assertEqual(response.data["results"][0]["reference"], "CURRENT-TX")
+
+    def test_transactions_create_api_creates_draft_without_balance_effect(self) -> None:
+        account = create_treasury_account(
+            company=self.company,
+            user=self.user,
+            name="API Draft Tx Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="500.00",
+        )
+
+        response = self.client.post(
+            "/api/company/treasury/transactions/",
+            data={
+                "account_id": account.id,
+                "transaction_type": TreasuryTransaction.TransactionType.INFLOW,
+                "amount": "125.00",
+                "description": "API draft receipt",
+                "reference": "API-DRAFT-001",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["item"]["status"], TreasuryTransaction.TransactionStatus.DRAFT)
+        self.assertEqual(response.data["item"]["amount"], "125.00")
+
+        account.refresh_from_db()
+        self.assertEqual(account.current_balance, Decimal("500.00"))
+
+    def test_transactions_create_api_can_create_posted_transaction(self) -> None:
+        account = create_treasury_account(
+            company=self.company,
+            user=self.user,
+            name="API Posted Tx Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+
+        response = self.client.post(
+            "/api/company/treasury/transactions/",
+            data={
+                "account_id": account.id,
+                "transaction_type": TreasuryTransaction.TransactionType.INFLOW,
+                "amount": "25.00",
+                "status": TreasuryTransaction.TransactionStatus.POSTED,
+                "description": "Create and post",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["item"]["status"], TreasuryTransaction.TransactionStatus.POSTED)
+
+        account.refresh_from_db()
+        self.assertEqual(account.current_balance, Decimal("125.00"))
+
+    def test_transaction_detail_api_returns_transaction(self) -> None:
+        account = create_treasury_account(
+            company=self.company,
+            user=self.user,
+            name="API Detail Tx Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+        transaction = create_treasury_transaction(
+            company=self.company,
+            account=account,
+            user=self.user,
+            transaction_type=TreasuryTransaction.TransactionType.INFLOW,
+            amount="30.00",
+            description="Detail transaction",
+        )
+
+        response = self.client.get(f"/api/company/treasury/transactions/{transaction.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["item"]["id"], transaction.id)
+        self.assertEqual(response.data["item"]["description"], "Detail transaction")
+
+    def test_transaction_update_api_updates_draft_transaction_only(self) -> None:
+        account = create_treasury_account(
+            company=self.company,
+            user=self.user,
+            name="API Update Tx Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+        transaction = create_treasury_transaction(
+            company=self.company,
+            account=account,
+            user=self.user,
+            transaction_type=TreasuryTransaction.TransactionType.INFLOW,
+            amount="30.00",
+            description="Before update",
+        )
+
+        response = self.client.patch(
+            f"/api/company/treasury/transactions/{transaction.id}/",
+            data={
+                "amount": "45.00",
+                "description": "After update",
+                "reference": "UPDATED-TX",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["item"]["amount"], "45.00")
+        self.assertEqual(response.data["item"]["description"], "After update")
+
+        transaction.refresh_from_db()
+        self.assertEqual(transaction.amount, Decimal("45.00"))
+        self.assertEqual(transaction.reference, "UPDATED-TX")
+
+    def test_post_transaction_api_posts_transaction_and_updates_balance(self) -> None:
+        account = create_treasury_account(
+            company=self.company,
+            user=self.user,
+            name="API Post Tx Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+        transaction = create_treasury_transaction(
+            company=self.company,
+            account=account,
+            user=self.user,
+            transaction_type=TreasuryTransaction.TransactionType.INFLOW,
+            amount="80.00",
+        )
+
+        response = self.client.post(
+            f"/api/company/treasury/transactions/{transaction.id}/post/",
+            data={},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["item"]["status"], TreasuryTransaction.TransactionStatus.POSTED)
+
+        account.refresh_from_db()
+        self.assertEqual(account.current_balance, Decimal("180.00"))
+
+    def test_cancel_transaction_api_cancels_posted_transaction_and_reverses_balance(self) -> None:
+        account = create_treasury_account(
+            company=self.company,
+            user=self.user,
+            name="API Cancel Tx Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+        transaction = create_treasury_transaction(
+            company=self.company,
+            account=account,
+            user=self.user,
+            transaction_type=TreasuryTransaction.TransactionType.INFLOW,
+            amount="80.00",
+        )
+        post_treasury_transaction(
+            company=self.company,
+            treasury_transaction=transaction,
+            user=self.user,
+        )
+
+        response = self.client.post(
+            f"/api/company/treasury/transactions/{transaction.id}/cancel/",
+            data={"reason": "API cancellation"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["item"]["status"], TreasuryTransaction.TransactionStatus.CANCELLED)
+
+        account.refresh_from_db()
+        transaction.refresh_from_db()
+
+        self.assertEqual(account.current_balance, Decimal("100.00"))
+        self.assertEqual(transaction.cancellation_reason, "API cancellation")
+
+    def test_api_rejects_foreign_account_detail_access(self) -> None:
+        foreign_account = create_treasury_account(
+            company=self.other_company,
+            user=self.user,
+            name="Foreign Detail Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+
+        response = self.client.get(f"/api/company/treasury/accounts/{foreign_account.id}/")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.data["success"])
+
+    def test_api_rejects_foreign_transaction_detail_access(self) -> None:
+        foreign_account = create_treasury_account(
+            company=self.other_company,
+            user=self.user,
+            name="Foreign Tx Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+        foreign_transaction = create_treasury_transaction(
+            company=self.other_company,
+            account=foreign_account,
+            user=self.user,
+            transaction_type=TreasuryTransaction.TransactionType.INFLOW,
+            amount="10.00",
+        )
+
+        response = self.client.get(
+            f"/api/company/treasury/transactions/{foreign_transaction.id}/"
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.data["success"])
+
+    def test_unauthenticated_api_request_is_rejected(self) -> None:
+        anonymous_client = APIClient()
+
+        response = anonymous_client.get("/api/company/treasury/accounts/")
+
+        self.assertIn(response.status_code, [401, 403])
