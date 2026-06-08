@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 accounts/models.py
-# 🧠 PrimeyAcc | Accounts Models V1.7
+# 🧠 PrimeyAcc | Accounts Models V1.8
 # ------------------------------------------------------------
 # ✅ User Profile
 # ✅ Workspace Type Foundation
@@ -16,6 +16,7 @@
 # ✅ Company Sales Invoices Permissions
 # ✅ Company Purchases Bills Permissions
 # ✅ Company Inventory & Warehouses Permissions
+# ✅ Company Accounting Permissions
 # ✅ Safe Default Company Membership Resolver
 # ✅ Audit Fields
 # ------------------------------------------------------------
@@ -31,6 +32,7 @@
 # - فواتير المبيعات لها صلاحيات دقيقة منفصلة داخل company.sales.invoices
 # - فواتير الموردين لها صلاحيات دقيقة منفصلة داخل company.purchases.bills
 # - المخزون والمستودعات لها صلاحيات دقيقة داخل company.inventory.*
+# - المحاسبة لها صلاحيات دقيقة داخل company.accounting.*
 # ============================================================
 
 from __future__ import annotations
@@ -190,6 +192,14 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.accounting.view",
         "company.accounting.create",
         "company.accounting.update",
+        "company.accounting.accounts.view",
+        "company.accounting.accounts.create",
+        "company.accounting.accounts.update",
+        "company.accounting.journals.view",
+        "company.accounting.journals.create",
+        "company.accounting.journals.post",
+        "company.accounting.journals.reverse",
+        "company.accounting.reports.view",
         "company.reports.view",
     ],
     CompanyRole.MANAGER: [
@@ -221,6 +231,10 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.inventory.warehouses.view",
         "company.inventory.stock.view",
         "company.inventory.movements.view",
+        "company.accounting.view",
+        "company.accounting.accounts.view",
+        "company.accounting.journals.view",
+        "company.accounting.reports.view",
         "company.reports.view",
     ],
     CompanyRole.ACCOUNTANT: [
@@ -247,6 +261,14 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.accounting.view",
         "company.accounting.create",
         "company.accounting.update",
+        "company.accounting.accounts.view",
+        "company.accounting.accounts.create",
+        "company.accounting.accounts.update",
+        "company.accounting.journals.view",
+        "company.accounting.journals.create",
+        "company.accounting.journals.post",
+        "company.accounting.journals.reverse",
+        "company.accounting.reports.view",
         "company.reports.view",
     ],
     CompanyRole.CASHIER: [
@@ -343,6 +365,10 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.inventory.warehouses.view",
         "company.inventory.stock.view",
         "company.inventory.movements.view",
+        "company.accounting.view",
+        "company.accounting.accounts.view",
+        "company.accounting.journals.view",
+        "company.accounting.reports.view",
         "company.reports.view",
     ],
 }
