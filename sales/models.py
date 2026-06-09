@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 sales/models.py
-# 🧠 PrimeyAcc | Sales Models V1.0
+# 🧠 PrimeyAcc | Sales Models V1.1
 # ------------------------------------------------------------
 # ✅ Company-scoped sales invoices foundation
 # ✅ SalesInvoice header model
@@ -10,6 +10,7 @@
 # ✅ Customer validation through BusinessParty
 # ✅ Catalog item snapshot for invoice lines
 # ✅ Safe totals recalculation at model level
+# ✅ Payment allocation helpers for treasury integration
 # ✅ Ready for APIs, payments, accounting, inventory, and POS later
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
@@ -18,7 +19,8 @@
 # - الفرع اختياري، وإذا تم ربطه يجب أن يكون تابعًا لنفس الشركة
 # - العميل اختياري حاليًا، وإذا تم ربطه يجب أن يكون عميلًا لنفس الشركة
 # - بند الفاتورة يحفظ snapshot للسعر والضريبة والوصف وقت إنشاء الفاتورة
-# - لا يتم إنشاء قيود محاسبية أو حركات مخزون في هذه المرحلة
+# - المدفوعات تعدل paid_amount / balance_due / payment_status فقط
+# - لا يتم إنشاء قيود محاسبية أو حركات مخزون مباشرة من models.py
 # ============================================================
 
 from __future__ import annotations
@@ -84,8 +86,6 @@ class SalesInvoiceStatus(models.TextChoices):
 class SalesInvoicePaymentStatus(models.TextChoices):
     """
     Payment status.
-
-    Real payment allocation will be added in a later phase.
     """
 
     UNPAID = "UNPAID", "Unpaid"
@@ -113,9 +113,8 @@ class SalesInvoice(models.Model):
     Company-scoped sales invoice header.
 
     This is the operational sales document foundation.
-    It does not post accounting entries and does not move inventory yet.
-    Those integrations should be added later when accounting, payments,
-    inventory, and POS phases are introduced.
+    It does not post accounting entries and does not move inventory directly.
+    Those integrations should be handled through services.py layers.
     """
 
     company = models.ForeignKey(
@@ -258,7 +257,7 @@ class SalesInvoice(models.Model):
         default=MONEY_ZERO,
         validators=[MinValueValidator(MONEY_ZERO)],
         verbose_name="Paid amount",
-        help_text="Payment allocation will be handled in a later phase.",
+        help_text="Updated by treasury payment allocation services.",
     )
 
     balance_due = models.DecimalField(
@@ -412,6 +411,20 @@ class SalesInvoice(models.Model):
     def can_be_cancelled(self) -> bool:
         return self.status == SalesInvoiceStatus.ISSUED
 
+    @property
+    def can_receive_payment(self) -> bool:
+        """
+        Only issued invoices can receive allocated payments.
+        """
+        return self.status == SalesInvoiceStatus.ISSUED
+
+    @property
+    def remaining_amount(self) -> Decimal:
+        """
+        Current unpaid invoice amount.
+        """
+        return quantize_money(self.balance_due)
+
     def clean(self) -> None:
         """
         Validate tenant consistency and invoice state.
@@ -462,6 +475,11 @@ class SalesInvoice(models.Model):
                 {"discount_amount": "Discount cannot be greater than subtotal."}
             )
 
+        if self.paid_amount > self.total_amount:
+            raise ValidationError(
+                {"paid_amount": "Paid amount cannot be greater than invoice total."}
+            )
+
         expected_total = quantize_money(
             self.subtotal - self.discount_amount + self.tax_amount
         )
@@ -475,6 +493,29 @@ class SalesInvoice(models.Model):
 
         self.balance_due = expected_balance
 
+        self.refresh_payment_status()
+
+        if self.status == SalesInvoiceStatus.CANCELLED and not self.cancelled_at:
+            self.cancelled_at = timezone.now()
+
+        if self.status == SalesInvoiceStatus.ISSUED and not self.issued_at:
+            self.issued_at = timezone.now()
+
+    def refresh_payment_status(self) -> None:
+        """
+        Refresh payment_status and balance_due from total_amount and paid_amount.
+
+        This method does not save by itself.
+        """
+        self.total_amount = quantize_money(self.total_amount)
+        self.paid_amount = quantize_money(self.paid_amount)
+
+        balance = quantize_money(self.total_amount - self.paid_amount)
+        if balance < MONEY_ZERO:
+            balance = MONEY_ZERO
+
+        self.balance_due = balance
+
         if self.paid_amount <= MONEY_ZERO:
             self.payment_status = SalesInvoicePaymentStatus.UNPAID
         elif self.paid_amount < self.total_amount:
@@ -482,11 +523,98 @@ class SalesInvoice(models.Model):
         else:
             self.payment_status = SalesInvoicePaymentStatus.PAID
 
-        if self.status == SalesInvoiceStatus.CANCELLED and not self.cancelled_at:
-            self.cancelled_at = timezone.now()
+    def apply_payment_allocation(
+        self,
+        amount: Decimal | int | float | str,
+        *,
+        save: bool = True,
+        user=None,
+    ) -> None:
+        """
+        Apply a customer payment allocation to this invoice.
 
-        if self.status == SalesInvoiceStatus.ISSUED and not self.issued_at:
-            self.issued_at = timezone.now()
+        Rules:
+        - invoice must belong to the same company as the caller/service context
+          before this method is called
+        - invoice must be issued
+        - amount must be positive
+        - amount cannot exceed current balance_due
+        """
+        allocation_amount = quantize_money(amount)
+
+        if allocation_amount <= MONEY_ZERO:
+            raise ValidationError({"amount": "Payment allocation amount must be greater than zero."})
+
+        if not self.can_receive_payment:
+            raise ValidationError({"status": "Only issued invoices can receive payments."})
+
+        current_balance = quantize_money(self.balance_due)
+        if allocation_amount > current_balance:
+            raise ValidationError({"amount": "Payment allocation cannot exceed invoice balance due."})
+
+        self.paid_amount = quantize_money(self.paid_amount + allocation_amount)
+        self.refresh_payment_status()
+
+        if user:
+            self.updated_by = user
+
+        self.full_clean()
+
+        if save:
+            update_fields = [
+                "paid_amount",
+                "balance_due",
+                "payment_status",
+                "updated_by",
+                "updated_at",
+            ]
+
+            if not user:
+                update_fields.remove("updated_by")
+
+            self.save(update_fields=update_fields)
+
+    def reverse_payment_allocation(
+        self,
+        amount: Decimal | int | float | str,
+        *,
+        save: bool = True,
+        user=None,
+    ) -> None:
+        """
+        Reverse a previous customer payment allocation from this invoice.
+
+        Used when cancelling/reversing a confirmed CustomerPayment.
+        """
+        reversal_amount = quantize_money(amount)
+
+        if reversal_amount <= MONEY_ZERO:
+            raise ValidationError({"amount": "Payment reversal amount must be greater than zero."})
+
+        if reversal_amount > self.paid_amount:
+            raise ValidationError({"amount": "Payment reversal cannot exceed paid amount."})
+
+        self.paid_amount = quantize_money(self.paid_amount - reversal_amount)
+        self.refresh_payment_status()
+
+        if user:
+            self.updated_by = user
+
+        self.full_clean()
+
+        if save:
+            update_fields = [
+                "paid_amount",
+                "balance_due",
+                "payment_status",
+                "updated_by",
+                "updated_at",
+            ]
+
+            if not user:
+                update_fields.remove("updated_by")
+
+            self.save(update_fields=update_fields)
 
     def build_customer_snapshot(self) -> dict:
         """
@@ -553,8 +681,7 @@ class SalesInvoice(models.Model):
         """
         Recalculate invoice totals from lines.
 
-        This is intentionally simple in Phase 6.
-        Accounting, payments, and inventory effects come later.
+        Accounting, payments, and inventory effects are handled outside models.py.
         """
         if not self.pk:
             return
@@ -572,17 +699,11 @@ class SalesInvoice(models.Model):
         self.taxable_amount = quantize_money(totals.get("taxable_amount") or MONEY_ZERO)
         self.tax_amount = quantize_money(totals.get("tax_amount") or MONEY_ZERO)
         self.total_amount = quantize_money(totals.get("total_amount") or MONEY_ZERO)
-        self.balance_due = quantize_money(self.total_amount - self.paid_amount)
 
-        if self.balance_due < MONEY_ZERO:
-            self.balance_due = MONEY_ZERO
+        if self.paid_amount > self.total_amount:
+            self.paid_amount = self.total_amount
 
-        if self.paid_amount <= MONEY_ZERO:
-            self.payment_status = SalesInvoicePaymentStatus.UNPAID
-        elif self.paid_amount < self.total_amount:
-            self.payment_status = SalesInvoicePaymentStatus.PARTIAL
-        else:
-            self.payment_status = SalesInvoicePaymentStatus.PAID
+        self.refresh_payment_status()
 
         if save:
             self.save(
@@ -639,6 +760,11 @@ class SalesInvoice(models.Model):
         """
         if not self.can_be_cancelled:
             raise ValidationError({"status": "Only issued invoices can be cancelled."})
+
+        if self.paid_amount > MONEY_ZERO:
+            raise ValidationError(
+                {"payment_status": "Paid or partially paid invoices cannot be cancelled directly."}
+            )
 
         self.status = SalesInvoiceStatus.CANCELLED
         self.cancelled_at = timezone.now()

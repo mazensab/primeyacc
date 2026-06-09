@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 purchases/models.py
-# 🧠 PrimeyAcc | Company Purchases Models V1.0
+# 🧠 PrimeyAcc | Company Purchases Models V1.1
 # ------------------------------------------------------------
 # ✅ Purchase bills foundation for suppliers
 # ✅ Company-scoped tenant isolation
@@ -9,6 +9,8 @@
 # ✅ Catalog item snapshot at purchase time
 # ✅ VAT, discount, subtotal, and total calculations
 # ✅ Draft / Posted / Cancelled lifecycle
+# ✅ Supplier payment allocation helpers
+# ✅ paid_amount / balance_due / payment_status
 # ✅ Audit fields
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
@@ -18,6 +20,8 @@
 # - الفرع إن وجد يجب أن يتبع نفس الشركة
 # - الصنف يجب أن يتبع نفس الشركة ويكون قابلًا للشراء
 # - بعد اعتماد الفاتورة لا يتم تعديلها مباشرة
+# - المدفوعات تعدل paid_amount / balance_due / payment_status فقط
+# - لا يتم إنشاء قيود محاسبية أو حركات مخزون مباشرة من models.py
 # ============================================================
 
 from __future__ import annotations
@@ -76,15 +80,25 @@ class PurchaseBillStatus(models.TextChoices):
     CANCELLED = "CANCELLED", "Cancelled"
 
 
+class PurchaseBillPaymentStatus(models.TextChoices):
+    """
+    Supplier bill payment status.
+    """
+
+    UNPAID = "UNPAID", "Unpaid"
+    PARTIAL = "PARTIAL", "Partially paid"
+    PAID = "PAID", "Paid"
+
+
 class PurchaseBill(models.Model):
     """
     Company-scoped supplier purchase bill.
 
     This model is the foundation for:
     - supplier bills
-    - purchase accounting later
-    - payable balances later
-    - inventory receiving later
+    - purchase accounting
+    - supplier payable balances
+    - inventory receiving
 
     Tenant isolation:
     The company must be assigned from backend request.company.
@@ -123,6 +137,14 @@ class PurchaseBill(models.Model):
         default=PurchaseBillStatus.DRAFT,
         db_index=True,
         verbose_name="Status",
+    )
+
+    payment_status = models.CharField(
+        max_length=20,
+        choices=PurchaseBillPaymentStatus.choices,
+        default=PurchaseBillPaymentStatus.UNPAID,
+        db_index=True,
+        verbose_name="Payment status",
     )
 
     bill_number = models.CharField(
@@ -192,6 +214,23 @@ class PurchaseBill(models.Model):
         default=MONEY_ZERO,
         validators=[MinValueValidator(MONEY_ZERO)],
         verbose_name="Total amount",
+    )
+
+    paid_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Paid amount",
+        help_text="Updated by treasury supplier payment allocation services.",
+    )
+
+    balance_due = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Balance due",
     )
 
     posted_at = models.DateTimeField(
@@ -284,6 +323,7 @@ class PurchaseBill(models.Model):
         ]
         indexes = [
             models.Index(fields=["company", "status"]),
+            models.Index(fields=["company", "payment_status"]),
             models.Index(fields=["company", "bill_date"]),
             models.Index(fields=["company", "due_date"]),
             models.Index(fields=["company", "supplier"]),
@@ -325,12 +365,36 @@ class PurchaseBill(models.Model):
             PurchaseBillStatus.POSTED,
         ]
 
+    @property
+    def can_receive_payment(self) -> bool:
+        """
+        Only posted purchase bills can receive supplier payment allocation.
+        """
+        return self.status == PurchaseBillStatus.POSTED
+
+    @property
+    def remaining_amount(self) -> Decimal:
+        """
+        Current unpaid supplier bill amount.
+        """
+        return quantize_money(self.balance_due)
+
     def clean(self) -> None:
         super().clean()
 
         self.bill_number = (self.bill_number or "").strip()
         self.supplier_bill_number = (self.supplier_bill_number or "").strip()
         self.currency_code = (self.currency_code or "SAR").strip().upper()
+        self.cancellation_reason = (self.cancellation_reason or "").strip()
+        self.notes = (self.notes or "").strip()
+
+        self.subtotal_amount = quantize_money(self.subtotal_amount)
+        self.discount_amount = quantize_money(self.discount_amount)
+        self.taxable_amount = quantize_money(self.taxable_amount)
+        self.tax_amount = quantize_money(self.tax_amount)
+        self.total_amount = quantize_money(self.total_amount)
+        self.paid_amount = quantize_money(self.paid_amount)
+        self.balance_due = quantize_money(self.balance_due)
 
         if not self.bill_number:
             raise ValidationError({"bill_number": "Purchase bill number is required."})
@@ -370,8 +434,130 @@ class PurchaseBill(models.Model):
         if self.total_amount < MONEY_ZERO:
             raise ValidationError({"total_amount": "Total amount cannot be negative."})
 
+        if self.paid_amount > self.total_amount:
+            raise ValidationError(
+                {"paid_amount": "Paid amount cannot be greater than bill total."}
+            )
+
         if self.due_date and self.bill_date and self.due_date < self.bill_date:
             raise ValidationError({"due_date": "Due date cannot be before bill date."})
+
+        self.refresh_payment_status()
+
+    def refresh_payment_status(self) -> None:
+        """
+        Refresh payment_status and balance_due from total_amount and paid_amount.
+
+        This method does not save by itself.
+        """
+        self.total_amount = quantize_money(self.total_amount)
+        self.paid_amount = quantize_money(self.paid_amount)
+
+        balance = quantize_money(self.total_amount - self.paid_amount)
+        if balance < MONEY_ZERO:
+            balance = MONEY_ZERO
+
+        self.balance_due = balance
+
+        if self.paid_amount <= MONEY_ZERO:
+            self.payment_status = PurchaseBillPaymentStatus.UNPAID
+        elif self.paid_amount < self.total_amount:
+            self.payment_status = PurchaseBillPaymentStatus.PARTIAL
+        else:
+            self.payment_status = PurchaseBillPaymentStatus.PAID
+
+    def apply_payment_allocation(
+        self,
+        amount: Decimal | int | float | str,
+        *,
+        save: bool = True,
+        user=None,
+    ) -> None:
+        """
+        Apply a supplier payment allocation to this purchase bill.
+
+        Rules:
+        - bill must belong to the same company as the caller/service context
+          before this method is called
+        - bill must be posted
+        - amount must be positive
+        - amount cannot exceed current balance_due
+        """
+        allocation_amount = quantize_money(amount)
+
+        if allocation_amount <= MONEY_ZERO:
+            raise ValidationError({"amount": "Payment allocation amount must be greater than zero."})
+
+        if not self.can_receive_payment:
+            raise ValidationError({"status": "Only posted purchase bills can receive payments."})
+
+        current_balance = quantize_money(self.balance_due)
+        if allocation_amount > current_balance:
+            raise ValidationError({"amount": "Payment allocation cannot exceed bill balance due."})
+
+        self.paid_amount = quantize_money(self.paid_amount + allocation_amount)
+        self.refresh_payment_status()
+
+        if user:
+            self.updated_by = user
+
+        self.full_clean()
+
+        if save:
+            update_fields = [
+                "paid_amount",
+                "balance_due",
+                "payment_status",
+                "updated_by",
+                "updated_at",
+            ]
+
+            if not user:
+                update_fields.remove("updated_by")
+
+            self.save(update_fields=update_fields)
+
+    def reverse_payment_allocation(
+        self,
+        amount: Decimal | int | float | str,
+        *,
+        save: bool = True,
+        user=None,
+    ) -> None:
+        """
+        Reverse a previous supplier payment allocation from this purchase bill.
+
+        Used when cancelling/reversing a confirmed SupplierPayment.
+        """
+        reversal_amount = quantize_money(amount)
+
+        if reversal_amount <= MONEY_ZERO:
+            raise ValidationError({"amount": "Payment reversal amount must be greater than zero."})
+
+        if reversal_amount > self.paid_amount:
+            raise ValidationError({"amount": "Payment reversal cannot exceed paid amount."})
+
+        self.paid_amount = quantize_money(self.paid_amount - reversal_amount)
+        self.refresh_payment_status()
+
+        if user:
+            self.updated_by = user
+
+        self.full_clean()
+
+        if save:
+            update_fields = [
+                "paid_amount",
+                "balance_due",
+                "payment_status",
+                "updated_by",
+                "updated_at",
+            ]
+
+            if not user:
+                update_fields.remove("updated_by")
+
+            self.save(update_fields=update_fields)
 
     def recalculate_totals(self, save: bool = True) -> None:
         """
@@ -398,6 +584,11 @@ class PurchaseBill(models.Model):
         self.tax_amount = quantize_money(tax)
         self.total_amount = quantize_money(total)
 
+        if self.paid_amount > self.total_amount:
+            self.paid_amount = self.total_amount
+
+        self.refresh_payment_status()
+
         if save:
             self.full_clean()
             self.save(
@@ -407,6 +598,9 @@ class PurchaseBill(models.Model):
                     "taxable_amount",
                     "tax_amount",
                     "total_amount",
+                    "paid_amount",
+                    "balance_due",
+                    "payment_status",
                     "updated_at",
                 ]
             )
@@ -415,7 +609,7 @@ class PurchaseBill(models.Model):
         """
         Mark bill as posted.
 
-        Accounting, payables, and inventory effects will be handled in later phases.
+        Accounting, payables, and inventory effects are handled in service layers.
         """
         if not self.can_post:
             raise ValidationError("Only draft purchase bills can be posted.")
@@ -443,6 +637,9 @@ class PurchaseBill(models.Model):
                 "taxable_amount",
                 "tax_amount",
                 "total_amount",
+                "paid_amount",
+                "balance_due",
+                "payment_status",
                 "updated_at",
             ]
         )
@@ -451,10 +648,15 @@ class PurchaseBill(models.Model):
         """
         Cancel purchase bill.
 
-        Reversals will be handled in accounting and inventory phases.
+        Reversals are handled in accounting and inventory services.
         """
         if not self.can_cancel:
             raise ValidationError("This purchase bill cannot be cancelled.")
+
+        if self.paid_amount > MONEY_ZERO:
+            raise ValidationError(
+                {"payment_status": "Paid or partially paid purchase bills cannot be cancelled directly."}
+            )
 
         self.status = PurchaseBillStatus.CANCELLED
         self.cancelled_at = timezone.now()

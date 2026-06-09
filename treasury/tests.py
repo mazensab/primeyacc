@@ -1,27 +1,27 @@
-# ============================================================
-# 📂 treasury/tests.py
-# 🧠 PrimeyAcc | Treasury & Payments Tests V1.1
+﻿# ============================================================
+# ًں“‚ treasury/tests.py
+# ًں§  PrimeyAcc | Treasury & Payments Tests V1.1
 # ------------------------------------------------------------
-# ✅ Phase 11.1 Treasury Accounts Foundation tests
-# ✅ Phase 11.2 Treasury Transactions Foundation tests
-# ✅ Phase 11.3 Treasury APIs Foundation tests
-# ✅ Company isolation validation
-# ✅ Safe posting and balance updates
-# ✅ Negative balance prevention
-# ✅ Duplicate posting prevention
-# ✅ Transfer and cancellation behavior
-# ✅ Treasury summary validation
-# ✅ Treasury accounts API validation
-# ✅ Treasury transactions API validation
-# ✅ Treasury summary API validation
+# âœ… Phase 11.1 Treasury Accounts Foundation tests
+# âœ… Phase 11.2 Treasury Transactions Foundation tests
+# âœ… Phase 11.3 Treasury APIs Foundation tests
+# âœ… Company isolation validation
+# âœ… Safe posting and balance updates
+# âœ… Negative balance prevention
+# âœ… Duplicate posting prevention
+# âœ… Transfer and cancellation behavior
+# âœ… Treasury summary validation
+# âœ… Treasury accounts API validation
+# âœ… Treasury transactions API validation
+# âœ… Treasury summary API validation
 # ------------------------------------------------------------
-# القاعدة المعمارية المعتمدة:
-# - لا يتم الاعتماد على company_id القادم من الفرونت
-# - كل اختبار يثبت أن الشركة هي نطاق العزل الأساسي
-# - الرصيد لا يتغير عند إنشاء Draft
-# - الرصيد يتغير فقط عند ترحيل الحركة POSTED
-# - لا يسمح بخلط حسابات أو حركات بين شركات مختلفة
-# - APIs تعتمد على request.company من عضوية الشركة الحالية
+# ط§ظ„ظ‚ط§ط¹ط¯ط© ط§ظ„ظ…ط¹ظ…ط§ط±ظٹط© ط§ظ„ظ…ط¹طھظ…ط¯ط©:
+# - ظ„ط§ ظٹطھظ… ط§ظ„ط§ط¹طھظ…ط§ط¯ ط¹ظ„ظ‰ company_id ط§ظ„ظ‚ط§ط¯ظ… ظ…ظ† ط§ظ„ظپط±ظˆظ†طھ
+# - ظƒظ„ ط§ط®طھط¨ط§ط± ظٹط«ط¨طھ ط£ظ† ط§ظ„ط´ط±ظƒط© ظ‡ظٹ ظ†ط·ط§ظ‚ ط§ظ„ط¹ط²ظ„ ط§ظ„ط£ط³ط§ط³ظٹ
+# - ط§ظ„ط±طµظٹط¯ ظ„ط§ ظٹطھط؛ظٹط± ط¹ظ†ط¯ ط¥ظ†ط´ط§ط، Draft
+# - ط§ظ„ط±طµظٹط¯ ظٹطھط؛ظٹط± ظپظ‚ط· ط¹ظ†ط¯ طھط±ط­ظٹظ„ ط§ظ„ط­ط±ظƒط© POSTED
+# - ظ„ط§ ظٹط³ظ…ط­ ط¨ط®ظ„ط· ط­ط³ط§ط¨ط§طھ ط£ظˆ ط­ط±ظƒط§طھ ط¨ظٹظ† ط´ط±ظƒط§طھ ظ…ط®طھظ„ظپط©
+# - APIs طھط¹طھظ…ط¯ ط¹ظ„ظ‰ request.company ظ…ظ† ط¹ط¶ظˆظٹط© ط§ظ„ط´ط±ظƒط© ط§ظ„ط­ط§ظ„ظٹط©
 # ============================================================
 
 from __future__ import annotations
@@ -69,9 +69,9 @@ class PrimeyAccTestFactoryMixin:
     """
     Shared lightweight factory helpers for PrimeyAcc tests.
 
-    الهدف:
-    بناء شركات ومستخدمين وعضويات بطريقة مرنة لا تكسر الاختبارات
-    عند إضافة حقول اختيارية مستقبلًا على Company.
+    ط§ظ„ظ‡ط¯ظپ:
+    ط¨ظ†ط§ط، ط´ط±ظƒط§طھ ظˆظ…ط³طھط®ط¯ظ…ظٹظ† ظˆط¹ط¶ظˆظٹط§طھ ط¨ط·ط±ظٹظ‚ط© ظ…ط±ظ†ط© ظ„ط§ طھظƒط³ط± ط§ظ„ط§ط®طھط¨ط§ط±ط§طھ
+    ط¹ظ†ط¯ ط¥ط¶ط§ظپط© ط­ظ‚ظˆظ„ ط§ط®طھظٹط§ط±ظٹط© ظ…ط³طھظ‚ط¨ظ„ظ‹ط§ ط¹ظ„ظ‰ Company.
     """
 
     @classmethod
@@ -194,8 +194,8 @@ class TreasuryServiceTests(PrimeyAccTestFactoryMixin, TestCase):
     """
     Tests for the Phase 11 treasury foundation.
 
-    هذه الاختبارات تبني شركات وحسابات خزينة وحركات مالية
-    وتتحقق من العزل والرصيد والترحيل.
+    ظ‡ط°ظ‡ ط§ظ„ط§ط®طھط¨ط§ط±ط§طھ طھط¨ظ†ظٹ ط´ط±ظƒط§طھ ظˆط­ط³ط§ط¨ط§طھ ط®ط²ظٹظ†ط© ظˆط­ط±ظƒط§طھ ظ…ط§ظ„ظٹط©
+    ظˆطھطھط­ظ‚ظ‚ ظ…ظ† ط§ظ„ط¹ط²ظ„ ظˆط§ظ„ط±طµظٹط¯ ظˆط§ظ„طھط±ط­ظٹظ„.
     """
 
     @classmethod
@@ -1139,6 +1139,480 @@ class TreasuryPaymentServiceTests(PrimeyAccTestFactoryMixin, TestCase):
             )
 
 
+
+# ============================================================
+# Payment allocation service tests
+# ============================================================
+
+
+class TreasuryPaymentAllocationServiceTests(PrimeyAccTestFactoryMixin, TestCase):
+    """
+    Tests for linking confirmed payments to sales invoices and purchase bills.
+
+    الهدف:
+    - تأكيد دفعة العميل يحدث فاتورة المبيعات
+    - إلغاء دفعة العميل يعكس فاتورة المبيعات
+    - تأكيد دفعة المورد يحدث فاتورة المشتريات
+    - إلغاء دفعة المورد يعكس فاتورة المشتريات
+    - منع الدفع الزائد عن المتبقي
+    """
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        User = get_user_model()
+
+        cls.user = User.objects.create_user(
+            username="treasury_allocation_user",
+            email="treasury-allocation@example.com",
+            password="StrongPass12345",
+        )
+
+        cls.company_a = cls.create_company(
+            name="PrimeyAcc Allocation Company A",
+            code="ALLOC-A",
+            email="allocation-a@example.com",
+        )
+        cls.company_b = cls.create_company(
+            name="PrimeyAcc Allocation Company B",
+            code="ALLOC-B",
+            email="allocation-b@example.com",
+        )
+
+    @classmethod
+    def create_business_party(
+        cls,
+        *,
+        company,
+        name: str,
+        code: str,
+        party_type: str,
+    ):
+        """
+        Create BusinessParty while staying tolerant to future optional fields.
+        """
+        BusinessParty = apps.get_model("parties", "BusinessParty")
+
+        explicit_values: dict[str, Any] = {
+            "company": company,
+            "company_id": company.id,
+            "code": code,
+            "name": name,
+            "display_name": name,
+            "legal_name": name,
+            "party_type": party_type,
+            "status": "ACTIVE",
+            "email": f"{code.lower()}@example.com",
+            "phone": "0500000000",
+            "mobile": "0500000000",
+            "country": "SA",
+            "city": "Riyadh",
+            "currency_code": "SAR",
+            "currency": "SAR",
+            "is_active": True,
+        }
+
+        payload: dict[str, Any] = {}
+
+        for field in BusinessParty._meta.fields:
+            if field.primary_key or field.auto_created:
+                continue
+
+            if field.name in explicit_values:
+                payload[field.name] = explicit_values[field.name]
+                continue
+
+            if field.has_default() or field.null or field.blank:
+                continue
+
+            if isinstance(field, models.ForeignKey):
+                if field.remote_field and field.remote_field.model._meta.model_name == "company":
+                    payload[field.name] = company
+                continue
+            elif isinstance(field, models.CharField):
+                payload[field.name] = f"{field.name}-{code}"
+            elif isinstance(field, models.TextField):
+                payload[field.name] = ""
+            elif isinstance(field, models.EmailField):
+                payload[field.name] = f"{code.lower()}@example.com"
+            elif isinstance(field, models.BooleanField):
+                payload[field.name] = True
+            elif isinstance(field, models.IntegerField):
+                payload[field.name] = 1
+            elif isinstance(field, models.DecimalField):
+                payload[field.name] = Decimal("0.00")
+            elif isinstance(field, models.DateField):
+                from django.utils import timezone
+
+                payload[field.name] = timezone.localdate()
+            elif isinstance(field, models.DateTimeField):
+                from django.utils import timezone
+
+                payload[field.name] = timezone.now()
+
+        return BusinessParty.objects.create(**payload)
+
+    @classmethod
+    def create_sales_invoice(
+        cls,
+        *,
+        company,
+        total: str = "100.00",
+        paid: str = "0.00",
+        invoice_number: str = "ALLOC-SI-001",
+    ):
+        """
+        Create issued SalesInvoice directly for allocation tests.
+        """
+        SalesInvoice = apps.get_model("sales", "SalesInvoice")
+
+        total_amount = Decimal(total)
+        paid_amount = Decimal(paid)
+        balance_due = total_amount - paid_amount
+
+        invoice = SalesInvoice.objects.create(
+            company=company,
+            invoice_number=invoice_number,
+            status="ISSUED",
+            payment_status="UNPAID" if paid_amount == Decimal("0.00") else "PARTIAL",
+            subtotal=total_amount,
+            discount_amount=Decimal("0.00"),
+            taxable_amount=total_amount,
+            tax_amount=Decimal("0.00"),
+            total_amount=total_amount,
+            paid_amount=paid_amount,
+            balance_due=balance_due,
+            currency_code="SAR",
+        )
+        invoice.full_clean()
+        invoice.save()
+
+        return invoice
+
+    @classmethod
+    def create_purchase_bill(
+        cls,
+        *,
+        company,
+        supplier,
+        total: str = "100.00",
+        paid: str = "0.00",
+        bill_number: str = "ALLOC-PB-001",
+    ):
+        """
+        Create posted PurchaseBill directly for allocation tests.
+        """
+        PurchaseBill = apps.get_model("purchases", "PurchaseBill")
+
+        total_amount = Decimal(total)
+        paid_amount = Decimal(paid)
+        balance_due = total_amount - paid_amount
+
+        bill = PurchaseBill.objects.create(
+            company=company,
+            supplier=supplier,
+            bill_number=bill_number,
+            status="POSTED",
+            payment_status="UNPAID" if paid_amount == Decimal("0.00") else "PARTIAL",
+            subtotal_amount=total_amount,
+            discount_amount=Decimal("0.00"),
+            taxable_amount=total_amount,
+            tax_amount=Decimal("0.00"),
+            total_amount=total_amount,
+            paid_amount=paid_amount,
+            balance_due=balance_due,
+            currency_code="SAR",
+        )
+        bill.full_clean()
+        bill.save()
+
+        return bill
+
+    def test_confirm_customer_payment_allocates_sales_invoice(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Customer Allocation Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+
+        invoice = self.create_sales_invoice(
+            company=self.company_a,
+            total="100.00",
+            invoice_number="ALLOC-SI-CONFIRM",
+        )
+
+        payment = create_customer_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="40.00",
+            payment_method=PaymentMethod.CASH,
+            customer_name="Allocation Customer",
+            sales_invoice=invoice,
+        )
+
+        confirm_customer_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+        )
+
+        account.refresh_from_db()
+        invoice.refresh_from_db()
+        payment.refresh_from_db()
+
+        self.assertEqual(account.current_balance, Decimal("140.00"))
+        self.assertEqual(payment.status, PaymentStatus.CONFIRMED)
+        self.assertEqual(invoice.paid_amount, Decimal("40.00"))
+        self.assertEqual(invoice.balance_due, Decimal("60.00"))
+        self.assertEqual(invoice.payment_status, "PARTIAL")
+
+    def test_cancel_customer_payment_reverses_sales_invoice_allocation(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Customer Allocation Cancel Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+
+        invoice = self.create_sales_invoice(
+            company=self.company_a,
+            total="100.00",
+            invoice_number="ALLOC-SI-CANCEL",
+        )
+
+        payment = create_customer_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="40.00",
+            payment_method=PaymentMethod.CASH,
+            customer_name="Allocation Customer",
+            sales_invoice=invoice,
+            status=PaymentStatus.CONFIRMED,
+        )
+
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.paid_amount, Decimal("40.00"))
+        self.assertEqual(invoice.balance_due, Decimal("60.00"))
+
+        cancel_customer_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+            reason="Reverse allocation",
+        )
+
+        account.refresh_from_db()
+        invoice.refresh_from_db()
+        payment.refresh_from_db()
+
+        self.assertEqual(account.current_balance, Decimal("100.00"))
+        self.assertEqual(payment.status, PaymentStatus.CANCELLED)
+        self.assertEqual(invoice.paid_amount, Decimal("0.00"))
+        self.assertEqual(invoice.balance_due, Decimal("100.00"))
+        self.assertEqual(invoice.payment_status, "UNPAID")
+
+    def test_customer_payment_over_invoice_balance_is_blocked(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Customer Overpayment Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+
+        invoice = self.create_sales_invoice(
+            company=self.company_a,
+            total="100.00",
+            invoice_number="ALLOC-SI-OVER",
+        )
+
+        payment = create_customer_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="150.00",
+            payment_method=PaymentMethod.CASH,
+            customer_name="Overpayment Customer",
+            sales_invoice=invoice,
+        )
+
+        with self.assertRaises(ValidationError):
+            confirm_customer_payment(
+                company=self.company_a,
+                payment=payment,
+                user=self.user,
+            )
+
+        account.refresh_from_db()
+        invoice.refresh_from_db()
+        payment.refresh_from_db()
+
+        self.assertEqual(account.current_balance, Decimal("100.00"))
+        self.assertEqual(payment.status, PaymentStatus.DRAFT)
+        self.assertIsNone(payment.treasury_transaction_id)
+        self.assertEqual(invoice.paid_amount, Decimal("0.00"))
+        self.assertEqual(invoice.balance_due, Decimal("100.00"))
+        self.assertEqual(invoice.payment_status, "UNPAID")
+
+    def test_confirm_supplier_payment_allocates_purchase_bill(self) -> None:
+        supplier = self.create_business_party(
+            company=self.company_a,
+            name="Allocation Supplier",
+            code="ALLOC-SUP-1",
+            party_type="SUPPLIER",
+        )
+
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Supplier Allocation Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="300.00",
+        )
+
+        bill = self.create_purchase_bill(
+            company=self.company_a,
+            supplier=supplier,
+            total="100.00",
+            bill_number="ALLOC-PB-CONFIRM",
+        )
+
+        payment = create_supplier_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="40.00",
+            payment_method=PaymentMethod.CASH,
+            supplier_name="Allocation Supplier",
+            purchase_bill=bill,
+        )
+
+        confirm_supplier_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+        )
+
+        account.refresh_from_db()
+        bill.refresh_from_db()
+        payment.refresh_from_db()
+
+        self.assertEqual(account.current_balance, Decimal("260.00"))
+        self.assertEqual(payment.status, PaymentStatus.CONFIRMED)
+        self.assertEqual(bill.paid_amount, Decimal("40.00"))
+        self.assertEqual(bill.balance_due, Decimal("60.00"))
+        self.assertEqual(bill.payment_status, "PARTIAL")
+
+    def test_cancel_supplier_payment_reverses_purchase_bill_allocation(self) -> None:
+        supplier = self.create_business_party(
+            company=self.company_a,
+            name="Cancel Allocation Supplier",
+            code="ALLOC-SUP-2",
+            party_type="SUPPLIER",
+        )
+
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Supplier Allocation Cancel Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="300.00",
+        )
+
+        bill = self.create_purchase_bill(
+            company=self.company_a,
+            supplier=supplier,
+            total="100.00",
+            bill_number="ALLOC-PB-CANCEL",
+        )
+
+        payment = create_supplier_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="40.00",
+            payment_method=PaymentMethod.CASH,
+            supplier_name="Allocation Supplier",
+            purchase_bill=bill,
+            status=PaymentStatus.CONFIRMED,
+        )
+
+        bill.refresh_from_db()
+        self.assertEqual(bill.paid_amount, Decimal("40.00"))
+        self.assertEqual(bill.balance_due, Decimal("60.00"))
+
+        cancel_supplier_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+            reason="Reverse supplier allocation",
+        )
+
+        account.refresh_from_db()
+        bill.refresh_from_db()
+        payment.refresh_from_db()
+
+        self.assertEqual(account.current_balance, Decimal("300.00"))
+        self.assertEqual(payment.status, PaymentStatus.CANCELLED)
+        self.assertEqual(bill.paid_amount, Decimal("0.00"))
+        self.assertEqual(bill.balance_due, Decimal("100.00"))
+        self.assertEqual(bill.payment_status, "UNPAID")
+
+    def test_supplier_payment_over_bill_balance_is_blocked(self) -> None:
+        supplier = self.create_business_party(
+            company=self.company_a,
+            name="Over Allocation Supplier",
+            code="ALLOC-SUP-3",
+            party_type="SUPPLIER",
+        )
+
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Supplier Overpayment Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="300.00",
+        )
+
+        bill = self.create_purchase_bill(
+            company=self.company_a,
+            supplier=supplier,
+            total="100.00",
+            bill_number="ALLOC-PB-OVER",
+        )
+
+        payment = create_supplier_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="150.00",
+            payment_method=PaymentMethod.CASH,
+            supplier_name="Overpayment Supplier",
+            purchase_bill=bill,
+        )
+
+        with self.assertRaises(ValidationError):
+            confirm_supplier_payment(
+                company=self.company_a,
+                payment=payment,
+                user=self.user,
+            )
+
+        account.refresh_from_db()
+        bill.refresh_from_db()
+        payment.refresh_from_db()
+
+        self.assertEqual(account.current_balance, Decimal("300.00"))
+        self.assertEqual(payment.status, PaymentStatus.DRAFT)
+        self.assertIsNone(payment.treasury_transaction_id)
+        self.assertEqual(bill.paid_amount, Decimal("0.00"))
+        self.assertEqual(bill.balance_due, Decimal("100.00"))
+        self.assertEqual(bill.payment_status, "UNPAID")
+
 # ============================================================
 # API tests
 # ============================================================
@@ -1148,8 +1622,8 @@ class TreasuryAPITests(PrimeyAccTestFactoryMixin, TestCase):
     """
     API tests for Phase 11 treasury endpoints.
 
-    هذه الاختبارات تتحقق من أن endpoints تعمل عبر عضوية الشركة الحالية
-    ولا تعتمد على company_id من الفرونت.
+    ظ‡ط°ظ‡ ط§ظ„ط§ط®طھط¨ط§ط±ط§طھ طھطھط­ظ‚ظ‚ ظ…ظ† ط£ظ† endpoints طھط¹ظ…ظ„ ط¹ط¨ط± ط¹ط¶ظˆظٹط© ط§ظ„ط´ط±ظƒط© ط§ظ„ط­ط§ظ„ظٹط©
+    ظˆظ„ط§ طھط¹طھظ…ط¯ ط¹ظ„ظ‰ company_id ظ…ظ† ط§ظ„ظپط±ظˆظ†طھ.
     """
 
     @classmethod

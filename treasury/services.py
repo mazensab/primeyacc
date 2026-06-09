@@ -1,17 +1,21 @@
 # ============================================================
 # 📂 treasury/services.py
-# 🧠 PrimeyAcc | Treasury & Payments Services V1.1
+# 🧠 PrimeyAcc | Treasury & Payments Services V1.2
 # ------------------------------------------------------------
 # ✅ Phase 11.1 Treasury Accounts Foundation services
 # ✅ Phase 11.2 Treasury Transactions Foundation services
 # ✅ Phase 11.3 Treasury APIs Foundation services
 # ✅ Phase 11.4 Customer & Supplier Payments Foundation services
+# ✅ Phase 11.5 Payment Allocation Foundation services
 # ✅ Company-scoped treasury account creation/update
 # ✅ Company-scoped treasury transaction creation/post/cancel
 # ✅ Company-scoped customer payment create/confirm/cancel
 # ✅ Company-scoped supplier payment create/confirm/cancel
+# ✅ Customer payment allocation to SalesInvoice
+# ✅ Supplier payment allocation to PurchaseBill
 # ✅ Safe balance updates only on posting/confirmation
 # ✅ Negative balance prevention for outflows/transfers/supplier payments
+# ✅ Overpayment prevention for sales invoices and purchase bills
 # ✅ Duplicate posting/confirmation prevention
 # ✅ Summary helpers for /company treasury dashboard
 # ------------------------------------------------------------
@@ -20,9 +24,9 @@
 # - الشركة يجب أن تصل للخدمة من عضوية المستخدم الحالية داخل /company
 # - كل حساب خزينة وحركة خزينة ودفع يجب أن يكون داخل نفس الشركة
 # - الرصيد لا يتغير عند إنشاء Draft، يتغير فقط عند POSTED / CONFIRMED
-# - تأكيد دفعة العميل ينشئ حركة خزينة واردة INFLOW
-# - تأكيد دفعة المورد ينشئ حركة خزينة صادرة OUTFLOW
-# - إلغاء دفعة مؤكدة يلغي حركة الخزينة ويعكس الرصيد بأمان
+# - تأكيد دفعة العميل ينشئ حركة خزينة واردة INFLOW ويحدث فاتورة المبيعات إن وجدت
+# - تأكيد دفعة المورد ينشئ حركة خزينة صادرة OUTFLOW ويحدث فاتورة المشتريات إن وجدت
+# - إلغاء دفعة مؤكدة يلغي حركة الخزينة ويعكس الرصيد ويعكس أثر الفاتورة بأمان
 # - الترحيل المحاسبي التفصيلي سيتم ربطه لاحقًا مع Phase 11 accounting integration
 # ============================================================
 
@@ -36,6 +40,9 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, Q, QuerySet, Sum
 from django.utils import timezone
+
+from purchases.models import PurchaseBill
+from sales.models import SalesInvoice
 
 from .models import (
     CustomerPayment,
@@ -142,6 +149,24 @@ def ensure_payment_is_editable(payment, *, field_name: str = "status") -> None:
 
     if payment.status == PaymentStatus.CANCELLED:
         raise ValidationError({field_name: "Cancelled payment cannot be edited."})
+
+
+def get_sales_invoice_or_raise(company, invoice_id: int) -> SalesInvoice:
+    try:
+        invoice = SalesInvoice.objects.get(id=invoice_id, company=company)
+    except SalesInvoice.DoesNotExist as exc:
+        raise ValidationError({"sales_invoice": "Sales invoice was not found."}) from exc
+
+    return invoice
+
+
+def get_purchase_bill_or_raise(company, bill_id: int) -> PurchaseBill:
+    try:
+        bill = PurchaseBill.objects.get(id=bill_id, company=company)
+    except PurchaseBill.DoesNotExist as exc:
+        raise ValidationError({"purchase_bill": "Purchase bill was not found."}) from exc
+
+    return bill
 
 
 # ---------------------------------------------------------------------
@@ -747,6 +772,99 @@ def _reverse_posted_treasury_transaction_balance(
 
 
 # ---------------------------------------------------------------------
+# Payment allocation helpers
+# ---------------------------------------------------------------------
+
+
+def _lock_customer_payment_invoice(company, payment: CustomerPayment) -> SalesInvoice | None:
+    if not payment.sales_invoice_id:
+        return None
+
+    return SalesInvoice.objects.select_for_update().get(
+        id=payment.sales_invoice_id,
+        company=company,
+    )
+
+
+def _lock_supplier_payment_bill(company, payment: SupplierPayment) -> PurchaseBill | None:
+    if not payment.purchase_bill_id:
+        return None
+
+    return PurchaseBill.objects.select_for_update().get(
+        id=payment.purchase_bill_id,
+        company=company,
+    )
+
+
+def _apply_customer_payment_invoice_allocation(
+    *,
+    company,
+    payment: CustomerPayment,
+    user=None,
+) -> None:
+    invoice = _lock_customer_payment_invoice(company, payment)
+    if invoice is None:
+        return
+
+    invoice.apply_payment_allocation(
+        payment.amount,
+        save=True,
+        user=user,
+    )
+
+
+def _reverse_customer_payment_invoice_allocation(
+    *,
+    company,
+    payment: CustomerPayment,
+    user=None,
+) -> None:
+    invoice = _lock_customer_payment_invoice(company, payment)
+    if invoice is None:
+        return
+
+    invoice.reverse_payment_allocation(
+        payment.amount,
+        save=True,
+        user=user,
+    )
+
+
+def _apply_supplier_payment_bill_allocation(
+    *,
+    company,
+    payment: SupplierPayment,
+    user=None,
+) -> None:
+    bill = _lock_supplier_payment_bill(company, payment)
+    if bill is None:
+        return
+
+    bill.apply_payment_allocation(
+        payment.amount,
+        save=True,
+        user=user,
+    )
+
+
+def _reverse_supplier_payment_bill_allocation(
+    *,
+    company,
+    payment: SupplierPayment,
+    user=None,
+) -> None:
+    bill = _lock_supplier_payment_bill(company, payment)
+    if bill is None:
+        return
+
+    bill.reverse_payment_allocation(
+        payment.amount,
+        save=True,
+        user=user,
+    )
+
+
+# ---------------------------------------------------------------------
 # Customer payment services
 # ---------------------------------------------------------------------
 
@@ -931,6 +1049,7 @@ def confirm_customer_payment(
 
     with transaction.atomic():
         payment = CustomerPayment.objects.select_for_update().select_related(
+            "sales_invoice",
             "treasury_account",
             "treasury_transaction",
         ).get(
@@ -943,6 +1062,12 @@ def confirm_customer_payment(
 
         if payment.status == PaymentStatus.CANCELLED:
             raise ValidationError({"status": "Cancelled customer payment cannot be confirmed."})
+
+        _apply_customer_payment_invoice_allocation(
+            company=company,
+            payment=payment,
+            user=user,
+        )
 
         if payment.treasury_transaction_id:
             treasury_transaction = payment.treasury_transaction
@@ -1002,6 +1127,7 @@ def cancel_customer_payment(
 
     with transaction.atomic():
         payment = CustomerPayment.objects.select_for_update().select_related(
+            "sales_invoice",
             "treasury_transaction",
         ).get(
             id=payment.id,
@@ -1021,12 +1147,21 @@ def cancel_customer_payment(
                 }
             )
 
+        was_confirmed = payment.status == PaymentStatus.CONFIRMED
+
         if payment.treasury_transaction_id:
             cancel_treasury_transaction(
                 company=company,
                 treasury_transaction=payment.treasury_transaction,
                 user=user,
                 reason=reason or f"Customer payment {payment.payment_number} cancelled.",
+            )
+
+        if was_confirmed:
+            _reverse_customer_payment_invoice_allocation(
+                company=company,
+                payment=payment,
+                user=user,
             )
 
         payment.status = PaymentStatus.CANCELLED
@@ -1233,6 +1368,7 @@ def confirm_supplier_payment(
 
     with transaction.atomic():
         payment = SupplierPayment.objects.select_for_update().select_related(
+            "purchase_bill",
             "treasury_account",
             "treasury_transaction",
         ).get(
@@ -1245,6 +1381,12 @@ def confirm_supplier_payment(
 
         if payment.status == PaymentStatus.CANCELLED:
             raise ValidationError({"status": "Cancelled supplier payment cannot be confirmed."})
+
+        _apply_supplier_payment_bill_allocation(
+            company=company,
+            payment=payment,
+            user=user,
+        )
 
         if payment.treasury_transaction_id:
             treasury_transaction = payment.treasury_transaction
@@ -1304,6 +1446,7 @@ def cancel_supplier_payment(
 
     with transaction.atomic():
         payment = SupplierPayment.objects.select_for_update().select_related(
+            "purchase_bill",
             "treasury_transaction",
         ).get(
             id=payment.id,
@@ -1323,12 +1466,21 @@ def cancel_supplier_payment(
                 }
             )
 
+        was_confirmed = payment.status == PaymentStatus.CONFIRMED
+
         if payment.treasury_transaction_id:
             cancel_treasury_transaction(
                 company=company,
                 treasury_transaction=payment.treasury_transaction,
                 user=user,
                 reason=reason or f"Supplier payment {payment.payment_number} cancelled.",
+            )
+
+        if was_confirmed:
+            _reverse_supplier_payment_bill_allocation(
+                company=company,
+                payment=payment,
+                user=user,
             )
 
         payment.status = PaymentStatus.CANCELLED
