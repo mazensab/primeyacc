@@ -1511,3 +1511,466 @@ def reverse_journal_entry(
     entry.save(update_fields=update_fields)
 
     return reversal
+# ============================================================
+# 💰 Phase 11.4 | Treasury Customer/Supplier Payment Accounting
+# ============================================================
+
+AUTO_SOURCE_TYPE_CUSTOMER_PAYMENT = "customer_payment"
+AUTO_SOURCE_TYPE_SUPPLIER_PAYMENT = "supplier_payment"
+POSTING_SOURCE_TREASURY = getattr(PostingSource, "TREASURY", PostingSource.OTHER)
+
+
+def _payment_number(payment: Any, *, fallback_prefix: str) -> str:
+    """
+    Return a safe payment number for references.
+    """
+    number = _clean_text(getattr(payment, "payment_number", ""))
+    if number:
+        return number
+
+    payment_id = getattr(payment, "pk", None) or getattr(payment, "id", None) or ""
+    return f"{fallback_prefix}-{payment_id}"
+
+
+def _ensure_confirmed_payment(payment: Any, *, payment_label: str) -> None:
+    """
+    Ensure payment is confirmed before posting to accounting.
+    """
+    status = _clean_text(getattr(payment, "status", "")).upper()
+
+    if status != "CONFIRMED":
+        raise AccountingPostingError(f"لا يمكن ترحيل {payment_label} غير مؤكدة محاسبيا.")
+
+
+def _resolve_treasury_accounting_account(company, treasury_account: Any) -> Account:
+    """
+    Resolve accounting account for treasury account.
+
+    Mapping:
+    - CASH   -> AccountingAccountPurpose.CASH
+    - BANK   -> AccountingAccountPurpose.BANK
+    - WALLET -> 110103 Digital Wallets, fallback CASH
+    - Other  -> CASH fallback
+    """
+    if not treasury_account:
+        raise AccountingConfigurationError("حساب الخزينة مطلوب للترحيل المحاسبي.")
+
+    if getattr(treasury_account, "company_id", None) != getattr(company, "pk", None):
+        raise AccountingConfigurationError("حساب الخزينة لا يتبع نفس الشركة.")
+
+    account_type = _clean_text(getattr(treasury_account, "account_type", "")).upper()
+
+    if account_type == "BANK":
+        return get_account_by_purpose(
+            company,
+            AccountingAccountPurpose.BANK,
+            required=True,
+        )
+
+    if account_type == "WALLET":
+        wallet_account = get_account_by_code(
+            company,
+            "110103",
+            required=False,
+        )
+        if wallet_account:
+            return wallet_account
+
+    return get_account_by_purpose(
+        company,
+        AccountingAccountPurpose.CASH,
+        required=True,
+    )
+
+
+def _mark_payment_accounting_posted(payment: Any, entry: JournalEntry) -> None:
+    """
+    Mark operational payment as accounting-posted when the model supports these fields.
+    """
+    update_fields: list[str] = []
+
+    if hasattr(payment, "accounting_entry"):
+        payment.accounting_entry = entry
+        update_fields.append("accounting_entry")
+
+    if hasattr(payment, "is_accounting_posted"):
+        payment.is_accounting_posted = True
+        update_fields.append("is_accounting_posted")
+
+    if hasattr(payment, "accounting_posted_at"):
+        payment.accounting_posted_at = timezone.now()
+        update_fields.append("accounting_posted_at")
+
+    if update_fields:
+        update_fields.append("updated_at")
+        payment.save(update_fields=update_fields)
+
+
+def find_customer_payment_journal_entry(payment: Any) -> JournalEntry | None:
+    """
+    Find the existing accounting entry linked to a customer payment.
+    """
+    if not payment:
+        return None
+
+    company = getattr(payment, "company", None)
+    if not company:
+        return None
+
+    payment_number = _payment_number(payment, fallback_prefix="CUSTOMER-PAYMENT")
+
+    return _get_existing_auto_entry(
+        company=company,
+        source_type=AUTO_SOURCE_TYPE_CUSTOMER_PAYMENT,
+        source_id=getattr(payment, "pk", None),
+        source_number=payment_number,
+    )
+
+
+@transaction.atomic
+def post_customer_payment_to_accounting(
+    payment: Any,
+    *,
+    actor: Any = None,
+    auto_post: bool = True,
+) -> JournalEntry:
+    """
+    Create and optionally post an automatic accounting journal entry for a confirmed customer payment.
+
+    Accounting treatment:
+    - Debit  Treasury/Cash/Bank       = payment.amount
+    - Credit Accounts Receivable      = payment.amount
+
+    Safety:
+    - Uses payment.company as tenant source.
+    - Refuses non-confirmed payments.
+    - Prevents duplicate entries for same payment.
+    - Links entry back to payment when fields exist.
+    """
+    if not payment:
+        raise AccountingPostingError("دفعة العميل مطلوبة للترحيل المحاسبي.")
+
+    company = getattr(payment, "company", None)
+    _validate_company(company)
+
+    if getattr(payment, "company_id", None) != getattr(company, "pk", None):
+        raise AccountingPostingError("دفعة العميل لا تتبع الشركة المحددة.")
+
+    _ensure_confirmed_payment(payment, payment_label="دفعة عميل")
+
+    payment_number = _payment_number(payment, fallback_prefix="CUSTOMER-PAYMENT")
+
+    existing = _get_existing_auto_entry(
+        company=company,
+        source_type=AUTO_SOURCE_TYPE_CUSTOMER_PAYMENT,
+        source_id=payment.pk,
+        source_number=payment_number,
+    )
+
+    if existing:
+        if auto_post and existing.status == JournalEntryStatus.DRAFT:
+            existing = post_journal_entry(existing, actor=actor)
+        _mark_payment_accounting_posted(payment, existing)
+        return existing
+
+    amount = _money(getattr(payment, "amount", MONEY_ZERO))
+
+    if amount <= MONEY_ZERO:
+        raise AccountingPostingError("لا يمكن ترحيل دفعة عميل بمبلغ صفري.")
+
+    seed_company_chart_of_accounts(company)
+
+    treasury_account = _resolve_treasury_accounting_account(
+        company,
+        getattr(payment, "treasury_account", None),
+    )
+
+    receivable_account = get_account_by_purpose(
+        company,
+        AccountingAccountPurpose.ACCOUNTS_RECEIVABLE,
+        source=AccountingRoutingSource.SALES_INVOICE,
+        required=True,
+    )
+
+    currency = _clean_currency(getattr(payment, "currency", "") or "SAR")
+    entry_date = getattr(payment, "payment_date", None) or timezone.localdate()
+
+    sales_invoice = getattr(payment, "sales_invoice", None)
+    customer_id = (
+        _clean_text(getattr(sales_invoice, "customer_id", "") or "")
+        or _clean_text(getattr(payment, "customer_id", "") or "")
+    )
+
+    entry = create_journal_entry_header(
+        company=company,
+        entry_date=entry_date,
+        entry_number=generate_journal_entry_number(company, prefix="CPAY"),
+        posting_source=POSTING_SOURCE_TREASURY,
+        reference=payment_number,
+        external_reference=_clean_text(getattr(payment, "reference", "")),
+        description=f"قيد تلقائي لدفعة عميل {payment_number}",
+        notes="تم إنشاء هذا القيد تلقائيا عند تأكيد دفعة العميل.",
+        currency=currency,
+        source_type=AUTO_SOURCE_TYPE_CUSTOMER_PAYMENT,
+        source_id=_source_id(payment.pk),
+        source_number=payment_number,
+        is_auto_posted=True,
+        actor=actor,
+    )
+
+    lines: list[EntryLinePayload] = [
+        EntryLinePayload(
+            account=treasury_account,
+            description=f"تحصيل دفعة عميل {payment_number}",
+            debit_amount=amount,
+            credit_amount=MONEY_ZERO,
+            currency=currency,
+            party_type="customer" if customer_id else "",
+            party_id=customer_id,
+            source_line_id="customer-payment-treasury",
+            sort_order=1,
+            metadata={
+                "source": AUTO_SOURCE_TYPE_CUSTOMER_PAYMENT,
+                "payment_id": payment.pk,
+                "payment_number": payment_number,
+                "treasury_account_id": getattr(payment, "treasury_account_id", None),
+                "sales_invoice_id": getattr(payment, "sales_invoice_id", None),
+            },
+        ),
+        EntryLinePayload(
+            account=receivable_account,
+            description=f"تسوية ذمم مدينة من دفعة عميل {payment_number}",
+            debit_amount=MONEY_ZERO,
+            credit_amount=amount,
+            currency=currency,
+            party_type="customer" if customer_id else "",
+            party_id=customer_id,
+            source_line_id="customer-payment-receivable",
+            sort_order=2,
+            metadata={
+                "source": AUTO_SOURCE_TYPE_CUSTOMER_PAYMENT,
+                "payment_id": payment.pk,
+                "payment_number": payment_number,
+                "customer_id": customer_id,
+                "sales_invoice_id": getattr(payment, "sales_invoice_id", None),
+            },
+        ),
+    ]
+
+    entry = replace_journal_entry_lines(
+        entry,
+        lines,
+        actor=actor,
+    )
+
+    entry.metadata = {
+        **(entry.metadata or {}),
+        "source": AUTO_SOURCE_TYPE_CUSTOMER_PAYMENT,
+        "source_app": "treasury",
+        "payment_id": payment.pk,
+        "payment_number": payment_number,
+        "customer_id": customer_id,
+        "sales_invoice_id": getattr(payment, "sales_invoice_id", None),
+        "treasury_account_id": getattr(payment, "treasury_account_id", None),
+        "amount": str(amount),
+        "auto_posted_by_phase": "phase_11_4",
+    }
+
+    metadata_update_fields = ["metadata", "updated_at"]
+
+    if actor is not None and getattr(actor, "is_authenticated", False):
+        entry.updated_by = actor
+        metadata_update_fields.append("updated_by")
+
+    entry.save(update_fields=metadata_update_fields)
+
+    if auto_post:
+        entry = post_journal_entry(entry, actor=actor)
+
+    _mark_payment_accounting_posted(payment, entry)
+    return entry
+
+
+def find_supplier_payment_journal_entry(payment: Any) -> JournalEntry | None:
+    """
+    Find the existing accounting entry linked to a supplier payment.
+    """
+    if not payment:
+        return None
+
+    company = getattr(payment, "company", None)
+    if not company:
+        return None
+
+    payment_number = _payment_number(payment, fallback_prefix="SUPPLIER-PAYMENT")
+
+    return _get_existing_auto_entry(
+        company=company,
+        source_type=AUTO_SOURCE_TYPE_SUPPLIER_PAYMENT,
+        source_id=getattr(payment, "pk", None),
+        source_number=payment_number,
+    )
+
+
+@transaction.atomic
+def post_supplier_payment_to_accounting(
+    payment: Any,
+    *,
+    actor: Any = None,
+    auto_post: bool = True,
+) -> JournalEntry:
+    """
+    Create and optionally post an automatic accounting journal entry for a confirmed supplier payment.
+
+    Accounting treatment:
+    - Debit  Accounts Payable       = payment.amount
+    - Credit Treasury/Cash/Bank     = payment.amount
+
+    Safety:
+    - Uses payment.company as tenant source.
+    - Refuses non-confirmed payments.
+    - Prevents duplicate entries for same payment.
+    - Links entry back to payment when fields exist.
+    """
+    if not payment:
+        raise AccountingPostingError("دفعة المورد مطلوبة للترحيل المحاسبي.")
+
+    company = getattr(payment, "company", None)
+    _validate_company(company)
+
+    if getattr(payment, "company_id", None) != getattr(company, "pk", None):
+        raise AccountingPostingError("دفعة المورد لا تتبع الشركة المحددة.")
+
+    _ensure_confirmed_payment(payment, payment_label="دفعة مورد")
+
+    payment_number = _payment_number(payment, fallback_prefix="SUPPLIER-PAYMENT")
+
+    existing = _get_existing_auto_entry(
+        company=company,
+        source_type=AUTO_SOURCE_TYPE_SUPPLIER_PAYMENT,
+        source_id=payment.pk,
+        source_number=payment_number,
+    )
+
+    if existing:
+        if auto_post and existing.status == JournalEntryStatus.DRAFT:
+            existing = post_journal_entry(existing, actor=actor)
+        _mark_payment_accounting_posted(payment, existing)
+        return existing
+
+    amount = _money(getattr(payment, "amount", MONEY_ZERO))
+
+    if amount <= MONEY_ZERO:
+        raise AccountingPostingError("لا يمكن ترحيل دفعة مورد بمبلغ صفري.")
+
+    seed_company_chart_of_accounts(company)
+
+    payable_account = get_account_by_purpose(
+        company,
+        AccountingAccountPurpose.ACCOUNTS_PAYABLE,
+        source=AccountingRoutingSource.PURCHASE_BILL,
+        required=True,
+    )
+
+    treasury_account = _resolve_treasury_accounting_account(
+        company,
+        getattr(payment, "treasury_account", None),
+    )
+
+    currency = _clean_currency(getattr(payment, "currency", "") or "SAR")
+    entry_date = getattr(payment, "payment_date", None) or timezone.localdate()
+
+    purchase_bill = getattr(payment, "purchase_bill", None)
+    supplier_id = (
+        _clean_text(getattr(purchase_bill, "supplier_id", "") or "")
+        or _clean_text(getattr(payment, "supplier_id", "") or "")
+    )
+
+    entry = create_journal_entry_header(
+        company=company,
+        entry_date=entry_date,
+        entry_number=generate_journal_entry_number(company, prefix="SPAY"),
+        posting_source=POSTING_SOURCE_TREASURY,
+        reference=payment_number,
+        external_reference=_clean_text(getattr(payment, "reference", "")),
+        description=f"قيد تلقائي لدفعة مورد {payment_number}",
+        notes="تم إنشاء هذا القيد تلقائيا عند تأكيد دفعة المورد.",
+        currency=currency,
+        source_type=AUTO_SOURCE_TYPE_SUPPLIER_PAYMENT,
+        source_id=_source_id(payment.pk),
+        source_number=payment_number,
+        is_auto_posted=True,
+        actor=actor,
+    )
+
+    lines: list[EntryLinePayload] = [
+        EntryLinePayload(
+            account=payable_account,
+            description=f"تسوية ذمم دائنة من دفعة مورد {payment_number}",
+            debit_amount=amount,
+            credit_amount=MONEY_ZERO,
+            currency=currency,
+            party_type="supplier" if supplier_id else "",
+            party_id=supplier_id,
+            source_line_id="supplier-payment-payable",
+            sort_order=1,
+            metadata={
+                "source": AUTO_SOURCE_TYPE_SUPPLIER_PAYMENT,
+                "payment_id": payment.pk,
+                "payment_number": payment_number,
+                "supplier_id": supplier_id,
+                "purchase_bill_id": getattr(payment, "purchase_bill_id", None),
+            },
+        ),
+        EntryLinePayload(
+            account=treasury_account,
+            description=f"صرف دفعة مورد {payment_number}",
+            debit_amount=MONEY_ZERO,
+            credit_amount=amount,
+            currency=currency,
+            party_type="supplier" if supplier_id else "",
+            party_id=supplier_id,
+            source_line_id="supplier-payment-treasury",
+            sort_order=2,
+            metadata={
+                "source": AUTO_SOURCE_TYPE_SUPPLIER_PAYMENT,
+                "payment_id": payment.pk,
+                "payment_number": payment_number,
+                "treasury_account_id": getattr(payment, "treasury_account_id", None),
+                "purchase_bill_id": getattr(payment, "purchase_bill_id", None),
+            },
+        ),
+    ]
+
+    entry = replace_journal_entry_lines(
+        entry,
+        lines,
+        actor=actor,
+    )
+
+    entry.metadata = {
+        **(entry.metadata or {}),
+        "source": AUTO_SOURCE_TYPE_SUPPLIER_PAYMENT,
+        "source_app": "treasury",
+        "payment_id": payment.pk,
+        "payment_number": payment_number,
+        "supplier_id": supplier_id,
+        "purchase_bill_id": getattr(payment, "purchase_bill_id", None),
+        "treasury_account_id": getattr(payment, "treasury_account_id", None),
+        "amount": str(amount),
+        "auto_posted_by_phase": "phase_11_4",
+    }
+
+    metadata_update_fields = ["metadata", "updated_at"]
+
+    if actor is not None and getattr(actor, "is_authenticated", False):
+        entry.updated_by = actor
+        metadata_update_fields.append("updated_by")
+
+    entry.save(update_fields=metadata_update_fields)
+
+    if auto_post:
+        entry = post_journal_entry(entry, actor=actor)
+
+    _mark_payment_accounting_posted(payment, entry)
+    return entry

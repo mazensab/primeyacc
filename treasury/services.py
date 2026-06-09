@@ -1,18 +1,21 @@
 # ============================================================
 # 📂 treasury/services.py
-# 🧠 PrimeyAcc | Treasury & Payments Services V1.2
+# 🧠 PrimeyAcc | Treasury & Payments Services V1.3
 # ------------------------------------------------------------
 # ✅ Phase 11.1 Treasury Accounts Foundation services
 # ✅ Phase 11.2 Treasury Transactions Foundation services
 # ✅ Phase 11.3 Treasury APIs Foundation services
 # ✅ Phase 11.4 Customer & Supplier Payments Foundation services
 # ✅ Phase 11.5 Payment Allocation Foundation services
+# ✅ Phase 11.6 Automatic Accounting Posting for Payments
 # ✅ Company-scoped treasury account creation/update
 # ✅ Company-scoped treasury transaction creation/post/cancel
 # ✅ Company-scoped customer payment create/confirm/cancel
 # ✅ Company-scoped supplier payment create/confirm/cancel
 # ✅ Customer payment allocation to SalesInvoice
 # ✅ Supplier payment allocation to PurchaseBill
+# ✅ Automatic accounting posting for confirmed CustomerPayment
+# ✅ Automatic accounting posting for confirmed SupplierPayment
 # ✅ Safe balance updates only on posting/confirmation
 # ✅ Negative balance prevention for outflows/transfers/supplier payments
 # ✅ Overpayment prevention for sales invoices and purchase bills
@@ -26,8 +29,9 @@
 # - الرصيد لا يتغير عند إنشاء Draft، يتغير فقط عند POSTED / CONFIRMED
 # - تأكيد دفعة العميل ينشئ حركة خزينة واردة INFLOW ويحدث فاتورة المبيعات إن وجدت
 # - تأكيد دفعة المورد ينشئ حركة خزينة صادرة OUTFLOW ويحدث فاتورة المشتريات إن وجدت
+# - تأكيد الدفعة يرحل قيد محاسبي تلقائي ويمنع التكرار
 # - إلغاء دفعة مؤكدة يلغي حركة الخزينة ويعكس الرصيد ويعكس أثر الفاتورة بأمان
-# - الترحيل المحاسبي التفصيلي سيتم ربطه لاحقًا مع Phase 11 accounting integration
+# - إذا تم ترحيل الدفعة محاسبيًا لا يتم إلغاؤها إلا عبر مسار عكس محاسبي لاحق
 # ============================================================
 
 from __future__ import annotations
@@ -41,6 +45,10 @@ from django.db import transaction
 from django.db.models import Count, Q, QuerySet, Sum
 from django.utils import timezone
 
+from accounting.services import (
+    post_customer_payment_to_accounting,
+    post_supplier_payment_to_accounting,
+)
 from purchases.models import PurchaseBill
 from sales.models import SalesInvoice
 
@@ -1052,6 +1060,7 @@ def confirm_customer_payment(
             "sales_invoice",
             "treasury_account",
             "treasury_transaction",
+            "accounting_entry",
         ).get(
             id=payment.id,
             company=company,
@@ -1113,6 +1122,13 @@ def confirm_customer_payment(
             ]
         )
 
+        post_customer_payment_to_accounting(
+            payment,
+            actor=user,
+            auto_post=True,
+        )
+        payment.refresh_from_db()
+
         return payment
 
 
@@ -1129,6 +1145,7 @@ def cancel_customer_payment(
         payment = CustomerPayment.objects.select_for_update().select_related(
             "sales_invoice",
             "treasury_transaction",
+            "accounting_entry",
         ).get(
             id=payment.id,
             company=company,
@@ -1371,6 +1388,7 @@ def confirm_supplier_payment(
             "purchase_bill",
             "treasury_account",
             "treasury_transaction",
+            "accounting_entry",
         ).get(
             id=payment.id,
             company=company,
@@ -1432,6 +1450,13 @@ def confirm_supplier_payment(
             ]
         )
 
+        post_supplier_payment_to_accounting(
+            payment,
+            actor=user,
+            auto_post=True,
+        )
+        payment.refresh_from_db()
+
         return payment
 
 
@@ -1448,6 +1473,7 @@ def cancel_supplier_payment(
         payment = SupplierPayment.objects.select_for_update().select_related(
             "purchase_bill",
             "treasury_transaction",
+            "accounting_entry",
         ).get(
             id=payment.id,
             company=company,
