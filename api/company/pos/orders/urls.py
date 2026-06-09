@@ -1,9 +1,9 @@
 # ============================================================
 # 📂 api/company/pos/orders/urls.py
-# 🧠 PrimeyAcc | Company POS Orders URLs V1.1
+# 🧠 PrimeyAcc | Company POS Orders URLs V1.2
 # ------------------------------------------------------------
 # ✅ Company POS orders URL routing
-# ✅ List, create, detail, preview, cancel and finalize endpoints
+# ✅ List, create, detail, preview, cancel, finalize and receipt endpoints
 # ✅ Order items endpoints
 # ✅ Order payments endpoints
 # ✅ Connected under /api/company/pos/orders/
@@ -27,6 +27,7 @@ from .items import pos_order_item_add, pos_order_items_list
 from .list import pos_orders_list
 from .payments import pos_order_payment_add, pos_order_payments_list
 from .preview import pos_order_preview
+from .receipt import pos_order_receipt
 
 
 app_name = "company_pos_orders"
@@ -39,6 +40,7 @@ urlpatterns = [
     path("<int:order_id>/", pos_order_detail, name="detail"),
     path("<int:order_id>/cancel/", pos_order_cancel, name="cancel"),
     path("<int:order_id>/finalize/", pos_order_finalize, name="finalize"),
+    path("<int:order_id>/receipt/", pos_order_receipt, name="receipt"),
     path("<int:order_id>/items/", pos_order_items_list, name="items-list"),
     path("<int:order_id>/items/add/", pos_order_item_add, name="items-add"),
     path("<int:order_id>/payments/", pos_order_payments_list, name="payments-list"),

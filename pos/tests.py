@@ -62,6 +62,7 @@ from api.company.pos.orders.payments import (
     pos_order_payments_list,
 )
 from api.company.pos.orders.preview import pos_order_preview
+from api.company.pos.orders.receipt import pos_order_receipt
 from catalog.models import CatalogItem, CatalogItemType
 from companies.models import Branch, Company
 from pos.models import (
@@ -1924,5 +1925,67 @@ class POSOrdersAPITests(POSBaseTestMixin, TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.data["ok"])
+    def test_pos_order_receipt_api_success(self):
+        order = self._create_order_for_api()
+
+        add_pos_order_item(
+            company=self.company,
+            order=order,
+            catalog_item=self.catalog_item,
+            quantity=Decimal("1"),
+            unit_price=Decimal("100.00"),
+        )
+
+        add_pos_payment_line(
+            company=self.company,
+            order=order,
+            payment_method=self.payment_method,
+            amount=Decimal("115.00"),
+            payment_type=POSPaymentLineType.CASH,
+            treasury_account=self.treasury_account,
+            confirm_now=True,
+            user=self.user,
+        )
+
+        order.refresh_from_db()
+
+        request = self._authenticated_request(
+            "get",
+            f"/api/company/pos/orders/{order.id}/receipt/",
+        )
+        response = self._call_with_permissions(
+            pos_order_receipt,
+            request,
+            order_id=order.id,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertIn("receipt", response.data)
+        self.assertEqual(
+            response.data["receipt"]["order"]["order_number"],
+            order.order_number,
+        )
+        self.assertEqual(len(response.data["receipt"]["lines"]), 1)
+        self.assertEqual(len(response.data["receipt"]["payments"]), 1)
+        self.assertEqual(response.data["receipt"]["totals"]["total_amount"], "115.00")
+        self.assertEqual(response.data["receipt"]["totals"]["paid_amount"], "115.00")
+        self.assertEqual(response.data["receipt"]["totals"]["remaining_amount"], "0.00")
+
+    def test_pos_order_receipt_api_hides_other_company_order(self):
+        other_order = self._create_other_company_order_for_api()
+
+        request = self._authenticated_request(
+            "get",
+            f"/api/company/pos/orders/{other_order.id}/receipt/",
+        )
+        response = self._call_with_permissions(
+            pos_order_receipt,
+            request,
+            order_id=other_order.id,
+        )
+
+        self.assertEqual(response.status_code, 404)
         self.assertFalse(response.data["ok"])
 
