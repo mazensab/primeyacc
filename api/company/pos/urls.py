@@ -1,12 +1,13 @@
 # ============================================================
 # 📂 api/company/pos/urls.py
-# 🧠 PrimeyAcc | Company POS URLs V1.1
+# 🧠 PrimeyAcc | Company POS URLs V1.2
 # ------------------------------------------------------------
 # ✅ Company POS API Root Routing
 # ✅ POS Registers Routes Include
 # ✅ POS Sessions Routes Include
+# ✅ POS Orders / Checkout Routes Include
 # ✅ Company-scoped /company POS API Routing
-# ✅ Ready for Checkout / Orders later
+# ✅ Ready for later receipts / returns / shifts reports
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - كل مسارات POS تعمل داخل /company فقط
@@ -32,5 +33,9 @@ urlpatterns = [
     path(
         "sessions/",
         include("api.company.pos.sessions.urls"),
+    ),
+    path(
+        "orders/",
+        include("api.company.pos.orders.urls"),
     ),
 ]

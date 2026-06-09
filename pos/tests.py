@@ -1,10 +1,11 @@
 # ============================================================
 # 📂 pos/tests.py
-# 🧠 PrimeyAcc | POS Tests V1.2
+# 🧠 PrimeyAcc | POS Tests V1.3
 # ------------------------------------------------------------
 # ✅ Phase 13.1 POS Foundation Service Tests
 # ✅ Phase 13.2 POS Registers API Tests
 # ✅ Phase 13.3 POS Sessions API Tests
+# ✅ Phase 13.4 POS Orders / Checkout API Tests
 # ✅ POS Register Creation Tests
 # ✅ POS Tenant Isolation Tests
 # ✅ POS Session Open / Close Tests
@@ -16,6 +17,7 @@
 # ✅ POS Checkout Preview Tests
 # ✅ POS Registers List / Create / Detail / Update / Status API Tests
 # ✅ POS Sessions List / Open / Detail / Close / Cancel API Tests
+# ✅ POS Orders List / Create / Detail / Items / Payments / Preview / Cancel API Tests
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - الاختبارات تثبت أن POS يعمل داخل شركة واحدة فقط
@@ -24,6 +26,7 @@
 # - اختبارات Phase 13.1 تغطي Models / Services foundation
 # - اختبارات Phase 13.2 تغطي POS Registers APIs
 # - اختبارات Phase 13.3 تغطي POS Sessions APIs فقط
+# - اختبارات Phase 13.4 تغطي POS Orders / Checkout APIs فقط
 # - لا يتم اختبار الترحيل المحاسبي أو خصم المخزون في هذه المرحلة
 # ============================================================
 
@@ -48,6 +51,16 @@ from api.company.pos.sessions.close import pos_session_close
 from api.company.pos.sessions.detail import pos_session_detail
 from api.company.pos.sessions.list import pos_sessions_list
 from api.company.pos.sessions.open import pos_session_open
+from api.company.pos.orders.cancel import pos_order_cancel
+from api.company.pos.orders.create import pos_order_create
+from api.company.pos.orders.detail import pos_order_detail
+from api.company.pos.orders.items import pos_order_item_add, pos_order_items_list
+from api.company.pos.orders.list import pos_orders_list
+from api.company.pos.orders.payments import (
+    pos_order_payment_add,
+    pos_order_payments_list,
+)
+from api.company.pos.orders.preview import pos_order_preview
 from catalog.models import CatalogItem, CatalogItemType
 from companies.models import Branch, Company
 from pos.models import (
@@ -1259,6 +1272,545 @@ class POSSessionsAPITests(POSBaseTestMixin, TestCase):
             pos_session_cancel,
             request,
             session_id=session.id,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.data["ok"])
+
+
+class POSOrdersAPITests(POSBaseTestMixin, TestCase):
+    """
+    Phase 13.4 POS orders / checkout API tests.
+    """
+
+    def setUp(self):
+        self._create_base_data()
+        self.factory = APIRequestFactory()
+
+    def _authenticated_request(self, method: str, path: str, data=None):
+        """
+        Build authenticated request with company context.
+        """
+        method = method.lower()
+
+        if method == "get":
+            request = self.factory.get(path, data=data or {})
+        elif method == "post":
+            request = self.factory.post(path, data=data or {}, format="json")
+        elif method == "patch":
+            request = self.factory.patch(path, data=data or {}, format="json")
+        else:
+            raise AssertionError(f"Unsupported method: {method}")
+
+        request.company = self.company
+        force_authenticate(request, user=self.user)
+
+        return request
+
+    def _call_with_permissions(self, view, request, *args, **kwargs):
+        """
+        Call API view while keeping this test focused on POS endpoint behavior.
+
+        Company permission behavior is already covered by permissions/company tests.
+        """
+        with patch(
+            "api.permissions.HasAnyCompanyPermission.has_permission",
+            return_value=True,
+        ):
+            return view(request, *args, **kwargs)
+
+    def _create_register_for_api(
+        self,
+        *,
+        name="Main Orders Register",
+        code="API-ORDERS-POS-001",
+    ):
+        return create_pos_register(
+            company=self.company,
+            branch=self.branch,
+            name=name,
+            code=code,
+            treasury_account=self.treasury_account,
+            default_payment_method=self.payment_method,
+            user=self.user,
+        )
+
+    def _create_other_company_register_for_api(self):
+        register = POSRegister.objects.create(
+            company=self.other_company,
+            branch=self.other_branch,
+            treasury_account=self.other_treasury_account,
+            default_payment_method=self.other_payment_method,
+            name="Other Orders Register",
+            code="OTHER-ORDERS-POS-001",
+            status=POSRegisterStatus.ACTIVE,
+            is_active=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        register.full_clean()
+        return register
+
+    def _open_session_for_api(
+        self,
+        *,
+        register=None,
+        opening_cash_amount=Decimal("100.00"),
+    ):
+        if register is None:
+            register = self._create_register_for_api()
+
+        return open_pos_session(
+            company=self.company,
+            register=register,
+            opening_cash_amount=opening_cash_amount,
+            user=self.user,
+        )
+
+    def _create_order_for_api(self, *, session=None):
+        if session is None:
+            session = self._open_session_for_api()
+
+        return create_pos_order(
+            company=self.company,
+            session=session,
+            user=self.user,
+        )
+
+    def _create_other_company_order_for_api(self):
+        other_register = self._create_other_company_register_for_api()
+        other_session = open_pos_session(
+            company=self.other_company,
+            register=other_register,
+            opening_cash_amount=Decimal("100.00"),
+            user=self.user,
+        )
+
+        return create_pos_order(
+            company=self.other_company,
+            session=other_session,
+            user=self.user,
+        )
+
+    def test_pos_orders_list_api_returns_company_orders_only(self):
+        order = self._create_order_for_api()
+        self._create_other_company_order_for_api()
+
+        request = self._authenticated_request(
+            "get",
+            "/api/company/pos/orders/",
+        )
+        response = self._call_with_permissions(pos_orders_list, request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["items"][0]["id"], order.id)
+        self.assertEqual(response.data["items"][0]["order_number"], order.order_number)
+
+    def test_pos_orders_list_api_supports_status_filter(self):
+        draft_order = self._create_order_for_api()
+
+        cancelled_session = self._open_session_for_api(
+            register=self._create_register_for_api(
+                name="Cancelled Orders Register",
+                code="API-CANCELLED-ORDERS-POS",
+            )
+        )
+        cancelled_order = create_pos_order(
+            company=self.company,
+            session=cancelled_session,
+            user=self.user,
+        )
+        cancelled_order.status = POSOrderStatus.CANCELLED
+        cancelled_order.save(update_fields=["status"])
+
+        request = self._authenticated_request(
+            "get",
+            "/api/company/pos/orders/",
+            data={"status": POSOrderStatus.DRAFT},
+        )
+        response = self._call_with_permissions(pos_orders_list, request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["items"][0]["id"], draft_order.id)
+        self.assertEqual(response.data["items"][0]["status"], POSOrderStatus.DRAFT)
+
+    def test_pos_order_create_api_success(self):
+        session = self._open_session_for_api()
+
+        request = self._authenticated_request(
+            "post",
+            "/api/company/pos/orders/create/",
+            data={
+                "session_id": session.id,
+                "notes": "Created by API test",
+            },
+        )
+        response = self._call_with_permissions(pos_order_create, request)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["item"]["session"]["id"], session.id)
+        self.assertEqual(response.data["item"]["status"], POSOrderStatus.DRAFT)
+        self.assertEqual(response.data["item"]["payment_status"], POSPaymentStatus.UNPAID)
+
+    def test_pos_order_create_api_rejects_other_company_session(self):
+        other_register = self._create_other_company_register_for_api()
+        other_session = open_pos_session(
+            company=self.other_company,
+            register=other_register,
+            opening_cash_amount=Decimal("100.00"),
+            user=self.user,
+        )
+
+        request = self._authenticated_request(
+            "post",
+            "/api/company/pos/orders/create/",
+            data={
+                "session_id": other_session.id,
+            },
+        )
+        response = self._call_with_permissions(pos_order_create, request)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.data["ok"])
+
+    def test_pos_order_detail_api_success(self):
+        order = self._create_order_for_api()
+
+        request = self._authenticated_request(
+            "get",
+            f"/api/company/pos/orders/{order.id}/",
+        )
+        response = self._call_with_permissions(
+            pos_order_detail,
+            request,
+            order_id=order.id,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["item"]["id"], order.id)
+        self.assertEqual(response.data["item"]["order_number"], order.order_number)
+
+    def test_pos_order_detail_api_hides_other_company_order(self):
+        other_order = self._create_other_company_order_for_api()
+
+        request = self._authenticated_request(
+            "get",
+            f"/api/company/pos/orders/{other_order.id}/",
+        )
+        response = self._call_with_permissions(
+            pos_order_detail,
+            request,
+            order_id=other_order.id,
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(response.data["ok"])
+
+    def test_pos_order_preview_api_success(self):
+        request = self._authenticated_request(
+            "post",
+            "/api/company/pos/orders/preview/",
+            data={
+                "items": [
+                    {
+                        "catalog_item_id": self.catalog_item.id,
+                        "quantity": "2",
+                        "unit_price": "100.00",
+                        "discount_amount": "10.00",
+                    }
+                ],
+            },
+        )
+        response = self._call_with_permissions(pos_order_preview, request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["preview"]["summary"]["items_count"], 1)
+        self.assertEqual(response.data["preview"]["summary"]["taxable_amount"], "190.00")
+        self.assertEqual(response.data["preview"]["summary"]["tax_amount"], "28.50")
+        self.assertEqual(response.data["preview"]["summary"]["total_amount"], "218.50")
+
+    def test_pos_order_preview_api_rejects_other_company_item(self):
+        other_item = CatalogItem.objects.create(
+            company=self.other_company,
+            item_type=CatalogItemType.PRODUCT,
+            code="OTHER-PREVIEW-ITEM",
+            name="Other Preview Item",
+            sale_price=Decimal("100.00"),
+            is_sellable=True,
+            taxable=True,
+            tax_rate=Decimal("15.00"),
+            created_by=self.user,
+        )
+
+        request = self._authenticated_request(
+            "post",
+            "/api/company/pos/orders/preview/",
+            data={
+                "items": [
+                    {
+                        "catalog_item_id": other_item.id,
+                        "quantity": "1",
+                    }
+                ],
+            },
+        )
+        response = self._call_with_permissions(pos_order_preview, request)
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(response.data["ok"])
+
+    def test_pos_order_items_list_api_success(self):
+        order = self._create_order_for_api()
+        item = add_pos_order_item(
+            company=self.company,
+            order=order,
+            catalog_item=self.catalog_item,
+            quantity=Decimal("1"),
+            unit_price=Decimal("100.00"),
+        )
+
+        request = self._authenticated_request(
+            "get",
+            f"/api/company/pos/orders/{order.id}/items/",
+        )
+        response = self._call_with_permissions(
+            pos_order_items_list,
+            request,
+            order_id=order.id,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["items"][0]["id"], item.id)
+        self.assertEqual(response.data["items"][0]["item_code"], self.catalog_item.code)
+
+    def test_pos_order_item_add_api_success(self):
+        order = self._create_order_for_api()
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/orders/{order.id}/items/add/",
+            data={
+                "catalog_item_id": self.catalog_item.id,
+                "quantity": "2",
+                "unit_price": "100.00",
+                "discount_amount": "10.00",
+            },
+        )
+        response = self._call_with_permissions(
+            pos_order_item_add,
+            request,
+            order_id=order.id,
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["item"]["item_code"], self.catalog_item.code)
+        self.assertEqual(response.data["item"]["line_total"], "218.50")
+        self.assertEqual(response.data["order"]["total_amount"], "218.50")
+
+    def test_pos_order_item_add_api_rejects_other_company_item(self):
+        order = self._create_order_for_api()
+        other_item = CatalogItem.objects.create(
+            company=self.other_company,
+            item_type=CatalogItemType.PRODUCT,
+            code="OTHER-ADD-ITEM",
+            name="Other Add Item",
+            sale_price=Decimal("100.00"),
+            is_sellable=True,
+            taxable=True,
+            tax_rate=Decimal("15.00"),
+            created_by=self.user,
+        )
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/orders/{order.id}/items/add/",
+            data={
+                "catalog_item_id": other_item.id,
+                "quantity": "1",
+            },
+        )
+        response = self._call_with_permissions(
+            pos_order_item_add,
+            request,
+            order_id=order.id,
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(response.data["ok"])
+
+    def test_pos_order_payments_list_api_success(self):
+        order = self._create_order_for_api()
+        add_pos_order_item(
+            company=self.company,
+            order=order,
+            catalog_item=self.catalog_item,
+            quantity=Decimal("1"),
+            unit_price=Decimal("100.00"),
+        )
+        payment = add_pos_payment_line(
+            company=self.company,
+            order=order,
+            payment_method=self.payment_method,
+            amount=Decimal("115.00"),
+            payment_type=POSPaymentLineType.CASH,
+            treasury_account=self.treasury_account,
+            confirm_now=True,
+            user=self.user,
+        )
+
+        request = self._authenticated_request(
+            "get",
+            f"/api/company/pos/orders/{order.id}/payments/",
+        )
+        response = self._call_with_permissions(
+            pos_order_payments_list,
+            request,
+            order_id=order.id,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["items"][0]["id"], payment.id)
+        self.assertEqual(response.data["items"][0]["amount"], "115.00")
+
+    def test_pos_order_payment_add_api_success(self):
+        order = self._create_order_for_api()
+        add_pos_order_item(
+            company=self.company,
+            order=order,
+            catalog_item=self.catalog_item,
+            quantity=Decimal("1"),
+            unit_price=Decimal("100.00"),
+        )
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/orders/{order.id}/payments/add/",
+            data={
+                "payment_method_id": self.payment_method.id,
+                "treasury_account_id": self.treasury_account.id,
+                "amount": "115.00",
+                "payment_type": POSPaymentLineType.CASH,
+                "confirm_now": True,
+                "reference": "API-PAY-001",
+            },
+        )
+        response = self._call_with_permissions(
+            pos_order_payment_add,
+            request,
+            order_id=order.id,
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["item"]["amount"], "115.00")
+        self.assertEqual(response.data["order"]["paid_amount"], "115.00")
+        self.assertEqual(response.data["order"]["payment_status"], POSPaymentStatus.PAID)
+
+    def test_pos_order_payment_add_api_rejects_other_company_payment_method(self):
+        order = self._create_order_for_api()
+        add_pos_order_item(
+            company=self.company,
+            order=order,
+            catalog_item=self.catalog_item,
+            quantity=Decimal("1"),
+            unit_price=Decimal("100.00"),
+        )
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/orders/{order.id}/payments/add/",
+            data={
+                "payment_method_id": self.other_payment_method.id,
+                "treasury_account_id": self.treasury_account.id,
+                "amount": "115.00",
+                "payment_type": POSPaymentLineType.CASH,
+            },
+        )
+        response = self._call_with_permissions(
+            pos_order_payment_add,
+            request,
+            order_id=order.id,
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(response.data["ok"])
+
+    def test_pos_order_payment_add_api_rejects_other_company_treasury_account(self):
+        order = self._create_order_for_api()
+        add_pos_order_item(
+            company=self.company,
+            order=order,
+            catalog_item=self.catalog_item,
+            quantity=Decimal("1"),
+            unit_price=Decimal("100.00"),
+        )
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/orders/{order.id}/payments/add/",
+            data={
+                "payment_method_id": self.payment_method.id,
+                "treasury_account_id": self.other_treasury_account.id,
+                "amount": "115.00",
+                "payment_type": POSPaymentLineType.CASH,
+            },
+        )
+        response = self._call_with_permissions(
+            pos_order_payment_add,
+            request,
+            order_id=order.id,
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(response.data["ok"])
+
+    def test_pos_order_cancel_api_success(self):
+        order = self._create_order_for_api()
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/orders/{order.id}/cancel/",
+            data={
+                "cancellation_reason": "Cancelled by API test",
+            },
+        )
+        response = self._call_with_permissions(
+            pos_order_cancel,
+            request,
+            order_id=order.id,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["item"]["status"], POSOrderStatus.CANCELLED)
+
+    def test_pos_order_cancel_api_rejects_already_cancelled_order(self):
+        order = self._create_order_for_api()
+        order.status = POSOrderStatus.CANCELLED
+        order.save(update_fields=["status"])
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/orders/{order.id}/cancel/",
+            data={
+                "cancellation_reason": "Should fail",
+            },
+        )
+        response = self._call_with_permissions(
+            pos_order_cancel,
+            request,
+            order_id=order.id,
         )
 
         self.assertEqual(response.status_code, 400)
