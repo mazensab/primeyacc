@@ -1,11 +1,13 @@
 ﻿# ============================================================
 # ًں“‚ pos/tests.py
-# ًں§  PrimeyAcc | POS Tests V1.3
+# ًں§  PrimeyAcc | POS Tests V1.5
 # ------------------------------------------------------------
 # âœ… Phase 13.1 POS Foundation Service Tests
 # âœ… Phase 13.2 POS Registers API Tests
 # âœ… Phase 13.3 POS Sessions API Tests
 # âœ… Phase 13.4 POS Orders / Checkout API Tests
+# ✅ Phase 13.5.3 POS Returns Foundation Service Tests
+# ✅ Phase 13.5.3 POS Returns API Tests
 # âœ… POS Register Creation Tests
 # âœ… POS Tenant Isolation Tests
 # âœ… POS Session Open / Close Tests
@@ -63,6 +65,12 @@ from api.company.pos.orders.payments import (
 )
 from api.company.pos.orders.preview import pos_order_preview
 from api.company.pos.orders.receipt import pos_order_receipt
+from api.company.pos.returns.cancel import pos_return_cancel
+from api.company.pos.returns.complete import pos_return_complete
+from api.company.pos.returns.create import pos_return_create
+from api.company.pos.returns.detail import pos_return_detail
+from api.company.pos.returns.list import pos_returns_list
+
 from catalog.models import CatalogItem, CatalogItemType
 from companies.models import Branch, Company
 from pos.models import (
@@ -83,7 +91,15 @@ from pos.services import (
     open_pos_session,
     preview_pos_checkout,
 )
+from pos.models import POSReturnStatus
 from treasury.models import TreasuryAccount
+from pos.services import (
+    add_pos_return_item,
+    cancel_pos_return,
+    complete_pos_return,
+    create_pos_return,
+)
+
 
 
 class POSBaseTestMixin:
@@ -1988,4 +2004,727 @@ class POSOrdersAPITests(POSBaseTestMixin, TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertFalse(response.data["ok"])
+
+class POSReturnsServiceTests(POSBaseTestMixin, TestCase):
+    """
+    Phase 13.5.3 POS returns foundation service tests.
+    """
+
+    def setUp(self):
+        self._create_base_data()
+
+    def _create_completed_order_with_item(self, *, quantity=Decimal("2")):
+        """
+        Create a completed POS order with one item.
+
+        This helper keeps return tests focused on return behavior. Finalize API
+        behavior is already tested separately in POSOrdersAPITests.
+        """
+
+        register = create_pos_register(
+            company=self.company,
+            branch=self.branch,
+            name="Returns Register",
+            treasury_account=self.treasury_account,
+            default_payment_method=self.payment_method,
+            user=self.user,
+        )
+        session = open_pos_session(
+            company=self.company,
+            register=register,
+            opening_cash_amount=Decimal("0.00"),
+            user=self.user,
+        )
+        order = create_pos_order(
+            company=self.company,
+            session=session,
+            user=self.user,
+        )
+        item = add_pos_order_item(
+            company=self.company,
+            order=order,
+            catalog_item=self.catalog_item,
+            quantity=quantity,
+            unit_price=Decimal("100.00"),
+            discount_amount=Decimal("10.00"),
+        )
+
+        order.status = POSOrderStatus.COMPLETED
+        order.payment_status = POSPaymentStatus.PAID
+        order.paid_amount = order.total_amount
+        order.save(
+            update_fields=[
+                "status",
+                "payment_status",
+                "paid_amount",
+                "updated_at",
+            ]
+        )
+
+        order.refresh_from_db()
+        item.refresh_from_db()
+
+        return order, item
+
+    def _create_other_company_completed_order(self):
+        """
+        Create an order for another company to verify tenant isolation.
+        """
+
+        other_item = CatalogItem.objects.create(
+            company=self.other_company,
+            item_type=CatalogItemType.PRODUCT,
+            code="OTHER-RETURN-ITEM",
+            sku="OTHER-RETURN-SKU",
+            barcode="628000009999",
+            name="Other Return Item",
+            sale_price=Decimal("100.00"),
+            purchase_price=Decimal("50.00"),
+            cost_price=Decimal("50.00"),
+            is_sellable=True,
+            is_purchasable=True,
+            taxable=True,
+            tax_rate=Decimal("15.00"),
+            created_by=self.user,
+        )
+
+        other_register = create_pos_register(
+            company=self.other_company,
+            branch=self.other_branch,
+            name="Other Returns Register",
+            treasury_account=self.other_treasury_account,
+            default_payment_method=self.other_payment_method,
+            user=self.user,
+        )
+        other_session = open_pos_session(
+            company=self.other_company,
+            register=other_register,
+            opening_cash_amount=Decimal("0.00"),
+            user=self.user,
+        )
+        other_order = create_pos_order(
+            company=self.other_company,
+            session=other_session,
+            user=self.user,
+        )
+        add_pos_order_item(
+            company=self.other_company,
+            order=other_order,
+            catalog_item=other_item,
+            quantity=Decimal("1"),
+            unit_price=Decimal("100.00"),
+        )
+
+        other_order.status = POSOrderStatus.COMPLETED
+        other_order.payment_status = POSPaymentStatus.PAID
+        other_order.paid_amount = other_order.total_amount
+        other_order.save(
+            update_fields=[
+                "status",
+                "payment_status",
+                "paid_amount",
+                "updated_at",
+            ]
+        )
+
+        return other_order
+
+    def test_create_pos_return_success(self):
+        order, _item = self._create_completed_order_with_item()
+
+        pos_return = create_pos_return(
+            company=self.company,
+            original_order=order,
+            reason="Customer returned item",
+            user=self.user,
+        )
+
+        self.assertEqual(pos_return.company, self.company)
+        self.assertEqual(pos_return.original_order, order)
+        self.assertEqual(pos_return.session, order.session)
+        self.assertEqual(pos_return.register, order.register)
+        self.assertEqual(pos_return.branch, order.branch)
+        self.assertEqual(pos_return.customer, order.customer)
+        self.assertEqual(pos_return.status, POSReturnStatus.DRAFT)
+        self.assertTrue(pos_return.return_number.startswith("POS-RET-"))
+
+    def test_create_pos_return_rejects_other_company_order(self):
+        other_order = self._create_other_company_completed_order()
+
+        with self.assertRaises(ValidationError):
+            create_pos_return(
+                company=self.company,
+                original_order=other_order,
+                user=self.user,
+            )
+
+    def test_create_pos_return_rejects_draft_order(self):
+        register = create_pos_register(
+            company=self.company,
+            branch=self.branch,
+            name="Draft Return Register",
+            treasury_account=self.treasury_account,
+            default_payment_method=self.payment_method,
+            user=self.user,
+        )
+        session = open_pos_session(
+            company=self.company,
+            register=register,
+            opening_cash_amount=Decimal("0.00"),
+            user=self.user,
+        )
+        order = create_pos_order(
+            company=self.company,
+            session=session,
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            create_pos_return(
+                company=self.company,
+                original_order=order,
+                user=self.user,
+            )
+
+    def test_add_pos_return_item_success_and_recalculate_totals(self):
+        order, original_item = self._create_completed_order_with_item(quantity=Decimal("2"))
+
+        pos_return = create_pos_return(
+            company=self.company,
+            original_order=order,
+            reason="Partial return",
+            user=self.user,
+        )
+
+        return_item = add_pos_return_item(
+            company=self.company,
+            pos_return=pos_return,
+            original_order_item=original_item,
+            quantity=Decimal("1"),
+        )
+
+        pos_return.refresh_from_db()
+
+        self.assertEqual(return_item.company, self.company)
+        self.assertEqual(return_item.pos_return, pos_return)
+        self.assertEqual(return_item.original_order_item, original_item)
+        self.assertEqual(return_item.catalog_item, self.catalog_item)
+        self.assertEqual(return_item.quantity, Decimal("1.0000"))
+        self.assertEqual(return_item.discount_amount, Decimal("5.00"))
+        self.assertEqual(return_item.taxable_amount, Decimal("95.00"))
+        self.assertEqual(return_item.tax_amount, Decimal("14.25"))
+        self.assertEqual(return_item.line_total, Decimal("109.25"))
+
+        self.assertEqual(pos_return.discount_amount, Decimal("5.00"))
+        self.assertEqual(pos_return.taxable_amount, Decimal("95.00"))
+        self.assertEqual(pos_return.tax_amount, Decimal("14.25"))
+        self.assertEqual(pos_return.total_amount, Decimal("109.25"))
+        self.assertEqual(pos_return.refund_amount, Decimal("109.25"))
+
+    def test_add_pos_return_item_rejects_quantity_greater_than_remaining(self):
+        order, original_item = self._create_completed_order_with_item(quantity=Decimal("2"))
+
+        first_return = create_pos_return(
+            company=self.company,
+            original_order=order,
+            reason="Full return",
+            user=self.user,
+        )
+        add_pos_return_item(
+            company=self.company,
+            pos_return=first_return,
+            original_order_item=original_item,
+            quantity=Decimal("2"),
+        )
+
+        second_return = create_pos_return(
+            company=self.company,
+            original_order=order,
+            reason="Duplicate return attempt",
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            add_pos_return_item(
+                company=self.company,
+                pos_return=second_return,
+                original_order_item=original_item,
+                quantity=Decimal("1"),
+            )
+
+    def test_add_pos_return_item_rejects_item_from_different_order(self):
+        order, _original_item = self._create_completed_order_with_item(quantity=Decimal("2"))
+        _other_order, other_item = self._create_completed_order_with_item(quantity=Decimal("1"))
+
+        pos_return = create_pos_return(
+            company=self.company,
+            original_order=order,
+            reason="Wrong item attempt",
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            add_pos_return_item(
+                company=self.company,
+                pos_return=pos_return,
+                original_order_item=other_item,
+                quantity=Decimal("1"),
+            )
+
+    def test_complete_pos_return_success(self):
+        order, original_item = self._create_completed_order_with_item(quantity=Decimal("2"))
+
+        pos_return = create_pos_return(
+            company=self.company,
+            original_order=order,
+            reason="Complete return",
+            user=self.user,
+        )
+        add_pos_return_item(
+            company=self.company,
+            pos_return=pos_return,
+            original_order_item=original_item,
+            quantity=Decimal("1"),
+        )
+
+        completed_return = complete_pos_return(
+            company=self.company,
+            pos_return=pos_return,
+            user=self.user,
+        )
+
+        self.assertEqual(completed_return.status, POSReturnStatus.COMPLETED)
+        self.assertIsNotNone(completed_return.completed_at)
+        self.assertEqual(completed_return.completed_by, self.user)
+        self.assertEqual(completed_return.total_amount, Decimal("109.25"))
+
+    def test_complete_pos_return_rejects_without_items(self):
+        order, _original_item = self._create_completed_order_with_item(quantity=Decimal("2"))
+
+        pos_return = create_pos_return(
+            company=self.company,
+            original_order=order,
+            reason="No items",
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            complete_pos_return(
+                company=self.company,
+                pos_return=pos_return,
+                user=self.user,
+            )
+
+    def test_cancel_pos_return_success(self):
+        order, _original_item = self._create_completed_order_with_item(quantity=Decimal("2"))
+
+        pos_return = create_pos_return(
+            company=self.company,
+            original_order=order,
+            reason="Cancel return",
+            user=self.user,
+        )
+
+        cancelled_return = cancel_pos_return(
+            company=self.company,
+            pos_return=pos_return,
+            reason="Cancelled by test",
+            user=self.user,
+        )
+
+        self.assertEqual(cancelled_return.status, POSReturnStatus.CANCELLED)
+        self.assertEqual(cancelled_return.cancelled_by, self.user)
+        self.assertIsNotNone(cancelled_return.cancelled_at)
+        self.assertEqual(cancelled_return.cancellation_reason, "Cancelled by test")
+
+    def test_cancel_pos_return_rejects_completed_return(self):
+        order, original_item = self._create_completed_order_with_item(quantity=Decimal("2"))
+
+        pos_return = create_pos_return(
+            company=self.company,
+            original_order=order,
+            reason="Completed cannot cancel",
+            user=self.user,
+        )
+        add_pos_return_item(
+            company=self.company,
+            pos_return=pos_return,
+            original_order_item=original_item,
+            quantity=Decimal("1"),
+        )
+        complete_pos_return(
+            company=self.company,
+            pos_return=pos_return,
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            cancel_pos_return(
+                company=self.company,
+                pos_return=pos_return,
+                reason="Should fail",
+                user=self.user,
+            )
+
+class POSReturnsAPITests(POSBaseTestMixin, TestCase):
+    """
+    Phase 13.5.3 POS returns API tests.
+    """
+
+    def setUp(self):
+        self._create_base_data()
+        self.factory = APIRequestFactory()
+
+    def _authenticated_request(self, method: str, path: str, data=None):
+        """
+        Build authenticated request with company context.
+        """
+
+        method = method.lower()
+
+        if method == "get":
+            request = self.factory.get(path, data=data or {})
+        elif method == "post":
+            request = self.factory.post(path, data=data or {}, format="json")
+        elif method == "patch":
+            request = self.factory.patch(path, data=data or {}, format="json")
+        else:
+            raise AssertionError(f"Unsupported method: {method}")
+
+        request.company = self.company
+        force_authenticate(request, user=self.user)
+
+        return request
+
+    def _call_with_permissions(self, view, request, *args, **kwargs):
+        """
+        Call API view while keeping this test focused on POS endpoint behavior.
+        """
+
+        with patch(
+            "api.permissions.HasAnyCompanyPermission.has_permission",
+            return_value=True,
+        ):
+            return view(request, *args, **kwargs)
+
+    def _create_completed_order_with_item(self, *, quantity=Decimal("2")):
+        """
+        Create a completed POS order with one item for returns API tests.
+        """
+
+        register = create_pos_register(
+            company=self.company,
+            branch=self.branch,
+            name="Returns API Register",
+            treasury_account=self.treasury_account,
+            default_payment_method=self.payment_method,
+            user=self.user,
+        )
+        session = open_pos_session(
+            company=self.company,
+            register=register,
+            opening_cash_amount=Decimal("0.00"),
+            user=self.user,
+        )
+        order = create_pos_order(
+            company=self.company,
+            session=session,
+            user=self.user,
+        )
+        item = add_pos_order_item(
+            company=self.company,
+            order=order,
+            catalog_item=self.catalog_item,
+            quantity=quantity,
+            unit_price=Decimal("100.00"),
+            discount_amount=Decimal("10.00"),
+        )
+
+        order.status = POSOrderStatus.COMPLETED
+        order.payment_status = POSPaymentStatus.PAID
+        order.paid_amount = order.total_amount
+        order.save(
+            update_fields=[
+                "status",
+                "payment_status",
+                "paid_amount",
+                "updated_at",
+            ]
+        )
+
+        order.refresh_from_db()
+        item.refresh_from_db()
+
+        return order, item
+
+    def _create_other_company_completed_order_with_item(self):
+        """
+        Create completed POS order for another company.
+        """
+
+        other_item = CatalogItem.objects.create(
+            company=self.other_company,
+            item_type=CatalogItemType.PRODUCT,
+            code="OTHER-RETURN-API-ITEM",
+            sku="OTHER-RETURN-API-SKU",
+            barcode="628000008888",
+            name="Other Return API Item",
+            sale_price=Decimal("100.00"),
+            purchase_price=Decimal("50.00"),
+            cost_price=Decimal("50.00"),
+            is_sellable=True,
+            is_purchasable=True,
+            taxable=True,
+            tax_rate=Decimal("15.00"),
+            created_by=self.user,
+        )
+
+        other_register = create_pos_register(
+            company=self.other_company,
+            branch=self.other_branch,
+            name="Other Returns API Register",
+            treasury_account=self.other_treasury_account,
+            default_payment_method=self.other_payment_method,
+            user=self.user,
+        )
+        other_session = open_pos_session(
+            company=self.other_company,
+            register=other_register,
+            opening_cash_amount=Decimal("0.00"),
+            user=self.user,
+        )
+        other_order = create_pos_order(
+            company=self.other_company,
+            session=other_session,
+            user=self.user,
+        )
+        other_order_item = add_pos_order_item(
+            company=self.other_company,
+            order=other_order,
+            catalog_item=other_item,
+            quantity=Decimal("1"),
+            unit_price=Decimal("100.00"),
+        )
+
+        other_order.status = POSOrderStatus.COMPLETED
+        other_order.payment_status = POSPaymentStatus.PAID
+        other_order.paid_amount = other_order.total_amount
+        other_order.save(
+            update_fields=[
+                "status",
+                "payment_status",
+                "paid_amount",
+                "updated_at",
+            ]
+        )
+
+        other_order.refresh_from_db()
+        other_order_item.refresh_from_db()
+
+        return other_order, other_order_item
+
+    def test_pos_returns_create_api_success(self):
+        order, item = self._create_completed_order_with_item(quantity=Decimal("2"))
+
+        request = self._authenticated_request(
+            "post",
+            "/api/company/pos/returns/create/",
+            data={
+                "original_order_id": order.id,
+                "reason": "API return",
+                "items": [
+                    {
+                        "original_order_item_id": item.id,
+                        "quantity": "1",
+                    }
+                ],
+            },
+        )
+        response = self._call_with_permissions(pos_return_create, request)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["item"]["status"], POSReturnStatus.DRAFT)
+        self.assertEqual(response.data["item"]["total_amount"], "109.25")
+        self.assertEqual(len(response.data["item"]["items"]), 1)
+
+    def test_pos_returns_create_api_rejects_other_company_order(self):
+        other_order, other_item = self._create_other_company_completed_order_with_item()
+
+        request = self._authenticated_request(
+            "post",
+            "/api/company/pos/returns/create/",
+            data={
+                "original_order_id": other_order.id,
+                "reason": "Invalid company return",
+                "items": [
+                    {
+                        "original_order_item_id": other_item.id,
+                        "quantity": "1",
+                    }
+                ],
+            },
+        )
+        response = self._call_with_permissions(pos_return_create, request)
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(response.data["ok"])
+
+    def test_pos_returns_list_api_returns_company_returns_only(self):
+        order, item = self._create_completed_order_with_item(quantity=Decimal("2"))
+        pos_return = create_pos_return(
+            company=self.company,
+            original_order=order,
+            reason="List API return",
+            user=self.user,
+        )
+        add_pos_return_item(
+            company=self.company,
+            pos_return=pos_return,
+            original_order_item=item,
+            quantity=Decimal("1"),
+        )
+
+        other_order, other_item = self._create_other_company_completed_order_with_item()
+        other_return = create_pos_return(
+            company=self.other_company,
+            original_order=other_order,
+            reason="Other company return",
+            user=self.user,
+        )
+        add_pos_return_item(
+            company=self.other_company,
+            pos_return=other_return,
+            original_order_item=other_item,
+            quantity=Decimal("1"),
+        )
+
+        request = self._authenticated_request(
+            "get",
+            "/api/company/pos/returns/",
+        )
+        response = self._call_with_permissions(pos_returns_list, request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["items"][0]["id"], pos_return.id)
+
+    def test_pos_returns_detail_api_success(self):
+        order, item = self._create_completed_order_with_item(quantity=Decimal("2"))
+        pos_return = create_pos_return(
+            company=self.company,
+            original_order=order,
+            reason="Detail API return",
+            user=self.user,
+        )
+        add_pos_return_item(
+            company=self.company,
+            pos_return=pos_return,
+            original_order_item=item,
+            quantity=Decimal("1"),
+        )
+
+        request = self._authenticated_request(
+            "get",
+            f"/api/company/pos/returns/{pos_return.id}/",
+        )
+        response = self._call_with_permissions(
+            pos_return_detail,
+            request,
+            return_id=pos_return.id,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["item"]["id"], pos_return.id)
+        self.assertEqual(len(response.data["item"]["items"]), 1)
+
+    def test_pos_returns_detail_api_hides_other_company_return(self):
+        other_order, other_item = self._create_other_company_completed_order_with_item()
+        other_return = create_pos_return(
+            company=self.other_company,
+            original_order=other_order,
+            reason="Hidden return",
+            user=self.user,
+        )
+        add_pos_return_item(
+            company=self.other_company,
+            pos_return=other_return,
+            original_order_item=other_item,
+            quantity=Decimal("1"),
+        )
+
+        request = self._authenticated_request(
+            "get",
+            f"/api/company/pos/returns/{other_return.id}/",
+        )
+        response = self._call_with_permissions(
+            pos_return_detail,
+            request,
+            return_id=other_return.id,
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(response.data["ok"])
+
+    def test_pos_returns_complete_api_success(self):
+        order, item = self._create_completed_order_with_item(quantity=Decimal("2"))
+        pos_return = create_pos_return(
+            company=self.company,
+            original_order=order,
+            reason="Complete API return",
+            user=self.user,
+        )
+        add_pos_return_item(
+            company=self.company,
+            pos_return=pos_return,
+            original_order_item=item,
+            quantity=Decimal("1"),
+        )
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/returns/{pos_return.id}/complete/",
+            data={},
+        )
+        response = self._call_with_permissions(
+            pos_return_complete,
+            request,
+            return_id=pos_return.id,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["item"]["status"], POSReturnStatus.COMPLETED)
+
+    def test_pos_returns_cancel_api_success(self):
+        order, _item = self._create_completed_order_with_item(quantity=Decimal("2"))
+        pos_return = create_pos_return(
+            company=self.company,
+            original_order=order,
+            reason="Cancel API return",
+            user=self.user,
+        )
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/returns/{pos_return.id}/cancel/",
+            data={
+                "cancellation_reason": "Cancelled by API test",
+            },
+        )
+        response = self._call_with_permissions(
+            pos_return_cancel,
+            request,
+            return_id=pos_return.id,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["item"]["status"], POSReturnStatus.CANCELLED)
+        self.assertEqual(
+            response.data["item"]["cancellation_reason"],
+            "Cancelled by API test",
+        )
 

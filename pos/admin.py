@@ -1,12 +1,14 @@
 # ============================================================
 # 📂 pos/admin.py
-# 🧠 PrimeyAcc | POS Admin V1.0
+# 🧠 PrimeyAcc | POS Admin V1.1
 # ------------------------------------------------------------
 # ✅ POS Registers Admin
 # ✅ POS Cashier Sessions Admin
 # ✅ POS Checkout Orders Admin
 # ✅ POS Checkout Order Items Admin
 # ✅ POS Payments Admin
+# ✅ POS Returns Admin
+# ✅ POS Return Items Admin
 # ✅ Company / Branch / Register Filters
 # ✅ Treasury / Payment Filters
 # ✅ Readonly Audit Fields
@@ -15,6 +17,7 @@
 # القاعدة المعتمدة:
 # - لوحة Admin للعرض والمراجعة التشغيلية فقط
 # - لا يتم تنفيذ البيع أو إغلاق الجلسات أو الترحيل من admin.py
+# - لا يتم تنفيذ المرتجعات أو رد المبالغ أو إرجاع المخزون من admin.py
 # - العمليات التشغيلية تتم داخل pos/services.py
 # - كل سجلات POS مرتبطة بشركة واحدة فقط
 # - لا يجوز خلط بيانات الشركات في أي علاقة تشغيلية
@@ -29,6 +32,8 @@ from .models import (
     POSOrderItem,
     POSPayment,
     POSRegister,
+    POSReturn,
+    POSReturnItem,
     POSSession,
 )
 
@@ -110,6 +115,50 @@ class POSPaymentInline(admin.TabularInline):
         "customer_payment",
         "confirmed_at",
         "cancelled_at",
+    ]
+
+
+class POSReturnItemInline(admin.TabularInline):
+    """
+    Inline POS return items.
+
+    Used only for operational review inside Django Admin.
+    """
+
+    model = POSReturnItem
+    extra = 0
+    can_delete = False
+    fields = [
+        "original_order_item",
+        "catalog_item",
+        "item_code",
+        "item_sku",
+        "item_barcode",
+        "item_name",
+        "unit_name",
+        "quantity",
+        "unit_price",
+        "discount_amount",
+        "taxable_amount",
+        "tax_rate",
+        "tax_amount",
+        "line_total",
+    ]
+    readonly_fields = [
+        "original_order_item",
+        "catalog_item",
+        "item_code",
+        "item_sku",
+        "item_barcode",
+        "item_name",
+        "unit_name",
+        "quantity",
+        "unit_price",
+        "discount_amount",
+        "taxable_amount",
+        "tax_rate",
+        "tax_amount",
+        "line_total",
     ]
 
 
@@ -608,6 +657,217 @@ class POSPaymentAdmin(admin.ModelAdmin):
                 "fields": [
                     "extra_data",
                     "notes",
+                ]
+            },
+        ),
+        (
+            "Audit",
+            {
+                "fields": [
+                    "created_at",
+                    "updated_at",
+                ]
+            },
+        ),
+    ]
+
+
+@admin.register(POSReturn)
+class POSReturnAdmin(admin.ModelAdmin):
+    """
+    Admin configuration for POS returns.
+    """
+
+    list_display = [
+        "id",
+        "return_number",
+        "company",
+        "original_order",
+        "session",
+        "register",
+        "branch",
+        "customer",
+        "status",
+        "total_amount",
+        "refund_amount",
+        "created_at",
+    ]
+    list_filter = [
+        "status",
+        "company",
+        "register",
+        "branch",
+        "created_at",
+        "completed_at",
+        "cancelled_at",
+    ]
+    search_fields = [
+        "return_number",
+        "original_order__order_number",
+        "session__session_number",
+        "register__name",
+        "register__code",
+        "company__name",
+        "company__name_ar",
+        "company__name_en",
+        "customer__name",
+        "customer__name_ar",
+        "customer__name_en",
+    ]
+    readonly_fields = [
+        "created_at",
+        "updated_at",
+    ]
+    inlines = [
+        POSReturnItemInline,
+    ]
+    fieldsets = [
+        (
+            "Return",
+            {
+                "fields": [
+                    "company",
+                    "original_order",
+                    "session",
+                    "register",
+                    "branch",
+                    "warehouse",
+                    "customer",
+                    "return_number",
+                    "status",
+                    "reason",
+                ]
+            },
+        ),
+        (
+            "Amounts",
+            {
+                "fields": [
+                    "subtotal_amount",
+                    "discount_amount",
+                    "taxable_amount",
+                    "tax_amount",
+                    "total_amount",
+                    "refund_amount",
+                ]
+            },
+        ),
+        (
+            "Lifecycle",
+            {
+                "fields": [
+                    "created_by",
+                    "updated_by",
+                    "completed_by",
+                    "cancelled_by",
+                    "completed_at",
+                    "cancelled_at",
+                    "cancellation_reason",
+                ]
+            },
+        ),
+        (
+            "Extra",
+            {
+                "fields": [
+                    "extra_data",
+                    "notes",
+                ]
+            },
+        ),
+        (
+            "Audit",
+            {
+                "fields": [
+                    "created_at",
+                    "updated_at",
+                ]
+            },
+        ),
+    ]
+
+
+@admin.register(POSReturnItem)
+class POSReturnItemAdmin(admin.ModelAdmin):
+    """
+    Admin configuration for POS return items.
+    """
+
+    list_display = [
+        "id",
+        "pos_return",
+        "company",
+        "original_order_item",
+        "catalog_item",
+        "item_name",
+        "item_code",
+        "item_sku",
+        "quantity",
+        "unit_price",
+        "tax_amount",
+        "line_total",
+        "created_at",
+    ]
+    list_filter = [
+        "company",
+        "catalog_item",
+        "created_at",
+    ]
+    search_fields = [
+        "pos_return__return_number",
+        "pos_return__original_order__order_number",
+        "original_order_item__order__order_number",
+        "item_name",
+        "item_code",
+        "item_sku",
+        "item_barcode",
+        "catalog_item__name",
+        "catalog_item__name_ar",
+        "catalog_item__name_en",
+        "company__name",
+        "company__name_ar",
+        "company__name_en",
+    ]
+    readonly_fields = [
+        "created_at",
+        "updated_at",
+    ]
+    fieldsets = [
+        (
+            "Return Item",
+            {
+                "fields": [
+                    "company",
+                    "pos_return",
+                    "original_order_item",
+                    "catalog_item",
+                    "item_code",
+                    "item_sku",
+                    "item_barcode",
+                    "item_name",
+                    "unit_name",
+                ]
+            },
+        ),
+        (
+            "Amounts",
+            {
+                "fields": [
+                    "quantity",
+                    "unit_price",
+                    "discount_amount",
+                    "taxable_amount",
+                    "tax_rate",
+                    "tax_amount",
+                    "line_total",
+                ]
+            },
+        ),
+        (
+            "Extra",
+            {
+                "fields": [
+                    "extra_data",
                 ]
             },
         ),

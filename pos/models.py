@@ -1,33 +1,33 @@
-# ============================================================
-# 📂 pos/models.py
-# 🧠 PrimeyAcc | POS Models V1.0
+﻿# ============================================================
+# ًں“‚ pos/models.py
+# ًں§  PrimeyAcc | POS Models V1.0
 # ------------------------------------------------------------
-# ✅ POS Registers Foundation
-# ✅ POS Cashier Sessions Foundation
-# ✅ POS Checkout Orders Foundation
-# ✅ POS Checkout Order Items Foundation
-# ✅ POS Payments Foundation
-# ✅ Branch / Warehouse / Treasury Account Linking
-# ✅ Payment Method / Terminal Linking
-# ✅ Sales Invoice Linking
-# ✅ Customer Linking
-# ✅ CatalogItem Snapshot at Checkout Time
-# ✅ Company-level Tenant Isolation
-# ✅ Audit Fields
+# âœ… POS Registers Foundation
+# âœ… POS Cashier Sessions Foundation
+# âœ… POS Checkout Orders Foundation
+# âœ… POS Checkout Order Items Foundation
+# âœ… POS Payments Foundation
+# âœ… Branch / Warehouse / Treasury Account Linking
+# âœ… Payment Method / Terminal Linking
+# âœ… Sales Invoice Linking
+# âœ… Customer Linking
+# âœ… CatalogItem Snapshot at Checkout Time
+# âœ… Company-level Tenant Isolation
+# âœ… Audit Fields
 # ------------------------------------------------------------
-# القاعدة المعتمدة:
-# - POS يعمل داخل مساحة /company فقط
-# - لا تقبل واجهات /company أي company_id من الواجهة
-# - أي API داخل /company يجب أن يستخرج الشركة من المستخدم الحالي
-# - كل سجل POS يجب أن يرتبط بـ company
-# - كل Register يرتبط بشركة وفرع ويمكن ربطه بمستودع وحساب خزينة
-# - كل Session ترتبط بـ Register واحد وتمنع الخدمات فتح أكثر من جلسة نشطة
-# - كل POSOrder هو مستند checkout قبل/بعد إنشاء فاتورة البيع
-# - كل POSOrderItem يحتفظ بنسخة Snapshot من بيانات CatalogItem وقت البيع
-# - كل POSPayment يحتفظ بطريقة الدفع والجهاز وحساب الخزينة وحركة الخزينة عند الحاجة
-# - لا يتم تنفيذ البيع أو خصم المخزون أو الترحيل المحاسبي داخل models.py
-# - العمليات التشغيلية تتم داخل pos/services.py فقط
-# - لا يجوز ربط أي فرع أو مستودع أو حساب خزينة أو طريقة دفع من شركة أخرى
+# ط§ظ„ظ‚ط§ط¹ط¯ط© ط§ظ„ظ…ط¹طھظ…ط¯ط©:
+# - POS ظٹط¹ظ…ظ„ ط¯ط§ط®ظ„ ظ…ط³ط§ط­ط© /company ظپظ‚ط·
+# - ظ„ط§ طھظ‚ط¨ظ„ ظˆط§ط¬ظ‡ط§طھ /company ط£ظٹ company_id ظ…ظ† ط§ظ„ظˆط§ط¬ظ‡ط©
+# - ط£ظٹ API ط¯ط§ط®ظ„ /company ظٹط¬ط¨ ط£ظ† ظٹط³طھط®ط±ط¬ ط§ظ„ط´ط±ظƒط© ظ…ظ† ط§ظ„ظ…ط³طھط®ط¯ظ… ط§ظ„ط­ط§ظ„ظٹ
+# - ظƒظ„ ط³ط¬ظ„ POS ظٹط¬ط¨ ط£ظ† ظٹط±طھط¨ط· ط¨ظ€ company
+# - ظƒظ„ Register ظٹط±طھط¨ط· ط¨ط´ط±ظƒط© ظˆظپط±ط¹ ظˆظٹظ…ظƒظ† ط±ط¨ط·ظ‡ ط¨ظ…ط³طھظˆط¯ط¹ ظˆط­ط³ط§ط¨ ط®ط²ظٹظ†ط©
+# - ظƒظ„ Session طھط±طھط¨ط· ط¨ظ€ Register ظˆط§ط­ط¯ ظˆطھظ…ظ†ط¹ ط§ظ„ط®ط¯ظ…ط§طھ ظپطھط­ ط£ظƒط«ط± ظ…ظ† ط¬ظ„ط³ط© ظ†ط´ط·ط©
+# - ظƒظ„ POSOrder ظ‡ظˆ ظ…ط³طھظ†ط¯ checkout ظ‚ط¨ظ„/ط¨ط¹ط¯ ط¥ظ†ط´ط§ط، ظپط§طھظˆط±ط© ط§ظ„ط¨ظٹط¹
+# - ظƒظ„ POSOrderItem ظٹط­طھظپط¸ ط¨ظ†ط³ط®ط© Snapshot ظ…ظ† ط¨ظٹط§ظ†ط§طھ CatalogItem ظˆظ‚طھ ط§ظ„ط¨ظٹط¹
+# - ظƒظ„ POSPayment ظٹط­طھظپط¸ ط¨ط·ط±ظٹظ‚ط© ط§ظ„ط¯ظپط¹ ظˆط§ظ„ط¬ظ‡ط§ط² ظˆط­ط³ط§ط¨ ط§ظ„ط®ط²ظٹظ†ط© ظˆط­ط±ظƒط© ط§ظ„ط®ط²ظٹظ†ط© ط¹ظ†ط¯ ط§ظ„ط­ط§ط¬ط©
+# - ظ„ط§ ظٹطھظ… طھظ†ظپظٹط° ط§ظ„ط¨ظٹط¹ ط£ظˆ ط®طµظ… ط§ظ„ظ…ط®ط²ظˆظ† ط£ظˆ ط§ظ„طھط±ط­ظٹظ„ ط§ظ„ظ…ط­ط§ط³ط¨ظٹ ط¯ط§ط®ظ„ models.py
+# - ط§ظ„ط¹ظ…ظ„ظٹط§طھ ط§ظ„طھط´ط؛ظٹظ„ظٹط© طھطھظ… ط¯ط§ط®ظ„ pos/services.py ظپظ‚ط·
+# - ظ„ط§ ظٹط¬ظˆط² ط±ط¨ط· ط£ظٹ ظپط±ط¹ ط£ظˆ ظ…ط³طھظˆط¯ط¹ ط£ظˆ ط­ط³ط§ط¨ ط®ط²ظٹظ†ط© ط£ظˆ ط·ط±ظٹظ‚ط© ط¯ظپط¹ ظ…ظ† ط´ط±ظƒط© ط£ط®ط±ظ‰
 # ============================================================
 
 from __future__ import annotations
@@ -86,6 +86,11 @@ class POSPaymentLineType(models.TextChoices):
     OTHER = "OTHER", "Other"
 
 
+
+class POSReturnStatus(models.TextChoices):
+    DRAFT = "DRAFT", "Draft"
+    COMPLETED = "COMPLETED", "Completed"
+    CANCELLED = "CANCELLED", "Cancelled"
 class POSRegister(models.Model):
     """
     POS register / cashier point.
@@ -1144,3 +1149,445 @@ class POSPayment(models.Model):
 
         if self.amount <= ZERO_MONEY:
             raise ValidationError({"amount": "Amount must be greater than zero."})
+
+class POSReturn(models.Model):
+    """
+    POS return document.
+
+    This model is the foundation document for returning POS order lines.
+    Refund posting, stock return, and accounting reversal are intentionally
+    handled later inside pos/services.py, not inside models.py.
+    """
+
+    company = models.ForeignKey(
+        "companies.Company",
+        on_delete=models.CASCADE,
+        related_name="pos_returns",
+        db_index=True,
+        verbose_name="Company",
+    )
+    original_order = models.ForeignKey(
+        POSOrder,
+        on_delete=models.PROTECT,
+        related_name="returns",
+        db_index=True,
+        verbose_name="Original POS order",
+    )
+    session = models.ForeignKey(
+        POSSession,
+        on_delete=models.PROTECT,
+        related_name="returns",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="POS session",
+    )
+    register = models.ForeignKey(
+        POSRegister,
+        on_delete=models.PROTECT,
+        related_name="returns",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Register",
+    )
+    branch = models.ForeignKey(
+        "companies.Branch",
+        on_delete=models.PROTECT,
+        related_name="pos_returns",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Branch",
+    )
+    warehouse = models.ForeignKey(
+        "inventory.Warehouse",
+        on_delete=models.PROTECT,
+        related_name="pos_returns",
+        blank=True,
+        null=True,
+        verbose_name="Warehouse",
+    )
+    customer = models.ForeignKey(
+        "parties.BusinessParty",
+        on_delete=models.SET_NULL,
+        related_name="pos_returns",
+        blank=True,
+        null=True,
+        verbose_name="Customer",
+    )
+
+    return_number = models.CharField(
+        max_length=50,
+        db_index=True,
+        verbose_name="Return number",
+        help_text="Unique inside the same company.",
+    )
+    status = models.CharField(
+        max_length=30,
+        choices=POSReturnStatus.choices,
+        default=POSReturnStatus.DRAFT,
+        db_index=True,
+        verbose_name="Status",
+    )
+
+    subtotal_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=ZERO_MONEY,
+        verbose_name="Subtotal amount",
+    )
+    discount_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=ZERO_MONEY,
+        verbose_name="Discount amount",
+    )
+    taxable_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=ZERO_MONEY,
+        verbose_name="Taxable amount",
+    )
+    tax_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=ZERO_MONEY,
+        verbose_name="Tax amount",
+    )
+    total_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=ZERO_MONEY,
+        verbose_name="Total amount",
+    )
+    refund_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=ZERO_MONEY,
+        verbose_name="Refund amount",
+        help_text="Amount expected to be refunded to the customer.",
+    )
+
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="completed_pos_returns",
+        verbose_name="Completed by",
+    )
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="cancelled_pos_returns",
+        verbose_name="Cancelled by",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="created_pos_returns",
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="updated_pos_returns",
+        verbose_name="Updated by",
+    )
+
+    completed_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="Completed at",
+    )
+    cancelled_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="Cancelled at",
+    )
+    cancellation_reason = models.TextField(
+        blank=True,
+        verbose_name="Cancellation reason",
+    )
+    reason = models.TextField(
+        blank=True,
+        verbose_name="Return reason",
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Internal notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "POS return"
+        verbose_name_plural = "POS returns"
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "return_number"],
+                name="unique_pos_return_number_per_company",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "status"]),
+            models.Index(fields=["company", "original_order"]),
+            models.Index(fields=["company", "session"]),
+            models.Index(fields=["company", "register"]),
+            models.Index(fields=["company", "branch"]),
+            models.Index(fields=["company", "created_at"]),
+            models.Index(fields=["return_number"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.return_number} - {self.status}"
+
+    @property
+    def is_completed(self) -> bool:
+        return self.status == POSReturnStatus.COMPLETED
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self.status == POSReturnStatus.CANCELLED
+
+    def clean(self) -> None:
+        super().clean()
+
+        if (
+            self.original_order_id
+            and self.company_id
+            and self.original_order.company_id != self.company_id
+        ):
+            raise ValidationError(
+                {"original_order": "Original POS order must belong to the same company."}
+            )
+
+        if self.session_id and self.company_id and self.session.company_id != self.company_id:
+            raise ValidationError({"session": "Session must belong to the same company."})
+
+        if self.register_id and self.company_id and self.register.company_id != self.company_id:
+            raise ValidationError({"register": "Register must belong to the same company."})
+
+        if self.branch_id and self.company_id and self.branch.company_id != self.company_id:
+            raise ValidationError({"branch": "Branch must belong to the same company."})
+
+        if self.warehouse_id and self.company_id and self.warehouse.company_id != self.company_id:
+            raise ValidationError({"warehouse": "Warehouse must belong to the same company."})
+
+        if self.customer_id and self.company_id and self.customer.company_id != self.company_id:
+            raise ValidationError({"customer": "Customer must belong to the same company."})
+
+        if self.total_amount < ZERO_MONEY:
+            raise ValidationError({"total_amount": "Total amount cannot be negative."})
+
+        if self.refund_amount < ZERO_MONEY:
+            raise ValidationError({"refund_amount": "Refund amount cannot be negative."})
+
+
+class POSReturnItem(models.Model):
+    """
+    POS return item.
+
+    This model stores returned quantity and snapshot values from the original
+    POS order item. Return quantity limits are enforced in pos/services.py.
+    """
+
+    company = models.ForeignKey(
+        "companies.Company",
+        on_delete=models.CASCADE,
+        related_name="pos_return_items",
+        db_index=True,
+        verbose_name="Company",
+    )
+    pos_return = models.ForeignKey(
+        POSReturn,
+        on_delete=models.CASCADE,
+        related_name="items",
+        db_index=True,
+        verbose_name="POS return",
+    )
+    original_order_item = models.ForeignKey(
+        POSOrderItem,
+        on_delete=models.PROTECT,
+        related_name="return_items",
+        db_index=True,
+        verbose_name="Original POS order item",
+    )
+    catalog_item = models.ForeignKey(
+        "catalog.CatalogItem",
+        on_delete=models.PROTECT,
+        related_name="pos_return_items",
+        db_index=True,
+        verbose_name="Catalog item",
+    )
+
+    item_code = models.CharField(
+        max_length=100,
+        blank=True,
+        db_index=True,
+        verbose_name="Item code",
+    )
+    item_sku = models.CharField(
+        max_length=100,
+        blank=True,
+        db_index=True,
+        verbose_name="Item SKU",
+    )
+    item_barcode = models.CharField(
+        max_length=120,
+        blank=True,
+        db_index=True,
+        verbose_name="Item barcode",
+    )
+    item_name = models.CharField(
+        max_length=255,
+        verbose_name="Item name",
+    )
+    unit_name = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="Unit name",
+    )
+
+    quantity = models.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        default=ZERO_QUANTITY,
+        verbose_name="Returned quantity",
+    )
+    unit_price = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=ZERO_MONEY,
+        verbose_name="Unit price",
+    )
+    discount_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=ZERO_MONEY,
+        verbose_name="Discount amount",
+    )
+    taxable_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=ZERO_MONEY,
+        verbose_name="Taxable amount",
+    )
+    tax_rate = models.DecimalField(
+        max_digits=7,
+        decimal_places=4,
+        default=ZERO_MONEY,
+        verbose_name="Tax rate",
+    )
+    tax_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=ZERO_MONEY,
+        verbose_name="Tax amount",
+    )
+    line_total = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=ZERO_MONEY,
+        verbose_name="Line total",
+    )
+
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "POS return item"
+        verbose_name_plural = "POS return items"
+        ordering = ["id"]
+        indexes = [
+            models.Index(fields=["company", "pos_return"]),
+            models.Index(fields=["company", "original_order_item"]),
+            models.Index(fields=["company", "catalog_item"]),
+            models.Index(fields=["item_code"]),
+            models.Index(fields=["item_sku"]),
+            models.Index(fields=["item_barcode"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.item_name} x {self.quantity}"
+
+    def clean(self) -> None:
+        super().clean()
+
+        if (
+            self.pos_return_id
+            and self.company_id
+            and self.pos_return.company_id != self.company_id
+        ):
+            raise ValidationError({"pos_return": "POS return must belong to the same company."})
+
+        if (
+            self.original_order_item_id
+            and self.company_id
+            and self.original_order_item.company_id != self.company_id
+        ):
+            raise ValidationError(
+                {"original_order_item": "Original order item must belong to the same company."}
+            )
+
+        if (
+            self.catalog_item_id
+            and self.company_id
+            and self.catalog_item.company_id != self.company_id
+        ):
+            raise ValidationError({"catalog_item": "Catalog item must belong to the same company."})
+
+        if (
+            self.pos_return_id
+            and self.original_order_item_id
+            and self.pos_return.original_order_id != self.original_order_item.order_id
+        ):
+            raise ValidationError(
+                {
+                    "original_order_item": (
+                        "Original order item must belong to the original POS order."
+                    )
+                }
+            )
+
+        if self.quantity <= ZERO_QUANTITY:
+            raise ValidationError({"quantity": "Returned quantity must be greater than zero."})
+
+        if self.unit_price < ZERO_MONEY:
+            raise ValidationError({"unit_price": "Unit price cannot be negative."})
+
+

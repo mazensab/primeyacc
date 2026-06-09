@@ -1,11 +1,12 @@
 # ============================================================
 # 📂 api/company/pos/urls.py
-# 🧠 PrimeyAcc | Company POS URLs V1.2
+# 🧠 PrimeyAcc | Company POS URLs V1.3
 # ------------------------------------------------------------
 # ✅ Company POS API Root Routing
 # ✅ POS Registers Routes Include
 # ✅ POS Sessions Routes Include
 # ✅ POS Orders / Checkout Routes Include
+# ✅ POS Returns Routes Include
 # ✅ Company-scoped /company POS API Routing
 # ✅ Ready for later receipts / returns / shifts reports
 # ------------------------------------------------------------
@@ -37,5 +38,9 @@ urlpatterns = [
     path(
         "orders/",
         include("api.company.pos.orders.urls"),
+    ),
+    path(
+        "returns/",
+        include("api.company.pos.returns.urls"),
     ),
 ]
