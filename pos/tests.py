@@ -1,9 +1,10 @@
 # ============================================================
 # 📂 pos/tests.py
-# 🧠 PrimeyAcc | POS Tests V1.1
+# 🧠 PrimeyAcc | POS Tests V1.2
 # ------------------------------------------------------------
 # ✅ Phase 13.1 POS Foundation Service Tests
 # ✅ Phase 13.2 POS Registers API Tests
+# ✅ Phase 13.3 POS Sessions API Tests
 # ✅ POS Register Creation Tests
 # ✅ POS Tenant Isolation Tests
 # ✅ POS Session Open / Close Tests
@@ -14,13 +15,15 @@
 # ✅ POS Payment Line Tests
 # ✅ POS Checkout Preview Tests
 # ✅ POS Registers List / Create / Detail / Update / Status API Tests
+# ✅ POS Sessions List / Open / Detail / Close / Cancel API Tests
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - الاختبارات تثبت أن POS يعمل داخل شركة واحدة فقط
 # - لا يتم الاعتماد على company_id من الواجهة
 # - لا يسمح بخلط فروع أو مستودعات أو خزائن أو منتجات بين الشركات
 # - اختبارات Phase 13.1 تغطي Models / Services foundation
-# - اختبارات Phase 13.2 تغطي POS Registers APIs فقط
+# - اختبارات Phase 13.2 تغطي POS Registers APIs
+# - اختبارات Phase 13.3 تغطي POS Sessions APIs فقط
 # - لا يتم اختبار الترحيل المحاسبي أو خصم المخزون في هذه المرحلة
 # ============================================================
 
@@ -40,6 +43,11 @@ from api.company.pos.registers.detail import pos_register_detail
 from api.company.pos.registers.list import pos_registers_list
 from api.company.pos.registers.status import pos_register_status
 from api.company.pos.registers.update import pos_register_update
+from api.company.pos.sessions.cancel import pos_session_cancel
+from api.company.pos.sessions.close import pos_session_close
+from api.company.pos.sessions.detail import pos_session_detail
+from api.company.pos.sessions.list import pos_sessions_list
+from api.company.pos.sessions.open import pos_session_open
 from catalog.models import CatalogItem, CatalogItemType
 from companies.models import Branch, Company
 from pos.models import (
@@ -885,3 +893,373 @@ class POSRegistersAPITests(POSBaseTestMixin, TestCase):
         self.assertTrue(response.data["ok"])
         self.assertEqual(response.data["item"]["status"], POSRegisterStatus.ACTIVE)
         self.assertTrue(response.data["item"]["is_active"])
+
+
+class POSSessionsAPITests(POSBaseTestMixin, TestCase):
+    """
+    Phase 13.3 POS sessions API tests.
+    """
+
+    def setUp(self):
+        self._create_base_data()
+        self.factory = APIRequestFactory()
+
+    def _authenticated_request(self, method: str, path: str, data=None):
+        """
+        Build authenticated request with company context.
+        """
+        method = method.lower()
+
+        if method == "get":
+            request = self.factory.get(path, data=data or {})
+        elif method == "post":
+            request = self.factory.post(path, data=data or {}, format="json")
+        elif method == "patch":
+            request = self.factory.patch(path, data=data or {}, format="json")
+        else:
+            raise AssertionError(f"Unsupported method: {method}")
+
+        request.company = self.company
+        force_authenticate(request, user=self.user)
+
+        return request
+
+    def _call_with_permissions(self, view, request, *args, **kwargs):
+        """
+        Call API view while keeping this test focused on POS endpoint behavior.
+
+        Company permission behavior is already covered by permissions/company tests.
+        """
+        with patch(
+            "api.permissions.HasAnyCompanyPermission.has_permission",
+            return_value=True,
+        ):
+            return view(request, *args, **kwargs)
+
+    def _create_register_for_api(self, *, name="Main Session Register", code="API-SESSION-POS-001"):
+        return create_pos_register(
+            company=self.company,
+            branch=self.branch,
+            name=name,
+            code=code,
+            treasury_account=self.treasury_account,
+            default_payment_method=self.payment_method,
+            user=self.user,
+        )
+
+    def _create_other_company_register_for_api(self):
+        register = POSRegister.objects.create(
+            company=self.other_company,
+            branch=self.other_branch,
+            treasury_account=self.other_treasury_account,
+            default_payment_method=self.other_payment_method,
+            name="Other Session Register",
+            code="OTHER-SESSION-POS-001",
+            status=POSRegisterStatus.ACTIVE,
+            is_active=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        register.full_clean()
+        return register
+
+    def _open_session_for_api(
+        self,
+        *,
+        register=None,
+        opening_cash_amount=Decimal("100.00"),
+    ):
+        if register is None:
+            register = self._create_register_for_api()
+
+        return open_pos_session(
+            company=self.company,
+            register=register,
+            opening_cash_amount=opening_cash_amount,
+            user=self.user,
+        )
+
+    def test_pos_sessions_list_api_returns_company_sessions_only(self):
+        register = self._create_register_for_api()
+        session = open_pos_session(
+            company=self.company,
+            register=register,
+            opening_cash_amount=Decimal("100.00"),
+            user=self.user,
+        )
+
+        other_register = self._create_other_company_register_for_api()
+        open_pos_session(
+            company=self.other_company,
+            register=other_register,
+            opening_cash_amount=Decimal("200.00"),
+            user=self.user,
+        )
+
+        request = self._authenticated_request(
+            "get",
+            "/api/company/pos/sessions/",
+        )
+        response = self._call_with_permissions(pos_sessions_list, request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["items"][0]["id"], session.id)
+        self.assertEqual(
+            response.data["items"][0]["session_number"],
+            session.session_number,
+        )
+
+    def test_pos_sessions_list_api_supports_search_filter(self):
+        front_register = self._create_register_for_api(
+            name="Front Session Register",
+            code="FRONT-SESSION-POS",
+        )
+        back_register = self._create_register_for_api(
+            name="Back Session Register",
+            code="BACK-SESSION-POS",
+        )
+
+        open_pos_session(
+            company=self.company,
+            register=front_register,
+            opening_cash_amount=Decimal("100.00"),
+            user=self.user,
+        )
+        open_pos_session(
+            company=self.company,
+            register=back_register,
+            opening_cash_amount=Decimal("200.00"),
+            user=self.user,
+        )
+
+        request = self._authenticated_request(
+            "get",
+            "/api/company/pos/sessions/",
+            data={"search": "FRONT"},
+        )
+        response = self._call_with_permissions(pos_sessions_list, request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(
+            response.data["items"][0]["register"]["code"],
+            "FRONT-SESSION-POS",
+        )
+
+    def test_pos_sessions_list_api_supports_status_filter(self):
+        register = self._create_register_for_api()
+        open_pos_session(
+            company=self.company,
+            register=register,
+            opening_cash_amount=Decimal("100.00"),
+            user=self.user,
+        )
+
+        closed_register = self._create_register_for_api(
+            name="Closed Session Register",
+            code="CLOSED-SESSION-POS",
+        )
+        closed_session = open_pos_session(
+            company=self.company,
+            register=closed_register,
+            opening_cash_amount=Decimal("50.00"),
+            user=self.user,
+        )
+        close_pos_session(
+            company=self.company,
+            session=closed_session,
+            closing_cash_amount=Decimal("50.00"),
+            user=self.user,
+        )
+
+        request = self._authenticated_request(
+            "get",
+            "/api/company/pos/sessions/",
+            data={"status": POSSessionStatus.OPEN},
+        )
+        response = self._call_with_permissions(pos_sessions_list, request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["items"][0]["status"], POSSessionStatus.OPEN)
+
+    def test_pos_session_open_api_success(self):
+        register = self._create_register_for_api()
+
+        request = self._authenticated_request(
+            "post",
+            "/api/company/pos/sessions/open/",
+            data={
+                "register_id": register.id,
+                "opening_cash_amount": "125.00",
+                "opening_notes": "Opened by API test",
+            },
+        )
+        response = self._call_with_permissions(pos_session_open, request)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["item"]["status"], POSSessionStatus.OPEN)
+        self.assertEqual(response.data["item"]["register"]["id"], register.id)
+        self.assertEqual(response.data["item"]["opening_cash_amount"], "125.00")
+
+    def test_pos_session_open_api_prevents_duplicate_open_session(self):
+        register = self._create_register_for_api()
+
+        open_pos_session(
+            company=self.company,
+            register=register,
+            opening_cash_amount=Decimal("100.00"),
+            user=self.user,
+        )
+
+        request = self._authenticated_request(
+            "post",
+            "/api/company/pos/sessions/open/",
+            data={
+                "register_id": register.id,
+                "opening_cash_amount": "200.00",
+            },
+        )
+        response = self._call_with_permissions(pos_session_open, request)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.data["ok"])
+
+    def test_pos_session_detail_api_success(self):
+        session = self._open_session_for_api()
+
+        request = self._authenticated_request(
+            "get",
+            f"/api/company/pos/sessions/{session.id}/",
+        )
+        response = self._call_with_permissions(
+            pos_session_detail,
+            request,
+            session_id=session.id,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["item"]["id"], session.id)
+        self.assertEqual(
+            response.data["item"]["session_number"],
+            session.session_number,
+        )
+
+    def test_pos_session_detail_api_hides_other_company_session(self):
+        other_register = self._create_other_company_register_for_api()
+        other_session = open_pos_session(
+            company=self.other_company,
+            register=other_register,
+            opening_cash_amount=Decimal("200.00"),
+            user=self.user,
+        )
+
+        request = self._authenticated_request(
+            "get",
+            f"/api/company/pos/sessions/{other_session.id}/",
+        )
+        response = self._call_with_permissions(
+            pos_session_detail,
+            request,
+            session_id=other_session.id,
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(response.data["ok"])
+
+    def test_pos_session_close_api_success(self):
+        session = self._open_session_for_api(opening_cash_amount=Decimal("100.00"))
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/sessions/{session.id}/close/",
+            data={
+                "closing_cash_amount": "100.00",
+                "closing_notes": "Closed by API test",
+            },
+        )
+        response = self._call_with_permissions(
+            pos_session_close,
+            request,
+            session_id=session.id,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["item"]["status"], POSSessionStatus.CLOSED)
+        self.assertEqual(response.data["item"]["closing_cash_amount"], "100.00")
+        self.assertEqual(response.data["item"]["difference_amount"], "0.00")
+
+    def test_pos_session_close_api_rejects_already_closed_session(self):
+        session = self._open_session_for_api(opening_cash_amount=Decimal("100.00"))
+        close_pos_session(
+            company=self.company,
+            session=session,
+            closing_cash_amount=Decimal("100.00"),
+            user=self.user,
+        )
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/sessions/{session.id}/close/",
+            data={
+                "closing_cash_amount": "100.00",
+            },
+        )
+        response = self._call_with_permissions(
+            pos_session_close,
+            request,
+            session_id=session.id,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.data["ok"])
+
+    def test_pos_session_cancel_api_success(self):
+        session = self._open_session_for_api(opening_cash_amount=Decimal("0.00"))
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/sessions/{session.id}/cancel/",
+            data={
+                "cancellation_reason": "Cancelled by API test",
+            },
+        )
+        response = self._call_with_permissions(
+            pos_session_cancel,
+            request,
+            session_id=session.id,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["item"]["status"], POSSessionStatus.CANCELLED)
+
+    def test_pos_session_cancel_api_rejects_closed_session(self):
+        session = self._open_session_for_api(opening_cash_amount=Decimal("100.00"))
+        close_pos_session(
+            company=self.company,
+            session=session,
+            closing_cash_amount=Decimal("100.00"),
+            user=self.user,
+        )
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/sessions/{session.id}/cancel/",
+            data={
+                "cancellation_reason": "Should fail",
+            },
+        )
+        response = self._call_with_permissions(
+            pos_session_cancel,
+            request,
+            session_id=session.id,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.data["ok"])
