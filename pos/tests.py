@@ -1,7 +1,9 @@
 # ============================================================
 # 📂 pos/tests.py
-# 🧠 PrimeyAcc | POS Tests V1.0
+# 🧠 PrimeyAcc | POS Tests V1.1
 # ------------------------------------------------------------
+# ✅ Phase 13.1 POS Foundation Service Tests
+# ✅ Phase 13.2 POS Registers API Tests
 # ✅ POS Register Creation Tests
 # ✅ POS Tenant Isolation Tests
 # ✅ POS Session Open / Close Tests
@@ -11,24 +13,33 @@
 # ✅ POS Totals Calculation Tests
 # ✅ POS Payment Line Tests
 # ✅ POS Checkout Preview Tests
+# ✅ POS Registers List / Create / Detail / Update / Status API Tests
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - الاختبارات تثبت أن POS يعمل داخل شركة واحدة فقط
 # - لا يتم الاعتماد على company_id من الواجهة
 # - لا يسمح بخلط فروع أو مستودعات أو خزائن أو منتجات بين الشركات
-# - لا يتم اختبار APIs هنا، فقط Models / Services foundation
-# - لا يتم اختبار الترحيل المحاسبي أو خصم المخزون في Phase 13.1
+# - اختبارات Phase 13.1 تغطي Models / Services foundation
+# - اختبارات Phase 13.2 تغطي POS Registers APIs فقط
+# - لا يتم اختبار الترحيل المحاسبي أو خصم المخزون في هذه المرحلة
 # ============================================================
 
 from __future__ import annotations
 
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from rest_framework.test import APIRequestFactory, force_authenticate
 
+from api.company.pos.registers.create import pos_register_create
+from api.company.pos.registers.detail import pos_register_detail
+from api.company.pos.registers.list import pos_registers_list
+from api.company.pos.registers.status import pos_register_status
+from api.company.pos.registers.update import pos_register_update
 from catalog.models import CatalogItem, CatalogItemType
 from companies.models import Branch, Company
 from pos.models import (
@@ -36,6 +47,7 @@ from pos.models import (
     POSPaymentLineStatus,
     POSPaymentLineType,
     POSPaymentStatus,
+    POSRegister,
     POSRegisterStatus,
     POSSessionStatus,
 )
@@ -51,12 +63,12 @@ from pos.services import (
 from treasury.models import TreasuryAccount
 
 
-class POSFoundationTests(TestCase):
+class POSBaseTestMixin:
     """
-    Phase 13.1 POS foundation service tests.
+    Shared setup/helpers for POS tests.
     """
 
-    def setUp(self):
+    def _create_base_data(self):
         self.User = get_user_model()
 
         self.user = self.User.objects.create_user(
@@ -100,11 +112,25 @@ class POSFoundationTests(TestCase):
             current_balance=Decimal("0.00"),
             created_by=self.user,
         )
+        self.other_treasury_account = TreasuryAccount.objects.create(
+            company=self.other_company,
+            name="Other Cashbox",
+            code="CASH-002",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance=Decimal("0.00"),
+            current_balance=Decimal("0.00"),
+            created_by=self.user,
+        )
 
         self.payment_method = self._create_company_payment_method(
             company=self.company,
             code="CASH",
             name="Cash",
+        )
+        self.other_payment_method = self._create_company_payment_method(
+            company=self.other_company,
+            code="OTHER-CASH",
+            name="Other Cash",
         )
 
         self.catalog_item = CatalogItem.objects.create(
@@ -212,7 +238,11 @@ class POSFoundationTests(TestCase):
                 data[field.name] = f"{field.name}-{code}"
             elif internal_type in ["DecimalField", "FloatField"]:
                 data[field.name] = Decimal("0.00")
-            elif internal_type in ["IntegerField", "PositiveIntegerField", "PositiveSmallIntegerField"]:
+            elif internal_type in [
+                "IntegerField",
+                "PositiveIntegerField",
+                "PositiveSmallIntegerField",
+            ]:
                 data[field.name] = 0
             elif internal_type == "BooleanField":
                 data[field.name] = False
@@ -222,6 +252,15 @@ class POSFoundationTests(TestCase):
         payment_method.save()
 
         return payment_method
+
+
+class POSFoundationTests(POSBaseTestMixin, TestCase):
+    """
+    Phase 13.1 POS foundation service tests.
+    """
+
+    def setUp(self):
+        self._create_base_data()
 
     def test_create_pos_register_success(self):
         register = create_pos_register(
@@ -534,3 +573,315 @@ class POSFoundationTests(TestCase):
                 company=self.company,
                 lines=[],
             )
+
+
+class POSRegistersAPITests(POSBaseTestMixin, TestCase):
+    """
+    Phase 13.2 POS registers API tests.
+    """
+
+    def setUp(self):
+        self._create_base_data()
+        self.factory = APIRequestFactory()
+
+    def _authenticated_request(self, method: str, path: str, data=None):
+        """
+        Build authenticated request with company context.
+        """
+        method = method.lower()
+
+        if method == "get":
+            request = self.factory.get(path, data=data or {})
+        elif method == "post":
+            request = self.factory.post(path, data=data or {}, format="json")
+        elif method == "patch":
+            request = self.factory.patch(path, data=data or {}, format="json")
+        else:
+            raise AssertionError(f"Unsupported method: {method}")
+
+        request.company = self.company
+        force_authenticate(request, user=self.user)
+
+        return request
+
+    def _call_with_permissions(self, view, request, *args, **kwargs):
+        """
+        Call API view while keeping this test focused on POS endpoint behavior.
+
+        Company permission behavior is already covered by permissions/company tests.
+        """
+        with patch(
+            "api.permissions.HasAnyCompanyPermission.has_permission",
+            return_value=True,
+        ):
+            return view(request, *args, **kwargs)
+
+    def _create_register_for_api(self, *, name="Main API Register", code="API-POS-001"):
+        return create_pos_register(
+            company=self.company,
+            branch=self.branch,
+            name=name,
+            code=code,
+            treasury_account=self.treasury_account,
+            default_payment_method=self.payment_method,
+            user=self.user,
+        )
+
+    def test_pos_registers_list_api_returns_company_registers_only(self):
+        register = self._create_register_for_api()
+
+        POSRegister.objects.create(
+            company=self.other_company,
+            branch=self.other_branch,
+            treasury_account=self.other_treasury_account,
+            default_payment_method=self.other_payment_method,
+            name="Other Company Register",
+            code="OTHER-POS-001",
+            status=POSRegisterStatus.ACTIVE,
+            is_active=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        request = self._authenticated_request(
+            "get",
+            "/api/company/pos/registers/",
+        )
+        response = self._call_with_permissions(pos_registers_list, request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["items"][0]["id"], register.id)
+        self.assertEqual(response.data["items"][0]["code"], register.code)
+
+    def test_pos_registers_list_api_supports_search_filter(self):
+        self._create_register_for_api(
+            name="Front Cashier",
+            code="FRONT-001",
+        )
+        self._create_register_for_api(
+            name="Back Cashier",
+            code="BACK-001",
+        )
+
+        request = self._authenticated_request(
+            "get",
+            "/api/company/pos/registers/",
+            data={"search": "FRONT"},
+        )
+        response = self._call_with_permissions(pos_registers_list, request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["items"][0]["code"], "FRONT-001")
+
+    def test_pos_register_create_api_success(self):
+        request = self._authenticated_request(
+            "post",
+            "/api/company/pos/registers/create/",
+            data={
+                "branch_id": self.branch.id,
+                "treasury_account_id": self.treasury_account.id,
+                "default_payment_method_id": self.payment_method.id,
+                "name": "Created From API",
+                "code": "API-CREATE-001",
+                "receipt_header": "Welcome",
+                "receipt_footer": "Thank you",
+                "notes": "Created by test",
+            },
+        )
+        response = self._call_with_permissions(pos_register_create, request)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["item"]["code"], "API-CREATE-001")
+        self.assertEqual(response.data["item"]["branch"]["id"], self.branch.id)
+        self.assertEqual(
+            response.data["item"]["treasury_account"]["id"],
+            self.treasury_account.id,
+        )
+
+    def test_pos_register_create_api_rejects_other_company_branch(self):
+        request = self._authenticated_request(
+            "post",
+            "/api/company/pos/registers/create/",
+            data={
+                "branch_id": self.other_branch.id,
+                "name": "Invalid API Register",
+                "code": "INVALID-001",
+            },
+        )
+        response = self._call_with_permissions(pos_register_create, request)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.data["ok"])
+
+    def test_pos_register_detail_api_success(self):
+        register = self._create_register_for_api()
+
+        request = self._authenticated_request(
+            "get",
+            f"/api/company/pos/registers/{register.id}/",
+        )
+        response = self._call_with_permissions(
+            pos_register_detail,
+            request,
+            register_id=register.id,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["item"]["id"], register.id)
+        self.assertEqual(response.data["item"]["code"], register.code)
+
+    def test_pos_register_detail_api_hides_other_company_register(self):
+        other_register = POSRegister.objects.create(
+            company=self.other_company,
+            branch=self.other_branch,
+            treasury_account=self.other_treasury_account,
+            default_payment_method=self.other_payment_method,
+            name="Hidden Register",
+            code="HIDDEN-001",
+            status=POSRegisterStatus.ACTIVE,
+            is_active=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        request = self._authenticated_request(
+            "get",
+            f"/api/company/pos/registers/{other_register.id}/",
+        )
+        response = self._call_with_permissions(
+            pos_register_detail,
+            request,
+            register_id=other_register.id,
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(response.data["ok"])
+
+    def test_pos_register_update_api_success(self):
+        register = self._create_register_for_api()
+
+        request = self._authenticated_request(
+            "patch",
+            f"/api/company/pos/registers/{register.id}/update/",
+            data={
+                "name": "Updated Register",
+                "receipt_header": "Updated Header",
+                "notes": "Updated notes",
+            },
+        )
+        response = self._call_with_permissions(
+            pos_register_update,
+            request,
+            register_id=register.id,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["item"]["name"], "Updated Register")
+        self.assertEqual(response.data["item"]["receipt_header"], "Updated Header")
+
+    def test_pos_register_update_api_rejects_other_company_treasury_account(self):
+        register = self._create_register_for_api()
+
+        request = self._authenticated_request(
+            "patch",
+            f"/api/company/pos/registers/{register.id}/update/",
+            data={
+                "treasury_account_id": self.other_treasury_account.id,
+            },
+        )
+        response = self._call_with_permissions(
+            pos_register_update,
+            request,
+            register_id=register.id,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.data["ok"])
+
+    def test_pos_register_status_api_deactivate_success(self):
+        register = self._create_register_for_api()
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/registers/{register.id}/status/",
+            data={"action": "deactivate"},
+        )
+        response = self._call_with_permissions(
+            pos_register_status,
+            request,
+            register_id=register.id,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["item"]["status"], POSRegisterStatus.INACTIVE)
+        self.assertFalse(response.data["item"]["is_active"])
+
+    def test_pos_register_status_api_prevents_deactivate_with_open_session(self):
+        register = self._create_register_for_api()
+        open_pos_session(
+            company=self.company,
+            register=register,
+            opening_cash_amount=Decimal("0.00"),
+            user=self.user,
+        )
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/registers/{register.id}/status/",
+            data={"action": "deactivate"},
+        )
+        response = self._call_with_permissions(
+            pos_register_status,
+            request,
+            register_id=register.id,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.data["ok"])
+
+    def test_pos_register_status_api_maintenance_success(self):
+        register = self._create_register_for_api()
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/registers/{register.id}/status/",
+            data={"action": "maintenance"},
+        )
+        response = self._call_with_permissions(
+            pos_register_status,
+            request,
+            register_id=register.id,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["item"]["status"], POSRegisterStatus.MAINTENANCE)
+        self.assertFalse(response.data["item"]["is_active"])
+
+    def test_pos_register_status_api_activate_success(self):
+        register = self._create_register_for_api()
+        register.deactivate(user=self.user)
+        register.refresh_from_db()
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/registers/{register.id}/status/",
+            data={"action": "activate"},
+        )
+        response = self._call_with_permissions(
+            pos_register_status,
+            request,
+            register_id=register.id,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["item"]["status"], POSRegisterStatus.ACTIVE)
+        self.assertTrue(response.data["item"]["is_active"])
