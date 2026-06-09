@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 config/settings.py
-# 🧠 PrimeyAcc | Django Project Settings V1.4
+# 🧠 PrimeyAcc | Django Project Settings V1.5
 # ------------------------------------------------------------
 # ✅ Django REST Framework configuration
 # ✅ CORS / CSRF configuration for Next.js frontend
@@ -14,6 +14,7 @@
 # ✅ Phase 8 inventory app registration
 # ✅ Phase 9 accounting app registration
 # ✅ Phase 11 treasury app registration
+# ✅ Phase 12 company payments app registration
 # ✅ Saudi Arabia timezone and Arabic language defaults
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
@@ -28,6 +29,8 @@
 # - المرحلة 8 تضيف inventory كأساس للمخزون والمستودعات وحركات المخزون داخل /company
 # - المرحلة 9 تضيف accounting كأساس للمحاسبة والقيود اليومية داخل /company
 # - المرحلة 11 تضيف treasury كأساس للخزينة والمدفوعات داخل /company
+# - المرحلة 12 تضيف payments كأساس لطرق الدفع وبوابات الدفع وأجهزة الدفع داخل /company
+# - دفع اشتراكات PrimeyAcc للمنصة منفصل عن طرق دفع الشركات لعملائها
 # ============================================================
 
 from __future__ import annotations
@@ -102,6 +105,7 @@ PRIMEYACC_APPS = [
     "inventory",
     "accounting",
     "treasury",
+    "payments",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + PRIMEYACC_APPS

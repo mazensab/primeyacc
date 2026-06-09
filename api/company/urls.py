@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/urls.py
-# 🧠 PrimeyAcc | Company Workspace API URLs V2.7
+# 🧠 PrimeyAcc | Company Workspace API URLs V2.8
 # ------------------------------------------------------------
 # ✅ Central routes for company workspace APIs
 # ✅ Current company endpoint /api/company/me/
@@ -20,6 +20,10 @@
 # ✅ Sales invoices endpoint /api/company/sales/invoices/
 # ✅ Purchases module endpoint /api/company/purchases/
 # ✅ Purchase bills endpoint /api/company/purchases/bills/
+# ✅ Inventory module endpoint /api/company/inventory/
+# ✅ Accounting module endpoint /api/company/accounting/
+# ✅ Treasury module endpoint /api/company/treasury/
+# ✅ Company payments endpoint /api/company/payments/
 # ✅ Company context comes from active CompanyMembership
 # ✅ Views protected by central api/permissions.py guards
 # ------------------------------------------------------------
@@ -34,6 +38,8 @@
 # - CatalogItem هو الأساس الموحد للمنتجات والخدمات
 # - مبيعات الشركة داخل /company/sales وتعتمد على SalesInvoice/SalesInvoiceItem
 # - مشتريات الشركة داخل /company/purchases وتعتمد على PurchaseBill/PurchaseBillItem
+# - طرق الدفع داخل /company/payments وتعتمد على CompanyPaymentMethod/Gateway/Terminal
+# - دفع اشتراكات PrimeyAcc للمنصة منفصل عن طرق دفع الشركات لعملائها
 # ============================================================
 
 from __future__ import annotations
@@ -66,4 +72,5 @@ urlpatterns = [
     path("inventory/", include("api.company.inventory.urls")),
     path("accounting/", include("api.company.accounting.urls")),
     path("treasury/", include("api.company.treasury.urls")),
+    path("payments/", include("api.company.payments.urls")),
 ]

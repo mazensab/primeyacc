@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 accounts/models.py
-# 🧠 PrimeyAcc | Accounts Models V2.0
+# 🧠 PrimeyAcc | Accounts Models V2.1
 # ------------------------------------------------------------
 # ✅ User Profile
 # ✅ Workspace Type Foundation
@@ -20,6 +20,7 @@
 # ✅ Company Treasury & Payments Permissions
 # ✅ Company Customer Payments Permissions
 # ✅ Company Supplier Payments Permissions
+# ✅ Company Payment Methods / Gateways / Terminals Permissions
 # ✅ Safe Default Company Membership Resolver
 # ✅ Audit Fields
 # ------------------------------------------------------------
@@ -37,6 +38,7 @@
 # - المخزون والمستودعات لها صلاحيات دقيقة داخل company.inventory.*
 # - المحاسبة لها صلاحيات دقيقة داخل company.accounting.*
 # - الخزينة والمدفوعات لها صلاحيات دقيقة داخل company.treasury.*
+# - طرق الدفع وبوابات الدفع وأجهزة الدفع لها صلاحيات دقيقة داخل company.payments.*
 # ============================================================
 
 from __future__ import annotations
@@ -223,6 +225,22 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.treasury.supplier_payments.update",
         "company.treasury.supplier_payments.confirm",
         "company.treasury.supplier_payments.cancel",
+        "company.payments.view",
+        "company.payments.create",
+        "company.payments.update",
+        "company.payments.status",
+        "company.payments.methods.view",
+        "company.payments.methods.create",
+        "company.payments.methods.update",
+        "company.payments.methods.status",
+        "company.payments.gateways.view",
+        "company.payments.gateways.create",
+        "company.payments.gateways.update",
+        "company.payments.gateways.status",
+        "company.payments.terminals.view",
+        "company.payments.terminals.create",
+        "company.payments.terminals.update",
+        "company.payments.terminals.status",
         "company.reports.view",
     ],
     CompanyRole.MANAGER: [
@@ -263,6 +281,10 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.treasury.transactions.view",
         "company.treasury.customer_payments.view",
         "company.treasury.supplier_payments.view",
+        "company.payments.view",
+        "company.payments.methods.view",
+        "company.payments.gateways.view",
+        "company.payments.terminals.view",
         "company.reports.view",
     ],
     CompanyRole.ACCOUNTANT: [
@@ -316,6 +338,22 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.treasury.supplier_payments.update",
         "company.treasury.supplier_payments.confirm",
         "company.treasury.supplier_payments.cancel",
+        "company.payments.view",
+        "company.payments.create",
+        "company.payments.update",
+        "company.payments.status",
+        "company.payments.methods.view",
+        "company.payments.methods.create",
+        "company.payments.methods.update",
+        "company.payments.methods.status",
+        "company.payments.gateways.view",
+        "company.payments.gateways.create",
+        "company.payments.gateways.update",
+        "company.payments.gateways.status",
+        "company.payments.terminals.view",
+        "company.payments.terminals.create",
+        "company.payments.terminals.update",
+        "company.payments.terminals.status",
         "company.reports.view",
     ],
     CompanyRole.CASHIER: [
@@ -338,6 +376,9 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.treasury.customer_payments.view",
         "company.treasury.customer_payments.create",
         "company.treasury.customer_payments.confirm",
+        "company.payments.view",
+        "company.payments.methods.view",
+        "company.payments.terminals.view",
     ],
     CompanyRole.SALES: [
         "company.dashboard.view",
@@ -358,6 +399,9 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.treasury.transactions.view",
         "company.treasury.customer_payments.view",
         "company.treasury.customer_payments.create",
+        "company.payments.view",
+        "company.payments.methods.view",
+        "company.payments.terminals.view",
     ],
     CompanyRole.INVENTORY: [
         "company.dashboard.view",
@@ -431,6 +475,10 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.treasury.transactions.view",
         "company.treasury.customer_payments.view",
         "company.treasury.supplier_payments.view",
+        "company.payments.view",
+        "company.payments.methods.view",
+        "company.payments.gateways.view",
+        "company.payments.terminals.view",
         "company.reports.view",
     ],
 }
