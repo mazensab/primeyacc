@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 accounts/models.py
-# 🧠 PrimeyAcc | Accounts Models V1.9
+# 🧠 PrimeyAcc | Accounts Models V2.0
 # ------------------------------------------------------------
 # ✅ User Profile
 # ✅ Workspace Type Foundation
@@ -18,6 +18,8 @@
 # ✅ Company Inventory & Warehouses Permissions
 # ✅ Company Accounting Permissions
 # ✅ Company Treasury & Payments Permissions
+# ✅ Company Customer Payments Permissions
+# ✅ Company Supplier Payments Permissions
 # ✅ Safe Default Company Membership Resolver
 # ✅ Audit Fields
 # ------------------------------------------------------------
@@ -211,6 +213,16 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.treasury.transactions.update",
         "company.treasury.transactions.post",
         "company.treasury.transactions.cancel",
+        "company.treasury.customer_payments.view",
+        "company.treasury.customer_payments.create",
+        "company.treasury.customer_payments.update",
+        "company.treasury.customer_payments.confirm",
+        "company.treasury.customer_payments.cancel",
+        "company.treasury.supplier_payments.view",
+        "company.treasury.supplier_payments.create",
+        "company.treasury.supplier_payments.update",
+        "company.treasury.supplier_payments.confirm",
+        "company.treasury.supplier_payments.cancel",
         "company.reports.view",
     ],
     CompanyRole.MANAGER: [
@@ -249,6 +261,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.treasury.summary.view",
         "company.treasury.accounts.view",
         "company.treasury.transactions.view",
+        "company.treasury.customer_payments.view",
+        "company.treasury.supplier_payments.view",
         "company.reports.view",
     ],
     CompanyRole.ACCOUNTANT: [
@@ -292,6 +306,16 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.treasury.transactions.update",
         "company.treasury.transactions.post",
         "company.treasury.transactions.cancel",
+        "company.treasury.customer_payments.view",
+        "company.treasury.customer_payments.create",
+        "company.treasury.customer_payments.update",
+        "company.treasury.customer_payments.confirm",
+        "company.treasury.customer_payments.cancel",
+        "company.treasury.supplier_payments.view",
+        "company.treasury.supplier_payments.create",
+        "company.treasury.supplier_payments.update",
+        "company.treasury.supplier_payments.confirm",
+        "company.treasury.supplier_payments.cancel",
         "company.reports.view",
     ],
     CompanyRole.CASHIER: [
@@ -311,6 +335,9 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.treasury.accounts.view",
         "company.treasury.transactions.view",
         "company.treasury.transactions.create",
+        "company.treasury.customer_payments.view",
+        "company.treasury.customer_payments.create",
+        "company.treasury.customer_payments.confirm",
     ],
     CompanyRole.SALES: [
         "company.dashboard.view",
@@ -329,6 +356,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.invoices.issue",
         "company.treasury.accounts.view",
         "company.treasury.transactions.view",
+        "company.treasury.customer_payments.view",
+        "company.treasury.customer_payments.create",
     ],
     CompanyRole.INVENTORY: [
         "company.dashboard.view",
@@ -400,6 +429,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.treasury.summary.view",
         "company.treasury.accounts.view",
         "company.treasury.transactions.view",
+        "company.treasury.customer_payments.view",
+        "company.treasury.supplier_payments.view",
         "company.reports.view",
     ],
 }

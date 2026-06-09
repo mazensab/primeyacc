@@ -37,9 +37,22 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from accounts.models import CompanyMembership, CompanyRole, UserProfile
-from .models import TreasuryAccount, TreasuryTransaction
+from .models import (
+    CustomerPayment,
+    PaymentMethod,
+    PaymentStatus,
+    SupplierPayment,
+    TreasuryAccount,
+    TreasuryTransaction,
+)
 from .services import (
+    cancel_customer_payment,
+    cancel_supplier_payment,
     cancel_treasury_transaction,
+    confirm_customer_payment,
+    confirm_supplier_payment,
+    create_customer_payment,
+    create_supplier_payment,
     create_treasury_account,
     create_treasury_transaction,
     get_treasury_summary,
@@ -686,6 +699,444 @@ class TreasuryServiceTests(PrimeyAccTestFactoryMixin, TestCase):
         summary_dict = summary.as_dict()
         self.assertEqual(summary_dict["total_accounts"], 2)
         self.assertEqual(summary_dict["total_balance"], Decimal("425.00"))
+
+
+
+# ============================================================
+# Payment service tests
+# ============================================================
+
+
+class TreasuryPaymentServiceTests(PrimeyAccTestFactoryMixin, TestCase):
+    """
+    Tests for CustomerPayment and SupplierPayment services.
+
+    ??? ?????????? ???? ?? ????????? ?? ???? ?????? ??? Draft
+    ??? ??????? ???? ???? ????? ??????? ??? ??????? ???? ??????.
+    """
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        User = get_user_model()
+
+        cls.user = User.objects.create_user(
+            username="treasury_payment_user",
+            email="treasury-payment@example.com",
+            password="StrongPass12345",
+        )
+
+        cls.company_a = cls.create_company(
+            name="PrimeyAcc Payment Company A",
+            code="PAY-A",
+            email="payment-a@example.com",
+        )
+        cls.company_b = cls.create_company(
+            name="PrimeyAcc Payment Company B",
+            code="PAY-B",
+            email="payment-b@example.com",
+        )
+
+    def test_create_customer_payment_draft_does_not_change_balance(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Customer Draft Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+
+        payment = create_customer_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="75.00",
+            payment_method=PaymentMethod.CASH,
+            customer_id=1,
+            customer_name="Test Customer",
+            reference="CP-DRAFT",
+        )
+
+        account.refresh_from_db()
+        payment.refresh_from_db()
+
+        self.assertEqual(payment.status, PaymentStatus.DRAFT)
+        self.assertIsNone(payment.treasury_transaction_id)
+        self.assertEqual(account.current_balance, Decimal("100.00"))
+        self.assertEqual(payment.amount, Decimal("75.00"))
+        self.assertEqual(payment.customer_id, 1)
+        self.assertEqual(payment.created_by_id, self.user.id)
+
+    def test_confirm_customer_payment_creates_inflow_and_increases_balance(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Customer Confirm Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+
+        payment = create_customer_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="150.00",
+            payment_method=PaymentMethod.CASH,
+            customer_name="Confirmed Customer",
+            reference="CP-CONFIRM",
+        )
+
+        payment = confirm_customer_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+        )
+
+        account.refresh_from_db()
+        payment.refresh_from_db()
+
+        self.assertEqual(payment.status, PaymentStatus.CONFIRMED)
+        self.assertIsNotNone(payment.treasury_transaction_id)
+        self.assertEqual(account.current_balance, Decimal("250.00"))
+        self.assertEqual(payment.confirmed_by_id, self.user.id)
+
+        treasury_transaction = payment.treasury_transaction
+        self.assertEqual(
+            treasury_transaction.transaction_type,
+            TreasuryTransaction.TransactionType.INFLOW,
+        )
+        self.assertEqual(
+            treasury_transaction.source_type,
+            TreasuryTransaction.SourceType.CUSTOMER_PAYMENT,
+        )
+        self.assertEqual(treasury_transaction.source_model, "CustomerPayment")
+        self.assertEqual(treasury_transaction.source_object_id, payment.id)
+        self.assertEqual(
+            treasury_transaction.status,
+            TreasuryTransaction.TransactionStatus.POSTED,
+        )
+        self.assertEqual(treasury_transaction.amount, Decimal("150.00"))
+
+    def test_confirm_customer_payment_twice_does_not_duplicate_balance_effect(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Customer No Duplicate Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+
+        payment = create_customer_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="40.00",
+            payment_method=PaymentMethod.CASH,
+            customer_name="No Duplicate Customer",
+        )
+
+        confirm_customer_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+        )
+        confirm_customer_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+        )
+
+        account.refresh_from_db()
+        payment.refresh_from_db()
+
+        self.assertEqual(account.current_balance, Decimal("140.00"))
+        self.assertEqual(payment.status, PaymentStatus.CONFIRMED)
+        self.assertIsNotNone(payment.treasury_transaction_id)
+        self.assertEqual(
+            TreasuryTransaction.objects.filter(
+                company=self.company_a,
+                source_type=TreasuryTransaction.SourceType.CUSTOMER_PAYMENT,
+                source_object_id=payment.id,
+            ).count(),
+            1,
+        )
+
+    def test_cancel_confirmed_customer_payment_reverses_balance(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Customer Cancel Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+
+        payment = create_customer_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="60.00",
+            payment_method=PaymentMethod.CASH,
+            customer_name="Cancelled Customer",
+            status=PaymentStatus.CONFIRMED,
+        )
+
+        account.refresh_from_db()
+        self.assertEqual(account.current_balance, Decimal("160.00"))
+
+        cancel_customer_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+            reason="Customer refund",
+        )
+
+        account.refresh_from_db()
+        payment.refresh_from_db()
+        payment.treasury_transaction.refresh_from_db()
+
+        self.assertEqual(account.current_balance, Decimal("100.00"))
+        self.assertEqual(payment.status, PaymentStatus.CANCELLED)
+        self.assertEqual(payment.cancelled_by_id, self.user.id)
+        self.assertEqual(payment.cancellation_reason, "Customer refund")
+        self.assertEqual(
+            payment.treasury_transaction.status,
+            TreasuryTransaction.TransactionStatus.CANCELLED,
+        )
+
+    def test_customer_payment_rejects_cross_company_treasury_account(self) -> None:
+        foreign_account = create_treasury_account(
+            company=self.company_b,
+            user=self.user,
+            name="Foreign Customer Payment Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+
+        with self.assertRaises(ValidationError):
+            create_customer_payment(
+                company=self.company_a,
+                treasury_account=foreign_account,
+                user=self.user,
+                amount="10.00",
+                payment_method=PaymentMethod.CASH,
+                customer_name="Cross Company Customer",
+            )
+
+    def test_create_supplier_payment_draft_does_not_change_balance(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Supplier Draft Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="300.00",
+        )
+
+        payment = create_supplier_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="75.00",
+            payment_method=PaymentMethod.CASH,
+            supplier_id=1,
+            supplier_name="Test Supplier",
+            reference="SP-DRAFT",
+        )
+
+        account.refresh_from_db()
+        payment.refresh_from_db()
+
+        self.assertEqual(payment.status, PaymentStatus.DRAFT)
+        self.assertIsNone(payment.treasury_transaction_id)
+        self.assertEqual(account.current_balance, Decimal("300.00"))
+        self.assertEqual(payment.amount, Decimal("75.00"))
+        self.assertEqual(payment.supplier_id, 1)
+        self.assertEqual(payment.created_by_id, self.user.id)
+
+    def test_confirm_supplier_payment_creates_outflow_and_decreases_balance(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Supplier Confirm Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="500.00",
+        )
+
+        payment = create_supplier_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="125.00",
+            payment_method=PaymentMethod.CASH,
+            supplier_name="Confirmed Supplier",
+            reference="SP-CONFIRM",
+        )
+
+        payment = confirm_supplier_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+        )
+
+        account.refresh_from_db()
+        payment.refresh_from_db()
+
+        self.assertEqual(payment.status, PaymentStatus.CONFIRMED)
+        self.assertIsNotNone(payment.treasury_transaction_id)
+        self.assertEqual(account.current_balance, Decimal("375.00"))
+        self.assertEqual(payment.confirmed_by_id, self.user.id)
+
+        treasury_transaction = payment.treasury_transaction
+        self.assertEqual(
+            treasury_transaction.transaction_type,
+            TreasuryTransaction.TransactionType.OUTFLOW,
+        )
+        self.assertEqual(
+            treasury_transaction.source_type,
+            TreasuryTransaction.SourceType.SUPPLIER_PAYMENT,
+        )
+        self.assertEqual(treasury_transaction.source_model, "SupplierPayment")
+        self.assertEqual(treasury_transaction.source_object_id, payment.id)
+        self.assertEqual(
+            treasury_transaction.status,
+            TreasuryTransaction.TransactionStatus.POSTED,
+        )
+        self.assertEqual(treasury_transaction.amount, Decimal("125.00"))
+
+    def test_confirm_supplier_payment_twice_does_not_duplicate_balance_effect(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Supplier No Duplicate Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="300.00",
+        )
+
+        payment = create_supplier_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="40.00",
+            payment_method=PaymentMethod.CASH,
+            supplier_name="No Duplicate Supplier",
+        )
+
+        confirm_supplier_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+        )
+        confirm_supplier_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+        )
+
+        account.refresh_from_db()
+        payment.refresh_from_db()
+
+        self.assertEqual(account.current_balance, Decimal("260.00"))
+        self.assertEqual(payment.status, PaymentStatus.CONFIRMED)
+        self.assertIsNotNone(payment.treasury_transaction_id)
+        self.assertEqual(
+            TreasuryTransaction.objects.filter(
+                company=self.company_a,
+                source_type=TreasuryTransaction.SourceType.SUPPLIER_PAYMENT,
+                source_object_id=payment.id,
+            ).count(),
+            1,
+        )
+
+    def test_cancel_confirmed_supplier_payment_reverses_balance(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Supplier Cancel Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="300.00",
+        )
+
+        payment = create_supplier_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="80.00",
+            payment_method=PaymentMethod.CASH,
+            supplier_name="Cancelled Supplier",
+            status=PaymentStatus.CONFIRMED,
+        )
+
+        account.refresh_from_db()
+        self.assertEqual(account.current_balance, Decimal("220.00"))
+
+        cancel_supplier_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+            reason="Supplier payment cancelled",
+        )
+
+        account.refresh_from_db()
+        payment.refresh_from_db()
+        payment.treasury_transaction.refresh_from_db()
+
+        self.assertEqual(account.current_balance, Decimal("300.00"))
+        self.assertEqual(payment.status, PaymentStatus.CANCELLED)
+        self.assertEqual(payment.cancelled_by_id, self.user.id)
+        self.assertEqual(payment.cancellation_reason, "Supplier payment cancelled")
+        self.assertEqual(
+            payment.treasury_transaction.status,
+            TreasuryTransaction.TransactionStatus.CANCELLED,
+        )
+
+    def test_supplier_payment_is_blocked_when_balance_is_insufficient(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Supplier Insufficient Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="50.00",
+        )
+
+        payment = create_supplier_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="100.00",
+            payment_method=PaymentMethod.CASH,
+            supplier_name="Insufficient Supplier",
+        )
+
+        with self.assertRaises(ValidationError):
+            confirm_supplier_payment(
+                company=self.company_a,
+                payment=payment,
+                user=self.user,
+            )
+
+        account.refresh_from_db()
+        payment.refresh_from_db()
+
+        self.assertEqual(account.current_balance, Decimal("50.00"))
+        self.assertEqual(payment.status, PaymentStatus.DRAFT)
+        self.assertIsNone(payment.treasury_transaction_id)
+
+    def test_supplier_payment_rejects_cross_company_treasury_account(self) -> None:
+        foreign_account = create_treasury_account(
+            company=self.company_b,
+            user=self.user,
+            name="Foreign Supplier Payment Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="100.00",
+        )
+
+        with self.assertRaises(ValidationError):
+            create_supplier_payment(
+                company=self.company_a,
+                treasury_account=foreign_account,
+                user=self.user,
+                amount="10.00",
+                payment_method=PaymentMethod.CASH,
+                supplier_name="Cross Company Supplier",
+            )
 
 
 # ============================================================

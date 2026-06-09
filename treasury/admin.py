@@ -1,17 +1,20 @@
 # ============================================================
 # 📂 treasury/admin.py
-# 🧠 PrimeyAcc | Treasury Admin V1.0
+# 🧠 PrimeyAcc | Treasury Admin V1.1
 # ------------------------------------------------------------
 # ✅ TreasuryAccount admin registration
 # ✅ TreasuryTransaction admin registration
+# ✅ CustomerPayment admin registration
+# ✅ SupplierPayment admin registration
 # ✅ Company-scoped visibility helpers
 # ✅ Operational filters/search for treasury review
-# ✅ Readonly protection for audit and posting fields
+# ✅ Readonly protection for audit, posting, confirmation fields
 # ------------------------------------------------------------
 # القاعدة المعمارية المعتمدة:
 # - Django Admin أداة مراجعة وإدارة داخلية فقط
 # - منطق الخزينة الحقيقي يبقى داخل treasury/services.py
 # - لا يتم تعديل الحركات المرحلة أو الملغاة مباشرة من الواجهة لاحقًا
+# - مدفوعات العملاء والموردين يتم تأكيدها فعليًا من services.py لاحقًا
 # - العزل النهائي داخل /company يتم عبر services و APIs وليس من Admin فقط
 # ============================================================
 
@@ -21,7 +24,12 @@ from django.contrib import admin
 from django.db.models import QuerySet
 from django.http import HttpRequest
 
-from .models import TreasuryAccount, TreasuryTransaction
+from .models import (
+    CustomerPayment,
+    SupplierPayment,
+    TreasuryAccount,
+    TreasuryTransaction,
+)
 
 
 @admin.register(TreasuryAccount)
@@ -343,6 +351,394 @@ class TreasuryTransactionAdmin(admin.ModelAdmin):
         self,
         request: HttpRequest,
         obj: TreasuryTransaction,
+        form,
+        change: bool,
+    ) -> None:
+        if not change and obj.created_by_id is None:
+            obj.created_by = request.user
+
+        obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(CustomerPayment)
+class CustomerPaymentAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "payment_number",
+        "company",
+        "customer_name",
+        "sales_invoice",
+        "treasury_account",
+        "amount",
+        "currency",
+        "payment_method",
+        "status",
+        "payment_date",
+        "confirmed_at",
+        "is_accounting_posted",
+    )
+    list_filter = (
+        "status",
+        "payment_method",
+        "currency",
+        "is_accounting_posted",
+        "company",
+        "treasury_account",
+        "payment_date",
+        "created_at",
+        "confirmed_at",
+        "cancelled_at",
+    )
+    search_fields = (
+        "payment_number",
+        "reference",
+        "description",
+        "notes",
+        "company__name",
+        "customer_name",
+        "customer_phone",
+        "customer_id",
+        "treasury_account__name",
+        "sales_invoice__invoice_number",
+    )
+    readonly_fields = (
+        "treasury_transaction",
+        "accounting_entry",
+        "is_accounting_posted",
+        "accounting_posted_at",
+        "confirmed_at",
+        "cancelled_at",
+        "created_at",
+        "updated_at",
+    )
+    autocomplete_fields = (
+        "company",
+        "sales_invoice",
+        "treasury_account",
+        "treasury_transaction",
+        "accounting_entry",
+        "confirmed_by",
+        "cancelled_by",
+        "created_by",
+        "updated_by",
+    )
+    ordering = (
+        "-payment_date",
+        "-id",
+    )
+    list_select_related = (
+        "company",
+        "sales_invoice",
+        "treasury_account",
+        "treasury_transaction",
+        "accounting_entry",
+        "confirmed_by",
+        "cancelled_by",
+        "created_by",
+        "updated_by",
+    )
+    date_hierarchy = "payment_date"
+    fieldsets = (
+        (
+            "Basic Information",
+            {
+                "fields": (
+                    "company",
+                    "payment_number",
+                    "status",
+                    "payment_date",
+                    "amount",
+                    "currency",
+                    "payment_method",
+                )
+            },
+        ),
+        (
+            "Customer",
+            {
+                "fields": (
+                    "customer_id",
+                    "customer_name",
+                    "customer_phone",
+                    "sales_invoice",
+                )
+            },
+        ),
+        (
+            "Treasury",
+            {
+                "fields": (
+                    "treasury_account",
+                    "treasury_transaction",
+                )
+            },
+        ),
+        (
+            "Reference / Notes",
+            {
+                "fields": (
+                    "reference",
+                    "description",
+                    "notes",
+                )
+            },
+        ),
+        (
+            "Confirmation / Cancellation",
+            {
+                "classes": (
+                    "collapse",
+                ),
+                "fields": (
+                    "confirmed_at",
+                    "confirmed_by",
+                    "cancelled_at",
+                    "cancelled_by",
+                    "cancellation_reason",
+                ),
+            },
+        ),
+        (
+            "Accounting",
+            {
+                "classes": (
+                    "collapse",
+                ),
+                "fields": (
+                    "accounting_entry",
+                    "is_accounting_posted",
+                    "accounting_posted_at",
+                ),
+            },
+        ),
+        (
+            "Audit",
+            {
+                "classes": (
+                    "collapse",
+                ),
+                "fields": (
+                    "created_by",
+                    "updated_by",
+                    "created_at",
+                    "updated_at",
+                ),
+            },
+        ),
+    )
+
+    def get_queryset(self, request: HttpRequest) -> QuerySet[CustomerPayment]:
+        return super().get_queryset(request).select_related(
+            "company",
+            "sales_invoice",
+            "treasury_account",
+            "treasury_transaction",
+            "accounting_entry",
+            "confirmed_by",
+            "cancelled_by",
+            "created_by",
+            "updated_by",
+        )
+
+    def save_model(
+        self,
+        request: HttpRequest,
+        obj: CustomerPayment,
+        form,
+        change: bool,
+    ) -> None:
+        if not change and obj.created_by_id is None:
+            obj.created_by = request.user
+
+        obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(SupplierPayment)
+class SupplierPaymentAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "payment_number",
+        "company",
+        "supplier_name",
+        "purchase_bill",
+        "treasury_account",
+        "amount",
+        "currency",
+        "payment_method",
+        "status",
+        "payment_date",
+        "confirmed_at",
+        "is_accounting_posted",
+    )
+    list_filter = (
+        "status",
+        "payment_method",
+        "currency",
+        "is_accounting_posted",
+        "company",
+        "treasury_account",
+        "payment_date",
+        "created_at",
+        "confirmed_at",
+        "cancelled_at",
+    )
+    search_fields = (
+        "payment_number",
+        "reference",
+        "description",
+        "notes",
+        "company__name",
+        "supplier_name",
+        "supplier_phone",
+        "supplier_id",
+        "treasury_account__name",
+        "purchase_bill__bill_number",
+    )
+    readonly_fields = (
+        "treasury_transaction",
+        "accounting_entry",
+        "is_accounting_posted",
+        "accounting_posted_at",
+        "confirmed_at",
+        "cancelled_at",
+        "created_at",
+        "updated_at",
+    )
+    autocomplete_fields = (
+        "company",
+        "purchase_bill",
+        "treasury_account",
+        "treasury_transaction",
+        "accounting_entry",
+        "confirmed_by",
+        "cancelled_by",
+        "created_by",
+        "updated_by",
+    )
+    ordering = (
+        "-payment_date",
+        "-id",
+    )
+    list_select_related = (
+        "company",
+        "purchase_bill",
+        "treasury_account",
+        "treasury_transaction",
+        "accounting_entry",
+        "confirmed_by",
+        "cancelled_by",
+        "created_by",
+        "updated_by",
+    )
+    date_hierarchy = "payment_date"
+    fieldsets = (
+        (
+            "Basic Information",
+            {
+                "fields": (
+                    "company",
+                    "payment_number",
+                    "status",
+                    "payment_date",
+                    "amount",
+                    "currency",
+                    "payment_method",
+                )
+            },
+        ),
+        (
+            "Supplier",
+            {
+                "fields": (
+                    "supplier_id",
+                    "supplier_name",
+                    "supplier_phone",
+                    "purchase_bill",
+                )
+            },
+        ),
+        (
+            "Treasury",
+            {
+                "fields": (
+                    "treasury_account",
+                    "treasury_transaction",
+                )
+            },
+        ),
+        (
+            "Reference / Notes",
+            {
+                "fields": (
+                    "reference",
+                    "description",
+                    "notes",
+                )
+            },
+        ),
+        (
+            "Confirmation / Cancellation",
+            {
+                "classes": (
+                    "collapse",
+                ),
+                "fields": (
+                    "confirmed_at",
+                    "confirmed_by",
+                    "cancelled_at",
+                    "cancelled_by",
+                    "cancellation_reason",
+                ),
+            },
+        ),
+        (
+            "Accounting",
+            {
+                "classes": (
+                    "collapse",
+                ),
+                "fields": (
+                    "accounting_entry",
+                    "is_accounting_posted",
+                    "accounting_posted_at",
+                ),
+            },
+        ),
+        (
+            "Audit",
+            {
+                "classes": (
+                    "collapse",
+                ),
+                "fields": (
+                    "created_by",
+                    "updated_by",
+                    "created_at",
+                    "updated_at",
+                ),
+            },
+        ),
+    )
+
+    def get_queryset(self, request: HttpRequest) -> QuerySet[SupplierPayment]:
+        return super().get_queryset(request).select_related(
+            "company",
+            "purchase_bill",
+            "treasury_account",
+            "treasury_transaction",
+            "accounting_entry",
+            "confirmed_by",
+            "cancelled_by",
+            "created_by",
+            "updated_by",
+        )
+
+    def save_model(
+        self,
+        request: HttpRequest,
+        obj: SupplierPayment,
         form,
         change: bool,
     ) -> None:

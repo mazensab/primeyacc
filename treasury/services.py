@@ -1,22 +1,28 @@
 # ============================================================
 # 📂 treasury/services.py
-# 🧠 PrimeyAcc | Treasury & Payments Services V1.0
+# 🧠 PrimeyAcc | Treasury & Payments Services V1.1
 # ------------------------------------------------------------
 # ✅ Phase 11.1 Treasury Accounts Foundation services
 # ✅ Phase 11.2 Treasury Transactions Foundation services
+# ✅ Phase 11.3 Treasury APIs Foundation services
+# ✅ Phase 11.4 Customer & Supplier Payments Foundation services
 # ✅ Company-scoped treasury account creation/update
 # ✅ Company-scoped treasury transaction creation/post/cancel
-# ✅ Safe balance updates only on posting
-# ✅ Negative balance prevention for outflows/transfers
-# ✅ Duplicate posting prevention
+# ✅ Company-scoped customer payment create/confirm/cancel
+# ✅ Company-scoped supplier payment create/confirm/cancel
+# ✅ Safe balance updates only on posting/confirmation
+# ✅ Negative balance prevention for outflows/transfers/supplier payments
+# ✅ Duplicate posting/confirmation prevention
 # ✅ Summary helpers for /company treasury dashboard
 # ------------------------------------------------------------
 # القاعدة المعمارية المعتمدة:
 # - لا يتم الاعتماد على company_id القادم من الفرونت
 # - الشركة يجب أن تصل للخدمة من عضوية المستخدم الحالية داخل /company
-# - كل حساب خزينة وحركة خزينة يجب أن تكون داخل نفس الشركة
-# - الرصيد لا يتغير عند إنشاء Draft، يتغير فقط عند POSTED
-# - لا نسمح بتكرار الترحيل أو خلط الشركات
+# - كل حساب خزينة وحركة خزينة ودفع يجب أن يكون داخل نفس الشركة
+# - الرصيد لا يتغير عند إنشاء Draft، يتغير فقط عند POSTED / CONFIRMED
+# - تأكيد دفعة العميل ينشئ حركة خزينة واردة INFLOW
+# - تأكيد دفعة المورد ينشئ حركة خزينة صادرة OUTFLOW
+# - إلغاء دفعة مؤكدة يلغي حركة الخزينة ويعكس الرصيد بأمان
 # - الترحيل المحاسبي التفصيلي سيتم ربطه لاحقًا مع Phase 11 accounting integration
 # ============================================================
 
@@ -31,7 +37,13 @@ from django.db import transaction
 from django.db.models import Count, Q, QuerySet, Sum
 from django.utils import timezone
 
-from .models import TreasuryAccount, TreasuryTransaction
+from .models import (
+    CustomerPayment,
+    PaymentStatus,
+    SupplierPayment,
+    TreasuryAccount,
+    TreasuryTransaction,
+)
 
 
 ZERO = Decimal("0.00")
@@ -98,6 +110,21 @@ def normalize_currency(value: Any) -> str:
     return currency or "SAR"
 
 
+def normalize_optional_positive_int(value: Any, *, field_name: str) -> int | None:
+    if value in (None, ""):
+        return None
+
+    try:
+        integer_value = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError({field_name: "Invalid integer value."}) from exc
+
+    if integer_value <= 0:
+        raise ValidationError({field_name: "Value must be greater than zero."})
+
+    return integer_value
+
+
 def ensure_same_company(company, obj: Any, *, field_name: str) -> None:
     if obj is None:
         return
@@ -107,6 +134,14 @@ def ensure_same_company(company, obj: Any, *, field_name: str) -> None:
 
     if obj.company_id != company.id:
         raise ValidationError({field_name: "Object must belong to the same company."})
+
+
+def ensure_payment_is_editable(payment, *, field_name: str = "status") -> None:
+    if payment.status == PaymentStatus.CONFIRMED:
+        raise ValidationError({field_name: "Confirmed payment cannot be edited directly."})
+
+    if payment.status == PaymentStatus.CANCELLED:
+        raise ValidationError({field_name: "Cancelled payment cannot be edited."})
 
 
 # ---------------------------------------------------------------------
@@ -139,6 +174,42 @@ def get_treasury_transactions_queryset(company) -> QuerySet[TreasuryTransaction]
     )
 
 
+def get_customer_payments_queryset(company) -> QuerySet[CustomerPayment]:
+    return (
+        CustomerPayment.objects.filter(company=company)
+        .select_related(
+            "company",
+            "sales_invoice",
+            "treasury_account",
+            "treasury_transaction",
+            "accounting_entry",
+            "confirmed_by",
+            "cancelled_by",
+            "created_by",
+            "updated_by",
+        )
+        .order_by("-payment_date", "-id")
+    )
+
+
+def get_supplier_payments_queryset(company) -> QuerySet[SupplierPayment]:
+    return (
+        SupplierPayment.objects.filter(company=company)
+        .select_related(
+            "company",
+            "purchase_bill",
+            "treasury_account",
+            "treasury_transaction",
+            "accounting_entry",
+            "confirmed_by",
+            "cancelled_by",
+            "created_by",
+            "updated_by",
+        )
+        .order_by("-payment_date", "-id")
+    )
+
+
 def get_treasury_account_or_raise(company, account_id: int) -> TreasuryAccount:
     try:
         account = TreasuryAccount.objects.get(id=account_id, company=company)
@@ -160,6 +231,24 @@ def get_treasury_transaction_or_raise(company, transaction_id: int) -> TreasuryT
         raise ValidationError({"transaction": "Treasury transaction was not found."}) from exc
 
     return treasury_transaction
+
+
+def get_customer_payment_or_raise(company, payment_id: int) -> CustomerPayment:
+    try:
+        payment = get_customer_payments_queryset(company).get(id=payment_id)
+    except CustomerPayment.DoesNotExist as exc:
+        raise ValidationError({"payment": "Customer payment was not found."}) from exc
+
+    return payment
+
+
+def get_supplier_payment_or_raise(company, payment_id: int) -> SupplierPayment:
+    try:
+        payment = get_supplier_payments_queryset(company).get(id=payment_id)
+    except SupplierPayment.DoesNotExist as exc:
+        raise ValidationError({"payment": "Supplier payment was not found."}) from exc
+
+    return payment
 
 
 # ---------------------------------------------------------------------
@@ -655,6 +744,610 @@ def _reverse_posted_treasury_transaction_balance(
         raise ValidationError({"transaction_type": "Unsupported treasury transaction type."})
 
     account.save(update_fields=["current_balance", "updated_at"])
+
+
+# ---------------------------------------------------------------------
+# Customer payment services
+# ---------------------------------------------------------------------
+
+
+def generate_customer_payment_number(company) -> str:
+    year = timezone.localdate().year
+    prefix = f"CP-{year}-"
+
+    last_payment = (
+        CustomerPayment.objects.filter(
+            company=company,
+            payment_number__startswith=prefix,
+        )
+        .order_by("-id")
+        .first()
+    )
+
+    if not last_payment or not last_payment.payment_number:
+        next_number = 1
+    else:
+        try:
+            next_number = int(last_payment.payment_number.replace(prefix, "")) + 1
+        except ValueError:
+            next_number = last_payment.id + 1
+
+    return f"{prefix}{next_number:06d}"
+
+
+def create_customer_payment(
+    *,
+    company,
+    treasury_account: TreasuryAccount,
+    user=None,
+    amount: Any,
+    payment_method: str,
+    payment_date=None,
+    customer_id: Any = None,
+    customer_name: str = "",
+    customer_phone: str = "",
+    sales_invoice=None,
+    currency: str | None = None,
+    payment_number: str = "",
+    reference: str = "",
+    description: str = "",
+    notes: str = "",
+    status: str = PaymentStatus.DRAFT,
+) -> CustomerPayment:
+    ensure_same_company(company, treasury_account, field_name="treasury_account")
+    ensure_same_company(company, sales_invoice, field_name="sales_invoice")
+
+    amount_decimal = normalize_decimal(amount)
+
+    if amount_decimal <= ZERO:
+        raise ValidationError({"amount": "Customer payment amount must be greater than zero."})
+
+    with transaction.atomic():
+        if not payment_number:
+            payment_number = generate_customer_payment_number(company)
+
+        payment = CustomerPayment(
+            company=company,
+            payment_number=normalize_code(payment_number),
+            customer_id=normalize_optional_positive_int(
+                customer_id,
+                field_name="customer_id",
+            ),
+            customer_name=normalize_text(customer_name),
+            customer_phone=normalize_text(customer_phone),
+            sales_invoice=sales_invoice,
+            treasury_account=treasury_account,
+            amount=amount_decimal,
+            currency=normalize_currency(currency or treasury_account.currency),
+            payment_method=payment_method,
+            status=PaymentStatus.DRAFT,
+            payment_date=payment_date or timezone.localdate(),
+            reference=normalize_text(reference),
+            description=normalize_text(description),
+            notes=normalize_text(notes),
+            created_by=user if getattr(user, "is_authenticated", False) else None,
+            updated_by=user if getattr(user, "is_authenticated", False) else None,
+        )
+
+        payment.full_clean()
+        payment.save()
+
+        if status == PaymentStatus.CONFIRMED:
+            payment = confirm_customer_payment(
+                company=company,
+                payment=payment,
+                user=user,
+            )
+
+        return payment
+
+
+def update_customer_payment(
+    *,
+    company,
+    payment: CustomerPayment,
+    user=None,
+    treasury_account: TreasuryAccount | None = None,
+    amount: Any | None = None,
+    payment_method: str | None = None,
+    payment_date=None,
+    customer_id: Any = None,
+    customer_name: str | None = None,
+    customer_phone: str | None = None,
+    sales_invoice=None,
+    currency: str | None = None,
+    reference: str | None = None,
+    description: str | None = None,
+    notes: str | None = None,
+) -> CustomerPayment:
+    ensure_same_company(company, payment, field_name="payment")
+
+    with transaction.atomic():
+        payment = CustomerPayment.objects.select_for_update().get(
+            id=payment.id,
+            company=company,
+        )
+
+        ensure_payment_is_editable(payment)
+
+        if treasury_account is not None:
+            ensure_same_company(company, treasury_account, field_name="treasury_account")
+            payment.treasury_account = treasury_account
+
+        if amount is not None:
+            amount_decimal = normalize_decimal(amount)
+            if amount_decimal <= ZERO:
+                raise ValidationError({"amount": "Customer payment amount must be greater than zero."})
+            payment.amount = amount_decimal
+
+        if payment_method is not None:
+            payment.payment_method = payment_method
+
+        if payment_date is not None:
+            payment.payment_date = payment_date
+
+        if customer_id is not None:
+            payment.customer_id = normalize_optional_positive_int(
+                customer_id,
+                field_name="customer_id",
+            )
+
+        if customer_name is not None:
+            payment.customer_name = normalize_text(customer_name)
+
+        if customer_phone is not None:
+            payment.customer_phone = normalize_text(customer_phone)
+
+        if sales_invoice is not None:
+            ensure_same_company(company, sales_invoice, field_name="sales_invoice")
+            payment.sales_invoice = sales_invoice
+
+        if currency is not None:
+            payment.currency = normalize_currency(currency)
+
+        if reference is not None:
+            payment.reference = normalize_text(reference)
+
+        if description is not None:
+            payment.description = normalize_text(description)
+
+        if notes is not None:
+            payment.notes = normalize_text(notes)
+
+        payment.updated_by = user if getattr(user, "is_authenticated", False) else None
+        payment.full_clean()
+        payment.save()
+
+        return payment
+
+
+def confirm_customer_payment(
+    *,
+    company,
+    payment: CustomerPayment,
+    user=None,
+) -> CustomerPayment:
+    ensure_same_company(company, payment, field_name="payment")
+
+    with transaction.atomic():
+        payment = CustomerPayment.objects.select_for_update().select_related(
+            "treasury_account",
+            "treasury_transaction",
+        ).get(
+            id=payment.id,
+            company=company,
+        )
+
+        if payment.status == PaymentStatus.CONFIRMED:
+            return payment
+
+        if payment.status == PaymentStatus.CANCELLED:
+            raise ValidationError({"status": "Cancelled customer payment cannot be confirmed."})
+
+        if payment.treasury_transaction_id:
+            treasury_transaction = payment.treasury_transaction
+            if treasury_transaction.status != TreasuryTransaction.TransactionStatus.POSTED:
+                treasury_transaction = post_treasury_transaction(
+                    company=company,
+                    treasury_transaction=treasury_transaction,
+                    user=user,
+                )
+        else:
+            treasury_transaction = create_treasury_transaction(
+                company=company,
+                account=payment.treasury_account,
+                user=user,
+                transaction_type=TreasuryTransaction.TransactionType.INFLOW,
+                amount=payment.amount,
+                transaction_date=payment.payment_date,
+                source_type=TreasuryTransaction.SourceType.CUSTOMER_PAYMENT,
+                source_app="treasury",
+                source_model="CustomerPayment",
+                source_object_id=payment.id,
+                reference=payment.reference,
+                description=payment.description
+                or f"Customer payment {payment.payment_number}",
+                notes=payment.notes,
+                currency=payment.currency,
+                status=TreasuryTransaction.TransactionStatus.POSTED,
+            )
+
+        payment.treasury_transaction = treasury_transaction
+        payment.status = PaymentStatus.CONFIRMED
+        payment.confirmed_at = timezone.now()
+        payment.confirmed_by = user if getattr(user, "is_authenticated", False) else None
+        payment.updated_by = user if getattr(user, "is_authenticated", False) else None
+        payment.save(
+            update_fields=[
+                "treasury_transaction",
+                "status",
+                "confirmed_at",
+                "confirmed_by",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+        return payment
+
+
+def cancel_customer_payment(
+    *,
+    company,
+    payment: CustomerPayment,
+    user=None,
+    reason: str = "",
+) -> CustomerPayment:
+    ensure_same_company(company, payment, field_name="payment")
+
+    with transaction.atomic():
+        payment = CustomerPayment.objects.select_for_update().select_related(
+            "treasury_transaction",
+        ).get(
+            id=payment.id,
+            company=company,
+        )
+
+        if payment.status == PaymentStatus.CANCELLED:
+            return payment
+
+        if payment.is_accounting_posted or payment.accounting_entry_id:
+            raise ValidationError(
+                {
+                    "accounting_entry": (
+                        "Accounting-posted customer payment cannot be cancelled "
+                        "without a reversal workflow."
+                    )
+                }
+            )
+
+        if payment.treasury_transaction_id:
+            cancel_treasury_transaction(
+                company=company,
+                treasury_transaction=payment.treasury_transaction,
+                user=user,
+                reason=reason or f"Customer payment {payment.payment_number} cancelled.",
+            )
+
+        payment.status = PaymentStatus.CANCELLED
+        payment.cancelled_at = timezone.now()
+        payment.cancelled_by = user if getattr(user, "is_authenticated", False) else None
+        payment.cancellation_reason = normalize_text(reason)
+        payment.updated_by = user if getattr(user, "is_authenticated", False) else None
+        payment.save(
+            update_fields=[
+                "status",
+                "cancelled_at",
+                "cancelled_by",
+                "cancellation_reason",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+        return payment
+
+
+# ---------------------------------------------------------------------
+# Supplier payment services
+# ---------------------------------------------------------------------
+
+
+def generate_supplier_payment_number(company) -> str:
+    year = timezone.localdate().year
+    prefix = f"SP-{year}-"
+
+    last_payment = (
+        SupplierPayment.objects.filter(
+            company=company,
+            payment_number__startswith=prefix,
+        )
+        .order_by("-id")
+        .first()
+    )
+
+    if not last_payment or not last_payment.payment_number:
+        next_number = 1
+    else:
+        try:
+            next_number = int(last_payment.payment_number.replace(prefix, "")) + 1
+        except ValueError:
+            next_number = last_payment.id + 1
+
+    return f"{prefix}{next_number:06d}"
+
+
+def create_supplier_payment(
+    *,
+    company,
+    treasury_account: TreasuryAccount,
+    user=None,
+    amount: Any,
+    payment_method: str,
+    payment_date=None,
+    supplier_id: Any = None,
+    supplier_name: str = "",
+    supplier_phone: str = "",
+    purchase_bill=None,
+    currency: str | None = None,
+    payment_number: str = "",
+    reference: str = "",
+    description: str = "",
+    notes: str = "",
+    status: str = PaymentStatus.DRAFT,
+) -> SupplierPayment:
+    ensure_same_company(company, treasury_account, field_name="treasury_account")
+    ensure_same_company(company, purchase_bill, field_name="purchase_bill")
+
+    amount_decimal = normalize_decimal(amount)
+
+    if amount_decimal <= ZERO:
+        raise ValidationError({"amount": "Supplier payment amount must be greater than zero."})
+
+    with transaction.atomic():
+        if not payment_number:
+            payment_number = generate_supplier_payment_number(company)
+
+        payment = SupplierPayment(
+            company=company,
+            payment_number=normalize_code(payment_number),
+            supplier_id=normalize_optional_positive_int(
+                supplier_id,
+                field_name="supplier_id",
+            ),
+            supplier_name=normalize_text(supplier_name),
+            supplier_phone=normalize_text(supplier_phone),
+            purchase_bill=purchase_bill,
+            treasury_account=treasury_account,
+            amount=amount_decimal,
+            currency=normalize_currency(currency or treasury_account.currency),
+            payment_method=payment_method,
+            status=PaymentStatus.DRAFT,
+            payment_date=payment_date or timezone.localdate(),
+            reference=normalize_text(reference),
+            description=normalize_text(description),
+            notes=normalize_text(notes),
+            created_by=user if getattr(user, "is_authenticated", False) else None,
+            updated_by=user if getattr(user, "is_authenticated", False) else None,
+        )
+
+        payment.full_clean()
+        payment.save()
+
+        if status == PaymentStatus.CONFIRMED:
+            payment = confirm_supplier_payment(
+                company=company,
+                payment=payment,
+                user=user,
+            )
+
+        return payment
+
+
+def update_supplier_payment(
+    *,
+    company,
+    payment: SupplierPayment,
+    user=None,
+    treasury_account: TreasuryAccount | None = None,
+    amount: Any | None = None,
+    payment_method: str | None = None,
+    payment_date=None,
+    supplier_id: Any = None,
+    supplier_name: str | None = None,
+    supplier_phone: str | None = None,
+    purchase_bill=None,
+    currency: str | None = None,
+    reference: str | None = None,
+    description: str | None = None,
+    notes: str | None = None,
+) -> SupplierPayment:
+    ensure_same_company(company, payment, field_name="payment")
+
+    with transaction.atomic():
+        payment = SupplierPayment.objects.select_for_update().get(
+            id=payment.id,
+            company=company,
+        )
+
+        ensure_payment_is_editable(payment)
+
+        if treasury_account is not None:
+            ensure_same_company(company, treasury_account, field_name="treasury_account")
+            payment.treasury_account = treasury_account
+
+        if amount is not None:
+            amount_decimal = normalize_decimal(amount)
+            if amount_decimal <= ZERO:
+                raise ValidationError({"amount": "Supplier payment amount must be greater than zero."})
+            payment.amount = amount_decimal
+
+        if payment_method is not None:
+            payment.payment_method = payment_method
+
+        if payment_date is not None:
+            payment.payment_date = payment_date
+
+        if supplier_id is not None:
+            payment.supplier_id = normalize_optional_positive_int(
+                supplier_id,
+                field_name="supplier_id",
+            )
+
+        if supplier_name is not None:
+            payment.supplier_name = normalize_text(supplier_name)
+
+        if supplier_phone is not None:
+            payment.supplier_phone = normalize_text(supplier_phone)
+
+        if purchase_bill is not None:
+            ensure_same_company(company, purchase_bill, field_name="purchase_bill")
+            payment.purchase_bill = purchase_bill
+
+        if currency is not None:
+            payment.currency = normalize_currency(currency)
+
+        if reference is not None:
+            payment.reference = normalize_text(reference)
+
+        if description is not None:
+            payment.description = normalize_text(description)
+
+        if notes is not None:
+            payment.notes = normalize_text(notes)
+
+        payment.updated_by = user if getattr(user, "is_authenticated", False) else None
+        payment.full_clean()
+        payment.save()
+
+        return payment
+
+
+def confirm_supplier_payment(
+    *,
+    company,
+    payment: SupplierPayment,
+    user=None,
+) -> SupplierPayment:
+    ensure_same_company(company, payment, field_name="payment")
+
+    with transaction.atomic():
+        payment = SupplierPayment.objects.select_for_update().select_related(
+            "treasury_account",
+            "treasury_transaction",
+        ).get(
+            id=payment.id,
+            company=company,
+        )
+
+        if payment.status == PaymentStatus.CONFIRMED:
+            return payment
+
+        if payment.status == PaymentStatus.CANCELLED:
+            raise ValidationError({"status": "Cancelled supplier payment cannot be confirmed."})
+
+        if payment.treasury_transaction_id:
+            treasury_transaction = payment.treasury_transaction
+            if treasury_transaction.status != TreasuryTransaction.TransactionStatus.POSTED:
+                treasury_transaction = post_treasury_transaction(
+                    company=company,
+                    treasury_transaction=treasury_transaction,
+                    user=user,
+                )
+        else:
+            treasury_transaction = create_treasury_transaction(
+                company=company,
+                account=payment.treasury_account,
+                user=user,
+                transaction_type=TreasuryTransaction.TransactionType.OUTFLOW,
+                amount=payment.amount,
+                transaction_date=payment.payment_date,
+                source_type=TreasuryTransaction.SourceType.SUPPLIER_PAYMENT,
+                source_app="treasury",
+                source_model="SupplierPayment",
+                source_object_id=payment.id,
+                reference=payment.reference,
+                description=payment.description
+                or f"Supplier payment {payment.payment_number}",
+                notes=payment.notes,
+                currency=payment.currency,
+                status=TreasuryTransaction.TransactionStatus.POSTED,
+            )
+
+        payment.treasury_transaction = treasury_transaction
+        payment.status = PaymentStatus.CONFIRMED
+        payment.confirmed_at = timezone.now()
+        payment.confirmed_by = user if getattr(user, "is_authenticated", False) else None
+        payment.updated_by = user if getattr(user, "is_authenticated", False) else None
+        payment.save(
+            update_fields=[
+                "treasury_transaction",
+                "status",
+                "confirmed_at",
+                "confirmed_by",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+        return payment
+
+
+def cancel_supplier_payment(
+    *,
+    company,
+    payment: SupplierPayment,
+    user=None,
+    reason: str = "",
+) -> SupplierPayment:
+    ensure_same_company(company, payment, field_name="payment")
+
+    with transaction.atomic():
+        payment = SupplierPayment.objects.select_for_update().select_related(
+            "treasury_transaction",
+        ).get(
+            id=payment.id,
+            company=company,
+        )
+
+        if payment.status == PaymentStatus.CANCELLED:
+            return payment
+
+        if payment.is_accounting_posted or payment.accounting_entry_id:
+            raise ValidationError(
+                {
+                    "accounting_entry": (
+                        "Accounting-posted supplier payment cannot be cancelled "
+                        "without a reversal workflow."
+                    )
+                }
+            )
+
+        if payment.treasury_transaction_id:
+            cancel_treasury_transaction(
+                company=company,
+                treasury_transaction=payment.treasury_transaction,
+                user=user,
+                reason=reason or f"Supplier payment {payment.payment_number} cancelled.",
+            )
+
+        payment.status = PaymentStatus.CANCELLED
+        payment.cancelled_at = timezone.now()
+        payment.cancelled_by = user if getattr(user, "is_authenticated", False) else None
+        payment.cancellation_reason = normalize_text(reason)
+        payment.updated_by = user if getattr(user, "is_authenticated", False) else None
+        payment.save(
+            update_fields=[
+                "status",
+                "cancelled_at",
+                "cancelled_by",
+                "cancellation_reason",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+        return payment
 
 
 # ---------------------------------------------------------------------
