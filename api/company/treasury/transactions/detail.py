@@ -1,9 +1,11 @@
 # ============================================================
 # 📂 api/company/treasury/transactions/detail.py
-# 🧠 PrimeyAcc | Company Treasury Transaction Detail API V1.0
+# 🧠 PrimeyAcc | Company Treasury Transaction Detail API V1.1
 # ------------------------------------------------------------
 # ✅ Retrieve treasury transaction for current company only
 # ✅ Update draft treasury transaction for current company only
+# ✅ Return enhanced accounting/source snapshot through list serializer
+# ✅ Return safe allowed actions for frontend
 # ✅ Tenant isolation through request.company
 # ✅ Posted/cancelled transactions are protected from direct edits
 # ✅ Protected by HasAnyCompanyPermission
@@ -14,6 +16,7 @@
 # - الشركة تؤخذ من request.company فقط
 # - لا نسمح بتعديل حركة مرحلة أو ملغاة مباشرة
 # - الترحيل والإلغاء لهم endpoints مستقلة
+# - تفاصيل القيد المحاسبي والمصدر تعرض عبر serializer موحد من list.py
 # ============================================================
 
 from __future__ import annotations
@@ -68,6 +71,59 @@ def _to_int(value: Any) -> int | None:
         return None
 
 
+def _company_payload(company) -> dict[str, Any]:
+    return {
+        "id": company.id,
+        "name": getattr(company, "display_name", None) or getattr(company, "name", ""),
+    }
+
+
+def _allowed_actions_payload(
+    treasury_transaction: TreasuryTransaction,
+) -> dict[str, bool]:
+    is_draft = treasury_transaction.status == TreasuryTransaction.TransactionStatus.DRAFT
+    is_posted = treasury_transaction.status == TreasuryTransaction.TransactionStatus.POSTED
+    is_cancelled = treasury_transaction.status == TreasuryTransaction.TransactionStatus.CANCELLED
+
+    return {
+        "can_view": True,
+        "can_update": is_draft,
+        "can_post": is_draft,
+        "can_cancel": not is_cancelled,
+        "can_direct_edit": is_draft,
+        "requires_reversal_for_cancel": bool(
+            treasury_transaction.is_accounting_posted
+            or treasury_transaction.accounting_entry_id
+        ),
+        "is_draft": is_draft,
+        "is_posted": is_posted,
+        "is_cancelled": is_cancelled,
+    }
+
+
+def _response_payload(
+    *,
+    company,
+    treasury_transaction: TreasuryTransaction,
+    message: str,
+    status_code: int = 200,
+) -> Response:
+    serialized = serialize_treasury_transaction(treasury_transaction)
+
+    return Response(
+        {
+            "ok": True,
+            "success": True,
+            "message": message,
+            "company": _company_payload(company),
+            "allowed_actions": _allowed_actions_payload(treasury_transaction),
+            "item": serialized,
+            "result": serialized,
+        },
+        status=status_code,
+    )
+
+
 def _update_draft_transaction_from_request(
     *,
     request: Request,
@@ -78,6 +134,7 @@ def _update_draft_transaction_from_request(
     Update draft transaction only.
 
     Balance effect is intentionally not changed here because draft has no effect.
+    Posted/cancelled transactions must use dedicated workflows.
     """
     if treasury_transaction.status != TreasuryTransaction.TransactionStatus.DRAFT:
         raise ValidationError(
@@ -151,7 +208,7 @@ def _update_draft_transaction_from_request(
     treasury_transaction.full_clean()
     treasury_transaction.save()
 
-    return treasury_transaction
+    return get_treasury_transaction_or_raise(company, treasury_transaction.id)
 
 
 @api_view(["GET", "PATCH", "PUT"])
@@ -173,15 +230,10 @@ def treasury_transaction_detail(
         )
 
         if request.method == "GET":
-            return Response(
-                {
-                    "ok": True,
-                    "success": True,
-                    "message": "Treasury transaction loaded successfully.",
-                    "item": serialize_treasury_transaction(treasury_transaction),
-                    "result": serialize_treasury_transaction(treasury_transaction),
-                },
-                status=200,
+            return _response_payload(
+                company=company,
+                treasury_transaction=treasury_transaction,
+                message="Treasury transaction loaded successfully.",
             )
 
         treasury_transaction = _update_draft_transaction_from_request(
@@ -190,15 +242,10 @@ def treasury_transaction_detail(
             treasury_transaction=treasury_transaction,
         )
 
-        return Response(
-            {
-                "ok": True,
-                "success": True,
-                "message": "Treasury transaction updated successfully.",
-                "item": serialize_treasury_transaction(treasury_transaction),
-                "result": serialize_treasury_transaction(treasury_transaction),
-            },
-            status=200,
+        return _response_payload(
+            company=company,
+            treasury_transaction=treasury_transaction,
+            message="Treasury transaction updated successfully.",
         )
 
     except TreasuryTransactionDetailAPIError as exc:

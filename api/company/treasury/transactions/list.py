@@ -1,12 +1,14 @@
 # ============================================================
 # 📂 api/company/treasury/transactions/list.py
-# 🧠 PrimeyAcc | Company Treasury Transactions List/Create API V1.0
+# 🧠 PrimeyAcc | Company Treasury Transactions List/Create API V1.1
 # ------------------------------------------------------------
 # ✅ List treasury transactions for current company only
 # ✅ Create draft/posted treasury transactions for current company only
+# ✅ Expose accounting entry status, number, and reversal details
+# ✅ Expose source payment snapshot for CustomerPayment/SupplierPayment
 # ✅ Tenant isolation through request.company
 # ✅ Account and counterparty account must belong to current company
-# ✅ Search, type, status, source, account and date filters
+# ✅ Search, type, status, source, account, accounting, and date filters
 # ✅ Safe pagination and ordering
 # ✅ Protected by HasAnyCompanyPermission
 # ✅ No frontend company_id trust
@@ -17,10 +19,12 @@
 # - أي حساب خزينة يجب أن يكون داخل نفس شركة العضوية الحالية
 # - الرصيد لا يتغير عند إنشاء Draft
 # - الرصيد يتغير فقط عند POSTED عبر treasury/services.py
+# - الترحيل المحاسبي والعكس المحاسبي يتمان من طبقة الخدمات وليس من الواجهة
 # ============================================================
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 from django.core.exceptions import ValidationError
@@ -33,7 +37,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
-from treasury.models import TreasuryAccount, TreasuryTransaction
+from treasury.models import CustomerPayment, SupplierPayment, TreasuryAccount, TreasuryTransaction
 from treasury.services import (
     create_treasury_transaction,
     get_treasury_account_or_raise,
@@ -92,6 +96,199 @@ def _to_int(value: Any) -> int | None:
         return None
 
 
+def _decimal_to_string(value: Any) -> str:
+    if value is None:
+        return "0.00"
+
+    if hasattr(value, "quantize"):
+        return str(value.quantize(Decimal("0.01")))
+
+    return str(value)
+
+
+def _date_to_string(value: Any) -> str | None:
+    return value.isoformat() if value else None
+
+
+def _datetime_to_string(value: Any) -> str | None:
+    return value.isoformat() if value else None
+
+
+def _get_user_display(user: Any) -> str:
+    if not user:
+        return ""
+
+    full_name = ""
+    if hasattr(user, "get_full_name"):
+        full_name = user.get_full_name() or ""
+
+    return full_name or getattr(user, "username", "") or getattr(user, "email", "") or ""
+
+
+def _serialize_user(user: Any) -> dict[str, Any] | None:
+    if not user:
+        return None
+
+    return {
+        "id": getattr(user, "id", None),
+        "username": getattr(user, "username", ""),
+        "email": getattr(user, "email", ""),
+        "name": _get_user_display(user),
+    }
+
+
+def _serialize_treasury_account(account: TreasuryAccount | None) -> dict[str, Any] | None:
+    if not account:
+        return None
+
+    return {
+        "id": account.id,
+        "name": account.name,
+        "code": account.code,
+        "account_type": account.account_type,
+        "account_type_display": account.get_account_type_display(),
+        "status": account.status,
+        "currency": account.currency,
+        "current_balance": _decimal_to_string(account.current_balance),
+    }
+
+
+def _serialize_accounting_entry(entry: Any) -> dict[str, Any]:
+    if not entry:
+        return {
+            "id": None,
+            "entry_number": "",
+            "status": "",
+            "entry_date": None,
+            "posted_at": None,
+            "source_type": "",
+            "source_app": "",
+            "source_model": "",
+            "source_object_id": None,
+            "total_debit": "0.00",
+            "total_credit": "0.00",
+            "reversal_of_id": None,
+            "reversal_entry_id": None,
+            "reversal_entry_number": "",
+            "reversal_entry_status": "",
+        }
+
+    latest_reversal = (
+        entry.__class__.objects.filter(reversal_of=entry).order_by("-id").first()
+        if getattr(entry, "id", None)
+        else None
+    )
+
+    return {
+        "id": entry.id,
+        "entry_number": getattr(entry, "entry_number", ""),
+        "status": getattr(entry, "status", ""),
+        "entry_date": _date_to_string(getattr(entry, "entry_date", None)),
+        "posted_at": _datetime_to_string(getattr(entry, "posted_at", None)),
+        "source_type": getattr(entry, "source_type", ""),
+        "source_app": getattr(entry, "source_app", ""),
+        "source_model": getattr(entry, "source_model", ""),
+        "source_object_id": getattr(entry, "source_object_id", None),
+        "total_debit": _decimal_to_string(getattr(entry, "total_debit", None)),
+        "total_credit": _decimal_to_string(getattr(entry, "total_credit", None)),
+        "reversal_of_id": getattr(entry, "reversal_of_id", None),
+        "reversal_entry_id": getattr(latest_reversal, "id", None),
+        "reversal_entry_number": getattr(latest_reversal, "entry_number", ""),
+        "reversal_entry_status": getattr(latest_reversal, "status", ""),
+    }
+
+
+def _serialize_customer_payment_source(payment: CustomerPayment) -> dict[str, Any]:
+    invoice = payment.sales_invoice
+
+    return {
+        "source_kind": "customer_payment",
+        "id": payment.id,
+        "payment_number": payment.payment_number,
+        "status": payment.status,
+        "amount": _decimal_to_string(payment.amount),
+        "currency": payment.currency,
+        "payment_method": payment.payment_method,
+        "payment_date": _date_to_string(payment.payment_date),
+        "customer_id": payment.customer_id,
+        "customer_name": payment.customer_name,
+        "customer_phone": payment.customer_phone,
+        "sales_invoice_id": payment.sales_invoice_id,
+        "sales_invoice_number": getattr(invoice, "invoice_number", ""),
+        "invoice_payment_status": getattr(invoice, "payment_status", ""),
+        "invoice_paid_amount": _decimal_to_string(getattr(invoice, "paid_amount", None)),
+        "invoice_balance_due": _decimal_to_string(getattr(invoice, "balance_due", None)),
+        "is_accounting_posted": payment.is_accounting_posted,
+        "accounting_entry_id": payment.accounting_entry_id,
+        "confirmed_at": _datetime_to_string(payment.confirmed_at),
+        "cancelled_at": _datetime_to_string(payment.cancelled_at),
+        "cancellation_reason": payment.cancellation_reason,
+    }
+
+
+def _serialize_supplier_payment_source(payment: SupplierPayment) -> dict[str, Any]:
+    bill = payment.purchase_bill
+
+    return {
+        "source_kind": "supplier_payment",
+        "id": payment.id,
+        "payment_number": payment.payment_number,
+        "status": payment.status,
+        "amount": _decimal_to_string(payment.amount),
+        "currency": payment.currency,
+        "payment_method": payment.payment_method,
+        "payment_date": _date_to_string(payment.payment_date),
+        "supplier_id": payment.supplier_id,
+        "supplier_name": payment.supplier_name,
+        "supplier_phone": payment.supplier_phone,
+        "purchase_bill_id": payment.purchase_bill_id,
+        "purchase_bill_number": getattr(bill, "bill_number", ""),
+        "bill_payment_status": getattr(bill, "payment_status", ""),
+        "bill_paid_amount": _decimal_to_string(getattr(bill, "paid_amount", None)),
+        "bill_balance_due": _decimal_to_string(getattr(bill, "balance_due", None)),
+        "is_accounting_posted": payment.is_accounting_posted,
+        "accounting_entry_id": payment.accounting_entry_id,
+        "confirmed_at": _datetime_to_string(payment.confirmed_at),
+        "cancelled_at": _datetime_to_string(payment.cancelled_at),
+        "cancellation_reason": payment.cancellation_reason,
+    }
+
+
+def _serialize_source_snapshot(
+    *,
+    company,
+    treasury_transaction: TreasuryTransaction,
+) -> dict[str, Any] | None:
+    source_model = _clean_text(treasury_transaction.source_model)
+    source_object_id = treasury_transaction.source_object_id
+
+    if not source_object_id:
+        return None
+
+    if source_model == "CustomerPayment":
+        payment = (
+            CustomerPayment.objects.filter(company=company, id=source_object_id)
+            .select_related("sales_invoice", "accounting_entry")
+            .first()
+        )
+        return _serialize_customer_payment_source(payment) if payment else None
+
+    if source_model == "SupplierPayment":
+        payment = (
+            SupplierPayment.objects.filter(company=company, id=source_object_id)
+            .select_related("purchase_bill", "accounting_entry")
+            .first()
+        )
+        return _serialize_supplier_payment_source(payment) if payment else None
+
+    return {
+        "source_kind": "external_or_manual",
+        "source_app": treasury_transaction.source_app,
+        "source_model": treasury_transaction.source_model,
+        "source_object_id": treasury_transaction.source_object_id,
+    }
+
+
 def serialize_treasury_transaction(
     treasury_transaction: TreasuryTransaction,
 ) -> dict[str, Any]:
@@ -100,126 +297,87 @@ def serialize_treasury_transaction(
     """
     account = treasury_transaction.account
     counterparty_account = treasury_transaction.counterparty_account
+    accounting_entry = treasury_transaction.accounting_entry
+
+    accounting_payload = _serialize_accounting_entry(accounting_entry)
+    source_snapshot = _serialize_source_snapshot(
+        company=treasury_transaction.company,
+        treasury_transaction=treasury_transaction,
+    )
 
     return {
         "id": treasury_transaction.id,
         "company_id": treasury_transaction.company_id,
         "transaction_number": treasury_transaction.transaction_number,
+
+        # Type / status
         "transaction_type": treasury_transaction.transaction_type,
         "transaction_type_display": treasury_transaction.get_transaction_type_display(),
         "status": treasury_transaction.status,
         "status_display": treasury_transaction.get_status_display(),
+
+        # Source tracking
         "source_type": treasury_transaction.source_type,
         "source_type_display": treasury_transaction.get_source_type_display(),
-        "account": (
-            {
-                "id": account.id,
-                "name": account.name,
-                "code": account.code,
-                "account_type": account.account_type,
-                "currency": account.currency,
-            }
-            if account
-            else None
-        ),
-        "counterparty_account": (
-            {
-                "id": counterparty_account.id,
-                "name": counterparty_account.name,
-                "code": counterparty_account.code,
-                "account_type": counterparty_account.account_type,
-                "currency": counterparty_account.currency,
-            }
-            if counterparty_account
-            else None
-        ),
-        "amount": str(treasury_transaction.amount),
-        "currency": treasury_transaction.currency,
-        "transaction_date": (
-            treasury_transaction.transaction_date.isoformat()
-            if treasury_transaction.transaction_date
-            else None
-        ),
-        "reference": treasury_transaction.reference,
-        "description": treasury_transaction.description,
-        "notes": treasury_transaction.notes,
         "source_app": treasury_transaction.source_app,
         "source_model": treasury_transaction.source_model,
         "source_object_id": treasury_transaction.source_object_id,
-        "balance_before": (
-            str(treasury_transaction.balance_before)
-            if treasury_transaction.balance_before is not None
-            else None
-        ),
-        "balance_after": (
-            str(treasury_transaction.balance_after)
-            if treasury_transaction.balance_after is not None
-            else None
-        ),
+        "source_snapshot": source_snapshot,
+
+        # Account snapshots
+        "account_id": treasury_transaction.account_id,
+        "account_name": getattr(account, "name", ""),
+        "account_code": getattr(account, "code", ""),
+        "account_type": getattr(account, "account_type", ""),
+        "account": _serialize_treasury_account(account),
+        "counterparty_account_id": treasury_transaction.counterparty_account_id,
+        "counterparty_account_name": getattr(counterparty_account, "name", ""),
+        "counterparty_account_code": getattr(counterparty_account, "code", ""),
+        "counterparty_account": _serialize_treasury_account(counterparty_account),
+
+        # Amount / dates
+        "amount": _decimal_to_string(treasury_transaction.amount),
+        "currency": treasury_transaction.currency,
+        "transaction_date": _date_to_string(treasury_transaction.transaction_date),
+        "reference": treasury_transaction.reference,
+        "description": treasury_transaction.description,
+        "notes": treasury_transaction.notes,
+        "balance_before": _decimal_to_string(treasury_transaction.balance_before),
+        "balance_after": _decimal_to_string(treasury_transaction.balance_after),
+
+        # Accounting fields
         "accounting_entry_id": treasury_transaction.accounting_entry_id,
+        "accounting_entry_number": accounting_payload["entry_number"],
+        "accounting_entry_status": accounting_payload["status"],
+        "accounting_entry_date": accounting_payload["entry_date"],
+        "accounting_entry_posted_at": accounting_payload["posted_at"],
+        "accounting_reversal_entry_id": accounting_payload["reversal_entry_id"],
+        "accounting_reversal_entry_number": accounting_payload["reversal_entry_number"],
+        "accounting_reversal_entry_status": accounting_payload["reversal_entry_status"],
         "is_accounting_posted": treasury_transaction.is_accounting_posted,
-        "accounting_posted_at": (
-            treasury_transaction.accounting_posted_at.isoformat()
-            if treasury_transaction.accounting_posted_at
-            else None
-        ),
-        "posted_at": (
-            treasury_transaction.posted_at.isoformat()
-            if treasury_transaction.posted_at
-            else None
-        ),
-        "posted_by": (
-            {
-                "id": treasury_transaction.posted_by_id,
-                "username": treasury_transaction.posted_by.username,
-                "email": treasury_transaction.posted_by.email,
-            }
-            if treasury_transaction.posted_by_id and treasury_transaction.posted_by
-            else None
-        ),
-        "cancelled_at": (
-            treasury_transaction.cancelled_at.isoformat()
-            if treasury_transaction.cancelled_at
-            else None
-        ),
-        "cancelled_by": (
-            {
-                "id": treasury_transaction.cancelled_by_id,
-                "username": treasury_transaction.cancelled_by.username,
-                "email": treasury_transaction.cancelled_by.email,
-            }
-            if treasury_transaction.cancelled_by_id and treasury_transaction.cancelled_by
-            else None
-        ),
+        "accounting_posted_at": _datetime_to_string(treasury_transaction.accounting_posted_at),
+        "accounting_entry": accounting_payload,
+
+        # Posting/cancellation metadata
+        "posted_at": _datetime_to_string(treasury_transaction.posted_at),
+        "posted_by_id": treasury_transaction.posted_by_id,
+        "posted_by_name": _get_user_display(treasury_transaction.posted_by),
+        "posted_by": _serialize_user(treasury_transaction.posted_by),
+        "cancelled_at": _datetime_to_string(treasury_transaction.cancelled_at),
+        "cancelled_by_id": treasury_transaction.cancelled_by_id,
+        "cancelled_by_name": _get_user_display(treasury_transaction.cancelled_by),
+        "cancelled_by": _serialize_user(treasury_transaction.cancelled_by),
         "cancellation_reason": treasury_transaction.cancellation_reason,
-        "created_by": (
-            {
-                "id": treasury_transaction.created_by_id,
-                "username": treasury_transaction.created_by.username,
-                "email": treasury_transaction.created_by.email,
-            }
-            if treasury_transaction.created_by_id and treasury_transaction.created_by
-            else None
-        ),
-        "updated_by": (
-            {
-                "id": treasury_transaction.updated_by_id,
-                "username": treasury_transaction.updated_by.username,
-                "email": treasury_transaction.updated_by.email,
-            }
-            if treasury_transaction.updated_by_id and treasury_transaction.updated_by
-            else None
-        ),
-        "created_at": (
-            treasury_transaction.created_at.isoformat()
-            if treasury_transaction.created_at
-            else None
-        ),
-        "updated_at": (
-            treasury_transaction.updated_at.isoformat()
-            if treasury_transaction.updated_at
-            else None
-        ),
+
+        # Audit fields
+        "created_by_id": treasury_transaction.created_by_id,
+        "created_by_name": _get_user_display(treasury_transaction.created_by),
+        "created_by": _serialize_user(treasury_transaction.created_by),
+        "updated_by_id": treasury_transaction.updated_by_id,
+        "updated_by_name": _get_user_display(treasury_transaction.updated_by),
+        "updated_by": _serialize_user(treasury_transaction.updated_by),
+        "created_at": _datetime_to_string(treasury_transaction.created_at),
+        "updated_at": _datetime_to_string(treasury_transaction.updated_at),
     }
 
 
@@ -240,6 +398,10 @@ def serialize_treasury_transaction_choices() -> dict[str, Any]:
             {"value": value, "label": label}
             for value, label in TreasuryTransaction.SourceType.choices
         ],
+        "boolean_filters": [
+            {"value": "true", "label": "Yes"},
+            {"value": "false", "label": "No"},
+        ],
         "ordering": [
             {"value": "-transaction_date", "label": "Newest transaction date"},
             {"value": "transaction_date", "label": "Oldest transaction date"},
@@ -249,6 +411,8 @@ def serialize_treasury_transaction_choices() -> dict[str, Any]:
             {"value": "amount", "label": "Amount low to high"},
             {"value": "transaction_number", "label": "Number A-Z"},
             {"value": "-transaction_number", "label": "Number Z-A"},
+            {"value": "-accounting_posted_at", "label": "Newest accounting posted"},
+            {"value": "accounting_posted_at", "label": "Oldest accounting posted"},
         ],
     }
 
@@ -269,9 +433,15 @@ def _apply_transaction_filters(queryset, request: Request):
     )
     status = _clean_upper(request.query_params.get("status") or "")
     source_type = _clean_upper(request.query_params.get("source_type") or "")
+    source_model = _clean_text(request.query_params.get("source_model") or "")
+    source_object_id = _to_int(request.query_params.get("source_object_id"))
     account_id = _to_int(request.query_params.get("account_id"))
     counterparty_account_id = _to_int(
         request.query_params.get("counterparty_account_id")
+    )
+    accounting_entry_id = _to_int(request.query_params.get("accounting_entry_id"))
+    accounting_entry_status = _clean_upper(
+        request.query_params.get("accounting_entry_status") or ""
     )
     date_from = parse_date(_clean_text(request.query_params.get("date_from") or ""))
     date_to = parse_date(_clean_text(request.query_params.get("date_to") or ""))
@@ -291,6 +461,7 @@ def _apply_transaction_filters(queryset, request: Request):
             | Q(counterparty_account__code__icontains=search)
             | Q(source_app__icontains=search)
             | Q(source_model__icontains=search)
+            | Q(accounting_entry__entry_number__icontains=search)
         )
 
     if transaction_type:
@@ -302,11 +473,23 @@ def _apply_transaction_filters(queryset, request: Request):
     if source_type:
         queryset = queryset.filter(source_type=source_type)
 
+    if source_model:
+        queryset = queryset.filter(source_model=source_model)
+
+    if source_object_id is not None:
+        queryset = queryset.filter(source_object_id=source_object_id)
+
     if account_id is not None:
         queryset = queryset.filter(account_id=account_id)
 
     if counterparty_account_id is not None:
         queryset = queryset.filter(counterparty_account_id=counterparty_account_id)
+
+    if accounting_entry_id is not None:
+        queryset = queryset.filter(accounting_entry_id=accounting_entry_id)
+
+    if accounting_entry_status:
+        queryset = queryset.filter(accounting_entry__status=accounting_entry_status)
 
     if date_from:
         queryset = queryset.filter(transaction_date__gte=date_from)
@@ -340,6 +523,12 @@ def _apply_transaction_ordering(queryset, ordering: str):
         "-status": "-status",
         "transaction_type": "transaction_type",
         "-transaction_type": "-transaction_type",
+        "accounting_posted_at": "accounting_posted_at",
+        "-accounting_posted_at": "-accounting_posted_at",
+        "posted_at": "posted_at",
+        "-posted_at": "-posted_at",
+        "cancelled_at": "cancelled_at",
+        "-cancelled_at": "-cancelled_at",
     }
 
     selected_ordering = allowed_ordering.get(ordering, "-transaction_date")
@@ -359,7 +548,7 @@ def _build_transaction_summary(queryset) -> dict[str, Any]:
                 transaction_type=TreasuryTransaction.TransactionType.INFLOW,
             )
         ),
-        start=0,
+        start=Decimal("0.00"),
     )
     outflow_total = sum(
         (
@@ -369,7 +558,7 @@ def _build_transaction_summary(queryset) -> dict[str, Any]:
                 transaction_type=TreasuryTransaction.TransactionType.OUTFLOW,
             )
         ),
-        start=0,
+        start=Decimal("0.00"),
     )
 
     return {
@@ -383,6 +572,9 @@ def _build_transaction_summary(queryset) -> dict[str, Any]:
         "cancelled_transactions": queryset.filter(
             status=TreasuryTransaction.TransactionStatus.CANCELLED
         ).count(),
+        "accounting_posted_transactions": queryset.filter(is_accounting_posted=True).count(),
+        "accounting_unposted_transactions": queryset.filter(is_accounting_posted=False).count(),
+        "with_accounting_entry": queryset.filter(accounting_entry_id__isnull=False).count(),
         "inflow_transactions": queryset.filter(
             transaction_type=TreasuryTransaction.TransactionType.INFLOW
         ).count(),
@@ -395,8 +587,8 @@ def _build_transaction_summary(queryset) -> dict[str, Any]:
         "adjustment_transactions": queryset.filter(
             transaction_type=TreasuryTransaction.TransactionType.ADJUSTMENT
         ).count(),
-        "posted_inflow_total": str(inflow_total),
-        "posted_outflow_total": str(outflow_total),
+        "posted_inflow_total": _decimal_to_string(inflow_total),
+        "posted_outflow_total": _decimal_to_string(outflow_total),
     }
 
 
@@ -538,9 +730,16 @@ def treasury_transactions_list(request: Request) -> Response:
                     or "",
                     "status": request.query_params.get("status") or "",
                     "source_type": request.query_params.get("source_type") or "",
+                    "source_model": request.query_params.get("source_model") or "",
+                    "source_object_id": request.query_params.get("source_object_id") or "",
                     "account_id": request.query_params.get("account_id") or "",
                     "counterparty_account_id": request.query_params.get(
                         "counterparty_account_id"
+                    )
+                    or "",
+                    "accounting_entry_id": request.query_params.get("accounting_entry_id") or "",
+                    "accounting_entry_status": request.query_params.get(
+                        "accounting_entry_status"
                     )
                     or "",
                     "date_from": request.query_params.get("date_from") or "",
