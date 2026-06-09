@@ -1,33 +1,33 @@
-# ============================================================
-# 📂 pos/tests.py
-# 🧠 PrimeyAcc | POS Tests V1.3
+﻿# ============================================================
+# ًں“‚ pos/tests.py
+# ًں§  PrimeyAcc | POS Tests V1.3
 # ------------------------------------------------------------
-# ✅ Phase 13.1 POS Foundation Service Tests
-# ✅ Phase 13.2 POS Registers API Tests
-# ✅ Phase 13.3 POS Sessions API Tests
-# ✅ Phase 13.4 POS Orders / Checkout API Tests
-# ✅ POS Register Creation Tests
-# ✅ POS Tenant Isolation Tests
-# ✅ POS Session Open / Close Tests
-# ✅ Duplicate Open Session Protection
-# ✅ POS Order Draft Tests
-# ✅ POS Order Item Snapshot Tests
-# ✅ POS Totals Calculation Tests
-# ✅ POS Payment Line Tests
-# ✅ POS Checkout Preview Tests
-# ✅ POS Registers List / Create / Detail / Update / Status API Tests
-# ✅ POS Sessions List / Open / Detail / Close / Cancel API Tests
-# ✅ POS Orders List / Create / Detail / Items / Payments / Preview / Cancel API Tests
+# âœ… Phase 13.1 POS Foundation Service Tests
+# âœ… Phase 13.2 POS Registers API Tests
+# âœ… Phase 13.3 POS Sessions API Tests
+# âœ… Phase 13.4 POS Orders / Checkout API Tests
+# âœ… POS Register Creation Tests
+# âœ… POS Tenant Isolation Tests
+# âœ… POS Session Open / Close Tests
+# âœ… Duplicate Open Session Protection
+# âœ… POS Order Draft Tests
+# âœ… POS Order Item Snapshot Tests
+# âœ… POS Totals Calculation Tests
+# âœ… POS Payment Line Tests
+# âœ… POS Checkout Preview Tests
+# âœ… POS Registers List / Create / Detail / Update / Status API Tests
+# âœ… POS Sessions List / Open / Detail / Close / Cancel API Tests
+# âœ… POS Orders List / Create / Detail / Items / Payments / Preview / Cancel API Tests
 # ------------------------------------------------------------
-# القاعدة المعتمدة:
-# - الاختبارات تثبت أن POS يعمل داخل شركة واحدة فقط
-# - لا يتم الاعتماد على company_id من الواجهة
-# - لا يسمح بخلط فروع أو مستودعات أو خزائن أو منتجات بين الشركات
-# - اختبارات Phase 13.1 تغطي Models / Services foundation
-# - اختبارات Phase 13.2 تغطي POS Registers APIs
-# - اختبارات Phase 13.3 تغطي POS Sessions APIs فقط
-# - اختبارات Phase 13.4 تغطي POS Orders / Checkout APIs فقط
-# - لا يتم اختبار الترحيل المحاسبي أو خصم المخزون في هذه المرحلة
+# ط§ظ„ظ‚ط§ط¹ط¯ط© ط§ظ„ظ…ط¹طھظ…ط¯ط©:
+# - ط§ظ„ط§ط®طھط¨ط§ط±ط§طھ طھط«ط¨طھ ط£ظ† POS ظٹط¹ظ…ظ„ ط¯ط§ط®ظ„ ط´ط±ظƒط© ظˆط§ط­ط¯ط© ظپظ‚ط·
+# - ظ„ط§ ظٹطھظ… ط§ظ„ط§ط¹طھظ…ط§ط¯ ط¹ظ„ظ‰ company_id ظ…ظ† ط§ظ„ظˆط§ط¬ظ‡ط©
+# - ظ„ط§ ظٹط³ظ…ط­ ط¨ط®ظ„ط· ظپط±ظˆط¹ ط£ظˆ ظ…ط³طھظˆط¯ط¹ط§طھ ط£ظˆ ط®ط²ط§ط¦ظ† ط£ظˆ ظ…ظ†طھط¬ط§طھ ط¨ظٹظ† ط§ظ„ط´ط±ظƒط§طھ
+# - ط§ط®طھط¨ط§ط±ط§طھ Phase 13.1 طھط؛ط·ظٹ Models / Services foundation
+# - ط§ط®طھط¨ط§ط±ط§طھ Phase 13.2 طھط؛ط·ظٹ POS Registers APIs
+# - ط§ط®طھط¨ط§ط±ط§طھ Phase 13.3 طھط؛ط·ظٹ POS Sessions APIs ظپظ‚ط·
+# - ط§ط®طھط¨ط§ط±ط§طھ Phase 13.4 طھط؛ط·ظٹ POS Orders / Checkout APIs ظپظ‚ط·
+# - ظ„ط§ ظٹطھظ… ط§ط®طھط¨ط§ط± ط§ظ„طھط±ط­ظٹظ„ ط§ظ„ظ…ط­ط§ط³ط¨ظٹ ط£ظˆ ط®طµظ… ط§ظ„ظ…ط®ط²ظˆظ† ظپظٹ ظ‡ط°ظ‡ ط§ظ„ظ…ط±ط­ظ„ط©
 # ============================================================
 
 from __future__ import annotations
@@ -54,6 +54,7 @@ from api.company.pos.sessions.open import pos_session_open
 from api.company.pos.orders.cancel import pos_order_cancel
 from api.company.pos.orders.create import pos_order_create
 from api.company.pos.orders.detail import pos_order_detail
+from api.company.pos.orders.finalize import pos_order_finalize
 from api.company.pos.orders.items import pos_order_item_add, pos_order_items_list
 from api.company.pos.orders.list import pos_orders_list
 from api.company.pos.orders.payments import (
@@ -1815,3 +1816,113 @@ class POSOrdersAPITests(POSBaseTestMixin, TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertFalse(response.data["ok"])
+    def test_pos_order_finalize_api_success(self):
+        order = self._create_order_for_api()
+
+        add_pos_order_item(
+            company=self.company,
+            order=order,
+            catalog_item=self.catalog_item,
+            quantity=Decimal("1"),
+            unit_price=Decimal("100.00"),
+        )
+
+        add_pos_payment_line(
+            company=self.company,
+            order=order,
+            payment_method=self.payment_method,
+            amount=Decimal("115.00"),
+            payment_type=POSPaymentLineType.CASH,
+            treasury_account=self.treasury_account,
+            confirm_now=True,
+            user=self.user,
+        )
+
+        order.refresh_from_db()
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/orders/{order.id}/finalize/",
+            data={
+                "notes": "Finalized by API test",
+            },
+        )
+        response = self._call_with_permissions(
+            pos_order_finalize,
+            request,
+            order_id=order.id,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(response.data["item"]["status"], POSOrderStatus.COMPLETED)
+
+    def test_pos_order_finalize_api_rejects_order_without_items(self):
+        order = self._create_order_for_api()
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/orders/{order.id}/finalize/",
+            data={
+                "notes": "Should fail without items",
+            },
+        )
+        response = self._call_with_permissions(
+            pos_order_finalize,
+            request,
+            order_id=order.id,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.data["ok"])
+
+    def test_pos_order_finalize_api_rejects_unpaid_order(self):
+        order = self._create_order_for_api()
+
+        add_pos_order_item(
+            company=self.company,
+            order=order,
+            catalog_item=self.catalog_item,
+            quantity=Decimal("1"),
+            unit_price=Decimal("100.00"),
+        )
+
+        order.refresh_from_db()
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/orders/{order.id}/finalize/",
+            data={
+                "notes": "Should fail unpaid",
+            },
+        )
+        response = self._call_with_permissions(
+            pos_order_finalize,
+            request,
+            order_id=order.id,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.data["ok"])
+
+    def test_pos_order_finalize_api_rejects_cancelled_order(self):
+        order = self._create_order_for_api()
+        order.status = POSOrderStatus.CANCELLED
+        order.save(update_fields=["status"])
+
+        request = self._authenticated_request(
+            "post",
+            f"/api/company/pos/orders/{order.id}/finalize/",
+            data={
+                "notes": "Should fail cancelled",
+            },
+        )
+        response = self._call_with_permissions(
+            pos_order_finalize,
+            request,
+            order_id=order.id,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.data["ok"])
+
