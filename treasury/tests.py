@@ -861,6 +861,8 @@ class TreasuryPaymentServiceTests(PrimeyAccTestFactoryMixin, TestCase):
         )
 
     def test_cancel_confirmed_customer_payment_reverses_balance(self) -> None:
+        from accounting.models import JournalEntry, JournalEntryStatus
+
         account = create_treasury_account(
             company=self.company_a,
             user=self.user,
@@ -879,37 +881,38 @@ class TreasuryPaymentServiceTests(PrimeyAccTestFactoryMixin, TestCase):
             status=PaymentStatus.CONFIRMED,
         )
 
+        original_entry_id = payment.accounting_entry_id
+        self.assertIsNotNone(original_entry_id)
+
         account.refresh_from_db()
-        payment.refresh_from_db()
-        payment.treasury_transaction.refresh_from_db()
-
         self.assertEqual(account.current_balance, Decimal("160.00"))
-        self.assertEqual(payment.status, PaymentStatus.CONFIRMED)
-        self.assertTrue(payment.is_accounting_posted)
-        self.assertIsNotNone(payment.accounting_entry_id)
-        self.assertEqual(
-            payment.treasury_transaction.status,
-            TreasuryTransaction.TransactionStatus.POSTED,
-        )
 
-        with self.assertRaises(ValidationError):
-            cancel_customer_payment(
-                company=self.company_a,
-                payment=payment,
-                user=self.user,
-                reason="Customer refund",
-            )
+        cancel_customer_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+            reason="Customer refund",
+        )
 
         account.refresh_from_db()
         payment.refresh_from_db()
         payment.treasury_transaction.refresh_from_db()
 
-        self.assertEqual(account.current_balance, Decimal("160.00"))
-        self.assertEqual(payment.status, PaymentStatus.CONFIRMED)
+        original_entry = JournalEntry.objects.get(id=original_entry_id)
+        reversal_entry = JournalEntry.objects.filter(reversal_of=original_entry).first()
+
+        self.assertIsNotNone(reversal_entry)
+        self.assertEqual(original_entry.status, JournalEntryStatus.REVERSED)
+        self.assertEqual(reversal_entry.status, JournalEntryStatus.POSTED)
+        self.assertEqual(account.current_balance, Decimal("100.00"))
+        self.assertEqual(payment.status, PaymentStatus.CANCELLED)
+        self.assertEqual(payment.cancelled_by_id, self.user.id)
+        self.assertEqual(payment.cancellation_reason, "Customer refund")
         self.assertEqual(
             payment.treasury_transaction.status,
-            TreasuryTransaction.TransactionStatus.POSTED,
+            TreasuryTransaction.TransactionStatus.CANCELLED,
         )
+
 
     def test_customer_payment_rejects_cross_company_treasury_account(self) -> None:
         foreign_account = create_treasury_account(
@@ -1055,6 +1058,8 @@ class TreasuryPaymentServiceTests(PrimeyAccTestFactoryMixin, TestCase):
         )
 
     def test_cancel_confirmed_supplier_payment_reverses_balance(self) -> None:
+        from accounting.models import JournalEntry, JournalEntryStatus
+
         account = create_treasury_account(
             company=self.company_a,
             user=self.user,
@@ -1073,37 +1078,38 @@ class TreasuryPaymentServiceTests(PrimeyAccTestFactoryMixin, TestCase):
             status=PaymentStatus.CONFIRMED,
         )
 
+        original_entry_id = payment.accounting_entry_id
+        self.assertIsNotNone(original_entry_id)
+
         account.refresh_from_db()
-        payment.refresh_from_db()
-        payment.treasury_transaction.refresh_from_db()
-
         self.assertEqual(account.current_balance, Decimal("220.00"))
-        self.assertEqual(payment.status, PaymentStatus.CONFIRMED)
-        self.assertTrue(payment.is_accounting_posted)
-        self.assertIsNotNone(payment.accounting_entry_id)
-        self.assertEqual(
-            payment.treasury_transaction.status,
-            TreasuryTransaction.TransactionStatus.POSTED,
-        )
 
-        with self.assertRaises(ValidationError):
-            cancel_supplier_payment(
-                company=self.company_a,
-                payment=payment,
-                user=self.user,
-                reason="Supplier payment cancelled",
-            )
+        cancel_supplier_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+            reason="Supplier payment cancelled",
+        )
 
         account.refresh_from_db()
         payment.refresh_from_db()
         payment.treasury_transaction.refresh_from_db()
 
-        self.assertEqual(account.current_balance, Decimal("220.00"))
-        self.assertEqual(payment.status, PaymentStatus.CONFIRMED)
+        original_entry = JournalEntry.objects.get(id=original_entry_id)
+        reversal_entry = JournalEntry.objects.filter(reversal_of=original_entry).first()
+
+        self.assertIsNotNone(reversal_entry)
+        self.assertEqual(original_entry.status, JournalEntryStatus.REVERSED)
+        self.assertEqual(reversal_entry.status, JournalEntryStatus.POSTED)
+        self.assertEqual(account.current_balance, Decimal("300.00"))
+        self.assertEqual(payment.status, PaymentStatus.CANCELLED)
+        self.assertEqual(payment.cancelled_by_id, self.user.id)
+        self.assertEqual(payment.cancellation_reason, "Supplier payment cancelled")
         self.assertEqual(
             payment.treasury_transaction.status,
-            TreasuryTransaction.TransactionStatus.POSTED,
+            TreasuryTransaction.TransactionStatus.CANCELLED,
         )
+
 
     def test_supplier_payment_is_blocked_when_balance_is_insufficient(self) -> None:
         account = create_treasury_account(
@@ -1387,6 +1393,8 @@ class TreasuryPaymentAllocationServiceTests(PrimeyAccTestFactoryMixin, TestCase)
         self.assertEqual(invoice.payment_status, "PARTIAL")
 
     def test_cancel_customer_payment_reverses_sales_invoice_allocation(self) -> None:
+        from accounting.models import JournalEntry, JournalEntryStatus
+
         account = create_treasury_account(
             company=self.company_a,
             user=self.user,
@@ -1412,29 +1420,43 @@ class TreasuryPaymentAllocationServiceTests(PrimeyAccTestFactoryMixin, TestCase)
             status=PaymentStatus.CONFIRMED,
         )
 
+        original_entry_id = payment.accounting_entry_id
+        self.assertIsNotNone(original_entry_id)
+
         invoice.refresh_from_db()
+        account.refresh_from_db()
+        self.assertEqual(account.current_balance, Decimal("140.00"))
         self.assertEqual(invoice.paid_amount, Decimal("40.00"))
         self.assertEqual(invoice.balance_due, Decimal("60.00"))
 
-        with self.assertRaises(ValidationError):
-            cancel_customer_payment(
-                company=self.company_a,
-                payment=payment,
-                user=self.user,
-                reason="Reverse allocation",
-            )
+        cancel_customer_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+            reason="Reverse allocation",
+        )
 
         account.refresh_from_db()
         invoice.refresh_from_db()
         payment.refresh_from_db()
+        payment.treasury_transaction.refresh_from_db()
 
-        self.assertEqual(account.current_balance, Decimal("140.00"))
-        self.assertEqual(payment.status, PaymentStatus.CONFIRMED)
-        self.assertTrue(payment.is_accounting_posted)
-        self.assertIsNotNone(payment.accounting_entry_id)
-        self.assertEqual(invoice.paid_amount, Decimal("40.00"))
-        self.assertEqual(invoice.balance_due, Decimal("60.00"))
-        self.assertEqual(invoice.payment_status, "PARTIAL")
+        original_entry = JournalEntry.objects.get(id=original_entry_id)
+        reversal_entry = JournalEntry.objects.filter(reversal_of=original_entry).first()
+
+        self.assertIsNotNone(reversal_entry)
+        self.assertEqual(original_entry.status, JournalEntryStatus.REVERSED)
+        self.assertEqual(reversal_entry.status, JournalEntryStatus.POSTED)
+        self.assertEqual(account.current_balance, Decimal("100.00"))
+        self.assertEqual(payment.status, PaymentStatus.CANCELLED)
+        self.assertEqual(
+            payment.treasury_transaction.status,
+            TreasuryTransaction.TransactionStatus.CANCELLED,
+        )
+        self.assertEqual(invoice.paid_amount, Decimal("0.00"))
+        self.assertEqual(invoice.balance_due, Decimal("100.00"))
+        self.assertEqual(invoice.payment_status, "UNPAID")
+
 
     def test_customer_payment_over_invoice_balance_is_blocked(self) -> None:
         account = create_treasury_account(
@@ -1529,6 +1551,8 @@ class TreasuryPaymentAllocationServiceTests(PrimeyAccTestFactoryMixin, TestCase)
         self.assertEqual(bill.payment_status, "PARTIAL")
 
     def test_cancel_supplier_payment_reverses_purchase_bill_allocation(self) -> None:
+        from accounting.models import JournalEntry, JournalEntryStatus
+
         supplier = self.create_business_party(
             company=self.company_a,
             name="Cancel Allocation Supplier",
@@ -1562,29 +1586,43 @@ class TreasuryPaymentAllocationServiceTests(PrimeyAccTestFactoryMixin, TestCase)
             status=PaymentStatus.CONFIRMED,
         )
 
+        original_entry_id = payment.accounting_entry_id
+        self.assertIsNotNone(original_entry_id)
+
         bill.refresh_from_db()
+        account.refresh_from_db()
+        self.assertEqual(account.current_balance, Decimal("260.00"))
         self.assertEqual(bill.paid_amount, Decimal("40.00"))
         self.assertEqual(bill.balance_due, Decimal("60.00"))
 
-        with self.assertRaises(ValidationError):
-            cancel_supplier_payment(
-                company=self.company_a,
-                payment=payment,
-                user=self.user,
-                reason="Reverse supplier allocation",
-            )
+        cancel_supplier_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+            reason="Reverse supplier allocation",
+        )
 
         account.refresh_from_db()
         bill.refresh_from_db()
         payment.refresh_from_db()
+        payment.treasury_transaction.refresh_from_db()
 
-        self.assertEqual(account.current_balance, Decimal("260.00"))
-        self.assertEqual(payment.status, PaymentStatus.CONFIRMED)
-        self.assertTrue(payment.is_accounting_posted)
-        self.assertIsNotNone(payment.accounting_entry_id)
-        self.assertEqual(bill.paid_amount, Decimal("40.00"))
-        self.assertEqual(bill.balance_due, Decimal("60.00"))
-        self.assertEqual(bill.payment_status, "PARTIAL")
+        original_entry = JournalEntry.objects.get(id=original_entry_id)
+        reversal_entry = JournalEntry.objects.filter(reversal_of=original_entry).first()
+
+        self.assertIsNotNone(reversal_entry)
+        self.assertEqual(original_entry.status, JournalEntryStatus.REVERSED)
+        self.assertEqual(reversal_entry.status, JournalEntryStatus.POSTED)
+        self.assertEqual(account.current_balance, Decimal("300.00"))
+        self.assertEqual(payment.status, PaymentStatus.CANCELLED)
+        self.assertEqual(
+            payment.treasury_transaction.status,
+            TreasuryTransaction.TransactionStatus.CANCELLED,
+        )
+        self.assertEqual(bill.paid_amount, Decimal("0.00"))
+        self.assertEqual(bill.balance_due, Decimal("100.00"))
+        self.assertEqual(bill.payment_status, "UNPAID")
+
 
     def test_supplier_payment_over_bill_balance_is_blocked(self) -> None:
         supplier = self.create_business_party(
@@ -2108,5 +2146,6 @@ class TreasuryAPITests(PrimeyAccTestFactoryMixin, TestCase):
         response = anonymous_client.get("/api/company/treasury/accounts/")
 
         self.assertIn(response.status_code, [401, 403])
+
 
 

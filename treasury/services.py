@@ -1,37 +1,37 @@
-# ============================================================
-# 📂 treasury/services.py
-# 🧠 PrimeyAcc | Treasury & Payments Services V1.3
+﻿# ============================================================
+# ًں“‚ treasury/services.py
+# ًں§  PrimeyAcc | Treasury & Payments Services V1.4
 # ------------------------------------------------------------
-# ✅ Phase 11.1 Treasury Accounts Foundation services
-# ✅ Phase 11.2 Treasury Transactions Foundation services
-# ✅ Phase 11.3 Treasury APIs Foundation services
-# ✅ Phase 11.4 Customer & Supplier Payments Foundation services
-# ✅ Phase 11.5 Payment Allocation Foundation services
-# ✅ Phase 11.6 Automatic Accounting Posting for Payments
-# ✅ Company-scoped treasury account creation/update
-# ✅ Company-scoped treasury transaction creation/post/cancel
-# ✅ Company-scoped customer payment create/confirm/cancel
-# ✅ Company-scoped supplier payment create/confirm/cancel
-# ✅ Customer payment allocation to SalesInvoice
-# ✅ Supplier payment allocation to PurchaseBill
-# ✅ Automatic accounting posting for confirmed CustomerPayment
-# ✅ Automatic accounting posting for confirmed SupplierPayment
-# ✅ Safe balance updates only on posting/confirmation
-# ✅ Negative balance prevention for outflows/transfers/supplier payments
-# ✅ Overpayment prevention for sales invoices and purchase bills
-# ✅ Duplicate posting/confirmation prevention
-# ✅ Summary helpers for /company treasury dashboard
+# âœ… Phase 11.1 Treasury Accounts Foundation services
+# âœ… Phase 11.2 Treasury Transactions Foundation services
+# âœ… Phase 11.3 Treasury APIs Foundation services
+# âœ… Phase 11.4 Customer & Supplier Payments Foundation services
+# âœ… Phase 11.5 Payment Allocation Foundation services
+# âœ… Phase 11.6 Automatic Accounting Posting for Payments
+# âœ… Company-scoped treasury account creation/update
+# âœ… Company-scoped treasury transaction creation/post/cancel
+# âœ… Company-scoped customer payment create/confirm/cancel
+# âœ… Company-scoped supplier payment create/confirm/cancel
+# âœ… Customer payment allocation to SalesInvoice
+# âœ… Supplier payment allocation to PurchaseBill
+# âœ… Automatic accounting posting for confirmed CustomerPayment
+# âœ… Automatic accounting posting for confirmed SupplierPayment
+# âœ… Safe balance updates only on posting/confirmation
+# âœ… Negative balance prevention for outflows/transfers/supplier payments
+# âœ… Overpayment prevention for sales invoices and purchase bills
+# âœ… Duplicate posting/confirmation prevention
+# âœ… Summary helpers for /company treasury dashboard
 # ------------------------------------------------------------
-# القاعدة المعمارية المعتمدة:
-# - لا يتم الاعتماد على company_id القادم من الفرونت
-# - الشركة يجب أن تصل للخدمة من عضوية المستخدم الحالية داخل /company
-# - كل حساب خزينة وحركة خزينة ودفع يجب أن يكون داخل نفس الشركة
-# - الرصيد لا يتغير عند إنشاء Draft، يتغير فقط عند POSTED / CONFIRMED
-# - تأكيد دفعة العميل ينشئ حركة خزينة واردة INFLOW ويحدث فاتورة المبيعات إن وجدت
-# - تأكيد دفعة المورد ينشئ حركة خزينة صادرة OUTFLOW ويحدث فاتورة المشتريات إن وجدت
-# - تأكيد الدفعة يرحل قيد محاسبي تلقائي ويمنع التكرار
-# - إلغاء دفعة مؤكدة يلغي حركة الخزينة ويعكس الرصيد ويعكس أثر الفاتورة بأمان
-# - إذا تم ترحيل الدفعة محاسبيًا لا يتم إلغاؤها إلا عبر مسار عكس محاسبي لاحق
+# ط§ظ„ظ‚ط§ط¹ط¯ط© ط§ظ„ظ…ط¹ظ…ط§ط±ظٹط© ط§ظ„ظ…ط¹طھظ…ط¯ط©:
+# - ظ„ط§ ظٹطھظ… ط§ظ„ط§ط¹طھظ…ط§ط¯ ط¹ظ„ظ‰ company_id ط§ظ„ظ‚ط§ط¯ظ… ظ…ظ† ط§ظ„ظپط±ظˆظ†طھ
+# - ط§ظ„ط´ط±ظƒط© ظٹط¬ط¨ ط£ظ† طھطµظ„ ظ„ظ„ط®ط¯ظ…ط© ظ…ظ† ط¹ط¶ظˆظٹط© ط§ظ„ظ…ط³طھط®ط¯ظ… ط§ظ„ط­ط§ظ„ظٹط© ط¯ط§ط®ظ„ /company
+# - ظƒظ„ ط­ط³ط§ط¨ ط®ط²ظٹظ†ط© ظˆط­ط±ظƒط© ط®ط²ظٹظ†ط© ظˆط¯ظپط¹ ظٹط¬ط¨ ط£ظ† ظٹظƒظˆظ† ط¯ط§ط®ظ„ ظ†ظپط³ ط§ظ„ط´ط±ظƒط©
+# - ط§ظ„ط±طµظٹط¯ ظ„ط§ ظٹطھط؛ظٹط± ط¹ظ†ط¯ ط¥ظ†ط´ط§ط، DraftطŒ ظٹطھط؛ظٹط± ظپظ‚ط· ط¹ظ†ط¯ POSTED / CONFIRMED
+# - طھط£ظƒظٹط¯ ط¯ظپط¹ط© ط§ظ„ط¹ظ…ظٹظ„ ظٹظ†ط´ط¦ ط­ط±ظƒط© ط®ط²ظٹظ†ط© ظˆط§ط±ط¯ط© INFLOW ظˆظٹط­ط¯ط« ظپط§طھظˆط±ط© ط§ظ„ظ…ط¨ظٹط¹ط§طھ ط¥ظ† ظˆط¬ط¯طھ
+# - طھط£ظƒظٹط¯ ط¯ظپط¹ط© ط§ظ„ظ…ظˆط±ط¯ ظٹظ†ط´ط¦ ط­ط±ظƒط© ط®ط²ظٹظ†ط© طµط§ط¯ط±ط© OUTFLOW ظˆظٹط­ط¯ط« ظپط§طھظˆط±ط© ط§ظ„ظ…ط´طھط±ظٹط§طھ ط¥ظ† ظˆط¬ط¯طھ
+# - طھط£ظƒظٹط¯ ط§ظ„ط¯ظپط¹ط© ظٹط±ط­ظ„ ظ‚ظٹط¯ ظ…ط­ط§ط³ط¨ظٹ طھظ„ظ‚ط§ط¦ظٹ ظˆظٹظ…ظ†ط¹ ط§ظ„طھظƒط±ط§ط±
+# - ط¥ظ„ط؛ط§ط، ط¯ظپط¹ط© ظ…ط¤ظƒط¯ط© ظٹظ„ط؛ظٹ ط­ط±ظƒط© ط§ظ„ط®ط²ظٹظ†ط© ظˆظٹط¹ظƒط³ ط§ظ„ط±طµظٹط¯ ظˆظٹط¹ظƒط³ ط£ط«ط± ط§ظ„ظپط§طھظˆط±ط© ط¨ط£ظ…ط§ظ†
+# - ط¥ط°ط§ طھظ… طھط±ط­ظٹظ„ ط§ظ„ط¯ظپط¹ط© ظ…ط­ط§ط³ط¨ظٹظ‹ط§ ظ„ط§ ظٹطھظ… ط¥ظ„ط؛ط§ط¤ظ‡ط§ ط¥ظ„ط§ ط¹ط¨ط± ظ…ط³ط§ط± ط¹ظƒط³ ظ…ط­ط§ط³ط¨ظٹ ظ„ط§ط­ظ‚
 # ============================================================
 
 from __future__ import annotations
@@ -48,6 +48,7 @@ from django.utils import timezone
 from accounting.services import (
     post_customer_payment_to_accounting,
     post_supplier_payment_to_accounting,
+    reverse_journal_entry,
 )
 from purchases.models import PurchaseBill
 from sales.models import SalesInvoice
@@ -1154,17 +1155,23 @@ def cancel_customer_payment(
         if payment.status == PaymentStatus.CANCELLED:
             return payment
 
-        if payment.is_accounting_posted or payment.accounting_entry_id:
-            raise ValidationError(
-                {
-                    "accounting_entry": (
-                        "Accounting-posted customer payment cannot be cancelled "
-                        "without a reversal workflow."
-                    )
-                }
-            )
-
         was_confirmed = payment.status == PaymentStatus.CONFIRMED
+
+        if payment.is_accounting_posted or payment.accounting_entry_id:
+            if not payment.accounting_entry_id:
+                raise ValidationError(
+                    {
+                        "accounting_entry": (
+                            "Accounting-posted customer payment is missing its journal entry."
+                        )
+                    }
+                )
+
+            reverse_journal_entry(
+                payment.accounting_entry,
+                reason=reason or f"Customer payment {payment.payment_number} cancelled.",
+                actor=user,
+            )
 
         if payment.treasury_transaction_id:
             cancel_treasury_transaction(
@@ -1482,17 +1489,23 @@ def cancel_supplier_payment(
         if payment.status == PaymentStatus.CANCELLED:
             return payment
 
-        if payment.is_accounting_posted or payment.accounting_entry_id:
-            raise ValidationError(
-                {
-                    "accounting_entry": (
-                        "Accounting-posted supplier payment cannot be cancelled "
-                        "without a reversal workflow."
-                    )
-                }
-            )
-
         was_confirmed = payment.status == PaymentStatus.CONFIRMED
+
+        if payment.is_accounting_posted or payment.accounting_entry_id:
+            if not payment.accounting_entry_id:
+                raise ValidationError(
+                    {
+                        "accounting_entry": (
+                            "Accounting-posted supplier payment is missing its journal entry."
+                        )
+                    }
+                )
+
+            reverse_journal_entry(
+                payment.accounting_entry,
+                reason=reason or f"Supplier payment {payment.payment_number} cancelled.",
+                actor=user,
+            )
 
         if payment.treasury_transaction_id:
             cancel_treasury_transaction(
@@ -1606,3 +1619,4 @@ def get_treasury_summary(company) -> TreasurySummary:
         posted_transactions=transaction_stats["posted_transactions"] or 0,
         cancelled_transactions=transaction_stats["cancelled_transactions"] or 0,
     )
+
