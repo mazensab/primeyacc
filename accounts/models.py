@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 accounts/models.py
-# 🧠 PrimeyAcc | Accounts Models V2.3
+# 🧠 PrimeyAcc | Accounts Models V2.4
 # ------------------------------------------------------------
 # ✅ User Profile
 # ✅ Workspace Type Foundation
@@ -24,6 +24,7 @@
 # ✅ Company Notifications Permissions
 # ✅ Company WhatsApp Permissions
 # ✅ Company HR Employees Permissions
+# ✅ Company HR Attendance Permissions
 # ✅ Safe Default Company Membership Resolver
 # ✅ Audit Fields
 # ------------------------------------------------------------
@@ -44,6 +45,7 @@
 # - طرق الدفع وبوابات الدفع وأجهزة الدفع لها صلاحيات دقيقة داخل company.payments.*
 # - الإشعارات والواتساب لها صلاحيات دقيقة داخل company.notifications.* و company.whatsapp.*
 # - الموارد البشرية والموظفون لهم صلاحيات دقيقة داخل company.hr.employees.*
+# - الحضور والانصراف له صلاحيات دقيقة داخل company.hr.attendance.*
 # ============================================================
 
 from __future__ import annotations
@@ -259,6 +261,12 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.hr.employees.update",
         "company.hr.employees.activate",
         "company.hr.employees.deactivate",
+        "company.hr.attendance.view",
+        "company.hr.attendance.create",
+        "company.hr.attendance.update",
+        "company.hr.attendance.check_in",
+        "company.hr.attendance.check_out",
+        "company.hr.attendance.cancel",
         "company.reports.view",
     ],
     CompanyRole.MANAGER: [
@@ -316,6 +324,12 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.hr.employees.update",
         "company.hr.employees.activate",
         "company.hr.employees.deactivate",
+        "company.hr.attendance.view",
+        "company.hr.attendance.create",
+        "company.hr.attendance.update",
+        "company.hr.attendance.check_in",
+        "company.hr.attendance.check_out",
+        "company.hr.attendance.cancel",
         "company.reports.view",
     ],
     CompanyRole.ACCOUNTANT: [
@@ -496,6 +510,12 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.hr.employees.update",
         "company.hr.employees.activate",
         "company.hr.employees.deactivate",
+        "company.hr.attendance.view",
+        "company.hr.attendance.create",
+        "company.hr.attendance.update",
+        "company.hr.attendance.check_in",
+        "company.hr.attendance.check_out",
+        "company.hr.attendance.cancel",
         "company.notifications.view",
         "company.notifications.read",
         "company.whatsapp.view",
@@ -543,6 +563,7 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.whatsapp.view",
         "company.whatsapp.messages.view",
         "company.hr.employees.view",
+        "company.hr.attendance.view",
         "company.reports.view",
     ],
 }

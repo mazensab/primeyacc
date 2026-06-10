@@ -1,9 +1,10 @@
 # ============================================================
 # 📂 api/company/hr/urls.py
-# 🧠 PrimeyAcc | Company HR URLs V1.0
+# 🧠 PrimeyAcc | Company HR URLs V1.1
 # ------------------------------------------------------------
 # ✅ HR module routes
 # ✅ Employees routes include
+# ✅ Attendance routes include
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذا الملف يجمع مسارات HR داخل /api/company/hr/
@@ -21,4 +22,5 @@ app_name = "company_hr"
 
 urlpatterns = [
     path("employees/", include("api.company.hr.employees.urls")),
+    path("attendance/", include("api.company.hr.attendance.urls")),
 ]
