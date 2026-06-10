@@ -109,6 +109,7 @@ PRIMEYACC_APPS = [
     "pos",
     "notifications",
     "whatsapp",
+    "hr",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + PRIMEYACC_APPS

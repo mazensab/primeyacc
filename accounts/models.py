@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 accounts/models.py
-# 🧠 PrimeyAcc | Accounts Models V2.2
+# 🧠 PrimeyAcc | Accounts Models V2.3
 # ------------------------------------------------------------
 # ✅ User Profile
 # ✅ Workspace Type Foundation
@@ -23,6 +23,7 @@
 # ✅ Company Payment Methods / Gateways / Terminals Permissions
 # ✅ Company Notifications Permissions
 # ✅ Company WhatsApp Permissions
+# ✅ Company HR Employees Permissions
 # ✅ Safe Default Company Membership Resolver
 # ✅ Audit Fields
 # ------------------------------------------------------------
@@ -42,6 +43,7 @@
 # - الخزينة والمدفوعات لها صلاحيات دقيقة داخل company.treasury.*
 # - طرق الدفع وبوابات الدفع وأجهزة الدفع لها صلاحيات دقيقة داخل company.payments.*
 # - الإشعارات والواتساب لها صلاحيات دقيقة داخل company.notifications.* و company.whatsapp.*
+# - الموارد البشرية والموظفون لهم صلاحيات دقيقة داخل company.hr.employees.*
 # ============================================================
 
 from __future__ import annotations
@@ -252,6 +254,11 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.whatsapp.templates.manage",
         "company.whatsapp.messages.view",
         "company.whatsapp.messages.send",
+        "company.hr.employees.view",
+        "company.hr.employees.create",
+        "company.hr.employees.update",
+        "company.hr.employees.activate",
+        "company.hr.employees.deactivate",
         "company.reports.view",
     ],
     CompanyRole.MANAGER: [
@@ -304,6 +311,11 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.whatsapp.templates.manage",
         "company.whatsapp.messages.view",
         "company.whatsapp.messages.send",
+        "company.hr.employees.view",
+        "company.hr.employees.create",
+        "company.hr.employees.update",
+        "company.hr.employees.activate",
+        "company.hr.employees.deactivate",
         "company.reports.view",
     ],
     CompanyRole.ACCOUNTANT: [
@@ -479,6 +491,11 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.hr.view",
         "company.hr.create",
         "company.hr.update",
+        "company.hr.employees.view",
+        "company.hr.employees.create",
+        "company.hr.employees.update",
+        "company.hr.employees.activate",
+        "company.hr.employees.deactivate",
         "company.notifications.view",
         "company.notifications.read",
         "company.whatsapp.view",
@@ -525,6 +542,7 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.notifications.read",
         "company.whatsapp.view",
         "company.whatsapp.messages.view",
+        "company.hr.employees.view",
         "company.reports.view",
     ],
 }
