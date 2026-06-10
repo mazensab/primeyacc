@@ -577,3 +577,449 @@ class AttendanceRecord(models.Model):
         if user:
             self.updated_by = user
         self.save()
+
+# ============================================================
+# 🏖️ HR Leave Management Models
+# ============================================================
+
+
+class LeaveTypeUnit(models.TextChoices):
+    DAYS = "DAYS", "Days"
+    HOURS = "HOURS", "Hours"
+
+
+class LeaveRequestStatus(models.TextChoices):
+    DRAFT = "DRAFT", "Draft"
+    SUBMITTED = "SUBMITTED", "Submitted"
+    APPROVED = "APPROVED", "Approved"
+    REJECTED = "REJECTED", "Rejected"
+    CANCELLED = "CANCELLED", "Cancelled"
+
+
+class LeaveType(models.Model):
+    """
+    Company-scoped leave type.
+
+    Examples:
+    - Annual Leave
+    - Sick Leave
+    - Emergency Leave
+    - Unpaid Leave
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="leave_types",
+    )
+
+    name = models.CharField(max_length=150)
+    code = models.CharField(max_length=50)
+
+    unit = models.CharField(
+        max_length=20,
+        choices=LeaveTypeUnit.choices,
+        default=LeaveTypeUnit.DAYS,
+    )
+
+    annual_allowance = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Default yearly allowance for this leave type.",
+    )
+
+    is_paid = models.BooleanField(default=True)
+    requires_approval = models.BooleanField(default=True)
+    allow_half_day = models.BooleanField(default=False)
+    allow_negative_balance = models.BooleanField(default=False)
+
+    is_active = models.BooleanField(default=True)
+
+    notes = models.TextField(blank=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_leave_types",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_leave_types",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Leave Type"
+        verbose_name_plural = "Leave Types"
+        ordering = ["company_id", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "code"],
+                name="unique_leave_type_code_per_company",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "code"]),
+            models.Index(fields=["company", "is_active"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.company} - {self.name}"
+
+    def clean(self):
+        super().clean()
+
+        if self.annual_allowance < 0:
+            raise ValidationError(
+                {"annual_allowance": "Annual allowance cannot be negative."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        self.code = (self.code or "").strip().upper()
+        self.name = (self.name or "").strip()
+        super().save(*args, **kwargs)
+
+
+class LeaveRequest(models.Model):
+    """
+    Company-scoped employee leave request.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="leave_requests",
+    )
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.PROTECT,
+        related_name="leave_requests",
+    )
+    leave_type = models.ForeignKey(
+        LeaveType,
+        on_delete=models.PROTECT,
+        related_name="leave_requests",
+    )
+
+    start_date = models.DateField()
+    end_date = models.DateField()
+
+    requested_units = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=1,
+        help_text="Requested leave amount in leave type unit.",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=LeaveRequestStatus.choices,
+        default=LeaveRequestStatus.DRAFT,
+        db_index=True,
+    )
+
+    reason = models.TextField(blank=True)
+    employee_note = models.TextField(blank=True)
+    manager_note = models.TextField(blank=True)
+
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_leave_requests",
+    )
+    rejected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="rejected_leave_requests",
+    )
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cancelled_leave_requests",
+    )
+
+    extra_data = models.JSONField(default=dict, blank=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_leave_requests",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_leave_requests",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Leave Request"
+        verbose_name_plural = "Leave Requests"
+        ordering = ["-start_date", "-id"]
+        indexes = [
+            models.Index(fields=["company", "employee"]),
+            models.Index(fields=["company", "leave_type"]),
+            models.Index(fields=["company", "status"]),
+            models.Index(fields=["company", "start_date", "end_date"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.employee} - {self.leave_type} - {self.start_date} to {self.end_date}"
+
+    def clean(self):
+        super().clean()
+
+        if self.employee_id and self.company_id:
+            if self.employee.company_id != self.company_id:
+                raise ValidationError(
+                    {"employee": "Employee must belong to the same company."}
+                )
+
+        if self.leave_type_id and self.company_id:
+            if self.leave_type.company_id != self.company_id:
+                raise ValidationError(
+                    {"leave_type": "Leave type must belong to the same company."}
+                )
+
+        if self.end_date and self.start_date and self.end_date < self.start_date:
+            raise ValidationError(
+                {"end_date": "End date cannot be before start date."}
+            )
+
+        if self.requested_units <= 0:
+            raise ValidationError(
+                {"requested_units": "Requested units must be greater than zero."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def submit(self, *, user=None):
+        if self.status != LeaveRequestStatus.DRAFT:
+            raise ValidationError(
+                {"status": "Only draft leave requests can be submitted."}
+            )
+
+        self.status = LeaveRequestStatus.SUBMITTED
+        self.submitted_at = timezone.now()
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "submitted_at",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+    def approve(self, *, user=None, note: str = ""):
+        if self.status != LeaveRequestStatus.SUBMITTED:
+            raise ValidationError(
+                {"status": "Only submitted leave requests can be approved."}
+            )
+
+        self.status = LeaveRequestStatus.APPROVED
+        self.approved_at = timezone.now()
+        self.approved_by = user
+        self.manager_note = note or self.manager_note
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "approved_at",
+                "approved_by",
+                "manager_note",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+    def reject(self, *, user=None, note: str = ""):
+        if self.status != LeaveRequestStatus.SUBMITTED:
+            raise ValidationError(
+                {"status": "Only submitted leave requests can be rejected."}
+            )
+
+        self.status = LeaveRequestStatus.REJECTED
+        self.rejected_at = timezone.now()
+        self.rejected_by = user
+        self.manager_note = note or self.manager_note
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "rejected_at",
+                "rejected_by",
+                "manager_note",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+    def cancel(self, *, user=None, note: str = ""):
+        if self.status in [
+            LeaveRequestStatus.APPROVED,
+            LeaveRequestStatus.REJECTED,
+            LeaveRequestStatus.CANCELLED,
+        ]:
+            raise ValidationError(
+                {"status": "This leave request cannot be cancelled."}
+            )
+
+        self.status = LeaveRequestStatus.CANCELLED
+        self.cancelled_at = timezone.now()
+        self.cancelled_by = user
+        self.manager_note = note or self.manager_note
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "cancelled_at",
+                "cancelled_by",
+                "manager_note",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+
+class LeaveBalance(models.Model):
+    """
+    Company-scoped leave balance per employee and leave type.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="leave_balances",
+    )
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name="leave_balances",
+    )
+    leave_type = models.ForeignKey(
+        LeaveType,
+        on_delete=models.CASCADE,
+        related_name="leave_balances",
+    )
+
+    year = models.PositiveIntegerField()
+
+    opening_balance = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+    )
+    accrued = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+    )
+    used = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+    )
+    adjusted = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+    )
+
+    notes = models.TextField(blank=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_leave_balances",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_leave_balances",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Leave Balance"
+        verbose_name_plural = "Leave Balances"
+        ordering = ["company_id", "year", "employee_id", "leave_type_id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "employee", "leave_type", "year"],
+                name="unique_leave_balance_per_employee_type_year",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "employee", "year"]),
+            models.Index(fields=["company", "leave_type", "year"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.employee} - {self.leave_type} - {self.year}"
+
+    @property
+    def available_balance(self):
+        return self.opening_balance + self.accrued + self.adjusted - self.used
+
+    def clean(self):
+        super().clean()
+
+        if self.employee_id and self.company_id:
+            if self.employee.company_id != self.company_id:
+                raise ValidationError(
+                    {"employee": "Employee must belong to the same company."}
+                )
+
+        if self.leave_type_id and self.company_id:
+            if self.leave_type.company_id != self.company_id:
+                raise ValidationError(
+                    {"leave_type": "Leave type must belong to the same company."}
+                )
+
+        if self.year < 2000:
+            raise ValidationError(
+                {"year": "Year must be valid."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)

@@ -1,22 +1,26 @@
 ﻿# ============================================================
-# ًں“‚ hr/services.py
-# ًں§  PrimeyAcc | HR Services V1.1
+# 📂 hr/services.py
+# 🧠 PrimeyAcc | HR Services V1.2
 # ------------------------------------------------------------
-# âœ… Employee create/update services
-# âœ… Tenant-safe branch validation
-# âœ… Employee status lifecycle helpers
-# âœ… Attendance create/check-in/check-out services
-# âœ… Attendance tenant isolation validation
-# âœ… Open attendance protection per employee
-# âœ… Audit user tracking
+# ✅ Employee create/update services
+# ✅ Tenant-safe branch validation
+# ✅ Employee status lifecycle helpers
+# ✅ Attendance create/check-in/check-out services
+# ✅ Attendance tenant isolation validation
+# ✅ Open attendance protection per employee
+# ✅ Leave type services
+# ✅ Leave request workflow services
+# ✅ Leave balance services
+# ✅ Audit user tracking
 # ------------------------------------------------------------
-# ط§ظ„ظ‚ط§ط¹ط¯ط© ط§ظ„ظ…ط¹طھظ…ط¯ط©:
-# - ط§ظ„ط®ط¯ظ…ط§طھ ظ„ط§ طھط³طھظ‚ط¨ظ„ company_id ظ…ظ† ط§ظ„ظˆط§ط¬ظ‡ط©
-# - ط§ظ„ط´ط±ظƒط© طھط£طھظٹ ظ…ظ† /company context ظ„ط§ط­ظ‚ظ‹ط§
-# - branch ط¥ظ† ظˆط¬ط¯طھ ظٹط¬ط¨ ط£ظ† طھظƒظˆظ† ظ…ظ† ظ†ظپط³ ط§ظ„ط´ط±ظƒط©
-# - employee ط¯ط§ط®ظ„ ط§ظ„ط­ط¶ظˆط± ظٹط¬ط¨ ط£ظ† ظٹظƒظˆظ† ظ…ظ† ظ†ظپط³ ط§ظ„ط´ط±ظƒط©
-# - ظ„ط§ ظٹط³ظ…ط­ ط¨ظˆط¬ظˆط¯ ط³ط¬ظ„ ط­ط¶ظˆط± ظ…ظپطھظˆط­ ظ„ظ†ظپط³ ط§ظ„ظ…ظˆط¸ظپ
-# - ط£ظٹ ظ…ظ†ط·ظ‚ طھط´ط؛ظٹظ„ظٹ ظٹط¨ظ‚ظ‰ ظ‡ظ†ط§ ظˆظ„ظٹط³ ط¯ط§ط®ظ„ views
+# القاعدة المعتمدة:
+# - الخدمات لا تستقبل company_id من الواجهة
+# - الشركة تأتي من /company context لاحقًا
+# - branch إن وجدت يجب أن تكون من نفس الشركة
+# - employee داخل الحضور والإجازات يجب أن يكون من نفس الشركة
+# - leave_type يجب أن يكون من نفس الشركة
+# - لا يسمح بوجود سجل حضور مفتوح لنفس الموظف
+# - أي منطق تشغيلي يبقى هنا وليس داخل views
 # ============================================================
 
 from __future__ import annotations
@@ -34,7 +38,15 @@ from .models import (
     AttendanceSource,
     AttendanceStatus,
     Employee,
+    LeaveBalance,
+    LeaveRequest,
+    LeaveType,
 )
+
+
+# ============================================================
+# 👤 Employee Services
+# ============================================================
 
 
 def validate_employee_branch(*, company: Company, branch: Branch | None) -> None:
@@ -46,6 +58,86 @@ def validate_employee_branch(*, company: Company, branch: Branch | None) -> None
         raise ValidationError(
             {"branch": "Branch must belong to the same company."}
         )
+
+
+@transaction.atomic
+def create_employee(
+    *,
+    company: Company,
+    created_by,
+    data: dict[str, Any],
+) -> Employee:
+    """
+    Create an employee inside a company tenant.
+    """
+
+    data = dict(data or {})
+    data.pop("company", None)
+
+    branch = data.get("branch")
+    validate_employee_branch(company=company, branch=branch)
+
+    employee = Employee(
+        company=company,
+        created_by=created_by,
+        updated_by=created_by,
+        **data,
+    )
+    employee.save()
+    return employee
+
+
+@transaction.atomic
+def update_employee(
+    *,
+    employee: Employee,
+    updated_by,
+    data: dict[str, Any],
+) -> Employee:
+    """
+    Update an employee without changing the tenant boundary.
+    """
+
+    data = dict(data or {})
+    data.pop("company", None)
+
+    if "branch" in data:
+        validate_employee_branch(
+            company=employee.company,
+            branch=data.get("branch"),
+        )
+
+    for field_name, value in data.items():
+        setattr(employee, field_name, value)
+
+    employee.updated_by = updated_by
+    employee.save()
+    return employee
+
+
+@transaction.atomic
+def activate_employee(*, employee: Employee, updated_by) -> Employee:
+    """
+    Activate employee.
+    """
+
+    employee.activate(user=updated_by)
+    return employee
+
+
+@transaction.atomic
+def deactivate_employee(*, employee: Employee, updated_by) -> Employee:
+    """
+    Deactivate employee.
+    """
+
+    employee.deactivate(user=updated_by)
+    return employee
+
+
+# ============================================================
+# 🕒 Attendance Services
+# ============================================================
 
 
 def validate_attendance_employee(
@@ -102,77 +194,6 @@ def validate_employee_has_no_open_attendance(*, employee: Employee) -> None:
 
 
 @transaction.atomic
-def create_employee(
-    *,
-    company: Company,
-    created_by,
-    data: dict[str, Any],
-) -> Employee:
-    """
-    Create an employee inside a company tenant.
-    """
-
-    branch = data.get("branch")
-    validate_employee_branch(company=company, branch=branch)
-
-    employee = Employee(
-        company=company,
-        created_by=created_by,
-        updated_by=created_by,
-        **data,
-    )
-    employee.save()
-    return employee
-
-
-@transaction.atomic
-def update_employee(
-    *,
-    employee: Employee,
-    updated_by,
-    data: dict[str, Any],
-) -> Employee:
-    """
-    Update an employee without changing the tenant boundary.
-    """
-
-    data.pop("company", None)
-
-    if "branch" in data:
-        validate_employee_branch(
-            company=employee.company,
-            branch=data.get("branch"),
-        )
-
-    for field_name, value in data.items():
-        setattr(employee, field_name, value)
-
-    employee.updated_by = updated_by
-    employee.save()
-    return employee
-
-
-@transaction.atomic
-def activate_employee(*, employee: Employee, updated_by) -> Employee:
-    """
-    Activate employee.
-    """
-
-    employee.activate(user=updated_by)
-    return employee
-
-
-@transaction.atomic
-def deactivate_employee(*, employee: Employee, updated_by) -> Employee:
-    """
-    Deactivate employee.
-    """
-
-    employee.deactivate(user=updated_by)
-    return employee
-
-
-@transaction.atomic
 def create_attendance_record(
     *,
     company: Company,
@@ -188,9 +209,9 @@ def create_attendance_record(
     - closed attendance record with check_in_at and check_out_at
     """
 
+    data = dict(data or {})
     data.pop("company", None)
 
-    data = dict(data or {})
     branch = data.pop("branch", None)
     if branch is None:
         branch = employee.branch
@@ -315,3 +336,310 @@ def cancel_attendance_record(
         user=updated_by,
     )
     return attendance_record
+
+
+# ============================================================
+# 🏖️ Leave Management Services
+# ============================================================
+
+
+def validate_leave_employee(*, company: Company, employee: Employee) -> None:
+    """
+    Ensure employee belongs to the current company.
+    """
+
+    if employee.company_id != company.id:
+        raise ValidationError(
+            {"employee": "Employee must belong to the current company."}
+        )
+
+
+def validate_leave_type(*, company: Company, leave_type: LeaveType) -> None:
+    """
+    Ensure leave type belongs to the current company.
+    """
+
+    if leave_type.company_id != company.id:
+        raise ValidationError(
+            {"leave_type": "Leave type must belong to the current company."}
+        )
+
+
+def validate_leave_balance_entities(
+    *,
+    company: Company,
+    employee: Employee,
+    leave_type: LeaveType,
+) -> None:
+    """
+    Ensure leave balance entities belong to the same company.
+    """
+
+    validate_leave_employee(company=company, employee=employee)
+    validate_leave_type(company=company, leave_type=leave_type)
+
+
+@transaction.atomic
+def create_leave_type(
+    *,
+    company: Company,
+    created_by,
+    data: dict[str, Any],
+) -> LeaveType:
+    """
+    Create company-scoped leave type.
+    """
+
+    data = dict(data or {})
+    data.pop("company", None)
+
+    leave_type = LeaveType(
+        company=company,
+        created_by=created_by,
+        updated_by=created_by,
+        **data,
+    )
+    leave_type.full_clean()
+    leave_type.save()
+
+    return leave_type
+
+
+@transaction.atomic
+def update_leave_type(
+    *,
+    leave_type: LeaveType,
+    updated_by,
+    data: dict[str, Any],
+) -> LeaveType:
+    """
+    Update leave type without changing company.
+    """
+
+    data = dict(data or {})
+    data.pop("company", None)
+
+    for field_name, value in data.items():
+        setattr(leave_type, field_name, value)
+
+    leave_type.updated_by = updated_by
+    leave_type.full_clean()
+    leave_type.save()
+
+    return leave_type
+
+
+@transaction.atomic
+def activate_leave_type(*, leave_type: LeaveType, updated_by) -> LeaveType:
+    """
+    Activate leave type.
+    """
+
+    leave_type.is_active = True
+    leave_type.updated_by = updated_by
+    leave_type.full_clean()
+    leave_type.save(
+        update_fields=[
+            "is_active",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+
+    return leave_type
+
+
+@transaction.atomic
+def deactivate_leave_type(*, leave_type: LeaveType, updated_by) -> LeaveType:
+    """
+    Deactivate leave type.
+    """
+
+    leave_type.is_active = False
+    leave_type.updated_by = updated_by
+    leave_type.full_clean()
+    leave_type.save(
+        update_fields=[
+            "is_active",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+
+    return leave_type
+
+
+@transaction.atomic
+def create_leave_request(
+    *,
+    company: Company,
+    employee: Employee,
+    leave_type: LeaveType,
+    created_by,
+    data: dict[str, Any],
+) -> LeaveRequest:
+    """
+    Create company-scoped leave request.
+    """
+
+    data = dict(data or {})
+    data.pop("company", None)
+    data.pop("employee", None)
+    data.pop("leave_type", None)
+
+    validate_leave_employee(company=company, employee=employee)
+    validate_leave_type(company=company, leave_type=leave_type)
+
+    leave_request = LeaveRequest(
+        company=company,
+        employee=employee,
+        leave_type=leave_type,
+        created_by=created_by,
+        updated_by=created_by,
+        **data,
+    )
+    leave_request.full_clean()
+    leave_request.save()
+
+    return leave_request
+
+
+@transaction.atomic
+def update_leave_request(
+    *,
+    leave_request: LeaveRequest,
+    updated_by,
+    data: dict[str, Any],
+) -> LeaveRequest:
+    """
+    Update leave request without changing company.
+    """
+
+    data = dict(data or {})
+    data.pop("company", None)
+
+    if "employee" in data:
+        validate_leave_employee(
+            company=leave_request.company,
+            employee=data["employee"],
+        )
+
+    if "leave_type" in data:
+        validate_leave_type(
+            company=leave_request.company,
+            leave_type=data["leave_type"],
+        )
+
+    for field_name, value in data.items():
+        setattr(leave_request, field_name, value)
+
+    leave_request.updated_by = updated_by
+    leave_request.full_clean()
+    leave_request.save()
+
+    return leave_request
+
+
+@transaction.atomic
+def submit_leave_request(
+    *,
+    leave_request: LeaveRequest,
+    updated_by,
+) -> LeaveRequest:
+    """
+    Submit draft leave request.
+    """
+
+    return leave_request.submit(user=updated_by)
+
+
+@transaction.atomic
+def approve_leave_request(
+    *,
+    leave_request: LeaveRequest,
+    approved_by,
+    note: str = "",
+) -> LeaveRequest:
+    """
+    Approve submitted leave request.
+    """
+
+    return leave_request.approve(user=approved_by, note=note)
+
+
+@transaction.atomic
+def reject_leave_request(
+    *,
+    leave_request: LeaveRequest,
+    rejected_by,
+    note: str = "",
+) -> LeaveRequest:
+    """
+    Reject submitted leave request.
+    """
+
+    return leave_request.reject(user=rejected_by, note=note)
+
+
+@transaction.atomic
+def cancel_leave_request(
+    *,
+    leave_request: LeaveRequest,
+    cancelled_by,
+    note: str = "",
+) -> LeaveRequest:
+    """
+    Cancel draft/submitted leave request.
+    """
+
+    return leave_request.cancel(user=cancelled_by, note=note)
+
+
+@transaction.atomic
+def create_or_update_leave_balance(
+    *,
+    company: Company,
+    employee: Employee,
+    leave_type: LeaveType,
+    year: int,
+    updated_by,
+    data: dict[str, Any],
+) -> LeaveBalance:
+    """
+    Create or update leave balance for employee/type/year.
+    """
+
+    data = dict(data or {})
+    data.pop("company", None)
+    data.pop("employee", None)
+    data.pop("leave_type", None)
+    data.pop("year", None)
+
+    validate_leave_balance_entities(
+        company=company,
+        employee=employee,
+        leave_type=leave_type,
+    )
+
+    balance, created = LeaveBalance.objects.get_or_create(
+        company=company,
+        employee=employee,
+        leave_type=leave_type,
+        year=year,
+        defaults={
+            "created_by": updated_by,
+            "updated_by": updated_by,
+        },
+    )
+
+    for field_name, value in data.items():
+        setattr(balance, field_name, value)
+
+    balance.updated_by = updated_by
+    if created:
+        balance.created_by = updated_by
+
+    balance.full_clean()
+    balance.save()
+
+    return balance

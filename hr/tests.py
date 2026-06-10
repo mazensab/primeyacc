@@ -32,17 +32,30 @@ from .models import (
     AttendanceStatus,
     Employee,
     EmployeeStatus,
+    LeaveBalance,
+    LeaveRequest,
+    LeaveRequestStatus,
+    LeaveType,
+    LeaveTypeUnit,
 )
 from .services import (
     activate_employee,
+    approve_leave_request,
     cancel_attendance_record,
+    cancel_leave_request,
     check_in_employee,
     check_out_attendance_record,
     create_attendance_record,
     create_employee,
+    create_leave_request,
+    create_leave_type,
+    create_or_update_leave_balance,
     deactivate_employee,
     mark_attendance_missing_check_out,
+    reject_leave_request,
+    submit_leave_request,
     update_employee,
+    update_leave_type,
 )
 
 
@@ -1394,3 +1407,926 @@ class AttendanceAPITests(TestCase):
             payload["results"][0]["employee"]["employee_number"],
             "EMP-ATT-API-SEARCH",
         )
+
+
+class LeaveModelsTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="leave-model-admin",
+            email="leave-model-admin@example.com",
+            password="StrongPass12345",
+        )
+        self.company = Company.objects.create(
+            name="Primey Leave Model Company",
+            company_code="HR-LEAVE-MODEL-001",
+            owner=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.branch = Branch.objects.create(
+            company=self.company,
+            name="Leave Model Branch",
+            branch_code="LEAVE-MODEL",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.employee = Employee.objects.create(
+            company=self.company,
+            branch=self.branch,
+            employee_number="EMP-LEAVE-MODEL-001",
+            first_name="Reem",
+            last_name="Saleh",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.leave_type = LeaveType.objects.create(
+            company=self.company,
+            name="Annual Leave",
+            code="annual",
+            unit=LeaveTypeUnit.DAYS,
+            annual_allowance=21,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+    def test_leave_type_can_be_created_and_normalizes_code(self):
+        self.assertEqual(self.leave_type.company, self.company)
+        self.assertEqual(self.leave_type.code, "ANNUAL")
+        self.assertEqual(self.leave_type.unit, LeaveTypeUnit.DAYS)
+        self.assertTrue(self.leave_type.is_paid)
+        self.assertTrue(self.leave_type.requires_approval)
+
+    def test_leave_type_rejects_negative_annual_allowance(self):
+        leave_type = LeaveType(
+            company=self.company,
+            name="Invalid Leave",
+            code="INVALID",
+            annual_allowance=-1,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            leave_type.full_clean()
+
+    def test_leave_request_can_be_created_as_draft(self):
+        request = LeaveRequest.objects.create(
+            company=self.company,
+            employee=self.employee,
+            leave_type=self.leave_type,
+            start_date=timezone.localdate(),
+            end_date=timezone.localdate() + timedelta(days=2),
+            requested_units=3,
+            reason="Annual vacation",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.assertEqual(request.company, self.company)
+        self.assertEqual(request.employee, self.employee)
+        self.assertEqual(request.leave_type, self.leave_type)
+        self.assertEqual(request.status, LeaveRequestStatus.DRAFT)
+        self.assertEqual(request.requested_units, 3)
+
+    def test_leave_request_rejects_employee_from_another_company(self):
+        other_company = Company.objects.create(
+            name="Other Leave Model Company",
+            company_code="HR-LEAVE-MODEL-002",
+            owner=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        other_employee = Employee.objects.create(
+            company=other_company,
+            employee_number="EMP-LEAVE-OTHER",
+            first_name="Other",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        request = LeaveRequest(
+            company=self.company,
+            employee=other_employee,
+            leave_type=self.leave_type,
+            start_date=timezone.localdate(),
+            end_date=timezone.localdate(),
+            requested_units=1,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            request.full_clean()
+
+    def test_leave_request_rejects_end_date_before_start_date(self):
+        today = timezone.localdate()
+
+        request = LeaveRequest(
+            company=self.company,
+            employee=self.employee,
+            leave_type=self.leave_type,
+            start_date=today,
+            end_date=today - timedelta(days=1),
+            requested_units=1,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            request.full_clean()
+
+    def test_leave_balance_available_balance(self):
+        balance = LeaveBalance.objects.create(
+            company=self.company,
+            employee=self.employee,
+            leave_type=self.leave_type,
+            year=timezone.localdate().year,
+            opening_balance=5,
+            accrued=21,
+            used=4,
+            adjusted=1,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.assertEqual(balance.available_balance, 23)
+
+
+class LeaveServicesTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="leave-service-admin",
+            email="leave-service-admin@example.com",
+            password="StrongPass12345",
+        )
+        self.company = Company.objects.create(
+            name="Primey Leave Service Company",
+            company_code="HR-LEAVE-SVC-001",
+            owner=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.branch = Branch.objects.create(
+            company=self.company,
+            name="Leave Service Branch",
+            branch_code="LEAVE-SVC",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.employee = Employee.objects.create(
+            company=self.company,
+            branch=self.branch,
+            employee_number="EMP-LEAVE-SVC-001",
+            first_name="Layan",
+            last_name="Khalid",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+    def test_create_leave_type_service_sets_company_and_audit(self):
+        leave_type = create_leave_type(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "name": "Sick Leave",
+                "code": "sick",
+                "annual_allowance": 30,
+                "unit": LeaveTypeUnit.DAYS,
+            },
+        )
+
+        self.assertEqual(leave_type.company, self.company)
+        self.assertEqual(leave_type.code, "SICK")
+        self.assertEqual(leave_type.created_by, self.user)
+        self.assertEqual(leave_type.updated_by, self.user)
+
+    def test_update_leave_type_service_does_not_change_company(self):
+        other_company = Company.objects.create(
+            name="Other Leave Service Company",
+            company_code="HR-LEAVE-SVC-002",
+            owner=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        leave_type = create_leave_type(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "name": "Annual Leave",
+                "code": "ANNUAL",
+                "annual_allowance": 21,
+            },
+        )
+
+        updated = update_leave_type(
+            leave_type=leave_type,
+            updated_by=self.user,
+            data={
+                "company": other_company,
+                "name": "Updated Annual Leave",
+                "annual_allowance": 25,
+            },
+        )
+
+        self.assertEqual(updated.company, self.company)
+        self.assertEqual(updated.name, "Updated Annual Leave")
+        self.assertEqual(updated.annual_allowance, 25)
+
+    def test_create_leave_request_service_sets_company_employee_type_and_audit(self):
+        leave_type = create_leave_type(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "name": "Annual Leave",
+                "code": "ANNUAL",
+                "annual_allowance": 21,
+            },
+        )
+
+        leave_request = create_leave_request(
+            company=self.company,
+            employee=self.employee,
+            leave_type=leave_type,
+            created_by=self.user,
+            data={
+                "start_date": timezone.localdate(),
+                "end_date": timezone.localdate() + timedelta(days=1),
+                "requested_units": 2,
+                "reason": "Family vacation",
+            },
+        )
+
+        self.assertEqual(leave_request.company, self.company)
+        self.assertEqual(leave_request.employee, self.employee)
+        self.assertEqual(leave_request.leave_type, leave_type)
+        self.assertEqual(leave_request.status, LeaveRequestStatus.DRAFT)
+        self.assertEqual(leave_request.created_by, self.user)
+        self.assertEqual(leave_request.updated_by, self.user)
+
+    def test_leave_request_workflow_submit_approve(self):
+        leave_type = create_leave_type(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "name": "Annual Leave",
+                "code": "ANNUAL",
+                "annual_allowance": 21,
+            },
+        )
+        leave_request = create_leave_request(
+            company=self.company,
+            employee=self.employee,
+            leave_type=leave_type,
+            created_by=self.user,
+            data={
+                "start_date": timezone.localdate(),
+                "end_date": timezone.localdate(),
+                "requested_units": 1,
+            },
+        )
+
+        submit_leave_request(
+            leave_request=leave_request,
+            updated_by=self.user,
+        )
+        leave_request.refresh_from_db()
+
+        self.assertEqual(leave_request.status, LeaveRequestStatus.SUBMITTED)
+        self.assertIsNotNone(leave_request.submitted_at)
+
+        approve_leave_request(
+            leave_request=leave_request,
+            approved_by=self.user,
+            note="Approved",
+        )
+        leave_request.refresh_from_db()
+
+        self.assertEqual(leave_request.status, LeaveRequestStatus.APPROVED)
+        self.assertEqual(leave_request.approved_by, self.user)
+        self.assertEqual(leave_request.manager_note, "Approved")
+
+    def test_leave_request_workflow_submit_reject(self):
+        leave_type = create_leave_type(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "name": "Emergency Leave",
+                "code": "EMERGENCY",
+                "annual_allowance": 5,
+            },
+        )
+        leave_request = create_leave_request(
+            company=self.company,
+            employee=self.employee,
+            leave_type=leave_type,
+            created_by=self.user,
+            data={
+                "start_date": timezone.localdate(),
+                "end_date": timezone.localdate(),
+                "requested_units": 1,
+            },
+        )
+
+        submit_leave_request(
+            leave_request=leave_request,
+            updated_by=self.user,
+        )
+        reject_leave_request(
+            leave_request=leave_request,
+            rejected_by=self.user,
+            note="Rejected",
+        )
+        leave_request.refresh_from_db()
+
+        self.assertEqual(leave_request.status, LeaveRequestStatus.REJECTED)
+        self.assertEqual(leave_request.rejected_by, self.user)
+        self.assertEqual(leave_request.manager_note, "Rejected")
+
+    def test_leave_request_cancel_draft(self):
+        leave_type = create_leave_type(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "name": "Unpaid Leave",
+                "code": "UNPAID",
+                "annual_allowance": 0,
+                "is_paid": False,
+            },
+        )
+        leave_request = create_leave_request(
+            company=self.company,
+            employee=self.employee,
+            leave_type=leave_type,
+            created_by=self.user,
+            data={
+                "start_date": timezone.localdate(),
+                "end_date": timezone.localdate(),
+                "requested_units": 1,
+            },
+        )
+
+        cancel_leave_request(
+            leave_request=leave_request,
+            cancelled_by=self.user,
+            note="Cancelled by employee",
+        )
+        leave_request.refresh_from_db()
+
+        self.assertEqual(leave_request.status, LeaveRequestStatus.CANCELLED)
+        self.assertEqual(leave_request.cancelled_by, self.user)
+        self.assertEqual(leave_request.manager_note, "Cancelled by employee")
+
+    def test_create_or_update_leave_balance_service(self):
+        leave_type = create_leave_type(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "name": "Annual Leave",
+                "code": "ANNUAL",
+                "annual_allowance": 21,
+            },
+        )
+
+        balance = create_or_update_leave_balance(
+            company=self.company,
+            employee=self.employee,
+            leave_type=leave_type,
+            year=timezone.localdate().year,
+            updated_by=self.user,
+            data={
+                "opening_balance": 2,
+                "accrued": 21,
+                "used": 3,
+                "adjusted": 0,
+            },
+        )
+
+        self.assertEqual(balance.company, self.company)
+        self.assertEqual(balance.employee, self.employee)
+        self.assertEqual(balance.leave_type, leave_type)
+        self.assertEqual(balance.available_balance, 20)
+
+        updated = create_or_update_leave_balance(
+            company=self.company,
+            employee=self.employee,
+            leave_type=leave_type,
+            year=timezone.localdate().year,
+            updated_by=self.user,
+            data={
+                "used": 5,
+            },
+        )
+
+        self.assertEqual(updated.id, balance.id)
+        self.assertEqual(updated.used, 5)
+        self.assertEqual(updated.available_balance, 18)
+
+
+class LeaveManagementAPITests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="leave-api-owner",
+            email="leave-api-owner@example.com",
+            password="StrongPass12345",
+        )
+        self.viewer = User.objects.create_user(
+            username="leave-api-viewer",
+            email="leave-api-viewer@example.com",
+            password="StrongPass12345",
+        )
+        self.other_owner = User.objects.create_user(
+            username="leave-api-other-owner",
+            email="leave-api-other-owner@example.com",
+            password="StrongPass12345",
+        )
+
+        self.company = Company.objects.create(
+            name="Primey Leave API Company",
+            company_code="HR-LEAVE-API-001",
+            owner=self.owner,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        self.other_company = Company.objects.create(
+            name="Other Leave API Company",
+            company_code="HR-LEAVE-API-002",
+            owner=self.other_owner,
+            created_by=self.other_owner,
+            updated_by=self.other_owner,
+        )
+
+        self.branch = Branch.objects.create(
+            company=self.company,
+            name="Leave API Main Branch",
+            branch_code="LEAVE-API-MAIN",
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        self.other_branch = Branch.objects.create(
+            company=self.other_company,
+            name="Other Leave API Branch",
+            branch_code="LEAVE-API-OTHER",
+            created_by=self.other_owner,
+            updated_by=self.other_owner,
+        )
+
+        CompanyMembership.objects.create(
+            user=self.owner,
+            company=self.company,
+            role=CompanyRole.OWNER,
+            is_primary=True,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        CompanyMembership.objects.create(
+            user=self.viewer,
+            company=self.company,
+            role=CompanyRole.VIEWER,
+            is_primary=True,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        CompanyMembership.objects.create(
+            user=self.other_owner,
+            company=self.other_company,
+            role=CompanyRole.OWNER,
+            is_primary=True,
+            created_by=self.other_owner,
+            updated_by=self.other_owner,
+        )
+
+        self.employee = Employee.objects.create(
+            company=self.company,
+            branch=self.branch,
+            employee_number="EMP-LEAVE-API-001",
+            first_name="Huda",
+            last_name="Ali",
+            job_title="HR Officer",
+            department_name="HR",
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        self.other_employee = Employee.objects.create(
+            company=self.other_company,
+            branch=self.other_branch,
+            employee_number="EMP-LEAVE-API-OTHER",
+            first_name="Other",
+            last_name="Employee",
+            created_by=self.other_owner,
+            updated_by=self.other_owner,
+        )
+
+        self.leave_type = LeaveType.objects.create(
+            company=self.company,
+            name="Annual Leave",
+            code="ANNUAL",
+            unit=LeaveTypeUnit.DAYS,
+            annual_allowance=21,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        self.other_leave_type = LeaveType.objects.create(
+            company=self.other_company,
+            name="Other Annual Leave",
+            code="OTHER-ANNUAL",
+            unit=LeaveTypeUnit.DAYS,
+            annual_allowance=21,
+            created_by=self.other_owner,
+            updated_by=self.other_owner,
+        )
+
+    def test_leave_types_list_requires_authentication(self):
+        response = self.client.get("/api/company/hr/leave-types/")
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_owner_can_create_and_list_leave_types_inside_current_company(self):
+        self.client.force_login(self.owner)
+
+        create_response = self.client.post(
+            "/api/company/hr/leave-types/create/",
+            data={
+                "name": "Sick Leave",
+                "code": "sick",
+                "unit": LeaveTypeUnit.DAYS,
+                "annual_allowance": 30,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(create_response.status_code, 201)
+        create_payload = create_response.json()
+
+        self.assertTrue(create_payload["success"])
+        self.assertEqual(create_payload["leave_type"]["code"], "SICK")
+
+        list_response = self.client.get("/api/company/hr/leave-types/")
+        self.assertEqual(list_response.status_code, 200)
+
+        list_payload = list_response.json()
+        codes = [item["code"] for item in list_payload["results"]]
+
+        self.assertIn("ANNUAL", codes)
+        self.assertIn("SICK", codes)
+        self.assertNotIn("OTHER-ANNUAL", codes)
+
+    def test_viewer_can_list_leave_types_but_cannot_create(self):
+        self.client.force_login(self.viewer)
+
+        list_response = self.client.get("/api/company/hr/leave-types/")
+        self.assertEqual(list_response.status_code, 200)
+
+        create_response = self.client.post(
+            "/api/company/hr/leave-types/create/",
+            data={
+                "name": "Emergency Leave",
+                "code": "EMERGENCY",
+                "annual_allowance": 5,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(create_response.status_code, 403)
+
+    def test_owner_can_view_update_activate_and_deactivate_leave_type(self):
+        self.client.force_login(self.owner)
+
+        detail_response = self.client.get(
+            f"/api/company/hr/leave-types/{self.leave_type.id}/"
+        )
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(detail_response.json()["leave_type"]["code"], "ANNUAL")
+
+        update_response = self.client.post(
+            f"/api/company/hr/leave-types/{self.leave_type.id}/update/",
+            data={
+                "name": "Updated Annual Leave",
+                "annual_allowance": 25,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(update_response.status_code, 200)
+        self.assertEqual(
+            update_response.json()["leave_type"]["name"],
+            "Updated Annual Leave",
+        )
+
+        deactivate_response = self.client.post(
+            f"/api/company/hr/leave-types/{self.leave_type.id}/deactivate/"
+        )
+        self.assertEqual(deactivate_response.status_code, 200)
+        self.leave_type.refresh_from_db()
+        self.assertFalse(self.leave_type.is_active)
+
+        activate_response = self.client.post(
+            f"/api/company/hr/leave-types/{self.leave_type.id}/activate/"
+        )
+        self.assertEqual(activate_response.status_code, 200)
+        self.leave_type.refresh_from_db()
+        self.assertTrue(self.leave_type.is_active)
+
+    def test_owner_cannot_view_leave_type_from_another_company(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.get(
+            f"/api/company/hr/leave-types/{self.other_leave_type.id}/"
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_owner_can_create_and_list_leave_requests_inside_current_company(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            "/api/company/hr/leave-requests/create/",
+            data={
+                "employee_id": self.employee.id,
+                "leave_type_id": self.leave_type.id,
+                "start_date": timezone.localdate().isoformat(),
+                "end_date": (timezone.localdate() + timedelta(days=1)).isoformat(),
+                "requested_units": 2,
+                "reason": "Family vacation",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(
+            payload["leave_request"]["employee"]["employee_number"],
+            "EMP-LEAVE-API-001",
+        )
+        self.assertEqual(payload["leave_request"]["leave_type"]["code"], "ANNUAL")
+        self.assertEqual(payload["leave_request"]["status"], LeaveRequestStatus.DRAFT)
+
+        list_response = self.client.get("/api/company/hr/leave-requests/")
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.json()["count"], 1)
+
+    def test_create_leave_request_rejects_foreign_employee(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            "/api/company/hr/leave-requests/create/",
+            data={
+                "employee_id": self.other_employee.id,
+                "leave_type_id": self.leave_type.id,
+                "start_date": timezone.localdate().isoformat(),
+                "end_date": timezone.localdate().isoformat(),
+                "requested_units": 1,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("employee_id", response.json()["errors"])
+
+    def test_create_leave_request_rejects_foreign_leave_type(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            "/api/company/hr/leave-requests/create/",
+            data={
+                "employee_id": self.employee.id,
+                "leave_type_id": self.other_leave_type.id,
+                "start_date": timezone.localdate().isoformat(),
+                "end_date": timezone.localdate().isoformat(),
+                "requested_units": 1,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("leave_type_id", response.json()["errors"])
+
+    def test_owner_can_view_and_update_leave_request(self):
+        leave_request = LeaveRequest.objects.create(
+            company=self.company,
+            employee=self.employee,
+            leave_type=self.leave_type,
+            start_date=timezone.localdate(),
+            end_date=timezone.localdate(),
+            requested_units=1,
+            reason="Initial reason",
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+
+        self.client.force_login(self.owner)
+
+        detail_response = self.client.get(
+            f"/api/company/hr/leave-requests/{leave_request.id}/"
+        )
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(
+            detail_response.json()["leave_request"]["employee"]["employee_number"],
+            "EMP-LEAVE-API-001",
+        )
+
+        update_response = self.client.post(
+            f"/api/company/hr/leave-requests/{leave_request.id}/update/",
+            data={
+                "reason": "Updated reason",
+                "requested_units": 1,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(update_response.status_code, 200)
+
+        leave_request.refresh_from_db()
+        self.assertEqual(leave_request.reason, "Updated reason")
+
+    def test_owner_can_submit_and_approve_leave_request(self):
+        leave_request = LeaveRequest.objects.create(
+            company=self.company,
+            employee=self.employee,
+            leave_type=self.leave_type,
+            start_date=timezone.localdate(),
+            end_date=timezone.localdate(),
+            requested_units=1,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+
+        self.client.force_login(self.owner)
+
+        submit_response = self.client.post(
+            f"/api/company/hr/leave-requests/{leave_request.id}/submit/"
+        )
+        self.assertEqual(submit_response.status_code, 200)
+
+        leave_request.refresh_from_db()
+        self.assertEqual(leave_request.status, LeaveRequestStatus.SUBMITTED)
+
+        approve_response = self.client.post(
+            f"/api/company/hr/leave-requests/{leave_request.id}/approve/",
+            data={"note": "Approved by manager"},
+            content_type="application/json",
+        )
+        self.assertEqual(approve_response.status_code, 200)
+
+        leave_request.refresh_from_db()
+        self.assertEqual(leave_request.status, LeaveRequestStatus.APPROVED)
+        self.assertEqual(leave_request.manager_note, "Approved by manager")
+
+    def test_owner_can_submit_and_reject_leave_request(self):
+        leave_request = LeaveRequest.objects.create(
+            company=self.company,
+            employee=self.employee,
+            leave_type=self.leave_type,
+            start_date=timezone.localdate(),
+            end_date=timezone.localdate(),
+            requested_units=1,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+
+        self.client.force_login(self.owner)
+
+        submit_response = self.client.post(
+            f"/api/company/hr/leave-requests/{leave_request.id}/submit/"
+        )
+        self.assertEqual(submit_response.status_code, 200)
+
+        reject_response = self.client.post(
+            f"/api/company/hr/leave-requests/{leave_request.id}/reject/",
+            data={"manager_note": "Rejected by manager"},
+            content_type="application/json",
+        )
+        self.assertEqual(reject_response.status_code, 200)
+
+        leave_request.refresh_from_db()
+        self.assertEqual(leave_request.status, LeaveRequestStatus.REJECTED)
+        self.assertEqual(leave_request.manager_note, "Rejected by manager")
+
+    def test_owner_can_cancel_leave_request(self):
+        leave_request = LeaveRequest.objects.create(
+            company=self.company,
+            employee=self.employee,
+            leave_type=self.leave_type,
+            start_date=timezone.localdate(),
+            end_date=timezone.localdate(),
+            requested_units=1,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            f"/api/company/hr/leave-requests/{leave_request.id}/cancel/",
+            data={"note": "Cancelled by employee"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        leave_request.refresh_from_db()
+        self.assertEqual(leave_request.status, LeaveRequestStatus.CANCELLED)
+        self.assertEqual(leave_request.manager_note, "Cancelled by employee")
+
+    def test_viewer_can_list_leave_requests_but_cannot_update(self):
+        leave_request = LeaveRequest.objects.create(
+            company=self.company,
+            employee=self.employee,
+            leave_type=self.leave_type,
+            start_date=timezone.localdate(),
+            end_date=timezone.localdate(),
+            requested_units=1,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+
+        self.client.force_login(self.viewer)
+
+        list_response = self.client.get("/api/company/hr/leave-requests/")
+        self.assertEqual(list_response.status_code, 200)
+
+        update_response = self.client.post(
+            f"/api/company/hr/leave-requests/{leave_request.id}/update/",
+            data={"reason": "Viewer update attempt"},
+            content_type="application/json",
+        )
+        self.assertEqual(update_response.status_code, 403)
+
+    def test_owner_can_update_and_list_leave_balances(self):
+        self.client.force_login(self.owner)
+
+        update_response = self.client.post(
+            "/api/company/hr/leave-balances/update/",
+            data={
+                "employee_id": self.employee.id,
+                "leave_type_id": self.leave_type.id,
+                "year": timezone.localdate().year,
+                "opening_balance": 2,
+                "accrued": 21,
+                "used": 3,
+                "adjusted": 0,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(update_response.status_code, 200)
+        payload = update_response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["leave_balance"]["available_balance"], "20")
+
+        list_response = self.client.get("/api/company/hr/leave-balances/")
+        self.assertEqual(list_response.status_code, 200)
+
+        list_payload = list_response.json()
+        self.assertEqual(list_payload["count"], 1)
+        self.assertEqual(
+            list_payload["results"][0]["employee"]["employee_number"],
+            "EMP-LEAVE-API-001",
+        )
+
+    def test_leave_balance_update_rejects_foreign_employee(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            "/api/company/hr/leave-balances/update/",
+            data={
+                "employee_id": self.other_employee.id,
+                "leave_type_id": self.leave_type.id,
+                "year": timezone.localdate().year,
+                "accrued": 21,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("employee_id", response.json()["errors"])
+
+    def test_viewer_can_list_leave_balances_but_cannot_update(self):
+        LeaveBalance.objects.create(
+            company=self.company,
+            employee=self.employee,
+            leave_type=self.leave_type,
+            year=timezone.localdate().year,
+            accrued=21,
+            used=1,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+
+        self.client.force_login(self.viewer)
+
+        list_response = self.client.get("/api/company/hr/leave-balances/")
+        self.assertEqual(list_response.status_code, 200)
+
+        update_response = self.client.post(
+            "/api/company/hr/leave-balances/update/",
+            data={
+                "employee_id": self.employee.id,
+                "leave_type_id": self.leave_type.id,
+                "year": timezone.localdate().year,
+                "used": 2,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(update_response.status_code, 403)
+

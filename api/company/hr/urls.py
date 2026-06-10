@@ -1,10 +1,11 @@
 # ============================================================
 # 📂 api/company/hr/urls.py
-# 🧠 PrimeyAcc | Company HR URLs V1.1
+# 🧠 PrimeyAcc | Company HR URLs V1.2
 # ------------------------------------------------------------
 # ✅ HR module routes
 # ✅ Employees routes include
 # ✅ Attendance routes include
+# ✅ Leave management routes include
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذا الملف يجمع مسارات HR داخل /api/company/hr/
@@ -23,4 +24,7 @@ app_name = "company_hr"
 urlpatterns = [
     path("employees/", include("api.company.hr.employees.urls")),
     path("attendance/", include("api.company.hr.attendance.urls")),
+    path("leave-types/", include("api.company.hr.leave_types.urls")),
+    path("leave-requests/", include("api.company.hr.leave_requests.urls")),
+    path("leave-balances/", include("api.company.hr.leave_balances.urls")),
 ]
