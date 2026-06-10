@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 hr/models.py
-# 🧠 PrimeyAcc | HR Models V1.1
+# 🧠 PrimeyAcc | HR Models V1.2
 # ------------------------------------------------------------
 # ✅ HR employees foundation
 # ✅ Company-level tenant isolation
@@ -1023,3 +1023,1334 @@ class LeaveBalance(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+
+# ============================================================
+# ?? HR Payroll Foundation Models
+# ============================================================
+
+
+class SalaryComponentType(models.TextChoices):
+    EARNING = "EARNING", "Earning"
+    DEDUCTION = "DEDUCTION", "Deduction"
+
+
+class SalaryComponentCalculationType(models.TextChoices):
+    FIXED = "FIXED", "Fixed"
+    PERCENTAGE = "PERCENTAGE", "Percentage"
+
+
+class PayrollPeriodStatus(models.TextChoices):
+    DRAFT = "DRAFT", "Draft"
+    OPEN = "OPEN", "Open"
+    CLOSED = "CLOSED", "Closed"
+
+
+class PayrollRunStatus(models.TextChoices):
+    DRAFT = "DRAFT", "Draft"
+    CALCULATED = "CALCULATED", "Calculated"
+    APPROVED = "APPROVED", "Approved"
+    POSTED = "POSTED", "Posted"
+    CANCELLED = "CANCELLED", "Cancelled"
+
+
+class PayslipStatus(models.TextChoices):
+    DRAFT = "DRAFT", "Draft"
+    CALCULATED = "CALCULATED", "Calculated"
+    APPROVED = "APPROVED", "Approved"
+    PAID = "PAID", "Paid"
+    CANCELLED = "CANCELLED", "Cancelled"
+
+
+class SalaryComponent(models.Model):
+    """
+    Company-scoped salary component.
+
+    Examples:
+    - Basic Salary
+    - Housing Allowance
+    - Transport Allowance
+    - GOSI Deduction
+    - Absence Deduction
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="salary_components",
+        db_index=True,
+        verbose_name="Company",
+    )
+
+    name = models.CharField(
+        max_length=150,
+        db_index=True,
+        verbose_name="Name",
+    )
+    code = models.CharField(
+        max_length=50,
+        db_index=True,
+        verbose_name="Code",
+    )
+
+    component_type = models.CharField(
+        max_length=30,
+        choices=SalaryComponentType.choices,
+        default=SalaryComponentType.EARNING,
+        db_index=True,
+        verbose_name="Component type",
+    )
+    calculation_type = models.CharField(
+        max_length=30,
+        choices=SalaryComponentCalculationType.choices,
+        default=SalaryComponentCalculationType.FIXED,
+        db_index=True,
+        verbose_name="Calculation type",
+    )
+
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        verbose_name="Fixed amount",
+    )
+    percentage = models.DecimalField(
+        max_digits=7,
+        decimal_places=4,
+        default=0,
+        verbose_name="Percentage",
+        help_text="Percentage value used when calculation type is percentage.",
+    )
+
+    is_taxable = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name="Taxable",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name="Active",
+    )
+    sort_order = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+        verbose_name="Sort order",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Internal notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_salary_components",
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_salary_components",
+        verbose_name="Updated by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Salary component"
+        verbose_name_plural = "Salary components"
+        ordering = ["company_id", "sort_order", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "code"],
+                name="unique_salary_component_code_per_company",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "code"]),
+            models.Index(fields=["company", "component_type"]),
+            models.Index(fields=["company", "is_active"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.company} - {self.code} - {self.name}"
+
+    def clean(self):
+        super().clean()
+
+        if self.amount < 0:
+            raise ValidationError(
+                {"amount": "Amount cannot be negative."}
+            )
+
+        if self.percentage < 0:
+            raise ValidationError(
+                {"percentage": "Percentage cannot be negative."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.code = (self.code or "").strip().upper()
+        self.name = (self.name or "").strip()
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+class EmployeeSalaryProfile(models.Model):
+    """
+    Company-scoped salary profile for an employee.
+
+    This is the current payroll contract snapshot used to generate payslips.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="employee_salary_profiles",
+        db_index=True,
+        verbose_name="Company",
+    )
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name="salary_profiles",
+        db_index=True,
+        verbose_name="Employee",
+    )
+
+    basic_salary = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        db_index=True,
+        verbose_name="Basic salary",
+    )
+    housing_allowance = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        verbose_name="Housing allowance",
+    )
+    transport_allowance = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        verbose_name="Transport allowance",
+    )
+    other_allowance = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        verbose_name="Other allowance",
+    )
+
+    currency = models.CharField(
+        max_length=10,
+        default="SAR",
+        db_index=True,
+        verbose_name="Currency",
+    )
+
+    bank_name = models.CharField(
+        max_length=150,
+        blank=True,
+        verbose_name="Bank name",
+    )
+    bank_account_number = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="Bank account number",
+    )
+    iban = models.CharField(
+        max_length=100,
+        blank=True,
+        db_index=True,
+        verbose_name="IBAN",
+    )
+
+    effective_from = models.DateField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Effective from",
+    )
+    effective_to = models.DateField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Effective to",
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name="Active",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Internal notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_employee_salary_profiles",
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_employee_salary_profiles",
+        verbose_name="Updated by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Employee salary profile"
+        verbose_name_plural = "Employee salary profiles"
+        ordering = ["company_id", "employee__employee_number", "-effective_from", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "employee"],
+                condition=models.Q(is_active=True),
+                name="unique_active_salary_profile_per_employee",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "employee", "is_active"]),
+            models.Index(fields=["company", "effective_from"]),
+            models.Index(fields=["company", "currency"]),
+            models.Index(fields=["iban"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.employee} - {self.basic_salary} {self.currency}"
+
+    @property
+    def gross_salary(self):
+        return (
+            self.basic_salary
+            + self.housing_allowance
+            + self.transport_allowance
+            + self.other_allowance
+        )
+
+    def clean(self):
+        super().clean()
+
+        if self.employee_id and self.company_id:
+            if self.employee.company_id != self.company_id:
+                raise ValidationError(
+                    {"employee": "Employee must belong to the same company."}
+                )
+
+        if self.effective_to and self.effective_from and self.effective_to < self.effective_from:
+            raise ValidationError(
+                {"effective_to": "Effective to cannot be before effective from."}
+            )
+
+        money_fields = {
+            "basic_salary": self.basic_salary,
+            "housing_allowance": self.housing_allowance,
+            "transport_allowance": self.transport_allowance,
+            "other_allowance": self.other_allowance,
+        }
+        for field_name, value in money_fields.items():
+            if value < 0:
+                raise ValidationError(
+                    {field_name: "Amount cannot be negative."}
+                )
+
+    def save(self, *args, **kwargs):
+        self.currency = (self.currency or "SAR").strip().upper()
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+class PayrollPeriod(models.Model):
+    """
+    Company-scoped payroll period.
+
+    Usually one period per company/month.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="payroll_periods",
+        db_index=True,
+        verbose_name="Company",
+    )
+
+    name = models.CharField(
+        max_length=150,
+        blank=True,
+        db_index=True,
+        verbose_name="Name",
+    )
+
+    year = models.PositiveIntegerField(
+        db_index=True,
+        verbose_name="Year",
+    )
+    month = models.PositiveSmallIntegerField(
+        db_index=True,
+        verbose_name="Month",
+    )
+
+    start_date = models.DateField(
+        db_index=True,
+        verbose_name="Start date",
+    )
+    end_date = models.DateField(
+        db_index=True,
+        verbose_name="End date",
+    )
+    payment_date = models.DateField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Payment date",
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=PayrollPeriodStatus.choices,
+        default=PayrollPeriodStatus.DRAFT,
+        db_index=True,
+        verbose_name="Status",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Internal notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_payroll_periods",
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_payroll_periods",
+        verbose_name="Updated by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Payroll period"
+        verbose_name_plural = "Payroll periods"
+        ordering = ["company_id", "-year", "-month"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "year", "month"],
+                name="unique_payroll_period_per_company_month",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "year", "month"]),
+            models.Index(fields=["company", "status"]),
+            models.Index(fields=["company", "start_date", "end_date"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.company} - {self.year}-{str(self.month).zfill(2)}"
+
+    def clean(self):
+        super().clean()
+
+        if self.month < 1 or self.month > 12:
+            raise ValidationError(
+                {"month": "Month must be between 1 and 12."}
+            )
+
+        if self.year < 2000:
+            raise ValidationError(
+                {"year": "Year must be valid."}
+            )
+
+        if self.end_date and self.start_date and self.end_date < self.start_date:
+            raise ValidationError(
+                {"end_date": "End date cannot be before start date."}
+            )
+
+        if self.payment_date and self.start_date and self.payment_date < self.start_date:
+            raise ValidationError(
+                {"payment_date": "Payment date cannot be before period start date."}
+            )
+
+    def save(self, *args, **kwargs):
+        if not self.name:
+            self.name = f"Payroll {self.year}-{str(self.month).zfill(2)}"
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def open(self, *, user=None):
+        if self.status == PayrollPeriodStatus.CLOSED:
+            raise ValidationError(
+                {"status": "Closed payroll periods cannot be reopened."}
+            )
+
+        self.status = PayrollPeriodStatus.OPEN
+        if user:
+            self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+    def close(self, *, user=None):
+        if self.status != PayrollPeriodStatus.OPEN:
+            raise ValidationError(
+                {"status": "Only open payroll periods can be closed."}
+            )
+
+        self.status = PayrollPeriodStatus.CLOSED
+        if user:
+            self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+
+class PayrollRun(models.Model):
+    """
+    Company-scoped payroll run for one payroll period.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="payroll_runs",
+        db_index=True,
+        verbose_name="Company",
+    )
+    period = models.ForeignKey(
+        PayrollPeriod,
+        on_delete=models.PROTECT,
+        related_name="payroll_runs",
+        db_index=True,
+        verbose_name="Payroll period",
+    )
+
+    run_number = models.CharField(
+        max_length=50,
+        db_index=True,
+        verbose_name="Run number",
+    )
+    name = models.CharField(
+        max_length=150,
+        blank=True,
+        db_index=True,
+        verbose_name="Name",
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=PayrollRunStatus.choices,
+        default=PayrollRunStatus.DRAFT,
+        db_index=True,
+        verbose_name="Status",
+    )
+
+    total_employees = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+        verbose_name="Total employees",
+    )
+    total_earnings = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name="Total earnings",
+    )
+    total_deductions = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name="Total deductions",
+    )
+    net_pay = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name="Net pay",
+    )
+
+    calculated_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Calculated at",
+    )
+    approved_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Approved at",
+    )
+    posted_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Posted at",
+    )
+    cancelled_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Cancelled at",
+    )
+
+    calculated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="calculated_payroll_runs",
+        verbose_name="Calculated by",
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="approved_payroll_runs",
+        verbose_name="Approved by",
+    )
+    posted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="posted_payroll_runs",
+        verbose_name="Posted by",
+    )
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="cancelled_payroll_runs",
+        verbose_name="Cancelled by",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Internal notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_payroll_runs",
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_payroll_runs",
+        verbose_name="Updated by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Payroll run"
+        verbose_name_plural = "Payroll runs"
+        ordering = ["company_id", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "run_number"],
+                name="unique_payroll_run_number_per_company",
+            ),
+            models.UniqueConstraint(
+                fields=["company", "period"],
+                name="unique_payroll_run_per_company_period",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "status"]),
+            models.Index(fields=["company", "period"]),
+            models.Index(fields=["company", "run_number"]),
+            models.Index(fields=["calculated_at"]),
+            models.Index(fields=["approved_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.run_number} - {self.status}"
+
+    def clean(self):
+        super().clean()
+
+        if self.period_id and self.company_id:
+            if self.period.company_id != self.company_id:
+                raise ValidationError(
+                    {"period": "Payroll period must belong to the same company."}
+                )
+
+        money_fields = {
+            "total_earnings": self.total_earnings,
+            "total_deductions": self.total_deductions,
+            "net_pay": self.net_pay,
+        }
+        for field_name, value in money_fields.items():
+            if value < 0:
+                raise ValidationError(
+                    {field_name: "Amount cannot be negative."}
+                )
+
+    def save(self, *args, **kwargs):
+        self.run_number = (self.run_number or "").strip().upper()
+
+        if not self.name and self.period_id:
+            self.name = f"Payroll Run {self.run_number}"
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def mark_calculated(self, *, user=None):
+        if self.status not in [PayrollRunStatus.DRAFT, PayrollRunStatus.CALCULATED]:
+            raise ValidationError(
+                {"status": "Only draft payroll runs can be calculated."}
+            )
+
+        self.status = PayrollRunStatus.CALCULATED
+        self.calculated_at = timezone.now()
+        self.calculated_by = user
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "calculated_at",
+                "calculated_by",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+    def approve(self, *, user=None):
+        if self.status != PayrollRunStatus.CALCULATED:
+            raise ValidationError(
+                {"status": "Only calculated payroll runs can be approved."}
+            )
+
+        self.status = PayrollRunStatus.APPROVED
+        self.approved_at = timezone.now()
+        self.approved_by = user
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "approved_at",
+                "approved_by",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+    def post(self, *, user=None):
+        if self.status != PayrollRunStatus.APPROVED:
+            raise ValidationError(
+                {"status": "Only approved payroll runs can be posted."}
+            )
+
+        self.status = PayrollRunStatus.POSTED
+        self.posted_at = timezone.now()
+        self.posted_by = user
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "posted_at",
+                "posted_by",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+    def cancel(self, *, user=None, note: str = ""):
+        if self.status == PayrollRunStatus.POSTED:
+            raise ValidationError(
+                {"status": "Posted payroll runs cannot be cancelled."}
+            )
+
+        self.status = PayrollRunStatus.CANCELLED
+        self.cancelled_at = timezone.now()
+        self.cancelled_by = user
+        self.notes = note or self.notes
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "cancelled_at",
+                "cancelled_by",
+                "notes",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+
+class Payslip(models.Model):
+    """
+    Company-scoped employee payslip generated by a payroll run.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="payslips",
+        db_index=True,
+        verbose_name="Company",
+    )
+    payroll_run = models.ForeignKey(
+        PayrollRun,
+        on_delete=models.CASCADE,
+        related_name="payslips",
+        db_index=True,
+        verbose_name="Payroll run",
+    )
+    period = models.ForeignKey(
+        PayrollPeriod,
+        on_delete=models.PROTECT,
+        related_name="payslips",
+        db_index=True,
+        verbose_name="Payroll period",
+    )
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.PROTECT,
+        related_name="payslips",
+        db_index=True,
+        verbose_name="Employee",
+    )
+    salary_profile = models.ForeignKey(
+        EmployeeSalaryProfile,
+        on_delete=models.SET_NULL,
+        related_name="payslips",
+        blank=True,
+        null=True,
+        verbose_name="Salary profile",
+    )
+
+    payslip_number = models.CharField(
+        max_length=50,
+        db_index=True,
+        verbose_name="Payslip number",
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=PayslipStatus.choices,
+        default=PayslipStatus.DRAFT,
+        db_index=True,
+        verbose_name="Status",
+    )
+
+    basic_salary = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        verbose_name="Basic salary",
+    )
+    total_earnings = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name="Total earnings",
+    )
+    total_deductions = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name="Total deductions",
+    )
+    net_pay = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        db_index=True,
+        verbose_name="Net pay",
+    )
+
+    currency = models.CharField(
+        max_length=10,
+        default="SAR",
+        db_index=True,
+        verbose_name="Currency",
+    )
+
+    calculated_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Calculated at",
+    )
+    approved_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Approved at",
+    )
+    paid_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Paid at",
+    )
+    cancelled_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Cancelled at",
+    )
+
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="approved_payslips",
+        verbose_name="Approved by",
+    )
+    paid_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="paid_payslips",
+        verbose_name="Paid by",
+    )
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="cancelled_payslips",
+        verbose_name="Cancelled by",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Internal notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_payslips",
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_payslips",
+        verbose_name="Updated by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Payslip"
+        verbose_name_plural = "Payslips"
+        ordering = ["company_id", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "payslip_number"],
+                name="unique_payslip_number_per_company",
+            ),
+            models.UniqueConstraint(
+                fields=["company", "payroll_run", "employee"],
+                name="unique_payslip_per_run_employee",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "status"]),
+            models.Index(fields=["company", "period"]),
+            models.Index(fields=["company", "employee"]),
+            models.Index(fields=["company", "payroll_run"]),
+            models.Index(fields=["payslip_number"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.payslip_number} - {self.employee}"
+
+    def clean(self):
+        super().clean()
+
+        if self.payroll_run_id and self.company_id:
+            if self.payroll_run.company_id != self.company_id:
+                raise ValidationError(
+                    {"payroll_run": "Payroll run must belong to the same company."}
+                )
+
+        if self.period_id and self.company_id:
+            if self.period.company_id != self.company_id:
+                raise ValidationError(
+                    {"period": "Payroll period must belong to the same company."}
+                )
+
+        if self.employee_id and self.company_id:
+            if self.employee.company_id != self.company_id:
+                raise ValidationError(
+                    {"employee": "Employee must belong to the same company."}
+                )
+
+        if self.salary_profile_id and self.company_id:
+            if self.salary_profile.company_id != self.company_id:
+                raise ValidationError(
+                    {"salary_profile": "Salary profile must belong to the same company."}
+                )
+
+        if self.salary_profile_id and self.employee_id:
+            if self.salary_profile.employee_id != self.employee_id:
+                raise ValidationError(
+                    {"salary_profile": "Salary profile must belong to the same employee."}
+                )
+
+        money_fields = {
+            "basic_salary": self.basic_salary,
+            "total_earnings": self.total_earnings,
+            "total_deductions": self.total_deductions,
+            "net_pay": self.net_pay,
+        }
+        for field_name, value in money_fields.items():
+            if value < 0:
+                raise ValidationError(
+                    {field_name: "Amount cannot be negative."}
+                )
+
+    def save(self, *args, **kwargs):
+        self.payslip_number = (self.payslip_number or "").strip().upper()
+        self.currency = (self.currency or "SAR").strip().upper()
+
+        if self.payroll_run_id and not self.period_id:
+            self.period = self.payroll_run.period
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def mark_calculated(self, *, user=None):
+        self.status = PayslipStatus.CALCULATED
+        self.calculated_at = timezone.now()
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "calculated_at",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+    def approve(self, *, user=None):
+        if self.status != PayslipStatus.CALCULATED:
+            raise ValidationError(
+                {"status": "Only calculated payslips can be approved."}
+            )
+
+        self.status = PayslipStatus.APPROVED
+        self.approved_at = timezone.now()
+        self.approved_by = user
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "approved_at",
+                "approved_by",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+    def mark_paid(self, *, user=None):
+        if self.status != PayslipStatus.APPROVED:
+            raise ValidationError(
+                {"status": "Only approved payslips can be marked as paid."}
+            )
+
+        self.status = PayslipStatus.PAID
+        self.paid_at = timezone.now()
+        self.paid_by = user
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "paid_at",
+                "paid_by",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+    def cancel(self, *, user=None, note: str = ""):
+        if self.status == PayslipStatus.PAID:
+            raise ValidationError(
+                {"status": "Paid payslips cannot be cancelled."}
+            )
+
+        self.status = PayslipStatus.CANCELLED
+        self.cancelled_at = timezone.now()
+        self.cancelled_by = user
+        self.notes = note or self.notes
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "cancelled_at",
+                "cancelled_by",
+                "notes",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+
+class PayslipItem(models.Model):
+    """
+    Company-scoped payslip earning/deduction line.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="payslip_items",
+        db_index=True,
+        verbose_name="Company",
+    )
+    payslip = models.ForeignKey(
+        Payslip,
+        on_delete=models.CASCADE,
+        related_name="items",
+        db_index=True,
+        verbose_name="Payslip",
+    )
+    component = models.ForeignKey(
+        SalaryComponent,
+        on_delete=models.SET_NULL,
+        related_name="payslip_items",
+        blank=True,
+        null=True,
+        verbose_name="Salary component",
+    )
+
+    name = models.CharField(
+        max_length=150,
+        db_index=True,
+        verbose_name="Name",
+    )
+    code = models.CharField(
+        max_length=50,
+        db_index=True,
+        verbose_name="Code",
+    )
+    component_type = models.CharField(
+        max_length=30,
+        choices=SalaryComponentType.choices,
+        db_index=True,
+        verbose_name="Component type",
+    )
+
+    amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name="Amount",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Internal notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_payslip_items",
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_payslip_items",
+        verbose_name="Updated by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Payslip item"
+        verbose_name_plural = "Payslip items"
+        ordering = ["company_id", "payslip_id", "component_type", "id"]
+        indexes = [
+            models.Index(fields=["company", "payslip"]),
+            models.Index(fields=["company", "component_type"]),
+            models.Index(fields=["company", "code"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.payslip} - {self.code} - {self.amount}"
+
+    def clean(self):
+        super().clean()
+
+        if self.payslip_id and self.company_id:
+            if self.payslip.company_id != self.company_id:
+                raise ValidationError(
+                    {"payslip": "Payslip must belong to the same company."}
+                )
+
+        if self.component_id and self.company_id:
+            if self.component.company_id != self.company_id:
+                raise ValidationError(
+                    {"component": "Salary component must belong to the same company."}
+                )
+
+        if self.amount < 0:
+            raise ValidationError(
+                {"amount": "Amount cannot be negative."}
+            )
+
+    def save(self, *args, **kwargs):
+        if self.component_id:
+            if not self.name:
+                self.name = self.component.name
+            if not self.code:
+                self.code = self.component.code
+            if not self.component_type:
+                self.component_type = self.component.component_type
+
+        self.code = (self.code or "").strip().upper()
+        self.name = (self.name or "").strip()
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+

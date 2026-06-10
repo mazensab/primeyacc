@@ -15,15 +15,16 @@
 # ============================================================
 
 from __future__ import annotations
+from decimal import Decimal
 
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.test import Client, TestCase
 from django.utils import timezone
 
-from accounts.models import CompanyMembership, CompanyRole
+from accounts.models import CompanyMembership, CompanyRole, MembershipStatus
 from companies.models import Branch, Company
 
 from .models import (
@@ -32,11 +33,22 @@ from .models import (
     AttendanceStatus,
     Employee,
     EmployeeStatus,
+    EmployeeSalaryProfile,
     LeaveBalance,
     LeaveRequest,
     LeaveRequestStatus,
     LeaveType,
     LeaveTypeUnit,
+    PayrollPeriod,
+    PayrollPeriodStatus,
+    PayrollRun,
+    PayrollRunStatus,
+    Payslip,
+    PayslipItem,
+    PayslipStatus,
+    SalaryComponent,
+    SalaryComponentCalculationType,
+    SalaryComponentType,
 )
 from .services import (
     activate_employee,
@@ -54,8 +66,20 @@ from .services import (
     mark_attendance_missing_check_out,
     reject_leave_request,
     submit_leave_request,
+    approve_payroll_run,
+    calculate_payroll_run,
+    close_payroll_period,
+    create_employee_salary_profile,
+    create_payroll_period,
+    create_payroll_run,
+    create_salary_component,
+    deactivate_salary_component,
+    open_payroll_period,
     update_employee,
+    update_employee_salary_profile,
     update_leave_type,
+    update_payroll_period,
+    update_salary_component,
 )
 
 
@@ -2329,4 +2353,1937 @@ class LeaveManagementAPITests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(update_response.status_code, 403)
+
+
+class PayrollModelsTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="payroll-model-admin",
+            email="payroll-model-admin@example.com",
+            password="StrongPass12345",
+        )
+        self.company = Company.objects.create(
+            name="Primey Payroll Model Company",
+            company_code="HR-PAYROLL-MODEL-001",
+            owner=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.branch = Branch.objects.create(
+            company=self.company,
+            name="Payroll Model Branch",
+            branch_code="PAYROLL-MODEL",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.employee = Employee.objects.create(
+            company=self.company,
+            branch=self.branch,
+            employee_number="EMP-PAYROLL-MODEL-001",
+            first_name="Noura",
+            last_name="Hassan",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+    def test_salary_component_can_be_created_and_normalizes_code(self):
+        component = SalaryComponent.objects.create(
+            company=self.company,
+            name="Basic Salary",
+            code="basic",
+            component_type=SalaryComponentType.EARNING,
+            calculation_type=SalaryComponentCalculationType.FIXED,
+            amount=5000,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.assertEqual(component.code, "BASIC")
+        self.assertEqual(component.company, self.company)
+        self.assertEqual(component.component_type, SalaryComponentType.EARNING)
+
+    def test_salary_component_rejects_negative_amount(self):
+        component = SalaryComponent(
+            company=self.company,
+            name="Invalid Component",
+            code="INVALID",
+            amount=-1,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            component.full_clean()
+
+    def test_employee_salary_profile_gross_salary(self):
+        profile = EmployeeSalaryProfile.objects.create(
+            company=self.company,
+            employee=self.employee,
+            basic_salary=5000,
+            housing_allowance=1250,
+            transport_allowance=500,
+            other_allowance=250,
+            currency="sar",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.assertEqual(profile.currency, "SAR")
+        self.assertEqual(profile.gross_salary, 7000)
+
+    def test_employee_salary_profile_rejects_employee_from_another_company(self):
+        other_company = Company.objects.create(
+            name="Other Payroll Model Company",
+            company_code="HR-PAYROLL-MODEL-002",
+            owner=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        other_employee = Employee.objects.create(
+            company=other_company,
+            employee_number="EMP-PAYROLL-OTHER",
+            first_name="Other",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        profile = EmployeeSalaryProfile(
+            company=self.company,
+            employee=other_employee,
+            basic_salary=5000,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            profile.full_clean()
+
+    def test_payroll_period_can_be_created_and_named(self):
+        period = PayrollPeriod.objects.create(
+            company=self.company,
+            year=timezone.localdate().year,
+            month=timezone.localdate().month,
+            start_date=timezone.localdate().replace(day=1),
+            end_date=timezone.localdate().replace(day=28),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.assertEqual(period.status, PayrollPeriodStatus.DRAFT)
+        self.assertIn(str(period.year), period.name)
+
+    def test_payroll_period_open_and_close_workflow(self):
+        period = PayrollPeriod.objects.create(
+            company=self.company,
+            year=timezone.localdate().year,
+            month=timezone.localdate().month,
+            start_date=timezone.localdate().replace(day=1),
+            end_date=timezone.localdate().replace(day=28),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        period.open(user=self.user)
+        self.assertEqual(period.status, PayrollPeriodStatus.OPEN)
+
+        period.close(user=self.user)
+        self.assertEqual(period.status, PayrollPeriodStatus.CLOSED)
+
+    def test_payroll_run_workflow_calculated_approved_posted(self):
+        period = PayrollPeriod.objects.create(
+            company=self.company,
+            year=timezone.localdate().year,
+            month=timezone.localdate().month,
+            start_date=timezone.localdate().replace(day=1),
+            end_date=timezone.localdate().replace(day=28),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        payroll_run = PayrollRun.objects.create(
+            company=self.company,
+            period=period,
+            run_number="PAY-MODEL-001",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        payroll_run.mark_calculated(user=self.user)
+        self.assertEqual(payroll_run.status, PayrollRunStatus.CALCULATED)
+
+        payroll_run.approve(user=self.user)
+        self.assertEqual(payroll_run.status, PayrollRunStatus.APPROVED)
+
+        payroll_run.post(user=self.user)
+        self.assertEqual(payroll_run.status, PayrollRunStatus.POSTED)
+
+    def test_payslip_can_be_created_and_marked_calculated_approved_paid(self):
+        profile = EmployeeSalaryProfile.objects.create(
+            company=self.company,
+            employee=self.employee,
+            basic_salary=5000,
+            housing_allowance=1000,
+            currency="SAR",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        period = PayrollPeriod.objects.create(
+            company=self.company,
+            year=timezone.localdate().year,
+            month=timezone.localdate().month,
+            start_date=timezone.localdate().replace(day=1),
+            end_date=timezone.localdate().replace(day=28),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        payroll_run = PayrollRun.objects.create(
+            company=self.company,
+            period=period,
+            run_number="PAY-MODEL-002",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        payslip = Payslip.objects.create(
+            company=self.company,
+            payroll_run=payroll_run,
+            period=period,
+            employee=self.employee,
+            salary_profile=profile,
+            payslip_number="PS-MODEL-001",
+            basic_salary=5000,
+            total_earnings=6000,
+            total_deductions=0,
+            net_pay=6000,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        payslip.mark_calculated(user=self.user)
+        self.assertEqual(payslip.status, PayslipStatus.CALCULATED)
+
+        payslip.approve(user=self.user)
+        self.assertEqual(payslip.status, PayslipStatus.APPROVED)
+
+        payslip.mark_paid(user=self.user)
+        self.assertEqual(payslip.status, PayslipStatus.PAID)
+
+    def test_payslip_item_rejects_component_from_another_company(self):
+        other_company = Company.objects.create(
+            name="Other Payroll Item Company",
+            company_code="HR-PAYROLL-ITEM-002",
+            owner=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        other_component = SalaryComponent.objects.create(
+            company=other_company,
+            name="Other Basic",
+            code="OTHER-BASIC",
+            amount=1000,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        period = PayrollPeriod.objects.create(
+            company=self.company,
+            year=timezone.localdate().year,
+            month=timezone.localdate().month,
+            start_date=timezone.localdate().replace(day=1),
+            end_date=timezone.localdate().replace(day=28),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        payroll_run = PayrollRun.objects.create(
+            company=self.company,
+            period=period,
+            run_number="PAY-MODEL-003",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        payslip = Payslip.objects.create(
+            company=self.company,
+            payroll_run=payroll_run,
+            period=period,
+            employee=self.employee,
+            payslip_number="PS-MODEL-002",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        item = PayslipItem(
+            company=self.company,
+            payslip=payslip,
+            component=other_component,
+            name="Invalid",
+            code="INVALID",
+            component_type=SalaryComponentType.EARNING,
+            amount=100,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            item.full_clean()
+
+
+class PayrollServicesTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="payroll-service-admin",
+            email="payroll-service-admin@example.com",
+            password="StrongPass12345",
+        )
+        self.company = Company.objects.create(
+            name="Primey Payroll Service Company",
+            company_code="HR-PAYROLL-SVC-001",
+            owner=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.branch = Branch.objects.create(
+            company=self.company,
+            name="Payroll Service Branch",
+            branch_code="PAYROLL-SVC",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.employee = Employee.objects.create(
+            company=self.company,
+            branch=self.branch,
+            employee_number="EMP-PAYROLL-SVC-001",
+            first_name="Fahad",
+            last_name="Omar",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+    def test_create_salary_component_service_sets_company_and_audit(self):
+        component = create_salary_component(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "name": "Basic Salary",
+                "code": "basic",
+                "component_type": SalaryComponentType.EARNING,
+                "calculation_type": SalaryComponentCalculationType.FIXED,
+                "amount": 5000,
+            },
+        )
+
+        self.assertEqual(component.company, self.company)
+        self.assertEqual(component.code, "BASIC")
+        self.assertEqual(component.created_by, self.user)
+        self.assertEqual(component.updated_by, self.user)
+
+    def test_update_salary_component_service_does_not_change_company(self):
+        other_company = Company.objects.create(
+            name="Other Payroll Component Company",
+            company_code="HR-PAYROLL-SVC-002",
+            owner=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        component = create_salary_component(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "name": "Housing Allowance",
+                "code": "HOUSING",
+                "amount": 1000,
+            },
+        )
+
+        updated = update_salary_component(
+            component=component,
+            updated_by=self.user,
+            data={
+                "company": other_company,
+                "name": "Updated Housing Allowance",
+                "amount": 1500,
+            },
+        )
+
+        self.assertEqual(updated.company, self.company)
+        self.assertEqual(updated.name, "Updated Housing Allowance")
+        self.assertEqual(updated.amount, 1500)
+
+    def test_deactivate_salary_component_service(self):
+        component = create_salary_component(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "name": "Transport Allowance",
+                "code": "TRANSPORT",
+                "amount": 500,
+            },
+        )
+
+        deactivate_salary_component(
+            component=component,
+            updated_by=self.user,
+        )
+
+        component.refresh_from_db()
+        self.assertFalse(component.is_active)
+
+    def test_create_employee_salary_profile_service(self):
+        profile = create_employee_salary_profile(
+            company=self.company,
+            employee=self.employee,
+            created_by=self.user,
+            data={
+                "basic_salary": 5000,
+                "housing_allowance": 1000,
+                "transport_allowance": 500,
+                "currency": "sar",
+            },
+        )
+
+        self.assertEqual(profile.company, self.company)
+        self.assertEqual(profile.employee, self.employee)
+        self.assertEqual(profile.currency, "SAR")
+        self.assertEqual(profile.gross_salary, 6500)
+
+    def test_update_employee_salary_profile_service(self):
+        profile = create_employee_salary_profile(
+            company=self.company,
+            employee=self.employee,
+            created_by=self.user,
+            data={
+                "basic_salary": 5000,
+                "currency": "SAR",
+            },
+        )
+
+        updated = update_employee_salary_profile(
+            profile=profile,
+            updated_by=self.user,
+            data={
+                "basic_salary": 6000,
+                "housing_allowance": 1200,
+            },
+        )
+
+        self.assertEqual(updated.basic_salary, 6000)
+        self.assertEqual(updated.gross_salary, 7200)
+
+    def test_create_and_update_payroll_period_services(self):
+        period = create_payroll_period(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "year": timezone.localdate().year,
+                "month": timezone.localdate().month,
+                "start_date": timezone.localdate().replace(day=1),
+                "end_date": timezone.localdate().replace(day=28),
+            },
+        )
+
+        self.assertEqual(period.company, self.company)
+        self.assertEqual(period.status, PayrollPeriodStatus.DRAFT)
+
+        updated = update_payroll_period(
+            period=period,
+            updated_by=self.user,
+            data={
+                "name": "Updated Payroll Period",
+            },
+        )
+
+        self.assertEqual(updated.name, "Updated Payroll Period")
+
+    def test_open_and_close_payroll_period_services(self):
+        period = create_payroll_period(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "year": timezone.localdate().year,
+                "month": timezone.localdate().month,
+                "start_date": timezone.localdate().replace(day=1),
+                "end_date": timezone.localdate().replace(day=28),
+            },
+        )
+
+        open_payroll_period(period=period, updated_by=self.user)
+        period.refresh_from_db()
+        self.assertEqual(period.status, PayrollPeriodStatus.OPEN)
+
+        close_payroll_period(period=period, updated_by=self.user)
+        period.refresh_from_db()
+        self.assertEqual(period.status, PayrollPeriodStatus.CLOSED)
+
+    def test_create_payroll_run_service_builds_run_number(self):
+        period = create_payroll_period(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "year": 2026,
+                "month": 6,
+                "start_date": timezone.localdate().replace(day=1),
+                "end_date": timezone.localdate().replace(day=28),
+            },
+        )
+
+        payroll_run = create_payroll_run(
+            company=self.company,
+            period=period,
+            created_by=self.user,
+        )
+
+        self.assertEqual(payroll_run.company, self.company)
+        self.assertEqual(payroll_run.period, period)
+        self.assertEqual(payroll_run.run_number, "PAY-2026-06")
+
+    def test_calculate_payroll_run_creates_payslip_and_items(self):
+        profile = create_employee_salary_profile(
+            company=self.company,
+            employee=self.employee,
+            created_by=self.user,
+            data={
+                "basic_salary": 5000,
+                "housing_allowance": 1000,
+                "transport_allowance": 500,
+                "other_allowance": 250,
+                "currency": "SAR",
+            },
+        )
+        period = create_payroll_period(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "year": 2026,
+                "month": 6,
+                "start_date": timezone.localdate().replace(day=1),
+                "end_date": timezone.localdate().replace(day=28),
+            },
+        )
+        payroll_run = create_payroll_run(
+            company=self.company,
+            period=period,
+            created_by=self.user,
+        )
+
+        calculate_payroll_run(
+            payroll_run=payroll_run,
+            calculated_by=self.user,
+        )
+
+        payroll_run.refresh_from_db()
+
+        self.assertEqual(payroll_run.status, PayrollRunStatus.CALCULATED)
+        self.assertEqual(payroll_run.total_employees, 1)
+        self.assertEqual(payroll_run.total_earnings, 6750)
+        self.assertEqual(payroll_run.total_deductions, 0)
+        self.assertEqual(payroll_run.net_pay, 6750)
+
+        payslip = Payslip.objects.get(payroll_run=payroll_run, employee=self.employee)
+        self.assertEqual(payslip.status, PayslipStatus.CALCULATED)
+        self.assertEqual(payslip.net_pay, 6750)
+        self.assertEqual(payslip.items.count(), 4)
+
+        self.assertEqual(profile.gross_salary, 6750)
+
+    def test_approve_payroll_run_approves_payslips(self):
+        create_employee_salary_profile(
+            company=self.company,
+            employee=self.employee,
+            created_by=self.user,
+            data={
+                "basic_salary": 5000,
+                "currency": "SAR",
+            },
+        )
+        period = create_payroll_period(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "year": 2026,
+                "month": 6,
+                "start_date": timezone.localdate().replace(day=1),
+                "end_date": timezone.localdate().replace(day=28),
+            },
+        )
+        payroll_run = create_payroll_run(
+            company=self.company,
+            period=period,
+            created_by=self.user,
+        )
+
+        calculate_payroll_run(
+            payroll_run=payroll_run,
+            calculated_by=self.user,
+        )
+        approve_payroll_run(
+            payroll_run=payroll_run,
+            approved_by=self.user,
+        )
+
+        payroll_run.refresh_from_db()
+        payslip = Payslip.objects.get(payroll_run=payroll_run, employee=self.employee)
+
+        self.assertEqual(payroll_run.status, PayrollRunStatus.APPROVED)
+        self.assertEqual(payslip.status, PayslipStatus.APPROVED)
+
+
+class PayrollSalaryComponentsAPITests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="payroll-components-api-admin",
+            email="payroll-components-api-admin@example.com",
+            password="StrongPass12345",
+        )
+        self.company = Company.objects.create(
+            name="Primey Payroll Components API Company",
+            company_code="HR-PAYROLL-COMP-API-001",
+            owner=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.membership = CompanyMembership.objects.create(
+            user=self.user,
+            company=self.company,
+            role=CompanyRole.ADMIN,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.client = Client()
+        self.client.force_login(self.user)
+
+    def test_salary_components_list_api(self):
+        create_salary_component(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "name": "Basic Salary",
+                "code": "BASIC",
+                "component_type": SalaryComponentType.EARNING,
+                "amount": 5000,
+            },
+        )
+
+        response = self.client.get("/api/company/hr/payroll/components/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["results"][0]["code"], "BASIC")
+
+    def test_salary_component_create_api(self):
+        response = self.client.post(
+            "/api/company/hr/payroll/components/create/",
+            data={
+                "name": "Housing Allowance",
+                "code": "housing",
+                "component_type": SalaryComponentType.EARNING,
+                "calculation_type": SalaryComponentCalculationType.FIXED,
+                "amount": "1200.00",
+                "is_taxable": "true",
+                "is_active": "true",
+                "sort_order": "10",
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["component"]["code"], "HOUSING")
+        self.assertEqual(payload["component"]["amount"], "1200.00")
+
+        self.assertTrue(
+            SalaryComponent.objects.filter(
+                company=self.company,
+                code="HOUSING",
+            ).exists()
+        )
+
+    def test_salary_component_detail_api(self):
+        component = create_salary_component(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "name": "Transport Allowance",
+                "code": "TRANSPORT",
+                "amount": 500,
+            },
+        )
+
+        response = self.client.get(
+            f"/api/company/hr/payroll/components/{component.id}/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["component"]["id"], component.id)
+        self.assertEqual(payload["component"]["code"], "TRANSPORT")
+
+    def test_salary_component_update_api(self):
+        component = create_salary_component(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "name": "Other Allowance",
+                "code": "OTHER",
+                "amount": 100,
+            },
+        )
+
+        response = self.client.post(
+            f"/api/company/hr/payroll/components/{component.id}/update/",
+            data={
+                "name": "Updated Other Allowance",
+                "amount": "250.00",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["component"]["name"], "Updated Other Allowance")
+        self.assertEqual(payload["component"]["amount"], "250.00")
+
+    def test_salary_component_activate_deactivate_api(self):
+        component = create_salary_component(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "name": "Bonus",
+                "code": "BONUS",
+                "amount": 300,
+                "is_active": True,
+            },
+        )
+
+        response = self.client.post(
+            f"/api/company/hr/payroll/components/{component.id}/deactivate/"
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertFalse(payload["component"]["is_active"])
+
+        response = self.client.post(
+            f"/api/company/hr/payroll/components/{component.id}/activate/"
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["component"]["is_active"])
+
+    def test_salary_component_create_requires_permission(self):
+        viewer = User.objects.create_user(
+            username="payroll-components-api-viewer",
+            email="payroll-components-api-viewer@example.com",
+            password="StrongPass12345",
+        )
+        CompanyMembership.objects.create(
+            user=viewer,
+            company=self.company,
+            role=CompanyRole.VIEWER,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.client.force_login(viewer)
+
+        response = self.client.post(
+            "/api/company/hr/payroll/components/create/",
+            data={
+                "name": "Unauthorized Component",
+                "code": "UNAUTH",
+                "amount": "100.00",
+            },
+        )
+
+        self.assertIn(response.status_code, [403, 404])
+        self.assertFalse(
+            SalaryComponent.objects.filter(
+                company=self.company,
+                code="UNAUTH",
+            ).exists()
+        )
+
+    def test_salary_component_tenant_isolation(self):
+        other_user = User.objects.create_user(
+            username="payroll-components-api-other",
+            email="payroll-components-api-other@example.com",
+            password="StrongPass12345",
+        )
+        other_company = Company.objects.create(
+            name="Other Payroll Components API Company",
+            company_code="HR-PAYROLL-COMP-API-002",
+            owner=other_user,
+            created_by=other_user,
+            updated_by=other_user,
+        )
+        other_component = create_salary_component(
+            company=other_company,
+            created_by=other_user,
+            data={
+                "name": "Other Company Component",
+                "code": "OTHER-COMP",
+                "amount": 999,
+            },
+        )
+
+        response = self.client.get(
+            f"/api/company/hr/payroll/components/{other_component.id}/"
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+
+class PayrollSalaryProfilesAPITests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="payroll-profiles-api-admin",
+            email="payroll-profiles-api-admin@example.com",
+            password="StrongPass12345",
+        )
+        self.company = Company.objects.create(
+            name="Primey Payroll Profiles API Company",
+            company_code="HR-PAYROLL-PROF-API-001",
+            owner=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        CompanyMembership.objects.create(
+            user=self.user,
+            company=self.company,
+            role=CompanyRole.ADMIN,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.branch = Branch.objects.create(
+            company=self.company,
+            name="Payroll Profiles API Branch",
+            branch_code="PAYROLL-PROF-API",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.employee = Employee.objects.create(
+            company=self.company,
+            branch=self.branch,
+            employee_number="EMP-PROF-API-001",
+            first_name="Sara",
+            last_name="Ali",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.client = Client()
+        self.client.force_login(self.user)
+
+    def test_salary_profiles_list_api(self):
+        create_employee_salary_profile(
+            company=self.company,
+            employee=self.employee,
+            created_by=self.user,
+            data={
+                "basic_salary": 5000,
+                "housing_allowance": 1000,
+                "currency": "SAR",
+            },
+        )
+
+        response = self.client.get("/api/company/hr/payroll/profiles/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["results"][0]["employee"]["employee_number"], "EMP-PROF-API-001")
+
+    def test_salary_profile_create_api(self):
+        response = self.client.post(
+            "/api/company/hr/payroll/profiles/create/",
+            data={
+                "employee_id": self.employee.id,
+                "basic_salary": "6000.00",
+                "housing_allowance": "1200.00",
+                "transport_allowance": "500.00",
+                "other_allowance": "300.00",
+                "currency": "sar",
+                "bank_name": "Prime Bank",
+                "iban": "SA0000000000000000000000",
+                "is_active": "true",
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["profile"]["employee_id"], self.employee.id)
+        self.assertEqual(payload["profile"]["currency"], "SAR")
+        self.assertEqual(payload["profile"]["gross_salary"], "8000.00")
+
+        self.assertTrue(
+            EmployeeSalaryProfile.objects.filter(
+                company=self.company,
+                employee=self.employee,
+                is_active=True,
+            ).exists()
+        )
+
+    def test_salary_profile_detail_api(self):
+        profile = create_employee_salary_profile(
+            company=self.company,
+            employee=self.employee,
+            created_by=self.user,
+            data={
+                "basic_salary": 5000,
+                "currency": "SAR",
+            },
+        )
+
+        response = self.client.get(
+            f"/api/company/hr/payroll/profiles/{profile.id}/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["profile"]["id"], profile.id)
+        self.assertEqual(payload["profile"]["employee_id"], self.employee.id)
+
+    def test_salary_profile_update_api(self):
+        profile = create_employee_salary_profile(
+            company=self.company,
+            employee=self.employee,
+            created_by=self.user,
+            data={
+                "basic_salary": 5000,
+                "currency": "SAR",
+            },
+        )
+
+        response = self.client.post(
+            f"/api/company/hr/payroll/profiles/{profile.id}/update/",
+            data={
+                "basic_salary": "6500.00",
+                "housing_allowance": "1500.00",
+                "currency": "sar",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["profile"]["basic_salary"], "6500.00")
+        self.assertEqual(payload["profile"]["gross_salary"], "8000.00")
+
+    def test_salary_profile_activate_deactivate_api(self):
+        profile = create_employee_salary_profile(
+            company=self.company,
+            employee=self.employee,
+            created_by=self.user,
+            data={
+                "basic_salary": 5000,
+                "currency": "SAR",
+                "is_active": True,
+            },
+        )
+
+        response = self.client.post(
+            f"/api/company/hr/payroll/profiles/{profile.id}/deactivate/"
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertFalse(payload["profile"]["is_active"])
+
+        response = self.client.post(
+            f"/api/company/hr/payroll/profiles/{profile.id}/activate/"
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["profile"]["is_active"])
+
+    def test_salary_profile_create_requires_permission(self):
+        viewer = User.objects.create_user(
+            username="payroll-profiles-api-viewer",
+            email="payroll-profiles-api-viewer@example.com",
+            password="StrongPass12345",
+        )
+        CompanyMembership.objects.create(
+            user=viewer,
+            company=self.company,
+            role=CompanyRole.VIEWER,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.client.force_login(viewer)
+
+        response = self.client.post(
+            "/api/company/hr/payroll/profiles/create/",
+            data={
+                "employee_id": self.employee.id,
+                "basic_salary": "5000.00",
+                "currency": "SAR",
+            },
+        )
+
+        self.assertIn(response.status_code, [403, 404])
+        self.assertFalse(
+            EmployeeSalaryProfile.objects.filter(
+                company=self.company,
+                employee=self.employee,
+            ).exists()
+        )
+
+    def test_salary_profile_tenant_isolation(self):
+        other_user = User.objects.create_user(
+            username="payroll-profiles-api-other",
+            email="payroll-profiles-api-other@example.com",
+            password="StrongPass12345",
+        )
+        other_company = Company.objects.create(
+            name="Other Payroll Profiles API Company",
+            company_code="HR-PAYROLL-PROF-API-002",
+            owner=other_user,
+            created_by=other_user,
+            updated_by=other_user,
+        )
+        other_employee = Employee.objects.create(
+            company=other_company,
+            employee_number="EMP-PROF-OTHER",
+            first_name="Other",
+            created_by=other_user,
+            updated_by=other_user,
+        )
+        other_profile = create_employee_salary_profile(
+            company=other_company,
+            employee=other_employee,
+            created_by=other_user,
+            data={
+                "basic_salary": 5000,
+                "currency": "SAR",
+            },
+        )
+
+        response = self.client.get(
+            f"/api/company/hr/payroll/profiles/{other_profile.id}/"
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+
+class PayrollPeriodsAPITests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="payroll-periods-api-admin",
+            email="payroll-periods-api-admin@example.com",
+            password="StrongPass12345",
+        )
+        self.company = Company.objects.create(
+            name="Primey Payroll Periods API Company",
+            company_code="HR-PAYROLL-PERIOD-API-001",
+            owner=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        CompanyMembership.objects.create(
+            user=self.user,
+            company=self.company,
+            role=CompanyRole.ADMIN,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.client = Client()
+        self.client.force_login(self.user)
+
+    def test_payroll_periods_list_api(self):
+        create_payroll_period(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "year": 2026,
+                "month": 6,
+                "start_date": "2026-06-01",
+                "end_date": "2026-06-30",
+            },
+        )
+
+        response = self.client.get("/api/company/hr/payroll/periods/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["results"][0]["year"], 2026)
+        self.assertEqual(payload["results"][0]["month"], 6)
+
+    def test_payroll_period_create_api(self):
+        response = self.client.post(
+            "/api/company/hr/payroll/periods/create/",
+            data={
+                "year": "2026",
+                "month": "7",
+                "start_date": "2026-07-01",
+                "end_date": "2026-07-31",
+                "payment_date": "2026-08-01",
+                "notes": "July payroll",
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["period"]["year"], 2026)
+        self.assertEqual(payload["period"]["month"], 7)
+        self.assertEqual(payload["period"]["status"], PayrollPeriodStatus.DRAFT)
+
+        self.assertTrue(
+            PayrollPeriod.objects.filter(
+                company=self.company,
+                year=2026,
+                month=7,
+            ).exists()
+        )
+
+    def test_payroll_period_detail_api(self):
+        period = create_payroll_period(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "year": 2026,
+                "month": 8,
+                "start_date": "2026-08-01",
+                "end_date": "2026-08-31",
+            },
+        )
+
+        response = self.client.get(
+            f"/api/company/hr/payroll/periods/{period.id}/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["period"]["id"], period.id)
+        self.assertEqual(payload["period"]["month"], 8)
+
+    def test_payroll_period_update_api(self):
+        period = create_payroll_period(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "year": 2026,
+                "month": 9,
+                "start_date": "2026-09-01",
+                "end_date": "2026-09-30",
+            },
+        )
+
+        response = self.client.post(
+            f"/api/company/hr/payroll/periods/{period.id}/update/",
+            data={
+                "name": "Updated September Payroll",
+                "payment_date": "2026-10-01",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["period"]["name"], "Updated September Payroll")
+        self.assertEqual(payload["period"]["payment_date"], "2026-10-01")
+
+    def test_payroll_period_open_close_api(self):
+        period = create_payroll_period(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "year": 2026,
+                "month": 10,
+                "start_date": "2026-10-01",
+                "end_date": "2026-10-31",
+            },
+        )
+
+        response = self.client.post(
+            f"/api/company/hr/payroll/periods/{period.id}/open/"
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["period"]["status"], PayrollPeriodStatus.OPEN)
+
+        response = self.client.post(
+            f"/api/company/hr/payroll/periods/{period.id}/close/"
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["period"]["status"], PayrollPeriodStatus.CLOSED)
+
+    def test_payroll_period_create_requires_permission(self):
+        viewer = User.objects.create_user(
+            username="payroll-periods-api-viewer",
+            email="payroll-periods-api-viewer@example.com",
+            password="StrongPass12345",
+        )
+        CompanyMembership.objects.create(
+            user=viewer,
+            company=self.company,
+            role=CompanyRole.VIEWER,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.client.force_login(viewer)
+
+        response = self.client.post(
+            "/api/company/hr/payroll/periods/create/",
+            data={
+                "year": "2026",
+                "month": "11",
+                "start_date": "2026-11-01",
+                "end_date": "2026-11-30",
+            },
+        )
+
+        self.assertIn(response.status_code, [403, 404])
+        self.assertFalse(
+            PayrollPeriod.objects.filter(
+                company=self.company,
+                year=2026,
+                month=11,
+            ).exists()
+        )
+
+    def test_payroll_period_tenant_isolation(self):
+        other_user = User.objects.create_user(
+            username="payroll-periods-api-other",
+            email="payroll-periods-api-other@example.com",
+            password="StrongPass12345",
+        )
+        other_company = Company.objects.create(
+            name="Other Payroll Periods API Company",
+            company_code="HR-PAYROLL-PERIOD-API-002",
+            owner=other_user,
+            created_by=other_user,
+            updated_by=other_user,
+        )
+        other_period = create_payroll_period(
+            company=other_company,
+            created_by=other_user,
+            data={
+                "year": 2026,
+                "month": 12,
+                "start_date": "2026-12-01",
+                "end_date": "2026-12-31",
+            },
+        )
+
+        response = self.client.get(
+            f"/api/company/hr/payroll/periods/{other_period.id}/"
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+
+class PayrollRunsAPITests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="payroll-runs-api-admin",
+            email="payroll-runs-api-admin@example.com",
+            password="StrongPass12345",
+        )
+        self.company = Company.objects.create(
+            name="Primey Payroll Runs API Company",
+            company_code="HR-PAYROLL-RUN-API-001",
+            owner=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        CompanyMembership.objects.create(
+            user=self.user,
+            company=self.company,
+            role=CompanyRole.ADMIN,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.branch = Branch.objects.create(
+            company=self.company,
+            name="Payroll Runs API Branch",
+            branch_code="PAYROLL-RUN-API",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.employee = Employee.objects.create(
+            company=self.company,
+            branch=self.branch,
+            employee_number="EMP-RUN-API-001",
+            first_name="Omar",
+            last_name="Saleh",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.period = create_payroll_period(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "year": 2026,
+                "month": 6,
+                "start_date": "2026-06-01",
+                "end_date": "2026-06-30",
+            },
+        )
+        self.client = Client()
+        self.client.force_login(self.user)
+
+    def test_payroll_runs_list_api(self):
+        create_payroll_run(
+            company=self.company,
+            period=self.period,
+            created_by=self.user,
+        )
+
+        response = self.client.get("/api/company/hr/payroll/runs/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["results"][0]["period_id"], self.period.id)
+
+    def test_payroll_run_create_api(self):
+        response = self.client.post(
+            "/api/company/hr/payroll/runs/create/",
+            data={
+                "period_id": self.period.id,
+                "name": "June Payroll Run",
+                "notes": "Main monthly payroll",
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["payroll_run"]["period_id"], self.period.id)
+        self.assertEqual(payload["payroll_run"]["run_number"], "PAY-2026-06")
+
+        self.assertTrue(
+            PayrollRun.objects.filter(
+                company=self.company,
+                period=self.period,
+                run_number="PAY-2026-06",
+            ).exists()
+        )
+
+    def test_payroll_run_detail_api(self):
+        payroll_run = create_payroll_run(
+            company=self.company,
+            period=self.period,
+            created_by=self.user,
+        )
+
+        response = self.client.get(
+            f"/api/company/hr/payroll/runs/{payroll_run.id}/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["payroll_run"]["id"], payroll_run.id)
+
+    def test_payroll_run_update_api(self):
+        payroll_run = create_payroll_run(
+            company=self.company,
+            period=self.period,
+            created_by=self.user,
+        )
+
+        response = self.client.post(
+            f"/api/company/hr/payroll/runs/{payroll_run.id}/update/",
+            data={
+                "name": "Updated Payroll Run",
+                "notes": "Updated notes",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["payroll_run"]["name"], "Updated Payroll Run")
+
+    def test_payroll_run_calculate_and_approve_api(self):
+        create_employee_salary_profile(
+            company=self.company,
+            employee=self.employee,
+            created_by=self.user,
+            data={
+                "basic_salary": 5000,
+                "housing_allowance": 1000,
+                "transport_allowance": 500,
+                "currency": "SAR",
+            },
+        )
+        payroll_run = create_payroll_run(
+            company=self.company,
+            period=self.period,
+            created_by=self.user,
+        )
+
+        response = self.client.post(
+            f"/api/company/hr/payroll/runs/{payroll_run.id}/calculate/"
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["payroll_run"]["status"], PayrollRunStatus.CALCULATED)
+        self.assertEqual(payload["payroll_run"]["total_employees"], 1)
+        self.assertEqual(Decimal(payload["payroll_run"]["net_pay"]), Decimal("6500"))
+
+        response = self.client.post(
+            f"/api/company/hr/payroll/runs/{payroll_run.id}/approve/"
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["payroll_run"]["status"], PayrollRunStatus.APPROVED)
+
+    def test_payroll_run_cancel_api(self):
+        payroll_run = create_payroll_run(
+            company=self.company,
+            period=self.period,
+            created_by=self.user,
+        )
+
+        response = self.client.post(
+            f"/api/company/hr/payroll/runs/{payroll_run.id}/cancel/",
+            data={
+                "note": "Cancelled by test",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["payroll_run"]["status"], PayrollRunStatus.CANCELLED)
+
+    def test_payroll_run_create_requires_permission(self):
+        viewer = User.objects.create_user(
+            username="payroll-runs-api-viewer",
+            email="payroll-runs-api-viewer@example.com",
+            password="StrongPass12345",
+        )
+        CompanyMembership.objects.create(
+            user=viewer,
+            company=self.company,
+            role=CompanyRole.VIEWER,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.client.force_login(viewer)
+
+        response = self.client.post(
+            "/api/company/hr/payroll/runs/create/",
+            data={
+                "period_id": self.period.id,
+            },
+        )
+
+        self.assertIn(response.status_code, [403, 404])
+        self.assertFalse(
+            PayrollRun.objects.filter(
+                company=self.company,
+                period=self.period,
+            ).exists()
+        )
+
+    def test_payroll_run_tenant_isolation(self):
+        other_user = User.objects.create_user(
+            username="payroll-runs-api-other",
+            email="payroll-runs-api-other@example.com",
+            password="StrongPass12345",
+        )
+        other_company = Company.objects.create(
+            name="Other Payroll Runs API Company",
+            company_code="HR-PAYROLL-RUN-API-002",
+            owner=other_user,
+            created_by=other_user,
+            updated_by=other_user,
+        )
+        other_period = create_payroll_period(
+            company=other_company,
+            created_by=other_user,
+            data={
+                "year": 2026,
+                "month": 7,
+                "start_date": "2026-07-01",
+                "end_date": "2026-07-31",
+            },
+        )
+        other_run = create_payroll_run(
+            company=other_company,
+            period=other_period,
+            created_by=other_user,
+        )
+
+        response = self.client.get(
+            f"/api/company/hr/payroll/runs/{other_run.id}/"
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+
+class PayrollPayslipsAPITests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="payroll-payslips-api-admin",
+            email="payroll-payslips-api-admin@example.com",
+            password="StrongPass12345",
+        )
+        self.company = Company.objects.create(
+            name="Primey Payroll Payslips API Company",
+            company_code="HR-PAYSLIP-API-001",
+            owner=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        CompanyMembership.objects.create(
+            user=self.user,
+            company=self.company,
+            role=CompanyRole.ADMIN,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.branch = Branch.objects.create(
+            company=self.company,
+            name="Payroll Payslips API Branch",
+            branch_code="PAYSLIP-API",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.employee = Employee.objects.create(
+            company=self.company,
+            branch=self.branch,
+            employee_number="EMP-PAYSLIP-API-001",
+            first_name="Nora",
+            last_name="Hassan",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.period = create_payroll_period(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "year": 2026,
+                "month": 6,
+                "start_date": "2026-06-01",
+                "end_date": "2026-06-30",
+            },
+        )
+        self.profile = create_employee_salary_profile(
+            company=self.company,
+            employee=self.employee,
+            created_by=self.user,
+            data={
+                "basic_salary": 5000,
+                "housing_allowance": 1000,
+                "transport_allowance": 500,
+                "currency": "SAR",
+            },
+        )
+        self.payroll_run = create_payroll_run(
+            company=self.company,
+            period=self.period,
+            created_by=self.user,
+        )
+        calculate_payroll_run(
+            payroll_run=self.payroll_run,
+            calculated_by=self.user,
+        )
+        self.payslip = Payslip.objects.get(
+            company=self.company,
+            payroll_run=self.payroll_run,
+            employee=self.employee,
+        )
+        self.client = Client()
+        self.client.force_login(self.user)
+
+    def test_payslips_list_api(self):
+        response = self.client.get("/api/company/hr/payroll/payslips/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["results"][0]["employee_id"], self.employee.id)
+        self.assertEqual(payload["results"][0]["payroll_run_id"], self.payroll_run.id)
+
+    def test_payslip_detail_api_includes_items(self):
+        response = self.client.get(
+            f"/api/company/hr/payroll/payslips/{self.payslip.id}/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["payslip"]["id"], self.payslip.id)
+        self.assertIn("items", payload["payslip"])
+        self.assertGreaterEqual(len(payload["payslip"]["items"]), 1)
+
+    def test_payslip_update_api(self):
+        response = self.client.post(
+            f"/api/company/hr/payroll/payslips/{self.payslip.id}/update/",
+            data={
+                "notes": "Updated payslip notes",
+                "currency": "SAR",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["payslip"]["notes"], "Updated payslip notes")
+
+    def test_payslip_approve_and_pay_api(self):
+        response = self.client.post(
+            f"/api/company/hr/payroll/payslips/{self.payslip.id}/approve/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["payslip"]["status"], PayslipStatus.APPROVED)
+
+        response = self.client.post(
+            f"/api/company/hr/payroll/payslips/{self.payslip.id}/pay/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["payslip"]["status"], PayslipStatus.PAID)
+
+    def test_payslip_cancel_api(self):
+        response = self.client.post(
+            f"/api/company/hr/payroll/payslips/{self.payslip.id}/cancel/",
+            data={
+                "note": "Cancelled by test",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["payslip"]["status"], PayslipStatus.CANCELLED)
+
+    def test_payslip_update_requires_permission(self):
+        viewer = User.objects.create_user(
+            username="payroll-payslips-api-viewer",
+            email="payroll-payslips-api-viewer@example.com",
+            password="StrongPass12345",
+        )
+        CompanyMembership.objects.create(
+            user=viewer,
+            company=self.company,
+            role=CompanyRole.VIEWER,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.client.force_login(viewer)
+
+        response = self.client.post(
+            f"/api/company/hr/payroll/payslips/{self.payslip.id}/update/",
+            data={
+                "notes": "Viewer should not update",
+            },
+        )
+
+        self.assertIn(response.status_code, [403, 404])
+        self.payslip.refresh_from_db()
+        self.assertNotEqual(self.payslip.notes, "Viewer should not update")
+
+    def test_payslip_tenant_isolation(self):
+        other_user = User.objects.create_user(
+            username="payroll-payslips-api-other",
+            email="payroll-payslips-api-other@example.com",
+            password="StrongPass12345",
+        )
+        other_company = Company.objects.create(
+            name="Other Payroll Payslips API Company",
+            company_code="HR-PAYSLIP-API-002",
+            owner=other_user,
+            created_by=other_user,
+            updated_by=other_user,
+        )
+        other_employee = Employee.objects.create(
+            company=other_company,
+            employee_number="EMP-PAYSLIP-OTHER",
+            first_name="Other",
+            created_by=other_user,
+            updated_by=other_user,
+        )
+        other_period = create_payroll_period(
+            company=other_company,
+            created_by=other_user,
+            data={
+                "year": 2026,
+                "month": 7,
+                "start_date": "2026-07-01",
+                "end_date": "2026-07-31",
+            },
+        )
+        create_employee_salary_profile(
+            company=other_company,
+            employee=other_employee,
+            created_by=other_user,
+            data={
+                "basic_salary": 5000,
+                "currency": "SAR",
+            },
+        )
+        other_run = create_payroll_run(
+            company=other_company,
+            period=other_period,
+            created_by=other_user,
+        )
+        calculate_payroll_run(
+            payroll_run=other_run,
+            calculated_by=other_user,
+        )
+        other_payslip = Payslip.objects.get(
+            company=other_company,
+            payroll_run=other_run,
+            employee=other_employee,
+        )
+
+        response = self.client.get(
+            f"/api/company/hr/payroll/payslips/{other_payslip.id}/"
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+
+class PayrollPayslipItemsAPITests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="payroll-payslip-items-api-admin",
+            email="payroll-payslip-items-api-admin@example.com",
+            password="StrongPass12345",
+        )
+        self.company = Company.objects.create(
+            name="Primey Payroll Payslip Items API Company",
+            company_code="HR-PAYSLIP-ITEM-API-001",
+            owner=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        CompanyMembership.objects.create(
+            user=self.user,
+            company=self.company,
+            role=CompanyRole.ADMIN,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.branch = Branch.objects.create(
+            company=self.company,
+            name="Payroll Payslip Items API Branch",
+            branch_code="PAYSLIP-ITEM-API",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.employee = Employee.objects.create(
+            company=self.company,
+            branch=self.branch,
+            employee_number="EMP-PAYSLIP-ITEM-API-001",
+            first_name="Fahad",
+            last_name="Ali",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.period = create_payroll_period(
+            company=self.company,
+            created_by=self.user,
+            data={
+                "year": 2026,
+                "month": 6,
+                "start_date": "2026-06-01",
+                "end_date": "2026-06-30",
+            },
+        )
+        self.profile = create_employee_salary_profile(
+            company=self.company,
+            employee=self.employee,
+            created_by=self.user,
+            data={
+                "basic_salary": 5000,
+                "housing_allowance": 1000,
+                "transport_allowance": 500,
+                "currency": "SAR",
+            },
+        )
+        self.payroll_run = create_payroll_run(
+            company=self.company,
+            period=self.period,
+            created_by=self.user,
+        )
+        calculate_payroll_run(
+            payroll_run=self.payroll_run,
+            calculated_by=self.user,
+        )
+        self.payslip = Payslip.objects.get(
+            company=self.company,
+            payroll_run=self.payroll_run,
+            employee=self.employee,
+        )
+        self.item = PayslipItem.objects.filter(
+            company=self.company,
+            payslip=self.payslip,
+        ).first()
+        self.client = Client()
+        self.client.force_login(self.user)
+
+    def test_payslip_items_list_api(self):
+        response = self.client.get("/api/company/hr/payroll/payslip-items/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertGreaterEqual(payload["count"], 1)
+        self.assertEqual(payload["results"][0]["payslip_id"], self.payslip.id)
+
+    def test_payslip_item_detail_api(self):
+        response = self.client.get(
+            f"/api/company/hr/payroll/payslip-items/{self.item.id}/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["item"]["id"], self.item.id)
+        self.assertEqual(payload["item"]["payslip_id"], self.payslip.id)
+        self.assertEqual(payload["item"]["employee_id"], self.employee.id)
+
+    def test_payslip_item_update_api(self):
+        response = self.client.post(
+            f"/api/company/hr/payroll/payslip-items/{self.item.id}/update/",
+            data={
+                "name": "Updated Payslip Item",
+                "amount": "1234.50",
+                "notes": "Updated by API test",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["item"]["name"], "Updated Payslip Item")
+        self.assertEqual(payload["item"]["amount"], "1234.50")
+        self.assertEqual(payload["item"]["notes"], "Updated by API test")
+
+    def test_payslip_item_update_requires_permission(self):
+        viewer = User.objects.create_user(
+            username="payroll-payslip-items-api-viewer",
+            email="payroll-payslip-items-api-viewer@example.com",
+            password="StrongPass12345",
+        )
+        CompanyMembership.objects.create(
+            user=viewer,
+            company=self.company,
+            role=CompanyRole.VIEWER,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.client.force_login(viewer)
+
+        response = self.client.post(
+            f"/api/company/hr/payroll/payslip-items/{self.item.id}/update/",
+            data={
+                "name": "Viewer should not update",
+            },
+        )
+
+        self.assertIn(response.status_code, [403, 404])
+        self.item.refresh_from_db()
+        self.assertNotEqual(self.item.name, "Viewer should not update")
+
+    def test_payslip_item_tenant_isolation(self):
+        other_user = User.objects.create_user(
+            username="payroll-payslip-items-api-other",
+            email="payroll-payslip-items-api-other@example.com",
+            password="StrongPass12345",
+        )
+        other_company = Company.objects.create(
+            name="Other Payroll Payslip Items API Company",
+            company_code="HR-PAYSLIP-ITEM-API-002",
+            owner=other_user,
+            created_by=other_user,
+            updated_by=other_user,
+        )
+        other_employee = Employee.objects.create(
+            company=other_company,
+            employee_number="EMP-PAYSLIP-ITEM-OTHER",
+            first_name="Other",
+            created_by=other_user,
+            updated_by=other_user,
+        )
+        other_period = create_payroll_period(
+            company=other_company,
+            created_by=other_user,
+            data={
+                "year": 2026,
+                "month": 7,
+                "start_date": "2026-07-01",
+                "end_date": "2026-07-31",
+            },
+        )
+        create_employee_salary_profile(
+            company=other_company,
+            employee=other_employee,
+            created_by=other_user,
+            data={
+                "basic_salary": 5000,
+                "currency": "SAR",
+            },
+        )
+        other_run = create_payroll_run(
+            company=other_company,
+            period=other_period,
+            created_by=other_user,
+        )
+        calculate_payroll_run(
+            payroll_run=other_run,
+            calculated_by=other_user,
+        )
+        other_payslip = Payslip.objects.get(
+            company=other_company,
+            payroll_run=other_run,
+            employee=other_employee,
+        )
+        other_item = PayslipItem.objects.filter(
+            company=other_company,
+            payslip=other_payslip,
+        ).first()
+
+        response = self.client.get(
+            f"/api/company/hr/payroll/payslip-items/{other_item.id}/"
+        )
+
+        self.assertEqual(response.status_code, 404)
 
