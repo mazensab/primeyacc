@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 accounts/models.py
-# 🧠 PrimeyAcc | Accounts Models V2.1
+# 🧠 PrimeyAcc | Accounts Models V2.2
 # ------------------------------------------------------------
 # ✅ User Profile
 # ✅ Workspace Type Foundation
@@ -21,6 +21,8 @@
 # ✅ Company Customer Payments Permissions
 # ✅ Company Supplier Payments Permissions
 # ✅ Company Payment Methods / Gateways / Terminals Permissions
+# ✅ Company Notifications Permissions
+# ✅ Company WhatsApp Permissions
 # ✅ Safe Default Company Membership Resolver
 # ✅ Audit Fields
 # ------------------------------------------------------------
@@ -39,6 +41,7 @@
 # - المحاسبة لها صلاحيات دقيقة داخل company.accounting.*
 # - الخزينة والمدفوعات لها صلاحيات دقيقة داخل company.treasury.*
 # - طرق الدفع وبوابات الدفع وأجهزة الدفع لها صلاحيات دقيقة داخل company.payments.*
+# - الإشعارات والواتساب لها صلاحيات دقيقة داخل company.notifications.* و company.whatsapp.*
 # ============================================================
 
 from __future__ import annotations
@@ -241,6 +244,14 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.payments.terminals.create",
         "company.payments.terminals.update",
         "company.payments.terminals.status",
+        "company.notifications.view",
+        "company.notifications.read",
+        "company.notifications.manage",
+        "company.whatsapp.view",
+        "company.whatsapp.manage",
+        "company.whatsapp.templates.manage",
+        "company.whatsapp.messages.view",
+        "company.whatsapp.messages.send",
         "company.reports.view",
     ],
     CompanyRole.MANAGER: [
@@ -285,6 +296,14 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.payments.methods.view",
         "company.payments.gateways.view",
         "company.payments.terminals.view",
+        "company.notifications.view",
+        "company.notifications.read",
+        "company.notifications.manage",
+        "company.whatsapp.view",
+        "company.whatsapp.manage",
+        "company.whatsapp.templates.manage",
+        "company.whatsapp.messages.view",
+        "company.whatsapp.messages.send",
         "company.reports.view",
     ],
     CompanyRole.ACCOUNTANT: [
@@ -354,6 +373,10 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.payments.terminals.create",
         "company.payments.terminals.update",
         "company.payments.terminals.status",
+        "company.notifications.view",
+        "company.notifications.read",
+        "company.whatsapp.view",
+        "company.whatsapp.messages.view",
         "company.reports.view",
     ],
     CompanyRole.CASHIER: [
@@ -379,6 +402,11 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.payments.view",
         "company.payments.methods.view",
         "company.payments.terminals.view",
+        "company.notifications.view",
+        "company.notifications.read",
+        "company.whatsapp.view",
+        "company.whatsapp.messages.view",
+        "company.whatsapp.messages.send",
     ],
     CompanyRole.SALES: [
         "company.dashboard.view",
@@ -402,6 +430,11 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.payments.view",
         "company.payments.methods.view",
         "company.payments.terminals.view",
+        "company.notifications.view",
+        "company.notifications.read",
+        "company.whatsapp.view",
+        "company.whatsapp.messages.view",
+        "company.whatsapp.messages.send",
     ],
     CompanyRole.INVENTORY: [
         "company.dashboard.view",
@@ -432,6 +465,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.inventory.warehouses.status",
         "company.inventory.stock.view",
         "company.inventory.movements.view",
+        "company.notifications.view",
+        "company.notifications.read",
         "company.reports.view",
     ],
     CompanyRole.HR: [
@@ -444,10 +479,17 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.hr.view",
         "company.hr.create",
         "company.hr.update",
+        "company.notifications.view",
+        "company.notifications.read",
+        "company.whatsapp.view",
+        "company.whatsapp.messages.view",
+        "company.whatsapp.messages.send",
         "company.reports.view",
     ],
     CompanyRole.EMPLOYEE: [
         "company.dashboard.view",
+        "company.notifications.view",
+        "company.notifications.read",
     ],
     CompanyRole.VIEWER: [
         "company.dashboard.view",
@@ -479,6 +521,10 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.payments.methods.view",
         "company.payments.gateways.view",
         "company.payments.terminals.view",
+        "company.notifications.view",
+        "company.notifications.read",
+        "company.whatsapp.view",
+        "company.whatsapp.messages.view",
         "company.reports.view",
     ],
 }
