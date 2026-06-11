@@ -574,3 +574,149 @@ def build_profit_loss_report(
             "expenses": expenses,
         },
     }
+
+def build_balance_sheet_report(
+    company: Any,
+    *,
+    date_to: Any = None,
+    include_zero: Any = False,
+) -> dict[str, Any]:
+    """
+    Build Balance Sheet report.
+
+    Rules:
+    - Only POSTED journal entries are included.
+    - Company is taken from request.company, never frontend company_id.
+    - Asset accounts increase by debit - credit.
+    - Liability and equity accounts increase by credit - debit.
+    """
+    _validate_company(company)
+
+    parsed_date_to = _parse_date(date_to, field_name="date_to")
+    include_zero_bool = _parse_bool(include_zero, default=False)
+
+    balance_sheet_account_types = ["ASSET", "LIABILITY", "EQUITY"]
+
+    lines_qs = JournalEntryLine.objects.filter(
+        company=company,
+        journal_entry__company=company,
+        journal_entry__status=JournalEntryStatus.POSTED,
+        account__account_type__in=balance_sheet_account_types,
+    )
+
+    if parsed_date_to:
+        lines_qs = lines_qs.filter(
+            journal_entry__entry_date__lte=parsed_date_to,
+        )
+
+    line_totals = {
+        row["account_id"]: {
+            "total_debit": _money(row["total_debit"]),
+            "total_credit": _money(row["total_credit"]),
+        }
+        for row in lines_qs.values("account_id").annotate(
+            total_debit=Sum("debit_amount"),
+            total_credit=Sum("credit_amount"),
+        )
+    }
+
+    accounts_qs = (
+        Account.objects.filter(
+            company=company,
+            account_type__in=balance_sheet_account_types,
+        )
+        .select_related("parent")
+        .order_by("account_type", "code", "id")
+    )
+
+    assets: list[dict[str, Any]] = []
+    liabilities: list[dict[str, Any]] = []
+    equity: list[dict[str, Any]] = []
+
+    total_assets = MONEY_ZERO
+    total_liabilities = MONEY_ZERO
+    total_equity = MONEY_ZERO
+
+    for account in accounts_qs:
+        totals = line_totals.get(
+            account.pk,
+            {
+                "total_debit": MONEY_ZERO,
+                "total_credit": MONEY_ZERO,
+            },
+        )
+
+        total_debit = _money(totals["total_debit"])
+        total_credit = _money(totals["total_credit"])
+
+        if account.account_type == "ASSET":
+            amount = _money(total_debit - total_credit)
+            section = "assets"
+        elif account.account_type == "LIABILITY":
+            amount = _money(total_credit - total_debit)
+            section = "liabilities"
+        else:
+            amount = _money(total_credit - total_debit)
+            section = "equity"
+
+        if not include_zero_bool and amount == MONEY_ZERO:
+            continue
+
+        row = {
+            "account": {
+                "id": account.pk,
+                "code": account.code,
+                "name": account.name,
+                "name_en": account.name_en,
+                "type": account.account_type,
+                "nature": account.nature,
+                "level": account.level,
+                "is_group": account.is_group,
+                "parent_id": account.parent_id,
+            },
+            "total_debit": _money_str(total_debit),
+            "total_credit": _money_str(total_credit),
+            "amount": _money_str(amount),
+        }
+
+        if section == "assets":
+            total_assets = _money(total_assets + amount)
+            assets.append(row)
+        elif section == "liabilities":
+            total_liabilities = _money(total_liabilities + amount)
+            liabilities.append(row)
+        else:
+            total_equity = _money(total_equity + amount)
+            equity.append(row)
+
+    liabilities_and_equity = _money(total_liabilities + total_equity)
+    difference = _money(total_assets - liabilities_and_equity)
+
+    return {
+        "report": {
+            "key": "balance_sheet",
+            "name": "Balance Sheet",
+            "phase": "16.5",
+            "generated_at": timezone.now().isoformat(),
+        },
+        "filters": {
+            "date_to": parsed_date_to.isoformat() if parsed_date_to else None,
+            "include_zero": include_zero_bool,
+        },
+        "summary": {
+            "total_assets": _money_str(total_assets),
+            "total_liabilities": _money_str(total_liabilities),
+            "total_equity": _money_str(total_equity),
+            "liabilities_and_equity": _money_str(liabilities_and_equity),
+            "difference": _money_str(difference),
+            "is_balanced": difference == MONEY_ZERO,
+            "assets_count": len(assets),
+            "liabilities_count": len(liabilities),
+            "equity_count": len(equity),
+        },
+        "sections": {
+            "assets": assets,
+            "liabilities": liabilities,
+            "equity": equity,
+        },
+    }
