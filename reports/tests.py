@@ -1,9 +1,13 @@
 # ============================================================
 # 📂 reports/tests.py
-# 🧠 PrimeyAcc | Reports Tests - Phase 16.1
+# 🧠 PrimeyAcc | Reports Tests - Phase 16.2
 # ------------------------------------------------------------
 # ✅ Reports overview service test
 # ✅ Reports overview API test
+# ✅ Trial Balance report API test
+# ✅ Posted journal entries only
+# ✅ Draft journal entries excluded
+# ✅ Date range validation
 # ✅ Tenant access through active CompanyMembership
 # ============================================================
 
@@ -22,6 +26,14 @@ from accounts.models import (
     CompanyMembership,
     CompanyRole,
     MembershipStatus,
+)
+from accounting.models import JournalEntryStatus
+from accounting.services import (
+    EntryLinePayload,
+    create_manual_journal_entry,
+    get_account_by_code,
+    post_journal_entry,
+    seed_company_chart_of_accounts,
 )
 from companies.models import Company
 from reports.services import get_reports_overview
@@ -273,3 +285,146 @@ class ReportsFoundationTests(TestCase):
         self.assertEqual(body["overview"]["module"], "reports")
         self.assertEqual(body["overview"]["phase"], "16.1")
         self.assertEqual(body["overview"]["status"], "ready")
+
+    def _balanced_lines(self):
+        cash_account = get_account_by_code(self.company, "110101")
+        opening_equity_account = get_account_by_code(self.company, "3201")
+
+        return [
+            EntryLinePayload(
+                account=cash_account,
+                description="مدين ميزان مراجعة",
+                debit_amount=Decimal("100.00"),
+                credit_amount=Decimal("0.00"),
+                currency="SAR",
+                sort_order=1,
+            ),
+            EntryLinePayload(
+                account=opening_equity_account,
+                description="دائن ميزان مراجعة",
+                debit_amount=Decimal("0.00"),
+                credit_amount=Decimal("100.00"),
+                currency="SAR",
+                sort_order=2,
+            ),
+        ]
+
+    def test_trial_balance_report_api_returns_posted_balances_only(self):
+        seed_company_chart_of_accounts(self.company)
+
+        posted_entry = create_manual_journal_entry(
+            company=self.company,
+            entry_date=timezone.localdate(),
+            description="قيد مرحل يظهر في ميزان المراجعة",
+            reference="REPORTS-TB-POSTED",
+            lines=self._balanced_lines(),
+        )
+        posted_entry = post_journal_entry(posted_entry)
+
+        self.assertEqual(posted_entry.status, JournalEntryStatus.POSTED)
+
+        draft_entry = create_manual_journal_entry(
+            company=self.company,
+            entry_date=timezone.localdate(),
+            description="قيد مسودة لا يظهر في ميزان المراجعة",
+            reference="REPORTS-TB-DRAFT",
+            lines=[
+                EntryLinePayload(
+                    account=get_account_by_code(self.company, "110101"),
+                    debit_amount=Decimal("250.00"),
+                    credit_amount=Decimal("0.00"),
+                ),
+                EntryLinePayload(
+                    account=get_account_by_code(self.company, "3201"),
+                    debit_amount=Decimal("0.00"),
+                    credit_amount=Decimal("250.00"),
+                ),
+            ],
+        )
+
+        self.assertEqual(draft_entry.status, JournalEntryStatus.DRAFT)
+
+        client = APIClient()
+        client.force_authenticate(user=self.owner)
+
+        response = client.get(
+            "/api/company/reports/trial-balance/",
+            {
+                "include_zero": "false",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+
+        body = response.json()
+
+        self.assertTrue(body["success"])
+        self.assertEqual(body["company"]["id"], self.company.pk)
+        self.assertEqual(body["report"]["key"], "trial_balance")
+        self.assertEqual(body["report"]["phase"], "16.2")
+        self.assertEqual(body["summary"]["total_debit"], "100.00")
+        self.assertEqual(body["summary"]["total_credit"], "100.00")
+        self.assertEqual(body["summary"]["difference"], "0.00")
+        self.assertTrue(body["summary"]["is_balanced"])
+
+        rows_by_code = {
+            row["account"]["code"]: row
+            for row in body["results"]
+        }
+
+        self.assertIn("110101", rows_by_code)
+        self.assertIn("3201", rows_by_code)
+
+        self.assertEqual(rows_by_code["110101"]["total_debit"], "100.00")
+        self.assertEqual(rows_by_code["110101"]["total_credit"], "0.00")
+        self.assertEqual(rows_by_code["110101"]["balance"], "100.00")
+        self.assertEqual(rows_by_code["110101"]["balance_type"], "DEBIT")
+
+        self.assertEqual(rows_by_code["3201"]["total_debit"], "0.00")
+        self.assertEqual(rows_by_code["3201"]["total_credit"], "100.00")
+        self.assertEqual(rows_by_code["3201"]["balance"], "-100.00")
+        self.assertEqual(rows_by_code["3201"]["balance_type"], "CREDIT")
+
+    def test_trial_balance_report_api_validates_date_range(self):
+        client = APIClient()
+        client.force_authenticate(user=self.owner)
+
+        response = client.get(
+            "/api/company/reports/trial-balance/",
+            {
+                "date_from": "2026-12-31",
+                "date_to": "2026-01-01",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+
+        body = response.json()
+
+        self.assertFalse(body["success"])
+
+    def test_trial_balance_report_api_can_include_zero_accounts(self):
+        seed_company_chart_of_accounts(self.company)
+
+        client = APIClient()
+        client.force_authenticate(user=self.owner)
+
+        response = client.get(
+            "/api/company/reports/trial-balance/",
+            {
+                "include_zero": "true",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+
+        body = response.json()
+
+        self.assertTrue(body["success"])
+        self.assertEqual(body["company"]["id"], self.company.pk)
+        self.assertEqual(body["report"]["key"], "trial_balance")
+        self.assertEqual(body["summary"]["total_debit"], "0.00")
+        self.assertEqual(body["summary"]["total_credit"], "0.00")
+        self.assertEqual(body["summary"]["difference"], "0.00")
+        self.assertTrue(body["summary"]["is_balanced"])
+        self.assertGreaterEqual(body["summary"]["accounts_count"], 100)
