@@ -423,3 +423,154 @@ def build_general_ledger_report(
         },
         "entries": entries,
     }
+
+def build_profit_loss_report(
+    company: Any,
+    *,
+    date_from: Any = None,
+    date_to: Any = None,
+    include_zero: Any = False,
+) -> dict[str, Any]:
+    """
+    Build Profit & Loss report.
+
+    Rules:
+    - Only POSTED journal entries are included.
+    - Company is taken from request.company, never frontend company_id.
+    - Revenue accounts increase by credit - debit.
+    - Expense accounts increase by debit - credit.
+    """
+    _validate_company(company)
+
+    parsed_date_from = _parse_date(date_from, field_name="date_from")
+    parsed_date_to = _parse_date(date_to, field_name="date_to")
+
+    if parsed_date_from and parsed_date_to and parsed_date_to < parsed_date_from:
+        raise ValidationError(
+            {
+                "date_to": "End date cannot be before start date.",
+            }
+        )
+
+    include_zero_bool = _parse_bool(include_zero, default=False)
+
+    profit_loss_account_types = ["REVENUE", "EXPENSE"]
+
+    lines_qs = JournalEntryLine.objects.filter(
+        company=company,
+        journal_entry__company=company,
+        journal_entry__status=JournalEntryStatus.POSTED,
+        account__account_type__in=profit_loss_account_types,
+    )
+
+    if parsed_date_from:
+        lines_qs = lines_qs.filter(
+            journal_entry__entry_date__gte=parsed_date_from,
+        )
+
+    if parsed_date_to:
+        lines_qs = lines_qs.filter(
+            journal_entry__entry_date__lte=parsed_date_to,
+        )
+
+    line_totals = {
+        row["account_id"]: {
+            "total_debit": _money(row["total_debit"]),
+            "total_credit": _money(row["total_credit"]),
+        }
+        for row in lines_qs.values("account_id").annotate(
+            total_debit=Sum("debit_amount"),
+            total_credit=Sum("credit_amount"),
+        )
+    }
+
+    accounts_qs = (
+        Account.objects.filter(
+            company=company,
+            account_type__in=profit_loss_account_types,
+        )
+        .select_related("parent")
+        .order_by("account_type", "code", "id")
+    )
+
+    revenues: list[dict[str, Any]] = []
+    expenses: list[dict[str, Any]] = []
+
+    total_revenue = MONEY_ZERO
+    total_expense = MONEY_ZERO
+
+    for account in accounts_qs:
+        totals = line_totals.get(
+            account.pk,
+            {
+                "total_debit": MONEY_ZERO,
+                "total_credit": MONEY_ZERO,
+            },
+        )
+
+        total_debit = _money(totals["total_debit"])
+        total_credit = _money(totals["total_credit"])
+
+        if account.account_type == "REVENUE":
+            amount = _money(total_credit - total_debit)
+            section = "revenue"
+        else:
+            amount = _money(total_debit - total_credit)
+            section = "expense"
+
+        if not include_zero_bool and amount == MONEY_ZERO:
+            continue
+
+        row = {
+            "account": {
+                "id": account.pk,
+                "code": account.code,
+                "name": account.name,
+                "name_en": account.name_en,
+                "type": account.account_type,
+                "nature": account.nature,
+                "level": account.level,
+                "is_group": account.is_group,
+                "parent_id": account.parent_id,
+            },
+            "total_debit": _money_str(total_debit),
+            "total_credit": _money_str(total_credit),
+            "amount": _money_str(amount),
+        }
+
+        if section == "revenue":
+            total_revenue = _money(total_revenue + amount)
+            revenues.append(row)
+        else:
+            total_expense = _money(total_expense + amount)
+            expenses.append(row)
+
+    gross_profit = _money(total_revenue - total_expense)
+    net_profit = gross_profit
+
+    return {
+        "report": {
+            "key": "profit_loss",
+            "name": "Profit and Loss",
+            "phase": "16.4",
+            "generated_at": timezone.now().isoformat(),
+        },
+        "filters": {
+            "date_from": parsed_date_from.isoformat() if parsed_date_from else None,
+            "date_to": parsed_date_to.isoformat() if parsed_date_to else None,
+            "include_zero": include_zero_bool,
+        },
+        "summary": {
+            "total_revenue": _money_str(total_revenue),
+            "total_expense": _money_str(total_expense),
+            "gross_profit": _money_str(gross_profit),
+            "net_profit": _money_str(net_profit),
+            "is_profit": net_profit >= MONEY_ZERO,
+            "revenues_count": len(revenues),
+            "expenses_count": len(expenses),
+        },
+        "sections": {
+            "revenues": revenues,
+            "expenses": expenses,
+        },
+    }

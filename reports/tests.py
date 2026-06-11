@@ -508,3 +508,114 @@ class ReportsFoundationTests(TestCase):
 
         self.assertFalse(body["success"])
 
+
+    def test_profit_loss_report_api_returns_posted_revenue_and_expense(self):
+        seed_company_chart_of_accounts(self.company)
+
+        posted_entry = create_manual_journal_entry(
+            company=self.company,
+            entry_date=timezone.localdate(),
+            description="Posted profit loss entry",
+            reference="REPORTS-PL-POSTED",
+            lines=[
+                EntryLinePayload(
+                    account=get_account_by_code(self.company, "110101"),
+                    debit_amount=Decimal("300.00"),
+                    credit_amount=Decimal("0.00"),
+                ),
+                EntryLinePayload(
+                    account=get_account_by_code(self.company, "4101"),
+                    debit_amount=Decimal("0.00"),
+                    credit_amount=Decimal("300.00"),
+                ),
+                EntryLinePayload(
+                    account=get_account_by_code(self.company, "5101"),
+                    debit_amount=Decimal("80.00"),
+                    credit_amount=Decimal("0.00"),
+                ),
+                EntryLinePayload(
+                    account=get_account_by_code(self.company, "110101"),
+                    debit_amount=Decimal("0.00"),
+                    credit_amount=Decimal("80.00"),
+                ),
+            ],
+        )
+        posted_entry = post_journal_entry(posted_entry)
+
+        self.assertEqual(posted_entry.status, JournalEntryStatus.POSTED)
+
+        draft_entry = create_manual_journal_entry(
+            company=self.company,
+            entry_date=timezone.localdate(),
+            description="Draft profit loss entry",
+            reference="REPORTS-PL-DRAFT",
+            lines=[
+                EntryLinePayload(
+                    account=get_account_by_code(self.company, "110101"),
+                    debit_amount=Decimal("500.00"),
+                    credit_amount=Decimal("0.00"),
+                ),
+                EntryLinePayload(
+                    account=get_account_by_code(self.company, "4101"),
+                    debit_amount=Decimal("0.00"),
+                    credit_amount=Decimal("500.00"),
+                ),
+            ],
+        )
+
+        self.assertEqual(draft_entry.status, JournalEntryStatus.DRAFT)
+
+        client = APIClient()
+        client.force_authenticate(user=self.owner)
+
+        response = client.get(
+            "/api/company/reports/profit-loss/",
+            {
+                "include_zero": "false",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+
+        body = response.json()
+
+        self.assertTrue(body["success"])
+        self.assertEqual(body["company"]["id"], self.company.pk)
+        self.assertEqual(body["report"]["key"], "profit_loss")
+        self.assertEqual(body["report"]["phase"], "16.4")
+        self.assertEqual(body["summary"]["total_revenue"], "300.00")
+        self.assertEqual(body["summary"]["total_expense"], "80.00")
+        self.assertEqual(body["summary"]["gross_profit"], "220.00")
+        self.assertEqual(body["summary"]["net_profit"], "220.00")
+        self.assertTrue(body["summary"]["is_profit"])
+
+        revenue_codes = {
+            row["account"]["code"]
+            for row in body["sections"]["revenues"]
+        }
+        expense_codes = {
+            row["account"]["code"]
+            for row in body["sections"]["expenses"]
+        }
+
+        self.assertIn("4101", revenue_codes)
+        self.assertIn("5101", expense_codes)
+
+    def test_profit_loss_report_api_validates_date_range(self):
+        client = APIClient()
+        client.force_authenticate(user=self.owner)
+
+        response = client.get(
+            "/api/company/reports/profit-loss/",
+            {
+                "date_from": "2026-12-31",
+                "date_to": "2026-01-01",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+
+        body = response.json()
+
+        self.assertFalse(body["success"])
+
