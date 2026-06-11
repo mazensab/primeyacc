@@ -23,6 +23,7 @@ app_name = "company_hr"
 
 urlpatterns = [
     path("payroll/", include("api.company.hr.payroll.urls")),
+    path("performance/", include("api.company.hr.performance.urls")),
     path("employees/", include("api.company.hr.employees.urls")),
     path("attendance/", include("api.company.hr.attendance.urls")),
     path("leave-types/", include("api.company.hr.leave_types.urls")),

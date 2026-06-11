@@ -34,6 +34,8 @@ from .models import (
     Employee,
     EmployeeStatus,
     EmployeeSalaryProfile,
+    EmployeePerformanceReview,
+    EmployeeGoal,
     LeaveBalance,
     LeaveRequest,
     LeaveRequestStatus,
@@ -43,6 +45,12 @@ from .models import (
     PayrollPeriodStatus,
     PayrollRun,
     PayrollRunStatus,
+    PerformanceCycle,
+    PerformanceCycleStatus,
+    PerformanceCriterion,
+    PerformanceReviewStatus,
+    PerformanceReviewScore,
+    PerformanceGoalStatus,
     Payslip,
     PayslipItem,
     PayslipStatus,
@@ -4286,4 +4294,1180 @@ class PayrollPayslipItemsAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, 404)
+
+# ============================================================
+# ?? Performance Cycles API Tests
+# ============================================================
+
+
+class PerformanceCyclesAPITests(TestCase):
+    def setUp(self):
+        self.client = Client()
+
+        self.company = Company.objects.create(
+            name="Performance Company",
+            company_code="PERF-001",
+        )
+        self.other_company = Company.objects.create(
+            name="Other Performance Company",
+            company_code="PERF-002",
+        )
+
+        self.user = User.objects.create_user(
+            username="performance-admin",
+            email="performance-admin@example.com",
+            password="pass12345",
+        )
+        CompanyMembership.objects.create(
+            user=self.user,
+            company=self.company,
+            role=CompanyRole.HR,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+        )
+
+        self.viewer = User.objects.create_user(
+            username="performance-viewer",
+            email="performance-viewer@example.com",
+            password="pass12345",
+        )
+        CompanyMembership.objects.create(
+            user=self.viewer,
+            company=self.company,
+            role=CompanyRole.VIEWER,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+        )
+
+        self.client.force_login(self.user)
+
+    def test_create_performance_cycle_api(self):
+        response = self.client.post(
+            "/api/company/hr/performance/cycles/create/",
+            data={
+                "name": "2026 Annual Review",
+                "code": "ANN-2026",
+                "start_date": "2026-01-01",
+                "end_date": "2026-12-31",
+                "description": "Annual performance review",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["cycle"]["code"], "ANN-2026")
+        self.assertEqual(
+            PerformanceCycle.objects.filter(company=self.company).count(),
+            1,
+        )
+
+    def test_list_performance_cycles_api(self):
+        PerformanceCycle.objects.create(
+            company=self.company,
+            name="2026 Annual Review",
+            code="ANN-2026",
+            start_date="2026-01-01",
+            end_date="2026-12-31",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        PerformanceCycle.objects.create(
+            company=self.other_company,
+            name="Other Review",
+            code="OTHER-2026",
+            start_date="2026-01-01",
+            end_date="2026-12-31",
+        )
+
+        response = self.client.get("/api/company/hr/performance/cycles/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(len(payload["results"]), 1)
+        self.assertEqual(payload["results"][0]["code"], "ANN-2026")
+
+    def test_detail_performance_cycle_api(self):
+        cycle = PerformanceCycle.objects.create(
+            company=self.company,
+            name="2026 Annual Review",
+            code="ANN-2026",
+            start_date="2026-01-01",
+            end_date="2026-12-31",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        response = self.client.get(f"/api/company/hr/performance/cycles/{cycle.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["cycle"]["id"], cycle.id)
+
+    def test_update_performance_cycle_api(self):
+        cycle = PerformanceCycle.objects.create(
+            company=self.company,
+            name="2026 Annual Review",
+            code="ANN-2026",
+            start_date="2026-01-01",
+            end_date="2026-12-31",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        response = self.client.post(
+            f"/api/company/hr/performance/cycles/{cycle.id}/update/",
+            data={
+                "name": "2026 Updated Review",
+                "description": "Updated description",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        cycle.refresh_from_db()
+        self.assertEqual(cycle.name, "2026 Updated Review")
+
+    def test_open_close_cancel_performance_cycle_api(self):
+        cycle = PerformanceCycle.objects.create(
+            company=self.company,
+            name="2026 Annual Review",
+            code="ANN-2026",
+            start_date="2026-01-01",
+            end_date="2026-12-31",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        open_response = self.client.post(
+            f"/api/company/hr/performance/cycles/{cycle.id}/open/",
+            data={},
+            content_type="application/json",
+        )
+        self.assertEqual(open_response.status_code, 200)
+        cycle.refresh_from_db()
+        self.assertEqual(cycle.status, PerformanceCycleStatus.OPEN)
+
+        close_response = self.client.post(
+            f"/api/company/hr/performance/cycles/{cycle.id}/close/",
+            data={},
+            content_type="application/json",
+        )
+        self.assertEqual(close_response.status_code, 200)
+        cycle.refresh_from_db()
+        self.assertEqual(cycle.status, PerformanceCycleStatus.CLOSED)
+
+    def test_cancel_performance_cycle_api(self):
+        cycle = PerformanceCycle.objects.create(
+            company=self.company,
+            name="2026 Annual Review",
+            code="ANN-2026",
+            start_date="2026-01-01",
+            end_date="2026-12-31",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        response = self.client.post(
+            f"/api/company/hr/performance/cycles/{cycle.id}/cancel/",
+            data={"note": "Cancelled by admin"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        cycle.refresh_from_db()
+        self.assertEqual(cycle.status, PerformanceCycleStatus.CANCELLED)
+
+    def test_performance_cycle_cross_company_blocked(self):
+        other_cycle = PerformanceCycle.objects.create(
+            company=self.other_company,
+            name="Other Review",
+            code="OTHER-2026",
+            start_date="2026-01-01",
+            end_date="2026-12-31",
+        )
+
+        response = self.client.get(
+            f"/api/company/hr/performance/cycles/{other_cycle.id}/"
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_viewer_cannot_create_performance_cycle(self):
+        self.client.force_login(self.viewer)
+
+        response = self.client.post(
+            "/api/company/hr/performance/cycles/create/",
+            data={
+                "name": "Viewer Review",
+                "code": "VIEWER-2026",
+                "start_date": "2026-01-01",
+                "end_date": "2026-12-31",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+# ============================================================
+# ?? Performance Criteria API Tests
+# ============================================================
+
+
+class PerformanceCriteriaAPITests(TestCase):
+    def setUp(self):
+        self.client = Client()
+
+        self.company = Company.objects.create(
+            name="Performance Criteria Company",
+            company_code="PERF-CRIT-001",
+        )
+        self.other_company = Company.objects.create(
+            name="Other Performance Criteria Company",
+            company_code="PERF-CRIT-002",
+        )
+
+        self.user = User.objects.create_user(
+            username="criteria-hr",
+            email="criteria-hr@example.com",
+            password="pass12345",
+        )
+        CompanyMembership.objects.create(
+            user=self.user,
+            company=self.company,
+            role=CompanyRole.HR,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+        )
+
+        self.viewer = User.objects.create_user(
+            username="criteria-viewer",
+            email="criteria-viewer@example.com",
+            password="pass12345",
+        )
+        CompanyMembership.objects.create(
+            user=self.viewer,
+            company=self.company,
+            role=CompanyRole.VIEWER,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+        )
+
+        self.client.force_login(self.user)
+
+    def test_create_performance_criterion_api(self):
+        response = self.client.post(
+            "/api/company/hr/performance/criteria/create/",
+            data={
+                "name": "Quality of Work",
+                "code": "QUALITY",
+                "description": "Work quality and accuracy",
+                "max_score": "5.00",
+                "weight": "40.0000",
+                "sort_order": 1,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["criterion"]["code"], "QUALITY")
+        self.assertEqual(
+            PerformanceCriterion.objects.filter(company=self.company).count(),
+            1,
+        )
+
+    def test_list_performance_criteria_api(self):
+        PerformanceCriterion.objects.create(
+            company=self.company,
+            name="Quality of Work",
+            code="QUALITY",
+            max_score="5.00",
+            weight="40.0000",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        PerformanceCriterion.objects.create(
+            company=self.other_company,
+            name="Other Criterion",
+            code="OTHER",
+            max_score="5.00",
+            weight="20.0000",
+        )
+
+        response = self.client.get("/api/company/hr/performance/criteria/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(len(payload["results"]), 1)
+        self.assertEqual(payload["results"][0]["code"], "QUALITY")
+
+    def test_detail_performance_criterion_api(self):
+        criterion = PerformanceCriterion.objects.create(
+            company=self.company,
+            name="Quality of Work",
+            code="QUALITY",
+            max_score="5.00",
+            weight="40.0000",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        response = self.client.get(
+            f"/api/company/hr/performance/criteria/{criterion.id}/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["criterion"]["id"], criterion.id)
+
+    def test_update_performance_criterion_api(self):
+        criterion = PerformanceCriterion.objects.create(
+            company=self.company,
+            name="Quality of Work",
+            code="QUALITY",
+            max_score="5.00",
+            weight="40.0000",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        response = self.client.post(
+            f"/api/company/hr/performance/criteria/{criterion.id}/update/",
+            data={
+                "name": "Updated Quality",
+                "weight": "50.0000",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        criterion.refresh_from_db()
+        self.assertEqual(criterion.name, "Updated Quality")
+        self.assertEqual(str(criterion.weight), "50.0000")
+
+    def test_activate_deactivate_performance_criterion_api(self):
+        criterion = PerformanceCriterion.objects.create(
+            company=self.company,
+            name="Quality of Work",
+            code="QUALITY",
+            max_score="5.00",
+            weight="40.0000",
+            is_active=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        deactivate_response = self.client.post(
+            f"/api/company/hr/performance/criteria/{criterion.id}/deactivate/",
+            data={},
+            content_type="application/json",
+        )
+        self.assertEqual(deactivate_response.status_code, 200)
+        criterion.refresh_from_db()
+        self.assertFalse(criterion.is_active)
+
+        activate_response = self.client.post(
+            f"/api/company/hr/performance/criteria/{criterion.id}/activate/",
+            data={},
+            content_type="application/json",
+        )
+        self.assertEqual(activate_response.status_code, 200)
+        criterion.refresh_from_db()
+        self.assertTrue(criterion.is_active)
+
+    def test_performance_criterion_cross_company_blocked(self):
+        other_criterion = PerformanceCriterion.objects.create(
+            company=self.other_company,
+            name="Other Criterion",
+            code="OTHER",
+            max_score="5.00",
+            weight="20.0000",
+        )
+
+        response = self.client.get(
+            f"/api/company/hr/performance/criteria/{other_criterion.id}/"
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_viewer_cannot_create_performance_criterion(self):
+        self.client.force_login(self.viewer)
+
+        response = self.client.post(
+            "/api/company/hr/performance/criteria/create/",
+            data={
+                "name": "Viewer Criterion",
+                "code": "VIEWER",
+                "max_score": "5.00",
+                "weight": "10.0000",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+# ============================================================
+# ?? Performance Reviews API Tests
+# ============================================================
+
+
+class PerformanceReviewsAPITests(TestCase):
+    def setUp(self):
+        self.client = Client()
+
+        self.company = Company.objects.create(
+            name="Performance Reviews Company",
+            company_code="PERF-REV-001",
+        )
+        self.other_company = Company.objects.create(
+            name="Other Performance Reviews Company",
+            company_code="PERF-REV-002",
+        )
+
+        self.user = User.objects.create_user(
+            username="reviews-hr",
+            email="reviews-hr@example.com",
+            password="pass12345",
+        )
+        CompanyMembership.objects.create(
+            user=self.user,
+            company=self.company,
+            role=CompanyRole.HR,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+        )
+
+        self.viewer = User.objects.create_user(
+            username="reviews-viewer",
+            email="reviews-viewer@example.com",
+            password="pass12345",
+        )
+        CompanyMembership.objects.create(
+            user=self.viewer,
+            company=self.company,
+            role=CompanyRole.VIEWER,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+        )
+
+        self.employee = Employee.objects.create(
+            company=self.company,
+            employee_number="EMP-REV-001",
+            first_name="Review",
+            last_name="Employee",
+            job_title="Accountant",
+            department_name="Finance",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.other_employee = Employee.objects.create(
+            company=self.other_company,
+            employee_number="EMP-REV-OTHER",
+            first_name="Other",
+            last_name="Employee",
+        )
+
+        self.cycle = PerformanceCycle.objects.create(
+            company=self.company,
+            name="2026 Annual Review",
+            code="ANN-2026",
+            start_date="2026-01-01",
+            end_date="2026-12-31",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.other_cycle = PerformanceCycle.objects.create(
+            company=self.other_company,
+            name="Other Annual Review",
+            code="OTHER-ANN-2026",
+            start_date="2026-01-01",
+            end_date="2026-12-31",
+        )
+
+        self.client.force_login(self.user)
+
+    def test_create_performance_review_api(self):
+        response = self.client.post(
+            "/api/company/hr/performance/reviews/create/",
+            data={
+                "cycle_id": self.cycle.id,
+                "employee_id": self.employee.id,
+                "review_date": "2026-06-30",
+                "final_rating": "Good",
+                "reviewer_comments": "Initial review",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["review"]["employee_id"], self.employee.id)
+        self.assertEqual(payload["review"]["cycle_id"], self.cycle.id)
+        self.assertEqual(
+            EmployeePerformanceReview.objects.filter(company=self.company).count(),
+            1,
+        )
+
+    def test_list_performance_reviews_api(self):
+        EmployeePerformanceReview.objects.create(
+            company=self.company,
+            cycle=self.cycle,
+            employee=self.employee,
+            reviewer=self.user,
+            review_date="2026-06-30",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        EmployeePerformanceReview.objects.create(
+            company=self.other_company,
+            cycle=self.other_cycle,
+            employee=self.other_employee,
+            review_date="2026-06-30",
+        )
+
+        response = self.client.get("/api/company/hr/performance/reviews/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(len(payload["results"]), 1)
+        self.assertEqual(payload["results"][0]["employee_id"], self.employee.id)
+
+    def test_detail_performance_review_api(self):
+        review = EmployeePerformanceReview.objects.create(
+            company=self.company,
+            cycle=self.cycle,
+            employee=self.employee,
+            reviewer=self.user,
+            review_date="2026-06-30",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        response = self.client.get(
+            f"/api/company/hr/performance/reviews/{review.id}/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["review"]["id"], review.id)
+        self.assertIn("scores", payload["review"])
+
+    def test_update_performance_review_api(self):
+        review = EmployeePerformanceReview.objects.create(
+            company=self.company,
+            cycle=self.cycle,
+            employee=self.employee,
+            reviewer=self.user,
+            review_date="2026-06-30",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        response = self.client.post(
+            f"/api/company/hr/performance/reviews/{review.id}/update/",
+            data={
+                "final_rating": "Excellent",
+                "reviewer_comments": "Updated comments",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        review.refresh_from_db()
+        self.assertEqual(review.final_rating, "Excellent")
+        self.assertEqual(review.reviewer_comments, "Updated comments")
+
+    def test_submit_approve_performance_review_api(self):
+        review = EmployeePerformanceReview.objects.create(
+            company=self.company,
+            cycle=self.cycle,
+            employee=self.employee,
+            reviewer=self.user,
+            review_date="2026-06-30",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        submit_response = self.client.post(
+            f"/api/company/hr/performance/reviews/{review.id}/submit/",
+            data={},
+            content_type="application/json",
+        )
+        self.assertEqual(submit_response.status_code, 200)
+        review.refresh_from_db()
+        self.assertEqual(review.status, PerformanceReviewStatus.SUBMITTED)
+
+        approve_response = self.client.post(
+            f"/api/company/hr/performance/reviews/{review.id}/approve/",
+            data={"note": "Approved by HR"},
+            content_type="application/json",
+        )
+        self.assertEqual(approve_response.status_code, 200)
+        review.refresh_from_db()
+        self.assertEqual(review.status, PerformanceReviewStatus.APPROVED)
+
+    def test_cancel_performance_review_api(self):
+        review = EmployeePerformanceReview.objects.create(
+            company=self.company,
+            cycle=self.cycle,
+            employee=self.employee,
+            reviewer=self.user,
+            review_date="2026-06-30",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        response = self.client.post(
+            f"/api/company/hr/performance/reviews/{review.id}/cancel/",
+            data={"note": "Cancelled by HR"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        review.refresh_from_db()
+        self.assertEqual(review.status, PerformanceReviewStatus.CANCELLED)
+
+    def test_performance_review_cross_company_blocked(self):
+        other_review = EmployeePerformanceReview.objects.create(
+            company=self.other_company,
+            cycle=self.other_cycle,
+            employee=self.other_employee,
+            review_date="2026-06-30",
+        )
+
+        response = self.client.get(
+            f"/api/company/hr/performance/reviews/{other_review.id}/"
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_viewer_cannot_create_performance_review(self):
+        self.client.force_login(self.viewer)
+
+        response = self.client.post(
+            "/api/company/hr/performance/reviews/create/",
+            data={
+                "cycle_id": self.cycle.id,
+                "employee_id": self.employee.id,
+                "review_date": "2026-06-30",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+# ============================================================
+# ?? Performance Scores API Tests
+# ============================================================
+
+
+class PerformanceScoresAPITests(TestCase):
+    def setUp(self):
+        self.client = Client()
+
+        self.company = Company.objects.create(
+            name="Performance Scores Company",
+            company_code="PERF-SCORE-001",
+        )
+        self.other_company = Company.objects.create(
+            name="Other Performance Scores Company",
+            company_code="PERF-SCORE-002",
+        )
+
+        self.user = User.objects.create_user(
+            username="scores-hr",
+            email="scores-hr@example.com",
+            password="pass12345",
+        )
+        CompanyMembership.objects.create(
+            user=self.user,
+            company=self.company,
+            role=CompanyRole.HR,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+        )
+
+        self.viewer = User.objects.create_user(
+            username="scores-viewer",
+            email="scores-viewer@example.com",
+            password="pass12345",
+        )
+        CompanyMembership.objects.create(
+            user=self.viewer,
+            company=self.company,
+            role=CompanyRole.VIEWER,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+        )
+
+        self.employee = Employee.objects.create(
+            company=self.company,
+            employee_number="EMP-SCORE-001",
+            first_name="Score",
+            last_name="Employee",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.other_employee = Employee.objects.create(
+            company=self.other_company,
+            employee_number="EMP-SCORE-OTHER",
+            first_name="Other",
+            last_name="Employee",
+        )
+
+        self.cycle = PerformanceCycle.objects.create(
+            company=self.company,
+            name="2026 Annual Review",
+            code="ANN-SCORE-2026",
+            start_date="2026-01-01",
+            end_date="2026-12-31",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.other_cycle = PerformanceCycle.objects.create(
+            company=self.other_company,
+            name="Other Annual Review",
+            code="OTHER-SCORE-2026",
+            start_date="2026-01-01",
+            end_date="2026-12-31",
+        )
+
+        self.review = EmployeePerformanceReview.objects.create(
+            company=self.company,
+            cycle=self.cycle,
+            employee=self.employee,
+            reviewer=self.user,
+            review_date="2026-06-30",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.other_review = EmployeePerformanceReview.objects.create(
+            company=self.other_company,
+            cycle=self.other_cycle,
+            employee=self.other_employee,
+            review_date="2026-06-30",
+        )
+
+        self.criterion = PerformanceCriterion.objects.create(
+            company=self.company,
+            name="Quality",
+            code="QUALITY-SCORE",
+            max_score="5.00",
+            weight="50.0000",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.other_criterion = PerformanceCriterion.objects.create(
+            company=self.other_company,
+            name="Other Quality",
+            code="OTHER-QUALITY-SCORE",
+            max_score="5.00",
+            weight="50.0000",
+        )
+
+        self.client.force_login(self.user)
+
+    def test_create_performance_score_api(self):
+        response = self.client.post(
+            "/api/company/hr/performance/scores/create/",
+            data={
+                "review_id": self.review.id,
+                "criterion_id": self.criterion.id,
+                "score": "4.0000",
+                "comments": "Good quality",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["score"]["review_id"], self.review.id)
+        self.assertEqual(payload["score"]["criterion_id"], self.criterion.id)
+        self.assertEqual(
+            PerformanceReviewScore.objects.filter(company=self.company).count(),
+            1,
+        )
+
+        self.review.refresh_from_db()
+        self.assertGreater(self.review.overall_score, 0)
+
+    def test_list_performance_scores_api(self):
+        PerformanceReviewScore.objects.create(
+            company=self.company,
+            review=self.review,
+            criterion=self.criterion,
+            score="4.0000",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        PerformanceReviewScore.objects.create(
+            company=self.other_company,
+            review=self.other_review,
+            criterion=self.other_criterion,
+            score="3.0000",
+        )
+
+        response = self.client.get(
+            f"/api/company/hr/performance/scores/?review_id={self.review.id}"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(len(payload["results"]), 1)
+
+    def test_detail_performance_score_api(self):
+        score = PerformanceReviewScore.objects.create(
+            company=self.company,
+            review=self.review,
+            criterion=self.criterion,
+            score="4.0000",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        response = self.client.get(
+            f"/api/company/hr/performance/scores/{score.id}/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["score"]["id"], score.id)
+
+    def test_update_performance_score_api(self):
+        score = PerformanceReviewScore.objects.create(
+            company=self.company,
+            review=self.review,
+            criterion=self.criterion,
+            score="3.0000",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        response = self.client.post(
+            f"/api/company/hr/performance/scores/{score.id}/update/",
+            data={
+                "score": "5.0000",
+                "comments": "Excellent",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        score.refresh_from_db()
+        self.assertEqual(str(score.score), "5.0000")
+        self.assertEqual(score.comments, "Excellent")
+
+    def test_delete_performance_score_api(self):
+        score = PerformanceReviewScore.objects.create(
+            company=self.company,
+            review=self.review,
+            criterion=self.criterion,
+            score="4.0000",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        response = self.client.post(
+            f"/api/company/hr/performance/scores/{score.id}/delete/",
+            data={},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            PerformanceReviewScore.objects.filter(id=score.id).exists()
+        )
+
+    def test_performance_score_cross_company_blocked(self):
+        score = PerformanceReviewScore.objects.create(
+            company=self.other_company,
+            review=self.other_review,
+            criterion=self.other_criterion,
+            score="4.0000",
+        )
+
+        response = self.client.get(
+            f"/api/company/hr/performance/scores/{score.id}/"
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_viewer_cannot_create_performance_score(self):
+        self.client.force_login(self.viewer)
+
+        response = self.client.post(
+            "/api/company/hr/performance/scores/create/",
+            data={
+                "review_id": self.review.id,
+                "criterion_id": self.criterion.id,
+                "score": "4.0000",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+
+# ============================================================
+# ?? Employee Goals API Tests
+# ============================================================
+
+
+class EmployeeGoalsAPITests(TestCase):
+    def setUp(self):
+        self.client = Client()
+
+        self.company = Company.objects.create(
+            name="Employee Goals Company",
+            company_code="GOALS-001",
+        )
+        self.other_company = Company.objects.create(
+            name="Other Employee Goals Company",
+            company_code="GOALS-002",
+        )
+
+        self.user = User.objects.create_user(
+            username="goals-hr",
+            email="goals-hr@example.com",
+            password="pass12345",
+        )
+        CompanyMembership.objects.create(
+            user=self.user,
+            company=self.company,
+            role=CompanyRole.HR,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+        )
+
+        self.viewer = User.objects.create_user(
+            username="goals-viewer",
+            email="goals-viewer@example.com",
+            password="pass12345",
+        )
+        CompanyMembership.objects.create(
+            user=self.viewer,
+            company=self.company,
+            role=CompanyRole.VIEWER,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+        )
+
+        self.employee = Employee.objects.create(
+            company=self.company,
+            employee_number="EMP-GOAL-001",
+            first_name="Goal",
+            last_name="Employee",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.other_employee = Employee.objects.create(
+            company=self.other_company,
+            employee_number="EMP-GOAL-OTHER",
+            first_name="Other",
+            last_name="Employee",
+        )
+
+        self.cycle = PerformanceCycle.objects.create(
+            company=self.company,
+            name="2026 Goals Cycle",
+            code="GOALS-2026",
+            start_date="2026-01-01",
+            end_date="2026-12-31",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.other_cycle = PerformanceCycle.objects.create(
+            company=self.other_company,
+            name="Other Goals Cycle",
+            code="OTHER-GOALS-2026",
+            start_date="2026-01-01",
+            end_date="2026-12-31",
+        )
+
+        self.client.force_login(self.user)
+
+    def test_create_employee_goal_api(self):
+        response = self.client.post(
+            "/api/company/hr/performance/goals/create/",
+            data={
+                "employee_id": self.employee.id,
+                "cycle_id": self.cycle.id,
+                "title": "Improve monthly closing",
+                "description": "Close monthly accounting faster",
+                "target_value": "Close in 3 days",
+                "priority": "HIGH",
+                "start_date": "2026-01-01",
+                "due_date": "2026-03-31",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["goal"]["employee_id"], self.employee.id)
+        self.assertEqual(payload["goal"]["title"], "Improve monthly closing")
+        self.assertEqual(
+            EmployeeGoal.objects.filter(company=self.company).count(),
+            1,
+        )
+
+    def test_list_employee_goals_api(self):
+        EmployeeGoal.objects.create(
+            company=self.company,
+            employee=self.employee,
+            cycle=self.cycle,
+            title="Improve monthly closing",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        EmployeeGoal.objects.create(
+            company=self.other_company,
+            employee=self.other_employee,
+            cycle=self.other_cycle,
+            title="Other Goal",
+        )
+
+        response = self.client.get("/api/company/hr/performance/goals/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(len(payload["results"]), 1)
+        self.assertEqual(payload["results"][0]["title"], "Improve monthly closing")
+
+    def test_detail_employee_goal_api(self):
+        goal = EmployeeGoal.objects.create(
+            company=self.company,
+            employee=self.employee,
+            cycle=self.cycle,
+            title="Improve monthly closing",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        response = self.client.get(
+            f"/api/company/hr/performance/goals/{goal.id}/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["goal"]["id"], goal.id)
+
+    def test_update_employee_goal_api(self):
+        goal = EmployeeGoal.objects.create(
+            company=self.company,
+            employee=self.employee,
+            cycle=self.cycle,
+            title="Improve monthly closing",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        response = self.client.post(
+            f"/api/company/hr/performance/goals/{goal.id}/update/",
+            data={
+                "title": "Updated goal",
+                "progress_percentage": "50.00",
+                "actual_value": "Half completed",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        goal.refresh_from_db()
+        self.assertEqual(goal.title, "Updated goal")
+        self.assertEqual(str(goal.progress_percentage), "50.00")
+
+    def test_activate_complete_employee_goal_api(self):
+        goal = EmployeeGoal.objects.create(
+            company=self.company,
+            employee=self.employee,
+            cycle=self.cycle,
+            title="Improve monthly closing",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        activate_response = self.client.post(
+            f"/api/company/hr/performance/goals/{goal.id}/activate/",
+            data={},
+            content_type="application/json",
+        )
+        self.assertEqual(activate_response.status_code, 200)
+        goal.refresh_from_db()
+        self.assertEqual(goal.status, PerformanceGoalStatus.ACTIVE)
+
+        complete_response = self.client.post(
+            f"/api/company/hr/performance/goals/{goal.id}/complete/",
+            data={"note": "Completed successfully"},
+            content_type="application/json",
+        )
+        self.assertEqual(complete_response.status_code, 200)
+        goal.refresh_from_db()
+        self.assertEqual(goal.status, PerformanceGoalStatus.COMPLETED)
+        self.assertEqual(str(goal.progress_percentage), "100.00")
+
+    def test_cancel_employee_goal_api(self):
+        goal = EmployeeGoal.objects.create(
+            company=self.company,
+            employee=self.employee,
+            cycle=self.cycle,
+            title="Improve monthly closing",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        response = self.client.post(
+            f"/api/company/hr/performance/goals/{goal.id}/cancel/",
+            data={"note": "Cancelled by HR"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        goal.refresh_from_db()
+        self.assertEqual(goal.status, PerformanceGoalStatus.CANCELLED)
+
+    def test_employee_goal_cross_company_blocked(self):
+        goal = EmployeeGoal.objects.create(
+            company=self.other_company,
+            employee=self.other_employee,
+            cycle=self.other_cycle,
+            title="Other Goal",
+        )
+
+        response = self.client.get(
+            f"/api/company/hr/performance/goals/{goal.id}/"
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_viewer_cannot_create_employee_goal(self):
+        self.client.force_login(self.viewer)
+
+        response = self.client.post(
+            "/api/company/hr/performance/goals/create/",
+            data={
+                "employee_id": self.employee.id,
+                "cycle_id": self.cycle.id,
+                "title": "Viewer Goal",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 403)
 

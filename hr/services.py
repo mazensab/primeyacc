@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 hr/services.py
-# 🧠 PrimeyAcc | HR Services V1.3
+# 🧠 PrimeyAcc | HR Services V1.4
 # ------------------------------------------------------------
 # ✅ Employee create/update services
 # ✅ Tenant-safe branch validation
@@ -55,6 +55,14 @@ from .models import (
     PayrollRunStatus,
     Payslip,
     PayslipItem,
+    PerformanceCriterion,
+    PerformanceCycle,
+    PerformanceCycleStatus,
+    EmployeePerformanceReview,
+    EmployeeGoal,
+    PerformanceGoalStatus,
+    PerformanceReviewScore,
+    PerformanceReviewStatus,
     SalaryComponent,
     SalaryComponentType,
 )
@@ -1537,3 +1545,684 @@ def cancel_payroll_run(
             )
 
     return payroll_run
+
+# ============================================================
+# ?? Performance & Appraisals Foundation Services
+# ============================================================
+
+
+def validate_performance_employee(*, company: Company, employee: Employee) -> None:
+    """
+    Ensure performance employee belongs to current company.
+    """
+
+    if employee.company_id != company.id:
+        raise ValidationError(
+            {"employee": "Employee must belong to the current company."}
+        )
+
+
+def validate_performance_cycle(*, company: Company, cycle: PerformanceCycle) -> None:
+    """
+    Ensure performance cycle belongs to current company.
+    """
+
+    if cycle.company_id != company.id:
+        raise ValidationError(
+            {"cycle": "Performance cycle must belong to the current company."}
+        )
+
+
+def validate_performance_criterion(
+    *,
+    company: Company,
+    criterion: PerformanceCriterion,
+) -> None:
+    """
+    Ensure performance criterion belongs to current company.
+    """
+
+    if criterion.company_id != company.id:
+        raise ValidationError(
+            {"criterion": "Performance criterion must belong to the current company."}
+        )
+
+
+def validate_performance_review(
+    *,
+    company: Company,
+    review: EmployeePerformanceReview,
+) -> None:
+    """
+    Ensure performance review belongs to current company.
+    """
+
+    if review.company_id != company.id:
+        raise ValidationError(
+            {"review": "Performance review must belong to the current company."}
+        )
+
+
+def validate_performance_review_entities(
+    *,
+    company: Company,
+    cycle: PerformanceCycle,
+    employee: Employee,
+) -> None:
+    """
+    Ensure performance review entities are tenant-safe.
+    """
+
+    validate_performance_cycle(company=company, cycle=cycle)
+    validate_performance_employee(company=company, employee=employee)
+
+
+def validate_performance_score_entities(
+    *,
+    company: Company,
+    review: EmployeePerformanceReview,
+    criterion: PerformanceCriterion,
+) -> None:
+    """
+    Ensure performance score entities are tenant-safe.
+    """
+
+    validate_performance_review(company=company, review=review)
+    validate_performance_criterion(company=company, criterion=criterion)
+
+
+def validate_employee_goal_entities(
+    *,
+    company: Company,
+    employee: Employee,
+    cycle: PerformanceCycle | None = None,
+) -> None:
+    """
+    Ensure employee goal entities are tenant-safe.
+    """
+
+    validate_performance_employee(company=company, employee=employee)
+
+    if cycle:
+        validate_performance_cycle(company=company, cycle=cycle)
+
+
+# ============================================================
+# ?? Performance Cycle Services
+# ============================================================
+
+
+@transaction.atomic
+def create_performance_cycle(
+    *,
+    company: Company,
+    created_by,
+    data: dict[str, Any],
+) -> PerformanceCycle:
+    """
+    Create company-scoped performance cycle.
+    """
+
+    data = dict(data or {})
+    data.pop("company", None)
+
+    cycle = PerformanceCycle(
+        company=company,
+        created_by=created_by,
+        updated_by=created_by,
+        **data,
+    )
+    cycle.full_clean()
+    cycle.save()
+
+    return cycle
+
+
+@transaction.atomic
+def update_performance_cycle(
+    *,
+    cycle: PerformanceCycle,
+    updated_by,
+    data: dict[str, Any],
+) -> PerformanceCycle:
+    """
+    Update performance cycle without changing company.
+    """
+
+    data = dict(data or {})
+    data.pop("company", None)
+
+    for field_name, value in data.items():
+        setattr(cycle, field_name, value)
+
+    cycle.updated_by = updated_by
+    cycle.full_clean()
+    cycle.save()
+
+    return cycle
+
+
+@transaction.atomic
+def open_performance_cycle(
+    *,
+    cycle: PerformanceCycle,
+    updated_by,
+) -> PerformanceCycle:
+    """
+    Open performance cycle.
+    """
+
+    return cycle.open(user=updated_by)
+
+
+@transaction.atomic
+def close_performance_cycle(
+    *,
+    cycle: PerformanceCycle,
+    updated_by,
+) -> PerformanceCycle:
+    """
+    Close performance cycle.
+    """
+
+    return cycle.close(user=updated_by)
+
+
+@transaction.atomic
+def cancel_performance_cycle(
+    *,
+    cycle: PerformanceCycle,
+    cancelled_by,
+    note: str = "",
+) -> PerformanceCycle:
+    """
+    Cancel performance cycle.
+    """
+
+    return cycle.cancel(user=cancelled_by, note=note)
+
+
+# ============================================================
+# ?? Performance Criteria Services
+# ============================================================
+
+
+@transaction.atomic
+def create_performance_criterion(
+    *,
+    company: Company,
+    created_by,
+    data: dict[str, Any],
+) -> PerformanceCriterion:
+    """
+    Create company-scoped performance criterion.
+    """
+
+    data = dict(data or {})
+    data.pop("company", None)
+
+    criterion = PerformanceCriterion(
+        company=company,
+        created_by=created_by,
+        updated_by=created_by,
+        **data,
+    )
+    criterion.full_clean()
+    criterion.save()
+
+    return criterion
+
+
+@transaction.atomic
+def update_performance_criterion(
+    *,
+    criterion: PerformanceCriterion,
+    updated_by,
+    data: dict[str, Any],
+) -> PerformanceCriterion:
+    """
+    Update performance criterion without changing company.
+    """
+
+    data = dict(data or {})
+    data.pop("company", None)
+
+    for field_name, value in data.items():
+        setattr(criterion, field_name, value)
+
+    criterion.updated_by = updated_by
+    criterion.full_clean()
+    criterion.save()
+
+    return criterion
+
+
+@transaction.atomic
+def activate_performance_criterion(
+    *,
+    criterion: PerformanceCriterion,
+    updated_by,
+) -> PerformanceCriterion:
+    """
+    Activate performance criterion.
+    """
+
+    criterion.is_active = True
+    criterion.updated_by = updated_by
+    criterion.full_clean()
+    criterion.save(
+        update_fields=[
+            "is_active",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+
+    return criterion
+
+
+@transaction.atomic
+def deactivate_performance_criterion(
+    *,
+    criterion: PerformanceCriterion,
+    updated_by,
+) -> PerformanceCriterion:
+    """
+    Deactivate performance criterion.
+    """
+
+    criterion.is_active = False
+    criterion.updated_by = updated_by
+    criterion.full_clean()
+    criterion.save(
+        update_fields=[
+            "is_active",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+
+    return criterion
+
+
+# ============================================================
+# ?? Employee Performance Review Services
+# ============================================================
+
+
+@transaction.atomic
+def create_employee_performance_review(
+    *,
+    company: Company,
+    cycle: PerformanceCycle,
+    employee: Employee,
+    created_by,
+    data: dict[str, Any],
+) -> EmployeePerformanceReview:
+    """
+    Create company-scoped employee performance review.
+    """
+
+    data = dict(data or {})
+    data.pop("company", None)
+    data.pop("cycle", None)
+    data.pop("employee", None)
+
+    validate_performance_review_entities(
+        company=company,
+        cycle=cycle,
+        employee=employee,
+    )
+
+    review = EmployeePerformanceReview(
+        company=company,
+        cycle=cycle,
+        employee=employee,
+        created_by=created_by,
+        updated_by=created_by,
+        **data,
+    )
+    review.full_clean()
+    review.save()
+
+    return review
+
+
+@transaction.atomic
+def update_employee_performance_review(
+    *,
+    review: EmployeePerformanceReview,
+    updated_by,
+    data: dict[str, Any],
+) -> EmployeePerformanceReview:
+    """
+    Update employee performance review without changing company.
+    """
+
+    data = dict(data or {})
+    data.pop("company", None)
+
+    if "cycle" in data:
+        validate_performance_cycle(
+            company=review.company,
+            cycle=data["cycle"],
+        )
+
+    if "employee" in data:
+        validate_performance_employee(
+            company=review.company,
+            employee=data["employee"],
+        )
+
+    for field_name, value in data.items():
+        setattr(review, field_name, value)
+
+    review.updated_by = updated_by
+    review.full_clean()
+    review.save()
+
+    return review
+
+
+def recalculate_performance_review_score(
+    *,
+    review: EmployeePerformanceReview,
+) -> EmployeePerformanceReview:
+    """
+    Recalculate review overall score from score lines.
+
+    Foundation formula:
+    - If total weights > 0: sum(weighted_score) / sum(weight)
+    - Else: average score
+    """
+
+    scores = PerformanceReviewScore.objects.filter(review=review)
+
+    total_weight = Decimal("0")
+    total_weighted_score = Decimal("0")
+    total_score = Decimal("0")
+    count = 0
+
+    for score_line in scores:
+        total_weight += _decimal(score_line.weight)
+        total_weighted_score += _decimal(score_line.weighted_score)
+        total_score += _decimal(score_line.score)
+        count += 1
+
+    if count == 0:
+        review.overall_score = Decimal("0")
+    elif total_weight > 0:
+        review.overall_score = total_weighted_score / total_weight
+    else:
+        review.overall_score = total_score / count
+
+    review.full_clean()
+    review.save(
+        update_fields=[
+            "overall_score",
+            "updated_at",
+        ]
+    )
+
+    return review
+
+
+@transaction.atomic
+def submit_employee_performance_review(
+    *,
+    review: EmployeePerformanceReview,
+    submitted_by,
+) -> EmployeePerformanceReview:
+    """
+    Submit draft employee performance review.
+    """
+
+    recalculate_performance_review_score(review=review)
+    return review.submit(user=submitted_by)
+
+
+@transaction.atomic
+def approve_employee_performance_review(
+    *,
+    review: EmployeePerformanceReview,
+    approved_by,
+    note: str = "",
+) -> EmployeePerformanceReview:
+    """
+    Approve submitted employee performance review.
+    """
+
+    recalculate_performance_review_score(review=review)
+    return review.approve(user=approved_by, note=note)
+
+
+@transaction.atomic
+def cancel_employee_performance_review(
+    *,
+    review: EmployeePerformanceReview,
+    cancelled_by,
+    note: str = "",
+) -> EmployeePerformanceReview:
+    """
+    Cancel employee performance review.
+    """
+
+    return review.cancel(user=cancelled_by, note=note)
+
+
+# ============================================================
+# ?? Performance Review Score Services
+# ============================================================
+
+
+@transaction.atomic
+def create_performance_review_score(
+    *,
+    company: Company,
+    review: EmployeePerformanceReview,
+    criterion: PerformanceCriterion,
+    created_by,
+    data: dict[str, Any],
+) -> PerformanceReviewScore:
+    """
+    Create score line for a performance review.
+    """
+
+    data = dict(data or {})
+    data.pop("company", None)
+    data.pop("review", None)
+    data.pop("criterion", None)
+
+    validate_performance_score_entities(
+        company=company,
+        review=review,
+        criterion=criterion,
+    )
+
+    score = PerformanceReviewScore(
+        company=company,
+        review=review,
+        criterion=criterion,
+        created_by=created_by,
+        updated_by=created_by,
+        **data,
+    )
+    score.full_clean()
+    score.save()
+
+    recalculate_performance_review_score(review=review)
+
+    return score
+
+
+@transaction.atomic
+def update_performance_review_score(
+    *,
+    score: PerformanceReviewScore,
+    updated_by,
+    data: dict[str, Any],
+) -> PerformanceReviewScore:
+    """
+    Update performance review score and recalculate review overall score.
+    """
+
+    data = dict(data or {})
+    data.pop("company", None)
+
+    if "review" in data:
+        validate_performance_review(
+            company=score.company,
+            review=data["review"],
+        )
+
+    if "criterion" in data:
+        validate_performance_criterion(
+            company=score.company,
+            criterion=data["criterion"],
+        )
+
+    for field_name, value in data.items():
+        setattr(score, field_name, value)
+
+    score.updated_by = updated_by
+    score.full_clean()
+    score.save()
+
+    recalculate_performance_review_score(review=score.review)
+
+    return score
+
+
+@transaction.atomic
+def delete_performance_review_score(
+    *,
+    score: PerformanceReviewScore,
+) -> EmployeePerformanceReview:
+    """
+    Delete score line and recalculate review score.
+    """
+
+    review = score.review
+    score.delete()
+    recalculate_performance_review_score(review=review)
+
+    return review
+
+
+# ============================================================
+# ?? Employee Goal Services
+# ============================================================
+
+
+@transaction.atomic
+def create_employee_goal(
+    *,
+    company: Company,
+    employee: Employee,
+    created_by,
+    data: dict[str, Any],
+) -> EmployeeGoal:
+    """
+    Create company-scoped employee goal.
+    """
+
+    data = dict(data or {})
+    data.pop("company", None)
+    data.pop("employee", None)
+
+    cycle = data.get("cycle")
+    validate_employee_goal_entities(
+        company=company,
+        employee=employee,
+        cycle=cycle,
+    )
+
+    goal = EmployeeGoal(
+        company=company,
+        employee=employee,
+        created_by=created_by,
+        updated_by=created_by,
+        **data,
+    )
+    goal.full_clean()
+    goal.save()
+
+    return goal
+
+
+@transaction.atomic
+def update_employee_goal(
+    *,
+    goal: EmployeeGoal,
+    updated_by,
+    data: dict[str, Any],
+) -> EmployeeGoal:
+    """
+    Update employee goal without changing company.
+    """
+
+    data = dict(data or {})
+    data.pop("company", None)
+
+    if "employee" in data:
+        validate_performance_employee(
+            company=goal.company,
+            employee=data["employee"],
+        )
+
+    if "cycle" in data and data["cycle"]:
+        validate_performance_cycle(
+            company=goal.company,
+            cycle=data["cycle"],
+        )
+
+    for field_name, value in data.items():
+        setattr(goal, field_name, value)
+
+    goal.updated_by = updated_by
+    goal.full_clean()
+    goal.save()
+
+    return goal
+
+
+@transaction.atomic
+def activate_employee_goal(
+    *,
+    goal: EmployeeGoal,
+    updated_by,
+) -> EmployeeGoal:
+    """
+    Activate employee goal.
+    """
+
+    return goal.activate(user=updated_by)
+
+
+@transaction.atomic
+def complete_employee_goal(
+    *,
+    goal: EmployeeGoal,
+    completed_by,
+    note: str = "",
+) -> EmployeeGoal:
+    """
+    Complete employee goal.
+    """
+
+    return goal.complete(user=completed_by, note=note)
+
+
+@transaction.atomic
+def cancel_employee_goal(
+    *,
+    goal: EmployeeGoal,
+    cancelled_by,
+    note: str = "",
+) -> EmployeeGoal:
+    """
+    Cancel employee goal.
+    """
+
+    return goal.cancel(user=cancelled_by, note=note)
+

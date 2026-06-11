@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 hr/models.py
-# 🧠 PrimeyAcc | HR Models V1.2
+# 🧠 PrimeyAcc | HR Models V1.3
 # ------------------------------------------------------------
 # ✅ HR employees foundation
 # ✅ Company-level tenant isolation
@@ -25,6 +25,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal, ROUND_HALF_UP
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -2353,4 +2354,1032 @@ class PayslipItem(models.Model):
 
         self.full_clean()
         super().save(*args, **kwargs)
+
+# ============================================================
+# ?? HR Performance & Appraisals Foundation Models
+# ============================================================
+
+
+class PerformanceCycleStatus(models.TextChoices):
+    DRAFT = "DRAFT", "Draft"
+    OPEN = "OPEN", "Open"
+    CLOSED = "CLOSED", "Closed"
+    CANCELLED = "CANCELLED", "Cancelled"
+
+
+class PerformanceReviewStatus(models.TextChoices):
+    DRAFT = "DRAFT", "Draft"
+    SUBMITTED = "SUBMITTED", "Submitted"
+    APPROVED = "APPROVED", "Approved"
+    CANCELLED = "CANCELLED", "Cancelled"
+
+
+class PerformanceGoalStatus(models.TextChoices):
+    DRAFT = "DRAFT", "Draft"
+    ACTIVE = "ACTIVE", "Active"
+    COMPLETED = "COMPLETED", "Completed"
+    CANCELLED = "CANCELLED", "Cancelled"
+
+
+class PerformanceGoalPriority(models.TextChoices):
+    LOW = "LOW", "Low"
+    MEDIUM = "MEDIUM", "Medium"
+    HIGH = "HIGH", "High"
+    CRITICAL = "CRITICAL", "Critical"
+
+
+class PerformanceCycle(models.Model):
+    """
+    Company-scoped performance review cycle.
+
+    Examples:
+    - 2026 Annual Review
+    - 2026 Q1 Performance Review
+    - Probation Evaluation Cycle
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="performance_cycles",
+        db_index=True,
+        verbose_name="Company",
+    )
+
+    name = models.CharField(
+        max_length=150,
+        db_index=True,
+        verbose_name="Name",
+    )
+    code = models.CharField(
+        max_length=50,
+        db_index=True,
+        verbose_name="Code",
+    )
+
+    start_date = models.DateField(
+        db_index=True,
+        verbose_name="Start date",
+    )
+    end_date = models.DateField(
+        db_index=True,
+        verbose_name="End date",
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=PerformanceCycleStatus.choices,
+        default=PerformanceCycleStatus.DRAFT,
+        db_index=True,
+        verbose_name="Status",
+    )
+
+    description = models.TextField(
+        blank=True,
+        verbose_name="Description",
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Internal notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_performance_cycles",
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_performance_cycles",
+        verbose_name="Updated by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Performance cycle"
+        verbose_name_plural = "Performance cycles"
+        ordering = ["company_id", "-start_date", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "code"],
+                name="uniq_perf_cycle_code_company",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "code"]),
+            models.Index(fields=["company", "status"]),
+            models.Index(fields=["company", "start_date", "end_date"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.company} - {self.code} - {self.name}"
+
+    def clean(self):
+        super().clean()
+
+        if self.end_date and self.start_date and self.end_date < self.start_date:
+            raise ValidationError(
+                {"end_date": "End date cannot be before start date."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.name = (self.name or "").strip()
+
+        if not self.code:
+            self.code = self.name
+
+        self.code = (self.code or "").strip().upper().replace(" ", "-")
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def open(self, *, user=None):
+        if self.status == PerformanceCycleStatus.CLOSED:
+            raise ValidationError(
+                {"status": "Closed performance cycles cannot be reopened."}
+            )
+
+        if self.status == PerformanceCycleStatus.CANCELLED:
+            raise ValidationError(
+                {"status": "Cancelled performance cycles cannot be opened."}
+            )
+
+        self.status = PerformanceCycleStatus.OPEN
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+    def close(self, *, user=None):
+        if self.status != PerformanceCycleStatus.OPEN:
+            raise ValidationError(
+                {"status": "Only open performance cycles can be closed."}
+            )
+
+        self.status = PerformanceCycleStatus.CLOSED
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+    def cancel(self, *, user=None, note: str = ""):
+        if self.status == PerformanceCycleStatus.CLOSED:
+            raise ValidationError(
+                {"status": "Closed performance cycles cannot be cancelled."}
+            )
+
+        self.status = PerformanceCycleStatus.CANCELLED
+        self.notes = note or self.notes
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "notes",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+
+class PerformanceCriterion(models.Model):
+    """
+    Company-scoped performance criterion.
+
+    Examples:
+    - Quality of Work
+    - Productivity
+    - Teamwork
+    - Attendance
+    - Leadership
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="performance_criteria",
+        db_index=True,
+        verbose_name="Company",
+    )
+
+    name = models.CharField(
+        max_length=150,
+        db_index=True,
+        verbose_name="Name",
+    )
+    code = models.CharField(
+        max_length=50,
+        db_index=True,
+        verbose_name="Code",
+    )
+    description = models.TextField(
+        blank=True,
+        verbose_name="Description",
+    )
+
+    max_score = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=5,
+        verbose_name="Maximum score",
+    )
+    weight = models.DecimalField(
+        max_digits=7,
+        decimal_places=4,
+        default=0,
+        verbose_name="Weight",
+        help_text="Weight percentage used in total performance score.",
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name="Active",
+    )
+    sort_order = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+        verbose_name="Sort order",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Internal notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_performance_criteria",
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_performance_criteria",
+        verbose_name="Updated by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Performance criterion"
+        verbose_name_plural = "Performance criteria"
+        ordering = ["company_id", "sort_order", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "code"],
+                name="uniq_perf_criterion_code_company",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "code"]),
+            models.Index(fields=["company", "is_active"]),
+            models.Index(fields=["company", "sort_order"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.company} - {self.code} - {self.name}"
+
+    def clean(self):
+        super().clean()
+
+        if self.max_score <= 0:
+            raise ValidationError(
+                {"max_score": "Maximum score must be greater than zero."}
+            )
+
+        if self.weight < 0:
+            raise ValidationError(
+                {"weight": "Weight cannot be negative."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.name = (self.name or "").strip()
+
+        if not self.code:
+            self.code = self.name
+
+        self.code = (self.code or "").strip().upper().replace(" ", "-")
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+class EmployeePerformanceReview(models.Model):
+    """
+    Company-scoped employee performance review.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="performance_reviews",
+        db_index=True,
+        verbose_name="Company",
+    )
+    cycle = models.ForeignKey(
+        PerformanceCycle,
+        on_delete=models.PROTECT,
+        related_name="reviews",
+        db_index=True,
+        verbose_name="Performance cycle",
+    )
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.PROTECT,
+        related_name="performance_reviews",
+        db_index=True,
+        verbose_name="Employee",
+    )
+
+    reviewer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="reviewed_performance_reviews",
+        verbose_name="Reviewer",
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=PerformanceReviewStatus.choices,
+        default=PerformanceReviewStatus.DRAFT,
+        db_index=True,
+        verbose_name="Status",
+    )
+
+    review_date = models.DateField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Review date",
+    )
+
+    overall_score = models.DecimalField(
+        max_digits=8,
+        decimal_places=4,
+        default=0,
+        db_index=True,
+        verbose_name="Overall score",
+    )
+    final_rating = models.CharField(
+        max_length=100,
+        blank=True,
+        db_index=True,
+        verbose_name="Final rating",
+    )
+
+    employee_comments = models.TextField(
+        blank=True,
+        verbose_name="Employee comments",
+    )
+    reviewer_comments = models.TextField(
+        blank=True,
+        verbose_name="Reviewer comments",
+    )
+    manager_comments = models.TextField(
+        blank=True,
+        verbose_name="Manager comments",
+    )
+
+    submitted_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Submitted at",
+    )
+    approved_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Approved at",
+    )
+    cancelled_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Cancelled at",
+    )
+
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="approved_performance_reviews",
+        verbose_name="Approved by",
+    )
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="cancelled_performance_reviews",
+        verbose_name="Cancelled by",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Internal notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_performance_reviews",
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_performance_reviews",
+        verbose_name="Updated by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Employee performance review"
+        verbose_name_plural = "Employee performance reviews"
+        ordering = ["company_id", "-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "cycle", "employee"],
+                name="uniq_perf_review_company_cycle_employee",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "cycle"]),
+            models.Index(fields=["company", "employee"]),
+            models.Index(fields=["company", "status"]),
+            models.Index(fields=["company", "review_date"]),
+            models.Index(fields=["overall_score"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.employee} - {self.cycle} - {self.status}"
+
+    def clean(self):
+        super().clean()
+
+        if self.cycle_id and self.company_id:
+            if self.cycle.company_id != self.company_id:
+                raise ValidationError(
+                    {"cycle": "Performance cycle must belong to the same company."}
+                )
+
+        if self.employee_id and self.company_id:
+            if self.employee.company_id != self.company_id:
+                raise ValidationError(
+                    {"employee": "Employee must belong to the same company."}
+                )
+
+        if self.overall_score < 0:
+            raise ValidationError(
+                {"overall_score": "Overall score cannot be negative."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.final_rating = (self.final_rating or "").strip()
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def submit(self, *, user=None):
+        if self.status != PerformanceReviewStatus.DRAFT:
+            raise ValidationError(
+                {"status": "Only draft performance reviews can be submitted."}
+            )
+
+        self.status = PerformanceReviewStatus.SUBMITTED
+        self.submitted_at = timezone.now()
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "submitted_at",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+    def approve(self, *, user=None, note: str = ""):
+        if self.status != PerformanceReviewStatus.SUBMITTED:
+            raise ValidationError(
+                {"status": "Only submitted performance reviews can be approved."}
+            )
+
+        self.status = PerformanceReviewStatus.APPROVED
+        self.approved_at = timezone.now()
+        self.approved_by = user
+        self.manager_comments = note or self.manager_comments
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "approved_at",
+                "approved_by",
+                "manager_comments",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+    def cancel(self, *, user=None, note: str = ""):
+        if self.status == PerformanceReviewStatus.APPROVED:
+            raise ValidationError(
+                {"status": "Approved performance reviews cannot be cancelled."}
+            )
+
+        self.status = PerformanceReviewStatus.CANCELLED
+        self.cancelled_at = timezone.now()
+        self.cancelled_by = user
+        self.manager_comments = note or self.manager_comments
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "cancelled_at",
+                "cancelled_by",
+                "manager_comments",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+
+class PerformanceReviewScore(models.Model):
+    """
+    Company-scoped score line for an employee performance review.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="performance_review_scores",
+        db_index=True,
+        verbose_name="Company",
+    )
+    review = models.ForeignKey(
+        EmployeePerformanceReview,
+        on_delete=models.CASCADE,
+        related_name="scores",
+        db_index=True,
+        verbose_name="Performance review",
+    )
+    criterion = models.ForeignKey(
+        PerformanceCriterion,
+        on_delete=models.PROTECT,
+        related_name="review_scores",
+        db_index=True,
+        verbose_name="Performance criterion",
+    )
+
+    score = models.DecimalField(
+        max_digits=8,
+        decimal_places=4,
+        default=0,
+        verbose_name="Score",
+    )
+    weight = models.DecimalField(
+        max_digits=7,
+        decimal_places=4,
+        default=0,
+        verbose_name="Weight",
+    )
+    weighted_score = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        default=0,
+        verbose_name="Weighted score",
+    )
+
+    comments = models.TextField(
+        blank=True,
+        verbose_name="Comments",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_performance_review_scores",
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_performance_review_scores",
+        verbose_name="Updated by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Performance review score"
+        verbose_name_plural = "Performance review scores"
+        ordering = ["company_id", "review_id", "criterion__sort_order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "review", "criterion"],
+                name="uniq_perf_score_company_review_criterion",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "review"]),
+            models.Index(fields=["company", "criterion"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.review} - {self.criterion} - {self.score}"
+
+    def clean(self):
+        super().clean()
+
+        if self.review_id and self.company_id:
+            if self.review.company_id != self.company_id:
+                raise ValidationError(
+                    {"review": "Performance review must belong to the same company."}
+                )
+
+        if self.criterion_id and self.company_id:
+            if self.criterion.company_id != self.company_id:
+                raise ValidationError(
+                    {"criterion": "Performance criterion must belong to the same company."}
+                )
+
+        if self.score < 0:
+            raise ValidationError(
+                {"score": "Score cannot be negative."}
+            )
+
+        if self.criterion_id and self.score > self.criterion.max_score:
+            raise ValidationError(
+                {"score": "Score cannot exceed criterion maximum score."}
+            )
+
+        if self.weight < 0:
+            raise ValidationError(
+                {"weight": "Weight cannot be negative."}
+            )
+
+        if self.weighted_score < 0:
+            raise ValidationError(
+                {"weighted_score": "Weighted score cannot be negative."}
+            )
+
+    def save(self, *args, **kwargs):
+        if self.criterion_id and not self.weight:
+            self.weight = self.criterion.weight
+
+        self.score = Decimal(str(self.score or "0")).quantize(
+            Decimal("0.0001"),
+            rounding=ROUND_HALF_UP,
+        )
+        self.weight = Decimal(str(self.weight or "0")).quantize(
+            Decimal("0.0001"),
+            rounding=ROUND_HALF_UP,
+        )
+        self.weighted_score = (
+            (self.score * self.weight) / Decimal("100")
+        ).quantize(
+            Decimal("0.0001"),
+            rounding=ROUND_HALF_UP,
+        )
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+class EmployeeGoal(models.Model):
+    """
+    Company-scoped employee goal/objective.
+
+    Goals can optionally be linked to a performance cycle.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="employee_goals",
+        db_index=True,
+        verbose_name="Company",
+    )
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name="performance_goals",
+        db_index=True,
+        verbose_name="Employee",
+    )
+    cycle = models.ForeignKey(
+        PerformanceCycle,
+        on_delete=models.SET_NULL,
+        related_name="goals",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Performance cycle",
+    )
+
+    title = models.CharField(
+        max_length=200,
+        db_index=True,
+        verbose_name="Title",
+    )
+    description = models.TextField(
+        blank=True,
+        verbose_name="Description",
+    )
+
+    target_value = models.CharField(
+        max_length=150,
+        blank=True,
+        verbose_name="Target value",
+    )
+    actual_value = models.CharField(
+        max_length=150,
+        blank=True,
+        verbose_name="Actual value",
+    )
+    progress_percentage = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=0,
+        db_index=True,
+        verbose_name="Progress percentage",
+    )
+
+    priority = models.CharField(
+        max_length=30,
+        choices=PerformanceGoalPriority.choices,
+        default=PerformanceGoalPriority.MEDIUM,
+        db_index=True,
+        verbose_name="Priority",
+    )
+    status = models.CharField(
+        max_length=30,
+        choices=PerformanceGoalStatus.choices,
+        default=PerformanceGoalStatus.DRAFT,
+        db_index=True,
+        verbose_name="Status",
+    )
+
+    start_date = models.DateField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Start date",
+    )
+    due_date = models.DateField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Due date",
+    )
+    completed_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Completed at",
+    )
+    cancelled_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Cancelled at",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Internal notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_employee_goals",
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_employee_goals",
+        verbose_name="Updated by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Employee goal"
+        verbose_name_plural = "Employee goals"
+        ordering = ["company_id", "employee_id", "-created_at"]
+        indexes = [
+            models.Index(fields=["company", "employee"]),
+            models.Index(fields=["company", "cycle"]),
+            models.Index(fields=["company", "status"]),
+            models.Index(fields=["company", "priority"]),
+            models.Index(fields=["company", "due_date"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.employee} - {self.title} - {self.status}"
+
+    def clean(self):
+        super().clean()
+
+        if self.employee_id and self.company_id:
+            if self.employee.company_id != self.company_id:
+                raise ValidationError(
+                    {"employee": "Employee must belong to the same company."}
+                )
+
+        if self.cycle_id and self.company_id:
+            if self.cycle.company_id != self.company_id:
+                raise ValidationError(
+                    {"cycle": "Performance cycle must belong to the same company."}
+                )
+
+        if self.due_date and self.start_date and self.due_date < self.start_date:
+            raise ValidationError(
+                {"due_date": "Due date cannot be before start date."}
+            )
+
+        if self.progress_percentage < 0 or self.progress_percentage > 100:
+            raise ValidationError(
+                {"progress_percentage": "Progress percentage must be between 0 and 100."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.title = (self.title or "").strip()
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def activate(self, *, user=None):
+        if self.status == PerformanceGoalStatus.CANCELLED:
+            raise ValidationError(
+                {"status": "Cancelled goals cannot be activated."}
+            )
+
+        if self.status == PerformanceGoalStatus.COMPLETED:
+            raise ValidationError(
+                {"status": "Completed goals cannot be activated."}
+            )
+
+        self.status = PerformanceGoalStatus.ACTIVE
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+    def complete(self, *, user=None, note: str = ""):
+        if self.status == PerformanceGoalStatus.CANCELLED:
+            raise ValidationError(
+                {"status": "Cancelled goals cannot be completed."}
+            )
+
+        self.status = PerformanceGoalStatus.COMPLETED
+        self.progress_percentage = 100
+        self.completed_at = timezone.now()
+        self.notes = note or self.notes
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "progress_percentage",
+                "completed_at",
+                "notes",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
+
+    def cancel(self, *, user=None, note: str = ""):
+        if self.status == PerformanceGoalStatus.COMPLETED:
+            raise ValidationError(
+                {"status": "Completed goals cannot be cancelled."}
+            )
+
+        self.status = PerformanceGoalStatus.CANCELLED
+        self.cancelled_at = timezone.now()
+        self.notes = note or self.notes
+        self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "cancelled_at",
+                "notes",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return self
 

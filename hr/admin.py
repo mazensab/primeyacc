@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 hr/admin.py
-# 🧠 PrimeyAcc | HR Admin V1.3
+# 🧠 PrimeyAcc | HR Admin V1.4
 # ------------------------------------------------------------
 # ✅ Employee admin registration
 # ✅ AttendanceRecord admin registration
@@ -32,6 +32,11 @@ from .models import (
     PayrollRun,
     Payslip,
     PayslipItem,
+    PerformanceCriterion,
+    PerformanceCycle,
+    EmployeePerformanceReview,
+    EmployeeGoal,
+    PerformanceReviewScore,
     SalaryComponent,
 )
 
@@ -1341,3 +1346,554 @@ class PayslipItemAdmin(admin.ModelAdmin):
             },
         ),
     ]
+
+
+# ============================================================
+# ?? Performance Cycles Admin
+# ============================================================
+
+
+@admin.register(PerformanceCycle)
+class PerformanceCycleAdmin(admin.ModelAdmin):
+    list_display = [
+        "name",
+        "code",
+        "company",
+        "start_date",
+        "end_date",
+        "status",
+        "created_at",
+    ]
+    list_filter = [
+        "company",
+        "status",
+        "start_date",
+        "end_date",
+        "created_at",
+    ]
+    search_fields = [
+        "name",
+        "code",
+        "company__name",
+        "company__name_ar",
+        "company__name_en",
+        "company__company_code",
+        "description",
+        "notes",
+    ]
+    readonly_fields = [
+        "created_at",
+        "updated_at",
+    ]
+    autocomplete_fields = [
+        "company",
+        "created_by",
+        "updated_by",
+    ]
+    date_hierarchy = "start_date"
+    ordering = [
+        "company",
+        "-start_date",
+        "-id",
+    ]
+    fieldsets = [
+        (
+            "Tenant",
+            {
+                "fields": [
+                    "company",
+                ]
+            },
+        ),
+        (
+            "Cycle",
+            {
+                "fields": [
+                    "name",
+                    "code",
+                    "start_date",
+                    "end_date",
+                    "status",
+                ]
+            },
+        ),
+        (
+            "Description",
+            {
+                "fields": [
+                    "description",
+                    "notes",
+                    "extra_data",
+                ]
+            },
+        ),
+        (
+            "Audit",
+            {
+                "fields": [
+                    "created_by",
+                    "updated_by",
+                    "created_at",
+                    "updated_at",
+                ]
+            },
+        ),
+    ]
+
+
+# ============================================================
+# ?? Performance Criteria Admin
+# ============================================================
+
+
+@admin.register(PerformanceCriterion)
+class PerformanceCriterionAdmin(admin.ModelAdmin):
+    list_display = [
+        "name",
+        "code",
+        "company",
+        "max_score",
+        "weight",
+        "is_active",
+        "sort_order",
+        "created_at",
+    ]
+    list_filter = [
+        "company",
+        "is_active",
+        "created_at",
+    ]
+    search_fields = [
+        "name",
+        "code",
+        "description",
+        "company__name",
+        "company__name_ar",
+        "company__name_en",
+        "company__company_code",
+        "notes",
+    ]
+    readonly_fields = [
+        "created_at",
+        "updated_at",
+    ]
+    autocomplete_fields = [
+        "company",
+        "created_by",
+        "updated_by",
+    ]
+    ordering = [
+        "company",
+        "sort_order",
+        "name",
+    ]
+    fieldsets = [
+        (
+            "Tenant",
+            {
+                "fields": [
+                    "company",
+                ]
+            },
+        ),
+        (
+            "Criterion",
+            {
+                "fields": [
+                    "name",
+                    "code",
+                    "description",
+                    "max_score",
+                    "weight",
+                    "sort_order",
+                    "is_active",
+                ]
+            },
+        ),
+        (
+            "Notes",
+            {
+                "fields": [
+                    "notes",
+                    "extra_data",
+                ]
+            },
+        ),
+        (
+            "Audit",
+            {
+                "fields": [
+                    "created_by",
+                    "updated_by",
+                    "created_at",
+                    "updated_at",
+                ]
+            },
+        ),
+    ]
+
+
+# ============================================================
+# ?? Performance Review Scores Inline/Admin
+# ============================================================
+
+
+class PerformanceReviewScoreInline(admin.TabularInline):
+    model = PerformanceReviewScore
+    extra = 0
+    fields = [
+        "criterion",
+        "score",
+        "weight",
+        "weighted_score",
+        "comments",
+    ]
+    readonly_fields = [
+        "weighted_score",
+    ]
+    autocomplete_fields = [
+        "criterion",
+    ]
+
+
+@admin.register(EmployeePerformanceReview)
+class EmployeePerformanceReviewAdmin(admin.ModelAdmin):
+    inlines = [
+        PerformanceReviewScoreInline,
+    ]
+    list_display = [
+        "employee",
+        "cycle",
+        "company",
+        "reviewer",
+        "status",
+        "review_date",
+        "overall_score",
+        "final_rating",
+        "submitted_at",
+        "approved_at",
+        "cancelled_at",
+        "created_at",
+    ]
+    list_filter = [
+        "company",
+        "cycle",
+        "status",
+        "review_date",
+        "submitted_at",
+        "approved_at",
+        "cancelled_at",
+        "created_at",
+    ]
+    search_fields = [
+        "employee__employee_number",
+        "employee__first_name",
+        "employee__middle_name",
+        "employee__last_name",
+        "employee__display_name",
+        "cycle__name",
+        "cycle__code",
+        "final_rating",
+        "employee_comments",
+        "reviewer_comments",
+        "manager_comments",
+        "company__name",
+        "company__name_ar",
+        "company__name_en",
+        "company__company_code",
+        "notes",
+    ]
+    readonly_fields = [
+        "submitted_at",
+        "approved_at",
+        "cancelled_at",
+        "created_at",
+        "updated_at",
+    ]
+    autocomplete_fields = [
+        "company",
+        "cycle",
+        "employee",
+        "reviewer",
+        "approved_by",
+        "cancelled_by",
+        "created_by",
+        "updated_by",
+    ]
+    date_hierarchy = "review_date"
+    ordering = [
+        "company",
+        "-created_at",
+        "-id",
+    ]
+    fieldsets = [
+        (
+            "Tenant",
+            {
+                "fields": [
+                    "company",
+                    "cycle",
+                    "employee",
+                    "reviewer",
+                ]
+            },
+        ),
+        (
+            "Review",
+            {
+                "fields": [
+                    "status",
+                    "review_date",
+                    "overall_score",
+                    "final_rating",
+                ]
+            },
+        ),
+        (
+            "Comments",
+            {
+                "fields": [
+                    "employee_comments",
+                    "reviewer_comments",
+                    "manager_comments",
+                    "notes",
+                    "extra_data",
+                ]
+            },
+        ),
+        (
+            "Workflow",
+            {
+                "fields": [
+                    "submitted_at",
+                    "approved_at",
+                    "approved_by",
+                    "cancelled_at",
+                    "cancelled_by",
+                ]
+            },
+        ),
+        (
+            "Audit",
+            {
+                "fields": [
+                    "created_by",
+                    "updated_by",
+                    "created_at",
+                    "updated_at",
+                ]
+            },
+        ),
+    ]
+
+
+@admin.register(PerformanceReviewScore)
+class PerformanceReviewScoreAdmin(admin.ModelAdmin):
+    list_display = [
+        "review",
+        "criterion",
+        "company",
+        "score",
+        "weight",
+        "weighted_score",
+        "created_at",
+    ]
+    list_filter = [
+        "company",
+        "criterion",
+        "created_at",
+    ]
+    search_fields = [
+        "review__employee__employee_number",
+        "review__employee__first_name",
+        "review__employee__last_name",
+        "review__employee__display_name",
+        "review__cycle__name",
+        "review__cycle__code",
+        "criterion__name",
+        "criterion__code",
+        "company__name",
+        "company__company_code",
+        "comments",
+    ]
+    readonly_fields = [
+        "weighted_score",
+        "created_at",
+        "updated_at",
+    ]
+    autocomplete_fields = [
+        "company",
+        "review",
+        "criterion",
+        "created_by",
+        "updated_by",
+    ]
+    ordering = [
+        "company",
+        "review",
+        "criterion",
+    ]
+    fieldsets = [
+        (
+            "Tenant",
+            {
+                "fields": [
+                    "company",
+                    "review",
+                    "criterion",
+                ]
+            },
+        ),
+        (
+            "Score",
+            {
+                "fields": [
+                    "score",
+                    "weight",
+                    "weighted_score",
+                    "comments",
+                    "extra_data",
+                ]
+            },
+        ),
+        (
+            "Audit",
+            {
+                "fields": [
+                    "created_by",
+                    "updated_by",
+                    "created_at",
+                    "updated_at",
+                ]
+            },
+        ),
+    ]
+
+
+# ============================================================
+# ?? Employee Goals Admin
+# ============================================================
+
+
+@admin.register(EmployeeGoal)
+class EmployeeGoalAdmin(admin.ModelAdmin):
+    list_display = [
+        "title",
+        "employee",
+        "company",
+        "cycle",
+        "priority",
+        "status",
+        "progress_percentage",
+        "start_date",
+        "due_date",
+        "completed_at",
+        "cancelled_at",
+        "created_at",
+    ]
+    list_filter = [
+        "company",
+        "cycle",
+        "priority",
+        "status",
+        "start_date",
+        "due_date",
+        "completed_at",
+        "cancelled_at",
+        "created_at",
+    ]
+    search_fields = [
+        "title",
+        "description",
+        "target_value",
+        "actual_value",
+        "employee__employee_number",
+        "employee__first_name",
+        "employee__middle_name",
+        "employee__last_name",
+        "employee__display_name",
+        "cycle__name",
+        "cycle__code",
+        "company__name",
+        "company__name_ar",
+        "company__name_en",
+        "company__company_code",
+        "notes",
+    ]
+    readonly_fields = [
+        "completed_at",
+        "cancelled_at",
+        "created_at",
+        "updated_at",
+    ]
+    autocomplete_fields = [
+        "company",
+        "employee",
+        "cycle",
+        "created_by",
+        "updated_by",
+    ]
+    date_hierarchy = "due_date"
+    ordering = [
+        "company",
+        "employee",
+        "-created_at",
+    ]
+    fieldsets = [
+        (
+            "Tenant",
+            {
+                "fields": [
+                    "company",
+                    "employee",
+                    "cycle",
+                ]
+            },
+        ),
+        (
+            "Goal",
+            {
+                "fields": [
+                    "title",
+                    "description",
+                    "target_value",
+                    "actual_value",
+                    "progress_percentage",
+                    "priority",
+                    "status",
+                ]
+            },
+        ),
+        (
+            "Dates",
+            {
+                "fields": [
+                    "start_date",
+                    "due_date",
+                    "completed_at",
+                    "cancelled_at",
+                ]
+            },
+        ),
+        (
+            "Notes",
+            {
+                "fields": [
+                    "notes",
+                    "extra_data",
+                ]
+            },
+        ),
+        (
+            "Audit",
+            {
+                "fields": [
+                    "created_by",
+                    "updated_by",
+                    "created_at",
+                    "updated_at",
+                ]
+            },
+        ),
+    ]
+
