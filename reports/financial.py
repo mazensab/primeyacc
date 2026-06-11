@@ -720,3 +720,133 @@ def build_balance_sheet_report(
             "equity": equity,
         },
     }
+
+def build_cash_flow_report(
+    company: Any,
+    *,
+    date_from: Any = None,
+    date_to: Any = None,
+) -> dict[str, Any]:
+    """
+    Build Cash Flow report.
+
+    Rules:
+    - Only POSTED journal entries are included.
+    - Company is taken from request.company, never frontend company_id.
+    - Cash accounts are detected by account purpose CASH or BANK, or by common cash/bank code prefixes.
+    - Net cash flow is calculated from cash/bank account movement.
+    """
+    _validate_company(company)
+
+    parsed_date_from = _parse_date(date_from, field_name="date_from")
+    parsed_date_to = _parse_date(date_to, field_name="date_to")
+
+    if parsed_date_from and parsed_date_to and parsed_date_to < parsed_date_from:
+        raise ValidationError(
+            {
+                "date_to": "End date cannot be before start date.",
+            }
+        )
+
+    cash_accounts_qs = Account.objects.filter(
+        company=company,
+        is_group=False,
+    ).filter(
+        purpose__in=["CASH", "BANK"],
+    )
+
+    if not cash_accounts_qs.exists():
+        cash_accounts_qs = Account.objects.filter(
+            company=company,
+            is_group=False,
+            code__startswith="1101",
+        )
+
+    cash_account_ids = list(cash_accounts_qs.values_list("id", flat=True))
+
+    opening_cash = MONEY_ZERO
+
+    base_cash_lines_qs = JournalEntryLine.objects.filter(
+        company=company,
+        journal_entry__company=company,
+        journal_entry__status=JournalEntryStatus.POSTED,
+        account_id__in=cash_account_ids,
+    )
+
+    if parsed_date_from:
+        opening_totals = base_cash_lines_qs.filter(
+            journal_entry__entry_date__lt=parsed_date_from,
+        ).aggregate(
+            total_debit=Sum("debit_amount"),
+            total_credit=Sum("credit_amount"),
+        )
+
+        opening_cash = _money(
+            _money(opening_totals["total_debit"])
+            - _money(opening_totals["total_credit"])
+        )
+
+    cash_lines_qs = base_cash_lines_qs
+
+    if parsed_date_from:
+        cash_lines_qs = cash_lines_qs.filter(
+            journal_entry__entry_date__gte=parsed_date_from,
+        )
+
+    if parsed_date_to:
+        cash_lines_qs = cash_lines_qs.filter(
+            journal_entry__entry_date__lte=parsed_date_to,
+        )
+
+    period_totals = cash_lines_qs.aggregate(
+        total_debit=Sum("debit_amount"),
+        total_credit=Sum("credit_amount"),
+    )
+
+    cash_inflows = _money(period_totals["total_debit"])
+    cash_outflows = _money(period_totals["total_credit"])
+    net_cash_flow = _money(cash_inflows - cash_outflows)
+    closing_cash = _money(opening_cash + net_cash_flow)
+
+    cash_accounts = [
+        {
+            "id": account.pk,
+            "code": account.code,
+            "name": account.name,
+            "name_en": account.name_en,
+            "type": account.account_type,
+            "nature": account.nature,
+            "purpose": account.purpose,
+        }
+        for account in cash_accounts_qs.order_by("code", "id")
+    ]
+
+    return {
+        "report": {
+            "key": "cash_flow",
+            "name": "Cash Flow",
+            "phase": "16.6",
+            "generated_at": timezone.now().isoformat(),
+        },
+        "filters": {
+            "date_from": parsed_date_from.isoformat() if parsed_date_from else None,
+            "date_to": parsed_date_to.isoformat() if parsed_date_to else None,
+        },
+        "summary": {
+            "opening_cash": _money_str(opening_cash),
+            "cash_inflows": _money_str(cash_inflows),
+            "cash_outflows": _money_str(cash_outflows),
+            "net_cash_flow": _money_str(net_cash_flow),
+            "closing_cash": _money_str(closing_cash),
+            "is_positive_flow": net_cash_flow >= MONEY_ZERO,
+            "cash_accounts_count": len(cash_accounts),
+        },
+        "sections": {
+            "operating": {
+                "cash_inflows": _money_str(cash_inflows),
+                "cash_outflows": _money_str(cash_outflows),
+                "net_cash_flow": _money_str(net_cash_flow),
+            },
+            "cash_accounts": cash_accounts,
+        },
+    }

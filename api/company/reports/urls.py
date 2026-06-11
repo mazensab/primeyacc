@@ -6,6 +6,7 @@
 from django.urls import path
 
 from .balance_sheet import balance_sheet_report
+from .cash_flow import cash_flow_report
 from .general_ledger import general_ledger_report
 from .overview import reports_overview
 from .profit_loss import profit_loss_report
@@ -21,4 +22,5 @@ urlpatterns = [
     path("general-ledger/", general_ledger_report, name="general-ledger"),
     path("profit-loss/", profit_loss_report, name="profit-loss"),
     path("balance-sheet/", balance_sheet_report, name="balance-sheet"),
+    path("cash-flow/", cash_flow_report, name="cash-flow"),
 ]
