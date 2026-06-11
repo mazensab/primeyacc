@@ -1,51 +1,51 @@
-# ============================================================
-# 📂 accounts/models.py
-# 🧠 PrimeyAcc | Accounts Models V2.7
+﻿# ============================================================
+# ًں“‚ accounts/models.py
+# ًں§  PrimeyAcc | Accounts Models V2.7
 # ------------------------------------------------------------
-# ✅ User Profile
-# ✅ Workspace Type Foundation
-# ✅ Company Membership
-# ✅ Company Role Basics
-# ✅ System / Company Access Separation
-# ✅ Multi-company User Support
-# ✅ Fixed Company Access Resolver
-# ✅ Role-based Permissions Foundation
-# ✅ Company Settings Permissions
-# ✅ Company Branches Permissions
-# ✅ Company Catalog Permissions
-# ✅ Company Sales Invoices Permissions
-# ✅ Company Purchases Bills Permissions
-# ✅ Company Inventory & Warehouses Permissions
-# ✅ Company Accounting Permissions
-# ✅ Company Treasury & Payments Permissions
-# ✅ Company Customer Payments Permissions
-# ✅ Company Supplier Payments Permissions
-# ✅ Company Payment Methods / Gateways / Terminals Permissions
-# ✅ Company Notifications Permissions
-# ✅ Company WhatsApp Permissions
-# ✅ Company HR Employees Permissions
-# ✅ Company HR Attendance Permissions
-# ✅ Safe Default Company Membership Resolver
-# ✅ Audit Fields
+# âœ… User Profile
+# âœ… Workspace Type Foundation
+# âœ… Company Membership
+# âœ… Company Role Basics
+# âœ… System / Company Access Separation
+# âœ… Multi-company User Support
+# âœ… Fixed Company Access Resolver
+# âœ… Role-based Permissions Foundation
+# âœ… Company Settings Permissions
+# âœ… Company Branches Permissions
+# âœ… Company Catalog Permissions
+# âœ… Company Sales Invoices Permissions
+# âœ… Company Purchases Bills Permissions
+# âœ… Company Inventory & Warehouses Permissions
+# âœ… Company Accounting Permissions
+# âœ… Company Treasury & Payments Permissions
+# âœ… Company Customer Payments Permissions
+# âœ… Company Supplier Payments Permissions
+# âœ… Company Payment Methods / Gateways / Terminals Permissions
+# âœ… Company Notifications Permissions
+# âœ… Company WhatsApp Permissions
+# âœ… Company HR Employees Permissions
+# âœ… Company HR Attendance Permissions
+# âœ… Safe Default Company Membership Resolver
+# âœ… Audit Fields
 # ------------------------------------------------------------
-# القاعدة المعتمدة:
-# - User = حساب دخول فقط
-# - UserProfile = ملف المستخدم العام داخل PrimeyAcc
-# - CompanyMembership = علاقة المستخدم بالشركة ودوره داخلها
-# - /system لا يفتح إلا لمستخدم نظام مصرح
-# - /company لا يفتح إلا بعضوية شركة فعالة
-# - لا يتم الوصول لبيانات شركة إلا عبر CompanyMembership فعال
-# - whoami هو مصدر الحقيقة للواجهة والصلاحيات
-# - كتالوج الشركة يحتاج صلاحيات منفصلة للتصنيفات والوحدات والمنتجات
-# - فواتير المبيعات لها صلاحيات دقيقة منفصلة داخل company.sales.invoices
-# - فواتير الموردين لها صلاحيات دقيقة منفصلة داخل company.purchases.bills
-# - المخزون والمستودعات لها صلاحيات دقيقة داخل company.inventory.*
-# - المحاسبة لها صلاحيات دقيقة داخل company.accounting.*
-# - الخزينة والمدفوعات لها صلاحيات دقيقة داخل company.treasury.*
-# - طرق الدفع وبوابات الدفع وأجهزة الدفع لها صلاحيات دقيقة داخل company.payments.*
-# - الإشعارات والواتساب لها صلاحيات دقيقة داخل company.notifications.* و company.whatsapp.*
-# - الموارد البشرية والموظفون لهم صلاحيات دقيقة داخل company.hr.employees.*
-# - الحضور والانصراف له صلاحيات دقيقة داخل company.hr.attendance.*
+# ط§ظ„ظ‚ط§ط¹ط¯ط© ط§ظ„ظ…ط¹طھظ…ط¯ط©:
+# - User = ط­ط³ط§ط¨ ط¯ط®ظˆظ„ ظپظ‚ط·
+# - UserProfile = ظ…ظ„ظپ ط§ظ„ظ…ط³طھط®ط¯ظ… ط§ظ„ط¹ط§ظ… ط¯ط§ط®ظ„ PrimeyAcc
+# - CompanyMembership = ط¹ظ„ط§ظ‚ط© ط§ظ„ظ…ط³طھط®ط¯ظ… ط¨ط§ظ„ط´ط±ظƒط© ظˆط¯ظˆط±ظ‡ ط¯ط§ط®ظ„ظ‡ط§
+# - /system ظ„ط§ ظٹظپطھط­ ط¥ظ„ط§ ظ„ظ…ط³طھط®ط¯ظ… ظ†ط¸ط§ظ… ظ…طµط±ط­
+# - /company ظ„ط§ ظٹظپطھط­ ط¥ظ„ط§ ط¨ط¹ط¶ظˆظٹط© ط´ط±ظƒط© ظپط¹ط§ظ„ط©
+# - ظ„ط§ ظٹطھظ… ط§ظ„ظˆطµظˆظ„ ظ„ط¨ظٹط§ظ†ط§طھ ط´ط±ظƒط© ط¥ظ„ط§ ط¹ط¨ط± CompanyMembership ظپط¹ط§ظ„
+# - whoami ظ‡ظˆ ظ…طµط¯ط± ط§ظ„ط­ظ‚ظٹظ‚ط© ظ„ظ„ظˆط§ط¬ظ‡ط© ظˆط§ظ„طµظ„ط§ط­ظٹط§طھ
+# - ظƒطھط§ظ„ظˆط¬ ط§ظ„ط´ط±ظƒط© ظٹط­طھط§ط¬ طµظ„ط§ط­ظٹط§طھ ظ…ظ†ظپطµظ„ط© ظ„ظ„طھطµظ†ظٹظپط§طھ ظˆط§ظ„ظˆط­ط¯ط§طھ ظˆط§ظ„ظ…ظ†طھط¬ط§طھ
+# - ظپظˆط§طھظٹط± ط§ظ„ظ…ط¨ظٹط¹ط§طھ ظ„ظ‡ط§ طµظ„ط§ط­ظٹط§طھ ط¯ظ‚ظٹظ‚ط© ظ…ظ†ظپطµظ„ط© ط¯ط§ط®ظ„ company.sales.invoices
+# - ظپظˆط§طھظٹط± ط§ظ„ظ…ظˆط±ط¯ظٹظ† ظ„ظ‡ط§ طµظ„ط§ط­ظٹط§طھ ط¯ظ‚ظٹظ‚ط© ظ…ظ†ظپطµظ„ط© ط¯ط§ط®ظ„ company.purchases.bills
+# - ط§ظ„ظ…ط®ط²ظˆظ† ظˆط§ظ„ظ…ط³طھظˆط¯ط¹ط§طھ ظ„ظ‡ط§ طµظ„ط§ط­ظٹط§طھ ط¯ظ‚ظٹظ‚ط© ط¯ط§ط®ظ„ company.inventory.*
+# - ط§ظ„ظ…ط­ط§ط³ط¨ط© ظ„ظ‡ط§ طµظ„ط§ط­ظٹط§طھ ط¯ظ‚ظٹظ‚ط© ط¯ط§ط®ظ„ company.accounting.*
+# - ط§ظ„ط®ط²ظٹظ†ط© ظˆط§ظ„ظ…ط¯ظپظˆط¹ط§طھ ظ„ظ‡ط§ طµظ„ط§ط­ظٹط§طھ ط¯ظ‚ظٹظ‚ط© ط¯ط§ط®ظ„ company.treasury.*
+# - ط·ط±ظ‚ ط§ظ„ط¯ظپط¹ ظˆط¨ظˆط§ط¨ط§طھ ط§ظ„ط¯ظپط¹ ظˆط£ط¬ظ‡ط²ط© ط§ظ„ط¯ظپط¹ ظ„ظ‡ط§ طµظ„ط§ط­ظٹط§طھ ط¯ظ‚ظٹظ‚ط© ط¯ط§ط®ظ„ company.payments.*
+# - ط§ظ„ط¥ط´ط¹ط§ط±ط§طھ ظˆط§ظ„ظˆط§طھط³ط§ط¨ ظ„ظ‡ط§ طµظ„ط§ط­ظٹط§طھ ط¯ظ‚ظٹظ‚ط© ط¯ط§ط®ظ„ company.notifications.* ظˆ company.whatsapp.*
+# - ط§ظ„ظ…ظˆط§ط±ط¯ ط§ظ„ط¨ط´ط±ظٹط© ظˆط§ظ„ظ…ظˆط¸ظپظˆظ† ظ„ظ‡ظ… طµظ„ط§ط­ظٹط§طھ ط¯ظ‚ظٹظ‚ط© ط¯ط§ط®ظ„ company.hr.employees.*
+# - ط§ظ„ط­ط¶ظˆط± ظˆط§ظ„ط§ظ†طµط±ط§ظپ ظ„ظ‡ طµظ„ط§ط­ظٹط§طھ ط¯ظ‚ظٹظ‚ط© ط¯ط§ط®ظ„ company.hr.attendance.*
 # ============================================================
 
 from __future__ import annotations
@@ -100,9 +100,9 @@ class MembershipStatus(models.TextChoices):
 # ============================================================
 # Permissions Foundation
 # ------------------------------------------------------------
-# ملاحظة:
-# هذه الصلاحيات ثابتة الآن لتثبيت المراحل بدون تعقيد زائد.
-# لاحقًا يمكن نقلها إلى جداول Role / Permission إذا احتجنا إدارة مرنة من الواجهة.
+# ظ…ظ„ط§ط­ط¸ط©:
+# ظ‡ط°ظ‡ ط§ظ„طµظ„ط§ط­ظٹط§طھ ط«ط§ط¨طھط© ط§ظ„ط¢ظ† ظ„طھط«ط¨ظٹطھ ط§ظ„ظ…ط±ط§ط­ظ„ ط¨ط¯ظˆظ† طھط¹ظ‚ظٹط¯ ط²ط§ط¦ط¯.
+# ظ„ط§ط­ظ‚ظ‹ط§ ظٹظ…ظƒظ† ظ†ظ‚ظ„ظ‡ط§ ط¥ظ„ظ‰ ط¬ط¯ط§ظˆظ„ Role / Permission ط¥ط°ط§ ط§ط­طھط¬ظ†ط§ ط¥ط¯ط§ط±ط© ظ…ط±ظ†ط© ظ…ظ† ط§ظ„ظˆط§ط¬ظ‡ط©.
 # ============================================================
 
 SYSTEM_PERMISSION_ALL = "*"
@@ -788,7 +788,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.hr.performance.criteria.view",
         "company.hr.performance.reviews.view",
         "company.hr.performance.scores.view",
-        "company.hr.performance.goals.view",
+        "company.hr.performance.goals.view",        "company.documents.templates.view",
+
         "company.reports.view",
     ],
 }
@@ -1262,3 +1263,4 @@ class CompanyMembership(models.Model):
                 "updated_at",
             ]
         )
+
