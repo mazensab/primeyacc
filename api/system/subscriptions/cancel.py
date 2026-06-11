@@ -1,21 +1,21 @@
 # ============================================================
 # 📂 api/system/subscriptions/cancel.py
-# 🧠 PrimeyAcc | System Company Subscription Cancel API V1.1
+# 🧠 PrimeyAcc | System Company Subscription Cancel API V1.2
 # ------------------------------------------------------------
 # ✅ Cancel company subscriptions from system workspace
-# ✅ Supports cancellation notes and auto-renew disabling
+# ✅ Supports PENDING_PAYMENT cancellation without touching old subscription
+# ✅ Supports active/trial cancellation and auto-renew disabling
 # ✅ Preserves subscription history without deleting records
+# ✅ Includes Phase 19 billing/payment lifecycle fields
 # ✅ Protected by system permission: system.subscriptions.cancel
 # ✅ Uses central api/permissions.py guard
-# ✅ Safe update fields based on the current CompanySubscription model
 # ------------------------------------------------------------
-# القاعدة المعتمدة:
-# - هذا الملف جزء من المرحلة 1: نواة SaaS
-# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
-# - إلغاء اشتراكات الشركات لا يسمح لمستخدم company فقط
-# - إلغاء الاشتراك لا يحذف السجل من قاعدة البيانات
-# - الإلغاء يوقف auto_renew ويحفظ وقت الإلغاء
-# - الدفع والفواتير لها وحدات مستقلة لاحقًا ولا توضع هنا
+# القاعدة المعتمدة في Phase 19:
+# - إلغاء PENDING_PAYMENT يعني إلغاء طلب الدفع فقط
+# - لا يتم لمس previous_subscription عند إلغاء طلب الدفع
+# - إلغاء ACTIVE/TRIAL يوقف auto_renew ويحفظ cancelled_at
+# - الإلغاء لا يحذف أي سجل من قاعدة البيانات
+# - لا نستخدم payments/models.py هنا لأنها تخص مدفوعات /company
 # ============================================================
 
 from __future__ import annotations
@@ -33,6 +33,7 @@ from django.views.decorators.http import require_POST
 
 from api.permissions import user_has_system_permission
 from subscriptions.models import CompanySubscription
+from subscriptions.services import money
 
 
 def _json_body(request: HttpRequest) -> dict[str, Any]:
@@ -83,7 +84,7 @@ def _money_to_string(value: Any) -> str:
     if value is None:
         return "0.00"
 
-    return f"{value:.2f}"
+    return f"{money(value):.2f}"
 
 
 def _date_to_string(value: Any) -> str | None:
@@ -108,27 +109,84 @@ def _datetime_to_string(value: Any) -> str | None:
     return value.isoformat()
 
 
-def _model_has_field(field_name: str) -> bool:
-    """
-    يتحقق من وجود الحقل داخل CompanySubscription.
-    """
-
-    return any(field.name == field_name for field in CompanySubscription._meta.fields)
-
-
-def _set_subscription_field(
+def _previous_subscription_payload(
     subscription: CompanySubscription,
-    field_name: str,
-    value: Any,
-    update_fields: set[str],
-) -> None:
+) -> dict[str, Any] | None:
     """
-    يعدل الحقل فقط إذا كان موجودًا في موديل CompanySubscription.
+    يرجع ملخص الاشتراك السابق إن وجد.
     """
 
-    if _model_has_field(field_name):
-        setattr(subscription, field_name, value)
-        update_fields.add(field_name)
+    previous = subscription.previous_subscription
+
+    if not previous:
+        return None
+
+    return {
+        "id": previous.id,
+        "plan": {
+            "id": previous.plan_id,
+            "name": previous.plan.name if previous.plan_id else "",
+            "code": previous.plan.code if previous.plan_id else "",
+            "slug": previous.plan.slug if previous.plan_id else "",
+        },
+        "status": previous.status,
+        "action": previous.action,
+        "billing_cycle": previous.billing_cycle,
+        "start_date": _date_to_string(previous.start_date),
+        "end_date": _date_to_string(previous.end_date),
+        "days_remaining": previous.days_remaining,
+        "is_current": previous.is_current,
+        "is_pending_payment": previous.is_pending_payment,
+        "is_expired_by_date": previous.is_expired_by_date,
+        "auto_renew": previous.auto_renew,
+        "billing_reference": previous.billing_reference,
+        "paid_at": _datetime_to_string(previous.paid_at),
+        "activated_at": _datetime_to_string(previous.activated_at),
+        "cancelled_at": _datetime_to_string(previous.cancelled_at),
+        "suspended_at": _datetime_to_string(previous.suspended_at),
+        "created_at": _datetime_to_string(previous.created_at),
+        "updated_at": _datetime_to_string(previous.updated_at),
+    }
+
+
+def _lifecycle_payload(subscription: CompanySubscription) -> dict[str, Any]:
+    """
+    يرجع ملخص دورة حياة الاشتراك.
+    """
+
+    return {
+        "status": subscription.status,
+        "action": subscription.action,
+        "is_current": subscription.is_current,
+        "is_pending_payment": subscription.is_pending_payment,
+        "is_expired_by_date": subscription.is_expired_by_date,
+        "days_remaining": subscription.days_remaining,
+        "auto_renew": subscription.auto_renew,
+        "start_date": _date_to_string(subscription.start_date),
+        "end_date": _date_to_string(subscription.end_date),
+        "paid_at": _datetime_to_string(subscription.paid_at),
+        "activated_at": _datetime_to_string(subscription.activated_at),
+        "cancelled_at": _datetime_to_string(subscription.cancelled_at),
+        "suspended_at": _datetime_to_string(subscription.suspended_at),
+        "can_confirm_payment": subscription.status == CompanySubscription.Status.PENDING_PAYMENT,
+        "can_renew": subscription.status
+        in {
+            CompanySubscription.Status.TRIAL,
+            CompanySubscription.Status.ACTIVE,
+            CompanySubscription.Status.EXPIRED,
+        },
+        "can_change_plan": subscription.status
+        in {
+            CompanySubscription.Status.TRIAL,
+            CompanySubscription.Status.ACTIVE,
+        },
+        "can_cancel": subscription.status
+        in {
+            CompanySubscription.Status.PENDING_PAYMENT,
+            CompanySubscription.Status.TRIAL,
+            CompanySubscription.Status.ACTIVE,
+        },
+    }
 
 
 def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
@@ -138,6 +196,7 @@ def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
 
     company = subscription.company
     plan = subscription.plan
+    created_by = getattr(subscription, "created_by", None)
 
     return {
         "id": subscription.id,
@@ -159,13 +218,20 @@ def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
             "name": plan.name,
             "code": plan.code,
             "slug": plan.slug,
+            "monthly_price": _money_to_string(plan.monthly_price),
+            "yearly_price": _money_to_string(plan.yearly_price),
         },
+        "previous_subscription_id": subscription.previous_subscription_id,
+        "previous_subscription": _previous_subscription_payload(subscription),
+        "lifecycle": _lifecycle_payload(subscription),
         "status": subscription.status,
+        "action": subscription.action,
         "billing_cycle": subscription.billing_cycle,
         "start_date": _date_to_string(subscription.start_date),
         "end_date": _date_to_string(subscription.end_date),
         "days_remaining": subscription.days_remaining,
         "is_current": subscription.is_current,
+        "is_pending_payment": subscription.is_pending_payment,
         "is_expired_by_date": subscription.is_expired_by_date,
         "price": _money_to_string(subscription.price),
         "discount_amount": _money_to_string(subscription.discount_amount),
@@ -173,12 +239,46 @@ def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
         "tax_amount": _money_to_string(subscription.tax_amount),
         "total_amount": _money_to_string(subscription.total_amount),
         "auto_renew": subscription.auto_renew,
-        "notes": subscription.notes,
+        "billing_reference": subscription.billing_reference,
+        "paid_at": _datetime_to_string(subscription.paid_at),
+        "activated_at": _datetime_to_string(subscription.activated_at),
         "cancelled_at": _datetime_to_string(subscription.cancelled_at),
         "suspended_at": _datetime_to_string(subscription.suspended_at),
+        "notes": subscription.notes,
+        "created_by": {
+            "id": created_by.id,
+            "username": created_by.username,
+            "email": created_by.email,
+        }
+        if created_by
+        else None,
         "created_at": _datetime_to_string(subscription.created_at),
         "updated_at": _datetime_to_string(subscription.updated_at),
     }
+
+
+def _append_cancel_note(
+    *,
+    subscription: CompanySubscription,
+    cancel_note: str,
+) -> str:
+    """
+    يبني ملاحظات الإلغاء بدون حذف الملاحظات السابقة.
+    """
+
+    current_notes = _clean_text(getattr(subscription, "notes", ""))
+
+    if subscription.status == CompanySubscription.Status.PENDING_PAYMENT:
+        default_note = "تم إلغاء طلب الدفع لهذا الاشتراك."
+    else:
+        default_note = "تم إلغاء الاشتراك."
+
+    if cancel_note:
+        new_note = f"{default_note}\nسبب الإلغاء: {cancel_note}"
+    else:
+        new_note = default_note
+
+    return f"{current_notes}\n\n{new_note}".strip() if current_notes else new_note
 
 
 @login_required
@@ -211,6 +311,8 @@ def system_subscription_cancel(
             "company",
             "plan",
             "created_by",
+            "previous_subscription",
+            "previous_subscription__plan",
         ),
         id=subscription_id,
     )
@@ -227,43 +329,62 @@ def system_subscription_cancel(
             status=200,
         )
 
+    if subscription.status in {
+        CompanySubscription.Status.EXPIRED,
+        CompanySubscription.Status.SUSPENDED,
+    }:
+        return JsonResponse(
+            {
+                "ok": False,
+                "message": "لا يمكن إلغاء هذا الاشتراك من حالته الحالية.",
+                "errors": {
+                    "status": "الإلغاء مسموح فقط للاشتراكات PENDING_PAYMENT أو TRIAL أو ACTIVE."
+                },
+            },
+            status=400,
+        )
+
     cancel_note = _clean_text(_get_value(request, payload, "notes", ""))
     now = timezone.now()
 
     with transaction.atomic():
-        update_fields: set[str] = set()
+        subscription = CompanySubscription.objects.select_for_update().select_related(
+            "company",
+            "plan",
+            "created_by",
+            "previous_subscription",
+            "previous_subscription__plan",
+        ).get(id=subscription.id)
 
-        _set_subscription_field(
-            subscription,
-            "status",
-            CompanySubscription.Status.CANCELLED,
-            update_fields,
+        old_status = subscription.status
+
+        subscription.status = CompanySubscription.Status.CANCELLED
+        subscription.auto_renew = False
+        subscription.cancelled_at = now
+        subscription.notes = _append_cancel_note(
+            subscription=subscription,
+            cancel_note=cancel_note,
         )
-        _set_subscription_field(subscription, "auto_renew", False, update_fields)
-        _set_subscription_field(subscription, "cancelled_at", now, update_fields)
 
-        if cancel_note:
-            current_notes = _clean_text(getattr(subscription, "notes", ""))
-            notes = (
-                f"{current_notes}\n\nسبب الإلغاء: {cancel_note}".strip()
-                if current_notes
-                else f"سبب الإلغاء: {cancel_note}"
-            )
-            _set_subscription_field(subscription, "notes", notes, update_fields)
+        subscription.save(
+            update_fields=[
+                "status",
+                "auto_renew",
+                "cancelled_at",
+                "notes",
+                "updated_at",
+            ]
+        )
 
-        if _model_has_field("updated_by"):
-            _set_subscription_field(subscription, "updated_by", request.user, update_fields)
-
-        if update_fields:
-            update_fields.add("updated_at")
-            subscription.save(update_fields=list(update_fields))
-        else:
-            subscription.save()
+    if old_status == CompanySubscription.Status.PENDING_PAYMENT:
+        message = "تم إلغاء طلب دفع الاشتراك بنجاح دون التأثير على الاشتراك السابق."
+    else:
+        message = "تم إلغاء اشتراك الشركة بنجاح."
 
     return JsonResponse(
         {
             "ok": True,
-            "message": "تم إلغاء اشتراك الشركة بنجاح.",
+            "message": message,
             "data": {
                 "subscription": _subscription_payload(subscription),
             },

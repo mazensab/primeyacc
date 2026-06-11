@@ -1,22 +1,32 @@
 # ============================================================
 # 📂 payments/models.py
-# 🧠 PrimeyAcc | Company Payment Methods Foundation Models
+# 🧠 PrimeyAcc | Company Payment Methods Foundation Models V1.1
 # ------------------------------------------------------------
 # ✅ Defines company-level payment methods
 # ✅ Defines company-level payment gateways
 # ✅ Defines company-level payment terminals
 # ✅ Keeps platform subscription billing separated from company payments
+# ✅ Hardens cross-company validation for gateways/methods/terminals
+# ✅ Prevents negative fees
+# ✅ Keeps one default gateway/method/terminal per scope
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذه النماذج تخص طرق دفع الشركة داخل /company فقط
 # - لا تستخدم هذه النماذج لدفع اشتراكات PrimeyAcc الخاصة بمالك المنصة
+# - Phase 19 سيستخدم نماذج/خدمات Platform Billing مستقلة
 # - الربط المحاسبي هنا مبدئي عبر أكواد حسابات آمنة حتى نراجع accounting/models.py
 # ============================================================
 
 from __future__ import annotations
 
+from decimal import Decimal
+
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+
+
+ZERO_MONEY = Decimal("0.00")
 
 
 class CompanyPaymentGateway(models.Model):
@@ -112,6 +122,26 @@ class CompanyPaymentGateway(models.Model):
     def __str__(self) -> str:
         return f"{self.name} ({self.company_id})"
 
+    def clean(self) -> None:
+        super().clean()
+
+        if self.settings is None:
+            self.settings = {}
+
+        if not isinstance(self.settings, dict):
+            raise ValidationError({"settings": "Gateway settings must be a JSON object."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+
+        if self.is_default and self.company_id:
+            CompanyPaymentGateway.objects.filter(
+                company_id=self.company_id,
+                is_default=True,
+            ).exclude(pk=self.pk).update(is_default=False)
+
+        super().save(*args, **kwargs)
+
 
 class CompanyPaymentMethod(models.Model):
     """
@@ -185,8 +215,16 @@ class CompanyPaymentMethod(models.Model):
         help_text="Accounting account code for payment fees.",
     )
 
-    fee_percentage = models.DecimalField(max_digits=7, decimal_places=4, default=0)
-    fixed_fee = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    fee_percentage = models.DecimalField(
+        max_digits=7,
+        decimal_places=4,
+        default=ZERO_MONEY,
+    )
+    fixed_fee = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=ZERO_MONEY,
+    )
 
     is_cash = models.BooleanField(default=False)
     is_bank_transfer = models.BooleanField(default=False)
@@ -233,6 +271,7 @@ class CompanyPaymentMethod(models.Model):
         """
         Keep boolean flags aligned with method_type.
         """
+
         self.is_cash = self.method_type == self.MethodType.CASH
         self.is_bank_transfer = self.method_type == self.MethodType.BANK_TRANSFER
         self.is_card = self.method_type in {
@@ -248,8 +287,65 @@ class CompanyPaymentMethod(models.Model):
         }
         self.is_pos_terminal = self.method_type == self.MethodType.POS_TERMINAL
 
+    def clean(self) -> None:
+        super().clean()
+
+        if self.gateway_id and self.company_id:
+            if self.gateway and self.gateway.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "gateway": (
+                            "Payment gateway must belong to the same company."
+                        )
+                    }
+                )
+
+        if self.fee_percentage is not None and self.fee_percentage < 0:
+            raise ValidationError(
+                {
+                    "fee_percentage": (
+                        "Fee percentage cannot be less than zero."
+                    )
+                }
+            )
+
+        if self.fixed_fee is not None and self.fixed_fee < 0:
+            raise ValidationError(
+                {
+                    "fixed_fee": (
+                        "Fixed fee cannot be less than zero."
+                    )
+                }
+            )
+
+        if self.method_type == self.MethodType.ONLINE_GATEWAY and not self.gateway_id:
+            raise ValidationError(
+                {
+                    "gateway": (
+                        "Online gateway payment methods require a payment gateway."
+                    )
+                }
+            )
+
+        if self.method_type == self.MethodType.POS_TERMINAL and not self.allow_pos:
+            raise ValidationError(
+                {
+                    "allow_pos": (
+                        "POS terminal payment methods must be allowed for POS."
+                    )
+                }
+            )
+
     def save(self, *args, **kwargs):
         self.normalize_flags()
+        self.full_clean()
+
+        if self.is_default and self.company_id:
+            CompanyPaymentMethod.objects.filter(
+                company_id=self.company_id,
+                is_default=True,
+            ).exclude(pk=self.pk).update(is_default=False)
+
         super().save(*args, **kwargs)
 
 
@@ -341,3 +437,66 @@ class CompanyPaymentTerminal(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.terminal_code})"
+
+    def clean(self) -> None:
+        super().clean()
+
+        if self.settings is None:
+            self.settings = {}
+
+        if not isinstance(self.settings, dict):
+            raise ValidationError({"settings": "Terminal settings must be a JSON object."})
+
+        if self.branch_id and self.company_id:
+            if self.branch and self.branch.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "branch": (
+                            "Payment terminal branch must belong to the same company."
+                        )
+                    }
+                )
+
+        if self.gateway_id and self.company_id:
+            if self.gateway and self.gateway.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "gateway": (
+                            "Payment terminal gateway must belong to the same company."
+                        )
+                    }
+                )
+
+        if self.payment_method_id and self.company_id:
+            if self.payment_method and self.payment_method.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "payment_method": (
+                            "Payment terminal method must belong to the same company."
+                        )
+                    }
+                )
+
+        if self.payment_method_id:
+            if self.payment_method and not self.payment_method.is_pos_terminal:
+                raise ValidationError(
+                    {
+                        "payment_method": (
+                            "Payment terminal method must be a POS terminal method."
+                        )
+                    }
+                )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+
+        if self.is_default_for_branch and self.company_id:
+            default_scope = CompanyPaymentTerminal.objects.filter(
+                company_id=self.company_id,
+                branch_id=self.branch_id,
+                is_default_for_branch=True,
+            ).exclude(pk=self.pk)
+
+            default_scope.update(is_default_for_branch=False)
+
+        super().save(*args, **kwargs)

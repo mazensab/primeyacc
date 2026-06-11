@@ -1,19 +1,18 @@
 # ============================================================
 # 📂 api/system/subscriptions/list.py
-# 🧠 PrimeyAcc | System Company Subscriptions List API V1.1
+# 🧠 PrimeyAcc | System Company Subscriptions List API V1.2
 # ------------------------------------------------------------
 # ✅ List company subscriptions for system workspace
-# ✅ Supports search, status, billing cycle, plan, and company filters
-# ✅ Returns clean stats for future SaaS dashboard pages
+# ✅ Supports search, status, action, billing cycle, plan, company filters
+# ✅ Includes Phase 19 billing/payment lifecycle fields
+# ✅ Returns clean stats for SaaS subscriptions dashboard pages
 # ✅ Protected by system permission: system.subscriptions.view
 # ✅ Uses central api/permissions.py guard
 # ------------------------------------------------------------
-# القاعدة المعتمدة:
-# - هذا الملف جزء من المرحلة 1: نواة SaaS
-# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
-# - جميع APIs داخل /api/system/ تتطلب can_access_system=True
+# القاعدة المعتمدة في Phase 19:
 # - عرض كل اشتراكات الشركات لا يسمح لمستخدم company فقط
 # - الاشتراك الحالي للشركة يجب أن يكون واحدًا فقط TRIAL أو ACTIVE
+# - PENDING_PAYMENT يظهر في القائمة ولا يعتبر اشتراكًا حاليًا
 # - البيانات حقيقية من قاعدة البيانات فقط بدون mock data
 # ============================================================
 
@@ -29,6 +28,7 @@ from django.views.decorators.http import require_GET
 
 from api.permissions import user_has_system_permission
 from subscriptions.models import CompanySubscription
+from subscriptions.services import money
 
 
 def _money_to_string(value: Any) -> str:
@@ -39,7 +39,7 @@ def _money_to_string(value: Any) -> str:
     if value is None:
         return "0.00"
 
-    return f"{value:.2f}"
+    return f"{money(value):.2f}"
 
 
 def _date_to_string(value: Any) -> str | None:
@@ -105,6 +105,75 @@ def _plan_payload(subscription: CompanySubscription) -> dict[str, Any]:
     }
 
 
+def _previous_subscription_payload(
+    subscription: CompanySubscription,
+) -> dict[str, Any] | None:
+    """
+    يرجع ملخص الاشتراك السابق إن وجد.
+    """
+
+    previous = subscription.previous_subscription
+
+    if not previous:
+        return None
+
+    return {
+        "id": previous.id,
+        "plan_id": previous.plan_id,
+        "status": previous.status,
+        "action": previous.action,
+        "billing_cycle": previous.billing_cycle,
+        "start_date": _date_to_string(previous.start_date),
+        "end_date": _date_to_string(previous.end_date),
+        "is_current": previous.is_current,
+        "is_pending_payment": previous.is_pending_payment,
+        "billing_reference": previous.billing_reference,
+        "paid_at": _datetime_to_string(previous.paid_at),
+        "activated_at": _datetime_to_string(previous.activated_at),
+        "cancelled_at": _datetime_to_string(previous.cancelled_at),
+    }
+
+
+def _lifecycle_payload(subscription: CompanySubscription) -> dict[str, Any]:
+    """
+    يرجع ملخص دورة حياة الاشتراك للقائمة.
+    """
+
+    return {
+        "status": subscription.status,
+        "action": subscription.action,
+        "is_current": subscription.is_current,
+        "is_pending_payment": subscription.is_pending_payment,
+        "is_expired_by_date": subscription.is_expired_by_date,
+        "days_remaining": subscription.days_remaining,
+        "auto_renew": subscription.auto_renew,
+        "start_date": _date_to_string(subscription.start_date),
+        "end_date": _date_to_string(subscription.end_date),
+        "paid_at": _datetime_to_string(subscription.paid_at),
+        "activated_at": _datetime_to_string(subscription.activated_at),
+        "cancelled_at": _datetime_to_string(subscription.cancelled_at),
+        "suspended_at": _datetime_to_string(subscription.suspended_at),
+        "can_confirm_payment": subscription.status == CompanySubscription.Status.PENDING_PAYMENT,
+        "can_renew": subscription.status
+        in {
+            CompanySubscription.Status.TRIAL,
+            CompanySubscription.Status.ACTIVE,
+            CompanySubscription.Status.EXPIRED,
+        },
+        "can_change_plan": subscription.status
+        in {
+            CompanySubscription.Status.TRIAL,
+            CompanySubscription.Status.ACTIVE,
+        },
+        "can_cancel": subscription.status
+        in {
+            CompanySubscription.Status.PENDING_PAYMENT,
+            CompanySubscription.Status.TRIAL,
+            CompanySubscription.Status.ACTIVE,
+        },
+    }
+
+
 def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
     """
     يحول كائن الاشتراك إلى JSON نظيف للواجهة.
@@ -114,12 +183,17 @@ def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
         "id": subscription.id,
         "company": _company_payload(subscription),
         "plan": _plan_payload(subscription),
+        "previous_subscription_id": subscription.previous_subscription_id,
+        "previous_subscription": _previous_subscription_payload(subscription),
+        "lifecycle": _lifecycle_payload(subscription),
         "status": subscription.status,
+        "action": subscription.action,
         "billing_cycle": subscription.billing_cycle,
         "start_date": _date_to_string(subscription.start_date),
         "end_date": _date_to_string(subscription.end_date),
         "days_remaining": subscription.days_remaining,
         "is_current": subscription.is_current,
+        "is_pending_payment": subscription.is_pending_payment,
         "is_expired_by_date": subscription.is_expired_by_date,
         "price": _money_to_string(subscription.price),
         "discount_amount": _money_to_string(subscription.discount_amount),
@@ -127,9 +201,12 @@ def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
         "tax_amount": _money_to_string(subscription.tax_amount),
         "total_amount": _money_to_string(subscription.total_amount),
         "auto_renew": subscription.auto_renew,
-        "notes": subscription.notes,
+        "billing_reference": subscription.billing_reference,
+        "paid_at": _datetime_to_string(subscription.paid_at),
+        "activated_at": _datetime_to_string(subscription.activated_at),
         "cancelled_at": _datetime_to_string(subscription.cancelled_at),
         "suspended_at": _datetime_to_string(subscription.suspended_at),
+        "notes": subscription.notes,
         "created_at": _datetime_to_string(subscription.created_at),
         "updated_at": _datetime_to_string(subscription.updated_at),
     }
@@ -145,10 +222,12 @@ def _apply_filters(
 
     search = (request.GET.get("search") or request.GET.get("q") or "").strip()
     status = (request.GET.get("status") or "").strip().upper()
+    action = (request.GET.get("action") or "").strip().upper()
     billing_cycle = (request.GET.get("billing_cycle") or "").strip().upper()
     plan_id = (request.GET.get("plan_id") or "").strip()
     company_id = (request.GET.get("company_id") or "").strip()
     current = (request.GET.get("current") or "").strip().lower()
+    pending_payment = (request.GET.get("pending_payment") or "").strip().lower()
     auto_renew = (request.GET.get("auto_renew") or "").strip().lower()
 
     if search:
@@ -164,12 +243,18 @@ def _apply_filters(
             | Q(plan__name__icontains=search)
             | Q(plan__slug__icontains=search)
             | Q(plan__code__icontains=search)
+            | Q(action__icontains=search)
+            | Q(billing_reference__icontains=search)
             | Q(notes__icontains=search)
         )
 
     valid_statuses = {choice[0] for choice in CompanySubscription.Status.choices}
     if status in valid_statuses:
         queryset = queryset.filter(status=status)
+
+    valid_actions = {choice[0] for choice in CompanySubscription.SubscriptionAction.choices}
+    if action in valid_actions:
+        queryset = queryset.filter(action=action)
 
     valid_cycles = {choice[0] for choice in CompanySubscription.BillingCycle.choices}
     if billing_cycle in valid_cycles:
@@ -203,6 +288,12 @@ def _apply_filters(
             end_date__gte=today,
         )
 
+    if pending_payment in {"1", "true", "yes", "on"}:
+        queryset = queryset.filter(status=CompanySubscription.Status.PENDING_PAYMENT)
+
+    if pending_payment in {"0", "false", "no", "off"}:
+        queryset = queryset.exclude(status=CompanySubscription.Status.PENDING_PAYMENT)
+
     if auto_renew in {"1", "true", "yes", "on"}:
         queryset = queryset.filter(auto_renew=True)
 
@@ -221,6 +312,10 @@ def _build_stats(queryset: QuerySet[CompanySubscription]) -> dict[str, Any]:
 
     aggregate = queryset.aggregate(
         total_amount_sum=Sum("total_amount"),
+        pending_payment_count=Count(
+            "id",
+            filter=Q(status=CompanySubscription.Status.PENDING_PAYMENT),
+        ),
         active_count=Count(
             "id",
             filter=Q(status=CompanySubscription.Status.ACTIVE),
@@ -240,6 +335,26 @@ def _build_stats(queryset: QuerySet[CompanySubscription]) -> dict[str, Any]:
         suspended_count=Count(
             "id",
             filter=Q(status=CompanySubscription.Status.SUSPENDED),
+        ),
+        new_count=Count(
+            "id",
+            filter=Q(action=CompanySubscription.SubscriptionAction.NEW),
+        ),
+        renewal_count=Count(
+            "id",
+            filter=Q(action=CompanySubscription.SubscriptionAction.RENEWAL),
+        ),
+        upgrade_count=Count(
+            "id",
+            filter=Q(action=CompanySubscription.SubscriptionAction.UPGRADE),
+        ),
+        downgrade_count=Count(
+            "id",
+            filter=Q(action=CompanySubscription.SubscriptionAction.DOWNGRADE),
+        ),
+        manual_count=Count(
+            "id",
+            filter=Q(action=CompanySubscription.SubscriptionAction.MANUAL),
         ),
         monthly_count=Count(
             "id",
@@ -264,6 +379,14 @@ def _build_stats(queryset: QuerySet[CompanySubscription]) -> dict[str, Any]:
                 end_date__gte=today,
             ),
         ),
+        paid_count=Count(
+            "id",
+            filter=Q(paid_at__isnull=False),
+        ),
+        activated_count=Count(
+            "id",
+            filter=Q(activated_at__isnull=False),
+        ),
     )
 
     total_count = queryset.count()
@@ -271,14 +394,22 @@ def _build_stats(queryset: QuerySet[CompanySubscription]) -> dict[str, Any]:
     return {
         "total": total_count,
         "current": aggregate.get("current_count") or 0,
+        "pending_payment": aggregate.get("pending_payment_count") or 0,
         "active": aggregate.get("active_count") or 0,
         "trial": aggregate.get("trial_count") or 0,
         "expired": aggregate.get("expired_count") or 0,
         "cancelled": aggregate.get("cancelled_count") or 0,
         "suspended": aggregate.get("suspended_count") or 0,
+        "new": aggregate.get("new_count") or 0,
+        "renewal": aggregate.get("renewal_count") or 0,
+        "upgrade": aggregate.get("upgrade_count") or 0,
+        "downgrade": aggregate.get("downgrade_count") or 0,
+        "manual": aggregate.get("manual_count") or 0,
         "monthly": aggregate.get("monthly_count") or 0,
         "yearly": aggregate.get("yearly_count") or 0,
         "auto_renew": aggregate.get("auto_renew_count") or 0,
+        "paid": aggregate.get("paid_count") or 0,
+        "activated": aggregate.get("activated_count") or 0,
         "total_amount": _money_to_string(aggregate.get("total_amount_sum") or 0),
     }
 
@@ -307,6 +438,8 @@ def system_subscriptions_list(request: HttpRequest) -> JsonResponse:
             "company",
             "plan",
             "created_by",
+            "previous_subscription",
+            "previous_subscription__plan",
         )
         .order_by("-created_at", "-id")
     )
@@ -325,6 +458,17 @@ def system_subscriptions_list(request: HttpRequest) -> JsonResponse:
                 "results": items,
                 "count": stats["total"],
                 "stats": stats,
+                "filters": {
+                    "supported_statuses": [
+                        choice[0] for choice in CompanySubscription.Status.choices
+                    ],
+                    "supported_actions": [
+                        choice[0] for choice in CompanySubscription.SubscriptionAction.choices
+                    ],
+                    "supported_billing_cycles": [
+                        choice[0] for choice in CompanySubscription.BillingCycle.choices
+                    ],
+                },
             },
         },
         status=200,

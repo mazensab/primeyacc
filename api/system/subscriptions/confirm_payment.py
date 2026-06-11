@@ -1,26 +1,25 @@
 # ============================================================
-# 📂 api/system/subscriptions/change_plan.py
-# 🧠 PrimeyAcc | System Company Subscription Change Plan API V1.2
+# 📂 api/system/subscriptions/confirm_payment.py
+# 🧠 PrimeyAcc | System Subscription Confirm Payment API V1.0
 # ------------------------------------------------------------
-# ✅ Change company subscription plan from system workspace
-# ✅ Creates a new PENDING_PAYMENT subscription record
-# ✅ Does not close current subscription until payment confirmation
-# ✅ Uses subscriptions.services.create_plan_change_pending_subscription
+# ✅ Confirms platform subscription payment from system workspace
+# ✅ Activates only PENDING_PAYMENT subscriptions
+# ✅ Cancels previous active/trial subscription after payment success
+# ✅ Uses subscriptions.services.activate_pending_subscription
 # ✅ Protected by system permission: system.subscriptions.update
 # ✅ Keeps platform billing separated from company payment methods
 # ------------------------------------------------------------
 # القاعدة المعتمدة في Phase 19:
-# - تغيير الباقة ينشئ اشتراكًا جديدًا ولا يعدل السجل القديم
-# - الاشتراك الجديد يكون PENDING_PAYMENT
-# - الاشتراك الحالي يبقى كما هو حتى يتم تأكيد الدفع
-# - عند تأكيد الدفع فقط يتم إغلاق القديم وتفعيل الجديد
+# - هذا الملف لا ينشئ Payment حقيقي
+# - هذا الملف لا يستخدم payments/models.py لأنها تخص /company
+# - هذا الملف يفعّل الاشتراك فقط بعد تأكيد نجاح الدفع من النظام
+# - عند التفعيل يتم إغلاق الاشتراك السابق إن وجد
 # ============================================================
 
 from __future__ import annotations
 
 import json
-from datetime import date
-from decimal import Decimal, InvalidOperation
+from datetime import datetime
 from typing import Any
 
 from django.contrib.auth.decorators import login_required
@@ -32,8 +31,8 @@ from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
 from api.permissions import user_has_system_permission
-from subscriptions.models import CompanySubscription, SubscriptionPlan
-from subscriptions.services import create_plan_change_pending_subscription, money
+from subscriptions.models import CompanySubscription
+from subscriptions.services import activate_pending_subscription, money
 
 
 def _json_body(request: HttpRequest) -> dict[str, Any]:
@@ -76,49 +75,36 @@ def _clean_text(value: Any) -> str:
     return str(value or "").strip()
 
 
-def _to_decimal(value: Any, default: str = "0.00") -> Decimal:
+def _parse_datetime(value: Any, field_name: str):
     """
-    يحول القيمة إلى Decimal آمن.
-    """
+    يحول ISO datetime إلى aware datetime.
 
-    if value in {None, ""}:
-        value = default
-
-    try:
-        return Decimal(str(value))
-    except (InvalidOperation, TypeError, ValueError):
-        raise ValidationError("القيمة المالية غير صحيحة.")
-
-
-def _to_bool(value: Any, default: bool = False) -> bool:
-    """
-    يحول القيم النصية إلى Boolean.
+    يقبل:
+    - 2026-06-11T20:30:00
+    - 2026-06-11T20:30:00+03:00
+    - قيمة فارغة = timezone.now()
     """
 
     if value in {None, ""}:
-        return default
+        return timezone.now()
 
-    if isinstance(value, bool):
-        return value
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        raw_value = str(value).strip()
 
-    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+        if raw_value.endswith("Z"):
+            raw_value = raw_value[:-1] + "+00:00"
 
+        try:
+            parsed = datetime.fromisoformat(raw_value)
+        except ValueError:
+            raise ValidationError({field_name: "صيغة التاريخ والوقت غير صحيحة."})
 
-def _parse_date(value: Any, field_name: str) -> date | None:
-    """
-    يحول نص YYYY-MM-DD إلى date.
-    """
+    if timezone.is_naive(parsed):
+        parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
 
-    if value in {None, ""}:
-        return None
-
-    if isinstance(value, date):
-        return value
-
-    try:
-        return date.fromisoformat(str(value))
-    except ValueError:
-        raise ValidationError({field_name: "صيغة التاريخ يجب أن تكون YYYY-MM-DD."})
+    return parsed
 
 
 def _money_to_string(value: Any) -> str:
@@ -208,6 +194,7 @@ def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
             "billing_cycle": previous_subscription.billing_cycle,
             "start_date": _date_to_string(previous_subscription.start_date),
             "end_date": _date_to_string(previous_subscription.end_date),
+            "cancelled_at": _datetime_to_string(previous_subscription.cancelled_at),
         }
         if previous_subscription
         else None,
@@ -244,61 +231,46 @@ def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
     }
 
 
-def _get_new_plan(plan_id: Any) -> SubscriptionPlan | None:
-    """
-    يرجع الباقة الجديدة المطلوبة.
-    """
-
-    if plan_id in {None, ""}:
-        return None
-
-    try:
-        return SubscriptionPlan.objects.get(id=int(plan_id))
-    except (SubscriptionPlan.DoesNotExist, TypeError, ValueError):
-        return None
-
-
 @login_required
 @csrf_protect
 @require_POST
-def system_subscription_change_plan(
+def system_subscription_confirm_payment(
     request: HttpRequest,
     subscription_id: int,
 ) -> JsonResponse:
     """
-    POST /api/system/subscriptions/<subscription_id>/change-plan/
+    POST /api/system/subscriptions/<subscription_id>/confirm-payment/
 
-    يغير باقة اشتراك شركة بإنشاء اشتراك جديد بحالة PENDING_PAYMENT.
+    يؤكد دفع اشتراك المنصة ويفعّل الاشتراك المنتظر.
     """
 
     if not user_has_system_permission(request.user, "system.subscriptions.update"):
         return JsonResponse(
             {
                 "ok": False,
-                "message": "غير مصرح لك بتغيير باقة اشتراكات الشركات.",
+                "message": "غير مصرح لك بتأكيد دفع اشتراكات الشركات.",
                 "code": "SYSTEM_SUBSCRIPTIONS_UPDATE_PERMISSION_REQUIRED",
             },
             status=403,
         )
 
-    current_subscription = get_object_or_404(
+    subscription = get_object_or_404(
         CompanySubscription.objects.select_related(
             "company",
             "plan",
+            "previous_subscription",
+            "previous_subscription__plan",
         ),
         id=subscription_id,
     )
 
-    if current_subscription.status not in {
-        CompanySubscription.Status.TRIAL,
-        CompanySubscription.Status.ACTIVE,
-    }:
+    if subscription.status != CompanySubscription.Status.PENDING_PAYMENT:
         return JsonResponse(
             {
                 "ok": False,
-                "message": "لا يمكن تغيير باقة هذا الاشتراك من حالته الحالية.",
+                "message": "لا يمكن تأكيد الدفع إلا لاشتراك بانتظار الدفع.",
                 "errors": {
-                    "status": "تغيير الباقة مسموح فقط للاشتراكات التجريبية أو النشطة."
+                    "status": "الاشتراك يجب أن يكون في حالة PENDING_PAYMENT."
                 },
             },
             status=400,
@@ -306,154 +278,61 @@ def system_subscription_change_plan(
 
     payload = _json_body(request)
 
-    new_plan = _get_new_plan(_get_value(request, payload, "plan_id"))
-    if not new_plan:
-        return JsonResponse(
-            {
-                "ok": False,
-                "message": "الباقة الجديدة مطلوبة أو غير موجودة.",
-                "errors": {"plan_id": "الباقة الجديدة مطلوبة أو غير موجودة."},
-            },
-            status=400,
-        )
-
-    if new_plan.id == current_subscription.plan_id:
-        return JsonResponse(
-            {
-                "ok": False,
-                "message": "الشركة مشتركة بالفعل في نفس الباقة.",
-                "errors": {"plan_id": "اختر باقة مختلفة عن الباقة الحالية."},
-            },
-            status=400,
-        )
-
-    if not new_plan.is_active:
-        return JsonResponse(
-            {
-                "ok": False,
-                "message": "لا يمكن التحويل إلى باقة غير نشطة.",
-                "errors": {"plan_id": "الباقة الجديدة غير نشطة."},
-            },
-            status=400,
-        )
-
-    billing_cycle = _clean_text(
-        _get_value(
-            request,
-            payload,
-            "billing_cycle",
-            current_subscription.billing_cycle,
-        )
-    ).upper()
-
-    valid_cycles = {choice[0] for choice in CompanySubscription.BillingCycle.choices}
-    if billing_cycle not in valid_cycles:
-        return JsonResponse(
-            {
-                "ok": False,
-                "message": "دورة الفوترة غير صحيحة.",
-                "errors": {"billing_cycle": "دورة الفوترة غير صحيحة."},
-            },
-            status=400,
-        )
-
-    action = _clean_text(
-        _get_value(
-            request,
-            payload,
-            "action",
-            CompanySubscription.SubscriptionAction.UPGRADE,
-        )
-    ).upper()
-
-    if action not in {
-        CompanySubscription.SubscriptionAction.UPGRADE,
-        CompanySubscription.SubscriptionAction.DOWNGRADE,
-    }:
-        return JsonResponse(
-            {
-                "ok": False,
-                "message": "نوع تغيير الباقة غير صحيح.",
-                "errors": {"action": "نوع تغيير الباقة يجب أن يكون UPGRADE أو DOWNGRADE."},
-            },
-            status=400,
-        )
-
     try:
-        start_date = _parse_date(
-            _get_value(request, payload, "start_date", timezone.localdate().isoformat()),
-            "start_date",
-        )
-        discount_amount = _to_decimal(
-            _get_value(request, payload, "discount_amount", "0.00")
-        )
-        vat_rate = _to_decimal(
-            _get_value(request, payload, "vat_rate", "0.15"),
-            default="0.15",
+        paid_at = _parse_datetime(
+            _get_value(request, payload, "paid_at", None),
+            "paid_at",
         )
     except ValidationError as exc:
         return JsonResponse(
             {
                 "ok": False,
-                "message": "تعذر قراءة بيانات تغيير الباقة.",
+                "message": "تعذر قراءة تاريخ الدفع.",
                 "errors": _validation_errors(exc),
             },
             status=400,
         )
-
-    auto_renew = _to_bool(
-        _get_value(request, payload, "auto_renew", current_subscription.auto_renew),
-        default=current_subscription.auto_renew,
-    )
 
     billing_reference = _clean_text(
-        _get_value(request, payload, "billing_reference", "")
+        _get_value(
+            request,
+            payload,
+            "billing_reference",
+            subscription.billing_reference,
+        )
     )
 
-    note = _clean_text(_get_value(request, payload, "notes", ""))
-    change_note = f"تغيير الباقة من {current_subscription.plan.name} إلى {new_plan.name}."
-
-    notes_parts = [change_note]
-    if note:
-        notes_parts.append(note)
-
-    notes = "\n".join(notes_parts)
+    cancel_previous = str(
+        _get_value(request, payload, "cancel_previous", "true")
+    ).strip().lower() not in {"0", "false", "no", "off"}
 
     try:
-        new_subscription = create_plan_change_pending_subscription(
-            current_subscription=current_subscription,
-            new_plan=new_plan,
-            billing_cycle=billing_cycle,
-            action=action,
-            start_date=start_date,
-            discount_amount=discount_amount,
-            vat_rate=vat_rate,
-            auto_renew=auto_renew,
+        activated_subscription = activate_pending_subscription(
+            subscription=subscription,
+            paid_at=paid_at,
             billing_reference=billing_reference,
-            created_by=request.user,
-            notes=notes,
+            cancel_previous=cancel_previous,
         )
 
     except ValidationError as exc:
         return JsonResponse(
             {
                 "ok": False,
-                "message": "تعذر إنشاء تغيير باقة بانتظار الدفع بسبب بيانات غير صحيحة.",
+                "message": "تعذر تأكيد الدفع وتفعيل الاشتراك.",
                 "errors": _validation_errors(exc),
             },
             status=400,
         )
 
-    current_subscription.refresh_from_db()
+    activated_subscription.refresh_from_db()
 
     return JsonResponse(
         {
             "ok": True,
-            "message": "تم إنشاء تغيير باقة بانتظار الدفع بنجاح.",
+            "message": "تم تأكيد الدفع وتفعيل الاشتراك بنجاح.",
             "data": {
-                "current_subscription": _subscription_payload(current_subscription),
-                "subscription": _subscription_payload(new_subscription),
+                "subscription": _subscription_payload(activated_subscription),
             },
         },
-        status=201,
+        status=200,
     )

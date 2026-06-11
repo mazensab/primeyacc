@@ -1,33 +1,30 @@
 # ============================================================
 # 📂 api/system/subscriptions/create.py
-# 🧠 PrimeyAcc | System Company Subscription Create API V1.1
+# 🧠 PrimeyAcc | System Company Subscription Create API V1.2
 # ------------------------------------------------------------
-# ✅ Create company subscriptions from system workspace
-# ✅ Validates company, plan, dates, billing cycle, and amounts
-# ✅ Prevents duplicate current TRIAL / ACTIVE subscription
+# ✅ Create pending company subscriptions from system workspace
+# ✅ Uses subscriptions.services.create_pending_subscription
+# ✅ Creates PENDING_PAYMENT first, not ACTIVE directly
+# ✅ Validates company, plan, billing cycle, action, discount, VAT
 # ✅ Protected by system permission: system.subscriptions.create
-# ✅ Uses central api/permissions.py guard
-# ✅ Safe payload fields based on the current CompanySubscription model
+# ✅ Keeps platform billing separated from company payment methods
 # ------------------------------------------------------------
-# القاعدة المعتمدة:
-# - هذا الملف جزء من المرحلة 1: نواة SaaS
-# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
-# - جميع APIs داخل /api/system/ تتطلب can_access_system=True
-# - إنشاء اشتراكات الشركات لا يسمح لمستخدم company فقط
-# - لا يسمح بأكثر من اشتراك TRIAL أو ACTIVE لنفس الشركة
-# - الدفع والفواتير لها وحدات مستقلة لاحقًا ولا توضع هنا
+# القاعدة المعتمدة في Phase 19:
+# - إنشاء الاشتراك من النظام لا يفعّل الاشتراك مباشرة
+# - يتم إنشاء CompanySubscription بحالة PENDING_PAYMENT
+# - التفعيل يتم لاحقًا بعد نجاح الدفع عبر confirm payment endpoint
+# - لا نستخدم payments/models.py هنا لأنها تخص مدفوعات /company
 # ============================================================
 
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
 from django.http import HttpRequest, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_protect
@@ -36,6 +33,7 @@ from django.views.decorators.http import require_POST
 from api.permissions import user_has_system_permission
 from companies.models import Company
 from subscriptions.models import CompanySubscription, SubscriptionPlan
+from subscriptions.services import create_pending_subscription, money
 
 
 def _json_body(request: HttpRequest) -> dict[str, Any]:
@@ -123,21 +121,6 @@ def _parse_date(value: Any, field_name: str) -> date | None:
         raise ValidationError({field_name: "صيغة التاريخ يجب أن تكون YYYY-MM-DD."})
 
 
-def _calculate_default_end_date(start_date: date, billing_cycle: str) -> date:
-    """
-    يحسب تاريخ النهاية الافتراضي حسب دورة الفوترة.
-
-    مبدئيًا:
-    - شهري = 30 يوم
-    - سنوي = 365 يوم
-    """
-
-    if billing_cycle == CompanySubscription.BillingCycle.YEARLY:
-        return start_date + timedelta(days=365)
-
-    return start_date + timedelta(days=30)
-
-
 def _money_to_string(value: Any) -> str:
     """
     توحيد إخراج المبالغ كنص عشري آمن للواجهة.
@@ -146,7 +129,7 @@ def _money_to_string(value: Any) -> str:
     if value is None:
         return "0.00"
 
-    return f"{value:.2f}"
+    return f"{money(value):.2f}"
 
 
 def _date_to_string(value: Any) -> str | None:
@@ -171,21 +154,18 @@ def _datetime_to_string(value: Any) -> str | None:
     return value.isoformat()
 
 
-def _model_has_field(field_name: str) -> bool:
+def _validation_errors(exc: ValidationError) -> dict[str, Any] | list[Any] | str:
     """
-    يتحقق من وجود الحقل داخل CompanySubscription.
-    """
-
-    return any(field.name == field_name for field in CompanySubscription._meta.fields)
-
-
-def _filter_subscription_fields(data: dict[str, Any]) -> dict[str, Any]:
-    """
-    يمنع تمرير حقول غير موجودة إلى CompanySubscription.
+    يحول ValidationError إلى صيغة JSON آمنة.
     """
 
-    valid_fields = {field.name for field in CompanySubscription._meta.fields}
-    return {key: value for key, value in data.items() if key in valid_fields}
+    if hasattr(exc, "message_dict"):
+        return exc.message_dict
+
+    if hasattr(exc, "messages"):
+        return exc.messages
+
+    return str(exc)
 
 
 def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
@@ -196,6 +176,7 @@ def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
     company = subscription.company
     plan = subscription.plan
     created_by = getattr(subscription, "created_by", None)
+    previous_subscription = getattr(subscription, "previous_subscription", None)
 
     return {
         "id": subscription.id,
@@ -220,18 +201,35 @@ def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
             "monthly_price": _money_to_string(plan.monthly_price),
             "yearly_price": _money_to_string(plan.yearly_price),
         },
+        "previous_subscription": {
+            "id": previous_subscription.id,
+            "status": previous_subscription.status,
+            "plan_id": previous_subscription.plan_id,
+            "billing_cycle": previous_subscription.billing_cycle,
+            "start_date": _date_to_string(previous_subscription.start_date),
+            "end_date": _date_to_string(previous_subscription.end_date),
+        }
+        if previous_subscription
+        else None,
         "status": subscription.status,
+        "action": subscription.action,
         "billing_cycle": subscription.billing_cycle,
         "start_date": _date_to_string(subscription.start_date),
         "end_date": _date_to_string(subscription.end_date),
         "days_remaining": subscription.days_remaining,
         "is_current": subscription.is_current,
+        "is_pending_payment": subscription.is_pending_payment,
         "price": _money_to_string(subscription.price),
         "discount_amount": _money_to_string(subscription.discount_amount),
         "amount_before_tax": _money_to_string(subscription.amount_before_tax),
         "tax_amount": _money_to_string(subscription.tax_amount),
         "total_amount": _money_to_string(subscription.total_amount),
         "auto_renew": subscription.auto_renew,
+        "billing_reference": subscription.billing_reference,
+        "paid_at": _datetime_to_string(subscription.paid_at),
+        "activated_at": _datetime_to_string(subscription.activated_at),
+        "cancelled_at": _datetime_to_string(subscription.cancelled_at),
+        "suspended_at": _datetime_to_string(subscription.suspended_at),
         "notes": subscription.notes,
         "created_by": {
             "id": created_by.id,
@@ -273,18 +271,20 @@ def _get_plan(plan_id: Any) -> SubscriptionPlan | None:
         return None
 
 
-def _has_current_subscription(company: Company) -> bool:
+def _get_previous_subscription(subscription_id: Any) -> CompanySubscription | None:
     """
-    يتحقق هل لدى الشركة اشتراك TRIAL أو ACTIVE حاليًا.
+    يرجع الاشتراك السابق إن تم تمريره.
     """
 
-    return CompanySubscription.objects.filter(
-        company=company,
-        status__in=[
-            CompanySubscription.Status.TRIAL,
-            CompanySubscription.Status.ACTIVE,
-        ],
-    ).exists()
+    if subscription_id in {None, ""}:
+        return None
+
+    try:
+        return CompanySubscription.objects.select_related("company", "plan").get(
+            id=int(subscription_id)
+        )
+    except (CompanySubscription.DoesNotExist, TypeError, ValueError):
+        return None
 
 
 @login_required
@@ -294,7 +294,7 @@ def system_subscription_create(request: HttpRequest) -> JsonResponse:
     """
     POST /api/system/subscriptions/create/
 
-    ينشئ اشتراك شركة جديد من مساحة النظام.
+    ينشئ اشتراك شركة جديد بحالة PENDING_PAYMENT من مساحة النظام.
     """
 
     if not user_has_system_permission(request.user, "system.subscriptions.create"):
@@ -331,44 +331,6 @@ def system_subscription_create(request: HttpRequest) -> JsonResponse:
             status=400,
         )
 
-    if not plan.is_active:
-        return JsonResponse(
-            {
-                "ok": False,
-                "message": "لا يمكن إنشاء اشتراك على باقة غير نشطة.",
-                "errors": {"plan_id": "الباقة غير نشطة."},
-            },
-            status=400,
-        )
-
-    status = _clean_text(
-        _get_value(request, payload, "status", CompanySubscription.Status.TRIAL)
-    ).upper()
-
-    valid_statuses = {choice[0] for choice in CompanySubscription.Status.choices}
-    if status not in valid_statuses:
-        return JsonResponse(
-            {
-                "ok": False,
-                "message": "حالة الاشتراك غير صحيحة.",
-                "errors": {"status": "حالة الاشتراك غير صحيحة."},
-            },
-            status=400,
-        )
-
-    if status in {CompanySubscription.Status.TRIAL, CompanySubscription.Status.ACTIVE}:
-        if _has_current_subscription(company):
-            return JsonResponse(
-                {
-                    "ok": False,
-                    "message": "هذه الشركة لديها اشتراك نشط أو تجريبي بالفعل.",
-                    "errors": {
-                        "company_id": "لا يمكن إنشاء أكثر من اشتراك نشط أو تجريبي لنفس الشركة."
-                    },
-                },
-                status=400,
-            )
-
     billing_cycle = _clean_text(
         _get_value(
             request,
@@ -389,64 +351,70 @@ def system_subscription_create(request: HttpRequest) -> JsonResponse:
             status=400,
         )
 
+    action = _clean_text(
+        _get_value(
+            request,
+            payload,
+            "action",
+            CompanySubscription.SubscriptionAction.NEW,
+        )
+    ).upper()
+
+    valid_actions = {choice[0] for choice in CompanySubscription.SubscriptionAction.choices}
+    if action not in valid_actions:
+        return JsonResponse(
+            {
+                "ok": False,
+                "message": "نوع عملية الاشتراك غير صحيح.",
+                "errors": {"action": "نوع عملية الاشتراك غير صحيح."},
+            },
+            status=400,
+        )
+
+    previous_subscription = _get_previous_subscription(
+        _get_value(request, payload, "previous_subscription_id", None)
+    )
+
+    if _get_value(request, payload, "previous_subscription_id", None) and not previous_subscription:
+        return JsonResponse(
+            {
+                "ok": False,
+                "message": "الاشتراك السابق غير موجود.",
+                "errors": {"previous_subscription_id": "الاشتراك السابق غير موجود."},
+            },
+            status=400,
+        )
+
+    if previous_subscription and previous_subscription.company_id != company.id:
+        return JsonResponse(
+            {
+                "ok": False,
+                "message": "الاشتراك السابق يجب أن يكون تابعًا لنفس الشركة.",
+                "errors": {
+                    "previous_subscription_id": "الاشتراك السابق يجب أن يكون تابعًا لنفس الشركة."
+                },
+            },
+            status=400,
+        )
+
     try:
         start_date = _parse_date(
             _get_value(request, payload, "start_date", timezone.localdate().isoformat()),
             "start_date",
         )
-        end_date = _parse_date(
-            _get_value(request, payload, "end_date", None),
-            "end_date",
-        )
-    except ValidationError as exc:
-        return JsonResponse(
-            {
-                "ok": False,
-                "message": "صيغة التاريخ غير صحيحة.",
-                "errors": exc.message_dict if hasattr(exc, "message_dict") else exc.messages,
-            },
-            status=400,
-        )
-
-    if start_date is None:
-        start_date = timezone.localdate()
-
-    if end_date is None:
-        end_date = _calculate_default_end_date(start_date, billing_cycle)
-
-    if end_date <= start_date:
-        return JsonResponse(
-            {
-                "ok": False,
-                "message": "تاريخ نهاية الاشتراك يجب أن يكون بعد تاريخ البداية.",
-                "errors": {"end_date": "تاريخ نهاية الاشتراك يجب أن يكون بعد تاريخ البداية."},
-            },
-            status=400,
-        )
-
-    default_price = (
-        plan.yearly_price
-        if billing_cycle == CompanySubscription.BillingCycle.YEARLY
-        else plan.monthly_price
-    )
-
-    try:
-        price = _to_decimal(_get_value(request, payload, "price", default_price))
         discount_amount = _to_decimal(
             _get_value(request, payload, "discount_amount", "0.00")
         )
-        tax_amount = _to_decimal(_get_value(request, payload, "tax_amount", "0.00"))
-
-        amount_before_tax = max(price - discount_amount, Decimal("0.00"))
-        default_total = amount_before_tax + tax_amount
-        total_amount = _to_decimal(
-            _get_value(request, payload, "total_amount", default_total)
+        vat_rate = _to_decimal(
+            _get_value(request, payload, "vat_rate", "0.15"),
+            default="0.15",
         )
     except ValidationError as exc:
         return JsonResponse(
             {
                 "ok": False,
-                "message": str(exc.messages[0] if hasattr(exc, "messages") else exc),
+                "message": "تعذر قراءة بيانات الاشتراك.",
+                "errors": _validation_errors(exc),
             },
             status=400,
         )
@@ -455,54 +423,33 @@ def system_subscription_create(request: HttpRequest) -> JsonResponse:
         _get_value(request, payload, "auto_renew", False),
         default=False,
     )
+    billing_reference = _clean_text(
+        _get_value(request, payload, "billing_reference", "")
+    )
     notes = _clean_text(_get_value(request, payload, "notes", ""))
 
     try:
-        with transaction.atomic():
-            subscription_data = {
-                "company": company,
-                "plan": plan,
-                "status": status,
-                "billing_cycle": billing_cycle,
-                "start_date": start_date,
-                "end_date": end_date,
-                "price": price,
-                "discount_amount": discount_amount,
-                "tax_amount": tax_amount,
-                "total_amount": total_amount,
-                "auto_renew": auto_renew,
-                "notes": notes,
-            }
-
-            if _model_has_field("amount_before_tax"):
-                subscription_data["amount_before_tax"] = amount_before_tax
-
-            if _model_has_field("created_by"):
-                subscription_data["created_by"] = request.user
-
-            if _model_has_field("updated_by"):
-                subscription_data["updated_by"] = request.user
-
-            subscription = CompanySubscription(
-                **_filter_subscription_fields(subscription_data)
-            )
-            subscription.full_clean()
-            subscription.save()
+        subscription = create_pending_subscription(
+            company=company,
+            plan=plan,
+            billing_cycle=billing_cycle,
+            action=action,
+            previous_subscription=previous_subscription,
+            start_date=start_date,
+            discount_amount=discount_amount,
+            vat_rate=vat_rate,
+            auto_renew=auto_renew,
+            billing_reference=billing_reference,
+            created_by=request.user,
+            notes=notes,
+        )
 
     except ValidationError as exc:
         return JsonResponse(
             {
                 "ok": False,
-                "message": "تعذر إنشاء الاشتراك بسبب بيانات غير صحيحة.",
-                "errors": exc.message_dict if hasattr(exc, "message_dict") else exc.messages,
-            },
-            status=400,
-        )
-    except IntegrityError:
-        return JsonResponse(
-            {
-                "ok": False,
-                "message": "تعذر إنشاء الاشتراك. قد يكون لدى الشركة اشتراك نشط أو تجريبي بالفعل.",
+                "message": "تعذر إنشاء اشتراك انتظار الدفع بسبب بيانات غير صحيحة.",
+                "errors": _validation_errors(exc),
             },
             status=400,
         )
@@ -510,7 +457,7 @@ def system_subscription_create(request: HttpRequest) -> JsonResponse:
     return JsonResponse(
         {
             "ok": True,
-            "message": "تم إنشاء اشتراك الشركة بنجاح.",
+            "message": "تم إنشاء اشتراك بانتظار الدفع بنجاح.",
             "data": {
                 "subscription": _subscription_payload(subscription),
             },
