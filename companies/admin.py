@@ -1,7 +1,8 @@
 # ============================================================
 # 📂 companies/admin.py
-# 🧠 PrimeyAcc | Companies Admin V1.2
+# 🧠 PrimeyAcc | Companies Admin V1.3
 # ------------------------------------------------------------
+# ✅ Register ActivityProfile Model
 # ✅ Register Company Model
 # ✅ Register CompanySettings Model
 # ✅ Register Branch Model
@@ -15,6 +16,7 @@
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - Company = حدود العزل الأساسية للنظام
+# - ActivityProfile = بروفايل النشاط القابل للتوسع
 # - CompanySettings = إعدادات تشغيلية لشركة واحدة فقط
 # - Branch = فرع تشغيلي داخل شركة واحدة فقط
 # - /system يدير الشركات والاشتراكات من جهة مالك المنصة
@@ -29,7 +31,107 @@ from __future__ import annotations
 from django.contrib import admin
 from django.http import HttpRequest
 
-from .models import Branch, Company, CompanySettings
+from .models import ActivityProfile, Branch, Company, CompanySettings
+
+
+@admin.register(ActivityProfile)
+class ActivityProfileAdmin(admin.ModelAdmin):
+    list_display = (
+        "code",
+        "display_name",
+        "company",
+        "is_system",
+        "is_active",
+        "created_at",
+    )
+    list_filter = (
+        "is_system",
+        "is_active",
+        "created_at",
+    )
+    search_fields = (
+        "code",
+        "name",
+        "name_ar",
+        "name_en",
+        "description",
+        "company__name",
+        "company__name_ar",
+        "company__name_en",
+        "company__company_code",
+    )
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+    )
+    autocomplete_fields = (
+        "company",
+        "created_by",
+        "updated_by",
+    )
+    ordering = (
+        "-is_system",
+        "name",
+    )
+    list_per_page = 25
+
+    fieldsets = (
+        (
+            "Scope",
+            {
+                "fields": (
+                    "is_system",
+                    "company",
+                    "is_active",
+                )
+            },
+        ),
+        (
+            "Basic Information",
+            {
+                "fields": (
+                    "code",
+                    "name",
+                    "name_ar",
+                    "name_en",
+                    "description",
+                )
+            },
+        ),
+        (
+            "Defaults",
+            {
+                "fields": (
+                    "default_settings",
+                    "extra_data",
+                )
+            },
+        ),
+        (
+            "Audit",
+            {
+                "fields": (
+                    "created_by",
+                    "updated_by",
+                    "created_at",
+                    "updated_at",
+                )
+            },
+        ),
+    )
+
+    def save_model(
+        self,
+        request: HttpRequest,
+        obj: ActivityProfile,
+        form,
+        change: bool,
+    ) -> None:
+        if not change and not obj.created_by:
+            obj.created_by = request.user
+
+        obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(Company)
@@ -38,6 +140,7 @@ class CompanyAdmin(admin.ModelAdmin):
         "company_code",
         "display_name",
         "activity_profile",
+        "activity_profile_ref",
         "status",
         "is_active",
         "city",
@@ -52,6 +155,7 @@ class CompanyAdmin(admin.ModelAdmin):
         "status",
         "is_active",
         "activity_profile",
+        "activity_profile_ref",
         "country",
         "region",
         "city",
@@ -84,6 +188,7 @@ class CompanyAdmin(admin.ModelAdmin):
         "suspended_at",
     )
     autocomplete_fields = (
+        "activity_profile_ref",
         "owner",
         "created_by",
         "updated_by",
@@ -106,6 +211,7 @@ class CompanyAdmin(admin.ModelAdmin):
                     "name_en",
                     "company_code",
                     "activity_profile",
+                    "activity_profile_ref",
                     "status",
                     "is_active",
                 )

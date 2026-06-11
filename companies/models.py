@@ -53,6 +53,173 @@ class CompanyActivityProfile(models.TextChoices):
     PETROL_STATION = "PETROL_STATION", "Petrol Station"
 
 
+class ActivityProfile(models.Model):
+    """
+    Activity profile catalog.
+
+    This model is the expandable foundation for company business activities.
+    It supports:
+    - system-level profiles available to all companies.
+    - company-specific custom profiles.
+    - default operational/accounting settings for future phases.
+
+    The legacy Company.activity_profile CharField is kept for compatibility.
+    New code should gradually use Company.activity_profile_ref.
+    """
+
+    company = models.ForeignKey(
+        "Company",
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name="custom_activity_profiles",
+        db_index=True,
+        verbose_name="Company",
+        help_text="Null means system-level profile. Set for company-specific custom profiles.",
+    )
+
+    code = models.CharField(
+        max_length=60,
+        db_index=True,
+        verbose_name="Activity code",
+    )
+    name = models.CharField(
+        max_length=255,
+        db_index=True,
+        verbose_name="Activity name",
+    )
+    name_ar = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Arabic name",
+    )
+    name_en = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="English name",
+    )
+    description = models.TextField(
+        blank=True,
+        verbose_name="Description",
+    )
+
+    is_system = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name="System profile",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name="Active",
+    )
+
+    default_settings = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Default settings",
+        help_text="Future-ready defaults for accounting, POS, inventory, documents, and reports.",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="created_activity_profiles",
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="updated_activity_profiles",
+        verbose_name="Updated by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Activity profile"
+        verbose_name_plural = "Activity profiles"
+        ordering = ["-is_system", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "code"],
+                name="unique_activity_profile_code_per_company",
+            ),
+            models.UniqueConstraint(
+                fields=["code"],
+                condition=models.Q(company__isnull=True),
+                name="unique_system_activity_profile_code",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "is_active"]),
+            models.Index(fields=["is_system", "is_active"]),
+            models.Index(fields=["code"]),
+            models.Index(fields=["name"]),
+        ]
+
+    def __str__(self) -> str:
+        if self.is_system:
+            scope = "System"
+        elif self.company_id:
+            scope = self.company.display_name
+        else:
+            scope = "Custom"
+
+        return f"{self.display_name} ({scope})"
+
+    @property
+    def display_name(self) -> str:
+        return self.name_ar or self.name_en or self.name
+
+    def clean(self) -> None:
+        if self.is_system and self.company_id:
+            raise ValidationError(
+                {"company": "System activity profiles must not be linked to a company."}
+            )
+
+        if not self.is_system and not self.company_id:
+            raise ValidationError(
+                {"company": "Custom activity profiles must be linked to a company."}
+            )
+
+        if not isinstance(self.default_settings, dict):
+            raise ValidationError(
+                {"default_settings": "Default settings must be a JSON object."}
+            )
+
+        if not isinstance(self.extra_data, dict):
+            raise ValidationError(
+                {"extra_data": "Extra data must be a JSON object."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.code = str(self.code or "").strip().upper()
+
+        if self.company_id:
+            self.is_system = False
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
 class BranchStatus(models.TextChoices):
     ACTIVE = "ACTIVE", "Active"
     INACTIVE = "INACTIVE", "Inactive"
@@ -118,6 +285,16 @@ class Company(models.Model):
         default=CompanyActivityProfile.GENERAL,
         db_index=True,
         verbose_name="Activity profile",
+    )
+    activity_profile_ref = models.ForeignKey(
+        ActivityProfile,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="companies",
+        db_index=True,
+        verbose_name="Activity profile reference",
+        help_text="Expandable activity profile reference. Keeps legacy activity_profile field untouched.",
     )
 
     status = models.CharField(
@@ -320,6 +497,7 @@ class Company(models.Model):
         indexes = [
             models.Index(fields=["status", "is_active"]),
             models.Index(fields=["activity_profile", "status"]),
+            models.Index(fields=["activity_profile_ref", "status"]),
             models.Index(fields=["city", "status"]),
             models.Index(fields=["district", "city"]),
             models.Index(fields=["postal_code"]),

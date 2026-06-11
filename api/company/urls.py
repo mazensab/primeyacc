@@ -59,6 +59,7 @@ urlpatterns = [
     path("setup/", include("api.company.setup.urls")),
     path("permissions/", include("api.company.permissions.urls")),
     path("settings/", include("api.company.settings.urls")),
+    path("activity-profiles/", include("api.company.activity_profiles.urls")),
     path("branches/", include("api.company.branches.urls")),
     path("users/", include("api.company.users.urls")),
     path("parties/", include("api.company.parties.urls")),

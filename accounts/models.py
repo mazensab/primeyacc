@@ -159,6 +159,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.users.update",
         "company.settings.view",
         "company.settings.update",
+        "company.activity_profiles.view",
+        "company.activity_profiles.update",
         "company.branches.view",
         "company.branches.create",
         "company.branches.update",
@@ -344,6 +346,7 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
     CompanyRole.MANAGER: [
         "company.dashboard.view",
         "company.settings.view",
+        "company.activity_profiles.view",
         "company.branches.view",
         "company.categories.view",
         "company.units.view",
@@ -747,6 +750,7 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
     CompanyRole.VIEWER: [
         "company.dashboard.view",
         "company.settings.view",
+        "company.activity_profiles.view",
         "company.branches.view",
         "company.categories.view",
         "company.units.view",
@@ -788,7 +792,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.hr.performance.criteria.view",
         "company.hr.performance.reviews.view",
         "company.hr.performance.scores.view",
-        "company.hr.performance.goals.view",        "company.documents.templates.view",
+        "company.hr.performance.goals.view",
+        "company.documents.templates.view",
 
         "company.reports.view",
     ],

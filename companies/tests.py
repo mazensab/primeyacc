@@ -8,6 +8,7 @@
 # ✅ Company setup/readiness API tests
 # ✅ Company users/memberships API tests
 # ✅ Branch tenant-isolation tests
+# ✅ Activity Profiles tests
 # ✅ /api/company/me/ snapshot tests
 # ✅ /api/company/profile/ snapshot tests
 # ✅ /api/company/permissions/ snapshot tests
@@ -22,6 +23,7 @@
 # - CompanyMembership = حد الوصول الرسمي لمساحة /company
 # - /api/company لا يقبل company_id من الواجهة كمصدر ثقة
 # - CompanySettings تخص الشركة الحالية فقط
+# - ActivityProfile يدعم الأنشطة العامة والمخصصة للشركات
 # - مستخدمو الشركة لا يظهرون إلا لأعضاء نفس الشركة
 # - فروع الشركة لا تظهر إلا لأعضاء نفس الشركة
 # - الصلاحيات والأدوار مصدرها الباكند
@@ -37,7 +39,14 @@ from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 
 from accounts.models import CompanyMembership, CompanyRole, MembershipStatus, UserProfile
-from companies.models import Branch, BranchType, Company, CompanySettings, CompanyStatus
+from companies.models import (
+    ActivityProfile,
+    Branch,
+    BranchType,
+    Company,
+    CompanySettings,
+    CompanyStatus,
+)
 
 
 User = get_user_model()
@@ -171,6 +180,298 @@ class CompanyWorkspacePhase3Tests(TestCase):
             updated_by=self.other_user,
         )
 
+    def test_can_create_system_activity_profile(self) -> None:
+        """
+        System activity profiles are global and not linked to one company.
+        """
+
+        profile = ActivityProfile.objects.create(
+            code="retail",
+            name="Retail",
+            name_ar="تجارة تجزئة",
+            name_en="Retail",
+            is_system=True,
+            is_active=True,
+            default_settings={
+                "inventory": {
+                    "enabled": True,
+                },
+                "pos": {
+                    "enabled": True,
+                },
+            },
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.assertEqual(profile.code, "RETAIL")
+        self.assertTrue(profile.is_system)
+        self.assertIsNone(profile.company_id)
+        self.assertEqual(profile.display_name, "تجارة تجزئة")
+        self.assertTrue(profile.default_settings["inventory"]["enabled"])
+
+    def test_can_create_company_custom_activity_profile(self) -> None:
+        """
+        Custom activity profiles must belong to one company.
+        """
+
+        profile = ActivityProfile.objects.create(
+            company=self.company,
+            code="custom-services",
+            name="Custom Services",
+            name_ar="خدمات مخصصة",
+            name_en="Custom Services",
+            is_system=False,
+            is_active=True,
+            default_settings={
+                "sales": {
+                    "require_customer": True,
+                },
+            },
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.assertEqual(profile.code, "CUSTOM-SERVICES")
+        self.assertFalse(profile.is_system)
+        self.assertEqual(profile.company_id, self.company.id)
+        self.assertEqual(profile.display_name, "خدمات مخصصة")
+        self.assertTrue(profile.default_settings["sales"]["require_customer"])
+
+    def test_company_can_reference_activity_profile_without_breaking_legacy_field(self) -> None:
+        """
+        Company keeps legacy activity_profile while using expandable activity_profile_ref.
+        """
+
+        profile = ActivityProfile.objects.create(
+            code="wholesale",
+            name="Wholesale",
+            name_ar="تجارة جملة",
+            name_en="Wholesale",
+            is_system=True,
+            is_active=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.company.activity_profile_ref = profile
+        self.company.save(update_fields=["activity_profile_ref", "updated_at"])
+
+        self.company.refresh_from_db()
+
+        self.assertEqual(self.company.activity_profile_ref_id, profile.id)
+        self.assertEqual(self.company.activity_profile, "GENERAL")
+
+    def test_activity_profiles_list_returns_system_and_current_company_profiles(self) -> None:
+        """
+        /api/company/activity-profiles/ returns active system profiles
+        and current-company custom profiles only.
+        """
+
+        system_profile = ActivityProfile.objects.create(
+            code="retail-api",
+            name="Retail API",
+            name_ar="????? ????? API",
+            name_en="Retail API",
+            is_system=True,
+            is_active=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        own_profile = ActivityProfile.objects.create(
+            company=self.company,
+            code="own-api",
+            name="Own API",
+            name_ar="???? ?????? API",
+            name_en="Own API",
+            is_system=False,
+            is_active=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        other_profile = ActivityProfile.objects.create(
+            company=self.other_company,
+            code="other-api",
+            name="Other API",
+            name_ar="???? ???? ???? API",
+            name_en="Other API",
+            is_system=False,
+            is_active=True,
+            created_by=self.other_user,
+            updated_by=self.other_user,
+        )
+
+        inactive_profile = ActivityProfile.objects.create(
+            code="inactive-api",
+            name="Inactive API",
+            name_ar="???? ??? ???? API",
+            name_en="Inactive API",
+            is_system=True,
+            is_active=False,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.client.force_login(self.user)
+
+        response = self.client.get("/api/company/activity-profiles/")
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        results = payload["data"]["results"]
+        result_ids = {item["id"] for item in results}
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["data"]["company_id"], self.company.id)
+        self.assertIn(system_profile.id, result_ids)
+        self.assertIn(own_profile.id, result_ids)
+        self.assertNotIn(other_profile.id, result_ids)
+        self.assertNotIn(inactive_profile.id, result_ids)
+
+    def test_current_activity_profile_returns_company_activity_snapshot(self) -> None:
+        """
+        /api/company/activity-profiles/current/ returns legacy and new activity profile state.
+        """
+
+        profile = ActivityProfile.objects.create(
+            code="services-api",
+            name="Services API",
+            name_ar="????? API",
+            name_en="Services API",
+            is_system=True,
+            is_active=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.company.activity_profile_ref = profile
+        self.company.save(update_fields=["activity_profile_ref", "updated_at"])
+
+        self.client.force_login(self.user)
+
+        response = self.client.get("/api/company/activity-profiles/current/")
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        data = payload["data"]
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(data["company_id"], self.company.id)
+        self.assertEqual(data["legacy_activity_profile"], "GENERAL")
+        self.assertEqual(data["activity_profile"]["id"], profile.id)
+        self.assertEqual(data["activity_profile"]["code"], "SERVICES-API")
+
+    def test_owner_can_update_current_company_activity_profile(self) -> None:
+        """
+        Owner can update current company's activity_profile_ref using an available profile.
+        """
+
+        profile = ActivityProfile.objects.create(
+            code="wholesale-api",
+            name="Wholesale API",
+            name_ar="???? API",
+            name_en="Wholesale API",
+            is_system=True,
+            is_active=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.client.force_login(self.user)
+
+        response = self.client.patch(
+            "/api/company/activity-profiles/update/",
+            data=json.dumps({"activity_profile_id": profile.id}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        data = payload["data"]
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(data["company_id"], self.company.id)
+        self.assertEqual(data["activity_profile"]["id"], profile.id)
+
+        self.company.refresh_from_db()
+        self.assertEqual(self.company.activity_profile_ref_id, profile.id)
+
+    def test_update_activity_profile_blocks_cross_company_profile(self) -> None:
+        """
+        A company cannot assign an activity profile belonging to another company.
+        """
+
+        other_profile = ActivityProfile.objects.create(
+            company=self.other_company,
+            code="blocked-api",
+            name="Blocked API",
+            name_ar="????? API",
+            name_en="Blocked API",
+            is_system=False,
+            is_active=True,
+            created_by=self.other_user,
+            updated_by=self.other_user,
+        )
+
+        self.client.force_login(self.user)
+
+        response = self.client.patch(
+            "/api/company/activity-profiles/update/",
+            data=json.dumps({"activity_profile_id": other_profile.id}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+        payload = response.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["code"], "ACTIVITY_PROFILE_NOT_FOUND")
+
+        self.company.refresh_from_db()
+        self.assertIsNone(self.company.activity_profile_ref_id)
+
+    def test_owner_can_clear_current_company_activity_profile(self) -> None:
+        """
+        Owner can clear current company's activity_profile_ref.
+        """
+
+        profile = ActivityProfile.objects.create(
+            code="clear-api",
+            name="Clear API",
+            name_ar="??? API",
+            name_en="Clear API",
+            is_system=True,
+            is_active=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.company.activity_profile_ref = profile
+        self.company.save(update_fields=["activity_profile_ref", "updated_at"])
+
+        self.client.force_login(self.user)
+
+        response = self.client.patch(
+            "/api/company/activity-profiles/update/",
+            data=json.dumps({"activity_profile_id": None}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        data = payload["data"]
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(data["company_id"], self.company.id)
+        self.assertIsNone(data["activity_profile"])
+
+        self.company.refresh_from_db()
+        self.assertIsNone(self.company.activity_profile_ref_id)
+
     def test_company_apis_return_json_401_for_guest(self) -> None:
         """
         Guest requests should receive JSON 401, not /accounts/login/ HTML redirects.
@@ -267,6 +568,8 @@ class CompanyWorkspacePhase3Tests(TestCase):
         self.assertIn("ADMIN", data["role_permissions"])
         self.assertIn("company.branches.view", data["role_permissions"]["ADMIN"])
         self.assertIn("company.users.update", data["role_permissions"]["ADMIN"])
+        self.assertIn("company.activity_profiles.view", data["role_permissions"]["ADMIN"])
+        self.assertIn("company.activity_profiles.update", data["role_permissions"]["ADMIN"])
 
     def test_company_setup_overview_returns_readiness_snapshot(self) -> None:
         """
