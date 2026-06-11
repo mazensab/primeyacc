@@ -222,3 +222,204 @@ def build_trial_balance_report(
         },
         "results": results,
     }
+
+def _resolve_ledger_account(
+    company: Any,
+    *,
+    account_id: Any = None,
+    account_code: Any = None,
+) -> Account:
+    """
+    Resolve account safely inside current company only.
+    """
+    if account_id in [None, ""] and account_code in [None, ""]:
+        raise ValidationError(
+            {
+                "account": "يجب تحديد account_id أو account_code.",
+            }
+        )
+
+    accounts_qs = Account.objects.filter(company=company)
+
+    if account_id not in [None, ""]:
+        try:
+            return accounts_qs.get(pk=account_id)
+        except Account.DoesNotExist as exc:
+            raise ValidationError(
+                {
+                    "account_id": "الحساب غير موجود داخل هذه الشركة.",
+                }
+            ) from exc
+
+    try:
+        return accounts_qs.get(code=str(account_code).strip())
+    except Account.DoesNotExist as exc:
+        raise ValidationError(
+            {
+                "account_code": "كود الحساب غير موجود داخل هذه الشركة.",
+            }
+        ) from exc
+
+
+def build_general_ledger_report(
+    company: Any,
+    *,
+    account_id: Any = None,
+    account_code: Any = None,
+    date_from: Any = None,
+    date_to: Any = None,
+    include_opening: Any = True,
+) -> dict[str, Any]:
+    """
+    Build general ledger report for one account.
+
+    Rules:
+    - Only POSTED journal entries are included.
+    - Company is taken from request.company, never frontend company_id.
+    - Account must belong to the current company.
+    - Opening balance is calculated before date_from when enabled.
+    """
+    _validate_company(company)
+
+    account = _resolve_ledger_account(
+        company,
+        account_id=account_id,
+        account_code=account_code,
+    )
+
+    parsed_date_from = _parse_date(date_from, field_name="date_from")
+    parsed_date_to = _parse_date(date_to, field_name="date_to")
+
+    if parsed_date_from and parsed_date_to and parsed_date_to < parsed_date_from:
+        raise ValidationError(
+            {
+                "date_to": "تاريخ النهاية لا يمكن أن يكون قبل تاريخ البداية.",
+            }
+        )
+
+    include_opening_bool = _parse_bool(include_opening, default=True)
+
+    base_lines_qs = JournalEntryLine.objects.filter(
+        company=company,
+        journal_entry__company=company,
+        journal_entry__status=JournalEntryStatus.POSTED,
+        account=account,
+    ).select_related(
+        "journal_entry",
+        "account",
+    )
+
+    opening_debit = MONEY_ZERO
+    opening_credit = MONEY_ZERO
+
+    if include_opening_bool and parsed_date_from:
+        opening_totals = base_lines_qs.filter(
+            journal_entry__entry_date__lt=parsed_date_from,
+        ).aggregate(
+            total_debit=Sum("debit_amount"),
+            total_credit=Sum("credit_amount"),
+        )
+
+        opening_debit = _money(opening_totals["total_debit"])
+        opening_credit = _money(opening_totals["total_credit"])
+
+    lines_qs = base_lines_qs
+
+    if parsed_date_from:
+        lines_qs = lines_qs.filter(
+            journal_entry__entry_date__gte=parsed_date_from,
+        )
+
+    if parsed_date_to:
+        lines_qs = lines_qs.filter(
+            journal_entry__entry_date__lte=parsed_date_to,
+        )
+
+    lines_qs = lines_qs.order_by(
+        "journal_entry__entry_date",
+        "journal_entry_id",
+        "id",
+    )
+
+    opening_balance = _money(opening_debit - opening_credit)
+    running_balance = opening_balance
+
+    entries: list[dict[str, Any]] = []
+
+    for line in lines_qs:
+        debit = _money(line.debit_amount)
+        credit = _money(line.credit_amount)
+        running_balance = _money(running_balance + debit - credit)
+
+        entries.append(
+            {
+                "journal_entry": {
+                    "id": line.journal_entry_id,
+                    "entry_number": line.journal_entry.entry_number,
+                    "entry_date": line.journal_entry.entry_date.isoformat(),
+                    "status": line.journal_entry.status,
+                    "description": line.journal_entry.description,
+                    "source_type": line.journal_entry.source_type,
+                    "source_id": line.journal_entry.source_id,
+                },
+                "line": {
+                    "id": line.pk,
+                    "description": line.description,
+                    "debit": _money_str(debit),
+                    "credit": _money_str(credit),
+                    "running_balance": _money_str(running_balance),
+                    "running_balance_type": "DEBIT"
+                    if running_balance >= MONEY_ZERO
+                    else "CREDIT",
+                },
+            }
+        )
+
+    period_totals = lines_qs.aggregate(
+        total_debit=Sum("debit_amount"),
+        total_credit=Sum("credit_amount"),
+    )
+
+    period_debit = _money(period_totals["total_debit"])
+    period_credit = _money(period_totals["total_credit"])
+    closing_balance = _money(opening_balance + period_debit - period_credit)
+
+    return {
+        "report": {
+            "key": "general_ledger",
+            "name": "دفتر الأستاذ",
+            "phase": "16.3",
+            "generated_at": timezone.now().isoformat(),
+        },
+        "filters": {
+            "account_id": account.pk,
+            "account_code": account.code,
+            "date_from": parsed_date_from.isoformat() if parsed_date_from else None,
+            "date_to": parsed_date_to.isoformat() if parsed_date_to else None,
+            "include_opening": include_opening_bool,
+        },
+        "account": {
+            "id": account.pk,
+            "code": account.code,
+            "name": account.name,
+            "name_en": account.name_en,
+            "type": account.account_type,
+            "nature": account.nature,
+            "level": account.level,
+            "is_group": account.is_group,
+            "parent_id": account.parent_id,
+        },
+        "summary": {
+            "opening_debit": _money_str(opening_debit),
+            "opening_credit": _money_str(opening_credit),
+            "opening_balance": _money_str(opening_balance),
+            "period_debit": _money_str(period_debit),
+            "period_credit": _money_str(period_credit),
+            "closing_balance": _money_str(closing_balance),
+            "closing_balance_type": "DEBIT"
+            if closing_balance >= MONEY_ZERO
+            else "CREDIT",
+            "entries_count": len(entries),
+        },
+        "entries": entries,
+    }

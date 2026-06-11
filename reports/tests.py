@@ -428,3 +428,83 @@ class ReportsFoundationTests(TestCase):
         self.assertEqual(body["summary"]["difference"], "0.00")
         self.assertTrue(body["summary"]["is_balanced"])
         self.assertGreaterEqual(body["summary"]["accounts_count"], 100)
+    def test_general_ledger_report_api_returns_posted_account_lines(self):
+        seed_company_chart_of_accounts(self.company)
+
+        posted_entry = create_manual_journal_entry(
+            company=self.company,
+            entry_date=timezone.localdate(),
+            description="Posted ledger entry",
+            reference="REPORTS-GL-POSTED",
+            lines=self._balanced_lines(),
+        )
+        posted_entry = post_journal_entry(posted_entry)
+
+        self.assertEqual(posted_entry.status, JournalEntryStatus.POSTED)
+
+        draft_entry = create_manual_journal_entry(
+            company=self.company,
+            entry_date=timezone.localdate(),
+            description="Draft ledger entry",
+            reference="REPORTS-GL-DRAFT",
+            lines=[
+                EntryLinePayload(
+                    account=get_account_by_code(self.company, "110101"),
+                    debit_amount=Decimal("250.00"),
+                    credit_amount=Decimal("0.00"),
+                ),
+                EntryLinePayload(
+                    account=get_account_by_code(self.company, "3201"),
+                    debit_amount=Decimal("0.00"),
+                    credit_amount=Decimal("250.00"),
+                ),
+            ],
+        )
+
+        self.assertEqual(draft_entry.status, JournalEntryStatus.DRAFT)
+
+        client = APIClient()
+        client.force_authenticate(user=self.owner)
+
+        response = client.get(
+            "/api/company/reports/general-ledger/",
+            {
+                "account_code": "110101",
+                "include_opening": "false",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+
+        body = response.json()
+
+        self.assertTrue(body["success"])
+        self.assertEqual(body["company"]["id"], self.company.pk)
+        self.assertEqual(body["report"]["key"], "general_ledger")
+        self.assertEqual(body["report"]["phase"], "16.3")
+        self.assertEqual(body["account"]["code"], "110101")
+        self.assertEqual(body["summary"]["period_debit"], "100.00")
+        self.assertEqual(body["summary"]["period_credit"], "0.00")
+        self.assertEqual(body["summary"]["closing_balance"], "100.00")
+        self.assertEqual(body["summary"]["entries_count"], 1)
+
+        self.assertEqual(len(body["entries"]), 1)
+        self.assertEqual(body["entries"][0]["journal_entry"]["id"], posted_entry.pk)
+        self.assertEqual(body["entries"][0]["line"]["debit"], "100.00")
+        self.assertEqual(body["entries"][0]["line"]["credit"], "0.00")
+        self.assertEqual(body["entries"][0]["line"]["running_balance"], "100.00")
+
+    def test_general_ledger_report_api_requires_account_filter(self):
+        client = APIClient()
+        client.force_authenticate(user=self.owner)
+
+        response = client.get(
+            "/api/company/reports/general-ledger/",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+
+        body = response.json()
+
+        self.assertFalse(body["success"])
+
