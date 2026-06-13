@@ -5839,6 +5839,18 @@ class SalesCreditNote(models.Model):
         verbose_name="Total amount",
     )
 
+    allocated_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Allocated amount",
+        help_text=(
+            "Amount already allocated from this posted "
+            "credit note to sales invoices."
+        ),
+    )
+
     currency_code = models.CharField(
         max_length=10,
         default="SAR",
@@ -6044,6 +6056,127 @@ class SalesCreditNote(models.Model):
             SalesCreditNoteStatus.ISSUED,
         ]
 
+    @property
+    def available_amount(self) -> Decimal:
+        """
+        Remaining credit available for invoice allocation.
+        """
+        available = quantize_money(
+            self.total_amount - self.allocated_amount
+        )
+        return max(available, MONEY_ZERO)
+
+    @property
+    def is_fully_allocated(self) -> bool:
+        return (
+            self.total_amount > MONEY_ZERO
+            and self.available_amount <= MONEY_ZERO
+        )
+
+    def apply_credit_allocation(
+        self,
+        amount: Decimal | int | float | str,
+        *,
+        save: bool = True,
+        user=None,
+    ) -> None:
+        """
+        Consume part of this posted credit note.
+        """
+        allocation_amount = quantize_money(amount)
+
+        if self.status != SalesCreditNoteStatus.POSTED:
+            raise ValidationError(
+                {
+                    "status":
+                    "Only posted credit notes can be allocated."
+                }
+            )
+
+        if allocation_amount <= MONEY_ZERO:
+            raise ValidationError(
+                {
+                    "amount":
+                    "Credit allocation amount must be greater than zero."
+                }
+            )
+
+        if allocation_amount > self.available_amount:
+            raise ValidationError(
+                {
+                    "amount":
+                    "Credit allocation cannot exceed available credit."
+                }
+            )
+
+        self.allocated_amount = quantize_money(
+            self.allocated_amount + allocation_amount
+        )
+
+        if user:
+            self.updated_by = user
+
+        self.full_clean()
+
+        if save:
+            update_fields = [
+                "allocated_amount",
+                "updated_at",
+            ]
+
+            if user:
+                update_fields.append("updated_by")
+
+            self.save(update_fields=update_fields)
+
+    def reverse_credit_allocation(
+        self,
+        amount: Decimal | int | float | str,
+        *,
+        save: bool = True,
+        user=None,
+    ) -> None:
+        """
+        Restore previously allocated credit.
+        """
+        reversal_amount = quantize_money(amount)
+
+        if reversal_amount <= MONEY_ZERO:
+            raise ValidationError(
+                {
+                    "amount":
+                    "Credit allocation reversal must be greater than zero."
+                }
+            )
+
+        if reversal_amount > self.allocated_amount:
+            raise ValidationError(
+                {
+                    "amount":
+                    "Credit reversal cannot exceed allocated amount."
+                }
+            )
+
+        self.allocated_amount = quantize_money(
+            self.allocated_amount - reversal_amount
+        )
+
+        if user:
+            self.updated_by = user
+
+        self.full_clean()
+
+        if save:
+            update_fields = [
+                "allocated_amount",
+                "updated_at",
+            ]
+
+            if user:
+                update_fields.append("updated_by")
+
+            self.save(update_fields=update_fields)
+
     def clean(self) -> None:
         """
         Validate company isolation, source documents, dates, and totals.
@@ -6081,6 +6214,30 @@ class SalesCreditNote(models.Model):
         self.total_amount = quantize_money(
             self.total_amount
         )
+        self.allocated_amount = quantize_money(
+            self.allocated_amount
+        )
+
+        if self.allocated_amount > self.total_amount:
+            raise ValidationError(
+                {
+                    "allocated_amount":
+                    "Allocated amount cannot exceed "
+                    "credit note total."
+                }
+            )
+
+        if (
+            self.allocated_amount > MONEY_ZERO
+            and self.status
+            != SalesCreditNoteStatus.POSTED
+        ):
+            raise ValidationError(
+                {
+                    "allocated_amount":
+                    "Only posted credit notes can carry allocations."
+                }
+            )
 
         if self.invoice_id and self.company_id:
             if (
@@ -7273,4 +7430,512 @@ class SalesCreditNoteItem(models.Model):
 
 # End Phase 21.5.1 - Sales Credit Notes Models Foundation
 # ============================================================
+
+
+# ============================================================
+# Phase 21.6.1 - Customer Credit Balance Models Foundation
+# ------------------------------------------------------------
+# Posted credit notes create customer credit availability.
+# Credit may be allocated partially or fully to issued invoices.
+# Allocation reversal restores both invoice balance and credit.
+# ============================================================
+
+
+class CustomerCreditAllocationStatus(models.TextChoices):
+    """
+    Customer credit allocation lifecycle.
+    """
+
+    ACTIVE = "ACTIVE", "Active"
+    REVERSED = "REVERSED", "Reversed"
+
+
+class CustomerCreditBalance(models.Model):
+    """
+    Aggregated customer credit balance per company and currency.
+
+    Values are maintained transactionally by sales services.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="customer_credit_balances",
+        db_index=True,
+        verbose_name="Company",
+    )
+
+    customer = models.ForeignKey(
+        BusinessParty,
+        on_delete=models.PROTECT,
+        related_name="credit_balances",
+        db_index=True,
+        verbose_name="Customer",
+    )
+
+    currency_code = models.CharField(
+        max_length=10,
+        default="SAR",
+        db_index=True,
+        verbose_name="Currency code",
+    )
+
+    total_credit = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Total posted credit",
+    )
+
+    allocated_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Allocated amount",
+    )
+
+    available_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Available amount",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Customer Credit Balance"
+        verbose_name_plural = "Customer Credit Balances"
+        ordering = [
+            "customer_id",
+            "currency_code",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "company",
+                    "customer",
+                    "currency_code",
+                ],
+                name=(
+                    "unique_customer_credit_balance_per_currency"
+                ),
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=[
+                    "company",
+                    "customer",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "currency_code",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "available_amount",
+                ]
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.customer.display_name}"
+            f" - {self.available_amount}"
+            f" {self.currency_code}"
+        )
+
+    def clean(self) -> None:
+        super().clean()
+
+        self.currency_code = (
+            self.currency_code or "SAR"
+        ).strip().upper()
+
+        self.total_credit = quantize_money(
+            self.total_credit
+        )
+        self.allocated_amount = quantize_money(
+            self.allocated_amount
+        )
+        self.available_amount = quantize_money(
+            self.available_amount
+        )
+
+        if (
+            self.customer_id
+            and self.customer.company_id
+            != self.company_id
+        ):
+            raise ValidationError(
+                {
+                    "customer":
+                    "Customer credit balance must belong "
+                    "to the same company."
+                }
+            )
+
+        if self.customer_id and self.customer.party_type not in [
+            BusinessPartyType.CUSTOMER,
+            BusinessPartyType.BOTH,
+        ]:
+            raise ValidationError(
+                {
+                    "customer":
+                    "Selected party is not a customer."
+                }
+            )
+
+        if self.allocated_amount > self.total_credit:
+            raise ValidationError(
+                {
+                    "allocated_amount":
+                    "Allocated credit cannot exceed total credit."
+                }
+            )
+
+        expected_available = quantize_money(
+            self.total_credit - self.allocated_amount
+        )
+
+        if expected_available < MONEY_ZERO:
+            expected_available = MONEY_ZERO
+
+        self.available_amount = expected_available
+
+
+class CustomerCreditAllocation(models.Model):
+    """
+    Allocation of one posted sales credit note to one issued invoice.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="customer_credit_allocations",
+        db_index=True,
+        verbose_name="Company",
+    )
+
+    customer = models.ForeignKey(
+        BusinessParty,
+        on_delete=models.PROTECT,
+        related_name="credit_allocations",
+        db_index=True,
+        verbose_name="Customer",
+    )
+
+    credit_note = models.ForeignKey(
+        SalesCreditNote,
+        on_delete=models.PROTECT,
+        related_name="allocations",
+        db_index=True,
+        verbose_name="Sales credit note",
+    )
+
+    invoice = models.ForeignKey(
+        SalesInvoice,
+        on_delete=models.PROTECT,
+        related_name="credit_allocations",
+        db_index=True,
+        verbose_name="Sales invoice",
+    )
+
+    amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        validators=[
+            MinValueValidator(Decimal("0.01"))
+        ],
+        verbose_name="Allocated amount",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=CustomerCreditAllocationStatus.choices,
+        default=CustomerCreditAllocationStatus.ACTIVE,
+        db_index=True,
+        verbose_name="Status",
+    )
+
+    allocated_at = models.DateTimeField(
+        default=timezone.now,
+        db_index=True,
+        verbose_name="Allocated at",
+    )
+
+    reversed_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Reversed at",
+    )
+
+    reversal_reason = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Reversal reason",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_customer_credit_allocations",
+        blank=True,
+        null=True,
+        verbose_name="Created by",
+    )
+
+    reversed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="reversed_customer_credit_allocations",
+        blank=True,
+        null=True,
+        verbose_name="Reversed by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Customer Credit Allocation"
+        verbose_name_plural = "Customer Credit Allocations"
+        ordering = [
+            "-allocated_at",
+            "-id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "credit_note",
+                    "invoice",
+                ],
+                condition=Q(
+                    status=CustomerCreditAllocationStatus.ACTIVE
+                ),
+                name=(
+                    "unique_active_credit_allocation_per_invoice"
+                ),
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=[
+                    "company",
+                    "customer",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "status",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "credit_note",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "invoice",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "allocated_at",
+                ]
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.credit_note.credit_note_number}"
+            f" -> {self.invoice.invoice_number}"
+            f" ({self.amount})"
+        )
+
+    @property
+    def is_active(self) -> bool:
+        return (
+            self.status
+            == CustomerCreditAllocationStatus.ACTIVE
+        )
+
+    @property
+    def is_reversed(self) -> bool:
+        return (
+            self.status
+            == CustomerCreditAllocationStatus.REVERSED
+        )
+
+    def clean(self) -> None:
+        super().clean()
+
+        self.amount = quantize_money(
+            self.amount
+        )
+        self.reversal_reason = (
+            self.reversal_reason or ""
+        ).strip()
+
+        if self.amount <= MONEY_ZERO:
+            raise ValidationError(
+                {
+                    "amount":
+                    "Credit allocation amount must "
+                    "be greater than zero."
+                }
+            )
+
+        if (
+            self.customer_id
+            and self.customer.company_id
+            != self.company_id
+        ):
+            raise ValidationError(
+                {
+                    "customer":
+                    "Allocation customer must belong "
+                    "to the same company."
+                }
+            )
+
+        if (
+            self.credit_note_id
+            and self.credit_note.company_id
+            != self.company_id
+        ):
+            raise ValidationError(
+                {
+                    "credit_note":
+                    "Credit note must belong "
+                    "to the same company."
+                }
+            )
+
+        if (
+            self.invoice_id
+            and self.invoice.company_id
+            != self.company_id
+        ):
+            raise ValidationError(
+                {
+                    "invoice":
+                    "Invoice must belong "
+                    "to the same company."
+                }
+            )
+
+        if self.credit_note_id:
+            if (
+                self.credit_note.status
+                != SalesCreditNoteStatus.POSTED
+            ):
+                raise ValidationError(
+                    {
+                        "credit_note":
+                        "Only posted credit notes "
+                        "can be allocated."
+                    }
+                )
+
+            if (
+                self.customer_id
+                and self.credit_note.customer_id
+                != self.customer_id
+            ):
+                raise ValidationError(
+                    {
+                        "customer":
+                        "Allocation customer must match "
+                        "credit note customer."
+                    }
+                )
+
+        if self.invoice_id:
+            if (
+                self.invoice.status
+                != SalesInvoiceStatus.ISSUED
+            ):
+                raise ValidationError(
+                    {
+                        "invoice":
+                        "Only issued invoices "
+                        "can receive customer credit."
+                    }
+                )
+
+            if (
+                self.customer_id
+                and self.invoice.customer_id
+                != self.customer_id
+            ):
+                raise ValidationError(
+                    {
+                        "customer":
+                        "Allocation customer must match "
+                        "invoice customer."
+                    }
+                )
+
+        if (
+            self.credit_note_id
+            and self.invoice_id
+            and self.credit_note.currency_code
+            != self.invoice.currency_code
+        ):
+            raise ValidationError(
+                {
+                    "invoice":
+                    "Credit note and invoice currencies "
+                    "must match."
+                }
+            )
+
+        if (
+            self.status
+            == CustomerCreditAllocationStatus.REVERSED
+            and not self.reversed_at
+        ):
+            raise ValidationError(
+                {
+                    "reversed_at":
+                    "Reversed allocation requires reversed_at."
+                }
+            )
+
+
+# End Phase 21.6.1 - Customer Credit Balance Models Foundation
+# ============================================================
+
 

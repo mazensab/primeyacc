@@ -50,6 +50,9 @@ from parties.models import (
 )
 from sales.models import (
     MONEY_ZERO,
+    CustomerCreditAllocation,
+    CustomerCreditAllocationStatus,
+    CustomerCreditBalance,
     SalesCreditNote,
     SalesCreditNoteItem,
     SalesCreditNoteStatus,
@@ -4587,6 +4590,16 @@ def post_sales_credit_note(
         user=user
     )
 
+    if locked_credit_note.customer_id:
+        refresh_customer_credit_balance(
+            company=company,
+            customer=locked_credit_note.customer,
+            currency_code=(
+                locked_credit_note.currency_code
+            ),
+            lock=True,
+        )
+
     locked_credit_note.refresh_from_db()
     locked_return.refresh_from_db()
 
@@ -4896,6 +4909,15 @@ def serialize_sales_credit_note(
         "total_amount": str(
             credit_note.total_amount
         ),
+        "allocated_amount": str(
+            credit_note.allocated_amount
+        ),
+        "available_amount": str(
+            credit_note.available_amount
+        ),
+        "is_fully_allocated": (
+            credit_note.is_fully_allocated
+        ),
         "currency_code": (
             credit_note.currency_code
         ),
@@ -4972,4 +4994,698 @@ def serialize_sales_credit_note(
 
 # End Phase 21.5.2 - Sales Credit Notes Services Foundation
 # ============================================================
+
+
+# ============================================================
+# Phase 21.6.3 - Customer Credit Allocation Services Foundation
+# ------------------------------------------------------------
+# Posted credit notes create available customer credit.
+# Credit can be allocated partially or fully to issued invoices.
+# Allocation updates invoice payment state without new accounting posting.
+# Reversal restores both invoice balance and credit availability.
+# ============================================================
+
+
+def refresh_customer_credit_balance(
+    *,
+    company: Company,
+    customer: BusinessParty,
+    currency_code: str,
+    lock: bool = False,
+) -> CustomerCreditBalance:
+    """
+    Rebuild one customer credit balance from authoritative records.
+
+    Total credit:
+        Sum of posted customer credit notes.
+
+    Allocated amount:
+        Sum of active customer credit allocations.
+
+    Available amount:
+        Total credit minus active allocations.
+    """
+    if not company:
+        raise ValidationError(
+            {
+                "company":
+                "Company context is required."
+            }
+        )
+
+    if not customer:
+        raise ValidationError(
+            {
+                "customer":
+                "Customer is required."
+            }
+        )
+
+    if customer.company_id != company.id:
+        raise ValidationError(
+            {
+                "customer":
+                "Customer does not belong "
+                "to this company."
+            }
+        )
+
+    normalized_currency = (
+        normalize_text(currency_code)
+        or normalize_text(company.currency_code)
+        or "SAR"
+    ).upper()
+
+    balance_queryset = (
+        CustomerCreditBalance.objects
+        .filter(
+            company=company,
+            customer=customer,
+            currency_code=normalized_currency,
+        )
+    )
+
+    if lock:
+        balance_queryset = (
+            balance_queryset.select_for_update()
+        )
+
+    balance = balance_queryset.first()
+
+    if not balance:
+        balance = CustomerCreditBalance.objects.create(
+            company=company,
+            customer=customer,
+            currency_code=normalized_currency,
+        )
+
+        if lock:
+            balance = (
+                CustomerCreditBalance.objects
+                .select_for_update()
+                .get(pk=balance.pk)
+            )
+
+    total_credit = (
+        SalesCreditNote.objects
+        .filter(
+            company=company,
+            customer=customer,
+            currency_code=normalized_currency,
+            status=SalesCreditNoteStatus.POSTED,
+        )
+        .aggregate(
+            total=models.Sum("total_amount")
+        )
+        .get("total")
+        or MONEY_ZERO
+    )
+
+    allocated_amount = (
+        CustomerCreditAllocation.objects
+        .filter(
+            company=company,
+            customer=customer,
+            credit_note__currency_code=(
+                normalized_currency
+            ),
+            status=(
+                CustomerCreditAllocationStatus.ACTIVE
+            ),
+        )
+        .aggregate(
+            total=models.Sum("amount")
+        )
+        .get("total")
+        or MONEY_ZERO
+    )
+
+    balance.total_credit = quantize_money(
+        total_credit
+    )
+    balance.allocated_amount = quantize_money(
+        allocated_amount
+    )
+    balance.available_amount = quantize_money(
+        balance.total_credit
+        - balance.allocated_amount
+    )
+
+    balance.full_clean()
+    balance.save(
+        update_fields=[
+            "total_credit",
+            "allocated_amount",
+            "available_amount",
+            "updated_at",
+        ]
+    )
+
+    balance.refresh_from_db()
+
+    return balance
+
+
+def get_customer_credit_balance(
+    *,
+    company: Company,
+    customer: BusinessParty,
+    currency_code: str | None = None,
+) -> CustomerCreditBalance:
+    """
+    Return a freshly recalculated customer credit balance.
+    """
+    return refresh_customer_credit_balance(
+        company=company,
+        customer=customer,
+        currency_code=(
+            currency_code
+            or company.currency_code
+            or "SAR"
+        ),
+        lock=False,
+    )
+
+
+@transaction.atomic
+def allocate_customer_credit(
+    *,
+    company: Company,
+    credit_note: SalesCreditNote,
+    invoice: SalesInvoice,
+    amount,
+    user=None,
+) -> CustomerCreditAllocation:
+    """
+    Allocate posted customer credit to one issued invoice.
+
+    The allocation:
+    - consumes available credit from the credit note
+    - increases invoice paid_amount
+    - reduces invoice balance_due
+    - refreshes invoice payment_status
+    - creates one auditable active allocation record
+    """
+    if not company:
+        raise ValidationError(
+            {
+                "company":
+                "Company context is required."
+            }
+        )
+
+    if not credit_note:
+        raise ValidationError(
+            {
+                "credit_note":
+                "Sales credit note is required."
+            }
+        )
+
+    if not invoice:
+        raise ValidationError(
+            {
+                "invoice":
+                "Sales invoice is required."
+            }
+        )
+
+    allocation_amount = quantize_money(
+        amount
+    )
+
+    if allocation_amount <= MONEY_ZERO:
+        raise ValidationError(
+            {
+                "amount":
+                "Allocation amount must be "
+                "greater than zero."
+            }
+        )
+
+    locked_credit_note = (
+        SalesCreditNote.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "customer",
+        )
+        .filter(
+            id=credit_note.id,
+            company=company,
+        )
+        .first()
+    )
+
+    if not locked_credit_note:
+        raise ValidationError(
+            {
+                "credit_note":
+                "Sales credit note does not belong "
+                "to this company."
+            }
+        )
+
+    locked_invoice = (
+        SalesInvoice.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "customer",
+        )
+        .filter(
+            id=invoice.id,
+            company=company,
+        )
+        .first()
+    )
+
+    if not locked_invoice:
+        raise ValidationError(
+            {
+                "invoice":
+                "Sales invoice does not belong "
+                "to this company."
+            }
+        )
+
+    if (
+        locked_credit_note.status
+        != SalesCreditNoteStatus.POSTED
+    ):
+        raise ValidationError(
+            {
+                "credit_note":
+                "Only posted credit notes "
+                "can be allocated."
+            }
+        )
+
+    if (
+        locked_invoice.status
+        != SalesInvoiceStatus.ISSUED
+    ):
+        raise ValidationError(
+            {
+                "invoice":
+                "Only issued invoices can "
+                "receive customer credit."
+            }
+        )
+
+    if not locked_credit_note.customer_id:
+        raise ValidationError(
+            {
+                "customer":
+                "Credit note must have a customer."
+            }
+        )
+
+    if not locked_invoice.customer_id:
+        raise ValidationError(
+            {
+                "customer":
+                "Invoice must have a customer."
+            }
+        )
+
+    if (
+        locked_credit_note.customer_id
+        != locked_invoice.customer_id
+    ):
+        raise ValidationError(
+            {
+                "customer":
+                "Credit note and invoice must "
+                "belong to the same customer."
+            }
+        )
+
+    if (
+        locked_credit_note.currency_code
+        != locked_invoice.currency_code
+    ):
+        raise ValidationError(
+            {
+                "currency_code":
+                "Credit note and invoice currencies "
+                "must match."
+            }
+        )
+
+    if allocation_amount > locked_credit_note.available_amount:
+        raise ValidationError(
+            {
+                "amount":
+                "Allocation amount cannot exceed "
+                "available credit."
+            }
+        )
+
+    if allocation_amount > locked_invoice.balance_due:
+        raise ValidationError(
+            {
+                "amount":
+                "Allocation amount cannot exceed "
+                "invoice balance due."
+            }
+        )
+
+    if CustomerCreditAllocation.objects.filter(
+        company=company,
+        credit_note=locked_credit_note,
+        invoice=locked_invoice,
+        status=CustomerCreditAllocationStatus.ACTIVE,
+    ).exists():
+        raise ValidationError(
+            {
+                "allocation":
+                "An active allocation already exists "
+                "for this credit note and invoice."
+            }
+        )
+
+    actor = (
+        user
+        if getattr(
+            user,
+            "is_authenticated",
+            False,
+        )
+        else None
+    )
+
+    allocation = CustomerCreditAllocation(
+        company=company,
+        customer=locked_credit_note.customer,
+        credit_note=locked_credit_note,
+        invoice=locked_invoice,
+        amount=allocation_amount,
+        status=CustomerCreditAllocationStatus.ACTIVE,
+        allocated_at=timezone.now(),
+        created_by=actor,
+    )
+
+    allocation.full_clean()
+
+    locked_credit_note.apply_credit_allocation(
+        allocation_amount,
+        save=True,
+        user=actor,
+    )
+
+    locked_invoice.apply_payment_allocation(
+        allocation_amount,
+        save=True,
+        user=actor,
+    )
+
+    allocation.save()
+
+    refresh_customer_credit_balance(
+        company=company,
+        customer=locked_credit_note.customer,
+        currency_code=(
+            locked_credit_note.currency_code
+        ),
+        lock=True,
+    )
+
+    allocation.refresh_from_db()
+    locked_credit_note.refresh_from_db()
+    locked_invoice.refresh_from_db()
+
+    return allocation
+
+
+@transaction.atomic
+def reverse_customer_credit_allocation(
+    *,
+    company: Company,
+    allocation: CustomerCreditAllocation,
+    reason: str = "",
+    user=None,
+) -> CustomerCreditAllocation:
+    """
+    Reverse one active customer credit allocation atomically.
+    """
+    if not company:
+        raise ValidationError(
+            {
+                "company":
+                "Company context is required."
+            }
+        )
+
+    if not allocation:
+        raise ValidationError(
+            {
+                "allocation":
+                "Customer credit allocation is required."
+            }
+        )
+
+    locked_allocation = (
+        CustomerCreditAllocation.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "customer",
+            "credit_note",
+            "invoice",
+        )
+        .filter(
+            id=allocation.id,
+            company=company,
+        )
+        .first()
+    )
+
+    if not locked_allocation:
+        raise ValidationError(
+            {
+                "allocation":
+                "Customer credit allocation does not "
+                "belong to this company."
+            }
+        )
+
+    if (
+        locked_allocation.status
+        != CustomerCreditAllocationStatus.ACTIVE
+    ):
+        raise ValidationError(
+            {
+                "status":
+                "Only active customer credit "
+                "allocations can be reversed."
+            }
+        )
+
+    locked_credit_note = (
+        SalesCreditNote.objects
+        .select_for_update()
+        .get(
+            id=locked_allocation.credit_note_id,
+            company=company,
+        )
+    )
+
+    locked_invoice = (
+        SalesInvoice.objects
+        .select_for_update()
+        .get(
+            id=locked_allocation.invoice_id,
+            company=company,
+        )
+    )
+
+    actor = (
+        user
+        if getattr(
+            user,
+            "is_authenticated",
+            False,
+        )
+        else None
+    )
+
+    locked_invoice.reverse_payment_allocation(
+        locked_allocation.amount,
+        save=True,
+        user=actor,
+    )
+
+    locked_credit_note.reverse_credit_allocation(
+        locked_allocation.amount,
+        save=True,
+        user=actor,
+    )
+
+    locked_allocation.status = (
+        CustomerCreditAllocationStatus.REVERSED
+    )
+    locked_allocation.reversed_at = timezone.now()
+    locked_allocation.reversal_reason = (
+        normalize_text(reason)
+    )
+    locked_allocation.reversed_by = actor
+
+    locked_allocation.full_clean()
+    locked_allocation.save(
+        update_fields=[
+            "status",
+            "reversed_at",
+            "reversal_reason",
+            "reversed_by",
+            "updated_at",
+        ]
+    )
+
+    refresh_customer_credit_balance(
+        company=company,
+        customer=locked_allocation.customer,
+        currency_code=(
+            locked_credit_note.currency_code
+        ),
+        lock=True,
+    )
+
+    locked_allocation.refresh_from_db()
+    locked_credit_note.refresh_from_db()
+    locked_invoice.refresh_from_db()
+
+    return locked_allocation
+
+
+def serialize_customer_credit_balance(
+    balance: CustomerCreditBalance,
+) -> dict[str, Any]:
+    """
+    Serialize one customer credit balance.
+    """
+    return {
+        "id": balance.id,
+        "company_id": balance.company_id,
+        "customer": {
+            "id": balance.customer_id,
+            "display_name": (
+                balance.customer.display_name
+            ),
+            "code": balance.customer.code,
+        },
+        "currency_code": balance.currency_code,
+        "total_credit": str(
+            balance.total_credit
+        ),
+        "allocated_amount": str(
+            balance.allocated_amount
+        ),
+        "available_amount": str(
+            balance.available_amount
+        ),
+        "created_at": (
+            balance.created_at.isoformat()
+            if balance.created_at
+            else None
+        ),
+        "updated_at": (
+            balance.updated_at.isoformat()
+            if balance.updated_at
+            else None
+        ),
+    }
+
+
+def serialize_customer_credit_allocation(
+    allocation: CustomerCreditAllocation,
+) -> dict[str, Any]:
+    """
+    Serialize one customer credit allocation.
+    """
+    return {
+        "id": allocation.id,
+        "company_id": allocation.company_id,
+        "customer": {
+            "id": allocation.customer_id,
+            "display_name": (
+                allocation.customer.display_name
+            ),
+            "code": allocation.customer.code,
+        },
+        "credit_note": {
+            "id": allocation.credit_note_id,
+            "credit_note_number": (
+                allocation.credit_note
+                .credit_note_number
+            ),
+            "total_amount": str(
+                allocation.credit_note
+                .total_amount
+            ),
+            "allocated_amount": str(
+                allocation.credit_note
+                .allocated_amount
+            ),
+            "available_amount": str(
+                allocation.credit_note
+                .available_amount
+            ),
+        },
+        "invoice": {
+            "id": allocation.invoice_id,
+            "invoice_number": (
+                allocation.invoice
+                .invoice_number
+            ),
+            "total_amount": str(
+                allocation.invoice.total_amount
+            ),
+            "paid_amount": str(
+                allocation.invoice.paid_amount
+            ),
+            "balance_due": str(
+                allocation.invoice.balance_due
+            ),
+            "payment_status": (
+                allocation.invoice.payment_status
+            ),
+        },
+        "amount": str(allocation.amount),
+        "status": allocation.status,
+        "allocated_at": (
+            allocation.allocated_at.isoformat()
+            if allocation.allocated_at
+            else None
+        ),
+        "reversed_at": (
+            allocation.reversed_at.isoformat()
+            if allocation.reversed_at
+            else None
+        ),
+        "reversal_reason": (
+            allocation.reversal_reason
+        ),
+        "created_by_id": (
+            allocation.created_by_id
+        ),
+        "reversed_by_id": (
+            allocation.reversed_by_id
+        ),
+        "created_at": (
+            allocation.created_at.isoformat()
+            if allocation.created_at
+            else None
+        ),
+        "updated_at": (
+            allocation.updated_at.isoformat()
+            if allocation.updated_at
+            else None
+        ),
+    }
+
+
+# End Phase 21.6.3 - Customer Credit Allocation Services Foundation
+# ============================================================
+
 

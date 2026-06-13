@@ -47,6 +47,9 @@ from catalog.models import CatalogItem, CatalogItemStatus, CatalogItemType, Cata
 from companies.models import Branch, Company, CompanySettings
 from parties.models import BusinessParty, BusinessPartyStatus, BusinessPartyType
 from sales.models import (
+    CustomerCreditAllocation,
+    CustomerCreditAllocationStatus,
+    CustomerCreditBalance,
     SalesCreditNote,
     SalesCreditNoteItem,
     SalesCreditNoteStatus,
@@ -70,6 +73,7 @@ from sales.models import (
 )
 from sales.services import (
     accept_sales_quotation,
+    allocate_customer_credit,
     cancel_sales_credit_note,
     cancel_sales_invoice,
     cancel_sales_order,
@@ -93,10 +97,14 @@ from sales.services import (
     issue_sales_credit_note,
     issue_sales_invoice,
     post_sales_credit_note,
+    refresh_customer_credit_balance,
+    reverse_customer_credit_allocation,
     resolve_catalog_item,
     resolve_company_branch,
     resolve_customer,
     send_sales_quotation,
+    serialize_customer_credit_allocation,
+    serialize_customer_credit_balance,
     serialize_invoice_return_summary,
     serialize_order_invoice_summary,
     serialize_sales_credit_note,
@@ -137,6 +145,10 @@ SALES_OWNER_PERMISSIONS = [
     "company.sales.credit_notes.issue",
     "company.sales.credit_notes.post",
     "company.sales.credit_notes.cancel",
+    "company.sales.customer_credits.view",
+    "company.sales.customer_credits.allocations.view",
+    "company.sales.customer_credits.allocate",
+    "company.sales.customer_credits.reverse",
 ]
 
 SALES_VIEWER_PERMISSIONS = [
@@ -144,6 +156,8 @@ SALES_VIEWER_PERMISSIONS = [
     "company.sales.quotations.view",
     "company.sales.orders.view",
     "company.sales.credit_notes.view",
+    "company.sales.customer_credits.view",
+    "company.sales.customer_credits.allocations.view",
 ]
 
 
@@ -8315,3 +8329,699 @@ class SalesCreditNotePostingTests(SalesTestCase):
 
 # End Phase 21.5.4 - Credit Note Accounting Posting Tests
 # ============================================================
+
+
+# ============================================================
+# Phase 21.6.6 - Customer Credit Services and APIs Tests
+# ============================================================
+
+
+class CustomerCreditAllocationTests(SalesTestCase):
+    """
+    Service, balance, allocation, reversal, API, permission,
+    and tenant-isolation tests for customer credit.
+    """
+
+    def _create_issued_invoice(
+        self,
+        *,
+        company=None,
+        user=None,
+        customer=None,
+        catalog_item=None,
+        quantity="2",
+        discount_amount="0.00",
+    ) -> SalesInvoice:
+        selected_company = company or self.company
+        selected_user = user or self.user
+        selected_customer = customer or self.customer
+        selected_item = catalog_item or self.item
+
+        invoice = create_sales_invoice(
+            company=selected_company,
+            user=selected_user,
+            customer_id=selected_customer.id,
+            items=[
+                {
+                    "catalog_item_id": selected_item.id,
+                    "quantity": quantity,
+                    "discount_amount": discount_amount,
+                }
+            ],
+        )
+
+        return issue_sales_invoice(
+            company=selected_company,
+            invoice=invoice,
+            user=selected_user,
+        )
+
+    def _create_posted_credit_note(
+        self,
+        *,
+        company=None,
+        user=None,
+        customer=None,
+        catalog_item=None,
+        invoice_quantity="2",
+        return_quantity="1",
+    ) -> SalesCreditNote:
+        selected_company = company or self.company
+        selected_user = user or self.user
+        selected_customer = customer or self.customer
+        selected_item = catalog_item or self.item
+
+        source_invoice = self._create_issued_invoice(
+            company=selected_company,
+            user=selected_user,
+            customer=selected_customer,
+            catalog_item=selected_item,
+            quantity=invoice_quantity,
+        )
+
+        sales_return = create_sales_return(
+            company=selected_company,
+            invoice=source_invoice,
+            user=selected_user,
+            items=[
+                {
+                    "invoice_item_id":
+                        source_invoice.items.get().id,
+                    "quantity": return_quantity,
+                }
+            ],
+        )
+
+        sales_return = confirm_sales_return(
+            company=selected_company,
+            sales_return=sales_return,
+            user=selected_user,
+        )
+
+        credit_note = create_sales_credit_note_from_return(
+            company=selected_company,
+            sales_return=sales_return,
+            user=selected_user,
+            issue_now=True,
+        )
+
+        return post_sales_credit_note(
+            company=selected_company,
+            credit_note=credit_note,
+            user=selected_user,
+        )
+
+    def test_posted_credit_note_creates_customer_balance(
+        self,
+    ):
+        credit_note = self._create_posted_credit_note()
+
+        balance = CustomerCreditBalance.objects.get(
+            company=self.company,
+            customer=self.customer,
+            currency_code="SAR",
+        )
+
+        self.assertEqual(
+            balance.total_credit,
+            credit_note.total_amount,
+        )
+        self.assertEqual(
+            balance.allocated_amount,
+            Decimal("0.00"),
+        )
+        self.assertEqual(
+            balance.available_amount,
+            credit_note.total_amount,
+        )
+
+    def test_partial_credit_allocation_updates_documents(
+        self,
+    ):
+        credit_note = self._create_posted_credit_note()
+
+        target_invoice = self._create_issued_invoice(
+            quantity="2",
+        )
+
+        allocation = allocate_customer_credit(
+            company=self.company,
+            credit_note=credit_note,
+            invoice=target_invoice,
+            amount="50.00",
+            user=self.user,
+        )
+
+        credit_note.refresh_from_db()
+        target_invoice.refresh_from_db()
+
+        balance = CustomerCreditBalance.objects.get(
+            company=self.company,
+            customer=self.customer,
+            currency_code="SAR",
+        )
+
+        self.assertEqual(
+            allocation.status,
+            CustomerCreditAllocationStatus.ACTIVE,
+        )
+        self.assertEqual(
+            allocation.amount,
+            Decimal("50.00"),
+        )
+        self.assertEqual(
+            credit_note.allocated_amount,
+            Decimal("50.00"),
+        )
+        self.assertEqual(
+            credit_note.available_amount,
+            Decimal("65.00"),
+        )
+        self.assertEqual(
+            target_invoice.paid_amount,
+            Decimal("50.00"),
+        )
+        self.assertEqual(
+            target_invoice.balance_due,
+            Decimal("180.00"),
+        )
+        self.assertEqual(
+            target_invoice.payment_status,
+            SalesInvoicePaymentStatus.PARTIAL,
+        )
+        self.assertEqual(
+            balance.allocated_amount,
+            Decimal("50.00"),
+        )
+        self.assertEqual(
+            balance.available_amount,
+            Decimal("65.00"),
+        )
+
+    def test_full_invoice_allocation_marks_invoice_paid(
+        self,
+    ):
+        credit_note = self._create_posted_credit_note(
+            invoice_quantity="2",
+            return_quantity="1",
+        )
+
+        target_invoice = self._create_issued_invoice(
+            quantity="1",
+        )
+
+        allocation = allocate_customer_credit(
+            company=self.company,
+            credit_note=credit_note,
+            invoice=target_invoice,
+            amount=target_invoice.balance_due,
+            user=self.user,
+        )
+
+        allocation.refresh_from_db()
+        target_invoice.refresh_from_db()
+        credit_note.refresh_from_db()
+
+        self.assertEqual(
+            allocation.amount,
+            Decimal("115.00"),
+        )
+        self.assertEqual(
+            target_invoice.paid_amount,
+            Decimal("115.00"),
+        )
+        self.assertEqual(
+            target_invoice.balance_due,
+            Decimal("0.00"),
+        )
+        self.assertEqual(
+            target_invoice.payment_status,
+            SalesInvoicePaymentStatus.PAID,
+        )
+        self.assertEqual(
+            credit_note.available_amount,
+            Decimal("0.00"),
+        )
+        self.assertTrue(
+            credit_note.is_fully_allocated
+        )
+
+    def test_allocation_rejects_amount_over_credit(
+        self,
+    ):
+        credit_note = self._create_posted_credit_note()
+
+        target_invoice = self._create_issued_invoice(
+            quantity="2",
+        )
+
+        with self.assertRaises(ValidationError):
+            allocate_customer_credit(
+                company=self.company,
+                credit_note=credit_note,
+                invoice=target_invoice,
+                amount="116.00",
+                user=self.user,
+            )
+
+        self.assertFalse(
+            CustomerCreditAllocation.objects.exists()
+        )
+
+    def test_allocation_rejects_amount_over_invoice_balance(
+        self,
+    ):
+        credit_note = self._create_posted_credit_note(
+            invoice_quantity="4",
+            return_quantity="2",
+        )
+
+        target_invoice = self._create_issued_invoice(
+            quantity="1",
+        )
+
+        with self.assertRaises(ValidationError):
+            allocate_customer_credit(
+                company=self.company,
+                credit_note=credit_note,
+                invoice=target_invoice,
+                amount="116.00",
+                user=self.user,
+            )
+
+    def test_allocation_rejects_cross_company_invoice(
+        self,
+    ):
+        credit_note = self._create_posted_credit_note()
+
+        other_invoice = self._create_issued_invoice(
+            company=self.other_company,
+            user=self.other_user,
+            customer=self.other_customer,
+            catalog_item=self.other_item,
+            quantity="1",
+        )
+
+        with self.assertRaises(ValidationError):
+            allocate_customer_credit(
+                company=self.company,
+                credit_note=credit_note,
+                invoice=other_invoice,
+                amount="50.00",
+                user=self.user,
+            )
+
+    def test_reverse_allocation_restores_credit_and_invoice(
+        self,
+    ):
+        credit_note = self._create_posted_credit_note()
+
+        target_invoice = self._create_issued_invoice(
+            quantity="2",
+        )
+
+        allocation = allocate_customer_credit(
+            company=self.company,
+            credit_note=credit_note,
+            invoice=target_invoice,
+            amount="50.00",
+            user=self.user,
+        )
+
+        allocation = reverse_customer_credit_allocation(
+            company=self.company,
+            allocation=allocation,
+            reason="Allocation entered by mistake",
+            user=self.user,
+        )
+
+        credit_note.refresh_from_db()
+        target_invoice.refresh_from_db()
+
+        balance = CustomerCreditBalance.objects.get(
+            company=self.company,
+            customer=self.customer,
+            currency_code="SAR",
+        )
+
+        self.assertEqual(
+            allocation.status,
+            CustomerCreditAllocationStatus.REVERSED,
+        )
+        self.assertEqual(
+            allocation.reversal_reason,
+            "Allocation entered by mistake",
+        )
+        self.assertEqual(
+            allocation.reversed_by,
+            self.user,
+        )
+        self.assertIsNotNone(
+            allocation.reversed_at
+        )
+        self.assertEqual(
+            credit_note.allocated_amount,
+            Decimal("0.00"),
+        )
+        self.assertEqual(
+            credit_note.available_amount,
+            Decimal("115.00"),
+        )
+        self.assertEqual(
+            target_invoice.paid_amount,
+            Decimal("0.00"),
+        )
+        self.assertEqual(
+            target_invoice.balance_due,
+            Decimal("230.00"),
+        )
+        self.assertEqual(
+            target_invoice.payment_status,
+            SalesInvoicePaymentStatus.UNPAID,
+        )
+        self.assertEqual(
+            balance.allocated_amount,
+            Decimal("0.00"),
+        )
+        self.assertEqual(
+            balance.available_amount,
+            Decimal("115.00"),
+        )
+
+    def test_reversed_allocation_cannot_be_reversed_twice(
+        self,
+    ):
+        credit_note = self._create_posted_credit_note()
+        target_invoice = self._create_issued_invoice()
+
+        allocation = allocate_customer_credit(
+            company=self.company,
+            credit_note=credit_note,
+            invoice=target_invoice,
+            amount="50.00",
+            user=self.user,
+        )
+
+        reverse_customer_credit_allocation(
+            company=self.company,
+            allocation=allocation,
+            reason="First reversal",
+            user=self.user,
+        )
+
+        allocation.refresh_from_db()
+
+        with self.assertRaises(ValidationError):
+            reverse_customer_credit_allocation(
+                company=self.company,
+                allocation=allocation,
+                reason="Second reversal",
+                user=self.user,
+            )
+
+    def test_credit_balance_and_allocation_serializers(
+        self,
+    ):
+        credit_note = self._create_posted_credit_note()
+        target_invoice = self._create_issued_invoice()
+
+        allocation = allocate_customer_credit(
+            company=self.company,
+            credit_note=credit_note,
+            invoice=target_invoice,
+            amount="50.00",
+            user=self.user,
+        )
+
+        balance = refresh_customer_credit_balance(
+            company=self.company,
+            customer=self.customer,
+            currency_code="SAR",
+        )
+
+        balance_data = serialize_customer_credit_balance(
+            balance
+        )
+        allocation_data = (
+            serialize_customer_credit_allocation(
+                allocation
+            )
+        )
+
+        self.assertEqual(
+            balance_data["available_amount"],
+            "65.00",
+        )
+        self.assertEqual(
+            allocation_data["amount"],
+            "50.00",
+        )
+        self.assertEqual(
+            allocation_data["status"],
+            CustomerCreditAllocationStatus.ACTIVE,
+        )
+        self.assertEqual(
+            allocation_data["invoice"]["paid_amount"],
+            "50.00",
+        )
+
+    def test_allocate_api_and_reverse_api(
+        self,
+    ):
+        credit_note = self._create_posted_credit_note()
+        target_invoice = self._create_issued_invoice()
+
+        allocate_response = self.client.post(
+            "/api/company/sales/customer-credits/allocate/",
+            data={
+                "credit_note_id": credit_note.id,
+                "invoice_id": target_invoice.id,
+                "amount": "50.00",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            allocate_response.status_code,
+            201,
+            allocate_response.content,
+        )
+
+        allocation_id = (
+            allocate_response.json()["allocation"]["id"]
+        )
+
+        reverse_response = self.client.post(
+            "/api/company/sales/customer-credits/"
+            f"allocations/{allocation_id}/reverse/",
+            data={
+                "reason": "API reversal",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            reverse_response.status_code,
+            200,
+            reverse_response.content,
+        )
+        self.assertEqual(
+            reverse_response.json()["allocation"]["status"],
+            CustomerCreditAllocationStatus.REVERSED,
+        )
+
+    def test_balances_and_allocations_apis_are_company_scoped(
+        self,
+    ):
+        credit_note = self._create_posted_credit_note()
+        target_invoice = self._create_issued_invoice()
+
+        allocation = allocate_customer_credit(
+            company=self.company,
+            credit_note=credit_note,
+            invoice=target_invoice,
+            amount="50.00",
+            user=self.user,
+        )
+
+        other_credit_note = self._create_posted_credit_note(
+            company=self.other_company,
+            user=self.other_user,
+            customer=self.other_customer,
+            catalog_item=self.other_item,
+            invoice_quantity="1",
+            return_quantity="1",
+        )
+
+        other_target_invoice = self._create_issued_invoice(
+            company=self.other_company,
+            user=self.other_user,
+            customer=self.other_customer,
+            catalog_item=self.other_item,
+            quantity="1",
+        )
+
+        other_allocation = allocate_customer_credit(
+            company=self.other_company,
+            credit_note=other_credit_note,
+            invoice=other_target_invoice,
+            amount="50.00",
+            user=self.other_user,
+        )
+
+        balances_response = self.client.get(
+            "/api/company/sales/customer-credits/balances/"
+        )
+        allocations_response = self.client.get(
+            "/api/company/sales/customer-credits/allocations/"
+        )
+
+        self.assertEqual(
+            balances_response.status_code,
+            200,
+            balances_response.content,
+        )
+        self.assertEqual(
+            allocations_response.status_code,
+            200,
+            allocations_response.content,
+        )
+
+        balance_customer_ids = {
+            item["customer"]["id"]
+            for item in balances_response.json()["results"]
+        }
+
+        allocation_ids = {
+            item["id"]
+            for item in allocations_response.json()["results"]
+        }
+
+        self.assertIn(
+            self.customer.id,
+            balance_customer_ids,
+        )
+        self.assertNotIn(
+            self.other_customer.id,
+            balance_customer_ids,
+        )
+        self.assertIn(
+            allocation.id,
+            allocation_ids,
+        )
+        self.assertNotIn(
+            other_allocation.id,
+            allocation_ids,
+        )
+
+    def test_allocation_detail_blocks_cross_company_access(
+        self,
+    ):
+        other_credit_note = self._create_posted_credit_note(
+            company=self.other_company,
+            user=self.other_user,
+            customer=self.other_customer,
+            catalog_item=self.other_item,
+            invoice_quantity="1",
+            return_quantity="1",
+        )
+
+        other_invoice = self._create_issued_invoice(
+            company=self.other_company,
+            user=self.other_user,
+            customer=self.other_customer,
+            catalog_item=self.other_item,
+            quantity="1",
+        )
+
+        other_allocation = allocate_customer_credit(
+            company=self.other_company,
+            credit_note=other_credit_note,
+            invoice=other_invoice,
+            amount="50.00",
+            user=self.other_user,
+        )
+
+        response = self.client.get(
+            "/api/company/sales/customer-credits/"
+            f"allocations/{other_allocation.id}/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+            response.content,
+        )
+
+    def test_viewer_can_view_but_cannot_allocate_or_reverse(
+        self,
+    ):
+        credit_note = self._create_posted_credit_note()
+        target_invoice = self._create_issued_invoice()
+
+        allocation = allocate_customer_credit(
+            company=self.company,
+            credit_note=credit_note,
+            invoice=target_invoice,
+            amount="25.00",
+            user=self.user,
+        )
+
+        second_invoice = self._create_issued_invoice()
+
+        self.client.force_login(
+            self.viewer_user
+        )
+
+        balances_response = self.client.get(
+            "/api/company/sales/customer-credits/balances/"
+        )
+
+        allocations_response = self.client.get(
+            "/api/company/sales/customer-credits/allocations/"
+        )
+
+        allocate_response = self.client.post(
+            "/api/company/sales/customer-credits/allocate/",
+            data={
+                "credit_note_id": credit_note.id,
+                "invoice_id": second_invoice.id,
+                "amount": "25.00",
+            },
+            content_type="application/json",
+        )
+
+        reverse_response = self.client.post(
+            "/api/company/sales/customer-credits/"
+            f"allocations/{allocation.id}/reverse/",
+            data={
+                "reason": "Not permitted",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            balances_response.status_code,
+            200,
+            balances_response.content,
+        )
+        self.assertEqual(
+            allocations_response.status_code,
+            200,
+            allocations_response.content,
+        )
+        self.assertEqual(
+            allocate_response.status_code,
+            403,
+            allocate_response.content,
+        )
+        self.assertEqual(
+            reverse_response.status_code,
+            403,
+            reverse_response.content,
+        )
+
+
+# End Phase 21.6.6 - Customer Credit Services and APIs Tests
+# ============================================================
+

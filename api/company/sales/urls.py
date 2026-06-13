@@ -40,4 +40,10 @@ urlpatterns = [
             "api.company.sales.credit_notes.urls"
         ),
     ),
+    path(
+        "customer-credits/",
+        include(
+            "api.company.sales.customer_credits.urls"
+        ),
+    ),
 ]

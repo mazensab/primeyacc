@@ -23,6 +23,8 @@ from __future__ import annotations
 from django.contrib import admin
 
 from sales.models import (
+    CustomerCreditAllocation,
+    CustomerCreditBalance,
     SalesCreditNote,
     SalesCreditNoteItem,
     SalesInvoice,
@@ -2402,6 +2404,8 @@ class SalesCreditNoteAdmin(admin.ModelAdmin):
         "status",
         "credit_note_date",
         "total_amount",
+        "allocated_amount",
+        "available_credit_amount",
         "issued_at",
         "posted_at",
         "cancelled_at",
@@ -2457,6 +2461,7 @@ class SalesCreditNoteAdmin(admin.ModelAdmin):
         "taxable_amount",
         "tax_amount",
         "total_amount",
+        "allocated_amount",
         "customer_snapshot",
         "invoice_snapshot",
         "return_snapshot",
@@ -2494,6 +2499,8 @@ class SalesCreditNoteAdmin(admin.ModelAdmin):
                     "taxable_amount",
                     "tax_amount",
                     "total_amount",
+                    "allocated_amount",
+                    "available_credit_amount",
                 ],
             },
         ),
@@ -2567,6 +2574,18 @@ class SalesCreditNoteAdmin(admin.ModelAdmin):
     ]
 
     save_on_top = True
+
+    @admin.display(
+        description="Available credit",
+    )
+    def available_credit_amount(self, obj):
+        """
+        Display current unallocated credit-note amount.
+        """
+        if not obj:
+            return None
+
+        return obj.available_amount
 
     def get_readonly_fields(
         self,
@@ -2971,3 +2990,232 @@ class SalesCreditNoteItemAdmin(admin.ModelAdmin):
 # End Phase 21.5.1 - Sales Credit Notes Admin Foundation
 # ============================================================
 
+
+# ============================================================
+# Phase 21.6.2 - Customer Credit Admin Foundation
+# ------------------------------------------------------------
+# Credit balances and allocations are operational audit records.
+# Creation, allocation, and reversal remain in services and APIs.
+# ============================================================
+
+
+@admin.register(CustomerCreditBalance)
+class CustomerCreditBalanceAdmin(admin.ModelAdmin):
+    """
+    Read-only operational review for customer credit balances.
+    """
+
+    list_display = [
+        "customer",
+        "company",
+        "currency_code",
+        "total_credit",
+        "allocated_amount",
+        "available_amount",
+        "updated_at",
+    ]
+
+    list_filter = [
+        "company",
+        "currency_code",
+        "created_at",
+        "updated_at",
+    ]
+
+    search_fields = [
+        "customer__display_name",
+        "customer__legal_name",
+        "customer__code",
+        "company__name",
+        "company__company_code",
+        "currency_code",
+    ]
+
+    autocomplete_fields = [
+        "company",
+        "customer",
+    ]
+
+    readonly_fields = [
+        "company",
+        "customer",
+        "currency_code",
+        "total_credit",
+        "allocated_amount",
+        "available_amount",
+        "created_at",
+        "updated_at",
+    ]
+
+    ordering = [
+        "company_id",
+        "customer_id",
+        "currency_code",
+    ]
+
+    list_select_related = [
+        "company",
+        "customer",
+    ]
+
+    def has_add_permission(
+        self,
+        request,
+    ):
+        return False
+
+    def has_change_permission(
+        self,
+        request,
+        obj=None,
+    ):
+        return False
+
+    def has_delete_permission(
+        self,
+        request,
+        obj=None,
+    ):
+        return False
+
+
+@admin.register(CustomerCreditAllocation)
+class CustomerCreditAllocationAdmin(admin.ModelAdmin):
+    """
+    Read-only operational review for customer credit allocations.
+    """
+
+    list_display = [
+        "credit_note",
+        "invoice",
+        "customer",
+        "company",
+        "amount",
+        "status",
+        "allocated_at",
+        "reversed_at",
+        "created_by",
+        "reversed_by",
+    ]
+
+    list_filter = [
+        "status",
+        "company",
+        "allocated_at",
+        "reversed_at",
+        "created_at",
+    ]
+
+    search_fields = [
+        "credit_note__credit_note_number",
+        "invoice__invoice_number",
+        "customer__display_name",
+        "customer__legal_name",
+        "customer__code",
+        "company__name",
+        "company__company_code",
+        "reversal_reason",
+    ]
+
+    autocomplete_fields = [
+        "company",
+        "customer",
+        "credit_note",
+        "invoice",
+        "created_by",
+        "reversed_by",
+    ]
+
+    readonly_fields = [
+        "company",
+        "customer",
+        "credit_note",
+        "invoice",
+        "amount",
+        "status",
+        "allocated_at",
+        "reversed_at",
+        "reversal_reason",
+        "created_by",
+        "reversed_by",
+        "created_at",
+        "updated_at",
+    ]
+
+    fieldsets = [
+        (
+            "Allocation",
+            {
+                "fields": [
+                    "company",
+                    "customer",
+                    "credit_note",
+                    "invoice",
+                    "amount",
+                    "status",
+                ],
+            },
+        ),
+        (
+            "Lifecycle",
+            {
+                "fields": [
+                    "allocated_at",
+                    "reversed_at",
+                    "reversal_reason",
+                    "created_by",
+                    "reversed_by",
+                ],
+            },
+        ),
+        (
+            "Audit",
+            {
+                "classes": ["collapse"],
+                "fields": [
+                    "created_at",
+                    "updated_at",
+                ],
+            },
+        ),
+    ]
+
+    date_hierarchy = "allocated_at"
+
+    ordering = [
+        "-allocated_at",
+        "-id",
+    ]
+
+    list_select_related = [
+        "company",
+        "customer",
+        "credit_note",
+        "invoice",
+        "created_by",
+        "reversed_by",
+    ]
+
+    def has_add_permission(
+        self,
+        request,
+    ):
+        return False
+
+    def has_change_permission(
+        self,
+        request,
+        obj=None,
+    ):
+        return False
+
+    def has_delete_permission(
+        self,
+        request,
+        obj=None,
+    ):
+        return False
+
+
+# End Phase 21.6.2 - Customer Credit Admin Foundation
+# ============================================================
