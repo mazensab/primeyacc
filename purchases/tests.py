@@ -44,6 +44,9 @@ from purchases.models import (
     PurchaseReturnItem,
     PurchaseReturnReason,
     PurchaseReturnStatus,
+    SupplierDebitNote,
+    SupplierDebitNoteItem,
+    SupplierDebitNoteStatus,
 )
 from purchases.services import (
     cancel_purchase_bill,
@@ -61,6 +64,12 @@ from purchases.services import (
     generate_purchase_return_number,
     serialize_purchase_return,
     update_purchase_return,
+    cancel_supplier_debit_note,
+    create_supplier_debit_note,
+    generate_supplier_debit_note_number,
+    issue_supplier_debit_note,
+    serialize_supplier_debit_note,
+    update_supplier_debit_note,
 )
 
 
@@ -2038,4 +2047,1011 @@ class PurchaseReturnsAPITests(PurchasesTestCase):
         self.assertEqual(
             create_response.status_code,
             403,
+        )
+
+
+class SupplierDebitNotesTests(PurchasesTestCase):
+    """
+    Tests for supplier debit note models and services.
+    """
+
+    def _create_confirmed_purchase_return(
+        self,
+        *,
+        company=None,
+        user=None,
+        supplier=None,
+        branch=None,
+        item=None,
+        bill_quantity="5.0000",
+        return_quantity="2.0000",
+    ) -> PurchaseReturn:
+        company = company or self.company
+        user = user or self.user
+        supplier = supplier or self.supplier
+        branch = branch or self.branch
+        item = item or self.item
+
+        bill = create_purchase_bill(
+            company=company,
+            user=user,
+            payload={
+                "supplier_id": supplier.id,
+                "branch_id": branch.id,
+                "items": [
+                    {
+                        "item_id": item.id,
+                        "quantity": bill_quantity,
+                        "unit_price": "100.00",
+                    }
+                ],
+            },
+        )
+
+        bill = post_purchase_bill(
+            bill=bill,
+            user=user,
+        )
+
+        purchase_return = create_purchase_return(
+            company=company,
+            user=user,
+            payload={
+                "bill_id": bill.id,
+                "reason": PurchaseReturnReason.DAMAGED,
+                "reason_details": "Returned to supplier",
+                "items": [
+                    {
+                        "bill_item_id": (
+                            bill.items.first().id
+                        ),
+                        "quantity": return_quantity,
+                        "condition_notes": (
+                            "Damaged returned units"
+                        ),
+                    }
+                ],
+            },
+        )
+
+        return confirm_purchase_return(
+            purchase_return=purchase_return,
+            user=user,
+        )
+
+    def test_generate_supplier_debit_note_number(self):
+        number = (
+            generate_supplier_debit_note_number(
+                self.company
+            )
+        )
+
+        expected_prefix = (
+            "SDN-"
+            f"{timezone.localdate().strftime('%Y%m%d')}-"
+        )
+
+        self.assertTrue(
+            number.startswith(expected_prefix)
+        )
+        self.assertTrue(
+            number.endswith("000001")
+        )
+
+    def test_create_supplier_debit_note_from_confirmed_return(self):
+        purchase_return = (
+            self._create_confirmed_purchase_return()
+        )
+
+        debit_note = create_supplier_debit_note(
+            company=self.company,
+            user=self.user,
+            payload={
+                "purchase_return_id": (
+                    purchase_return.id
+                ),
+                "supplier_reference": "SUP-DN-001",
+                "notes": "Supplier debit note",
+            },
+        )
+
+        debit_note.refresh_from_db()
+        debit_note_item = debit_note.items.get()
+        return_item = purchase_return.items.get()
+
+        self.assertEqual(
+            debit_note.status,
+            SupplierDebitNoteStatus.DRAFT,
+        )
+        self.assertEqual(
+            debit_note.company,
+            self.company,
+        )
+        self.assertEqual(
+            debit_note.supplier,
+            self.supplier,
+        )
+        self.assertEqual(
+            debit_note.bill,
+            purchase_return.bill,
+        )
+        self.assertEqual(
+            debit_note.purchase_return,
+            purchase_return,
+        )
+        self.assertEqual(
+            debit_note.supplier_reference,
+            "SUP-DN-001",
+        )
+        self.assertEqual(
+            debit_note.items.count(),
+            1,
+        )
+        self.assertEqual(
+            debit_note_item.purchase_return_item,
+            return_item,
+        )
+        self.assertEqual(
+            debit_note_item.bill_item,
+            return_item.bill_item,
+        )
+        self.assertEqual(
+            debit_note_item.quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            debit_note_item.subtotal_amount,
+            Decimal("200.00"),
+        )
+        self.assertEqual(
+            debit_note_item.tax_amount,
+            Decimal("30.00"),
+        )
+        self.assertEqual(
+            debit_note_item.total_amount,
+            Decimal("230.00"),
+        )
+        self.assertEqual(
+            debit_note.total_amount,
+            Decimal("230.00"),
+        )
+        self.assertEqual(
+            debit_note.applied_to_bill_amount,
+            Decimal("0.00"),
+        )
+        self.assertEqual(
+            debit_note.supplier_credit_amount,
+            Decimal("0.00"),
+        )
+        self.assertEqual(
+            debit_note.unapplied_amount,
+            Decimal("230.00"),
+        )
+
+    def test_create_supplier_debit_note_rejects_draft_return(self):
+        bill = create_purchase_bill(
+            company=self.company,
+            user=self.user,
+            payload={
+                "supplier_id": self.supplier.id,
+                "branch_id": self.branch.id,
+                "items": [
+                    {
+                        "item_id": self.item.id,
+                        "quantity": "3.0000",
+                    }
+                ],
+            },
+        )
+
+        bill = post_purchase_bill(
+            bill=bill,
+            user=self.user,
+        )
+
+        purchase_return = create_purchase_return(
+            company=self.company,
+            user=self.user,
+            payload={
+                "bill_id": bill.id,
+                "items": [
+                    {
+                        "bill_item_id": (
+                            bill.items.first().id
+                        ),
+                        "quantity": "1.0000",
+                    }
+                ],
+            },
+        )
+
+        with self.assertRaises(ValidationError):
+            create_supplier_debit_note(
+                company=self.company,
+                user=self.user,
+                payload={
+                    "purchase_return_id": (
+                        purchase_return.id
+                    ),
+                },
+            )
+
+    def test_create_supplier_debit_note_rejects_duplicate_return(self):
+        purchase_return = (
+            self._create_confirmed_purchase_return()
+        )
+
+        create_supplier_debit_note(
+            company=self.company,
+            user=self.user,
+            payload={
+                "purchase_return_id": (
+                    purchase_return.id
+                ),
+            },
+        )
+
+        with self.assertRaises(ValidationError):
+            create_supplier_debit_note(
+                company=self.company,
+                user=self.user,
+                payload={
+                    "purchase_return_id": (
+                        purchase_return.id
+                    ),
+                },
+            )
+
+    def test_create_supplier_debit_note_rejects_other_company_return(self):
+        other_return = (
+            self._create_confirmed_purchase_return(
+                company=self.other_company,
+                user=self.other_user,
+                supplier=self.other_supplier,
+                branch=self.other_branch,
+                item=self.other_item,
+            )
+        )
+
+        with self.assertRaises(ValidationError):
+            create_supplier_debit_note(
+                company=self.company,
+                user=self.user,
+                payload={
+                    "purchase_return_id": (
+                        other_return.id
+                    ),
+                },
+            )
+
+    def test_update_supplier_debit_note_updates_draft_header(self):
+        purchase_return = (
+            self._create_confirmed_purchase_return()
+        )
+
+        debit_note = create_supplier_debit_note(
+            company=self.company,
+            user=self.user,
+            payload={
+                "purchase_return_id": (
+                    purchase_return.id
+                ),
+            },
+        )
+
+        debit_note = update_supplier_debit_note(
+            debit_note=debit_note,
+            user=self.user,
+            payload={
+                "supplier_reference": "UPDATED-REF",
+                "notes": "Updated supplier debit note",
+                "extra_data": {
+                    "source": "test",
+                },
+            },
+        )
+
+        self.assertEqual(
+            debit_note.supplier_reference,
+            "UPDATED-REF",
+        )
+        self.assertEqual(
+            debit_note.notes,
+            "Updated supplier debit note",
+        )
+        self.assertEqual(
+            debit_note.extra_data["source"],
+            "test",
+        )
+
+    def test_issue_supplier_debit_note(self):
+        purchase_return = (
+            self._create_confirmed_purchase_return()
+        )
+
+        debit_note = create_supplier_debit_note(
+            company=self.company,
+            user=self.user,
+            payload={
+                "purchase_return_id": (
+                    purchase_return.id
+                ),
+            },
+        )
+
+        debit_note = issue_supplier_debit_note(
+            debit_note=debit_note,
+            user=self.user,
+        )
+
+        self.assertEqual(
+            debit_note.status,
+            SupplierDebitNoteStatus.ISSUED,
+        )
+        self.assertIsNotNone(
+            debit_note.issued_at
+        )
+        self.assertEqual(
+            debit_note.issued_by,
+            self.user,
+        )
+        self.assertFalse(
+            debit_note.can_be_edited
+        )
+        self.assertTrue(
+            debit_note.can_be_posted
+        )
+
+    def test_update_supplier_debit_note_rejects_issued_note(self):
+        purchase_return = (
+            self._create_confirmed_purchase_return()
+        )
+
+        debit_note = create_supplier_debit_note(
+            company=self.company,
+            user=self.user,
+            payload={
+                "purchase_return_id": (
+                    purchase_return.id
+                ),
+            },
+        )
+
+        debit_note = issue_supplier_debit_note(
+            debit_note=debit_note,
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            update_supplier_debit_note(
+                debit_note=debit_note,
+                user=self.user,
+                payload={
+                    "notes": "Should fail",
+                },
+            )
+
+    def test_cancel_supplier_debit_note(self):
+        purchase_return = (
+            self._create_confirmed_purchase_return()
+        )
+
+        debit_note = create_supplier_debit_note(
+            company=self.company,
+            user=self.user,
+            payload={
+                "purchase_return_id": (
+                    purchase_return.id
+                ),
+            },
+        )
+
+        debit_note = issue_supplier_debit_note(
+            debit_note=debit_note,
+            user=self.user,
+        )
+
+        debit_note = cancel_supplier_debit_note(
+            debit_note=debit_note,
+            reason="Supplier rejected note",
+            user=self.user,
+        )
+
+        self.assertEqual(
+            debit_note.status,
+            SupplierDebitNoteStatus.CANCELLED,
+        )
+        self.assertIsNotNone(
+            debit_note.cancelled_at
+        )
+        self.assertEqual(
+            debit_note.cancelled_by,
+            self.user,
+        )
+        self.assertEqual(
+            debit_note.cancellation_reason,
+            "Supplier rejected note",
+        )
+
+    def test_supplier_debit_note_item_rejects_wrong_return_item(self):
+        first_return = (
+            self._create_confirmed_purchase_return()
+        )
+        second_return = (
+            self._create_confirmed_purchase_return()
+        )
+
+        debit_note = create_supplier_debit_note(
+            company=self.company,
+            user=self.user,
+            payload={
+                "purchase_return_id": (
+                    first_return.id
+                ),
+            },
+        )
+
+        wrong_return_item = (
+            second_return.items.get()
+        )
+
+        invalid_item = SupplierDebitNoteItem(
+            debit_note=debit_note,
+            company=self.company,
+            purchase_return_item=(
+                wrong_return_item
+            ),
+            bill_item=wrong_return_item.bill_item,
+            item=wrong_return_item.item,
+            line_number=2,
+            quantity=wrong_return_item.quantity,
+        )
+
+        with self.assertRaises(ValidationError):
+            invalid_item.full_clean()
+
+    def test_serialize_supplier_debit_note(self):
+        purchase_return = (
+            self._create_confirmed_purchase_return()
+        )
+
+        debit_note = create_supplier_debit_note(
+            company=self.company,
+            user=self.user,
+            payload={
+                "purchase_return_id": (
+                    purchase_return.id
+                ),
+            },
+        )
+
+        data = serialize_supplier_debit_note(
+            debit_note,
+            include_items=True,
+        )
+
+        self.assertEqual(
+            data["id"],
+            debit_note.id,
+        )
+        self.assertEqual(
+            data["status"],
+            SupplierDebitNoteStatus.DRAFT,
+        )
+        self.assertEqual(
+            data["supplier"]["id"],
+            self.supplier.id,
+        )
+        self.assertEqual(
+            data["purchase_return"]["id"],
+            purchase_return.id,
+        )
+        self.assertEqual(
+            data["total_amount"],
+            "230.00",
+        )
+        self.assertEqual(
+            data["unapplied_amount"],
+            "230.00",
+        )
+        self.assertEqual(
+            len(data["items"]),
+            1,
+        )
+        self.assertTrue(
+            data["allowed_actions"]["issue"]
+        )
+        self.assertFalse(
+            data["allowed_actions"]["post"]
+        )
+
+
+class SupplierDebitNotesAPITests(PurchasesTestCase):
+    """
+    Tests for company supplier debit note APIs.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.user)
+
+    def _create_confirmed_return(
+        self,
+        *,
+        company=None,
+        user=None,
+        supplier=None,
+        branch=None,
+        item=None,
+        return_quantity="2.0000",
+    ) -> PurchaseReturn:
+        company = company or self.company
+        user = user or self.user
+        supplier = supplier or self.supplier
+        branch = branch or self.branch
+        item = item or self.item
+
+        bill = create_purchase_bill(
+            company=company,
+            user=user,
+            payload={
+                "supplier_id": supplier.id,
+                "branch_id": branch.id,
+                "items": [
+                    {
+                        "item_id": item.id,
+                        "quantity": "5.0000",
+                        "unit_price": "100.00",
+                    }
+                ],
+            },
+        )
+
+        bill = post_purchase_bill(
+            bill=bill,
+            user=user,
+        )
+
+        purchase_return = create_purchase_return(
+            company=company,
+            user=user,
+            payload={
+                "bill_id": bill.id,
+                "reason": PurchaseReturnReason.DAMAGED,
+                "items": [
+                    {
+                        "bill_item_id": (
+                            bill.items.first().id
+                        ),
+                        "quantity": return_quantity,
+                    }
+                ],
+            },
+        )
+
+        return confirm_purchase_return(
+            purchase_return=purchase_return,
+            user=user,
+        )
+
+    def _create_debit_note(
+        self,
+        *,
+        purchase_return=None,
+    ) -> SupplierDebitNote:
+        purchase_return = (
+            purchase_return
+            or self._create_confirmed_return()
+        )
+
+        return create_supplier_debit_note(
+            company=purchase_return.company,
+            user=self.user,
+            payload={
+                "purchase_return_id": (
+                    purchase_return.id
+                ),
+                "supplier_reference": "API-DN-001",
+            },
+        )
+
+    def test_supplier_debit_note_create_endpoint(self):
+        purchase_return = (
+            self._create_confirmed_return()
+        )
+
+        response = self.client.post(
+            (
+                "/api/company/purchases/"
+                "debit-notes/create/"
+            ),
+            data={
+                "purchase_return_id": (
+                    purchase_return.id
+                ),
+                "supplier_reference": "SUP-API-001",
+                "notes": "Created through API",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+        )
+
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(
+            payload["debit_note"]["status"],
+            SupplierDebitNoteStatus.DRAFT,
+        )
+        self.assertEqual(
+            payload["debit_note"][
+                "purchase_return"
+            ]["id"],
+            purchase_return.id,
+        )
+        self.assertEqual(
+            payload["debit_note"]["total_amount"],
+            "230.00",
+        )
+        self.assertEqual(
+            len(payload["debit_note"]["items"]),
+            1,
+        )
+
+    def test_supplier_debit_notes_list_is_company_scoped(self):
+        debit_note = self._create_debit_note()
+
+        other_return = self._create_confirmed_return(
+            company=self.other_company,
+            user=self.other_user,
+            supplier=self.other_supplier,
+            branch=self.other_branch,
+            item=self.other_item,
+            return_quantity="1.0000",
+        )
+
+        create_supplier_debit_note(
+            company=self.other_company,
+            user=self.other_user,
+            payload={
+                "purchase_return_id": (
+                    other_return.id
+                ),
+            },
+        )
+
+        response = self.client.get(
+            (
+                "/api/company/purchases/"
+                "debit-notes/"
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(
+            payload["results"][0]["id"],
+            debit_note.id,
+        )
+
+    def test_supplier_debit_note_detail_endpoint(self):
+        debit_note = self._create_debit_note()
+
+        response = self.client.get(
+            (
+                "/api/company/purchases/"
+                f"debit-notes/{debit_note.id}/"
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(
+            payload["debit_note"]["id"],
+            debit_note.id,
+        )
+        self.assertEqual(
+            len(payload["debit_note"]["items"]),
+            1,
+        )
+
+    def test_supplier_debit_note_detail_blocks_cross_company(self):
+        other_return = self._create_confirmed_return(
+            company=self.other_company,
+            user=self.other_user,
+            supplier=self.other_supplier,
+            branch=self.other_branch,
+            item=self.other_item,
+            return_quantity="1.0000",
+        )
+
+        other_note = create_supplier_debit_note(
+            company=self.other_company,
+            user=self.other_user,
+            payload={
+                "purchase_return_id": (
+                    other_return.id
+                ),
+            },
+        )
+
+        response = self.client.get(
+            (
+                "/api/company/purchases/"
+                f"debit-notes/{other_note.id}/"
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+    def test_supplier_debit_note_update_endpoint(self):
+        debit_note = self._create_debit_note()
+
+        response = self.client.patch(
+            (
+                "/api/company/purchases/"
+                f"debit-notes/{debit_note.id}/update/"
+            ),
+            data={
+                "supplier_reference": "UPDATED-API-REF",
+                "notes": "Updated through API",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(
+            payload["debit_note"][
+                "supplier_reference"
+            ],
+            "UPDATED-API-REF",
+        )
+        self.assertEqual(
+            payload["debit_note"]["notes"],
+            "Updated through API",
+        )
+
+    def test_supplier_debit_note_issue_endpoint(self):
+        debit_note = self._create_debit_note()
+
+        response = self.client.post(
+            (
+                "/api/company/purchases/"
+                f"debit-notes/{debit_note.id}/issue/"
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        debit_note.refresh_from_db()
+
+        self.assertEqual(
+            debit_note.status,
+            SupplierDebitNoteStatus.ISSUED,
+        )
+        self.assertEqual(
+            debit_note.issued_by,
+            self.user,
+        )
+
+    def test_supplier_debit_note_cancel_endpoint(self):
+        debit_note = self._create_debit_note()
+
+        debit_note = issue_supplier_debit_note(
+            debit_note=debit_note,
+            user=self.user,
+        )
+
+        response = self.client.post(
+            (
+                "/api/company/purchases/"
+                f"debit-notes/{debit_note.id}/cancel/"
+            ),
+            data={
+                "reason": "Cancelled through API",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        debit_note.refresh_from_db()
+
+        self.assertEqual(
+            debit_note.status,
+            SupplierDebitNoteStatus.CANCELLED,
+        )
+        self.assertEqual(
+            debit_note.cancellation_reason,
+            "Cancelled through API",
+        )
+
+    def test_supplier_debit_note_create_rejects_draft_return(self):
+        bill = create_purchase_bill(
+            company=self.company,
+            user=self.user,
+            payload={
+                "supplier_id": self.supplier.id,
+                "items": [
+                    {
+                        "item_id": self.item.id,
+                        "quantity": "2.0000",
+                    }
+                ],
+            },
+        )
+
+        bill = post_purchase_bill(
+            bill=bill,
+            user=self.user,
+        )
+
+        purchase_return = create_purchase_return(
+            company=self.company,
+            user=self.user,
+            payload={
+                "bill_id": bill.id,
+                "items": [
+                    {
+                        "bill_item_id": (
+                            bill.items.first().id
+                        ),
+                        "quantity": "1.0000",
+                    }
+                ],
+            },
+        )
+
+        response = self.client.post(
+            (
+                "/api/company/purchases/"
+                "debit-notes/create/"
+            ),
+            data={
+                "purchase_return_id": (
+                    purchase_return.id
+                ),
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+        )
+        self.assertFalse(
+            response.json()["success"]
+        )
+
+    def test_viewer_can_view_but_cannot_create_debit_note(self):
+        debit_note = self._create_debit_note()
+
+        self.client.force_login(
+            self.viewer_user
+        )
+
+        list_response = self.client.get(
+            (
+                "/api/company/purchases/"
+                "debit-notes/"
+            )
+        )
+
+        self.assertEqual(
+            list_response.status_code,
+            200,
+        )
+
+        detail_response = self.client.get(
+            (
+                "/api/company/purchases/"
+                f"debit-notes/{debit_note.id}/"
+            )
+        )
+
+        self.assertEqual(
+            detail_response.status_code,
+            200,
+        )
+
+        create_response = self.client.post(
+            (
+                "/api/company/purchases/"
+                "debit-notes/create/"
+            ),
+            data={
+                "purchase_return_id": (
+                    debit_note.purchase_return_id
+                ),
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            create_response.status_code,
+            403,
+        )
+
+    def test_supplier_debit_note_permissions(self):
+        admin_user = User.objects.create_user(
+            username="debit_notes_admin",
+            email="debit_notes_admin@example.com",
+            password="StrongPass123!",
+        )
+
+        admin_membership = (
+            CompanyMembership.objects.create(
+                user=admin_user,
+                company=self.company,
+                role=CompanyRole.ADMIN,
+                status=MembershipStatus.ACTIVE,
+                is_primary=True,
+                created_by=self.user,
+            )
+        )
+
+        permissions = (
+            admin_membership.company_permissions
+        )
+
+        expected_permissions = [
+            "company.purchases.debit_notes.view",
+            "company.purchases.debit_notes.create",
+            "company.purchases.debit_notes.update",
+            "company.purchases.debit_notes.issue",
+            "company.purchases.debit_notes.post",
+            "company.purchases.debit_notes.cancel",
+        ]
+
+        for permission in expected_permissions:
+            self.assertIn(
+                permission,
+                permissions,
+            )
+
+        viewer_permissions = (
+            self.viewer_membership.company_permissions
+        )
+
+        self.assertIn(
+            "company.purchases.debit_notes.view",
+            viewer_permissions,
+        )
+        self.assertNotIn(
+            "company.purchases.debit_notes.create",
+            viewer_permissions,
+        )
+        self.assertNotIn(
+            "company.purchases.debit_notes.post",
+            viewer_permissions,
         )

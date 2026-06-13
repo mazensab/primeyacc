@@ -15,4 +15,10 @@ from django.urls import include, path
 urlpatterns = [
     path("bills/", include("api.company.purchases.bills.urls")),
     path("returns/", include("api.company.purchases.returns.urls")),
+    path(
+        "debit-notes/",
+        include(
+            "api.company.purchases.debit_notes.urls"
+        ),
+    ),
 ]

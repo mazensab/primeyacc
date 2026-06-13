@@ -60,6 +60,9 @@ from purchases.models import (
     PurchaseReturnItem,
     PurchaseReturnReason,
     PurchaseReturnStatus,
+    SupplierDebitNote,
+    SupplierDebitNoteItem,
+    SupplierDebitNoteStatus,
     quantize_quantity,
 )
 
@@ -1655,6 +1658,744 @@ def serialize_purchase_return(
             for item in (
                 purchase_return.items
                 .select_related(
+                    "bill_item",
+                    "item",
+                )
+                .order_by(
+                    "line_number",
+                    "id",
+                )
+            )
+        ]
+
+    return result
+
+
+# ============================================================
+# Supplier Debit Notes Services Foundation
+# ============================================================
+
+
+def get_company_supplier_debit_note_prefix(
+    company: Company,
+) -> str:
+    """
+    Resolve company supplier debit note prefix.
+    """
+    settings_obj = getattr(
+        company,
+        "operational_settings",
+        None,
+    )
+
+    configured_prefix = (
+        getattr(
+            settings_obj,
+            "supplier_debit_note_prefix",
+            "",
+        )
+        if settings_obj
+        else ""
+    )
+
+    return normalize_text(
+        configured_prefix
+    ) or "SDN"
+
+
+def generate_supplier_debit_note_number(
+    company: Company,
+) -> str:
+    """
+    Generate a company-scoped supplier debit note number.
+
+    Format:
+    SDN-YYYYMMDD-000001
+    """
+    today = timezone.localdate()
+    prefix = get_company_supplier_debit_note_prefix(
+        company
+    )
+    date_part = today.strftime("%Y%m%d")
+    starts_with = f"{prefix}-{date_part}-"
+
+    last_note = (
+        SupplierDebitNote.objects
+        .filter(
+            company=company,
+            debit_note_number__startswith=starts_with,
+        )
+        .order_by("-debit_note_number")
+        .first()
+    )
+
+    next_number = 1
+
+    if last_note:
+        try:
+            next_number = (
+                int(
+                    last_note.debit_note_number
+                    .split("-")[-1]
+                )
+                + 1
+            )
+        except (TypeError, ValueError):
+            next_number = 1
+
+    return (
+        f"{starts_with}"
+        f"{next_number:06d}"
+    )
+
+
+def get_purchase_return_for_debit_note(
+    *,
+    company: Company,
+    purchase_return_id: int | str,
+) -> PurchaseReturn:
+    """
+    Return a confirmed or posted purchase return
+    eligible for supplier debit note creation.
+    """
+    try:
+        purchase_return = (
+            PurchaseReturn.objects
+            .select_related(
+                "company",
+                "branch",
+                "supplier",
+                "bill",
+            )
+            .get(
+                id=purchase_return_id,
+                company=company,
+            )
+        )
+    except PurchaseReturn.DoesNotExist as exc:
+        raise ValidationError(
+            {
+                "purchase_return":
+                    "Purchase return was not found "
+                    "for this company."
+            }
+        ) from exc
+
+    if purchase_return.status not in [
+        PurchaseReturnStatus.CONFIRMED,
+        PurchaseReturnStatus.POSTED,
+    ]:
+        raise ValidationError(
+            {
+                "purchase_return":
+                    "Purchase return must be confirmed "
+                    "or posted before creating "
+                    "a supplier debit note."
+            }
+        )
+
+    if SupplierDebitNote.objects.filter(
+        purchase_return=purchase_return,
+    ).exists():
+        raise ValidationError(
+            {
+                "purchase_return":
+                    "A supplier debit note already exists "
+                    "for this purchase return."
+            }
+        )
+
+    if not purchase_return.items.exists():
+        raise ValidationError(
+            {
+                "purchase_return":
+                    "Purchase return has no items."
+            }
+        )
+
+    return purchase_return
+
+
+def build_supplier_debit_note_item(
+    *,
+    debit_note: SupplierDebitNote,
+    purchase_return_item: PurchaseReturnItem,
+    line_number: int,
+) -> SupplierDebitNoteItem:
+    """
+    Create one supplier debit note item from
+    a purchase return item.
+    """
+    if not debit_note.can_be_edited:
+        raise ValidationError(
+            "Only draft supplier debit notes can be edited."
+        )
+
+    if (
+        purchase_return_item.purchase_return_id
+        != debit_note.purchase_return_id
+    ):
+        raise ValidationError(
+            {
+                "purchase_return_item":
+                    "Purchase return item does not belong "
+                    "to the debit note purchase return."
+            }
+        )
+
+    item = SupplierDebitNoteItem(
+        debit_note=debit_note,
+        company=debit_note.company,
+        purchase_return_item=purchase_return_item,
+        bill_item=purchase_return_item.bill_item,
+        item=purchase_return_item.item,
+        line_number=line_number,
+        quantity=purchase_return_item.quantity,
+        unit_price=purchase_return_item.unit_price,
+        discount_amount=(
+            purchase_return_item.discount_amount
+        ),
+        taxable=purchase_return_item.taxable,
+        tax_rate=purchase_return_item.tax_rate,
+        notes=purchase_return_item.condition_notes,
+        extra_data={
+            "source": "purchase_return",
+            "purchase_return_id": (
+                purchase_return_item.purchase_return_id
+            ),
+            "purchase_return_item_id": (
+                purchase_return_item.id
+            ),
+        },
+    )
+    item.save()
+
+    return item
+
+
+@transaction.atomic
+def create_supplier_debit_note(
+    *,
+    company: Company,
+    payload: dict[str, Any],
+    user=None,
+) -> SupplierDebitNote:
+    """
+    Create a draft supplier debit note from
+    a confirmed or posted purchase return.
+    """
+    if not company:
+        raise ValidationError(
+            "Company is required."
+        )
+
+    purchase_return_id = (
+        payload.get("purchase_return_id")
+        or payload.get("purchase_return")
+    )
+
+    if not purchase_return_id:
+        raise ValidationError(
+            {
+                "purchase_return":
+                    "Purchase return is required."
+            }
+        )
+
+    purchase_return = (
+        get_purchase_return_for_debit_note(
+            company=company,
+            purchase_return_id=purchase_return_id,
+        )
+    )
+
+    debit_note_date = normalize_date(
+        payload.get("debit_note_date")
+        or timezone.localdate(),
+        field_name="debit_note_date",
+    )
+
+    debit_note = SupplierDebitNote(
+        company=company,
+        branch=purchase_return.branch,
+        supplier=purchase_return.supplier,
+        bill=purchase_return.bill,
+        purchase_return=purchase_return,
+        debit_note_number=(
+            normalize_text(
+                payload.get("debit_note_number")
+            )
+            or generate_supplier_debit_note_number(
+                company
+            )
+        ),
+        supplier_reference=normalize_text(
+            payload.get("supplier_reference")
+        ),
+        debit_note_date=(
+            debit_note_date
+            or timezone.localdate()
+        ),
+        status=SupplierDebitNoteStatus.DRAFT,
+        currency_code=(
+            purchase_return.currency_code
+        ),
+        notes=normalize_text(
+            payload.get("notes")
+        ),
+        extra_data=(
+            payload.get("extra_data")
+            if isinstance(
+                payload.get("extra_data"),
+                dict,
+            )
+            else {}
+        ),
+        created_by=user,
+        updated_by=user,
+    )
+
+    debit_note.full_clean()
+    debit_note.save()
+
+    return_items = list(
+        purchase_return.items
+        .select_related(
+            "bill_item",
+            "item",
+            "purchase_return",
+        )
+        .order_by(
+            "line_number",
+            "id",
+        )
+    )
+
+    for index, return_item in enumerate(
+        return_items,
+        start=1,
+    ):
+        build_supplier_debit_note_item(
+            debit_note=debit_note,
+            purchase_return_item=return_item,
+            line_number=index,
+        )
+
+    debit_note.recalculate_totals(
+        save=True
+    )
+    debit_note.refresh_from_db()
+
+    return debit_note
+
+
+@transaction.atomic
+def update_supplier_debit_note(
+    *,
+    debit_note: SupplierDebitNote,
+    payload: dict[str, Any],
+    user=None,
+) -> SupplierDebitNote:
+    """
+    Update editable header fields for a draft
+    supplier debit note.
+
+    Source items remain synchronized with
+    the linked purchase return and are not manually replaced.
+    """
+    if not debit_note.can_be_edited:
+        raise ValidationError(
+            "Only draft supplier debit notes can be updated."
+        )
+
+    if "debit_note_number" in payload:
+        debit_note.debit_note_number = (
+            normalize_text(
+                payload.get("debit_note_number")
+            )
+        )
+
+    if "supplier_reference" in payload:
+        debit_note.supplier_reference = (
+            normalize_text(
+                payload.get("supplier_reference")
+            )
+        )
+
+    if "debit_note_date" in payload:
+        debit_note.debit_note_date = (
+            normalize_date(
+                payload.get("debit_note_date"),
+                field_name="debit_note_date",
+            )
+            or debit_note.debit_note_date
+        )
+
+    if "notes" in payload:
+        debit_note.notes = normalize_text(
+            payload.get("notes")
+        )
+
+    if isinstance(
+        payload.get("extra_data"),
+        dict,
+    ):
+        debit_note.extra_data = (
+            payload["extra_data"]
+        )
+
+    debit_note.updated_by = user
+    debit_note.full_clean()
+    debit_note.save()
+    debit_note.refresh_from_db()
+
+    return debit_note
+
+
+@transaction.atomic
+def issue_supplier_debit_note(
+    *,
+    debit_note: SupplierDebitNote,
+    user=None,
+) -> SupplierDebitNote:
+    """
+    Issue a draft supplier debit note.
+    """
+    locked_note = (
+        SupplierDebitNote.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "branch",
+            "supplier",
+            "bill",
+            "purchase_return",
+        )
+        .get(pk=debit_note.pk)
+    )
+
+    if not locked_note.can_be_issued:
+        raise ValidationError(
+            "Only draft supplier debit notes can be issued."
+        )
+
+    source_return = locked_note.purchase_return
+
+    if not source_return:
+        raise ValidationError(
+            {
+                "purchase_return":
+                    "Supplier debit note must reference "
+                    "a purchase return."
+            }
+        )
+
+    if source_return.status not in [
+        PurchaseReturnStatus.CONFIRMED,
+        PurchaseReturnStatus.POSTED,
+    ]:
+        raise ValidationError(
+            {
+                "purchase_return":
+                    "Linked purchase return must remain "
+                    "confirmed or posted."
+            }
+        )
+
+    locked_items = list(
+        locked_note.items
+        .select_for_update()
+        .select_related(
+            "purchase_return_item",
+            "bill_item",
+            "item",
+        )
+        .order_by(
+            "line_number",
+            "id",
+        )
+    )
+
+    if not locked_items:
+        raise ValidationError(
+            "Cannot issue a supplier debit note without items."
+        )
+
+    source_item_ids = set(
+        source_return.items.values_list(
+            "id",
+            flat=True,
+        )
+    )
+    note_source_item_ids = {
+        item.purchase_return_item_id
+        for item in locked_items
+        if item.purchase_return_item_id
+    }
+
+    if source_item_ids != note_source_item_ids:
+        raise ValidationError(
+            {
+                "items":
+                    "Supplier debit note items do not match "
+                    "the linked purchase return items."
+            }
+        )
+
+    for item in locked_items:
+        item.full_clean()
+
+    locked_note.issue(user=user)
+    locked_note.refresh_from_db()
+
+    return locked_note
+
+
+@transaction.atomic
+def cancel_supplier_debit_note(
+    *,
+    debit_note: SupplierDebitNote,
+    reason: str = "",
+    user=None,
+) -> SupplierDebitNote:
+    """
+    Cancel a draft or issued supplier debit note.
+
+    Posted notes require a dedicated financial
+    and accounting reversal workflow.
+    """
+    locked_note = (
+        SupplierDebitNote.objects
+        .select_for_update()
+        .get(pk=debit_note.pk)
+    )
+
+    locked_note.cancel(
+        reason=normalize_text(reason),
+        user=user,
+    )
+    locked_note.refresh_from_db()
+
+    return locked_note
+
+
+def serialize_supplier_debit_note_item(
+    item: SupplierDebitNoteItem,
+) -> dict[str, Any]:
+    """
+    Serialize one supplier debit note item.
+    """
+    return {
+        "id": item.id,
+        "line_number": item.line_number,
+        "purchase_return_item_id": (
+            item.purchase_return_item_id
+        ),
+        "bill_item_id": item.bill_item_id,
+        "catalog_item_id": item.item_id,
+        "item_code": item.item_code_snapshot,
+        "item_name": item.item_name_snapshot,
+        "item_name_ar": (
+            item.item_name_ar_snapshot
+        ),
+        "item_name_en": (
+            item.item_name_en_snapshot
+        ),
+        "unit_name": item.unit_name_snapshot,
+        "quantity": str(item.quantity),
+        "unit_price": str(item.unit_price),
+        "discount_amount": str(
+            item.discount_amount
+        ),
+        "taxable": item.taxable,
+        "tax_rate": str(item.tax_rate),
+        "subtotal_amount": str(
+            item.subtotal_amount
+        ),
+        "taxable_amount": str(
+            item.taxable_amount
+        ),
+        "tax_amount": str(
+            item.tax_amount
+        ),
+        "total_amount": str(
+            item.total_amount
+        ),
+        "notes": item.notes,
+        "extra_data": item.extra_data or {},
+        "created_at": (
+            item.created_at.isoformat()
+            if item.created_at
+            else None
+        ),
+        "updated_at": (
+            item.updated_at.isoformat()
+            if item.updated_at
+            else None
+        ),
+    }
+
+
+def serialize_supplier_debit_note(
+    debit_note: SupplierDebitNote,
+    *,
+    include_items: bool = True,
+) -> dict[str, Any]:
+    """
+    Serialize a supplier debit note for company APIs.
+    """
+    result = {
+        "id": debit_note.id,
+        "debit_note_number": (
+            debit_note.debit_note_number
+        ),
+        "supplier_reference": (
+            debit_note.supplier_reference
+        ),
+        "debit_note_date": (
+            debit_note.debit_note_date.isoformat()
+            if debit_note.debit_note_date
+            else None
+        ),
+        "status": debit_note.status,
+        "currency_code": (
+            debit_note.currency_code
+        ),
+        "company": {
+            "id": debit_note.company_id,
+            "name": debit_note.company.name,
+        },
+        "branch": (
+            {
+                "id": debit_note.branch_id,
+                "name": debit_note.branch.name,
+            }
+            if debit_note.branch_id
+            else None
+        ),
+        "supplier": {
+            "id": debit_note.supplier_id,
+            "display_name": (
+                debit_note.supplier.display_name
+            ),
+        },
+        "bill": {
+            "id": debit_note.bill_id,
+            "bill_number": (
+                debit_note.bill.bill_number
+            ),
+            "supplier_bill_number": (
+                debit_note.bill.supplier_bill_number
+            ),
+            "bill_date": (
+                debit_note.bill.bill_date.isoformat()
+            ),
+            "payment_status": (
+                debit_note.bill.payment_status
+            ),
+            "paid_amount": str(
+                debit_note.bill.paid_amount
+            ),
+            "balance_due": str(
+                debit_note.bill.balance_due
+            ),
+        },
+        "purchase_return": (
+            {
+                "id": debit_note.purchase_return_id,
+                "return_number": (
+                    debit_note
+                    .purchase_return
+                    .return_number
+                ),
+                "return_date": (
+                    debit_note
+                    .purchase_return
+                    .return_date
+                    .isoformat()
+                ),
+                "status": (
+                    debit_note
+                    .purchase_return
+                    .status
+                ),
+            }
+            if debit_note.purchase_return_id
+            else None
+        ),
+        "subtotal_amount": str(
+            debit_note.subtotal_amount
+        ),
+        "discount_amount": str(
+            debit_note.discount_amount
+        ),
+        "taxable_amount": str(
+            debit_note.taxable_amount
+        ),
+        "tax_amount": str(
+            debit_note.tax_amount
+        ),
+        "total_amount": str(
+            debit_note.total_amount
+        ),
+        "applied_to_bill_amount": str(
+            debit_note.applied_to_bill_amount
+        ),
+        "supplier_credit_amount": str(
+            debit_note.supplier_credit_amount
+        ),
+        "unapplied_amount": str(
+            debit_note.unapplied_amount
+        ),
+        "notes": debit_note.notes,
+        "extra_data": (
+            debit_note.extra_data or {}
+        ),
+        "issued_at": (
+            debit_note.issued_at.isoformat()
+            if debit_note.issued_at
+            else None
+        ),
+        "posted_at": (
+            debit_note.posted_at.isoformat()
+            if debit_note.posted_at
+            else None
+        ),
+        "cancelled_at": (
+            debit_note.cancelled_at.isoformat()
+            if debit_note.cancelled_at
+            else None
+        ),
+        "cancellation_reason": (
+            debit_note.cancellation_reason
+        ),
+        "allowed_actions": {
+            "update": debit_note.can_be_edited,
+            "issue": debit_note.can_be_issued,
+            "post": debit_note.can_be_posted,
+            "cancel": debit_note.can_be_cancelled,
+        },
+        "created_at": (
+            debit_note.created_at.isoformat()
+            if debit_note.created_at
+            else None
+        ),
+        "updated_at": (
+            debit_note.updated_at.isoformat()
+            if debit_note.updated_at
+            else None
+        ),
+    }
+
+    if include_items:
+        result["items"] = [
+            serialize_supplier_debit_note_item(
+                item
+            )
+            for item in (
+                debit_note.items
+                .select_related(
+                    "purchase_return_item",
                     "bill_item",
                     "item",
                 )

@@ -1915,3 +1915,1277 @@ class PurchaseReturnItem(models.Model):
         )
 
         return result
+
+
+# ============================================================
+# Supplier Debit Notes Foundation
+# ============================================================
+
+
+class SupplierDebitNoteStatus(models.TextChoices):
+    """
+    Supplier debit note lifecycle.
+    """
+
+    DRAFT = "DRAFT", "Draft"
+    ISSUED = "ISSUED", "Issued"
+    POSTED = "POSTED", "Posted"
+    CANCELLED = "CANCELLED", "Cancelled"
+
+
+class SupplierDebitNote(models.Model):
+    """
+    Company-scoped supplier debit note.
+
+    A debit note may originate from a confirmed or posted
+    purchase return and remains linked to its supplier bill.
+
+    Financial effects are handled in service layers:
+    - reduce supplier bill balance
+    - create supplier credit balance
+    - post accounting reversal
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="supplier_debit_notes",
+        db_index=True,
+        verbose_name="Company",
+    )
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        related_name="supplier_debit_notes",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Branch",
+    )
+    supplier = models.ForeignKey(
+        BusinessParty,
+        on_delete=models.PROTECT,
+        related_name="supplier_debit_notes",
+        db_index=True,
+        verbose_name="Supplier",
+    )
+    bill = models.ForeignKey(
+        PurchaseBill,
+        on_delete=models.PROTECT,
+        related_name="supplier_debit_notes",
+        db_index=True,
+        verbose_name="Purchase bill",
+    )
+    purchase_return = models.OneToOneField(
+        PurchaseReturn,
+        on_delete=models.PROTECT,
+        related_name="debit_note",
+        blank=True,
+        null=True,
+        verbose_name="Purchase return",
+        help_text=(
+            "Optional source purchase return. "
+            "One purchase return can create one debit note."
+        ),
+    )
+
+    debit_note_number = models.CharField(
+        max_length=80,
+        db_index=True,
+        verbose_name="Debit note number",
+    )
+    supplier_reference = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name="Supplier reference",
+    )
+    debit_note_date = models.DateField(
+        default=timezone.localdate,
+        db_index=True,
+        verbose_name="Debit note date",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=SupplierDebitNoteStatus.choices,
+        default=SupplierDebitNoteStatus.DRAFT,
+        db_index=True,
+        verbose_name="Status",
+    )
+    currency_code = models.CharField(
+        max_length=10,
+        default="SAR",
+        verbose_name="Currency code",
+    )
+
+    subtotal_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Subtotal amount",
+    )
+    discount_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Discount amount",
+    )
+    taxable_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Taxable amount",
+    )
+    tax_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Tax amount",
+    )
+    total_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Total amount",
+    )
+
+    applied_to_bill_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Applied to bill amount",
+        help_text=(
+            "Amount used to reduce the linked purchase bill balance."
+        ),
+    )
+    supplier_credit_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Supplier credit amount",
+        help_text=(
+            "Remaining debit note amount held as supplier credit."
+        ),
+    )
+
+    issued_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Issued at",
+    )
+    issued_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="issued_supplier_debit_notes",
+        blank=True,
+        null=True,
+        verbose_name="Issued by",
+    )
+    posted_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Posted at",
+    )
+    posted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="posted_supplier_debit_notes",
+        blank=True,
+        null=True,
+        verbose_name="Posted by",
+    )
+    cancelled_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Cancelled at",
+    )
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="cancelled_supplier_debit_notes",
+        blank=True,
+        null=True,
+        verbose_name="Cancelled by",
+    )
+    cancellation_reason = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Cancellation reason",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_supplier_debit_notes",
+        blank=True,
+        null=True,
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="updated_supplier_debit_notes",
+        blank=True,
+        null=True,
+        verbose_name="Updated by",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Internal notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Supplier debit note"
+        verbose_name_plural = "Supplier debit notes"
+        ordering = [
+            "-debit_note_date",
+            "-created_at",
+            "-id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "company",
+                    "debit_note_number",
+                ],
+                name=(
+                    "unique_supplier_debit_note_number_"
+                    "per_company"
+                ),
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["company", "status"],
+            ),
+            models.Index(
+                fields=["company", "debit_note_date"],
+            ),
+            models.Index(
+                fields=["company", "supplier"],
+            ),
+            models.Index(
+                fields=["company", "bill"],
+            ),
+            models.Index(
+                fields=["supplier", "status"],
+            ),
+            models.Index(
+                fields=["posted_at"],
+            ),
+            models.Index(
+                fields=["cancelled_at"],
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.debit_note_number} - "
+            f"{self.supplier.display_name}"
+        )
+
+    @property
+    def is_draft(self) -> bool:
+        return (
+            self.status
+            == SupplierDebitNoteStatus.DRAFT
+        )
+
+    @property
+    def is_issued(self) -> bool:
+        return (
+            self.status
+            == SupplierDebitNoteStatus.ISSUED
+        )
+
+    @property
+    def is_posted(self) -> bool:
+        return (
+            self.status
+            == SupplierDebitNoteStatus.POSTED
+        )
+
+    @property
+    def is_cancelled(self) -> bool:
+        return (
+            self.status
+            == SupplierDebitNoteStatus.CANCELLED
+        )
+
+    @property
+    def can_be_edited(self) -> bool:
+        return self.is_draft
+
+    @property
+    def can_be_issued(self) -> bool:
+        return self.is_draft
+
+    @property
+    def can_be_posted(self) -> bool:
+        return self.is_issued
+
+    @property
+    def can_be_cancelled(self) -> bool:
+        return self.status in [
+            SupplierDebitNoteStatus.DRAFT,
+            SupplierDebitNoteStatus.ISSUED,
+        ]
+
+    @property
+    def unapplied_amount(self) -> Decimal:
+        """
+        Amount not yet assigned to bill reduction or supplier credit.
+        """
+        allocated = quantize_money(
+            self.applied_to_bill_amount
+            + self.supplier_credit_amount
+        )
+
+        remaining = quantize_money(
+            self.total_amount - allocated
+        )
+
+        if remaining < MONEY_ZERO:
+            return MONEY_ZERO
+
+        return remaining
+
+    def clean(self) -> None:
+        super().clean()
+
+        self.debit_note_number = (
+            self.debit_note_number or ""
+        ).strip()
+        self.supplier_reference = (
+            self.supplier_reference or ""
+        ).strip()
+        self.currency_code = (
+            self.currency_code or "SAR"
+        ).strip().upper()
+        self.cancellation_reason = (
+            self.cancellation_reason or ""
+        ).strip()
+        self.notes = (
+            self.notes or ""
+        ).strip()
+
+        self.subtotal_amount = quantize_money(
+            self.subtotal_amount
+        )
+        self.discount_amount = quantize_money(
+            self.discount_amount
+        )
+        self.taxable_amount = quantize_money(
+            self.taxable_amount
+        )
+        self.tax_amount = quantize_money(
+            self.tax_amount
+        )
+        self.total_amount = quantize_money(
+            self.total_amount
+        )
+        self.applied_to_bill_amount = quantize_money(
+            self.applied_to_bill_amount
+        )
+        self.supplier_credit_amount = quantize_money(
+            self.supplier_credit_amount
+        )
+
+        if not self.debit_note_number:
+            raise ValidationError(
+                {
+                    "debit_note_number":
+                        "Supplier debit note number is required."
+                }
+            )
+
+        if self.branch_id and self.company_id:
+            if self.branch.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "branch":
+                            "Selected branch does not belong "
+                            "to this company."
+                    }
+                )
+
+        if self.supplier_id and self.company_id:
+            if self.supplier.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "supplier":
+                            "Selected supplier does not belong "
+                            "to this company."
+                    }
+                )
+
+            if self.supplier.party_type not in [
+                BusinessPartyType.SUPPLIER,
+                BusinessPartyType.BOTH,
+            ]:
+                raise ValidationError(
+                    {
+                        "supplier":
+                            "Selected party is not a supplier."
+                    }
+                )
+
+        if self.bill_id and self.company_id:
+            if self.bill.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "bill":
+                            "Purchase bill does not belong "
+                            "to this company."
+                    }
+                )
+
+            if self.bill.status != PurchaseBillStatus.POSTED:
+                raise ValidationError(
+                    {
+                        "bill":
+                            "Supplier debit notes require "
+                            "a posted purchase bill."
+                    }
+                )
+
+        if self.bill_id and self.supplier_id:
+            if self.bill.supplier_id != self.supplier_id:
+                raise ValidationError(
+                    {
+                        "supplier":
+                            "Supplier must match purchase bill."
+                    }
+                )
+
+        if self.bill_id and self.branch_id:
+            if (
+                self.bill.branch_id
+                and self.bill.branch_id != self.branch_id
+            ):
+                raise ValidationError(
+                    {
+                        "branch":
+                            "Branch must match purchase bill."
+                    }
+                )
+
+        if self.purchase_return_id:
+            purchase_return = self.purchase_return
+
+            if (
+                self.company_id
+                and purchase_return.company_id
+                != self.company_id
+            ):
+                raise ValidationError(
+                    {
+                        "purchase_return":
+                            "Purchase return does not belong "
+                            "to this company."
+                    }
+                )
+
+            if (
+                self.bill_id
+                and purchase_return.bill_id
+                != self.bill_id
+            ):
+                raise ValidationError(
+                    {
+                        "purchase_return":
+                            "Purchase return must belong "
+                            "to the selected purchase bill."
+                    }
+                )
+
+            if (
+                self.supplier_id
+                and purchase_return.supplier_id
+                != self.supplier_id
+            ):
+                raise ValidationError(
+                    {
+                        "purchase_return":
+                            "Purchase return supplier must "
+                            "match debit note supplier."
+                    }
+                )
+
+            if purchase_return.status not in [
+                PurchaseReturnStatus.CONFIRMED,
+                PurchaseReturnStatus.POSTED,
+            ]:
+                raise ValidationError(
+                    {
+                        "purchase_return":
+                            "Purchase return must be confirmed "
+                            "or posted."
+                    }
+                )
+
+        if (
+            self.bill_id
+            and self.debit_note_date
+            and self.debit_note_date
+            < self.bill.bill_date
+        ):
+            raise ValidationError(
+                {
+                    "debit_note_date":
+                        "Debit note date cannot be before "
+                        "purchase bill date."
+                }
+            )
+
+        if (
+            self.purchase_return_id
+            and self.debit_note_date
+            and self.debit_note_date
+            < self.purchase_return.return_date
+        ):
+            raise ValidationError(
+                {
+                    "debit_note_date":
+                        "Debit note date cannot be before "
+                        "purchase return date."
+                }
+            )
+
+        if (
+            self.bill_id
+            and self.currency_code
+            != self.bill.currency_code
+        ):
+            raise ValidationError(
+                {
+                    "currency_code":
+                        "Currency must match purchase bill."
+                }
+            )
+
+        allocated_amount = quantize_money(
+            self.applied_to_bill_amount
+            + self.supplier_credit_amount
+        )
+
+        if allocated_amount > self.total_amount:
+            raise ValidationError(
+                {
+                    "applied_to_bill_amount":
+                        "Applied amount and supplier credit "
+                        "cannot exceed debit note total."
+                }
+            )
+
+        if self.is_posted:
+            if self.total_amount <= MONEY_ZERO:
+                raise ValidationError(
+                    {
+                        "total_amount":
+                            "Posted supplier debit note "
+                            "must have a positive total."
+                    }
+                )
+
+            if allocated_amount != self.total_amount:
+                raise ValidationError(
+                    {
+                        "applied_to_bill_amount":
+                            "Posted supplier debit note total "
+                            "must be fully distributed between "
+                            "bill application and supplier credit."
+                    }
+                )
+
+    def recalculate_totals(
+        self,
+        save: bool = True,
+    ) -> None:
+        totals = self.items.aggregate(
+            subtotal=Sum("subtotal_amount"),
+            discount=Sum("discount_amount"),
+            taxable=Sum("taxable_amount"),
+            tax=Sum("tax_amount"),
+            total=Sum("total_amount"),
+        )
+
+        self.subtotal_amount = quantize_money(
+            totals["subtotal"] or MONEY_ZERO
+        )
+        self.discount_amount = quantize_money(
+            totals["discount"] or MONEY_ZERO
+        )
+        self.taxable_amount = quantize_money(
+            totals["taxable"] or MONEY_ZERO
+        )
+        self.tax_amount = quantize_money(
+            totals["tax"] or MONEY_ZERO
+        )
+        self.total_amount = quantize_money(
+            totals["total"] or MONEY_ZERO
+        )
+
+        if save:
+            self.full_clean()
+            self.save(
+                update_fields=[
+                    "subtotal_amount",
+                    "discount_amount",
+                    "taxable_amount",
+                    "tax_amount",
+                    "total_amount",
+                    "updated_at",
+                ]
+            )
+
+    def issue(self, user=None) -> None:
+        """
+        Issue a draft supplier debit note.
+        """
+        if not self.can_be_issued:
+            raise ValidationError(
+                "Only draft supplier debit notes can be issued."
+            )
+
+        if not self.items.exists():
+            raise ValidationError(
+                "Cannot issue a supplier debit note without items."
+            )
+
+        self.recalculate_totals(
+            save=False
+        )
+
+        if self.total_amount <= MONEY_ZERO:
+            raise ValidationError(
+                {
+                    "total_amount":
+                        "Supplier debit note total "
+                        "must be greater than zero."
+                }
+            )
+
+        self.status = SupplierDebitNoteStatus.ISSUED
+        self.issued_at = timezone.now()
+
+        if user:
+            self.issued_by = user
+            self.updated_by = user
+
+        self.full_clean()
+        self.save(
+            update_fields=[
+                "status",
+                "issued_at",
+                "issued_by",
+                "updated_by",
+                "subtotal_amount",
+                "discount_amount",
+                "taxable_amount",
+                "tax_amount",
+                "total_amount",
+                "updated_at",
+            ]
+        )
+
+    def mark_posted(
+        self,
+        *,
+        applied_to_bill_amount: (
+            Decimal | int | float | str
+        ) = MONEY_ZERO,
+        supplier_credit_amount: (
+            Decimal | int | float | str
+        ) = MONEY_ZERO,
+        user=None,
+    ) -> None:
+        """
+        Mark an issued supplier debit note as posted.
+
+        Accounting and supplier balance effects must be
+        completed by the service layer before this call.
+        """
+        if not self.can_be_posted:
+            raise ValidationError(
+                "Only issued supplier debit notes can be posted."
+            )
+
+        self.applied_to_bill_amount = quantize_money(
+            applied_to_bill_amount
+        )
+        self.supplier_credit_amount = quantize_money(
+            supplier_credit_amount
+        )
+        self.status = SupplierDebitNoteStatus.POSTED
+        self.posted_at = timezone.now()
+
+        if user:
+            self.posted_by = user
+            self.updated_by = user
+
+        self.full_clean()
+        self.save(
+            update_fields=[
+                "status",
+                "applied_to_bill_amount",
+                "supplier_credit_amount",
+                "posted_at",
+                "posted_by",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+    def cancel(
+        self,
+        reason: str = "",
+        user=None,
+    ) -> None:
+        """
+        Cancel a draft or issued debit note.
+
+        Posted debit notes require reversal services instead.
+        """
+        if not self.can_be_cancelled:
+            raise ValidationError(
+                "This supplier debit note cannot be cancelled."
+            )
+
+        self.status = SupplierDebitNoteStatus.CANCELLED
+        self.cancelled_at = timezone.now()
+        self.cancellation_reason = reason or ""
+
+        if user:
+            self.cancelled_by = user
+            self.updated_by = user
+
+        self.full_clean()
+        self.save(
+            update_fields=[
+                "status",
+                "cancelled_at",
+                "cancelled_by",
+                "cancellation_reason",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+
+class SupplierDebitNoteItem(models.Model):
+    """
+    Supplier debit note line.
+
+    When created from a purchase return, values are copied
+    from the linked purchase return item.
+    """
+
+    debit_note = models.ForeignKey(
+        SupplierDebitNote,
+        on_delete=models.CASCADE,
+        related_name="items",
+        db_index=True,
+        verbose_name="Supplier debit note",
+    )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="supplier_debit_note_items",
+        db_index=True,
+        verbose_name="Company",
+    )
+    purchase_return_item = models.OneToOneField(
+        PurchaseReturnItem,
+        on_delete=models.PROTECT,
+        related_name="debit_note_item",
+        blank=True,
+        null=True,
+        verbose_name="Purchase return item",
+    )
+    bill_item = models.ForeignKey(
+        PurchaseBillItem,
+        on_delete=models.PROTECT,
+        related_name="supplier_debit_note_items",
+        db_index=True,
+        verbose_name="Purchase bill item",
+    )
+    item = models.ForeignKey(
+        CatalogItem,
+        on_delete=models.PROTECT,
+        related_name="supplier_debit_note_items",
+        db_index=True,
+        verbose_name="Catalog item",
+    )
+
+    line_number = models.PositiveIntegerField(
+        default=1,
+        db_index=True,
+        verbose_name="Line number",
+    )
+
+    item_code_snapshot = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+    )
+    item_name_snapshot = models.CharField(
+        max_length=255,
+    )
+    item_name_ar_snapshot = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+    item_name_en_snapshot = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+    unit_name_snapshot = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+    )
+
+    quantity = models.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        validators=[
+            MinValueValidator(Decimal("0.0001"))
+        ],
+    )
+    unit_price = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+    )
+    discount_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+    )
+    taxable = models.BooleanField(
+        default=True,
+        db_index=True,
+    )
+    tax_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+    )
+
+    subtotal_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+    )
+    taxable_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+    )
+    tax_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+    )
+    total_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+    )
+
+    notes = models.TextField(
+        blank=True,
+        default="",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        verbose_name = "Supplier debit note item"
+        verbose_name_plural = "Supplier debit note items"
+        ordering = [
+            "debit_note_id",
+            "line_number",
+            "id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "debit_note",
+                    "line_number",
+                ],
+                name=(
+                    "unique_supplier_debit_note_item_line"
+                ),
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "debit_note",
+                    "bill_item",
+                ],
+                name=(
+                    "unique_supplier_debit_note_bill_item"
+                ),
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["company", "item"],
+            ),
+            models.Index(
+                fields=["company", "bill_item"],
+            ),
+            models.Index(
+                fields=[
+                    "debit_note",
+                    "line_number",
+                ],
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.debit_note.debit_note_number} - "
+            f"{self.item_name_snapshot}"
+        )
+
+    def apply_source_snapshot(self) -> None:
+        """
+        Copy source data from return item or bill item.
+        """
+        if self.purchase_return_item_id:
+            source = self.purchase_return_item
+
+            self.bill_item = source.bill_item
+            self.item = source.item
+            self.item_code_snapshot = (
+                source.item_code_snapshot
+            )
+            self.item_name_snapshot = (
+                source.item_name_snapshot
+            )
+            self.item_name_ar_snapshot = (
+                source.item_name_ar_snapshot
+            )
+            self.item_name_en_snapshot = (
+                source.item_name_en_snapshot
+            )
+            self.unit_name_snapshot = (
+                source.unit_name_snapshot
+            )
+            self.quantity = source.quantity
+            self.unit_price = source.unit_price
+            self.discount_amount = (
+                source.discount_amount
+            )
+            self.taxable = source.taxable
+            self.tax_rate = source.tax_rate
+            self.subtotal_amount = (
+                source.subtotal_amount
+            )
+            self.taxable_amount = (
+                source.taxable_amount
+            )
+            self.tax_amount = source.tax_amount
+            self.total_amount = (
+                source.total_amount
+            )
+            return
+
+        if self.bill_item_id:
+            source = self.bill_item
+
+            self.item = source.item
+            self.item_code_snapshot = (
+                source.item_code_snapshot
+            )
+            self.item_name_snapshot = (
+                source.item_name_snapshot
+            )
+            self.item_name_ar_snapshot = (
+                source.item_name_ar_snapshot
+            )
+            self.item_name_en_snapshot = (
+                source.item_name_en_snapshot
+            )
+            self.unit_name_snapshot = (
+                source.unit_name_snapshot
+            )
+
+    def calculate_totals(self) -> None:
+        """
+        Calculate manual debit note line totals.
+        """
+        if self.purchase_return_item_id:
+            return
+
+        quantity = quantize_quantity(
+            self.quantity
+        )
+        unit_price = quantize_money(
+            self.unit_price
+        )
+        discount = quantize_money(
+            self.discount_amount
+        )
+
+        subtotal = quantize_money(
+            quantity * unit_price
+        )
+
+        if discount > subtotal:
+            raise ValidationError(
+                {
+                    "discount_amount":
+                        "Discount cannot exceed subtotal."
+                }
+            )
+
+        taxable_amount = quantize_money(
+            subtotal - discount
+        )
+
+        tax_amount = MONEY_ZERO
+        if self.taxable:
+            tax_amount = quantize_money(
+                taxable_amount
+                * self.tax_rate
+                / Decimal("100.00")
+            )
+
+        self.quantity = quantity
+        self.unit_price = unit_price
+        self.discount_amount = discount
+        self.subtotal_amount = subtotal
+        self.taxable_amount = taxable_amount
+        self.tax_amount = tax_amount
+        self.total_amount = quantize_money(
+            taxable_amount + tax_amount
+        )
+
+    def clean(self) -> None:
+        super().clean()
+
+        if (
+            self.debit_note_id
+            and self.company_id
+            and self.debit_note.company_id
+            != self.company_id
+        ):
+            raise ValidationError(
+                {
+                    "company":
+                        "Item company must match "
+                        "supplier debit note company."
+                }
+            )
+
+        if (
+            self.debit_note_id
+            and not self.debit_note.can_be_edited
+        ):
+            raise ValidationError(
+                "Cannot edit items for an issued, "
+                "posted, or cancelled supplier debit note."
+            )
+
+        if (
+            self.bill_item_id
+            and self.debit_note_id
+            and self.bill_item.bill_id
+            != self.debit_note.bill_id
+        ):
+            raise ValidationError(
+                {
+                    "bill_item":
+                        "Bill item must belong to the "
+                        "supplier debit note bill."
+                }
+            )
+
+        if (
+            self.bill_item_id
+            and self.company_id
+            and self.bill_item.company_id
+            != self.company_id
+        ):
+            raise ValidationError(
+                {
+                    "bill_item":
+                        "Bill item does not belong "
+                        "to this company."
+                }
+            )
+
+        if self.purchase_return_item_id:
+            source = self.purchase_return_item
+
+            if not self.debit_note.purchase_return_id:
+                raise ValidationError(
+                    {
+                        "purchase_return_item":
+                            "Debit note must reference "
+                            "a purchase return."
+                    }
+                )
+
+            if (
+                source.purchase_return_id
+                != self.debit_note.purchase_return_id
+            ):
+                raise ValidationError(
+                    {
+                        "purchase_return_item":
+                            "Purchase return item must belong "
+                            "to the debit note purchase return."
+                    }
+                )
+
+            if (
+                self.company_id
+                and source.company_id
+                != self.company_id
+            ):
+                raise ValidationError(
+                    {
+                        "purchase_return_item":
+                            "Purchase return item does not "
+                            "belong to this company."
+                    }
+                )
+
+        if self.item_id and self.company_id:
+            if self.item.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "item":
+                            "Catalog item does not belong "
+                            "to this company."
+                    }
+                )
+
+        self.quantity = quantize_quantity(
+            self.quantity
+        )
+        self.unit_price = quantize_money(
+            self.unit_price
+        )
+        self.discount_amount = quantize_money(
+            self.discount_amount
+        )
+        self.tax_rate = quantize_money(
+            self.tax_rate
+        )
+
+        if self.quantity <= QUANTITY_ZERO:
+            raise ValidationError(
+                {
+                    "quantity":
+                        "Quantity must be greater than zero."
+                }
+            )
+
+        if self.unit_price < MONEY_ZERO:
+            raise ValidationError(
+                {
+                    "unit_price":
+                        "Unit price cannot be negative."
+                }
+            )
+
+        if self.discount_amount < MONEY_ZERO:
+            raise ValidationError(
+                {
+                    "discount_amount":
+                        "Discount cannot be negative."
+                }
+            )
+
+        if self.tax_rate < MONEY_ZERO:
+            raise ValidationError(
+                {
+                    "tax_rate":
+                        "Tax rate cannot be negative."
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        if (
+            self.debit_note_id
+            and not self.company_id
+        ):
+            self.company = self.debit_note.company
+
+        self.apply_source_snapshot()
+        self.calculate_totals()
+        self.full_clean()
+
+        super().save(*args, **kwargs)
+
+        if self.debit_note_id:
+            self.debit_note.recalculate_totals(
+                save=True
+            )
+
+    def delete(self, *args, **kwargs):
+        debit_note = self.debit_note
+
+        if not debit_note.can_be_edited:
+            raise ValidationError(
+                "Cannot delete items from an issued, "
+                "posted, or cancelled supplier debit note."
+            )
+
+        result = super().delete(*args, **kwargs)
+
+        debit_note.recalculate_totals(
+            save=True
+        )
+
+        return result
