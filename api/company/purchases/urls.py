@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # 📂 api/company/purchases/urls.py
 # 🧠 PrimeyAcc | Company Purchases URLs V1.0
 # ------------------------------------------------------------
@@ -14,4 +14,5 @@ from django.urls import include, path
 
 urlpatterns = [
     path("bills/", include("api.company.purchases.bills.urls")),
+    path("returns/", include("api.company.purchases.returns.urls")),
 ]

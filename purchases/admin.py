@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # 📂 purchases/admin.py
 # 🧠 PrimeyAcc | Purchases Admin V1.0
 # ------------------------------------------------------------
@@ -13,7 +13,12 @@ from __future__ import annotations
 
 from django.contrib import admin
 
-from purchases.models import PurchaseBill, PurchaseBillItem
+from purchases.models import (
+    PurchaseBill,
+    PurchaseBillItem,
+    PurchaseReturn,
+    PurchaseReturnItem,
+)
 
 
 class PurchaseBillItemInline(admin.TabularInline):
@@ -238,4 +243,263 @@ class PurchaseBillItemAdmin(admin.ModelAdmin):
         "bill",
         "company",
         "item",
+    ]
+
+
+class PurchaseReturnItemInline(admin.TabularInline):
+    model = PurchaseReturnItem
+    extra = 0
+
+    fields = [
+        "line_number",
+        "bill_item",
+        "item",
+        "item_name_snapshot",
+        "unit_name_snapshot",
+        "quantity",
+        "unit_price",
+        "discount_amount",
+        "taxable",
+        "tax_rate",
+        "subtotal_amount",
+        "taxable_amount",
+        "tax_amount",
+        "total_amount",
+        "condition_notes",
+    ]
+
+    readonly_fields = [
+        "item",
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "item_name_ar_snapshot",
+        "item_name_en_snapshot",
+        "unit_name_snapshot",
+        "unit_price",
+        "discount_amount",
+        "taxable",
+        "tax_rate",
+        "subtotal_amount",
+        "taxable_amount",
+        "tax_amount",
+        "total_amount",
+    ]
+
+    autocomplete_fields = [
+        "bill_item",
+    ]
+
+
+@admin.register(PurchaseReturn)
+class PurchaseReturnAdmin(admin.ModelAdmin):
+    list_display = [
+        "return_number",
+        "supplier",
+        "bill",
+        "company",
+        "branch",
+        "status",
+        "reason",
+        "return_date",
+        "subtotal_amount",
+        "tax_amount",
+        "total_amount",
+        "created_at",
+    ]
+
+    list_filter = [
+        "status",
+        "reason",
+        "return_date",
+        "company",
+        "branch",
+        "created_at",
+    ]
+
+    search_fields = [
+        "return_number",
+        "bill__bill_number",
+        "bill__supplier_bill_number",
+        "supplier__display_name",
+        "supplier__legal_name",
+        "company__name",
+        "company__name_ar",
+        "company__name_en",
+        "reason_details",
+        "notes",
+    ]
+
+    readonly_fields = [
+        "subtotal_amount",
+        "discount_amount",
+        "taxable_amount",
+        "tax_amount",
+        "total_amount",
+        "confirmed_at",
+        "confirmed_by",
+        "posted_at",
+        "posted_by",
+        "cancelled_at",
+        "cancelled_by",
+        "created_at",
+        "updated_at",
+    ]
+
+    autocomplete_fields = [
+        "company",
+        "branch",
+        "supplier",
+        "bill",
+        "created_by",
+        "updated_by",
+        "confirmed_by",
+        "posted_by",
+        "cancelled_by",
+    ]
+
+    fieldsets = [
+        (
+            "Basic information",
+            {
+                "fields": [
+                    "company",
+                    "branch",
+                    "supplier",
+                    "bill",
+                    "return_number",
+                    "return_date",
+                    "status",
+                    "reason",
+                    "reason_details",
+                    "currency_code",
+                ],
+            },
+        ),
+        (
+            "Totals",
+            {
+                "fields": [
+                    "subtotal_amount",
+                    "discount_amount",
+                    "taxable_amount",
+                    "tax_amount",
+                    "total_amount",
+                ],
+            },
+        ),
+        (
+            "Confirmation",
+            {
+                "fields": [
+                    "confirmed_at",
+                    "confirmed_by",
+                ],
+            },
+        ),
+        (
+            "Posting",
+            {
+                "fields": [
+                    "posted_at",
+                    "posted_by",
+                ],
+            },
+        ),
+        (
+            "Cancellation",
+            {
+                "fields": [
+                    "cancelled_at",
+                    "cancelled_by",
+                    "cancellation_reason",
+                ],
+            },
+        ),
+        (
+            "Audit",
+            {
+                "fields": [
+                    "created_by",
+                    "updated_by",
+                    "created_at",
+                    "updated_at",
+                ],
+            },
+        ),
+        (
+            "Extra",
+            {
+                "classes": [
+                    "collapse",
+                ],
+                "fields": [
+                    "notes",
+                    "extra_data",
+                ],
+            },
+        ),
+    ]
+
+    inlines = [
+        PurchaseReturnItemInline,
+    ]
+
+
+@admin.register(PurchaseReturnItem)
+class PurchaseReturnItemAdmin(admin.ModelAdmin):
+    list_display = [
+        "purchase_return",
+        "line_number",
+        "bill_item",
+        "item",
+        "company",
+        "quantity",
+        "unit_price",
+        "discount_amount",
+        "tax_rate",
+        "subtotal_amount",
+        "tax_amount",
+        "total_amount",
+        "created_at",
+    ]
+
+    list_filter = [
+        "taxable",
+        "company",
+        "created_at",
+    ]
+
+    search_fields = [
+        "purchase_return__return_number",
+        "purchase_return__bill__bill_number",
+        "item__name",
+        "item__name_ar",
+        "item__name_en",
+        "item_code_snapshot",
+        "item_name_snapshot",
+    ]
+
+    readonly_fields = [
+        "item",
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "item_name_ar_snapshot",
+        "item_name_en_snapshot",
+        "unit_name_snapshot",
+        "unit_price",
+        "discount_amount",
+        "taxable",
+        "tax_rate",
+        "subtotal_amount",
+        "taxable_amount",
+        "tax_amount",
+        "total_amount",
+        "created_at",
+        "updated_at",
+    ]
+
+    autocomplete_fields = [
+        "purchase_return",
+        "company",
+        "bill_item",
     ]

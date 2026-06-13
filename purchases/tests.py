@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # 📂 purchases/tests.py
 # 🧠 PrimeyAcc | Purchases Tests V1.2
 # ------------------------------------------------------------
@@ -36,7 +36,15 @@ from accounts.models import CompanyMembership, CompanyRole, MembershipStatus
 from catalog.models import CatalogItem, CatalogItemStatus, CatalogItemType, CatalogUnit
 from companies.models import Branch, Company, CompanySettings
 from parties.models import BusinessParty, BusinessPartyStatus, BusinessPartyType
-from purchases.models import PurchaseBill, PurchaseBillItem, PurchaseBillStatus
+from purchases.models import (
+    PurchaseBill,
+    PurchaseBillItem,
+    PurchaseBillStatus,
+    PurchaseReturn,
+    PurchaseReturnItem,
+    PurchaseReturnReason,
+    PurchaseReturnStatus,
+)
 from purchases.services import (
     cancel_purchase_bill,
     create_purchase_bill,
@@ -47,6 +55,12 @@ from purchases.services import (
     post_purchase_bill,
     post_purchase_bill_to_accounting,
     update_purchase_bill,
+    cancel_purchase_return,
+    confirm_purchase_return,
+    create_purchase_return,
+    generate_purchase_return_number,
+    serialize_purchase_return,
+    update_purchase_return,
 )
 
 
@@ -1122,3 +1136,906 @@ class PurchaseBillsAPITests(PurchasesTestCase):
         )
 
         self.assertEqual(create_response.status_code, 403)
+
+
+class PurchaseReturnsTests(PurchasesTestCase):
+    """
+    Tests for purchase return models and services.
+    """
+
+    def _create_posted_bill(
+        self,
+        *,
+        company=None,
+        user=None,
+        supplier=None,
+        branch=None,
+        item=None,
+        quantity="5.0000",
+    ) -> PurchaseBill:
+        company = company or self.company
+        user = user or self.user
+        supplier = supplier or self.supplier
+        branch = branch or self.branch
+        item = item or self.item
+
+        bill = create_purchase_bill(
+            company=company,
+            user=user,
+            payload={
+                "supplier_id": supplier.id,
+                "branch_id": branch.id,
+                "items": [
+                    {
+                        "item_id": item.id,
+                        "quantity": quantity,
+                        "unit_price": "100.00",
+                    }
+                ],
+            },
+        )
+
+        bill = post_purchase_bill(
+            bill=bill,
+            user=user,
+        )
+
+        bill.refresh_from_db()
+
+        return bill
+
+    def _create_purchase_return(
+        self,
+        *,
+        bill=None,
+        quantity="2.0000",
+        user=None,
+    ) -> PurchaseReturn:
+        bill = bill or self._create_posted_bill()
+        user = user or self.user
+
+        return create_purchase_return(
+            company=bill.company,
+            user=user,
+            payload={
+                "bill_id": bill.id,
+                "reason": (
+                    PurchaseReturnReason.DAMAGED
+                ),
+                "reason_details": (
+                    "Damaged during receiving"
+                ),
+                "items": [
+                    {
+                        "bill_item_id": (
+                            bill.items.first().id
+                        ),
+                        "quantity": quantity,
+                        "condition_notes": (
+                            "Damaged units"
+                        ),
+                    }
+                ],
+            },
+        )
+
+    def test_generate_purchase_return_number(self):
+        number = generate_purchase_return_number(
+            self.company
+        )
+
+        expected_prefix = (
+            "PRET-"
+            f"{timezone.localdate().strftime('%Y%m%d')}-"
+        )
+
+        self.assertTrue(
+            number.startswith(expected_prefix)
+        )
+        self.assertTrue(
+            number.endswith("000001")
+        )
+
+    def test_create_purchase_return_calculates_totals(self):
+        bill = self._create_posted_bill(
+            quantity="5.0000"
+        )
+
+        purchase_return = self._create_purchase_return(
+            bill=bill,
+            quantity="2.0000",
+        )
+
+        purchase_return.refresh_from_db()
+        return_item = purchase_return.items.get()
+
+        self.assertEqual(
+            purchase_return.status,
+            PurchaseReturnStatus.DRAFT,
+        )
+        self.assertEqual(
+            purchase_return.company,
+            self.company,
+        )
+        self.assertEqual(
+            purchase_return.supplier,
+            self.supplier,
+        )
+        self.assertEqual(
+            purchase_return.bill,
+            bill,
+        )
+        self.assertEqual(
+            return_item.quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            return_item.subtotal_amount,
+            Decimal("200.00"),
+        )
+        self.assertEqual(
+            return_item.tax_amount,
+            Decimal("30.00"),
+        )
+        self.assertEqual(
+            return_item.total_amount,
+            Decimal("230.00"),
+        )
+        self.assertEqual(
+            purchase_return.total_amount,
+            Decimal("230.00"),
+        )
+
+    def test_create_purchase_return_rejects_draft_bill(self):
+        bill = create_purchase_bill(
+            company=self.company,
+            user=self.user,
+            payload={
+                "supplier_id": self.supplier.id,
+                "items": [
+                    {
+                        "item_id": self.item.id,
+                        "quantity": "1",
+                    }
+                ],
+            },
+        )
+
+        with self.assertRaises(ValidationError):
+            create_purchase_return(
+                company=self.company,
+                user=self.user,
+                payload={
+                    "bill_id": bill.id,
+                    "items": [
+                        {
+                            "bill_item_id": (
+                                bill.items.first().id
+                            ),
+                            "quantity": "1",
+                        }
+                    ],
+                },
+            )
+
+    def test_create_purchase_return_rejects_other_company_bill(self):
+        other_bill = self._create_posted_bill(
+            company=self.other_company,
+            user=self.other_user,
+            supplier=self.other_supplier,
+            branch=self.other_branch,
+            item=self.other_item,
+            quantity="2",
+        )
+
+        with self.assertRaises(ValidationError):
+            create_purchase_return(
+                company=self.company,
+                user=self.user,
+                payload={
+                    "bill_id": other_bill.id,
+                    "items": [
+                        {
+                            "bill_item_id": (
+                                other_bill.items.first().id
+                            ),
+                            "quantity": "1",
+                        }
+                    ],
+                },
+            )
+
+    def test_create_purchase_return_rejects_over_return(self):
+        bill = self._create_posted_bill(
+            quantity="3.0000"
+        )
+
+        with self.assertRaises(ValidationError):
+            self._create_purchase_return(
+                bill=bill,
+                quantity="4.0000",
+            )
+
+    def test_confirm_purchase_return_consumes_quantity(self):
+        bill = self._create_posted_bill(
+            quantity="5.0000"
+        )
+        bill_item = bill.items.get()
+
+        purchase_return = self._create_purchase_return(
+            bill=bill,
+            quantity="2.0000",
+        )
+
+        purchase_return = confirm_purchase_return(
+            purchase_return=purchase_return,
+            user=self.user,
+        )
+
+        bill_item.refresh_from_db()
+
+        self.assertEqual(
+            purchase_return.status,
+            PurchaseReturnStatus.CONFIRMED,
+        )
+        self.assertEqual(
+            bill_item.returned_quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            bill_item.returnable_quantity,
+            Decimal("3.0000"),
+        )
+
+    def test_multiple_partial_purchase_returns(self):
+        bill = self._create_posted_bill(
+            quantity="5.0000"
+        )
+        bill_item = bill.items.get()
+
+        first_return = self._create_purchase_return(
+            bill=bill,
+            quantity="2.0000",
+        )
+        confirm_purchase_return(
+            purchase_return=first_return,
+            user=self.user,
+        )
+
+        second_return = self._create_purchase_return(
+            bill=bill,
+            quantity="3.0000",
+        )
+        confirm_purchase_return(
+            purchase_return=second_return,
+            user=self.user,
+        )
+
+        bill_item.refresh_from_db()
+
+        self.assertEqual(
+            bill_item.returned_quantity,
+            Decimal("5.0000"),
+        )
+        self.assertEqual(
+            bill_item.returnable_quantity,
+            Decimal("0.0000"),
+        )
+
+        with self.assertRaises(ValidationError):
+            self._create_purchase_return(
+                bill=bill,
+                quantity="1.0000",
+            )
+
+    def test_cancel_confirmed_purchase_return_restores_quantity(self):
+        bill = self._create_posted_bill(
+            quantity="5.0000"
+        )
+        bill_item = bill.items.get()
+
+        purchase_return = self._create_purchase_return(
+            bill=bill,
+            quantity="2.0000",
+        )
+        purchase_return = confirm_purchase_return(
+            purchase_return=purchase_return,
+            user=self.user,
+        )
+
+        purchase_return = cancel_purchase_return(
+            purchase_return=purchase_return,
+            reason="Supplier accepted cancellation",
+            user=self.user,
+        )
+
+        bill_item.refresh_from_db()
+
+        self.assertEqual(
+            purchase_return.status,
+            PurchaseReturnStatus.CANCELLED,
+        )
+        self.assertEqual(
+            purchase_return.cancellation_reason,
+            "Supplier accepted cancellation",
+        )
+        self.assertEqual(
+            bill_item.returned_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            bill_item.returnable_quantity,
+            Decimal("5.0000"),
+        )
+
+    def test_update_purchase_return_replaces_items(self):
+        bill = self._create_posted_bill(
+            quantity="5.0000"
+        )
+
+        purchase_return = self._create_purchase_return(
+            bill=bill,
+            quantity="1.0000",
+        )
+
+        purchase_return = update_purchase_return(
+            purchase_return=purchase_return,
+            user=self.user,
+            payload={
+                "reason": (
+                    PurchaseReturnReason.QUALITY_ISSUE
+                ),
+                "notes": "Updated purchase return",
+                "items": [
+                    {
+                        "bill_item_id": (
+                            bill.items.first().id
+                        ),
+                        "quantity": "3.0000",
+                    }
+                ],
+            },
+        )
+
+        return_item = purchase_return.items.get()
+
+        self.assertEqual(
+            purchase_return.reason,
+            PurchaseReturnReason.QUALITY_ISSUE,
+        )
+        self.assertEqual(
+            purchase_return.notes,
+            "Updated purchase return",
+        )
+        self.assertEqual(
+            return_item.quantity,
+            Decimal("3.0000"),
+        )
+        self.assertEqual(
+            purchase_return.total_amount,
+            Decimal("345.00"),
+        )
+
+    def test_update_purchase_return_rejects_confirmed_return(self):
+        purchase_return = self._create_purchase_return()
+        purchase_return = confirm_purchase_return(
+            purchase_return=purchase_return,
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            update_purchase_return(
+                purchase_return=purchase_return,
+                user=self.user,
+                payload={
+                    "notes": "Should fail",
+                },
+            )
+
+    def test_serialize_purchase_return(self):
+        purchase_return = self._create_purchase_return()
+
+        data = serialize_purchase_return(
+            purchase_return,
+            include_items=True,
+        )
+
+        self.assertEqual(
+            data["id"],
+            purchase_return.id,
+        )
+        self.assertEqual(
+            data["status"],
+            PurchaseReturnStatus.DRAFT,
+        )
+        self.assertEqual(
+            data["supplier"]["id"],
+            self.supplier.id,
+        )
+        self.assertEqual(
+            len(data["items"]),
+            1,
+        )
+        self.assertTrue(
+            data["allowed_actions"]["confirm"]
+        )
+
+    def test_purchase_return_permissions(self):
+        admin_user = User.objects.create_user(
+            username="purchase_returns_admin",
+            email="purchase_returns_admin@example.com",
+            password="StrongPass123!",
+        )
+
+        admin_membership = CompanyMembership.objects.create(
+            user=admin_user,
+            company=self.company,
+            role=CompanyRole.ADMIN,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+            created_by=self.user,
+        )
+
+        permissions = (
+            admin_membership.company_permissions
+        )
+
+        self.assertIn(
+            "company.purchases.returns.view",
+            permissions,
+        )
+        self.assertIn(
+            "company.purchases.returns.create",
+            permissions,
+        )
+        self.assertIn(
+            "company.purchases.returns.update",
+            permissions,
+        )
+        self.assertIn(
+            "company.purchases.returns.confirm",
+            permissions,
+        )
+        self.assertIn(
+            "company.purchases.returns.post",
+            permissions,
+        )
+        self.assertIn(
+            "company.purchases.returns.cancel",
+            permissions,
+        )
+
+        viewer_permissions = (
+            self.viewer_membership.company_permissions
+        )
+
+        self.assertIn(
+            "company.purchases.returns.view",
+            viewer_permissions,
+        )
+        self.assertNotIn(
+            "company.purchases.returns.create",
+            viewer_permissions,
+        )
+        self.assertNotIn(
+            "company.purchases.returns.confirm",
+            viewer_permissions,
+        )
+
+
+class PurchaseReturnsAPITests(PurchasesTestCase):
+    """
+    Tests for /api/company/purchases/returns/ endpoints.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.user)
+
+    def _create_posted_bill(
+        self,
+        *,
+        company=None,
+        user=None,
+        supplier=None,
+        branch=None,
+        item=None,
+        quantity="5.0000",
+    ) -> PurchaseBill:
+        company = company or self.company
+        user = user or self.user
+        supplier = supplier or self.supplier
+        branch = branch or self.branch
+        item = item or self.item
+
+        bill = create_purchase_bill(
+            company=company,
+            user=user,
+            payload={
+                "supplier_id": supplier.id,
+                "branch_id": branch.id,
+                "items": [
+                    {
+                        "item_id": item.id,
+                        "quantity": quantity,
+                        "unit_price": "100.00",
+                    }
+                ],
+            },
+        )
+
+        return post_purchase_bill(
+            bill=bill,
+            user=user,
+        )
+
+    def _create_return_for_api(
+        self,
+        *,
+        bill=None,
+        quantity="2.0000",
+    ) -> PurchaseReturn:
+        bill = bill or self._create_posted_bill()
+
+        return create_purchase_return(
+            company=bill.company,
+            user=self.user,
+            payload={
+                "bill_id": bill.id,
+                "reason": PurchaseReturnReason.DAMAGED,
+                "items": [
+                    {
+                        "bill_item_id": (
+                            bill.items.first().id
+                        ),
+                        "quantity": quantity,
+                    }
+                ],
+            },
+        )
+
+    def test_purchase_return_create_endpoint(self):
+        bill = self._create_posted_bill()
+
+        response = self.client.post(
+            "/api/company/purchases/returns/create/",
+            data={
+                "bill_id": bill.id,
+                "reason": (
+                    PurchaseReturnReason.DAMAGED
+                ),
+                "items": [
+                    {
+                        "bill_item_id": (
+                            bill.items.first().id
+                        ),
+                        "quantity": "2.0000",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+        )
+
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(
+            payload["purchase_return"]["status"],
+            PurchaseReturnStatus.DRAFT,
+        )
+        self.assertEqual(
+            payload["purchase_return"]["total_amount"],
+            "230.00",
+        )
+        self.assertEqual(
+            len(
+                payload["purchase_return"]["items"]
+            ),
+            1,
+        )
+
+    def test_purchase_returns_list_is_company_scoped(self):
+        purchase_return = (
+            self._create_return_for_api()
+        )
+
+        other_bill = self._create_posted_bill(
+            company=self.other_company,
+            user=self.other_user,
+            supplier=self.other_supplier,
+            branch=self.other_branch,
+            item=self.other_item,
+            quantity="2.0000",
+        )
+
+        create_purchase_return(
+            company=self.other_company,
+            user=self.other_user,
+            payload={
+                "bill_id": other_bill.id,
+                "items": [
+                    {
+                        "bill_item_id": (
+                            other_bill.items.first().id
+                        ),
+                        "quantity": "1.0000",
+                    }
+                ],
+            },
+        )
+
+        response = self.client.get(
+            "/api/company/purchases/returns/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(
+            payload["results"][0]["id"],
+            purchase_return.id,
+        )
+
+    def test_purchase_return_detail_endpoint(self):
+        purchase_return = (
+            self._create_return_for_api()
+        )
+
+        response = self.client.get(
+            (
+                "/api/company/purchases/returns/"
+                f"{purchase_return.id}/"
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(
+            payload["purchase_return"]["id"],
+            purchase_return.id,
+        )
+        self.assertEqual(
+            len(
+                payload["purchase_return"]["items"]
+            ),
+            1,
+        )
+
+    def test_purchase_return_detail_blocks_cross_company(self):
+        other_bill = self._create_posted_bill(
+            company=self.other_company,
+            user=self.other_user,
+            supplier=self.other_supplier,
+            branch=self.other_branch,
+            item=self.other_item,
+            quantity="2.0000",
+        )
+
+        other_return = create_purchase_return(
+            company=self.other_company,
+            user=self.other_user,
+            payload={
+                "bill_id": other_bill.id,
+                "items": [
+                    {
+                        "bill_item_id": (
+                            other_bill.items.first().id
+                        ),
+                        "quantity": "1.0000",
+                    }
+                ],
+            },
+        )
+
+        response = self.client.get(
+            (
+                "/api/company/purchases/returns/"
+                f"{other_return.id}/"
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+    def test_purchase_return_update_endpoint(self):
+        purchase_return = (
+            self._create_return_for_api()
+        )
+
+        response = self.client.patch(
+            (
+                "/api/company/purchases/returns/"
+                f"{purchase_return.id}/update/"
+            ),
+            data={
+                "notes": "Updated through API",
+                "items": [
+                    {
+                        "bill_item_id": (
+                            purchase_return
+                            .bill
+                            .items
+                            .first()
+                            .id
+                        ),
+                        "quantity": "3.0000",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(
+            payload["purchase_return"]["notes"],
+            "Updated through API",
+        )
+        self.assertEqual(
+            payload["purchase_return"]["items"][0][
+                "quantity"
+            ],
+            "3.0000",
+        )
+
+    def test_purchase_return_confirm_endpoint(self):
+        purchase_return = (
+            self._create_return_for_api()
+        )
+
+        response = self.client.post(
+            (
+                "/api/company/purchases/returns/"
+                f"{purchase_return.id}/confirm/"
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        purchase_return.refresh_from_db()
+
+        self.assertEqual(
+            purchase_return.status,
+            PurchaseReturnStatus.CONFIRMED,
+        )
+
+    def test_purchase_return_cancel_endpoint(self):
+        purchase_return = (
+            self._create_return_for_api()
+        )
+
+        response = self.client.post(
+            (
+                "/api/company/purchases/returns/"
+                f"{purchase_return.id}/cancel/"
+            ),
+            data={
+                "reason": "Cancelled through API",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        purchase_return.refresh_from_db()
+
+        self.assertEqual(
+            purchase_return.status,
+            PurchaseReturnStatus.CANCELLED,
+        )
+        self.assertEqual(
+            purchase_return.cancellation_reason,
+            "Cancelled through API",
+        )
+
+    def test_purchase_return_create_rejects_over_return(self):
+        bill = self._create_posted_bill(
+            quantity="2.0000"
+        )
+
+        response = self.client.post(
+            "/api/company/purchases/returns/create/",
+            data={
+                "bill_id": bill.id,
+                "items": [
+                    {
+                        "bill_item_id": (
+                            bill.items.first().id
+                        ),
+                        "quantity": "3.0000",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+        )
+        self.assertFalse(
+            response.json()["success"]
+        )
+
+    def test_viewer_can_view_but_cannot_create_return(self):
+        purchase_return = (
+            self._create_return_for_api()
+        )
+
+        self.client.force_login(
+            self.viewer_user
+        )
+
+        list_response = self.client.get(
+            "/api/company/purchases/returns/"
+        )
+
+        self.assertEqual(
+            list_response.status_code,
+            200,
+        )
+
+        detail_response = self.client.get(
+            (
+                "/api/company/purchases/returns/"
+                f"{purchase_return.id}/"
+            )
+        )
+
+        self.assertEqual(
+            detail_response.status_code,
+            200,
+        )
+
+        create_response = self.client.post(
+            "/api/company/purchases/returns/create/",
+            data={
+                "bill_id": purchase_return.bill_id,
+                "items": [
+                    {
+                        "bill_item_id": (
+                            purchase_return
+                            .bill
+                            .items
+                            .first()
+                            .id
+                        ),
+                        "quantity": "1.0000",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            create_response.status_code,
+            403,
+        )

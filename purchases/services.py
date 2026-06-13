@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # 📂 purchases/services.py
 # 🧠 PrimeyAcc | Purchases Services V1.1
 # ------------------------------------------------------------
@@ -52,7 +52,16 @@ from accounting.services import (
 from catalog.models import CatalogItem
 from companies.models import Branch, Company
 from parties.models import BusinessParty, BusinessPartyStatus, BusinessPartyType
-from purchases.models import PurchaseBill, PurchaseBillItem, PurchaseBillStatus
+from purchases.models import (
+    PurchaseBill,
+    PurchaseBillItem,
+    PurchaseBillStatus,
+    PurchaseReturn,
+    PurchaseReturnItem,
+    PurchaseReturnReason,
+    PurchaseReturnStatus,
+    quantize_quantity,
+)
 
 
 MONEY_ZERO = Decimal("0.00")
@@ -830,3 +839,830 @@ def cancel_purchase_bill(
     bill.cancel(reason=reason, user=user)
     bill.refresh_from_db()
     return bill
+
+
+# ============================================================
+# Purchase Returns Services Foundation
+# ============================================================
+
+
+def get_company_purchase_return_prefix(
+    company: Company,
+) -> str:
+    """
+    Resolve company purchase return prefix.
+    """
+    settings_obj = getattr(
+        company,
+        "operational_settings",
+        None,
+    )
+
+    configured_prefix = (
+        getattr(
+            settings_obj,
+            "purchase_return_prefix",
+            "",
+        )
+        if settings_obj
+        else ""
+    )
+
+    return normalize_text(
+        configured_prefix
+    ) or "PRET"
+
+
+def generate_purchase_return_number(
+    company: Company,
+) -> str:
+    """
+    Generate a company-scoped purchase return number.
+
+    Format:
+    PRET-YYYYMMDD-000001
+    """
+    today = timezone.localdate()
+    prefix = get_company_purchase_return_prefix(
+        company
+    )
+    date_part = today.strftime("%Y%m%d")
+    starts_with = f"{prefix}-{date_part}-"
+
+    last_return = (
+        PurchaseReturn.objects
+        .filter(
+            company=company,
+            return_number__startswith=starts_with,
+        )
+        .order_by("-return_number")
+        .first()
+    )
+
+    next_number = 1
+
+    if last_return:
+        try:
+            next_number = (
+                int(
+                    last_return.return_number
+                    .split("-")[-1]
+                )
+                + 1
+            )
+        except (TypeError, ValueError):
+            next_number = 1
+
+    return (
+        f"{starts_with}"
+        f"{next_number:06d}"
+    )
+
+
+def get_posted_purchase_bill_for_company(
+    *,
+    company: Company,
+    bill_id: int | str,
+) -> PurchaseBill:
+    """
+    Return a posted purchase bill owned by the company.
+    """
+    try:
+        bill = (
+            PurchaseBill.objects
+            .select_related(
+                "company",
+                "branch",
+                "supplier",
+            )
+            .get(
+                id=bill_id,
+                company=company,
+            )
+        )
+    except PurchaseBill.DoesNotExist as exc:
+        raise ValidationError(
+            {
+                "bill":
+                    "Purchase bill was not found "
+                    "for this company."
+            }
+        ) from exc
+
+    if bill.status != PurchaseBillStatus.POSTED:
+        raise ValidationError(
+            {
+                "bill":
+                    "Only posted purchase bills "
+                    "can be returned."
+            }
+        )
+
+    return bill
+
+
+def get_purchase_bill_item_for_return(
+    *,
+    company: Company,
+    bill: PurchaseBill,
+    bill_item_id: int | str,
+) -> PurchaseBillItem:
+    """
+    Return a bill item eligible for purchase return.
+    """
+    try:
+        bill_item = (
+            PurchaseBillItem.objects
+            .select_related(
+                "bill",
+                "item",
+                "company",
+            )
+            .get(
+                id=bill_item_id,
+                company=company,
+                bill=bill,
+            )
+        )
+    except PurchaseBillItem.DoesNotExist as exc:
+        raise ValidationError(
+            {
+                "bill_item":
+                    "Purchase bill item was not found "
+                    "for this bill and company."
+            }
+        ) from exc
+
+    if (
+        bill_item.returnable_quantity
+        <= Decimal("0.0000")
+    ):
+        raise ValidationError(
+            {
+                "bill_item":
+                    "This purchase bill item has no "
+                    "remaining quantity available "
+                    "for return."
+            }
+        )
+
+    return bill_item
+
+
+def normalize_purchase_return_reason(
+    value: Any,
+) -> str:
+    """
+    Validate and normalize purchase return reason.
+    """
+    reason = normalize_text(
+        value or PurchaseReturnReason.OTHER
+    ).upper()
+
+    valid_reasons = {
+        choice
+        for choice, _label
+        in PurchaseReturnReason.choices
+    }
+
+    if reason not in valid_reasons:
+        raise ValidationError(
+            {
+                "reason":
+                    "Invalid purchase return reason."
+            }
+        )
+
+    return reason
+
+
+def build_purchase_return_item(
+    *,
+    purchase_return: PurchaseReturn,
+    company: Company,
+    payload: dict[str, Any],
+    line_number: int,
+) -> PurchaseReturnItem:
+    """
+    Build and save one purchase return item.
+    """
+    if not purchase_return.can_be_edited:
+        raise ValidationError(
+            "Only draft purchase returns can be edited."
+        )
+
+    bill_item_id = (
+        payload.get("bill_item_id")
+        or payload.get("bill_item")
+    )
+
+    if not bill_item_id:
+        raise ValidationError(
+            {
+                "bill_item":
+                    "Purchase bill item is required."
+            }
+        )
+
+    bill_item = get_purchase_bill_item_for_return(
+        company=company,
+        bill=purchase_return.bill,
+        bill_item_id=bill_item_id,
+    )
+
+    quantity = quantize_quantity(
+        normalize_decimal(
+            payload.get("quantity"),
+            field_name="quantity",
+            default=Decimal("0.0000"),
+        )
+    )
+
+    if quantity <= Decimal("0.0000"):
+        raise ValidationError(
+            {
+                "quantity":
+                    "Return quantity must be greater "
+                    "than zero."
+            }
+        )
+
+    purchase_return_item = PurchaseReturnItem(
+        purchase_return=purchase_return,
+        company=company,
+        bill_item=bill_item,
+        item=bill_item.item,
+        line_number=int(
+            payload.get("line_number")
+            or line_number
+        ),
+        quantity=quantity,
+        condition_notes=normalize_text(
+            payload.get("condition_notes")
+        ),
+        extra_data=(
+            payload.get("extra_data")
+            if isinstance(
+                payload.get("extra_data"),
+                dict,
+            )
+            else {}
+        ),
+    )
+
+    purchase_return_item.save()
+
+    return purchase_return_item
+
+
+@transaction.atomic
+def create_purchase_return(
+    *,
+    company: Company,
+    payload: dict[str, Any],
+    user=None,
+) -> PurchaseReturn:
+    """
+    Create a draft purchase return with its items.
+    """
+    if not company:
+        raise ValidationError(
+            "Company is required."
+        )
+
+    bill_id = (
+        payload.get("bill_id")
+        or payload.get("bill")
+    )
+
+    if not bill_id:
+        raise ValidationError(
+            {
+                "bill":
+                    "Purchase bill is required."
+            }
+        )
+
+    bill = get_posted_purchase_bill_for_company(
+        company=company,
+        bill_id=bill_id,
+    )
+
+    items_payload = payload.get("items") or []
+
+    if (
+        not isinstance(items_payload, list)
+        or not items_payload
+    ):
+        raise ValidationError(
+            {
+                "items":
+                    "At least one purchase return "
+                    "item is required."
+            }
+        )
+
+    return_date = normalize_date(
+        payload.get("return_date")
+        or timezone.localdate(),
+        field_name="return_date",
+    )
+
+    purchase_return = PurchaseReturn(
+        company=company,
+        branch=bill.branch,
+        supplier=bill.supplier,
+        bill=bill,
+        return_number=(
+            normalize_text(
+                payload.get("return_number")
+            )
+            or generate_purchase_return_number(
+                company
+            )
+        ),
+        return_date=(
+            return_date
+            or timezone.localdate()
+        ),
+        status=PurchaseReturnStatus.DRAFT,
+        reason=normalize_purchase_return_reason(
+            payload.get("reason")
+        ),
+        reason_details=normalize_text(
+            payload.get("reason_details")
+        ),
+        currency_code=bill.currency_code,
+        notes=normalize_text(
+            payload.get("notes")
+        ),
+        extra_data=(
+            payload.get("extra_data")
+            if isinstance(
+                payload.get("extra_data"),
+                dict,
+            )
+            else {}
+        ),
+        created_by=user,
+        updated_by=user,
+    )
+
+    purchase_return.full_clean()
+    purchase_return.save()
+
+    for index, item_payload in enumerate(
+        items_payload,
+        start=1,
+    ):
+        if not isinstance(item_payload, dict):
+            raise ValidationError(
+                {
+                    "items":
+                        "Each purchase return item "
+                        "must be an object."
+                }
+            )
+
+        build_purchase_return_item(
+            purchase_return=purchase_return,
+            company=company,
+            payload=item_payload,
+            line_number=index,
+        )
+
+    purchase_return.recalculate_totals(
+        save=True
+    )
+    purchase_return.refresh_from_db()
+
+    return purchase_return
+
+
+@transaction.atomic
+def update_purchase_return(
+    *,
+    purchase_return: PurchaseReturn,
+    payload: dict[str, Any],
+    user=None,
+) -> PurchaseReturn:
+    """
+    Update a draft purchase return.
+
+    If items are supplied, existing items are replaced.
+    """
+    if not purchase_return.can_be_edited:
+        raise ValidationError(
+            "Only draft purchase returns can be updated."
+        )
+
+    company = purchase_return.company
+
+    if "return_number" in payload:
+        purchase_return.return_number = (
+            normalize_text(
+                payload.get("return_number")
+            )
+        )
+
+    if "return_date" in payload:
+        purchase_return.return_date = (
+            normalize_date(
+                payload.get("return_date"),
+                field_name="return_date",
+            )
+            or purchase_return.return_date
+        )
+
+    if "reason" in payload:
+        purchase_return.reason = (
+            normalize_purchase_return_reason(
+                payload.get("reason")
+            )
+        )
+
+    if "reason_details" in payload:
+        purchase_return.reason_details = (
+            normalize_text(
+                payload.get("reason_details")
+            )
+        )
+
+    if "notes" in payload:
+        purchase_return.notes = (
+            normalize_text(
+                payload.get("notes")
+            )
+        )
+
+    if isinstance(
+        payload.get("extra_data"),
+        dict,
+    ):
+        purchase_return.extra_data = (
+            payload["extra_data"]
+        )
+
+    purchase_return.updated_by = user
+    purchase_return.full_clean()
+    purchase_return.save()
+
+    if "items" in payload:
+        items_payload = payload.get("items") or []
+
+        if (
+            not isinstance(items_payload, list)
+            or not items_payload
+        ):
+            raise ValidationError(
+                {
+                    "items":
+                        "At least one purchase return "
+                        "item is required."
+                }
+            )
+
+        purchase_return.items.all().delete()
+
+        for index, item_payload in enumerate(
+            items_payload,
+            start=1,
+        ):
+            if not isinstance(
+                item_payload,
+                dict,
+            ):
+                raise ValidationError(
+                    {
+                        "items":
+                            "Each purchase return item "
+                            "must be an object."
+                    }
+                )
+
+            build_purchase_return_item(
+                purchase_return=purchase_return,
+                company=company,
+                payload=item_payload,
+                line_number=index,
+            )
+
+    purchase_return.recalculate_totals(
+        save=True
+    )
+    purchase_return.refresh_from_db()
+
+    return purchase_return
+
+
+@transaction.atomic
+def confirm_purchase_return(
+    *,
+    purchase_return: PurchaseReturn,
+    user=None,
+) -> PurchaseReturn:
+    """
+    Confirm a draft purchase return.
+
+    Confirmed quantities are counted against each bill item.
+    """
+    locked_return = (
+        PurchaseReturn.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "bill",
+            "supplier",
+            "branch",
+        )
+        .get(pk=purchase_return.pk)
+    )
+
+    if not locked_return.can_be_confirmed:
+        raise ValidationError(
+            "Only draft purchase returns can be confirmed."
+        )
+
+    locked_items = list(
+        locked_return.items
+        .select_for_update()
+        .select_related(
+            "bill_item",
+            "bill_item__bill",
+            "item",
+        )
+        .order_by(
+            "line_number",
+            "id",
+        )
+    )
+
+    if not locked_items:
+        raise ValidationError(
+            "Cannot confirm a purchase return without items."
+        )
+
+    for return_item in locked_items:
+        bill_item = (
+            PurchaseBillItem.objects
+            .select_for_update()
+            .get(pk=return_item.bill_item_id)
+        )
+
+        available_quantity = (
+            bill_item.returnable_quantity
+        )
+
+        if (
+            return_item.quantity
+            > available_quantity
+        ):
+            raise ValidationError(
+                {
+                    "quantity":
+                        "One or more return quantities "
+                        "exceed the remaining purchase "
+                        "bill quantities."
+                }
+            )
+
+        return_item.full_clean()
+
+    locked_return.confirm(user=user)
+    locked_return.refresh_from_db()
+
+    return locked_return
+
+
+@transaction.atomic
+def cancel_purchase_return(
+    *,
+    purchase_return: PurchaseReturn,
+    reason: str = "",
+    user=None,
+) -> PurchaseReturn:
+    """
+    Cancel a draft or confirmed purchase return.
+
+    Posted returns cannot be cancelled through this helper.
+    """
+    locked_return = (
+        PurchaseReturn.objects
+        .select_for_update()
+        .get(pk=purchase_return.pk)
+    )
+
+    locked_return.cancel(
+        reason=normalize_text(reason),
+        user=user,
+    )
+    locked_return.refresh_from_db()
+
+    return locked_return
+
+
+def serialize_purchase_return_item(
+    item: PurchaseReturnItem,
+) -> dict[str, Any]:
+    """
+    Serialize one purchase return item.
+    """
+    bill_item = item.bill_item
+
+    return {
+        "id": item.id,
+        "line_number": item.line_number,
+        "bill_item_id": item.bill_item_id,
+        "catalog_item_id": item.item_id,
+        "item_code": item.item_code_snapshot,
+        "item_name": item.item_name_snapshot,
+        "item_name_ar": (
+            item.item_name_ar_snapshot
+        ),
+        "item_name_en": (
+            item.item_name_en_snapshot
+        ),
+        "unit_name": item.unit_name_snapshot,
+        "quantity": str(item.quantity),
+        "original_bill_quantity": str(
+            bill_item.quantity
+        ),
+        "remaining_returnable_quantity": str(
+            bill_item.returnable_quantity
+        ),
+        "unit_price": str(item.unit_price),
+        "discount_amount": str(
+            item.discount_amount
+        ),
+        "taxable": item.taxable,
+        "tax_rate": str(item.tax_rate),
+        "subtotal_amount": str(
+            item.subtotal_amount
+        ),
+        "taxable_amount": str(
+            item.taxable_amount
+        ),
+        "tax_amount": str(item.tax_amount),
+        "total_amount": str(
+            item.total_amount
+        ),
+        "condition_notes": (
+            item.condition_notes
+        ),
+        "extra_data": item.extra_data or {},
+        "created_at": (
+            item.created_at.isoformat()
+            if item.created_at
+            else None
+        ),
+        "updated_at": (
+            item.updated_at.isoformat()
+            if item.updated_at
+            else None
+        ),
+    }
+
+
+def serialize_purchase_return(
+    purchase_return: PurchaseReturn,
+    *,
+    include_items: bool = True,
+) -> dict[str, Any]:
+    """
+    Serialize a purchase return for company APIs.
+    """
+    result = {
+        "id": purchase_return.id,
+        "return_number": (
+            purchase_return.return_number
+        ),
+        "return_date": (
+            purchase_return.return_date.isoformat()
+            if purchase_return.return_date
+            else None
+        ),
+        "status": purchase_return.status,
+        "reason": purchase_return.reason,
+        "reason_details": (
+            purchase_return.reason_details
+        ),
+        "currency_code": (
+            purchase_return.currency_code
+        ),
+        "company": {
+            "id": purchase_return.company_id,
+            "name": purchase_return.company.name,
+        },
+        "branch": (
+            {
+                "id": purchase_return.branch_id,
+                "name": purchase_return.branch.name,
+            }
+            if purchase_return.branch_id
+            else None
+        ),
+        "supplier": {
+            "id": purchase_return.supplier_id,
+            "display_name": (
+                purchase_return
+                .supplier
+                .display_name
+            ),
+        },
+        "bill": {
+            "id": purchase_return.bill_id,
+            "bill_number": (
+                purchase_return.bill.bill_number
+            ),
+            "supplier_bill_number": (
+                purchase_return
+                .bill
+                .supplier_bill_number
+            ),
+            "bill_date": (
+                purchase_return
+                .bill
+                .bill_date
+                .isoformat()
+            ),
+        },
+        "subtotal_amount": str(
+            purchase_return.subtotal_amount
+        ),
+        "discount_amount": str(
+            purchase_return.discount_amount
+        ),
+        "taxable_amount": str(
+            purchase_return.taxable_amount
+        ),
+        "tax_amount": str(
+            purchase_return.tax_amount
+        ),
+        "total_amount": str(
+            purchase_return.total_amount
+        ),
+        "notes": purchase_return.notes,
+        "extra_data": (
+            purchase_return.extra_data or {}
+        ),
+        "confirmed_at": (
+            purchase_return.confirmed_at.isoformat()
+            if purchase_return.confirmed_at
+            else None
+        ),
+        "posted_at": (
+            purchase_return.posted_at.isoformat()
+            if purchase_return.posted_at
+            else None
+        ),
+        "cancelled_at": (
+            purchase_return.cancelled_at.isoformat()
+            if purchase_return.cancelled_at
+            else None
+        ),
+        "cancellation_reason": (
+            purchase_return.cancellation_reason
+        ),
+        "allowed_actions": {
+            "update": (
+                purchase_return.can_be_edited
+            ),
+            "confirm": (
+                purchase_return.can_be_confirmed
+            ),
+            "post": (
+                purchase_return.can_be_posted
+            ),
+            "cancel": (
+                purchase_return.can_be_cancelled
+            ),
+        },
+        "created_at": (
+            purchase_return.created_at.isoformat()
+            if purchase_return.created_at
+            else None
+        ),
+        "updated_at": (
+            purchase_return.updated_at.isoformat()
+            if purchase_return.updated_at
+            else None
+        ),
+    }
+
+    if include_items:
+        result["items"] = [
+            serialize_purchase_return_item(item)
+            for item in (
+                purchase_return.items
+                .select_related(
+                    "bill_item",
+                    "item",
+                )
+                .order_by(
+                    "line_number",
+                    "id",
+                )
+            )
+        ]
+
+    return result

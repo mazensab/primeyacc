@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # 📂 purchases/models.py
 # 🧠 PrimeyAcc | Company Purchases Models V1.1
 # ------------------------------------------------------------
@@ -32,7 +32,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.utils import timezone
 
 from catalog.models import CatalogItem
@@ -850,6 +850,41 @@ class PurchaseBillItem(models.Model):
     def __str__(self) -> str:
         return f"{self.bill.bill_number} - {self.item_name_snapshot}"
 
+    @property
+    def returned_quantity(self) -> Decimal:
+        """
+        Quantity consumed by confirmed or posted purchase returns.
+        """
+        result = (
+            self.purchase_return_items
+            .filter(
+                purchase_return__status__in=[
+                    PurchaseReturnStatus.CONFIRMED,
+                    PurchaseReturnStatus.POSTED,
+                ]
+            )
+            .aggregate(total=Sum("quantity"))
+            .get("total")
+        )
+
+        return quantize_quantity(
+            result or QUANTITY_ZERO
+        )
+
+    @property
+    def returnable_quantity(self) -> Decimal:
+        """
+        Remaining quantity available for purchase return.
+        """
+        remaining = quantize_quantity(
+            self.quantity - self.returned_quantity
+        )
+
+        if remaining < QUANTITY_ZERO:
+            return QUANTITY_ZERO
+
+        return remaining
+
     def clean(self) -> None:
         super().clean()
 
@@ -973,5 +1008,910 @@ class PurchaseBillItem(models.Model):
 
         if bill:
             bill.recalculate_totals(save=True)
+
+        return result
+
+
+# ============================================================
+# Purchase Returns Foundation
+# ============================================================
+
+
+class PurchaseReturnStatus(models.TextChoices):
+    """
+    Purchase return lifecycle.
+    """
+
+    DRAFT = "DRAFT", "Draft"
+    CONFIRMED = "CONFIRMED", "Confirmed"
+    POSTED = "POSTED", "Posted"
+    CANCELLED = "CANCELLED", "Cancelled"
+
+
+class PurchaseReturnReason(models.TextChoices):
+    """
+    Standard supplier return reasons.
+    """
+
+    DAMAGED = "DAMAGED", "Damaged"
+    DEFECTIVE = "DEFECTIVE", "Defective"
+    WRONG_ITEM = "WRONG_ITEM", "Wrong item"
+    EXCESS_QUANTITY = "EXCESS_QUANTITY", "Excess quantity"
+    QUALITY_ISSUE = "QUALITY_ISSUE", "Quality issue"
+    SUPPLIER_REQUEST = "SUPPLIER_REQUEST", "Supplier request"
+    OTHER = "OTHER", "Other"
+
+
+class PurchaseReturn(models.Model):
+    """
+    Company-scoped purchase return linked to a posted purchase bill.
+
+    Accounting, stock issue, and supplier debit note effects are
+    handled by service layers.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="purchase_returns",
+        db_index=True,
+        verbose_name="Company",
+    )
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        related_name="purchase_returns",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Branch",
+    )
+    supplier = models.ForeignKey(
+        BusinessParty,
+        on_delete=models.PROTECT,
+        related_name="purchase_returns",
+        db_index=True,
+        verbose_name="Supplier",
+    )
+    bill = models.ForeignKey(
+        PurchaseBill,
+        on_delete=models.PROTECT,
+        related_name="purchase_returns",
+        db_index=True,
+        verbose_name="Purchase bill",
+    )
+
+    return_number = models.CharField(
+        max_length=80,
+        db_index=True,
+        verbose_name="Return number",
+    )
+    return_date = models.DateField(
+        default=timezone.localdate,
+        db_index=True,
+        verbose_name="Return date",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=PurchaseReturnStatus.choices,
+        default=PurchaseReturnStatus.DRAFT,
+        db_index=True,
+        verbose_name="Status",
+    )
+    reason = models.CharField(
+        max_length=40,
+        choices=PurchaseReturnReason.choices,
+        default=PurchaseReturnReason.OTHER,
+        db_index=True,
+        verbose_name="Reason",
+    )
+    reason_details = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Reason details",
+    )
+    currency_code = models.CharField(
+        max_length=10,
+        default="SAR",
+        verbose_name="Currency code",
+    )
+
+    subtotal_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+    )
+    discount_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+    )
+    taxable_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+    )
+    tax_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+    )
+    total_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+    )
+
+    confirmed_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+    )
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="confirmed_purchase_returns",
+        blank=True,
+        null=True,
+    )
+    posted_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+    )
+    posted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="posted_purchase_returns",
+        blank=True,
+        null=True,
+    )
+    cancelled_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+    )
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="cancelled_purchase_returns",
+        blank=True,
+        null=True,
+    )
+    cancellation_reason = models.TextField(
+        blank=True,
+        default="",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_purchase_returns",
+        blank=True,
+        null=True,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="updated_purchase_returns",
+        blank=True,
+        null=True,
+    )
+
+    notes = models.TextField(
+        blank=True,
+        default="",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = [
+            "-return_date",
+            "-created_at",
+            "-id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "return_number"],
+                name=(
+                    "unique_purchase_return_number_"
+                    "per_company"
+                ),
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["company", "status"],
+            ),
+            models.Index(
+                fields=["company", "return_date"],
+            ),
+            models.Index(
+                fields=["company", "supplier"],
+            ),
+            models.Index(
+                fields=["company", "bill"],
+            ),
+            models.Index(
+                fields=["supplier", "status"],
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.return_number} - "
+            f"{self.supplier.display_name}"
+        )
+
+    @property
+    def is_draft(self) -> bool:
+        return self.status == PurchaseReturnStatus.DRAFT
+
+    @property
+    def can_be_edited(self) -> bool:
+        return self.is_draft
+
+    @property
+    def can_be_confirmed(self) -> bool:
+        return self.is_draft
+
+    @property
+    def can_be_posted(self) -> bool:
+        return self.status == PurchaseReturnStatus.CONFIRMED
+
+    @property
+    def can_be_cancelled(self) -> bool:
+        return self.status in [
+            PurchaseReturnStatus.DRAFT,
+            PurchaseReturnStatus.CONFIRMED,
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+
+        self.return_number = (
+            self.return_number or ""
+        ).strip()
+        self.currency_code = (
+            self.currency_code or "SAR"
+        ).strip().upper()
+        self.reason_details = (
+            self.reason_details or ""
+        ).strip()
+        self.cancellation_reason = (
+            self.cancellation_reason or ""
+        ).strip()
+        self.notes = (self.notes or "").strip()
+
+        if not self.return_number:
+            raise ValidationError(
+                {
+                    "return_number":
+                        "Purchase return number is required."
+                }
+            )
+
+        if self.bill_id and self.company_id:
+            if self.bill.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "bill":
+                            "Purchase bill does not belong "
+                            "to this company."
+                    }
+                )
+
+            if self.bill.status != PurchaseBillStatus.POSTED:
+                raise ValidationError(
+                    {
+                        "bill":
+                            "Only posted purchase bills "
+                            "can be returned."
+                    }
+                )
+
+        if self.branch_id and self.company_id:
+            if self.branch.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "branch":
+                            "Selected branch does not belong "
+                            "to this company."
+                    }
+                )
+
+        if self.supplier_id and self.company_id:
+            if self.supplier.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "supplier":
+                            "Selected supplier does not belong "
+                            "to this company."
+                    }
+                )
+
+        if self.bill_id and self.supplier_id:
+            if self.bill.supplier_id != self.supplier_id:
+                raise ValidationError(
+                    {
+                        "supplier":
+                            "Supplier must match purchase bill."
+                    }
+                )
+
+        if self.bill_id and self.branch_id:
+            if (
+                self.bill.branch_id
+                and self.bill.branch_id != self.branch_id
+            ):
+                raise ValidationError(
+                    {
+                        "branch":
+                            "Branch must match purchase bill."
+                    }
+                )
+
+        if (
+            self.bill_id
+            and self.return_date
+            and self.return_date < self.bill.bill_date
+        ):
+            raise ValidationError(
+                {
+                    "return_date":
+                        "Return date cannot be before bill date."
+                }
+            )
+
+        if (
+            self.bill_id
+            and self.currency_code
+            != self.bill.currency_code
+        ):
+            raise ValidationError(
+                {
+                    "currency_code":
+                        "Currency must match purchase bill."
+                }
+            )
+
+    def recalculate_totals(
+        self,
+        save: bool = True,
+    ) -> None:
+        totals = self.items.aggregate(
+            subtotal=Sum("subtotal_amount"),
+            discount=Sum("discount_amount"),
+            taxable=Sum("taxable_amount"),
+            tax=Sum("tax_amount"),
+            total=Sum("total_amount"),
+        )
+
+        self.subtotal_amount = quantize_money(
+            totals["subtotal"] or MONEY_ZERO
+        )
+        self.discount_amount = quantize_money(
+            totals["discount"] or MONEY_ZERO
+        )
+        self.taxable_amount = quantize_money(
+            totals["taxable"] or MONEY_ZERO
+        )
+        self.tax_amount = quantize_money(
+            totals["tax"] or MONEY_ZERO
+        )
+        self.total_amount = quantize_money(
+            totals["total"] or MONEY_ZERO
+        )
+
+        if save:
+            self.full_clean()
+            self.save(
+                update_fields=[
+                    "subtotal_amount",
+                    "discount_amount",
+                    "taxable_amount",
+                    "tax_amount",
+                    "total_amount",
+                    "updated_at",
+                ]
+            )
+
+    def confirm(self, user=None) -> None:
+        if not self.can_be_confirmed:
+            raise ValidationError(
+                "Only draft purchase returns can be confirmed."
+            )
+
+        if not self.items.exists():
+            raise ValidationError(
+                "Cannot confirm a purchase return without items."
+            )
+
+        for item in self.items.select_related(
+            "bill_item"
+        ):
+            item.full_clean()
+
+        self.recalculate_totals(save=False)
+        self.status = PurchaseReturnStatus.CONFIRMED
+        self.confirmed_at = timezone.now()
+
+        if user:
+            self.confirmed_by = user
+            self.updated_by = user
+
+        self.full_clean()
+        self.save(
+            update_fields=[
+                "status",
+                "confirmed_at",
+                "confirmed_by",
+                "updated_by",
+                "subtotal_amount",
+                "discount_amount",
+                "taxable_amount",
+                "tax_amount",
+                "total_amount",
+                "updated_at",
+            ]
+        )
+
+    def mark_posted(self, user=None) -> None:
+        if not self.can_be_posted:
+            raise ValidationError(
+                "Only confirmed purchase returns can be posted."
+            )
+
+        self.status = PurchaseReturnStatus.POSTED
+        self.posted_at = timezone.now()
+
+        if user:
+            self.posted_by = user
+            self.updated_by = user
+
+        self.full_clean()
+        self.save(
+            update_fields=[
+                "status",
+                "posted_at",
+                "posted_by",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+    def cancel(
+        self,
+        reason: str = "",
+        user=None,
+    ) -> None:
+        if not self.can_be_cancelled:
+            raise ValidationError(
+                "This purchase return cannot be cancelled."
+            )
+
+        self.status = PurchaseReturnStatus.CANCELLED
+        self.cancelled_at = timezone.now()
+        self.cancellation_reason = reason or ""
+
+        if user:
+            self.cancelled_by = user
+            self.updated_by = user
+
+        self.full_clean()
+        self.save(
+            update_fields=[
+                "status",
+                "cancelled_at",
+                "cancelled_by",
+                "cancellation_reason",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+
+class PurchaseReturnItem(models.Model):
+    """
+    Purchase return line linked to one purchase bill item.
+    """
+
+    purchase_return = models.ForeignKey(
+        PurchaseReturn,
+        on_delete=models.CASCADE,
+        related_name="items",
+        db_index=True,
+    )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="purchase_return_items",
+        db_index=True,
+    )
+    bill_item = models.ForeignKey(
+        PurchaseBillItem,
+        on_delete=models.PROTECT,
+        related_name="purchase_return_items",
+        db_index=True,
+    )
+    item = models.ForeignKey(
+        CatalogItem,
+        on_delete=models.PROTECT,
+        related_name="purchase_return_items",
+        db_index=True,
+    )
+
+    line_number = models.PositiveIntegerField(
+        default=1,
+        db_index=True,
+    )
+
+    item_code_snapshot = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+    )
+    item_name_snapshot = models.CharField(
+        max_length=255,
+    )
+    item_name_ar_snapshot = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+    item_name_en_snapshot = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+    unit_name_snapshot = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+    )
+
+    quantity = models.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        validators=[
+            MinValueValidator(Decimal("0.0001"))
+        ],
+    )
+    unit_price = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+    )
+    discount_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+    )
+    taxable = models.BooleanField(
+        default=True,
+        db_index=True,
+    )
+    tax_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=MONEY_ZERO,
+    )
+
+    subtotal_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+    )
+    taxable_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+    )
+    tax_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+    )
+    total_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+    )
+
+    condition_notes = models.TextField(
+        blank=True,
+        default="",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = [
+            "purchase_return_id",
+            "line_number",
+            "id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "purchase_return",
+                    "line_number",
+                ],
+                name=(
+                    "unique_purchase_return_item_line"
+                ),
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "purchase_return",
+                    "bill_item",
+                ],
+                name=(
+                    "unique_purchase_return_bill_item"
+                ),
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["company", "item"],
+            ),
+            models.Index(
+                fields=["company", "bill_item"],
+            ),
+            models.Index(
+                fields=[
+                    "purchase_return",
+                    "line_number",
+                ],
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.purchase_return.return_number} - "
+            f"{self.item_name_snapshot}"
+        )
+
+    def apply_bill_item_snapshot(self) -> None:
+        if not self.bill_item_id:
+            return
+
+        bill_item = self.bill_item
+
+        self.item = bill_item.item
+        self.item_code_snapshot = (
+            bill_item.item_code_snapshot
+        )
+        self.item_name_snapshot = (
+            bill_item.item_name_snapshot
+        )
+        self.item_name_ar_snapshot = (
+            bill_item.item_name_ar_snapshot
+        )
+        self.item_name_en_snapshot = (
+            bill_item.item_name_en_snapshot
+        )
+        self.unit_name_snapshot = (
+            bill_item.unit_name_snapshot
+        )
+        self.unit_price = bill_item.unit_price
+        self.taxable = bill_item.taxable
+        self.tax_rate = bill_item.tax_rate
+
+    def calculate_totals(self) -> None:
+        bill_quantity = quantize_quantity(
+            self.bill_item.quantity
+        )
+        return_quantity = quantize_quantity(
+            self.quantity
+        )
+
+        ratio = (
+            return_quantity / bill_quantity
+            if bill_quantity > QUANTITY_ZERO
+            else Decimal("0")
+        )
+
+        self.quantity = return_quantity
+        self.unit_price = quantize_money(
+            self.bill_item.unit_price
+        )
+        self.discount_amount = quantize_money(
+            self.bill_item.discount_amount * ratio
+        )
+        self.subtotal_amount = quantize_money(
+            self.unit_price * return_quantity
+        )
+        self.taxable_amount = quantize_money(
+            self.subtotal_amount
+            - self.discount_amount
+        )
+
+        if self.taxable_amount < MONEY_ZERO:
+            self.taxable_amount = MONEY_ZERO
+
+        self.tax_amount = (
+            quantize_money(
+                self.taxable_amount
+                * self.tax_rate
+                / Decimal("100.00")
+            )
+            if self.taxable
+            else MONEY_ZERO
+        )
+        self.total_amount = quantize_money(
+            self.taxable_amount
+            + self.tax_amount
+        )
+
+    def clean(self) -> None:
+        super().clean()
+
+        if (
+            self.purchase_return_id
+            and self.company_id
+            and self.purchase_return.company_id
+            != self.company_id
+        ):
+            raise ValidationError(
+                {
+                    "company":
+                        "Item company must match "
+                        "purchase return company."
+                }
+            )
+
+        if (
+            self.bill_item_id
+            and self.purchase_return_id
+            and self.bill_item.bill_id
+            != self.purchase_return.bill_id
+        ):
+            raise ValidationError(
+                {
+                    "bill_item":
+                        "Bill item must belong to the "
+                        "purchase return bill."
+                }
+            )
+
+        if (
+            self.bill_item_id
+            and self.company_id
+            and self.bill_item.company_id
+            != self.company_id
+        ):
+            raise ValidationError(
+                {
+                    "bill_item":
+                        "Bill item does not belong "
+                        "to this company."
+                }
+            )
+
+        if self.item_id and self.company_id:
+            if self.item.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "item":
+                            "Catalog item does not belong "
+                            "to this company."
+                    }
+                )
+
+        if (
+            self.purchase_return_id
+            and not self.purchase_return.can_be_edited
+        ):
+            raise ValidationError(
+                "Cannot edit items for a confirmed, "
+                "posted, or cancelled purchase return."
+            )
+
+        self.quantity = quantize_quantity(
+            self.quantity
+        )
+
+        if self.quantity <= QUANTITY_ZERO:
+            raise ValidationError(
+                {
+                    "quantity":
+                        "Return quantity must be greater "
+                        "than zero."
+                }
+            )
+
+        if self.bill_item_id:
+            available = (
+                self.bill_item.returnable_quantity
+            )
+
+            existing_quantity = QUANTITY_ZERO
+            if self.pk:
+                existing = (
+                    PurchaseReturnItem.objects
+                    .filter(pk=self.pk)
+                    .values_list(
+                        "quantity",
+                        flat=True,
+                    )
+                    .first()
+                )
+                existing_quantity = quantize_quantity(
+                    existing or QUANTITY_ZERO
+                )
+
+            allowed_quantity = quantize_quantity(
+                available + existing_quantity
+            )
+
+            if self.quantity > allowed_quantity:
+                raise ValidationError(
+                    {
+                        "quantity":
+                            "Return quantity cannot exceed "
+                            "the remaining bill quantity."
+                    }
+                )
+
+    def save(self, *args, **kwargs):
+        if (
+            self.purchase_return_id
+            and not self.company_id
+        ):
+            self.company = (
+                self.purchase_return.company
+            )
+
+        if self.bill_item_id:
+            self.apply_bill_item_snapshot()
+            self.calculate_totals()
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+        if self.purchase_return_id:
+            self.purchase_return.recalculate_totals(
+                save=True
+            )
+
+    def delete(self, *args, **kwargs):
+        purchase_return = self.purchase_return
+
+        if not purchase_return.can_be_edited:
+            raise ValidationError(
+                "Cannot delete items from a confirmed, "
+                "posted, or cancelled purchase return."
+            )
+
+        result = super().delete(*args, **kwargs)
+
+        purchase_return.recalculate_totals(
+            save=True
+        )
 
         return result
