@@ -29,6 +29,8 @@ from sales.models import (
     SalesOrderItem,
     SalesQuotation,
     SalesQuotationItem,
+    SalesReturn,
+    SalesReturnItem,
 )
 
 
@@ -1575,3 +1577,693 @@ class SalesOrderItemAdmin(admin.ModelAdmin):
 
 # End Phase 21.2 - Sales Orders Admin
 # ============================================================
+
+# ============================================================
+# Phase 21.4.1 - Sales Returns Admin Foundation
+# ------------------------------------------------------------
+# Sales return operational review.
+# Sales return items inline.
+# Draft-only editing for return lines and operational fields.
+# Calculated totals and lifecycle timestamps are readonly.
+# Posting, accounting, inventory, and credit-note actions remain
+# inside APIs and sales/services.py.
+# ============================================================
+
+
+class SalesReturnItemInline(admin.TabularInline):
+    """
+    Inline returned invoice items for operational review.
+    """
+
+    model = SalesReturnItem
+    extra = 0
+
+    fields = [
+        "line_number",
+        "invoice_item",
+        "catalog_item",
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "unit_name_snapshot",
+        "quantity",
+        "unit_price",
+        "line_subtotal",
+        "discount_amount",
+        "taxable",
+        "tax_rate",
+        "taxable_amount",
+        "tax_amount",
+        "line_total",
+        "restock",
+        "condition_notes",
+    ]
+
+    readonly_fields = [
+        "catalog_item",
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "unit_name_snapshot",
+        "unit_price",
+        "line_subtotal",
+        "discount_amount",
+        "taxable",
+        "tax_rate",
+        "taxable_amount",
+        "tax_amount",
+        "line_total",
+    ]
+
+    autocomplete_fields = [
+        "invoice_item",
+    ]
+
+    ordering = [
+        "line_number",
+        "id",
+    ]
+
+    def has_add_permission(
+        self,
+        request,
+        obj=None,
+    ):
+        """
+        Add return lines only while the return is draft.
+        """
+        if obj and not obj.can_be_edited:
+            return False
+
+        return super().has_add_permission(
+            request,
+            obj,
+        )
+
+    def has_delete_permission(
+        self,
+        request,
+        obj=None,
+    ):
+        """
+        Delete return lines only while the return is draft.
+        """
+        if obj and not obj.can_be_edited:
+            return False
+
+        return super().has_delete_permission(
+            request,
+            obj,
+        )
+
+    def get_readonly_fields(
+        self,
+        request,
+        obj=None,
+    ):
+        """
+        Lock all return-line fields after confirmation.
+        """
+        readonly_fields = list(
+            super().get_readonly_fields(
+                request,
+                obj,
+            )
+        )
+
+        if obj and not obj.can_be_edited:
+            return list(self.fields)
+
+        return readonly_fields
+
+
+@admin.register(SalesReturn)
+class SalesReturnAdmin(admin.ModelAdmin):
+    """
+    Admin configuration for sales returns.
+    """
+
+    list_display = [
+        "return_number",
+        "company",
+        "branch",
+        "customer",
+        "invoice",
+        "status",
+        "reason",
+        "return_date",
+        "return_warehouse",
+        "total_amount",
+        "confirmed_at",
+        "posted_at",
+        "cancelled_at",
+        "created_at",
+    ]
+
+    list_filter = [
+        "status",
+        "reason",
+        "return_date",
+        "company",
+        "branch",
+        "return_warehouse",
+        "confirmed_at",
+        "posted_at",
+        "cancelled_at",
+        "created_at",
+    ]
+
+    search_fields = [
+        "return_number",
+        "invoice__invoice_number",
+        "company__name",
+        "company__name_ar",
+        "company__name_en",
+        "company__company_code",
+        "branch__name",
+        "branch__branch_code",
+        "customer__display_name",
+        "customer__legal_name",
+        "customer__code",
+        "customer__phone",
+        "customer__mobile",
+        "customer__email",
+        "reason_details",
+        "cancelled_reason",
+    ]
+
+    autocomplete_fields = [
+        "company",
+        "branch",
+        "customer",
+        "invoice",
+        "return_warehouse",
+        "created_by",
+        "updated_by",
+        "confirmed_by",
+        "posted_by",
+        "cancelled_by",
+    ]
+
+    readonly_fields = [
+        "subtotal",
+        "discount_amount",
+        "taxable_amount",
+        "tax_amount",
+        "total_amount",
+        "customer_snapshot",
+        "invoice_snapshot",
+        "tax_snapshot",
+        "confirmed_at",
+        "posted_at",
+        "cancelled_at",
+        "created_at",
+        "updated_at",
+    ]
+
+    fieldsets = [
+        (
+            "Return identity",
+            {
+                "fields": [
+                    "company",
+                    "branch",
+                    "customer",
+                    "invoice",
+                    "return_warehouse",
+                    "return_number",
+                    "status",
+                    "reason",
+                    "reason_details",
+                    "return_date",
+                    "currency_code",
+                ],
+            },
+        ),
+        (
+            "Totals",
+            {
+                "fields": [
+                    "subtotal",
+                    "discount_amount",
+                    "taxable_amount",
+                    "tax_amount",
+                    "total_amount",
+                ],
+            },
+        ),
+        (
+            "Lifecycle",
+            {
+                "fields": [
+                    "confirmed_at",
+                    "confirmed_by",
+                    "posted_at",
+                    "posted_by",
+                    "cancelled_at",
+                    "cancelled_by",
+                    "cancelled_reason",
+                ],
+            },
+        ),
+        (
+            "Snapshots",
+            {
+                "classes": ["collapse"],
+                "fields": [
+                    "customer_snapshot",
+                    "invoice_snapshot",
+                    "tax_snapshot",
+                ],
+            },
+        ),
+        (
+            "Notes and extra data",
+            {
+                "fields": [
+                    "public_notes",
+                    "internal_notes",
+                    "extra_data",
+                ],
+            },
+        ),
+        (
+            "Audit",
+            {
+                "classes": ["collapse"],
+                "fields": [
+                    "created_by",
+                    "updated_by",
+                    "created_at",
+                    "updated_at",
+                ],
+            },
+        ),
+    ]
+
+    inlines = [
+        SalesReturnItemInline,
+    ]
+
+    date_hierarchy = "return_date"
+
+    ordering = [
+        "-return_date",
+        "-id",
+    ]
+
+    list_select_related = [
+        "company",
+        "branch",
+        "customer",
+        "invoice",
+        "return_warehouse",
+    ]
+
+    save_on_top = True
+
+    def get_readonly_fields(
+        self,
+        request,
+        obj=None,
+    ):
+        """
+        Lock operational return fields after draft status.
+        """
+        readonly_fields = list(
+            super().get_readonly_fields(
+                request,
+                obj,
+            )
+        )
+
+        if obj and not obj.can_be_edited:
+            readonly_fields.extend(
+                [
+                    "company",
+                    "branch",
+                    "customer",
+                    "invoice",
+                    "return_warehouse",
+                    "return_number",
+                    "reason",
+                    "reason_details",
+                    "return_date",
+                    "currency_code",
+                    "public_notes",
+                    "internal_notes",
+                    "extra_data",
+                ]
+            )
+
+        return list(
+            dict.fromkeys(readonly_fields)
+        )
+
+    def save_model(
+        self,
+        request,
+        obj,
+        form,
+        change,
+    ):
+        """
+        Synchronize source invoice, company, customer, branch, and audit data.
+        """
+        if obj.invoice_id:
+            if not obj.company_id:
+                obj.company_id = (
+                    obj.invoice.company_id
+                )
+
+            if not obj.customer_id:
+                obj.customer_id = (
+                    obj.invoice.customer_id
+                )
+
+            if not obj.branch_id:
+                obj.branch_id = (
+                    obj.invoice.branch_id
+                )
+
+            if not obj.currency_code:
+                obj.currency_code = (
+                    obj.invoice.currency_code
+                )
+
+        if not change and not obj.created_by_id:
+            obj.created_by = request.user
+
+        obj.updated_by = request.user
+        obj.full_clean()
+
+        super().save_model(
+            request,
+            obj,
+            form,
+            change,
+        )
+
+        obj.refresh_snapshots(
+            save=True
+        )
+        obj.recalculate_totals(
+            save=True
+        )
+
+    def save_formset(
+        self,
+        request,
+        form,
+        formset,
+        change,
+    ):
+        """
+        Save return lines and refresh return totals.
+        """
+        instances = formset.save(
+            commit=False
+        )
+
+        for deleted_object in (
+            formset.deleted_objects
+        ):
+            deleted_object.delete()
+
+        for instance in instances:
+            if isinstance(
+                instance,
+                SalesReturnItem,
+            ):
+                if (
+                    instance.sales_return_id
+                    and not instance.company_id
+                ):
+                    instance.company_id = (
+                        instance
+                        .sales_return
+                        .company_id
+                    )
+
+                if instance.invoice_item_id:
+                    instance.apply_invoice_item_snapshot()
+
+                instance.full_clean()
+
+            instance.save()
+
+        formset.save_m2m()
+
+        if form.instance.pk:
+            form.instance.recalculate_totals(
+                save=True
+            )
+
+
+@admin.register(SalesReturnItem)
+class SalesReturnItemAdmin(admin.ModelAdmin):
+    """
+    Admin configuration for sales return items.
+    """
+
+    list_display = [
+        "sales_return",
+        "company",
+        "line_number",
+        "invoice_item",
+        "catalog_item",
+        "item_name_snapshot",
+        "quantity",
+        "unit_price",
+        "discount_amount",
+        "taxable",
+        "tax_rate",
+        "line_total",
+        "restock",
+        "created_at",
+    ]
+
+    list_filter = [
+        "company",
+        "restock",
+        "taxable",
+        "tax_rate",
+        "sales_return__status",
+        "created_at",
+    ]
+
+    search_fields = [
+        "sales_return__return_number",
+        "sales_return__invoice__invoice_number",
+        "invoice_item__invoice__invoice_number",
+        "company__name",
+        "company__company_code",
+        "catalog_item__name",
+        "catalog_item__code",
+        "catalog_item__sku",
+        "catalog_item__barcode",
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "condition_notes",
+        "notes",
+    ]
+
+    autocomplete_fields = [
+        "sales_return",
+        "company",
+        "invoice_item",
+        "catalog_item",
+    ]
+
+    readonly_fields = [
+        "catalog_item",
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "item_description_snapshot",
+        "unit_name_snapshot",
+        "unit_price",
+        "line_subtotal",
+        "discount_amount",
+        "taxable",
+        "tax_rate",
+        "taxable_amount",
+        "tax_amount",
+        "line_total",
+        "created_at",
+        "updated_at",
+    ]
+
+    fieldsets = [
+        (
+            "Return line",
+            {
+                "fields": [
+                    "sales_return",
+                    "company",
+                    "invoice_item",
+                    "catalog_item",
+                    "line_number",
+                ],
+            },
+        ),
+        (
+            "Snapshot",
+            {
+                "fields": [
+                    "item_code_snapshot",
+                    "item_name_snapshot",
+                    "item_description_snapshot",
+                    "unit_name_snapshot",
+                ],
+            },
+        ),
+        (
+            "Amounts",
+            {
+                "fields": [
+                    "quantity",
+                    "unit_price",
+                    "line_subtotal",
+                    "discount_amount",
+                    "taxable",
+                    "tax_rate",
+                    "taxable_amount",
+                    "tax_amount",
+                    "line_total",
+                ],
+            },
+        ),
+        (
+            "Inventory return",
+            {
+                "fields": [
+                    "restock",
+                    "condition_notes",
+                ],
+            },
+        ),
+        (
+            "Extra",
+            {
+                "fields": [
+                    "notes",
+                    "extra_data",
+                ],
+            },
+        ),
+        (
+            "Audit",
+            {
+                "classes": ["collapse"],
+                "fields": [
+                    "created_at",
+                    "updated_at",
+                ],
+            },
+        ),
+    ]
+
+    ordering = [
+        "-created_at",
+        "-id",
+    ]
+
+    list_select_related = [
+        "sales_return",
+        "sales_return__invoice",
+        "company",
+        "invoice_item",
+        "invoice_item__invoice",
+        "catalog_item",
+    ]
+
+    def get_readonly_fields(
+        self,
+        request,
+        obj=None,
+    ):
+        """
+        Lock return-item operational fields when return is no longer draft.
+        """
+        readonly_fields = list(
+            super().get_readonly_fields(
+                request,
+                obj,
+            )
+        )
+
+        if (
+            obj
+            and obj.sales_return_id
+            and not obj.sales_return.can_be_edited
+        ):
+            readonly_fields.extend(
+                [
+                    "sales_return",
+                    "company",
+                    "invoice_item",
+                    "line_number",
+                    "quantity",
+                    "restock",
+                    "condition_notes",
+                    "notes",
+                    "extra_data",
+                ]
+            )
+
+        return list(
+            dict.fromkeys(readonly_fields)
+        )
+
+    def has_delete_permission(
+        self,
+        request,
+        obj=None,
+    ):
+        """
+        Delete return lines only while their return is draft.
+        """
+        if (
+            obj
+            and obj.sales_return_id
+            and not obj.sales_return.can_be_edited
+        ):
+            return False
+
+        return super().has_delete_permission(
+            request,
+            obj,
+        )
+
+    def save_model(
+        self,
+        request,
+        obj,
+        form,
+        change,
+    ):
+        """
+        Synchronize company and invoice-item snapshots.
+        """
+        if (
+            obj.sales_return_id
+            and not obj.company_id
+        ):
+            obj.company_id = (
+                obj.sales_return.company_id
+            )
+
+        if obj.invoice_item_id:
+            obj.apply_invoice_item_snapshot()
+
+        obj.full_clean()
+
+        super().save_model(
+            request,
+            obj,
+            form,
+            change,
+        )
+
+
+# End Phase 21.4.1 - Sales Returns Admin Foundation
+# ============================================================
+

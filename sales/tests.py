@@ -52,6 +52,10 @@ from sales.models import (
     SalesQuotation,
     SalesQuotationItem,
     SalesQuotationStatus,
+    SalesReturn,
+    SalesReturnItem,
+    SalesReturnReason,
+    SalesReturnStatus,
 )
 from sales.services import (
     accept_sales_quotation,
@@ -66,15 +70,21 @@ from sales.services import (
     create_sales_order,
     create_sales_order_from_quotation,
     create_sales_order_item,
+    create_sales_return,
+    confirm_sales_return,
+    cancel_sales_return,
     generate_invoice_number,
     generate_order_number,
+    generate_sales_return_number,
     issue_sales_invoice,
     resolve_catalog_item,
     resolve_company_branch,
     resolve_customer,
     send_sales_quotation,
+    serialize_invoice_return_summary,
     serialize_order_invoice_summary,
     serialize_sales_invoice,
+    serialize_sales_return,
     serialize_sales_order,
     start_processing_sales_order,
 )
@@ -4268,3 +4278,1797 @@ class SalesOrderInvoiceConversionAPITests(
 
 # End Phase 21.3 - Sales Order Fulfillment & Invoice Conversion Tests
 # ============================================================
+
+# ============================================================
+# Phase 21.4.1 - Sales Returns Models Foundation Tests
+# ============================================================
+
+
+class SalesReturnModelTests(SalesTestCase):
+    """
+    Model tests for sales return headers, lines, quantities,
+    lifecycle, totals, and tenant isolation.
+    """
+
+    def _create_issued_invoice(
+        self,
+        *,
+        company=None,
+        user=None,
+        customer=None,
+        catalog_item=None,
+        quantity="4",
+        discount_amount="40.00",
+    ) -> SalesInvoice:
+        selected_company = company or self.company
+        selected_user = user or self.user
+        selected_customer = customer or self.customer
+        selected_item = catalog_item or self.item
+
+        invoice = create_sales_invoice(
+            company=selected_company,
+            user=selected_user,
+            customer_id=selected_customer.id,
+            items=[
+                {
+                    "catalog_item_id": selected_item.id,
+                    "quantity": quantity,
+                    "discount_amount": discount_amount,
+                }
+            ],
+        )
+
+        return issue_sales_invoice(
+            company=selected_company,
+            invoice=invoice,
+            user=selected_user,
+        )
+
+    def _create_draft_return(
+        self,
+        invoice: SalesInvoice,
+        *,
+        return_number="SR-MODEL-001",
+        company=None,
+        branch=None,
+        customer=None,
+    ) -> SalesReturn:
+        selected_company = company or invoice.company
+
+        sales_return = SalesReturn(
+            company=selected_company,
+            branch=(
+                branch
+                if branch is not None
+                else invoice.branch
+            ),
+            customer=(
+                customer
+                if customer is not None
+                else invoice.customer
+            ),
+            invoice=invoice,
+            return_number=return_number,
+            reason=SalesReturnReason.CUSTOMER_REQUEST,
+            return_date=timezone.localdate(),
+            currency_code=invoice.currency_code,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        sales_return.full_clean()
+        sales_return.save()
+
+        return sales_return
+
+    def _create_return_item(
+        self,
+        sales_return: SalesReturn,
+        *,
+        invoice_item=None,
+        quantity="1",
+        line_number=1,
+        restock=True,
+    ) -> SalesReturnItem:
+        selected_invoice_item = (
+            invoice_item
+            or sales_return.invoice.items.get()
+        )
+
+        return_item = SalesReturnItem(
+            sales_return=sales_return,
+            company=sales_return.company,
+            invoice_item=selected_invoice_item,
+            catalog_item=selected_invoice_item.catalog_item,
+            line_number=line_number,
+            quantity=Decimal(str(quantity)),
+            restock=restock,
+        )
+
+        return_item.full_clean()
+        return_item.save()
+
+        return return_item
+
+    def test_sales_return_defaults_to_draft(self):
+        invoice = self._create_issued_invoice()
+        sales_return = self._create_draft_return(
+            invoice
+        )
+
+        self.assertEqual(
+            sales_return.status,
+            SalesReturnStatus.DRAFT,
+        )
+        self.assertTrue(
+            sales_return.is_draft
+        )
+        self.assertTrue(
+            sales_return.can_be_edited
+        )
+        self.assertTrue(
+            sales_return.can_be_confirmed
+        )
+        self.assertFalse(
+            sales_return.can_be_posted
+        )
+
+    def test_sales_return_requires_issued_invoice(self):
+        invoice = create_sales_invoice(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            items=[
+                {
+                    "catalog_item_id": self.item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        sales_return = SalesReturn(
+            company=self.company,
+            branch=self.branch,
+            customer=self.customer,
+            invoice=invoice,
+            return_number="SR-DRAFT-INVOICE",
+            return_date=timezone.localdate(),
+            currency_code="SAR",
+        )
+
+        with self.assertRaises(
+            ValidationError
+        ):
+            sales_return.full_clean()
+
+    def test_sales_return_rejects_cross_company_invoice(self):
+        other_invoice = self._create_issued_invoice(
+            company=self.other_company,
+            user=self.other_user,
+            customer=self.other_customer,
+            catalog_item=self.other_item,
+            quantity="1",
+            discount_amount="0.00",
+        )
+
+        sales_return = SalesReturn(
+            company=self.company,
+            branch=self.branch,
+            customer=self.customer,
+            invoice=other_invoice,
+            return_number="SR-CROSS-COMPANY",
+            return_date=timezone.localdate(),
+            currency_code="SAR",
+        )
+
+        with self.assertRaises(
+            ValidationError
+        ):
+            sales_return.full_clean()
+
+    def test_sales_return_rejects_return_date_before_invoice(
+        self,
+    ):
+        invoice = self._create_issued_invoice()
+
+        sales_return = SalesReturn(
+            company=self.company,
+            branch=self.branch,
+            customer=self.customer,
+            invoice=invoice,
+            return_number="SR-INVALID-DATE",
+            return_date=(
+                invoice.invoice_date
+                - timedelta(days=1)
+            ),
+            currency_code=invoice.currency_code,
+        )
+
+        with self.assertRaises(
+            ValidationError
+        ):
+            sales_return.full_clean()
+
+    def test_return_item_uses_invoice_snapshots_and_totals(
+        self,
+    ):
+        invoice = self._create_issued_invoice()
+        invoice_item = invoice.items.get()
+
+        sales_return = self._create_draft_return(
+            invoice,
+            return_number="SR-AMOUNTS",
+        )
+
+        return_item = self._create_return_item(
+            sales_return,
+            invoice_item=invoice_item,
+            quantity="1",
+        )
+
+        return_item.refresh_from_db()
+        sales_return.refresh_from_db()
+
+        self.assertEqual(
+            return_item.item_code_snapshot,
+            invoice_item.item_code_snapshot,
+        )
+        self.assertEqual(
+            return_item.item_name_snapshot,
+            invoice_item.item_name_snapshot,
+        )
+        self.assertEqual(
+            return_item.quantity,
+            Decimal("1.0000"),
+        )
+        self.assertEqual(
+            return_item.unit_price,
+            Decimal("100.00"),
+        )
+        self.assertEqual(
+            return_item.line_subtotal,
+            Decimal("100.00"),
+        )
+        self.assertEqual(
+            return_item.discount_amount,
+            Decimal("10.00"),
+        )
+        self.assertEqual(
+            return_item.taxable_amount,
+            Decimal("90.00"),
+        )
+        self.assertEqual(
+            return_item.tax_amount,
+            Decimal("13.50"),
+        )
+        self.assertEqual(
+            return_item.line_total,
+            Decimal("103.50"),
+        )
+
+        self.assertEqual(
+            sales_return.subtotal,
+            Decimal("100.00"),
+        )
+        self.assertEqual(
+            sales_return.discount_amount,
+            Decimal("10.00"),
+        )
+        self.assertEqual(
+            sales_return.taxable_amount,
+            Decimal("90.00"),
+        )
+        self.assertEqual(
+            sales_return.tax_amount,
+            Decimal("13.50"),
+        )
+        self.assertEqual(
+            sales_return.total_amount,
+            Decimal("103.50"),
+        )
+
+    def test_draft_return_does_not_consume_quantity(self):
+        invoice = self._create_issued_invoice()
+        invoice_item = invoice.items.get()
+
+        sales_return = self._create_draft_return(
+            invoice,
+            return_number="SR-DRAFT-QTY",
+        )
+
+        self._create_return_item(
+            sales_return,
+            quantity="1",
+        )
+
+        self.assertEqual(
+            invoice_item.returned_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            invoice_item.returnable_quantity,
+            Decimal("4.0000"),
+        )
+
+    def test_confirmed_partial_return_consumes_quantity(
+        self,
+    ):
+        invoice = self._create_issued_invoice()
+        invoice_item = invoice.items.get()
+
+        sales_return = self._create_draft_return(
+            invoice,
+            return_number="SR-PARTIAL",
+        )
+
+        self._create_return_item(
+            sales_return,
+            quantity="1.5",
+        )
+
+        sales_return.confirm(
+            user=self.user
+        )
+
+        sales_return.refresh_from_db()
+        invoice_item.refresh_from_db()
+
+        self.assertEqual(
+            sales_return.status,
+            SalesReturnStatus.CONFIRMED,
+        )
+        self.assertEqual(
+            sales_return.confirmed_by,
+            self.user,
+        )
+        self.assertIsNotNone(
+            sales_return.confirmed_at
+        )
+        self.assertEqual(
+            invoice_item.returned_quantity,
+            Decimal("1.5000"),
+        )
+        self.assertEqual(
+            invoice_item.returnable_quantity,
+            Decimal("2.5000"),
+        )
+
+    def test_multiple_returns_support_full_return(self):
+        invoice = self._create_issued_invoice()
+        invoice_item = invoice.items.get()
+
+        first_return = self._create_draft_return(
+            invoice,
+            return_number="SR-FULL-001",
+        )
+        self._create_return_item(
+            first_return,
+            quantity="1.5",
+        )
+        first_return.confirm(
+            user=self.user
+        )
+
+        second_return = self._create_draft_return(
+            invoice,
+            return_number="SR-FULL-002",
+        )
+        self._create_return_item(
+            second_return,
+            quantity="2.5",
+        )
+        second_return.confirm(
+            user=self.user
+        )
+
+        invoice_item.refresh_from_db()
+
+        self.assertEqual(
+            invoice_item.returned_quantity,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            invoice_item.returnable_quantity,
+            Decimal("0.0000"),
+        )
+
+    def test_return_item_rejects_quantity_over_invoice(
+        self,
+    ):
+        invoice = self._create_issued_invoice()
+        sales_return = self._create_draft_return(
+            invoice,
+            return_number="SR-OVER-QTY",
+        )
+
+        return_item = SalesReturnItem(
+            sales_return=sales_return,
+            company=self.company,
+            invoice_item=invoice.items.get(),
+            catalog_item=self.item,
+            line_number=1,
+            quantity=Decimal("5.0000"),
+        )
+
+        with self.assertRaises(
+            ValidationError
+        ):
+            return_item.full_clean()
+
+    def test_second_return_rejects_quantity_over_remaining(
+        self,
+    ):
+        invoice = self._create_issued_invoice()
+
+        first_return = self._create_draft_return(
+            invoice,
+            return_number="SR-REMAINING-001",
+        )
+        self._create_return_item(
+            first_return,
+            quantity="3",
+        )
+        first_return.confirm(
+            user=self.user
+        )
+
+        second_return = self._create_draft_return(
+            invoice,
+            return_number="SR-REMAINING-002",
+        )
+
+        return_item = SalesReturnItem(
+            sales_return=second_return,
+            company=self.company,
+            invoice_item=invoice.items.get(),
+            catalog_item=self.item,
+            line_number=1,
+            quantity=Decimal("2.0000"),
+        )
+
+        with self.assertRaises(
+            ValidationError
+        ):
+            return_item.full_clean()
+
+    def test_cancelled_return_releases_quantity(self):
+        invoice = self._create_issued_invoice()
+        invoice_item = invoice.items.get()
+
+        sales_return = self._create_draft_return(
+            invoice,
+            return_number="SR-CANCEL-QTY",
+        )
+        self._create_return_item(
+            sales_return,
+            quantity="2",
+        )
+
+        sales_return.confirm(
+            user=self.user
+        )
+
+        self.assertEqual(
+            invoice_item.returned_quantity,
+            Decimal("2.0000"),
+        )
+
+        sales_return.cancel(
+            reason="Return cancelled",
+            user=self.user,
+        )
+
+        sales_return.refresh_from_db()
+        invoice_item.refresh_from_db()
+
+        self.assertEqual(
+            sales_return.status,
+            SalesReturnStatus.CANCELLED,
+        )
+        self.assertEqual(
+            sales_return.cancelled_reason,
+            "Return cancelled",
+        )
+        self.assertEqual(
+            invoice_item.returned_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            invoice_item.returnable_quantity,
+            Decimal("4.0000"),
+        )
+
+    def test_confirmed_return_item_cannot_be_modified(
+        self,
+    ):
+        invoice = self._create_issued_invoice()
+        sales_return = self._create_draft_return(
+            invoice,
+            return_number="SR-LOCKED",
+        )
+        return_item = self._create_return_item(
+            sales_return,
+            quantity="1",
+        )
+
+        sales_return.confirm(
+            user=self.user
+        )
+        sales_return.refresh_from_db()
+        return_item.refresh_from_db()
+
+        return_item.quantity = Decimal("2.0000")
+
+        with self.assertRaises(
+            ValidationError
+        ):
+            return_item.full_clean()
+
+    def test_confirmed_return_item_cannot_be_deleted(
+        self,
+    ):
+        invoice = self._create_issued_invoice()
+        sales_return = self._create_draft_return(
+            invoice,
+            return_number="SR-LOCKED-DELETE",
+        )
+        return_item = self._create_return_item(
+            sales_return,
+            quantity="1",
+        )
+
+        sales_return.confirm(
+            user=self.user
+        )
+        sales_return.refresh_from_db()
+
+        with self.assertRaises(
+            ValidationError
+        ):
+            return_item.delete()
+
+    def test_sales_return_lifecycle_to_posted(self):
+        invoice = self._create_issued_invoice()
+        sales_return = self._create_draft_return(
+            invoice,
+            return_number="SR-LIFECYCLE",
+        )
+        self._create_return_item(
+            sales_return,
+            quantity="1",
+        )
+
+        sales_return.confirm(
+            user=self.user
+        )
+        sales_return.refresh_from_db()
+
+        self.assertEqual(
+            sales_return.status,
+            SalesReturnStatus.CONFIRMED,
+        )
+        self.assertTrue(
+            sales_return.can_be_posted
+        )
+
+        sales_return.mark_posted(
+            user=self.user
+        )
+        sales_return.refresh_from_db()
+
+        self.assertEqual(
+            sales_return.status,
+            SalesReturnStatus.POSTED,
+        )
+        self.assertEqual(
+            sales_return.posted_by,
+            self.user,
+        )
+        self.assertIsNotNone(
+            sales_return.posted_at
+        )
+        self.assertFalse(
+            sales_return.can_be_cancelled
+        )
+
+    def test_posted_return_cannot_be_cancelled(self):
+        invoice = self._create_issued_invoice()
+        sales_return = self._create_draft_return(
+            invoice,
+            return_number="SR-POSTED-CANCEL",
+        )
+        self._create_return_item(
+            sales_return,
+            quantity="1",
+        )
+
+        sales_return.confirm(
+            user=self.user
+        )
+        sales_return.mark_posted(
+            user=self.user
+        )
+
+        with self.assertRaises(
+            ValidationError
+        ):
+            sales_return.cancel(
+                reason="Invalid cancellation",
+                user=self.user,
+            )
+
+    def test_return_item_rejects_other_invoice_item(
+        self,
+    ):
+        first_invoice = self._create_issued_invoice()
+
+        second_invoice = create_sales_invoice(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            items=[
+                {
+                    "catalog_item_id": self.service.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+        second_invoice = issue_sales_invoice(
+            company=self.company,
+            invoice=second_invoice,
+            user=self.user,
+        )
+
+        sales_return = self._create_draft_return(
+            first_invoice,
+            return_number="SR-WRONG-INVOICE-ITEM",
+        )
+
+        return_item = SalesReturnItem(
+            sales_return=sales_return,
+            company=self.company,
+            invoice_item=second_invoice.items.get(),
+            catalog_item=self.service,
+            line_number=1,
+            quantity=Decimal("1.0000"),
+        )
+
+        with self.assertRaises(
+            ValidationError
+        ):
+            return_item.full_clean()
+
+    def test_return_number_unique_inside_company(self):
+        invoice = self._create_issued_invoice()
+
+        self._create_draft_return(
+            invoice,
+            return_number="SR-UNIQUE-001",
+        )
+
+        duplicate = SalesReturn(
+            company=self.company,
+            branch=self.branch,
+            customer=self.customer,
+            invoice=invoice,
+            return_number="SR-UNIQUE-001",
+            return_date=timezone.localdate(),
+            currency_code="SAR",
+        )
+
+        with self.assertRaises(
+            ValidationError
+        ):
+            duplicate.full_clean()
+
+
+# End Phase 21.4.1 - Sales Returns Models Foundation Tests
+# ============================================================
+
+# ============================================================
+# Phase 21.4.2 - Sales Returns Services Foundation Tests
+# ============================================================
+
+
+class SalesReturnServicesTests(SalesTestCase):
+    """
+    Tests for company-scoped sales return services.
+    """
+
+    def _create_issued_invoice(
+        self,
+        *,
+        company=None,
+        user=None,
+        customer=None,
+        catalog_item=None,
+        quantity="4",
+        discount_amount="40.00",
+    ) -> SalesInvoice:
+        selected_company = company or self.company
+        selected_user = user or self.user
+        selected_customer = customer or self.customer
+        selected_item = catalog_item or self.item
+
+        invoice = create_sales_invoice(
+            company=selected_company,
+            user=selected_user,
+            customer_id=selected_customer.id,
+            items=[
+                {
+                    "catalog_item_id": selected_item.id,
+                    "quantity": quantity,
+                    "discount_amount": discount_amount,
+                }
+            ],
+        )
+
+        return issue_sales_invoice(
+            company=selected_company,
+            invoice=invoice,
+            user=selected_user,
+        )
+
+    def test_generate_sales_return_number_uses_year(self):
+        return_number = generate_sales_return_number(
+            self.company,
+            return_date=timezone.localdate(),
+        )
+
+        self.assertTrue(
+            return_number.startswith(
+                f"SR-{timezone.localdate().year}-"
+            )
+        )
+        self.assertTrue(
+            return_number.endswith("000001")
+        )
+
+    def test_create_partial_sales_return(self):
+        invoice = self._create_issued_invoice()
+        invoice_item = invoice.items.get()
+
+        sales_return = create_sales_return(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+            reason=SalesReturnReason.CUSTOMER_REQUEST,
+            reason_details="Customer returned one unit",
+            items=[
+                {
+                    "invoice_item_id": invoice_item.id,
+                    "quantity": "1",
+                    "restock": True,
+                    "condition_notes": "Good condition",
+                }
+            ],
+        )
+
+        sales_return.refresh_from_db()
+        return_item = sales_return.items.get()
+
+        self.assertEqual(
+            sales_return.status,
+            SalesReturnStatus.DRAFT,
+        )
+        self.assertEqual(
+            sales_return.invoice,
+            invoice,
+        )
+        self.assertEqual(
+            sales_return.company,
+            self.company,
+        )
+        self.assertEqual(
+            return_item.invoice_item,
+            invoice_item,
+        )
+        self.assertEqual(
+            return_item.quantity,
+            Decimal("1.0000"),
+        )
+        self.assertEqual(
+            return_item.discount_amount,
+            Decimal("10.00"),
+        )
+        self.assertEqual(
+            return_item.tax_amount,
+            Decimal("13.50"),
+        )
+        self.assertEqual(
+            return_item.line_total,
+            Decimal("103.50"),
+        )
+        self.assertEqual(
+            sales_return.total_amount,
+            Decimal("103.50"),
+        )
+        self.assertEqual(
+            sales_return.reason_details,
+            "Customer returned one unit",
+        )
+        self.assertTrue(return_item.restock)
+
+    def test_create_full_sales_return_when_items_omitted(self):
+        invoice = self._create_issued_invoice(
+            quantity="2",
+            discount_amount="20.00",
+        )
+
+        sales_return = create_sales_return(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+            items=None,
+        )
+
+        return_item = sales_return.items.get()
+
+        self.assertEqual(
+            return_item.quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            sales_return.total_amount,
+            invoice.total_amount,
+        )
+
+    def test_create_return_rejects_draft_invoice(self):
+        invoice = create_sales_invoice(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            items=[
+                {
+                    "catalog_item_id": self.item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        with self.assertRaises(ValidationError):
+            create_sales_return(
+                company=self.company,
+                invoice=invoice,
+                user=self.user,
+                items=None,
+            )
+
+    def test_create_return_rejects_cross_company_invoice(self):
+        other_invoice = self._create_issued_invoice(
+            company=self.other_company,
+            user=self.other_user,
+            customer=self.other_customer,
+            catalog_item=self.other_item,
+            quantity="1",
+            discount_amount="0.00",
+        )
+
+        with self.assertRaises(ValidationError):
+            create_sales_return(
+                company=self.company,
+                invoice=other_invoice,
+                user=self.user,
+                items=None,
+            )
+
+    def test_create_return_rejects_duplicate_invoice_item(self):
+        invoice = self._create_issued_invoice()
+        invoice_item = invoice.items.get()
+
+        with self.assertRaises(ValidationError):
+            create_sales_return(
+                company=self.company,
+                invoice=invoice,
+                user=self.user,
+                items=[
+                    {
+                        "invoice_item_id": invoice_item.id,
+                        "quantity": "1",
+                    },
+                    {
+                        "invoice_item_id": invoice_item.id,
+                        "quantity": "1",
+                    },
+                ],
+            )
+
+    def test_create_return_rejects_quantity_over_remaining(self):
+        invoice = self._create_issued_invoice()
+        invoice_item = invoice.items.get()
+
+        first_return = create_sales_return(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+            items=[
+                {
+                    "invoice_item_id": invoice_item.id,
+                    "quantity": "3",
+                }
+            ],
+        )
+
+        confirm_sales_return(
+            company=self.company,
+            sales_return=first_return,
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            create_sales_return(
+                company=self.company,
+                invoice=invoice,
+                user=self.user,
+                items=[
+                    {
+                        "invoice_item_id": invoice_item.id,
+                        "quantity": "2",
+                    }
+                ],
+            )
+
+    def test_confirm_sales_return_consumes_quantity(self):
+        invoice = self._create_issued_invoice()
+        invoice_item = invoice.items.get()
+
+        sales_return = create_sales_return(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+            items=[
+                {
+                    "invoice_item_id": invoice_item.id,
+                    "quantity": "1.5",
+                }
+            ],
+        )
+
+        sales_return = confirm_sales_return(
+            company=self.company,
+            sales_return=sales_return,
+            user=self.user,
+        )
+
+        invoice_item.refresh_from_db()
+
+        self.assertEqual(
+            sales_return.status,
+            SalesReturnStatus.CONFIRMED,
+        )
+        self.assertEqual(
+            sales_return.confirmed_by,
+            self.user,
+        )
+        self.assertEqual(
+            invoice_item.returned_quantity,
+            Decimal("1.5000"),
+        )
+        self.assertEqual(
+            invoice_item.returnable_quantity,
+            Decimal("2.5000"),
+        )
+
+    def test_cancel_confirmed_return_releases_quantity(self):
+        invoice = self._create_issued_invoice()
+        invoice_item = invoice.items.get()
+
+        sales_return = create_sales_return(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+            items=[
+                {
+                    "invoice_item_id": invoice_item.id,
+                    "quantity": "2",
+                }
+            ],
+        )
+
+        sales_return = confirm_sales_return(
+            company=self.company,
+            sales_return=sales_return,
+            user=self.user,
+        )
+
+        sales_return = cancel_sales_return(
+            company=self.company,
+            sales_return=sales_return,
+            reason="Return cancelled",
+            user=self.user,
+        )
+
+        invoice_item.refresh_from_db()
+
+        self.assertEqual(
+            sales_return.status,
+            SalesReturnStatus.CANCELLED,
+        )
+        self.assertEqual(
+            sales_return.cancelled_reason,
+            "Return cancelled",
+        )
+        self.assertEqual(
+            invoice_item.returned_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            invoice_item.returnable_quantity,
+            Decimal("4.0000"),
+        )
+
+    def test_confirm_return_blocks_cross_company_access(self):
+        invoice = self._create_issued_invoice()
+
+        sales_return = create_sales_return(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+            items=None,
+        )
+
+        with self.assertRaises(ValidationError):
+            confirm_sales_return(
+                company=self.other_company,
+                sales_return=sales_return,
+                user=self.other_user,
+            )
+
+    def test_serialize_sales_return_with_items(self):
+        invoice = self._create_issued_invoice()
+        invoice_item = invoice.items.get()
+
+        sales_return = create_sales_return(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+            items=[
+                {
+                    "invoice_item_id": invoice_item.id,
+                    "quantity": "1",
+                    "restock": False,
+                    "condition_notes": "Damaged",
+                }
+            ],
+        )
+
+        data = serialize_sales_return(
+            sales_return,
+            include_items=True,
+        )
+
+        self.assertEqual(
+            data["id"],
+            sales_return.id,
+        )
+        self.assertEqual(
+            data["company_id"],
+            self.company.id,
+        )
+        self.assertEqual(
+            data["invoice"]["id"],
+            invoice.id,
+        )
+        self.assertEqual(
+            data["total_amount"],
+            "103.50",
+        )
+        self.assertEqual(
+            len(data["items"]),
+            1,
+        )
+        self.assertEqual(
+            data["items"][0]["invoice_item_id"],
+            invoice_item.id,
+        )
+        self.assertFalse(
+            data["items"][0]["restock"]
+        )
+        self.assertEqual(
+            data["items"][0]["condition_notes"],
+            "Damaged",
+        )
+
+    def test_invoice_return_summary_excludes_cancelled_amount(self):
+        invoice = self._create_issued_invoice()
+        invoice_item = invoice.items.get()
+
+        cancelled_return = create_sales_return(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+            items=[
+                {
+                    "invoice_item_id": invoice_item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        cancelled_return = confirm_sales_return(
+            company=self.company,
+            sales_return=cancelled_return,
+            user=self.user,
+        )
+
+        cancel_sales_return(
+            company=self.company,
+            sales_return=cancelled_return,
+            reason="Cancelled",
+            user=self.user,
+        )
+
+        active_return = create_sales_return(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+            items=[
+                {
+                    "invoice_item_id": invoice_item.id,
+                    "quantity": "2",
+                }
+            ],
+        )
+
+        confirm_sales_return(
+            company=self.company,
+            sales_return=active_return,
+            user=self.user,
+        )
+
+        summary = serialize_invoice_return_summary(
+            invoice
+        )
+
+        self.assertEqual(
+            summary["invoice_id"],
+            invoice.id,
+        )
+        self.assertEqual(
+            summary["returned_amount"],
+            "207.00",
+        )
+        self.assertEqual(
+            summary["net_amount"],
+            "207.00",
+        )
+        self.assertEqual(
+            summary["returns_count"],
+            1,
+        )
+        self.assertEqual(
+            summary["items"][0]["returned_quantity"],
+            "2.0000",
+        )
+        self.assertEqual(
+            summary["items"][0]["returnable_quantity"],
+            "2.0000",
+        )
+
+    def test_full_return_rejected_after_invoice_fully_returned(self):
+        invoice = self._create_issued_invoice(
+            quantity="1",
+            discount_amount="0.00",
+        )
+
+        first_return = create_sales_return(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+            items=None,
+        )
+
+        confirm_sales_return(
+            company=self.company,
+            sales_return=first_return,
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            create_sales_return(
+                company=self.company,
+                invoice=invoice,
+                user=self.user,
+                items=None,
+            )
+
+
+# End Phase 21.4.2 - Sales Returns Services Foundation Tests
+# ============================================================
+
+# ============================================================
+# Phase 21.4.3 - Sales Returns Company APIs Tests
+# ============================================================
+
+
+class SalesReturnsAPITests(SalesTestCase):
+    """
+    API, permission, lifecycle, and tenant-isolation tests
+    for company sales returns.
+    """
+
+    def _create_issued_invoice(
+        self,
+        *,
+        company=None,
+        user=None,
+        customer=None,
+        catalog_item=None,
+        quantity="4",
+        discount_amount="40.00",
+    ) -> SalesInvoice:
+        selected_company = company or self.company
+        selected_user = user or self.user
+        selected_customer = customer or self.customer
+        selected_item = catalog_item or self.item
+
+        invoice = create_sales_invoice(
+            company=selected_company,
+            user=selected_user,
+            customer_id=selected_customer.id,
+            items=[
+                {
+                    "catalog_item_id": selected_item.id,
+                    "quantity": quantity,
+                    "discount_amount": discount_amount,
+                }
+            ],
+        )
+
+        return issue_sales_invoice(
+            company=selected_company,
+            invoice=invoice,
+            user=selected_user,
+        )
+
+    def _create_return(
+        self,
+        *,
+        invoice=None,
+        company=None,
+        user=None,
+        quantity="1",
+    ) -> SalesReturn:
+        selected_company = company or self.company
+        selected_user = user or self.user
+        selected_invoice = (
+            invoice
+            or self._create_issued_invoice(
+                company=selected_company,
+                user=selected_user,
+                customer=(
+                    self.customer
+                    if selected_company == self.company
+                    else self.other_customer
+                ),
+                catalog_item=(
+                    self.item
+                    if selected_company == self.company
+                    else self.other_item
+                ),
+            )
+        )
+
+        return create_sales_return(
+            company=selected_company,
+            invoice=selected_invoice,
+            user=selected_user,
+            items=[
+                {
+                    "invoice_item_id":
+                        selected_invoice.items.get().id,
+                    "quantity": quantity,
+                }
+            ],
+        )
+
+    def test_returns_list_returns_current_company_only(self):
+        current_return = self._create_return()
+
+        other_invoice = self._create_issued_invoice(
+            company=self.other_company,
+            user=self.other_user,
+            customer=self.other_customer,
+            catalog_item=self.other_item,
+            quantity="1",
+            discount_amount="0.00",
+        )
+
+        other_return = self._create_return(
+            invoice=other_invoice,
+            company=self.other_company,
+            user=self.other_user,
+        )
+
+        response = self.client.get(
+            "/api/company/sales/returns/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(
+            payload["results"][0]["id"],
+            current_return.id,
+        )
+        self.assertNotEqual(
+            payload["results"][0]["id"],
+            other_return.id,
+        )
+
+    def test_returns_list_supports_search_and_status_filter(
+        self,
+    ):
+        sales_return = self._create_return()
+
+        confirm_sales_return(
+            company=self.company,
+            sales_return=sales_return,
+            user=self.user,
+        )
+
+        response = self.client.get(
+            "/api/company/sales/returns/",
+            {
+                "q": sales_return.return_number,
+                "status":
+                    SalesReturnStatus.CONFIRMED,
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(
+            payload["results"][0]["id"],
+            sales_return.id,
+        )
+        self.assertEqual(
+            payload["results"][0]["status"],
+            SalesReturnStatus.CONFIRMED,
+        )
+
+    def test_create_partial_return_endpoint(self):
+        invoice = self._create_issued_invoice()
+        invoice_item = invoice.items.get()
+
+        response = self.client.post(
+            "/api/company/sales/returns/create/",
+            data={
+                "invoice_id": invoice.id,
+                "reason":
+                    SalesReturnReason.CUSTOMER_REQUEST,
+                "reason_details":
+                    "Partial customer return",
+                "items": [
+                    {
+                        "invoice_item_id":
+                            invoice_item.id,
+                        "quantity": "1",
+                        "restock": True,
+                        "condition_notes":
+                            "Good condition",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+            response.content,
+        )
+
+        payload = response.json()
+        sales_return = SalesReturn.objects.get(
+            company=self.company
+        )
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(
+            payload["sales_return"]["status"],
+            SalesReturnStatus.DRAFT,
+        )
+        self.assertEqual(
+            payload["sales_return"]["total_amount"],
+            "103.50",
+        )
+        self.assertEqual(
+            len(
+                payload["sales_return"]["items"]
+            ),
+            1,
+        )
+        self.assertEqual(
+            sales_return.invoice,
+            invoice,
+        )
+        self.assertEqual(
+            sales_return.reason_details,
+            "Partial customer return",
+        )
+
+    def test_create_full_return_endpoint_when_items_omitted(
+        self,
+    ):
+        invoice = self._create_issued_invoice(
+            quantity="2",
+            discount_amount="20.00",
+        )
+
+        response = self.client.post(
+            "/api/company/sales/returns/create/",
+            data={
+                "invoice_id": invoice.id,
+                "reason":
+                    SalesReturnReason.OTHER,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(
+            payload["sales_return"]["items"][0][
+                "quantity"
+            ],
+            "2.0000",
+        )
+        self.assertEqual(
+            payload["sales_return"]["total_amount"],
+            str(invoice.total_amount),
+        )
+
+    def test_create_return_rejects_draft_invoice(self):
+        invoice = create_sales_invoice(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            items=[
+                {
+                    "catalog_item_id": self.item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        response = self.client.post(
+            "/api/company/sales/returns/create/",
+            data={
+                "invoice_id": invoice.id,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+            response.content,
+        )
+        self.assertFalse(
+            response.json()["success"]
+        )
+
+    def test_return_detail_returns_items(self):
+        sales_return = self._create_return()
+
+        response = self.client.get(
+            f"/api/company/sales/returns/"
+            f"{sales_return.id}/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(
+            payload["sales_return"]["id"],
+            sales_return.id,
+        )
+        self.assertEqual(
+            len(
+                payload["sales_return"]["items"]
+            ),
+            1,
+        )
+
+    def test_return_detail_blocks_cross_company_access(self):
+        other_invoice = self._create_issued_invoice(
+            company=self.other_company,
+            user=self.other_user,
+            customer=self.other_customer,
+            catalog_item=self.other_item,
+            quantity="1",
+            discount_amount="0.00",
+        )
+
+        other_return = self._create_return(
+            invoice=other_invoice,
+            company=self.other_company,
+            user=self.other_user,
+        )
+
+        response = self.client.get(
+            f"/api/company/sales/returns/"
+            f"{other_return.id}/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+    def test_confirm_return_endpoint(self):
+        sales_return = self._create_return()
+        invoice_item = (
+            sales_return.invoice.items.get()
+        )
+
+        response = self.client.post(
+            f"/api/company/sales/returns/"
+            f"{sales_return.id}/confirm/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        sales_return.refresh_from_db()
+        invoice_item.refresh_from_db()
+
+        self.assertEqual(
+            sales_return.status,
+            SalesReturnStatus.CONFIRMED,
+        )
+        self.assertEqual(
+            sales_return.confirmed_by,
+            self.user,
+        )
+        self.assertEqual(
+            invoice_item.returned_quantity,
+            Decimal("1.0000"),
+        )
+
+    def test_cancel_confirmed_return_endpoint(self):
+        sales_return = self._create_return()
+
+        confirm_sales_return(
+            company=self.company,
+            sales_return=sales_return,
+            user=self.user,
+        )
+
+        response = self.client.post(
+            f"/api/company/sales/returns/"
+            f"{sales_return.id}/cancel/",
+            data={
+                "reason": "API cancellation",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        sales_return.refresh_from_db()
+
+        self.assertEqual(
+            sales_return.status,
+            SalesReturnStatus.CANCELLED,
+        )
+        self.assertEqual(
+            sales_return.cancelled_reason,
+            "API cancellation",
+        )
+        self.assertEqual(
+            sales_return.cancelled_by,
+            self.user,
+        )
+
+    def test_invoice_returns_summary_endpoint(self):
+        invoice = self._create_issued_invoice()
+        invoice_item = invoice.items.get()
+
+        sales_return = create_sales_return(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+            items=[
+                {
+                    "invoice_item_id":
+                        invoice_item.id,
+                    "quantity": "2",
+                }
+            ],
+        )
+
+        confirm_sales_return(
+            company=self.company,
+            sales_return=sales_return,
+            user=self.user,
+        )
+
+        response = self.client.get(
+            "/api/company/sales/returns/"
+            f"invoice/{invoice.id}/summary/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(
+            payload["summary"]["invoice_id"],
+            invoice.id,
+        )
+        self.assertEqual(
+            payload["summary"]["returned_amount"],
+            "207.00",
+        )
+        self.assertEqual(
+            payload["summary"]["net_amount"],
+            "207.00",
+        )
+        self.assertEqual(
+            payload["summary"]["returns_count"],
+            1,
+        )
+
+    def test_invoice_summary_blocks_cross_company_access(
+        self,
+    ):
+        other_invoice = self._create_issued_invoice(
+            company=self.other_company,
+            user=self.other_user,
+            customer=self.other_customer,
+            catalog_item=self.other_item,
+            quantity="1",
+            discount_amount="0.00",
+        )
+
+        response = self.client.get(
+            "/api/company/sales/returns/"
+            f"invoice/{other_invoice.id}/summary/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+    def test_viewer_can_view_but_cannot_create_return(
+        self,
+    ):
+        sales_return = self._create_return()
+        invoice = sales_return.invoice
+
+        self.client.force_login(
+            self.viewer_user
+        )
+
+        list_response = self.client.get(
+            "/api/company/sales/returns/"
+        )
+
+        detail_response = self.client.get(
+            f"/api/company/sales/returns/"
+            f"{sales_return.id}/"
+        )
+
+        create_response = self.client.post(
+            "/api/company/sales/returns/create/",
+            data={
+                "invoice_id": invoice.id,
+                "items": [
+                    {
+                        "invoice_item_id":
+                            invoice.items.get().id,
+                        "quantity": "1",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            list_response.status_code,
+            200,
+            list_response.content,
+        )
+        self.assertEqual(
+            detail_response.status_code,
+            200,
+            detail_response.content,
+        )
+        self.assertEqual(
+            create_response.status_code,
+            403,
+            create_response.content,
+        )
+
+    def test_viewer_cannot_confirm_or_cancel_return(
+        self,
+    ):
+        sales_return = self._create_return()
+
+        self.client.force_login(
+            self.viewer_user
+        )
+
+        confirm_response = self.client.post(
+            f"/api/company/sales/returns/"
+            f"{sales_return.id}/confirm/"
+        )
+
+        cancel_response = self.client.post(
+            f"/api/company/sales/returns/"
+            f"{sales_return.id}/cancel/",
+            data={
+                "reason": "Not allowed",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            confirm_response.status_code,
+            403,
+            confirm_response.content,
+        )
+        self.assertEqual(
+            cancel_response.status_code,
+            403,
+            cancel_response.content,
+        )
+
+    def test_unauthenticated_user_cannot_list_returns(
+        self,
+    ):
+        self.client.logout()
+
+        response = self.client.get(
+            "/api/company/sales/returns/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            403,
+        )
+
+
+# End Phase 21.4.3 - Sales Returns Company APIs Tests
+# ============================================================
+

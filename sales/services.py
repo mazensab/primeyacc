@@ -32,7 +32,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 
 from accounting.services import (
@@ -61,6 +61,10 @@ from sales.models import (
     SalesQuotationItem,
     SalesQuotationSource,
     SalesQuotationStatus,
+    SalesReturn,
+    SalesReturnItem,
+    SalesReturnReason,
+    SalesReturnStatus,
     quantize_money,
     quantize_quantity,
 )
@@ -2812,5 +2816,1172 @@ def serialize_order_invoice_summary(
 
 
 # End Phase 21.3 - Sales Order Fulfillment & Invoice Conversion Services
+# ============================================================
+
+# ============================================================
+# Phase 21.4.2 - Sales Returns Services Foundation
+# ------------------------------------------------------------
+# Company-scoped sales return creation and lifecycle services.
+# Partial and full invoice returns.
+# Quantity and tenant validation.
+# Return serialization and invoice return summary.
+# Inventory, accounting, and credit notes are added later.
+# ============================================================
+
+
+def generate_sales_return_number(
+    company: Company,
+    return_date=None,
+) -> str:
+    """
+    Generate a company-scoped sales return number.
+
+    Format:
+        SR-YYYY-000001
+    """
+    if not company:
+        raise ValidationError(
+            {
+                "company":
+                "Company context is required."
+            }
+        )
+
+    normalized_return_date = (
+        normalize_invoice_date(
+            return_date,
+            field_name="return_date",
+            default_today=True,
+        )
+    )
+
+    year = normalized_return_date.year
+    prefix = "SR"
+    starts_with = f"{prefix}-{year}-"
+
+    last_return = (
+        SalesReturn.objects
+        .filter(
+            company=company,
+            return_number__startswith=(
+                starts_with
+            ),
+        )
+        .order_by(
+            "-return_number",
+            "-id",
+        )
+        .first()
+    )
+
+    next_number = 1
+
+    if (
+        last_return
+        and last_return.return_number
+    ):
+        try:
+            next_number = (
+                int(
+                    last_return.return_number
+                    .split("-")[-1]
+                )
+                + 1
+            )
+        except (TypeError, ValueError):
+            next_number = (
+                last_return.id + 1
+            )
+
+    return (
+        f"{starts_with}"
+        f"{next_number:06d}"
+    )
+
+
+def resolve_sales_return_invoice(
+    *,
+    company: Company,
+    invoice_id: int | str | None,
+    lock: bool = False,
+) -> SalesInvoice:
+    """
+    Resolve an issued sales invoice inside the company.
+    """
+    if not company:
+        raise ValidationError(
+            {
+                "company":
+                "Company context is required."
+            }
+        )
+
+    if not invoice_id:
+        raise ValidationError(
+            {
+                "invoice":
+                "Sales invoice is required."
+            }
+        )
+
+    queryset = (
+        SalesInvoice.objects
+        .select_related(
+            "company",
+            "branch",
+            "customer",
+        )
+        .filter(
+            company=company,
+            id=invoice_id,
+        )
+    )
+
+    if lock:
+        queryset = (
+            queryset.select_for_update()
+        )
+
+    invoice = queryset.first()
+
+    if not invoice:
+        raise ValidationError(
+            {
+                "invoice":
+                "Sales invoice was not found "
+                "for this company."
+            }
+        )
+
+    if (
+        invoice.status
+        != SalesInvoiceStatus.ISSUED
+    ):
+        raise ValidationError(
+            {
+                "invoice":
+                "Only issued sales invoices "
+                "can be returned."
+            }
+        )
+
+    return invoice
+
+
+def resolve_sales_return_invoice_item(
+    *,
+    company: Company,
+    invoice: SalesInvoice,
+    invoice_item_id: int | str | None,
+    lock: bool = False,
+) -> SalesInvoiceItem:
+    """
+    Resolve one invoice item inside the selected invoice.
+    """
+    if not invoice_item_id:
+        raise ValidationError(
+            {
+                "invoice_item":
+                "Sales invoice item is required."
+            }
+        )
+
+    queryset = (
+        SalesInvoiceItem.objects
+        .select_related(
+            "invoice",
+            "catalog_item",
+            "catalog_item__unit",
+        )
+        .filter(
+            company=company,
+            invoice=invoice,
+            id=invoice_item_id,
+        )
+    )
+
+    if lock:
+        queryset = (
+            queryset.select_for_update()
+        )
+
+    invoice_item = queryset.first()
+
+    if not invoice_item:
+        raise ValidationError(
+            {
+                "invoice_item":
+                "Sales invoice item was not found "
+                "inside this invoice."
+            }
+        )
+
+    return invoice_item
+
+
+def normalize_sales_return_items(
+    *,
+    company: Company,
+    invoice: SalesInvoice,
+    items: list[dict[str, Any]] | None,
+) -> list[
+    tuple[
+        SalesInvoiceItem,
+        Decimal,
+        bool,
+        str,
+        str,
+        dict[str, Any],
+    ]
+]:
+    """
+    Normalize requested return lines.
+
+    When items is omitted, all remaining invoice quantities
+    are selected for a full return.
+    """
+    invoice_items = list(
+        SalesInvoiceItem.objects
+        .select_for_update()
+        .select_related(
+            "invoice",
+            "catalog_item",
+            "catalog_item__unit",
+        )
+        .filter(
+            company=company,
+            invoice=invoice,
+        )
+        .order_by(
+            "line_number",
+            "id",
+        )
+    )
+
+    if not invoice_items:
+        raise ValidationError(
+            {
+                "items":
+                "Sales invoice has no items "
+                "available for return."
+            }
+        )
+
+    invoice_items_by_id = {
+        item.id: item
+        for item in invoice_items
+    }
+
+    if items is None:
+        selected_items = []
+
+        for invoice_item in invoice_items:
+            remaining_quantity = (
+                quantize_quantity(
+                    invoice_item
+                    .returnable_quantity
+                )
+            )
+
+            if (
+                remaining_quantity
+                > Decimal("0.0000")
+            ):
+                selected_items.append(
+                    (
+                        invoice_item,
+                        remaining_quantity,
+                        True,
+                        "",
+                        "",
+                        {},
+                    )
+                )
+
+        if not selected_items:
+            raise ValidationError(
+                {
+                    "items":
+                    "Sales invoice is already "
+                    "fully returned."
+                }
+            )
+
+        return selected_items
+
+    if (
+        not isinstance(items, list)
+        or not items
+    ):
+        raise ValidationError(
+            {
+                "items":
+                "At least one return item "
+                "is required."
+            }
+        )
+
+    selected_items = []
+    seen_invoice_item_ids = set()
+
+    for raw_item in items:
+        if not isinstance(raw_item, dict):
+            raise ValidationError(
+                {
+                    "items":
+                    "Each return item must "
+                    "be an object."
+                }
+            )
+
+        invoice_item_id = (
+            raw_item.get("invoice_item_id")
+            or raw_item.get(
+                "sales_invoice_item_id"
+            )
+            or raw_item.get(
+                "source_invoice_item_id"
+            )
+        )
+
+        if not invoice_item_id:
+            raise ValidationError(
+                {
+                    "invoice_item_id":
+                    "Sales invoice item "
+                    "is required."
+                }
+            )
+
+        try:
+            normalized_item_id = int(
+                invoice_item_id
+            )
+        except (
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise ValidationError(
+                {
+                    "invoice_item_id":
+                    "Invalid sales invoice item."
+                }
+            ) from exc
+
+        if (
+            normalized_item_id
+            in seen_invoice_item_ids
+        ):
+            raise ValidationError(
+                {
+                    "items":
+                    "A sales invoice item cannot "
+                    "appear more than once "
+                    "in the same return."
+                }
+            )
+
+        seen_invoice_item_ids.add(
+            normalized_item_id
+        )
+
+        invoice_item = (
+            invoice_items_by_id.get(
+                normalized_item_id
+            )
+        )
+
+        if not invoice_item:
+            raise ValidationError(
+                {
+                    "invoice_item_id":
+                    "Sales invoice item was not "
+                    "found inside this invoice."
+                }
+            )
+
+        quantity = quantize_quantity(
+            raw_item.get("quantity")
+        )
+
+        if quantity <= Decimal("0.0000"):
+            raise ValidationError(
+                {
+                    "quantity":
+                    "Returned quantity must "
+                    "be greater than zero."
+                }
+            )
+
+        returnable_quantity = (
+            quantize_quantity(
+                invoice_item
+                .returnable_quantity
+            )
+        )
+
+        if quantity > returnable_quantity:
+            raise ValidationError(
+                {
+                    "quantity":
+                    "Returned quantity cannot exceed "
+                    "the remaining invoice quantity."
+                }
+            )
+
+        selected_items.append(
+            (
+                invoice_item,
+                quantity,
+                bool(
+                    raw_item.get(
+                        "restock",
+                        True,
+                    )
+                ),
+                normalize_text(
+                    raw_item.get(
+                        "condition_notes"
+                    )
+                ),
+                normalize_text(
+                    raw_item.get("notes")
+                ),
+                (
+                    raw_item.get("extra_data")
+                    if isinstance(
+                        raw_item.get(
+                            "extra_data"
+                        ),
+                        dict,
+                    )
+                    else {}
+                ),
+            )
+        )
+
+    return selected_items
+
+
+@transaction.atomic
+def create_sales_return(
+    *,
+    company: Company,
+    invoice: SalesInvoice | None = None,
+    invoice_id: int | str | None = None,
+    user=None,
+    return_date=None,
+    reason: str = (
+        SalesReturnReason.CUSTOMER_REQUEST
+    ),
+    reason_details: str = "",
+    public_notes: str = "",
+    internal_notes: str = "",
+    items: list[dict[str, Any]] | None = None,
+    extra_data: dict[str, Any] | None = None,
+) -> SalesReturn:
+    """
+    Create a draft partial or full sales return.
+
+    Passing items=None creates a full return for all remaining
+    quantities on the invoice.
+    """
+    if not company:
+        raise ValidationError(
+            {
+                "company":
+                "Company context is required."
+            }
+        )
+
+    selected_invoice_id = (
+        invoice.id
+        if invoice is not None
+        else invoice_id
+    )
+
+    locked_invoice = (
+        resolve_sales_return_invoice(
+            company=company,
+            invoice_id=selected_invoice_id,
+            lock=True,
+        )
+    )
+
+    normalized_return_date = (
+        normalize_invoice_date(
+            return_date,
+            field_name="return_date",
+            default_today=True,
+        )
+    )
+
+    if (
+        normalized_return_date
+        < locked_invoice.invoice_date
+    ):
+        raise ValidationError(
+            {
+                "return_date":
+                "Return date cannot be before "
+                "invoice date."
+            }
+        )
+
+    selected_items = (
+        normalize_sales_return_items(
+            company=company,
+            invoice=locked_invoice,
+            items=items,
+        )
+    )
+
+    actor = (
+        user
+        if getattr(
+            user,
+            "is_authenticated",
+            False,
+        )
+        else None
+    )
+
+    sales_return = SalesReturn(
+        company=company,
+        branch=locked_invoice.branch,
+        customer=locked_invoice.customer,
+        invoice=locked_invoice,
+        return_number=(
+            generate_sales_return_number(
+                company,
+                return_date=(
+                    normalized_return_date
+                ),
+            )
+        ),
+        status=SalesReturnStatus.DRAFT,
+        reason=(
+            reason
+            or SalesReturnReason
+            .CUSTOMER_REQUEST
+        ),
+        reason_details=normalize_text(
+            reason_details
+        ),
+        return_date=normalized_return_date,
+        currency_code=(
+            normalize_text(
+                locked_invoice.currency_code
+            )
+            or normalize_text(
+                company.currency_code
+            )
+            or "SAR"
+        ),
+        public_notes=normalize_text(
+            public_notes
+        ),
+        internal_notes=normalize_text(
+            internal_notes
+        ),
+        extra_data={
+            **dict(extra_data or {}),
+            "source_invoice_id": (
+                locked_invoice.id
+            ),
+            "source_invoice_number": (
+                locked_invoice.invoice_number
+            ),
+        },
+        created_by=actor,
+        updated_by=actor,
+    )
+
+    sales_return.full_clean()
+    sales_return.save()
+    sales_return.refresh_snapshots(
+        save=True
+    )
+
+    for line_number, (
+        invoice_item,
+        quantity,
+        restock,
+        condition_notes,
+        notes,
+        item_extra_data,
+    ) in enumerate(
+        selected_items,
+        start=1,
+    ):
+        return_item = SalesReturnItem(
+            sales_return=sales_return,
+            company=company,
+            invoice_item=invoice_item,
+            catalog_item=(
+                invoice_item.catalog_item
+            ),
+            line_number=line_number,
+            quantity=quantity,
+            restock=restock,
+            condition_notes=(
+                condition_notes
+            ),
+            notes=notes,
+            extra_data={
+                **dict(item_extra_data or {}),
+                "source_invoice_item_id": (
+                    invoice_item.id
+                ),
+                "source_invoice_line_number": (
+                    invoice_item.line_number
+                ),
+            },
+        )
+
+        return_item.apply_invoice_item_snapshot()
+        return_item.full_clean()
+        return_item.save()
+
+    sales_return.recalculate_totals(
+        save=True
+    )
+    sales_return.refresh_from_db()
+
+    return sales_return
+
+
+@transaction.atomic
+def confirm_sales_return(
+    *,
+    company: Company,
+    sales_return: SalesReturn,
+    user=None,
+) -> SalesReturn:
+    """
+    Confirm a draft sales return.
+
+    Confirmation consumes invoice returnable quantities.
+    """
+    if not company:
+        raise ValidationError(
+            {
+                "company":
+                "Company context is required."
+            }
+        )
+
+    if not sales_return:
+        raise ValidationError(
+            {
+                "sales_return":
+                "Sales return is required."
+            }
+        )
+
+    locked_return = (
+        SalesReturn.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "branch",
+            "customer",
+            "invoice",
+        )
+        .filter(
+            id=sales_return.id,
+            company=company,
+        )
+        .first()
+    )
+
+    if not locked_return:
+        raise ValidationError(
+            {
+                "sales_return":
+                "Sales return does not belong "
+                "to this company."
+            }
+        )
+
+    locked_return.recalculate_totals(
+        save=True
+    )
+    locked_return.confirm(
+        user=user
+    )
+    locked_return.refresh_from_db()
+
+    return locked_return
+
+
+@transaction.atomic
+def cancel_sales_return(
+    *,
+    company: Company,
+    sales_return: SalesReturn,
+    reason: str = "",
+    user=None,
+) -> SalesReturn:
+    """
+    Cancel a draft or confirmed sales return.
+
+    Posted returns require a dedicated reversal process.
+    """
+    if not company:
+        raise ValidationError(
+            {
+                "company":
+                "Company context is required."
+            }
+        )
+
+    if not sales_return:
+        raise ValidationError(
+            {
+                "sales_return":
+                "Sales return is required."
+            }
+        )
+
+    locked_return = (
+        SalesReturn.objects
+        .select_for_update()
+        .filter(
+            id=sales_return.id,
+            company=company,
+        )
+        .first()
+    )
+
+    if not locked_return:
+        raise ValidationError(
+            {
+                "sales_return":
+                "Sales return does not belong "
+                "to this company."
+            }
+        )
+
+    locked_return.cancel(
+        reason=reason,
+        user=user,
+    )
+    locked_return.refresh_from_db()
+
+    return locked_return
+
+
+def serialize_sales_return_item(
+    item: SalesReturnItem,
+) -> dict[str, Any]:
+    """
+    Serialize one sales return line.
+    """
+    return {
+        "id": item.id,
+        "line_number": item.line_number,
+        "invoice_item_id": (
+            item.invoice_item_id
+        ),
+        "catalog_item_id": (
+            item.catalog_item_id
+        ),
+        "item_code": (
+            item.item_code_snapshot
+        ),
+        "item_name": (
+            item.item_name_snapshot
+        ),
+        "description": (
+            item
+            .item_description_snapshot
+        ),
+        "unit_name": (
+            item.unit_name_snapshot
+        ),
+        "quantity": str(item.quantity),
+        "unit_price": str(
+            item.unit_price
+        ),
+        "line_subtotal": str(
+            item.line_subtotal
+        ),
+        "discount_amount": str(
+            item.discount_amount
+        ),
+        "taxable": item.taxable,
+        "tax_rate": str(item.tax_rate),
+        "taxable_amount": str(
+            item.taxable_amount
+        ),
+        "tax_amount": str(
+            item.tax_amount
+        ),
+        "line_total": str(
+            item.line_total
+        ),
+        "restock": item.restock,
+        "condition_notes": (
+            item.condition_notes
+        ),
+        "notes": item.notes,
+        "extra_data": item.extra_data,
+        "created_at": (
+            item.created_at.isoformat()
+            if item.created_at
+            else None
+        ),
+        "updated_at": (
+            item.updated_at.isoformat()
+            if item.updated_at
+            else None
+        ),
+    }
+
+
+def serialize_sales_return(
+    sales_return: SalesReturn,
+    include_items: bool = False,
+) -> dict[str, Any]:
+    """
+    Serialize a sales return for company APIs.
+    """
+    data = {
+        "id": sales_return.id,
+        "company_id": (
+            sales_return.company_id
+        ),
+        "branch": (
+            {
+                "id": sales_return.branch_id,
+                "name": (
+                    sales_return
+                    .branch
+                    .display_name
+                ),
+                "code": (
+                    sales_return
+                    .branch
+                    .branch_code
+                ),
+            }
+            if sales_return.branch_id
+            else None
+        ),
+        "customer": (
+            {
+                "id": (
+                    sales_return.customer_id
+                ),
+                "display_name": (
+                    sales_return
+                    .customer
+                    .display_name
+                ),
+                "code": (
+                    sales_return
+                    .customer
+                    .code
+                ),
+                "phone": (
+                    sales_return
+                    .customer
+                    .phone
+                ),
+                "mobile": (
+                    sales_return
+                    .customer
+                    .mobile
+                ),
+                "vat_number": (
+                    sales_return
+                    .customer
+                    .vat_number
+                ),
+            }
+            if sales_return.customer_id
+            else None
+        ),
+        "invoice": {
+            "id": sales_return.invoice_id,
+            "invoice_number": (
+                sales_return
+                .invoice
+                .invoice_number
+            ),
+            "invoice_date": (
+                sales_return
+                .invoice
+                .invoice_date
+                .isoformat()
+                if (
+                    sales_return
+                    .invoice
+                    .invoice_date
+                )
+                else None
+            ),
+            "status": (
+                sales_return
+                .invoice
+                .status
+            ),
+            "payment_status": (
+                sales_return
+                .invoice
+                .payment_status
+            ),
+            "total_amount": str(
+                sales_return
+                .invoice
+                .total_amount
+            ),
+        },
+        "return_number": (
+            sales_return.return_number
+        ),
+        "status": sales_return.status,
+        "reason": sales_return.reason,
+        "reason_details": (
+            sales_return.reason_details
+        ),
+        "return_date": (
+            sales_return
+            .return_date
+            .isoformat()
+            if sales_return.return_date
+            else None
+        ),
+        "confirmed_at": (
+            sales_return
+            .confirmed_at
+            .isoformat()
+            if sales_return.confirmed_at
+            else None
+        ),
+        "posted_at": (
+            sales_return
+            .posted_at
+            .isoformat()
+            if sales_return.posted_at
+            else None
+        ),
+        "cancelled_at": (
+            sales_return
+            .cancelled_at
+            .isoformat()
+            if sales_return.cancelled_at
+            else None
+        ),
+        "cancelled_reason": (
+            sales_return
+            .cancelled_reason
+        ),
+        "subtotal": str(
+            sales_return.subtotal
+        ),
+        "discount_amount": str(
+            sales_return.discount_amount
+        ),
+        "taxable_amount": str(
+            sales_return.taxable_amount
+        ),
+        "tax_amount": str(
+            sales_return.tax_amount
+        ),
+        "total_amount": str(
+            sales_return.total_amount
+        ),
+        "currency_code": (
+            sales_return.currency_code
+        ),
+        "customer_snapshot": (
+            sales_return
+            .customer_snapshot
+        ),
+        "invoice_snapshot": (
+            sales_return
+            .invoice_snapshot
+        ),
+        "tax_snapshot": (
+            sales_return.tax_snapshot
+        ),
+        "public_notes": (
+            sales_return.public_notes
+        ),
+        "internal_notes": (
+            sales_return.internal_notes
+        ),
+        "extra_data": (
+            sales_return.extra_data
+        ),
+        "can_be_edited": (
+            sales_return.can_be_edited
+        ),
+        "can_be_confirmed": (
+            sales_return
+            .can_be_confirmed
+        ),
+        "can_be_posted": (
+            sales_return.can_be_posted
+        ),
+        "can_be_cancelled": (
+            sales_return
+            .can_be_cancelled
+        ),
+        "created_at": (
+            sales_return
+            .created_at
+            .isoformat()
+            if sales_return.created_at
+            else None
+        ),
+        "updated_at": (
+            sales_return
+            .updated_at
+            .isoformat()
+            if sales_return.updated_at
+            else None
+        ),
+    }
+
+    if include_items:
+        data["items"] = [
+            serialize_sales_return_item(
+                item
+            )
+            for item in (
+                sales_return.items
+                .select_related(
+                    "invoice_item",
+                    "catalog_item",
+                )
+                .order_by(
+                    "line_number",
+                    "id",
+                )
+            )
+        ]
+
+    return data
+
+
+def serialize_invoice_return_summary(
+    invoice: SalesInvoice,
+) -> dict[str, Any]:
+    """
+    Serialize return progress for one sales invoice.
+    """
+    invoice_items = list(
+        invoice.items
+        .select_related(
+            "catalog_item"
+        )
+        .order_by(
+            "line_number",
+            "id",
+        )
+    )
+
+    active_returns = (
+        invoice.sales_returns
+        .exclude(
+            status=(
+                SalesReturnStatus.CANCELLED
+            )
+        )
+        .select_related(
+            "customer",
+            "branch",
+        )
+        .order_by(
+            "return_date",
+            "id",
+        )
+    )
+
+    confirmed_or_posted = (
+        active_returns.filter(
+            status__in=[
+                SalesReturnStatus.CONFIRMED,
+                SalesReturnStatus.POSTED,
+            ]
+        )
+    )
+
+    total_returned_amount = (
+        confirmed_or_posted
+        .aggregate(
+            total=models.Sum(
+                "total_amount"
+            )
+        )
+        .get("total")
+        or MONEY_ZERO
+    )
+
+    return {
+        "invoice_id": invoice.id,
+        "invoice_number": (
+            invoice.invoice_number
+        ),
+        "invoice_status": (
+            invoice.status
+        ),
+        "invoice_total_amount": str(
+            invoice.total_amount
+        ),
+        "returned_amount": str(
+            quantize_money(
+                total_returned_amount
+            )
+        ),
+        "net_amount": str(
+            max(
+                quantize_money(
+                    invoice.total_amount
+                    - total_returned_amount
+                ),
+                MONEY_ZERO,
+            )
+        ),
+        "returns_count": (
+            active_returns.count()
+        ),
+        "items": [
+            {
+                "invoice_item_id": (
+                    item.id
+                ),
+                "line_number": (
+                    item.line_number
+                ),
+                "item_name": (
+                    item.item_name_snapshot
+                ),
+                "invoiced_quantity": str(
+                    item.quantity
+                ),
+                "returned_quantity": str(
+                    item.returned_quantity
+                ),
+                "returnable_quantity": str(
+                    item.returnable_quantity
+                ),
+            }
+            for item in invoice_items
+        ],
+        "returns": [
+            serialize_sales_return(
+                sales_return,
+                include_items=True,
+            )
+            for sales_return in active_returns
+        ],
+    }
+
+
+# End Phase 21.4.2 - Sales Returns Services Foundation
 # ============================================================
 

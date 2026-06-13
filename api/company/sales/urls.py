@@ -30,4 +30,8 @@ urlpatterns = [
         "orders/",
         include("api.company.sales.orders.urls"),
     ),
+    path(
+        "returns/",
+        include("api.company.sales.returns.urls"),
+    ),
 ]

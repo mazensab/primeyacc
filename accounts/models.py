@@ -371,7 +371,11 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.orders.create_from_quotation",
         "company.sales.orders.create_invoice",
         "company.sales.orders.invoices.view",
-    ],
+            "company.sales.returns.view",
+        "company.sales.returns.create",
+        "company.sales.returns.confirm",
+        "company.sales.returns.cancel",
+],
     CompanyRole.MANAGER: [
         "company.dashboard.view",
         "company.settings.view",
@@ -525,7 +529,11 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.orders.create_from_quotation",
         "company.sales.orders.create_invoice",
         "company.sales.orders.invoices.view",
-    ],
+            "company.sales.returns.view",
+        "company.sales.returns.create",
+        "company.sales.returns.confirm",
+        "company.sales.returns.cancel",
+],
     CompanyRole.ACCOUNTANT: [
         "company.dashboard.view",
         "company.settings.view",
@@ -601,7 +609,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.quotations.view",
         "company.sales.orders.view",
         "company.sales.orders.invoices.view",
-    ],
+            "company.sales.returns.view",
+],
     CompanyRole.CASHIER: [
         "company.dashboard.view",
         "company.branches.view",
@@ -633,7 +642,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.quotations.view",
         "company.sales.orders.view",
         "company.sales.orders.invoices.view",
-    ],
+            "company.sales.returns.view",
+],
     CompanyRole.SALES: [
         "company.dashboard.view",
         "company.branches.view",
@@ -679,7 +689,11 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.orders.create_from_quotation",
         "company.sales.orders.create_invoice",
         "company.sales.orders.invoices.view",
-    ],
+            "company.sales.returns.view",
+        "company.sales.returns.create",
+        "company.sales.returns.confirm",
+        "company.sales.returns.cancel",
+],
     CompanyRole.INVENTORY: [
         "company.dashboard.view",
         "company.settings.view",
@@ -869,7 +883,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.quotations.view",
         "company.sales.orders.view",
         "company.sales.orders.invoices.view",
-    ],
+            "company.sales.returns.view",
+],
 }
 
 

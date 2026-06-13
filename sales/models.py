@@ -1200,6 +1200,42 @@ class SalesInvoiceItem(models.Model):
 
         self.line_total = quantize_money(net_amount + self.tax_amount)
 
+    @property
+    def returned_quantity(self) -> Decimal:
+        """
+        Return quantity consumed by confirmed or posted sales returns.
+
+        Draft and cancelled returns do not consume invoice quantities.
+        """
+        totals = (
+            self.sales_return_items
+            .filter(
+                sales_return__status__in=[
+                    SalesReturnStatus.CONFIRMED,
+                    SalesReturnStatus.POSTED,
+                ],
+            )
+            .aggregate(total=Sum("quantity"))
+        )
+
+        return quantize_quantity(
+            totals.get("total") or QUANTITY_ZERO
+        )
+
+    @property
+    def returnable_quantity(self) -> Decimal:
+        """
+        Return remaining quantity available for sales return.
+        """
+        remaining = quantize_quantity(
+            self.quantity - self.returned_quantity
+        )
+
+        return max(
+            remaining,
+            QUANTITY_ZERO,
+        )
+
     def apply_catalog_snapshot(self) -> None:
         """
         Copy catalog item values into snapshot fields.
@@ -3999,3 +4035,1639 @@ class SalesOrderItem(models.Model):
 # Partial and full invoicing are supported.
 # Cancelled invoices are excluded from fulfillment progress.
 # ============================================================
+
+# ============================================================
+# Phase 21.4.1 - Sales Returns Models Foundation
+# ------------------------------------------------------------
+# Company-scoped sales return header and lines.
+# Partial and full invoice returns are supported.
+# Confirmed and posted returns consume invoice quantities.
+# Draft and cancelled returns do not consume quantities.
+# Inventory, accounting, and credit notes remain in services.
+# ============================================================
+
+
+class SalesReturnStatus(models.TextChoices):
+    """
+    Sales return lifecycle.
+    """
+
+    DRAFT = "DRAFT", "Draft"
+    CONFIRMED = "CONFIRMED", "Confirmed"
+    POSTED = "POSTED", "Posted"
+    CANCELLED = "CANCELLED", "Cancelled"
+
+
+class SalesReturnReason(models.TextChoices):
+    """
+    Standard sales return reasons.
+    """
+
+    CUSTOMER_REQUEST = (
+        "CUSTOMER_REQUEST",
+        "Customer request",
+    )
+    DAMAGED = "DAMAGED", "Damaged item"
+    DEFECTIVE = "DEFECTIVE", "Defective item"
+    WRONG_ITEM = "WRONG_ITEM", "Wrong item"
+    WRONG_QUANTITY = (
+        "WRONG_QUANTITY",
+        "Wrong quantity",
+    )
+    EXPIRED = "EXPIRED", "Expired item"
+    QUALITY_ISSUE = (
+        "QUALITY_ISSUE",
+        "Quality issue",
+    )
+    OTHER = "OTHER", "Other"
+
+
+class SalesReturn(models.Model):
+    """
+    Company-scoped sales return header.
+
+    A return references one issued sales invoice.
+
+    This model manages lifecycle, validation, snapshots, and totals only.
+    Credit notes, accounting entries, and inventory movements are created
+    through sales.services in later Phase 21.4 parts.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="sales_returns",
+        db_index=True,
+        verbose_name="Company",
+    )
+
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        related_name="sales_returns",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Branch",
+    )
+
+    customer = models.ForeignKey(
+        BusinessParty,
+        on_delete=models.SET_NULL,
+        related_name="sales_returns",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Customer",
+    )
+
+    invoice = models.ForeignKey(
+        SalesInvoice,
+        on_delete=models.PROTECT,
+        related_name="sales_returns",
+        db_index=True,
+        verbose_name="Sales invoice",
+    )
+
+    return_warehouse = models.ForeignKey(
+        "inventory.Warehouse",
+        on_delete=models.PROTECT,
+        related_name="sales_returns",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Return warehouse",
+        help_text=(
+            "Optional in draft. Used later for physical "
+            "inventory return processing."
+        ),
+    )
+
+    return_number = models.CharField(
+        max_length=60,
+        db_index=True,
+        verbose_name="Return number",
+        help_text="Unique inside the same company.",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=SalesReturnStatus.choices,
+        default=SalesReturnStatus.DRAFT,
+        db_index=True,
+        verbose_name="Status",
+    )
+
+    reason = models.CharField(
+        max_length=40,
+        choices=SalesReturnReason.choices,
+        default=SalesReturnReason.CUSTOMER_REQUEST,
+        db_index=True,
+        verbose_name="Return reason",
+    )
+
+    reason_details = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Reason details",
+    )
+
+    return_date = models.DateField(
+        default=timezone.localdate,
+        db_index=True,
+        verbose_name="Return date",
+    )
+
+    confirmed_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Confirmed at",
+    )
+
+    posted_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Posted at",
+    )
+
+    cancelled_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Cancelled at",
+    )
+
+    cancelled_reason = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Cancelled reason",
+    )
+
+    subtotal = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[
+            MinValueValidator(MONEY_ZERO)
+        ],
+        verbose_name="Subtotal",
+    )
+
+    discount_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[
+            MinValueValidator(MONEY_ZERO)
+        ],
+        verbose_name="Discount amount",
+    )
+
+    taxable_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[
+            MinValueValidator(MONEY_ZERO)
+        ],
+        verbose_name="Taxable amount",
+    )
+
+    tax_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[
+            MinValueValidator(MONEY_ZERO)
+        ],
+        verbose_name="Tax amount",
+    )
+
+    total_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[
+            MinValueValidator(MONEY_ZERO)
+        ],
+        verbose_name="Total amount",
+    )
+
+    currency_code = models.CharField(
+        max_length=10,
+        default="SAR",
+        verbose_name="Currency code",
+    )
+
+    customer_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Customer snapshot",
+    )
+
+    invoice_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Invoice snapshot",
+    )
+
+    tax_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Tax snapshot",
+    )
+
+    public_notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Public notes",
+    )
+
+    internal_notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Internal notes",
+    )
+
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_sales_returns",
+        blank=True,
+        null=True,
+        verbose_name="Created by",
+    )
+
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="updated_sales_returns",
+        blank=True,
+        null=True,
+        verbose_name="Updated by",
+    )
+
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="confirmed_sales_returns",
+        blank=True,
+        null=True,
+        verbose_name="Confirmed by",
+    )
+
+    posted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="posted_sales_returns",
+        blank=True,
+        null=True,
+        verbose_name="Posted by",
+    )
+
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="cancelled_sales_returns",
+        blank=True,
+        null=True,
+        verbose_name="Cancelled by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Sales Return"
+        verbose_name_plural = "Sales Returns"
+        ordering = [
+            "-return_date",
+            "-id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "company",
+                    "return_number",
+                ],
+                condition=~Q(return_number=""),
+                name=(
+                    "unique_sales_return_number_per_company"
+                ),
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=[
+                    "company",
+                    "status",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "reason",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "return_date",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "invoice",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "customer",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "branch",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "return_warehouse",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "created_at",
+                ]
+            ),
+            models.Index(
+                fields=["return_number"]
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.return_number or 'Draft return'}"
+            f" - {self.company.display_name}"
+        )
+
+    @property
+    def is_draft(self) -> bool:
+        return (
+            self.status
+            == SalesReturnStatus.DRAFT
+        )
+
+    @property
+    def is_confirmed(self) -> bool:
+        return (
+            self.status
+            == SalesReturnStatus.CONFIRMED
+        )
+
+    @property
+    def is_posted(self) -> bool:
+        return (
+            self.status
+            == SalesReturnStatus.POSTED
+        )
+
+    @property
+    def is_cancelled(self) -> bool:
+        return (
+            self.status
+            == SalesReturnStatus.CANCELLED
+        )
+
+    @property
+    def can_be_edited(self) -> bool:
+        return (
+            self.status
+            == SalesReturnStatus.DRAFT
+        )
+
+    @property
+    def can_be_confirmed(self) -> bool:
+        return (
+            self.status
+            == SalesReturnStatus.DRAFT
+        )
+
+    @property
+    def can_be_posted(self) -> bool:
+        return (
+            self.status
+            == SalesReturnStatus.CONFIRMED
+        )
+
+    @property
+    def can_be_cancelled(self) -> bool:
+        return self.status in [
+            SalesReturnStatus.DRAFT,
+            SalesReturnStatus.CONFIRMED,
+        ]
+
+    def clean(self) -> None:
+        """
+        Validate company isolation, invoice, dates, and totals.
+        """
+        super().clean()
+
+        self.return_number = (
+            self.return_number or ""
+        ).strip()
+        self.currency_code = (
+            self.currency_code or "SAR"
+        ).strip().upper()
+        self.reason_details = (
+            self.reason_details or ""
+        ).strip()
+        self.cancelled_reason = (
+            self.cancelled_reason or ""
+        ).strip()
+        self.public_notes = (
+            self.public_notes or ""
+        ).strip()
+        self.internal_notes = (
+            self.internal_notes or ""
+        ).strip()
+
+        self.subtotal = quantize_money(
+            self.subtotal
+        )
+        self.discount_amount = quantize_money(
+            self.discount_amount
+        )
+        self.taxable_amount = quantize_money(
+            self.taxable_amount
+        )
+        self.tax_amount = quantize_money(
+            self.tax_amount
+        )
+        self.total_amount = quantize_money(
+            self.total_amount
+        )
+
+        if self.invoice_id and self.company_id:
+            if (
+                self.invoice.company_id
+                != self.company_id
+            ):
+                raise ValidationError(
+                    {
+                        "invoice":
+                        "Sales invoice must belong "
+                        "to the same company."
+                    }
+                )
+
+            if (
+                self.invoice.status
+                != SalesInvoiceStatus.ISSUED
+            ):
+                raise ValidationError(
+                    {
+                        "invoice":
+                        "Only issued sales invoices "
+                        "can be returned."
+                    }
+                )
+
+            if (
+                self.return_date
+                and self.invoice.invoice_date
+                and self.return_date
+                < self.invoice.invoice_date
+            ):
+                raise ValidationError(
+                    {
+                        "return_date":
+                        "Return date cannot be before "
+                        "invoice date."
+                    }
+                )
+
+            if (
+                self.customer_id
+                and self.invoice.customer_id
+                and self.customer_id
+                != self.invoice.customer_id
+            ):
+                raise ValidationError(
+                    {
+                        "customer":
+                        "Return customer must match "
+                        "invoice customer."
+                    }
+                )
+
+            if (
+                self.branch_id
+                and self.invoice.branch_id
+                and self.branch_id
+                != self.invoice.branch_id
+            ):
+                raise ValidationError(
+                    {
+                        "branch":
+                        "Return branch must match "
+                        "invoice branch."
+                    }
+                )
+
+            if (
+                self.currency_code
+                != self.invoice.currency_code
+            ):
+                raise ValidationError(
+                    {
+                        "currency_code":
+                        "Return currency must match "
+                        "invoice currency."
+                    }
+                )
+
+        if self.branch_id and self.company_id:
+            if (
+                self.branch.company_id
+                != self.company_id
+            ):
+                raise ValidationError(
+                    {
+                        "branch":
+                        "Selected branch does not belong "
+                        "to this company."
+                    }
+                )
+
+        if self.customer_id and self.company_id:
+            if (
+                self.customer.company_id
+                != self.company_id
+            ):
+                raise ValidationError(
+                    {
+                        "customer":
+                        "Selected customer does not belong "
+                        "to this company."
+                    }
+                )
+
+            if self.customer.party_type not in [
+                BusinessPartyType.CUSTOMER,
+                BusinessPartyType.BOTH,
+            ]:
+                raise ValidationError(
+                    {
+                        "customer":
+                        "Selected party is not a customer."
+                    }
+                )
+
+        if (
+            self.return_warehouse_id
+            and self.company_id
+            and self.return_warehouse.company_id
+            != self.company_id
+        ):
+            raise ValidationError(
+                {
+                    "return_warehouse":
+                    "Return warehouse must belong "
+                    "to the same company."
+                }
+            )
+
+        if self.discount_amount > self.subtotal:
+            raise ValidationError(
+                {
+                    "discount_amount":
+                    "Discount cannot be greater "
+                    "than subtotal."
+                }
+            )
+
+        self.total_amount = quantize_money(
+            self.subtotal
+            - self.discount_amount
+            + self.tax_amount
+        )
+
+    def build_customer_snapshot(self) -> dict:
+        """
+        Copy the customer snapshot from the source invoice.
+        """
+        if not self.invoice_id:
+            return {}
+
+        return dict(
+            self.invoice.customer_snapshot or {}
+        )
+
+    def build_invoice_snapshot(self) -> dict:
+        """
+        Build source invoice identity and amount snapshot.
+        """
+        if not self.invoice_id:
+            return {}
+
+        return {
+            "id": self.invoice_id,
+            "invoice_number":
+                self.invoice.invoice_number,
+            "invoice_date": (
+                self.invoice.invoice_date.isoformat()
+                if self.invoice.invoice_date
+                else None
+            ),
+            "status": self.invoice.status,
+            "payment_status":
+                self.invoice.payment_status,
+            "subtotal": str(
+                self.invoice.subtotal
+            ),
+            "discount_amount": str(
+                self.invoice.discount_amount
+            ),
+            "taxable_amount": str(
+                self.invoice.taxable_amount
+            ),
+            "tax_amount": str(
+                self.invoice.tax_amount
+            ),
+            "total_amount": str(
+                self.invoice.total_amount
+            ),
+            "paid_amount": str(
+                self.invoice.paid_amount
+            ),
+            "balance_due": str(
+                self.invoice.balance_due
+            ),
+            "currency_code":
+                self.invoice.currency_code,
+        }
+
+    def refresh_snapshots(
+        self,
+        save: bool = True,
+    ) -> None:
+        """
+        Refresh snapshots from the source invoice.
+        """
+        self.customer_snapshot = (
+            self.build_customer_snapshot()
+        )
+        self.invoice_snapshot = (
+            self.build_invoice_snapshot()
+        )
+        self.tax_snapshot = (
+            dict(self.invoice.tax_snapshot or {})
+            if self.invoice_id
+            else {}
+        )
+
+        if save and self.pk:
+            self.save(
+                update_fields=[
+                    "customer_snapshot",
+                    "invoice_snapshot",
+                    "tax_snapshot",
+                    "updated_at",
+                ]
+            )
+
+    def recalculate_totals(
+        self,
+        save: bool = True,
+    ) -> None:
+        """
+        Recalculate return totals from return lines.
+        """
+        if not self.pk:
+            return
+
+        totals = self.items.aggregate(
+            subtotal=Sum("line_subtotal"),
+            discount_amount=Sum(
+                "discount_amount"
+            ),
+            taxable_amount=Sum(
+                "taxable_amount"
+            ),
+            tax_amount=Sum("tax_amount"),
+            total_amount=Sum("line_total"),
+        )
+
+        self.subtotal = quantize_money(
+            totals.get("subtotal")
+            or MONEY_ZERO
+        )
+        self.discount_amount = quantize_money(
+            totals.get("discount_amount")
+            or MONEY_ZERO
+        )
+        self.taxable_amount = quantize_money(
+            totals.get("taxable_amount")
+            or MONEY_ZERO
+        )
+        self.tax_amount = quantize_money(
+            totals.get("tax_amount")
+            or MONEY_ZERO
+        )
+        self.total_amount = quantize_money(
+            totals.get("total_amount")
+            or MONEY_ZERO
+        )
+
+        if save:
+            self.save(
+                update_fields=[
+                    "subtotal",
+                    "discount_amount",
+                    "taxable_amount",
+                    "tax_amount",
+                    "total_amount",
+                    "updated_at",
+                ]
+            )
+
+    def validate_items_for_confirmation(
+        self,
+    ) -> None:
+        """
+        Validate return lines before confirmation.
+        """
+        if (
+            not self.pk
+            or not self.items.exists()
+        ):
+            raise ValidationError(
+                {
+                    "items":
+                    "Sales return cannot be "
+                    "confirmed without items."
+                }
+            )
+
+        for item in self.items.select_related(
+            "invoice_item",
+            "invoice_item__invoice",
+            "catalog_item",
+        ):
+            item.full_clean()
+
+        self.recalculate_totals(
+            save=False
+        )
+
+        if self.total_amount <= MONEY_ZERO:
+            raise ValidationError(
+                {
+                    "total_amount":
+                    "Sales return total must "
+                    "be greater than zero."
+                }
+            )
+
+    def confirm(self, user=None) -> None:
+        """
+        Confirm a draft return.
+        """
+        if not self.can_be_confirmed:
+            raise ValidationError(
+                {
+                    "status":
+                    "Only draft sales returns "
+                    "can be confirmed."
+                }
+            )
+
+        self.validate_items_for_confirmation()
+
+        self.status = (
+            SalesReturnStatus.CONFIRMED
+        )
+        self.confirmed_at = timezone.now()
+        self.refresh_snapshots(
+            save=False
+        )
+
+        if user:
+            self.confirmed_by = user
+            self.updated_by = user
+
+        self.full_clean()
+
+        update_fields = [
+            "status",
+            "confirmed_at",
+            "subtotal",
+            "discount_amount",
+            "taxable_amount",
+            "tax_amount",
+            "total_amount",
+            "customer_snapshot",
+            "invoice_snapshot",
+            "tax_snapshot",
+            "updated_at",
+        ]
+
+        if user:
+            update_fields.extend([
+                "confirmed_by",
+                "updated_by",
+            ])
+
+        self.save(
+            update_fields=update_fields
+        )
+
+    def mark_posted(self, user=None) -> None:
+        """
+        Mark a confirmed return as posted.
+
+        Integrations must finish successfully before this method is called
+        inside the service transaction.
+        """
+        if not self.can_be_posted:
+            raise ValidationError(
+                {
+                    "status":
+                    "Only confirmed sales returns "
+                    "can be posted."
+                }
+            )
+
+        self.status = SalesReturnStatus.POSTED
+        self.posted_at = timezone.now()
+
+        if user:
+            self.posted_by = user
+            self.updated_by = user
+
+        self.full_clean()
+
+        update_fields = [
+            "status",
+            "posted_at",
+            "updated_at",
+        ]
+
+        if user:
+            update_fields.extend([
+                "posted_by",
+                "updated_by",
+            ])
+
+        self.save(
+            update_fields=update_fields
+        )
+
+    def cancel(
+        self,
+        reason: str = "",
+        user=None,
+    ) -> None:
+        """
+        Cancel a draft or confirmed return.
+
+        Posted returns require a dedicated reversal flow later.
+        """
+        if not self.can_be_cancelled:
+            raise ValidationError(
+                {
+                    "status":
+                    "Posted or already cancelled "
+                    "returns cannot be cancelled directly."
+                }
+            )
+
+        self.status = (
+            SalesReturnStatus.CANCELLED
+        )
+        self.cancelled_at = timezone.now()
+        self.cancelled_reason = (
+            reason or ""
+        ).strip()
+
+        if user:
+            self.cancelled_by = user
+            self.updated_by = user
+
+        self.full_clean()
+
+        update_fields = [
+            "status",
+            "cancelled_at",
+            "cancelled_reason",
+            "updated_at",
+        ]
+
+        if user:
+            update_fields.extend([
+                "cancelled_by",
+                "updated_by",
+            ])
+
+        self.save(
+            update_fields=update_fields
+        )
+
+
+class SalesReturnItem(models.Model):
+    """
+    One returned quantity from one sales invoice item.
+
+    Historical commercial values are copied from the invoice item.
+    """
+
+    sales_return = models.ForeignKey(
+        SalesReturn,
+        on_delete=models.CASCADE,
+        related_name="items",
+        db_index=True,
+        verbose_name="Sales return",
+    )
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="sales_return_items",
+        db_index=True,
+        verbose_name="Company",
+    )
+
+    invoice_item = models.ForeignKey(
+        SalesInvoiceItem,
+        on_delete=models.PROTECT,
+        related_name="sales_return_items",
+        db_index=True,
+        verbose_name="Source invoice item",
+    )
+
+    catalog_item = models.ForeignKey(
+        CatalogItem,
+        on_delete=models.SET_NULL,
+        related_name="sales_return_items",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Catalog item",
+    )
+
+    line_number = models.PositiveIntegerField(
+        default=1,
+        db_index=True,
+        verbose_name="Line number",
+    )
+
+    item_code_snapshot = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+        verbose_name="Item code snapshot",
+    )
+
+    item_name_snapshot = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="Item name snapshot",
+        help_text=(
+            "Automatically copied from the source "
+            "sales invoice item."
+        ),
+    )
+
+    item_description_snapshot = (
+        models.TextField(
+            blank=True,
+            default="",
+            verbose_name=(
+                "Item description snapshot"
+            ),
+        )
+    )
+
+    unit_name_snapshot = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        verbose_name="Unit name snapshot",
+    )
+
+    quantity = models.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        validators=[
+            MinValueValidator(
+                Decimal("0.0001")
+            )
+        ],
+        verbose_name="Returned quantity",
+    )
+
+    unit_price = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[
+            MinValueValidator(MONEY_ZERO)
+        ],
+        verbose_name="Unit price",
+    )
+
+    line_subtotal = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[
+            MinValueValidator(MONEY_ZERO)
+        ],
+        verbose_name="Line subtotal",
+    )
+
+    discount_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[
+            MinValueValidator(MONEY_ZERO)
+        ],
+        verbose_name="Discount amount",
+    )
+
+    taxable = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name="Taxable",
+    )
+
+    tax_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("15.00"),
+        validators=[
+            MinValueValidator(TAX_ZERO)
+        ],
+        verbose_name="Tax rate",
+    )
+
+    taxable_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[
+            MinValueValidator(MONEY_ZERO)
+        ],
+        verbose_name="Taxable amount",
+    )
+
+    tax_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[
+            MinValueValidator(MONEY_ZERO)
+        ],
+        verbose_name="Tax amount",
+    )
+
+    line_total = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[
+            MinValueValidator(MONEY_ZERO)
+        ],
+        verbose_name="Line total",
+    )
+
+    restock = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name="Restock item",
+        help_text=(
+            "Inventory services ignore service "
+            "or non-inventory catalog items."
+        ),
+    )
+
+    condition_notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Condition notes",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Internal notes",
+    )
+
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Sales Return Item"
+        verbose_name_plural = (
+            "Sales Return Items"
+        )
+        ordering = [
+            "sales_return_id",
+            "line_number",
+            "id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "sales_return",
+                    "line_number",
+                ],
+                name=(
+                    "unique_sales_return_line_number_per_return"
+                ),
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "sales_return",
+                    "invoice_item",
+                ],
+                name=(
+                    "unique_invoice_item_per_sales_return"
+                ),
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=[
+                    "company",
+                    "sales_return",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "invoice_item",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "catalog_item",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "sales_return",
+                    "line_number",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "restock",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "created_at",
+                ]
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.sales_return.return_number}"
+            f" - {self.item_name_snapshot}"
+        )
+
+    def apply_invoice_item_snapshot(
+        self,
+    ) -> None:
+        """
+        Copy historical invoice line values.
+        """
+        if not self.invoice_item_id:
+            return
+
+        source_item = self.invoice_item
+
+        self.catalog_item = (
+            source_item.catalog_item
+        )
+        self.item_code_snapshot = (
+            source_item.item_code_snapshot
+        )
+        self.item_name_snapshot = (
+            source_item.item_name_snapshot
+        )
+        self.item_description_snapshot = (
+            source_item
+            .item_description_snapshot
+        )
+        self.unit_name_snapshot = (
+            source_item.unit_name_snapshot
+        )
+        self.unit_price = quantize_money(
+            source_item.unit_price
+        )
+        self.taxable = bool(
+            source_item.taxable
+        )
+        self.tax_rate = quantize_money(
+            source_item.tax_rate
+        )
+
+    def calculate_amounts_from_invoice_item(
+        self,
+    ) -> None:
+        """
+        Calculate proportional amounts using invoice snapshots.
+        """
+        if not self.invoice_item_id:
+            return
+
+        source_item = self.invoice_item
+
+        source_quantity = quantize_quantity(
+            source_item.quantity
+        )
+
+        if source_quantity <= QUANTITY_ZERO:
+            raise ValidationError(
+                {
+                    "invoice_item":
+                    "Source invoice item has "
+                    "invalid quantity."
+                }
+            )
+
+        ratio = (
+            self.quantity
+            / source_quantity
+        )
+
+        self.line_subtotal = quantize_money(
+            source_item.line_subtotal
+            * ratio
+        )
+        self.discount_amount = quantize_money(
+            source_item.discount_amount
+            * ratio
+        )
+        self.taxable_amount = quantize_money(
+            source_item.taxable_amount
+            * ratio
+        )
+        self.tax_amount = quantize_money(
+            source_item.tax_amount
+            * ratio
+        )
+        self.line_total = quantize_money(
+            source_item.line_total
+            * ratio
+        )
+
+    def clean(self) -> None:
+        """
+        Validate isolation, invoice linkage, quantity, and totals.
+        """
+        super().clean()
+
+        self.item_code_snapshot = (
+            self.item_code_snapshot or ""
+        ).strip()
+        self.item_name_snapshot = (
+            self.item_name_snapshot or ""
+        ).strip()
+        self.item_description_snapshot = (
+            self.item_description_snapshot
+            or ""
+        ).strip()
+        self.unit_name_snapshot = (
+            self.unit_name_snapshot or ""
+        ).strip()
+        self.condition_notes = (
+            self.condition_notes or ""
+        ).strip()
+        self.notes = (
+            self.notes or ""
+        ).strip()
+
+        self.quantity = quantize_quantity(
+            self.quantity
+        )
+        self.unit_price = quantize_money(
+            self.unit_price
+        )
+        self.tax_rate = quantize_money(
+            self.tax_rate
+        )
+
+        if self.quantity <= QUANTITY_ZERO:
+            raise ValidationError(
+                {
+                    "quantity":
+                    "Returned quantity must "
+                    "be greater than zero."
+                }
+            )
+
+        if (
+            self.sales_return_id
+            and self.company_id
+            and self.sales_return.company_id
+            != self.company_id
+        ):
+            raise ValidationError(
+                {
+                    "company":
+                    "Return item company must "
+                    "match return company."
+                }
+            )
+
+        if (
+            self.sales_return_id
+            and not self.sales_return.can_be_edited
+        ):
+            existing_item = (
+                type(self).objects
+                .filter(pk=self.pk)
+                .first()
+                if self.pk
+                else None
+            )
+
+            if not existing_item:
+                raise ValidationError(
+                    {
+                        "sales_return":
+                        "Only draft sales returns "
+                        "can be modified."
+                    }
+                )
+
+            protected_fields = [
+                "invoice_item_id",
+                "catalog_item_id",
+                "line_number",
+                "quantity",
+                "restock",
+                "condition_notes",
+                "notes",
+                "extra_data",
+            ]
+
+            for field_name in protected_fields:
+                if (
+                    getattr(
+                        existing_item,
+                        field_name,
+                    )
+                    != getattr(
+                        self,
+                        field_name,
+                    )
+                ):
+                    raise ValidationError(
+                        {
+                            "sales_return":
+                            "Only draft sales returns "
+                            "can be modified."
+                        }
+                    )
+
+        if (
+            self.invoice_item_id
+            and self.company_id
+        ):
+            if (
+                self.invoice_item.company_id
+                != self.company_id
+            ):
+                raise ValidationError(
+                    {
+                        "invoice_item":
+                        "Invoice item must belong "
+                        "to the same company."
+                    }
+                )
+
+            if (
+                self.sales_return_id
+                and self.invoice_item.invoice_id
+                != self.sales_return.invoice_id
+            ):
+                raise ValidationError(
+                    {
+                        "invoice_item":
+                        "Invoice item must belong "
+                        "to the return invoice."
+                    }
+                )
+
+            if (
+                self.invoice_item.invoice.status
+                != SalesInvoiceStatus.ISSUED
+            ):
+                raise ValidationError(
+                    {
+                        "invoice_item":
+                        "Only issued invoice items "
+                        "can be returned."
+                    }
+                )
+
+            accepted_quantity = (
+                type(self).objects
+                .filter(
+                    invoice_item=(
+                        self.invoice_item
+                    ),
+                    sales_return__status__in=[
+                        SalesReturnStatus.CONFIRMED,
+                        SalesReturnStatus.POSTED,
+                    ],
+                )
+                .exclude(pk=self.pk)
+                .aggregate(
+                    total=Sum("quantity")
+                )
+                .get("total")
+                or QUANTITY_ZERO
+            )
+
+            returnable_quantity = (
+                quantize_quantity(
+                    self.invoice_item.quantity
+                    - accepted_quantity
+                )
+            )
+
+            if (
+                self.quantity
+                > returnable_quantity
+            ):
+                raise ValidationError(
+                    {
+                        "quantity":
+                        "Returned quantity cannot exceed "
+                        "the remaining invoice quantity."
+                    }
+                )
+
+        if (
+            self.catalog_item_id
+            and self.company_id
+            and self.catalog_item.company_id
+            != self.company_id
+        ):
+            raise ValidationError(
+                {
+                    "catalog_item":
+                    "Catalog item must belong "
+                    "to the same company."
+                }
+            )
+
+        if (
+            self.invoice_item_id
+            and self.catalog_item_id
+            != self.invoice_item.catalog_item_id
+        ):
+            raise ValidationError(
+                {
+                    "catalog_item":
+                    "Return catalog item must "
+                    "match invoice item."
+                }
+            )
+
+        if not self.item_name_snapshot:
+            if self.invoice_item_id:
+                self.apply_invoice_item_snapshot()
+            else:
+                raise ValidationError(
+                    {
+                        "item_name_snapshot":
+                        "Item name is required."
+                    }
+                )
+
+        self.calculate_amounts_from_invoice_item()
+
+        if (
+            self.discount_amount
+            > self.line_subtotal
+        ):
+            raise ValidationError(
+                {
+                    "discount_amount":
+                    "Discount cannot be greater "
+                    "than line subtotal."
+                }
+            )
+
+        self.line_total = quantize_money(
+            self.line_subtotal
+            - self.discount_amount
+            + self.tax_amount
+        )
+
+    def save(self, *args, **kwargs):
+        """
+        Validate and refresh return totals.
+        """
+        if (
+            self.sales_return_id
+            and not self.company_id
+        ):
+            self.company_id = (
+                self.sales_return.company_id
+            )
+
+        if self.invoice_item_id:
+            self.apply_invoice_item_snapshot()
+
+        self.full_clean()
+
+        super().save(
+            *args,
+            **kwargs,
+        )
+
+        if self.sales_return_id:
+            self.sales_return.recalculate_totals(
+                save=True
+            )
+
+    def delete(self, *args, **kwargs):
+        """
+        Delete lines only while return is draft.
+        """
+        sales_return = self.sales_return
+
+        if not sales_return.can_be_edited:
+            raise ValidationError(
+                {
+                    "sales_return":
+                    "Only draft sales returns "
+                    "can be modified."
+                }
+            )
+
+        result = super().delete(
+            *args,
+            **kwargs,
+        )
+
+        if sales_return.pk:
+            sales_return.recalculate_totals(
+                save=True
+            )
+
+        return result
+
+
+# End Phase 21.4.1 - Sales Returns Models Foundation
+# ============================================================
+
