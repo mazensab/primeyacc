@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 sales/tests.py
-# 🧠 PrimeyAcc | Sales Tests V1.4
+# 🧠 PrimeyAcc | Sales Tests V1.5
 # ------------------------------------------------------------
 # ✅ Sales invoice model tests
 # ✅ Sales invoice services tests
@@ -43,22 +43,36 @@ from sales.models import (
     SalesInvoiceItem,
     SalesInvoicePaymentStatus,
     SalesInvoiceStatus,
+    SalesOrder,
+    SalesOrderItem,
+    SalesOrderSource,
+    SalesOrderStatus,
     SalesQuotation,
     SalesQuotationItem,
     SalesQuotationStatus,
 )
 from sales.services import (
+    accept_sales_quotation,
     cancel_sales_invoice,
+    cancel_sales_order,
+    complete_sales_order,
+    confirm_sales_order,
     create_sales_invoice,
     create_sales_invoice_item,
     create_sales_quotation,
+    create_sales_order,
+    create_sales_order_from_quotation,
+    create_sales_order_item,
     generate_invoice_number,
+    generate_order_number,
     issue_sales_invoice,
     resolve_catalog_item,
     resolve_company_branch,
     resolve_customer,
     send_sales_quotation,
     serialize_sales_invoice,
+    serialize_sales_order,
+    start_processing_sales_order,
 )
 
 
@@ -79,11 +93,20 @@ SALES_OWNER_PERMISSIONS = [
     "company.sales.quotations.reject",
     "company.sales.quotations.expire",
     "company.sales.quotations.cancel",
+    "company.sales.orders.view",
+    "company.sales.orders.create",
+    "company.sales.orders.update",
+    "company.sales.orders.confirm",
+    "company.sales.orders.process",
+    "company.sales.orders.complete",
+    "company.sales.orders.cancel",
+    "company.sales.orders.create_from_quotation",
 ]
 
 SALES_VIEWER_PERMISSIONS = [
     "company.sales.invoices.view",
     "company.sales.quotations.view",
+    "company.sales.orders.view",
 ]
 
 
@@ -2366,3 +2389,1160 @@ class SalesQuotationsAPITests(SalesTestCase):
 
         self.assertEqual(response.status_code, 401)
 
+# ============================================================
+# Phase 21.2 - Sales Orders Tests
+# ============================================================
+
+
+class SalesOrderModelTests(SalesTestCase):
+    """
+    Tests for the Phase 21.2 sales order model foundation.
+    """
+
+    def _create_order(
+        self,
+        *,
+        company=None,
+        branch=None,
+        customer=None,
+        order_number="SO-MODEL-001",
+    ) -> SalesOrder:
+        selected_company = company or self.company
+
+        order = SalesOrder(
+            company=selected_company,
+            branch=(
+                branch
+                if branch is not None
+                else self.branch
+            ),
+            customer=(
+                customer
+                if customer is not None
+                else self.customer
+            ),
+            order_number=order_number,
+            order_date=timezone.localdate(),
+            currency_code="SAR",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        order.full_clean()
+        order.save()
+
+        return order
+
+    def _create_order_item(
+        self,
+        order: SalesOrder,
+        *,
+        catalog_item=None,
+        line_number=1,
+        quantity=Decimal("2.0000"),
+        unit_price=Decimal("100.00"),
+        discount_amount=Decimal("10.00"),
+        taxable=True,
+        tax_rate=Decimal("15.00"),
+    ) -> SalesOrderItem:
+        selected_item = catalog_item or self.item
+
+        item = SalesOrderItem(
+            company=order.company,
+            order=order,
+            catalog_item=selected_item,
+            line_number=line_number,
+            item_code_snapshot=selected_item.code,
+            item_name_snapshot=selected_item.name,
+            unit_name_snapshot="Piece",
+            quantity=quantity,
+            unit_price=unit_price,
+            discount_amount=discount_amount,
+            taxable=taxable,
+            tax_rate=tax_rate,
+        )
+
+        item.full_clean()
+        item.save()
+
+        return item
+
+    def test_sales_order_defaults_to_draft(self):
+        order = self._create_order()
+
+        self.assertEqual(
+            order.status,
+            SalesOrderStatus.DRAFT,
+        )
+        self.assertTrue(order.can_be_edited)
+        self.assertTrue(order.can_be_confirmed)
+        self.assertFalse(order.can_start_processing)
+        self.assertFalse(order.can_be_completed)
+
+    def test_sales_order_validates_branch_company(self):
+        order = SalesOrder(
+            company=self.company,
+            branch=self.other_branch,
+            customer=self.customer,
+            order_number="SO-INVALID-BRANCH",
+            order_date=timezone.localdate(),
+        )
+
+        with self.assertRaises(ValidationError):
+            order.full_clean()
+
+    def test_sales_order_validates_customer_company(self):
+        order = SalesOrder(
+            company=self.company,
+            branch=self.branch,
+            customer=self.other_customer,
+            order_number="SO-INVALID-CUSTOMER",
+            order_date=timezone.localdate(),
+        )
+
+        with self.assertRaises(ValidationError):
+            order.full_clean()
+
+    def test_sales_order_rejects_supplier_as_customer(self):
+        order = SalesOrder(
+            company=self.company,
+            branch=self.branch,
+            customer=self.supplier,
+            order_number="SO-INVALID-SUPPLIER",
+            order_date=timezone.localdate(),
+        )
+
+        with self.assertRaises(ValidationError):
+            order.full_clean()
+
+    def test_sales_order_rejects_invalid_delivery_date(self):
+        order = SalesOrder(
+            company=self.company,
+            branch=self.branch,
+            customer=self.customer,
+            order_number="SO-INVALID-DATE",
+            order_date=timezone.localdate(),
+            expected_delivery_date=(
+                timezone.localdate()
+                - timedelta(days=1)
+            ),
+        )
+
+        with self.assertRaises(ValidationError):
+            order.full_clean()
+
+    def test_sales_order_item_calculates_totals(self):
+        order = self._create_order()
+        item = self._create_order_item(order)
+
+        item.refresh_from_db()
+        order.refresh_from_db()
+
+        self.assertEqual(
+            item.line_subtotal,
+            Decimal("200.00"),
+        )
+        self.assertEqual(
+            item.taxable_amount,
+            Decimal("190.00"),
+        )
+        self.assertEqual(
+            item.tax_amount,
+            Decimal("28.50"),
+        )
+        self.assertEqual(
+            item.line_total,
+            Decimal("218.50"),
+        )
+
+        self.assertEqual(
+            order.subtotal,
+            Decimal("200.00"),
+        )
+        self.assertEqual(
+            order.discount_amount,
+            Decimal("10.00"),
+        )
+        self.assertEqual(
+            order.taxable_amount,
+            Decimal("190.00"),
+        )
+        self.assertEqual(
+            order.tax_amount,
+            Decimal("28.50"),
+        )
+        self.assertEqual(
+            order.total_amount,
+            Decimal("218.50"),
+        )
+
+    def test_sales_order_item_rejects_other_company_item(self):
+        order = self._create_order()
+
+        item = SalesOrderItem(
+            company=self.company,
+            order=order,
+            catalog_item=self.other_item,
+            line_number=1,
+            item_code_snapshot=self.other_item.code,
+            item_name_snapshot=self.other_item.name,
+            quantity=Decimal("1.0000"),
+            unit_price=Decimal("200.00"),
+        )
+
+        with self.assertRaises(ValidationError):
+            item.full_clean()
+
+    def test_confirmed_order_items_cannot_be_modified(self):
+        order = self._create_order(
+            order_number="SO-LOCKED-001",
+        )
+        item = self._create_order_item(order)
+
+        order.confirm(user=self.user)
+        order.refresh_from_db()
+
+        item.quantity = Decimal("3.0000")
+
+        with self.assertRaises(ValidationError):
+            item.full_clean()
+
+    def test_confirmed_order_items_cannot_be_deleted(self):
+        order = self._create_order(
+            order_number="SO-LOCKED-DELETE",
+        )
+        item = self._create_order_item(order)
+
+        order.confirm(user=self.user)
+        order.refresh_from_db()
+
+        with self.assertRaises(ValidationError):
+            item.delete()
+
+    def test_sales_order_lifecycle(self):
+        order = self._create_order(
+            order_number="SO-LIFECYCLE-001",
+        )
+        self._create_order_item(order)
+
+        order.confirm(user=self.user)
+        order.refresh_from_db()
+
+        self.assertEqual(
+            order.status,
+            SalesOrderStatus.CONFIRMED,
+        )
+        self.assertEqual(
+            order.confirmed_by,
+            self.user,
+        )
+        self.assertIsNotNone(order.confirmed_at)
+
+        order.start_processing(user=self.user)
+        order.refresh_from_db()
+
+        self.assertEqual(
+            order.status,
+            SalesOrderStatus.PROCESSING,
+        )
+        self.assertEqual(
+            order.processing_by,
+            self.user,
+        )
+        self.assertIsNotNone(order.processing_at)
+
+        order.complete(user=self.user)
+        order.refresh_from_db()
+
+        self.assertEqual(
+            order.status,
+            SalesOrderStatus.COMPLETED,
+        )
+        self.assertEqual(
+            order.completed_by,
+            self.user,
+        )
+        self.assertIsNotNone(order.completed_at)
+
+    def test_cancel_completed_order_is_rejected(self):
+        order = self._create_order(
+            order_number="SO-COMPLETE-CANCEL",
+        )
+        self._create_order_item(order)
+
+        order.confirm(user=self.user)
+        order.start_processing(user=self.user)
+        order.complete(user=self.user)
+
+        with self.assertRaises(ValidationError):
+            order.cancel(
+                reason="Invalid cancellation",
+                user=self.user,
+            )
+
+
+class SalesOrderServicesTests(SalesTestCase):
+    """
+    Tests for Phase 21.2 sales order services.
+    """
+
+    def _create_accepted_quotation(
+        self,
+    ) -> SalesQuotation:
+        quotation = create_sales_quotation(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            valid_until=(
+                timezone.localdate()
+                + timedelta(days=7)
+            ),
+            items=[
+                {
+                    "catalog_item_id": self.item.id,
+                    "quantity": "2",
+                    "discount_amount": "10.00",
+                },
+                {
+                    "catalog_item_id": self.service.id,
+                    "quantity": "1",
+                    "unit_price": "250.00",
+                },
+            ],
+            public_notes="Quotation public note",
+            internal_notes="Quotation internal note",
+        )
+
+        send_sales_quotation(
+            company=self.company,
+            quotation=quotation,
+            user=self.user,
+        )
+
+        accept_sales_quotation(
+            company=self.company,
+            quotation=quotation,
+            user=self.user,
+        )
+
+        quotation.refresh_from_db()
+
+        return quotation
+
+    def test_generate_order_number_uses_year(self):
+        order_number = generate_order_number(
+            self.company,
+            order_date=timezone.localdate(),
+        )
+
+        self.assertTrue(
+            order_number.startswith(
+                f"SO-{timezone.localdate().year}-"
+            )
+        )
+        self.assertTrue(
+            order_number.endswith("000001")
+        )
+
+    def test_create_manual_sales_order_with_items(self):
+        order = create_sales_order(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            expected_delivery_date=(
+                timezone.localdate()
+                + timedelta(days=3)
+            ),
+            items=[
+                {
+                    "catalog_item_id": self.item.id,
+                    "quantity": "2",
+                    "discount_amount": "10.00",
+                },
+                {
+                    "catalog_item_id": self.service.id,
+                    "quantity": "1",
+                    "unit_price": "250.00",
+                },
+            ],
+            public_notes="Order note",
+        )
+
+        order.refresh_from_db()
+
+        self.assertEqual(
+            order.company,
+            self.company,
+        )
+        self.assertEqual(
+            order.branch,
+            self.branch,
+        )
+        self.assertEqual(
+            order.customer,
+            self.customer,
+        )
+        self.assertEqual(
+            order.status,
+            SalesOrderStatus.DRAFT,
+        )
+        self.assertEqual(
+            order.source,
+            SalesOrderSource.MANUAL,
+        )
+        self.assertEqual(order.items.count(), 2)
+        self.assertEqual(
+            order.subtotal,
+            Decimal("450.00"),
+        )
+        self.assertEqual(
+            order.discount_amount,
+            Decimal("10.00"),
+        )
+        self.assertEqual(
+            order.tax_amount,
+            Decimal("66.00"),
+        )
+        self.assertEqual(
+            order.total_amount,
+            Decimal("506.00"),
+        )
+        self.assertEqual(
+            order.public_notes,
+            "Order note",
+        )
+
+    def test_create_sales_order_rejects_invalid_date(self):
+        with self.assertRaises(ValidationError):
+            create_sales_order(
+                company=self.company,
+                user=self.user,
+                customer_id=self.customer.id,
+                order_date=timezone.localdate(),
+                expected_delivery_date=(
+                    timezone.localdate()
+                    - timedelta(days=1)
+                ),
+                items=[
+                    {
+                        "catalog_item_id":
+                            self.item.id,
+                        "quantity": "1",
+                    }
+                ],
+            )
+
+    def test_create_sales_order_from_accepted_quotation(self):
+        quotation = self._create_accepted_quotation()
+
+        order = create_sales_order_from_quotation(
+            company=self.company,
+            quotation=quotation,
+            user=self.user,
+            expected_delivery_date=(
+                timezone.localdate()
+                + timedelta(days=5)
+            ),
+        )
+
+        order.refresh_from_db()
+
+        self.assertEqual(
+            order.source,
+            SalesOrderSource.QUOTATION,
+        )
+        self.assertEqual(
+            order.source_quotation,
+            quotation,
+        )
+        self.assertEqual(
+            order.customer,
+            quotation.customer,
+        )
+        self.assertEqual(
+            order.branch,
+            quotation.branch,
+        )
+        self.assertEqual(order.items.count(), 2)
+        self.assertEqual(
+            order.total_amount,
+            quotation.total_amount,
+        )
+        self.assertEqual(
+            order.public_notes,
+            quotation.public_notes,
+        )
+        self.assertEqual(
+            order.internal_notes,
+            quotation.internal_notes,
+        )
+        self.assertEqual(
+            order.quotation_snapshot[
+                "quotation_number"
+            ],
+            quotation.quotation_number,
+        )
+
+        first_item = order.items.order_by(
+            "line_number"
+        ).first()
+
+        self.assertIsNotNone(
+            first_item.source_quotation_item_id
+        )
+
+    def test_create_order_from_nonaccepted_quotation_rejected(
+        self,
+    ):
+        quotation = create_sales_quotation(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            items=[
+                {
+                    "catalog_item_id": self.item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        with self.assertRaises(ValidationError):
+            create_sales_order_from_quotation(
+                company=self.company,
+                quotation=quotation,
+                user=self.user,
+            )
+
+    def test_quotation_cannot_create_two_orders(self):
+        quotation = self._create_accepted_quotation()
+
+        create_sales_order_from_quotation(
+            company=self.company,
+            quotation=quotation,
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            create_sales_order_from_quotation(
+                company=self.company,
+                quotation=quotation,
+                user=self.user,
+            )
+
+    def test_order_services_lifecycle(self):
+        order = create_sales_order(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            items=[
+                {
+                    "catalog_item_id": self.item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        order = confirm_sales_order(
+            company=self.company,
+            order=order,
+            user=self.user,
+        )
+
+        self.assertEqual(
+            order.status,
+            SalesOrderStatus.CONFIRMED,
+        )
+
+        order = start_processing_sales_order(
+            company=self.company,
+            order=order,
+            user=self.user,
+        )
+
+        self.assertEqual(
+            order.status,
+            SalesOrderStatus.PROCESSING,
+        )
+
+        order = complete_sales_order(
+            company=self.company,
+            order=order,
+            user=self.user,
+        )
+
+        self.assertEqual(
+            order.status,
+            SalesOrderStatus.COMPLETED,
+        )
+
+    def test_cancel_sales_order_service(self):
+        order = create_sales_order(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            items=[
+                {
+                    "catalog_item_id": self.item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        order = cancel_sales_order(
+            company=self.company,
+            order=order,
+            reason="Customer cancelled order",
+            user=self.user,
+        )
+
+        self.assertEqual(
+            order.status,
+            SalesOrderStatus.CANCELLED,
+        )
+        self.assertEqual(
+            order.cancelled_reason,
+            "Customer cancelled order",
+        )
+        self.assertEqual(
+            order.cancelled_by,
+            self.user,
+        )
+
+    def test_serialize_sales_order_with_items(self):
+        order = create_sales_order(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            items=[
+                {
+                    "catalog_item_id": self.item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        data = serialize_sales_order(
+            order,
+            include_items=True,
+        )
+
+        self.assertEqual(data["id"], order.id)
+        self.assertEqual(
+            data["company_id"],
+            self.company.id,
+        )
+        self.assertEqual(
+            data["customer"]["display_name"],
+            "Customer One",
+        )
+        self.assertEqual(len(data["items"]), 1)
+        self.assertEqual(
+            data["items"][0]["item_name"],
+            "Sales Item",
+        )
+        self.assertEqual(
+            data["total_amount"],
+            "115.00",
+        )
+
+
+class SalesOrdersAPITests(SalesTestCase):
+    """
+    Tests for company sales order API endpoints.
+    """
+
+    def _create_order_for_api(
+        self,
+        *,
+        company=None,
+        user=None,
+        customer=None,
+        catalog_item=None,
+    ) -> SalesOrder:
+        selected_company = company or self.company
+        selected_user = user or self.user
+        selected_customer = customer or self.customer
+        selected_item = catalog_item or self.item
+
+        return create_sales_order(
+            company=selected_company,
+            user=selected_user,
+            customer_id=selected_customer.id,
+            items=[
+                {
+                    "catalog_item_id":
+                        selected_item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+    def _create_accepted_quotation_for_api(
+        self,
+    ) -> SalesQuotation:
+        quotation = create_sales_quotation(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            valid_until=(
+                timezone.localdate()
+                + timedelta(days=7)
+            ),
+            items=[
+                {
+                    "catalog_item_id": self.item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        send_sales_quotation(
+            company=self.company,
+            quotation=quotation,
+            user=self.user,
+        )
+
+        accept_sales_quotation(
+            company=self.company,
+            quotation=quotation,
+            user=self.user,
+        )
+
+        return quotation
+
+    def test_orders_list_returns_current_company_only(self):
+        current_order = self._create_order_for_api()
+
+        other_order = self._create_order_for_api(
+            company=self.other_company,
+            user=self.other_user,
+            customer=self.other_customer,
+            catalog_item=self.other_item,
+        )
+
+        response = self.client.get(
+            "/api/company/sales/orders/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(
+            payload["results"][0]["id"],
+            current_order.id,
+        )
+        self.assertNotEqual(
+            payload["results"][0]["id"],
+            other_order.id,
+        )
+
+    def test_orders_list_supports_search(self):
+        order = self._create_order_for_api()
+
+        response = self.client.get(
+            "/api/company/sales/orders/",
+            {
+                "q": order.order_number,
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(
+            payload["results"][0]["id"],
+            order.id,
+        )
+
+    def test_order_create_endpoint_creates_draft(self):
+        response = self.client.post(
+            "/api/company/sales/orders/create/",
+            data={
+                "customer_id": self.customer.id,
+                "expected_delivery_date": str(
+                    timezone.localdate()
+                    + timedelta(days=5)
+                ),
+                "public_notes": "API order",
+                "items": [
+                    {
+                        "catalog_item_id": self.item.id,
+                        "quantity": "2",
+                        "discount_amount": "10.00",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(
+            payload["order"]["status"],
+            SalesOrderStatus.DRAFT,
+        )
+        self.assertEqual(
+            payload["order"]["total_amount"],
+            "218.50",
+        )
+        self.assertEqual(
+            len(payload["order"]["items"]),
+            1,
+        )
+
+    def test_order_create_endpoint_can_confirm_now(self):
+        response = self.client.post(
+            "/api/company/sales/orders/create/",
+            data={
+                "customer_id": self.customer.id,
+                "confirm_now": True,
+                "items": [
+                    {
+                        "catalog_item_id": self.item.id,
+                        "quantity": "1",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+            response.content,
+        )
+
+        self.assertEqual(
+            response.json()["order"]["status"],
+            SalesOrderStatus.CONFIRMED,
+        )
+
+    def test_order_create_rejects_cross_company_item(self):
+        response = self.client.post(
+            "/api/company/sales/orders/create/",
+            data={
+                "customer_id": self.customer.id,
+                "items": [
+                    {
+                        "catalog_item_id":
+                            self.other_item.id,
+                        "quantity": "1",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(
+            response.json()["success"]
+        )
+
+    def test_order_detail_returns_items(self):
+        order = self._create_order_for_api()
+
+        response = self.client.get(
+            f"/api/company/sales/orders/{order.id}/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(
+            payload["order"]["id"],
+            order.id,
+        )
+        self.assertEqual(
+            len(payload["order"]["items"]),
+            1,
+        )
+
+    def test_order_detail_blocks_cross_company_access(self):
+        other_order = self._create_order_for_api(
+            company=self.other_company,
+            user=self.other_user,
+            customer=self.other_customer,
+            catalog_item=self.other_item,
+        )
+
+        response = self.client.get(
+            f"/api/company/sales/orders/"
+            f"{other_order.id}/"
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_order_update_endpoint_updates_draft(self):
+        order = self._create_order_for_api()
+
+        response = self.client.patch(
+            f"/api/company/sales/orders/"
+            f"{order.id}/update/",
+            data={
+                "public_notes": "Updated order",
+                "items": [
+                    {
+                        "catalog_item_id":
+                            self.service.id,
+                        "quantity": "1",
+                        "unit_price": "300.00",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        order.refresh_from_db()
+
+        self.assertEqual(
+            order.public_notes,
+            "Updated order",
+        )
+        self.assertEqual(order.items.count(), 1)
+        self.assertEqual(
+            order.total_amount,
+            Decimal("345.00"),
+        )
+
+    def test_order_update_rejects_confirmed_order(self):
+        order = self._create_order_for_api()
+
+        confirm_sales_order(
+            company=self.company,
+            order=order,
+            user=self.user,
+        )
+
+        response = self.client.patch(
+            f"/api/company/sales/orders/"
+            f"{order.id}/update/",
+            data={
+                "public_notes": "Invalid update",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_order_from_quotation_endpoint(self):
+        quotation = (
+            self._create_accepted_quotation_for_api()
+        )
+
+        response = self.client.post(
+            "/api/company/sales/orders/"
+            f"from-quotation/{quotation.id}/",
+            data={
+                "confirm_now": True,
+                "expected_delivery_date": str(
+                    timezone.localdate()
+                    + timedelta(days=4)
+                ),
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(
+            payload["order"]["status"],
+            SalesOrderStatus.CONFIRMED,
+        )
+        self.assertEqual(
+            payload["order"]["source"],
+            SalesOrderSource.QUOTATION,
+        )
+        self.assertEqual(
+            payload["order"]["source_quotation"][
+                "id"
+            ],
+            quotation.id,
+        )
+
+    def test_create_order_from_quotation_rejects_duplicate(
+        self,
+    ):
+        quotation = (
+            self._create_accepted_quotation_for_api()
+        )
+
+        first_response = self.client.post(
+            "/api/company/sales/orders/"
+            f"from-quotation/{quotation.id}/",
+            data={},
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            first_response.status_code,
+            201,
+            first_response.content,
+        )
+
+        second_response = self.client.post(
+            "/api/company/sales/orders/"
+            f"from-quotation/{quotation.id}/",
+            data={},
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            second_response.status_code,
+            400,
+        )
+
+    def test_order_lifecycle_endpoints(self):
+        order = self._create_order_for_api()
+
+        confirm_response = self.client.post(
+            f"/api/company/sales/orders/"
+            f"{order.id}/confirm/"
+        )
+
+        self.assertEqual(
+            confirm_response.status_code,
+            200,
+            confirm_response.content,
+        )
+
+        process_response = self.client.post(
+            f"/api/company/sales/orders/"
+            f"{order.id}/process/"
+        )
+
+        self.assertEqual(
+            process_response.status_code,
+            200,
+            process_response.content,
+        )
+
+        complete_response = self.client.post(
+            f"/api/company/sales/orders/"
+            f"{order.id}/complete/"
+        )
+
+        self.assertEqual(
+            complete_response.status_code,
+            200,
+            complete_response.content,
+        )
+
+        order.refresh_from_db()
+
+        self.assertEqual(
+            order.status,
+            SalesOrderStatus.COMPLETED,
+        )
+
+    def test_order_cancel_endpoint(self):
+        order = self._create_order_for_api()
+
+        response = self.client.post(
+            f"/api/company/sales/orders/"
+            f"{order.id}/cancel/",
+            data={
+                "reason": "Customer cancelled",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        order.refresh_from_db()
+
+        self.assertEqual(
+            order.status,
+            SalesOrderStatus.CANCELLED,
+        )
+        self.assertEqual(
+            order.cancelled_reason,
+            "Customer cancelled",
+        )
+
+    def test_viewer_can_list_but_cannot_create_order(self):
+        self.client.force_login(self.viewer_user)
+
+        list_response = self.client.get(
+            "/api/company/sales/orders/"
+        )
+
+        self.assertEqual(
+            list_response.status_code,
+            200,
+            list_response.content,
+        )
+
+        create_response = self.client.post(
+            "/api/company/sales/orders/create/",
+            data={
+                "customer_id": self.customer.id,
+                "items": [
+                    {
+                        "catalog_item_id":
+                            self.item.id,
+                        "quantity": "1",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            create_response.status_code,
+            403,
+            create_response.content,
+        )
+
+    def test_unauthenticated_user_cannot_list_orders(self):
+        self.client.logout()
+
+        response = self.client.get(
+            "/api/company/sales/orders/"
+        )
+
+        self.assertEqual(response.status_code, 401)
+
+
+# End Phase 21.2 - Sales Orders Tests
+# ============================================================

@@ -1,6 +1,6 @@
-# ============================================================
+﻿# ============================================================
 # 📂 sales/services.py
-# 🧠 PrimeyAcc | Sales Services V1.3
+# 🧠 PrimeyAcc | Sales Services V1.4
 # ------------------------------------------------------------
 # ✅ Company-scoped invoice helpers
 # ✅ Invoice number generation
@@ -52,6 +52,10 @@ from sales.models import (
     SalesInvoiceItem,
     SalesInvoiceSource,
     SalesInvoiceStatus,
+    SalesOrder,
+    SalesOrderItem,
+    SalesOrderSource,
+    SalesOrderStatus,
     SalesQuotation,
     SalesQuotationItem,
     SalesQuotationSource,
@@ -1451,3 +1455,825 @@ def serialize_sales_quotation(
         ]
 
     return data
+
+# ============================================================
+# Phase 21.2 - Sales Orders Services Foundation
+# ============================================================
+
+
+def generate_order_number(
+    company: Company,
+    order_date=None,
+) -> str:
+    """
+    Generate a company-scoped sales order number.
+
+    Format:
+        SO-YYYY-000001
+    """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    normalized_date = normalize_invoice_date(
+        order_date,
+        field_name="order_date",
+        default_today=True,
+    )
+
+    year = normalized_date.year
+    prefix = "SO"
+    starts_with = f"{prefix}-{year}-"
+
+    last_order = (
+        SalesOrder.objects.filter(
+            company=company,
+            order_number__startswith=starts_with,
+        )
+        .order_by("-order_number", "-id")
+        .first()
+    )
+
+    next_number = 1
+
+    if last_order and last_order.order_number:
+        try:
+            next_number = (
+                int(
+                    last_order.order_number
+                    .split("-")[-1]
+                )
+                + 1
+            )
+        except (TypeError, ValueError):
+            next_number = last_order.id + 1
+
+    return f"{starts_with}{next_number:06d}"
+
+
+@transaction.atomic
+def create_sales_order(
+    *,
+    company: Company,
+    user=None,
+    branch_id: int | str | None = None,
+    customer_id: int | str | None = None,
+    order_date=None,
+    expected_delivery_date=None,
+    source: str = SalesOrderSource.MANUAL,
+    public_notes: str = "",
+    internal_notes: str = "",
+    items: list[dict[str, Any]] | None = None,
+    extra_data: dict[str, Any] | None = None,
+) -> SalesOrder:
+    """
+    Create a company-scoped draft sales order manually.
+
+    The order does not create accounting entries or inventory movements.
+    """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    normalized_order_date = normalize_invoice_date(
+        order_date,
+        field_name="order_date",
+        default_today=True,
+    )
+
+    normalized_delivery_date = normalize_invoice_date(
+        expected_delivery_date,
+        field_name="expected_delivery_date",
+        default_today=False,
+    )
+
+    if (
+        normalized_delivery_date
+        and normalized_delivery_date < normalized_order_date
+    ):
+        raise ValidationError(
+            {
+                "expected_delivery_date":
+                "Expected delivery date cannot be before order date."
+            }
+        )
+
+    branch = resolve_company_branch(
+        company,
+        branch_id,
+    )
+
+    customer = resolve_customer(
+        company,
+        customer_id,
+    )
+
+    actor = (
+        user
+        if getattr(user, "is_authenticated", False)
+        else None
+    )
+
+    order = SalesOrder(
+        company=company,
+        branch=branch,
+        customer=customer,
+        order_number=generate_order_number(
+            company,
+            order_date=normalized_order_date,
+        ),
+        status=SalesOrderStatus.DRAFT,
+        source=source or SalesOrderSource.MANUAL,
+        order_date=normalized_order_date,
+        expected_delivery_date=normalized_delivery_date,
+        public_notes=normalize_text(public_notes),
+        internal_notes=normalize_text(internal_notes),
+        currency_code=(
+            normalize_text(company.currency_code)
+            or "SAR"
+        ),
+        extra_data=extra_data or {},
+        created_by=actor,
+        updated_by=actor,
+    )
+
+    order.full_clean()
+    order.save()
+    order.refresh_snapshots(save=True)
+
+    for index, item_payload in enumerate(
+        items or [],
+        start=1,
+    ):
+        create_sales_order_item(
+            order=order,
+            company=company,
+            payload=item_payload,
+            line_number=index,
+        )
+
+    order.recalculate_totals(save=True)
+    order.refresh_from_db()
+
+    return order
+
+
+@transaction.atomic
+def create_sales_order_item(
+    *,
+    order: SalesOrder,
+    company: Company,
+    payload: dict[str, Any],
+    line_number: int | None = None,
+) -> SalesOrderItem:
+    """
+    Create one sales order line and refresh order totals.
+    """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    if not order:
+        raise ValidationError(
+            {"order": "Sales order is required."}
+        )
+
+    if order.company_id != company.id:
+        raise ValidationError(
+            {
+                "company":
+                "Sales order does not belong to this company."
+            }
+        )
+
+    if order.status != SalesOrderStatus.DRAFT:
+        raise ValidationError(
+            {
+                "order":
+                "Only draft sales orders can be edited."
+            }
+        )
+
+    normalized = normalize_invoice_item_payload(payload)
+
+    if normalized.quantity <= Decimal("0.0000"):
+        raise ValidationError(
+            {"quantity": "Quantity must be greater than zero."}
+        )
+
+    catalog_item = resolve_catalog_item(
+        company,
+        normalized.catalog_item_id,
+    )
+
+    if not catalog_item and not normalized.item_name:
+        raise ValidationError(
+            {
+                "item_name":
+                "Item name is required when no catalog item is selected."
+            }
+        )
+
+    if line_number is None:
+        last_line = (
+            SalesOrderItem.objects.filter(
+                order=order,
+            )
+            .order_by("-line_number")
+            .first()
+        )
+
+        line_number = (
+            last_line.line_number + 1
+            if last_line
+            else 1
+        )
+
+    item = SalesOrderItem(
+        order=order,
+        company=company,
+        catalog_item=catalog_item,
+        line_number=line_number,
+        quantity=normalized.quantity,
+        discount_amount=normalized.discount_amount,
+        notes=normalized.description,
+    )
+
+    if catalog_item:
+        item.apply_catalog_snapshot()
+
+    if normalized.item_name:
+        item.item_name_snapshot = normalized.item_name
+
+    if normalized.description:
+        item.item_description_snapshot = (
+            normalized.description
+        )
+
+    if normalized.unit_price is not None:
+        item.unit_price = normalized.unit_price
+
+    if normalized.taxable is not None:
+        item.taxable = bool(normalized.taxable)
+
+    if normalized.tax_rate is not None:
+        item.tax_rate = normalized.tax_rate
+
+    item.full_clean()
+    item.save()
+
+    order.recalculate_totals(save=True)
+
+    return item
+
+
+@transaction.atomic
+def create_sales_order_from_quotation(
+    *,
+    company: Company,
+    quotation: SalesQuotation,
+    user=None,
+    order_date=None,
+    expected_delivery_date=None,
+    public_notes: str | None = None,
+    internal_notes: str | None = None,
+    extra_data: dict[str, Any] | None = None,
+) -> SalesOrder:
+    """
+    Create one draft sales order from an accepted quotation.
+
+    Rules:
+    - quotation must belong to the current company
+    - quotation must be accepted
+    - quotation must contain lines
+    - one quotation can create only one sales order
+    - customer, branch, prices, taxes, and snapshots are copied safely
+    """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    if not quotation:
+        raise ValidationError(
+            {"quotation": "Sales quotation is required."}
+        )
+
+    quotation = (
+        SalesQuotation.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "branch",
+            "customer",
+        )
+        .filter(
+            id=quotation.id,
+            company=company,
+        )
+        .first()
+    )
+
+    if not quotation:
+        raise ValidationError(
+            {
+                "quotation":
+                "Quotation does not belong to this company."
+            }
+        )
+
+    if quotation.status != SalesQuotationStatus.ACCEPTED:
+        raise ValidationError(
+            {
+                "quotation":
+                "Only accepted quotations can create sales orders."
+            }
+        )
+
+    if not quotation.customer_id:
+        raise ValidationError(
+            {
+                "customer":
+                "Accepted quotation must have a customer."
+            }
+        )
+
+    if not quotation.items.exists():
+        raise ValidationError(
+            {
+                "items":
+                "Quotation cannot be converted without items."
+            }
+        )
+
+    if SalesOrder.objects.filter(
+        source_quotation=quotation,
+    ).exists():
+        raise ValidationError(
+            {
+                "quotation":
+                "This quotation has already been converted to a sales order."
+            }
+        )
+
+    normalized_order_date = normalize_invoice_date(
+        order_date,
+        field_name="order_date",
+        default_today=True,
+    )
+
+    normalized_delivery_date = normalize_invoice_date(
+        expected_delivery_date,
+        field_name="expected_delivery_date",
+        default_today=False,
+    )
+
+    if (
+        normalized_delivery_date
+        and normalized_delivery_date < normalized_order_date
+    ):
+        raise ValidationError(
+            {
+                "expected_delivery_date":
+                "Expected delivery date cannot be before order date."
+            }
+        )
+
+    actor = (
+        user
+        if getattr(user, "is_authenticated", False)
+        else None
+    )
+
+    order = SalesOrder(
+        company=company,
+        branch=quotation.branch,
+        customer=quotation.customer,
+        source_quotation=quotation,
+        order_number=generate_order_number(
+            company,
+            order_date=normalized_order_date,
+        ),
+        status=SalesOrderStatus.DRAFT,
+        source=SalesOrderSource.QUOTATION,
+        order_date=normalized_order_date,
+        expected_delivery_date=normalized_delivery_date,
+        public_notes=(
+            normalize_text(public_notes)
+            if public_notes is not None
+            else quotation.public_notes
+        ),
+        internal_notes=(
+            normalize_text(internal_notes)
+            if internal_notes is not None
+            else quotation.internal_notes
+        ),
+        currency_code=(
+            normalize_text(quotation.currency_code)
+            or normalize_text(company.currency_code)
+            or "SAR"
+        ),
+        extra_data=extra_data or {},
+        created_by=actor,
+        updated_by=actor,
+    )
+
+    order.full_clean()
+    order.save()
+    order.refresh_snapshots(save=True)
+
+    quotation_items = (
+        quotation.items
+        .select_related(
+            "catalog_item",
+            "catalog_item__unit",
+        )
+        .order_by(
+            "line_number",
+            "id",
+        )
+    )
+
+    for source_item in quotation_items:
+        order_item = SalesOrderItem(
+            order=order,
+            company=company,
+            catalog_item=source_item.catalog_item,
+            source_quotation_item=source_item,
+            line_number=source_item.line_number,
+            item_code_snapshot=(
+                source_item.item_code_snapshot
+            ),
+            item_name_snapshot=(
+                source_item.item_name_snapshot
+            ),
+            item_description_snapshot=(
+                source_item.item_description_snapshot
+            ),
+            unit_name_snapshot=(
+                source_item.unit_name_snapshot
+            ),
+            quantity=source_item.quantity,
+            unit_price=source_item.unit_price,
+            discount_amount=(
+                source_item.discount_amount
+            ),
+            taxable=source_item.taxable,
+            tax_rate=source_item.tax_rate,
+            notes=source_item.notes,
+            extra_data=dict(
+                source_item.extra_data or {}
+            ),
+        )
+
+        order_item.full_clean()
+        order_item.save()
+
+    order.recalculate_totals(save=True)
+    order.refresh_snapshots(save=True)
+    order.refresh_from_db()
+
+    return order
+
+
+@transaction.atomic
+def confirm_sales_order(
+    *,
+    company: Company,
+    order: SalesOrder,
+    user=None,
+) -> SalesOrder:
+    """
+    Confirm a draft sales order.
+    """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    if not order:
+        raise ValidationError(
+            {"order": "Sales order is required."}
+        )
+
+    if order.company_id != company.id:
+        raise ValidationError(
+            {
+                "order":
+                "Sales order does not belong to this company."
+            }
+        )
+
+    order.recalculate_totals(save=True)
+    order.confirm(user=user)
+    order.refresh_from_db()
+
+    return order
+
+
+@transaction.atomic
+def start_processing_sales_order(
+    *,
+    company: Company,
+    order: SalesOrder,
+    user=None,
+) -> SalesOrder:
+    """
+    Move a confirmed sales order into processing.
+    """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    if not order:
+        raise ValidationError(
+            {"order": "Sales order is required."}
+        )
+
+    if order.company_id != company.id:
+        raise ValidationError(
+            {
+                "order":
+                "Sales order does not belong to this company."
+            }
+        )
+
+    order.start_processing(user=user)
+    order.refresh_from_db()
+
+    return order
+
+
+@transaction.atomic
+def complete_sales_order(
+    *,
+    company: Company,
+    order: SalesOrder,
+    user=None,
+) -> SalesOrder:
+    """
+    Complete a processing sales order.
+    """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    if not order:
+        raise ValidationError(
+            {"order": "Sales order is required."}
+        )
+
+    if order.company_id != company.id:
+        raise ValidationError(
+            {
+                "order":
+                "Sales order does not belong to this company."
+            }
+        )
+
+    order.complete(user=user)
+    order.refresh_from_db()
+
+    return order
+
+
+@transaction.atomic
+def cancel_sales_order(
+    *,
+    company: Company,
+    order: SalesOrder,
+    reason: str = "",
+    user=None,
+) -> SalesOrder:
+    """
+    Cancel a draft, confirmed, or processing sales order.
+    """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    if not order:
+        raise ValidationError(
+            {"order": "Sales order is required."}
+        )
+
+    if order.company_id != company.id:
+        raise ValidationError(
+            {
+                "order":
+                "Sales order does not belong to this company."
+            }
+        )
+
+    order.cancel(
+        reason=reason,
+        user=user,
+    )
+    order.refresh_from_db()
+
+    return order
+
+
+def serialize_order_item(
+    item: SalesOrderItem,
+) -> dict[str, Any]:
+    """
+    Serialize one sales order line for APIs.
+    """
+    return {
+        "id": item.id,
+        "line_number": item.line_number,
+        "catalog_item_id": item.catalog_item_id,
+        "source_quotation_item_id": (
+            item.source_quotation_item_id
+        ),
+        "item_code": item.item_code_snapshot,
+        "item_name": item.item_name_snapshot,
+        "description": (
+            item.item_description_snapshot
+        ),
+        "unit_name": item.unit_name_snapshot,
+        "quantity": str(item.quantity),
+        "unit_price": str(item.unit_price),
+        "line_subtotal": str(item.line_subtotal),
+        "discount_amount": str(
+            item.discount_amount
+        ),
+        "taxable": item.taxable,
+        "tax_rate": str(item.tax_rate),
+        "taxable_amount": str(
+            item.taxable_amount
+        ),
+        "tax_amount": str(item.tax_amount),
+        "line_total": str(item.line_total),
+        "notes": item.notes,
+        "extra_data": item.extra_data,
+        "created_at": (
+            item.created_at.isoformat()
+            if item.created_at
+            else None
+        ),
+        "updated_at": (
+            item.updated_at.isoformat()
+            if item.updated_at
+            else None
+        ),
+    }
+
+
+def serialize_sales_order(
+    order: SalesOrder,
+    include_items: bool = False,
+) -> dict[str, Any]:
+    """
+    Serialize a sales order for APIs.
+    """
+    data = {
+        "id": order.id,
+        "company_id": order.company_id,
+        "branch": (
+            {
+                "id": order.branch_id,
+                "name": order.branch.display_name,
+                "code": order.branch.branch_code,
+            }
+            if order.branch_id
+            else None
+        ),
+        "customer": (
+            {
+                "id": order.customer_id,
+                "display_name": (
+                    order.customer.display_name
+                ),
+                "code": order.customer.code,
+                "phone": order.customer.phone,
+                "mobile": order.customer.mobile,
+                "vat_number": order.customer.vat_number,
+            }
+            if order.customer_id
+            else None
+        ),
+        "source_quotation": (
+            {
+                "id": order.source_quotation_id,
+                "quotation_number": (
+                    order.source_quotation.quotation_number
+                ),
+                "status": order.source_quotation.status,
+                "quotation_date": (
+                    order.source_quotation
+                    .quotation_date.isoformat()
+                    if order.source_quotation.quotation_date
+                    else None
+                ),
+                "total_amount": str(
+                    order.source_quotation.total_amount
+                ),
+            }
+            if order.source_quotation_id
+            else None
+        ),
+        "order_number": order.order_number,
+        "status": order.status,
+        "source": order.source,
+        "order_date": (
+            order.order_date.isoformat()
+            if order.order_date
+            else None
+        ),
+        "expected_delivery_date": (
+            order.expected_delivery_date.isoformat()
+            if order.expected_delivery_date
+            else None
+        ),
+        "confirmed_at": (
+            order.confirmed_at.isoformat()
+            if order.confirmed_at
+            else None
+        ),
+        "processing_at": (
+            order.processing_at.isoformat()
+            if order.processing_at
+            else None
+        ),
+        "completed_at": (
+            order.completed_at.isoformat()
+            if order.completed_at
+            else None
+        ),
+        "cancelled_at": (
+            order.cancelled_at.isoformat()
+            if order.cancelled_at
+            else None
+        ),
+        "cancelled_reason": order.cancelled_reason,
+        "subtotal": str(order.subtotal),
+        "discount_amount": str(
+            order.discount_amount
+        ),
+        "taxable_amount": str(
+            order.taxable_amount
+        ),
+        "tax_amount": str(order.tax_amount),
+        "total_amount": str(order.total_amount),
+        "currency_code": order.currency_code,
+        "customer_snapshot": order.customer_snapshot,
+        "billing_address_snapshot": (
+            order.billing_address_snapshot
+        ),
+        "tax_snapshot": order.tax_snapshot,
+        "quotation_snapshot": (
+            order.quotation_snapshot
+        ),
+        "public_notes": order.public_notes,
+        "internal_notes": order.internal_notes,
+        "extra_data": order.extra_data,
+        "can_be_edited": order.can_be_edited,
+        "can_be_confirmed": (
+            order.can_be_confirmed
+        ),
+        "can_start_processing": (
+            order.can_start_processing
+        ),
+        "can_be_completed": (
+            order.can_be_completed
+        ),
+        "can_be_cancelled": (
+            order.can_be_cancelled
+        ),
+        "created_at": (
+            order.created_at.isoformat()
+            if order.created_at
+            else None
+        ),
+        "updated_at": (
+            order.updated_at.isoformat()
+            if order.updated_at
+            else None
+        ),
+    }
+
+    if include_items:
+        data["items"] = [
+            serialize_order_item(item)
+            for item in order.items.select_related(
+                "catalog_item",
+                "source_quotation_item",
+            ).order_by(
+                "line_number",
+                "id",
+            )
+        ]
+
+    return data
+
+
+# End Phase 21.2 - Sales Orders Services Foundation
+# ============================================================

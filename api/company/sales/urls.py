@@ -1,6 +1,6 @@
-# ============================================================
+﻿# ============================================================
 # 📂 api/company/sales/urls.py
-# 🧠 PrimeyAcc | Company Sales URLs V1.1
+# 🧠 PrimeyAcc | Company Sales URLs V1.2
 # ------------------------------------------------------------
 # ✅ Company sales module routes
 # ✅ Sales invoices routes
@@ -25,5 +25,9 @@ urlpatterns = [
     path(
         "quotations/",
         include("api.company.sales.quotations.urls"),
+    ),
+    path(
+        "orders/",
+        include("api.company.sales.orders.urls"),
     ),
 ]

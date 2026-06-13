@@ -1,6 +1,6 @@
-# ============================================================
+﻿# ============================================================
 # 📂 sales/admin.py
-# 🧠 PrimeyAcc | Sales Admin V1.1
+# 🧠 PrimeyAcc | Sales Admin V1.2
 # ------------------------------------------------------------
 # ✅ Sales invoices admin
 # ✅ Sales invoice items inline
@@ -25,6 +25,8 @@ from django.contrib import admin
 from sales.models import (
     SalesInvoice,
     SalesInvoiceItem,
+    SalesOrder,
+    SalesOrderItem,
     SalesQuotation,
     SalesQuotationItem,
 )
@@ -996,3 +998,580 @@ class SalesQuotationItemAdmin(admin.ModelAdmin):
             form,
             change,
         )
+
+class SalesOrderItemInline(admin.TabularInline):
+    """
+    Inline sales order items for operational review.
+    """
+
+    model = SalesOrderItem
+    extra = 0
+
+    fields = [
+        "line_number",
+        "catalog_item",
+        "source_quotation_item",
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "unit_name_snapshot",
+        "quantity",
+        "unit_price",
+        "line_subtotal",
+        "discount_amount",
+        "taxable",
+        "tax_rate",
+        "taxable_amount",
+        "tax_amount",
+        "line_total",
+    ]
+
+    readonly_fields = [
+        "line_subtotal",
+        "taxable_amount",
+        "tax_amount",
+        "line_total",
+    ]
+
+    autocomplete_fields = [
+        "catalog_item",
+        "source_quotation_item",
+    ]
+
+    ordering = [
+        "line_number",
+        "id",
+    ]
+
+    def has_add_permission(self, request, obj=None):
+        """
+        Allow adding order lines only while the order is draft.
+        """
+        if obj and not obj.can_be_edited:
+            return False
+
+        return super().has_add_permission(
+            request,
+            obj,
+        )
+
+    def has_delete_permission(self, request, obj=None):
+        """
+        Allow deleting order lines only while the order is draft.
+        """
+        if obj and not obj.can_be_edited:
+            return False
+
+        return super().has_delete_permission(
+            request,
+            obj,
+        )
+
+    def get_readonly_fields(self, request, obj=None):
+        """
+        Lock all order line fields after leaving draft status.
+        """
+        readonly_fields = list(
+            super().get_readonly_fields(
+                request,
+                obj,
+            )
+        )
+
+        if obj and not obj.can_be_edited:
+            return list(self.fields)
+
+        return readonly_fields
+
+
+@admin.register(SalesOrder)
+class SalesOrderAdmin(admin.ModelAdmin):
+    """
+    Admin configuration for sales orders.
+    """
+
+    list_display = [
+        "order_number",
+        "company",
+        "branch",
+        "customer",
+        "status",
+        "source",
+        "source_quotation",
+        "order_date",
+        "expected_delivery_date",
+        "total_amount",
+        "confirmed_at",
+        "processing_at",
+        "completed_at",
+        "created_at",
+    ]
+
+    list_filter = [
+        "status",
+        "source",
+        "order_date",
+        "expected_delivery_date",
+        "company",
+        "branch",
+        "created_at",
+    ]
+
+    search_fields = [
+        "order_number",
+        "source_quotation__quotation_number",
+        "company__name",
+        "company__name_ar",
+        "company__name_en",
+        "company__company_code",
+        "branch__name",
+        "branch__branch_code",
+        "customer__display_name",
+        "customer__legal_name",
+        "customer__code",
+        "customer__phone",
+        "customer__mobile",
+        "customer__email",
+    ]
+
+    autocomplete_fields = [
+        "company",
+        "branch",
+        "customer",
+        "source_quotation",
+        "created_by",
+        "updated_by",
+        "confirmed_by",
+        "processing_by",
+        "completed_by",
+        "cancelled_by",
+    ]
+
+    readonly_fields = [
+        "subtotal",
+        "discount_amount",
+        "taxable_amount",
+        "tax_amount",
+        "total_amount",
+        "customer_snapshot",
+        "billing_address_snapshot",
+        "tax_snapshot",
+        "quotation_snapshot",
+        "confirmed_at",
+        "processing_at",
+        "completed_at",
+        "cancelled_at",
+        "created_at",
+        "updated_at",
+    ]
+
+    fieldsets = [
+        (
+            "Order identity",
+            {
+                "fields": [
+                    "company",
+                    "branch",
+                    "customer",
+                    "source_quotation",
+                    "order_number",
+                    "status",
+                    "source",
+                    "order_date",
+                    "expected_delivery_date",
+                    "currency_code",
+                ],
+            },
+        ),
+        (
+            "Totals",
+            {
+                "fields": [
+                    "subtotal",
+                    "discount_amount",
+                    "taxable_amount",
+                    "tax_amount",
+                    "total_amount",
+                ],
+            },
+        ),
+        (
+            "Lifecycle",
+            {
+                "fields": [
+                    "confirmed_at",
+                    "confirmed_by",
+                    "processing_at",
+                    "processing_by",
+                    "completed_at",
+                    "completed_by",
+                    "cancelled_at",
+                    "cancelled_by",
+                    "cancelled_reason",
+                ],
+            },
+        ),
+        (
+            "Snapshots",
+            {
+                "classes": ["collapse"],
+                "fields": [
+                    "customer_snapshot",
+                    "billing_address_snapshot",
+                    "tax_snapshot",
+                    "quotation_snapshot",
+                ],
+            },
+        ),
+        (
+            "Notes and extra data",
+            {
+                "fields": [
+                    "public_notes",
+                    "internal_notes",
+                    "extra_data",
+                ],
+            },
+        ),
+        (
+            "Audit",
+            {
+                "classes": ["collapse"],
+                "fields": [
+                    "created_by",
+                    "updated_by",
+                    "created_at",
+                    "updated_at",
+                ],
+            },
+        ),
+    ]
+
+    inlines = [
+        SalesOrderItemInline,
+    ]
+
+    date_hierarchy = "order_date"
+
+    ordering = [
+        "-order_date",
+        "-id",
+    ]
+
+    list_select_related = [
+        "company",
+        "branch",
+        "customer",
+        "source_quotation",
+    ]
+
+    save_on_top = True
+
+    def get_readonly_fields(self, request, obj=None):
+        """
+        Lock operational fields after the order leaves draft status.
+        """
+        readonly_fields = list(
+            super().get_readonly_fields(
+                request,
+                obj,
+            )
+        )
+
+        if obj and not obj.can_be_edited:
+            readonly_fields.extend(
+                [
+                    "company",
+                    "branch",
+                    "customer",
+                    "source_quotation",
+                    "order_number",
+                    "source",
+                    "order_date",
+                    "expected_delivery_date",
+                    "currency_code",
+                    "public_notes",
+                    "internal_notes",
+                    "extra_data",
+                ]
+            )
+
+        return list(dict.fromkeys(readonly_fields))
+
+    def save_model(self, request, obj, form, change):
+        """
+        Keep sales order audit fields and snapshots synchronized.
+        """
+        if not change and not obj.created_by_id:
+            obj.created_by = request.user
+
+        obj.updated_by = request.user
+        obj.full_clean()
+
+        super().save_model(
+            request,
+            obj,
+            form,
+            change,
+        )
+
+        obj.refresh_snapshots(save=True)
+        obj.recalculate_totals(save=True)
+
+    def save_formset(self, request, form, formset, change):
+        """
+        Save sales order lines and refresh order totals.
+        """
+        instances = formset.save(commit=False)
+
+        for deleted_object in formset.deleted_objects:
+            deleted_object.delete()
+
+        for instance in instances:
+            if isinstance(instance, SalesOrderItem):
+                if (
+                    instance.order_id
+                    and not instance.company_id
+                ):
+                    instance.company_id = (
+                        instance.order.company_id
+                    )
+
+                if (
+                    instance.source_quotation_item_id
+                    and not instance.item_name_snapshot
+                ):
+                    instance.apply_quotation_item_snapshot()
+
+                if (
+                    instance.catalog_item_id
+                    and not instance.item_name_snapshot
+                ):
+                    instance.apply_catalog_snapshot()
+
+                instance.full_clean()
+
+            instance.save()
+
+        formset.save_m2m()
+
+        if form.instance.pk:
+            form.instance.recalculate_totals(save=True)
+
+
+@admin.register(SalesOrderItem)
+class SalesOrderItemAdmin(admin.ModelAdmin):
+    """
+    Admin configuration for sales order items.
+    """
+
+    list_display = [
+        "order",
+        "company",
+        "line_number",
+        "catalog_item",
+        "source_quotation_item",
+        "item_name_snapshot",
+        "quantity",
+        "unit_price",
+        "discount_amount",
+        "taxable",
+        "tax_rate",
+        "line_total",
+        "created_at",
+    ]
+
+    list_filter = [
+        "company",
+        "taxable",
+        "tax_rate",
+        "created_at",
+    ]
+
+    search_fields = [
+        "order__order_number",
+        "order__source_quotation__quotation_number",
+        "company__name",
+        "company__company_code",
+        "catalog_item__name",
+        "catalog_item__code",
+        "catalog_item__sku",
+        "catalog_item__barcode",
+        "item_code_snapshot",
+        "item_name_snapshot",
+    ]
+
+    autocomplete_fields = [
+        "order",
+        "company",
+        "catalog_item",
+        "source_quotation_item",
+    ]
+
+    readonly_fields = [
+        "line_subtotal",
+        "taxable_amount",
+        "tax_amount",
+        "line_total",
+        "created_at",
+        "updated_at",
+    ]
+
+    fieldsets = [
+        (
+            "Order line",
+            {
+                "fields": [
+                    "order",
+                    "company",
+                    "catalog_item",
+                    "source_quotation_item",
+                    "line_number",
+                ],
+            },
+        ),
+        (
+            "Snapshot",
+            {
+                "fields": [
+                    "item_code_snapshot",
+                    "item_name_snapshot",
+                    "item_description_snapshot",
+                    "unit_name_snapshot",
+                ],
+            },
+        ),
+        (
+            "Amounts",
+            {
+                "fields": [
+                    "quantity",
+                    "unit_price",
+                    "line_subtotal",
+                    "discount_amount",
+                    "taxable",
+                    "tax_rate",
+                    "taxable_amount",
+                    "tax_amount",
+                    "line_total",
+                ],
+            },
+        ),
+        (
+            "Extra",
+            {
+                "fields": [
+                    "notes",
+                    "extra_data",
+                ],
+            },
+        ),
+        (
+            "Audit",
+            {
+                "classes": ["collapse"],
+                "fields": [
+                    "created_at",
+                    "updated_at",
+                ],
+            },
+        ),
+    ]
+
+    ordering = [
+        "-created_at",
+        "-id",
+    ]
+
+    list_select_related = [
+        "order",
+        "company",
+        "catalog_item",
+        "source_quotation_item",
+    ]
+
+    def get_readonly_fields(self, request, obj=None):
+        """
+        Lock order line fields when its order is no longer draft.
+        """
+        readonly_fields = list(
+            super().get_readonly_fields(
+                request,
+                obj,
+            )
+        )
+
+        if (
+            obj
+            and obj.order_id
+            and not obj.order.can_be_edited
+        ):
+            readonly_fields.extend(
+                [
+                    "order",
+                    "company",
+                    "catalog_item",
+                    "source_quotation_item",
+                    "line_number",
+                    "item_code_snapshot",
+                    "item_name_snapshot",
+                    "item_description_snapshot",
+                    "unit_name_snapshot",
+                    "quantity",
+                    "unit_price",
+                    "discount_amount",
+                    "taxable",
+                    "tax_rate",
+                    "notes",
+                    "extra_data",
+                ]
+            )
+
+        return list(dict.fromkeys(readonly_fields))
+
+    def has_delete_permission(self, request, obj=None):
+        """
+        Allow deletion only while the related order is draft.
+        """
+        if (
+            obj
+            and obj.order_id
+            and not obj.order.can_be_edited
+        ):
+            return False
+
+        return super().has_delete_permission(
+            request,
+            obj,
+        )
+
+    def save_model(self, request, obj, form, change):
+        """
+        Synchronize company and source snapshots.
+        """
+        if obj.order_id and not obj.company_id:
+            obj.company_id = obj.order.company_id
+
+        if (
+            obj.source_quotation_item_id
+            and not obj.item_name_snapshot
+        ):
+            obj.apply_quotation_item_snapshot()
+
+        if (
+            obj.catalog_item_id
+            and not obj.item_name_snapshot
+        ):
+            obj.apply_catalog_snapshot()
+
+        obj.full_clean()
+
+        super().save_model(
+            request,
+            obj,
+            form,
+            change,
+        )
+
+
+# End Phase 21.2 - Sales Orders Admin
+# ============================================================
