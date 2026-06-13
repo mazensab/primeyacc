@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 sales/services.py
-# 🧠 PrimeyAcc | Sales Services V1.2
+# 🧠 PrimeyAcc | Sales Services V1.3
 # ------------------------------------------------------------
 # ✅ Company-scoped invoice helpers
 # ✅ Invoice number generation
@@ -10,16 +10,18 @@
 # ✅ Draft invoice creation
 # ✅ Invoice item creation
 # ✅ Issue / cancel helpers
-# ✅ Phase 10.1 automatic accounting posting for issued sales invoices
+# ✅ Phase 10.1 automatic accounting posting for invoices
+# ✅ Phase 21.1 sales quotations services foundation
+# ✅ Quotation creation, lifecycle, serialization, and isolation
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - الخدمات هنا هي مصدر منطق المبيعات الأساسي
 # - APIs تستدعي هذه الخدمات بدل تكرار المنطق
 # - لا نثق بأي company_id قادم من الفرونت
 # - الشركة يجب أن تأتي من عضوية المستخدم أو context الخاص بـ /company
-# - invoice_date و due_date قد تصل من الواجهة كنص YYYY-MM-DD ويجب تطبيعها هنا
-# - عند إصدار فاتورة البيع يتم إنشاء قيد محاسبي تلقائي من خلال accounting.services
-# - لا ننشئ حركات مخزون في هذه الخطوة؛ المخزون له جزء لاحق في Phase 10
+# - التواريخ قد تصل من الواجهة كنص YYYY-MM-DD ويجب تطبيعها هنا
+# - عند إصدار فاتورة البيع يتم إنشاء قيد محاسبي تلقائي
+# - عروض الأسعار لا تنشئ قيودًا محاسبية ولا حركات مخزون
 # ============================================================
 
 from __future__ import annotations
@@ -39,13 +41,21 @@ from accounting.services import (
 )
 from catalog.models import CatalogItem, CatalogItemStatus
 from companies.models import Branch, Company
-from parties.models import BusinessParty, BusinessPartyStatus, BusinessPartyType
+from parties.models import (
+    BusinessParty,
+    BusinessPartyStatus,
+    BusinessPartyType,
+)
 from sales.models import (
     MONEY_ZERO,
     SalesInvoice,
     SalesInvoiceItem,
     SalesInvoiceSource,
     SalesInvoiceStatus,
+    SalesQuotation,
+    SalesQuotationItem,
+    SalesQuotationSource,
+    SalesQuotationStatus,
     quantize_money,
     quantize_quantity,
 )
@@ -54,7 +64,10 @@ from sales.models import (
 @dataclass(frozen=True)
 class InvoiceItemPayload:
     """
-    Normalized invoice item payload used by services and APIs.
+    Normalized sales document line payload.
+
+    Used by invoices and quotations because both documents currently share
+    the same line pricing, discount, tax, catalog, and snapshot rules.
     """
 
     catalog_item_id: int | None = None
@@ -74,15 +87,20 @@ def normalize_text(value: Any) -> str:
     return str(value or "").strip()
 
 
-def normalize_invoice_date(value: Any, *, field_name: str = "invoice_date", default_today: bool = False) -> date | None:
+def normalize_invoice_date(
+    value: Any,
+    *,
+    field_name: str = "invoice_date",
+    default_today: bool = False,
+) -> date | None:
     """
-    Normalize invoice date values safely.
+    Normalize sales document date values safely.
 
     Accepts:
     - None / empty string
     - datetime.date
     - datetime.datetime
-    - "YYYY-MM-DD"
+    - YYYY-MM-DD string
 
     Raises ValidationError for unsupported formats.
     """
@@ -96,18 +114,19 @@ def normalize_invoice_date(value: Any, *, field_name: str = "invoice_date", defa
         return value
 
     if isinstance(value, str):
-        value = value.strip()
-        if not value:
+        normalized_value = value.strip()
+
+        if not normalized_value:
             return timezone.localdate() if default_today else None
 
         try:
-            return date.fromisoformat(value)
-        except ValueError:
+            return date.fromisoformat(normalized_value)
+        except ValueError as exc:
             raise ValidationError(
                 {
                     field_name: "Date must be in YYYY-MM-DD format.",
                 }
-            )
+            ) from exc
 
     raise ValidationError(
         {
@@ -118,7 +137,7 @@ def normalize_invoice_date(value: Any, *, field_name: str = "invoice_date", defa
 
 def get_default_branch(company: Company) -> Branch | None:
     """
-    Return the default active branch for a company if available.
+    Return the default active branch for a company when available.
     """
     return (
         Branch.objects.filter(
@@ -131,13 +150,20 @@ def get_default_branch(company: Company) -> Branch | None:
     )
 
 
-def resolve_company_branch(company: Company, branch_id: int | str | None = None) -> Branch | None:
+def resolve_company_branch(
+    company: Company,
+    branch_id: int | str | None = None,
+) -> Branch | None:
     """
-    Resolve branch inside the same company.
+    Resolve a branch inside the same company.
 
-    If branch_id is not provided, returns the company's default active branch
-    when available.
+    When branch_id is not provided, the default active branch is returned.
     """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
     if not branch_id:
         return get_default_branch(company)
 
@@ -150,20 +176,35 @@ def resolve_company_branch(company: Company, branch_id: int | str | None = None)
     )
 
     if not branch:
-        raise ValidationError({"branch": "Selected branch was not found for this company."})
+        raise ValidationError(
+            {
+                "branch":
+                "Selected branch was not found for this company."
+            }
+        )
 
     if not branch.is_active:
-        raise ValidationError({"branch": "Selected branch is not active."})
+        raise ValidationError(
+            {"branch": "Selected branch is not active."}
+        )
 
     return branch
 
 
-def resolve_customer(company: Company, customer_id: int | str | None = None) -> BusinessParty | None:
+def resolve_customer(
+    company: Company,
+    customer_id: int | str | None = None,
+) -> BusinessParty | None:
     """
-    Resolve customer inside the same company.
+    Resolve an active customer inside the same company.
 
-    Customer is optional in this phase unless company settings later require it.
+    The customer may remain optional while a document is in draft.
     """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
     if not customer_id:
         return None
 
@@ -176,24 +217,41 @@ def resolve_customer(company: Company, customer_id: int | str | None = None) -> 
     )
 
     if not customer:
-        raise ValidationError({"customer": "Selected customer was not found for this company."})
+        raise ValidationError(
+            {
+                "customer":
+                "Selected customer was not found for this company."
+            }
+        )
 
     if customer.party_type not in [
         BusinessPartyType.CUSTOMER,
         BusinessPartyType.BOTH,
     ]:
-        raise ValidationError({"customer": "Selected party is not a customer."})
+        raise ValidationError(
+            {"customer": "Selected party is not a customer."}
+        )
 
     if customer.status != BusinessPartyStatus.ACTIVE:
-        raise ValidationError({"customer": "Selected customer is not active."})
+        raise ValidationError(
+            {"customer": "Selected customer is not active."}
+        )
 
     return customer
 
 
-def resolve_catalog_item(company: Company, catalog_item_id: int | str | None = None) -> CatalogItem | None:
+def resolve_catalog_item(
+    company: Company,
+    catalog_item_id: int | str | None = None,
+) -> CatalogItem | None:
     """
-    Resolve sellable catalog item inside the same company.
+    Resolve an active sellable catalog item inside the same company.
     """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
     if not catalog_item_id:
         return None
 
@@ -207,38 +265,70 @@ def resolve_catalog_item(company: Company, catalog_item_id: int | str | None = N
     )
 
     if not catalog_item:
-        raise ValidationError({"catalog_item": "Selected catalog item was not found for this company."})
+        raise ValidationError(
+            {
+                "catalog_item":
+                "Selected catalog item was not found for this company."
+            }
+        )
 
     if catalog_item.status != CatalogItemStatus.ACTIVE:
-        raise ValidationError({"catalog_item": "Selected catalog item is not active."})
+        raise ValidationError(
+            {
+                "catalog_item":
+                "Selected catalog item is not active."
+            }
+        )
 
     if not catalog_item.is_sellable:
-        raise ValidationError({"catalog_item": "Selected catalog item is not sellable."})
+        raise ValidationError(
+            {
+                "catalog_item":
+                "Selected catalog item is not sellable."
+            }
+        )
 
     return catalog_item
 
 
-def generate_invoice_number(company: Company, invoice_date=None) -> str:
+def generate_invoice_number(
+    company: Company,
+    invoice_date=None,
+) -> str:
     """
-    Generate a simple company-scoped invoice number.
+    Generate a company-scoped invoice number.
 
     Format:
         INV-YYYY-000001
-
-    Later we can replace this with a dedicated sequence model per company/branch.
     """
-    invoice_date = normalize_invoice_date(
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    normalized_date = normalize_invoice_date(
         invoice_date,
         field_name="invoice_date",
         default_today=True,
     )
-    year = invoice_date.year
+    year = normalized_date.year
 
     prefix = "INV"
 
-    settings_obj = getattr(company, "operational_settings", None)
-    if settings_obj and getattr(settings_obj, "invoice_prefix", None):
-        prefix = normalize_text(settings_obj.invoice_prefix) or "INV"
+    settings_obj = getattr(
+        company,
+        "operational_settings",
+        None,
+    )
+
+    if (
+        settings_obj
+        and getattr(settings_obj, "invoice_prefix", None)
+    ):
+        prefix = (
+            normalize_text(settings_obj.invoice_prefix)
+            or "INV"
+        )
 
     starts_with = f"{prefix}-{year}-"
 
@@ -255,28 +345,55 @@ def generate_invoice_number(company: Company, invoice_date=None) -> str:
 
     if last_invoice and last_invoice.invoice_number:
         try:
-            next_number = int(last_invoice.invoice_number.split("-")[-1]) + 1
+            next_number = (
+                int(
+                    last_invoice.invoice_number.split("-")[-1]
+                )
+                + 1
+            )
         except (TypeError, ValueError):
             next_number = last_invoice.id + 1
 
     return f"{starts_with}{next_number:06d}"
 
 
-def normalize_invoice_item_payload(raw_item: dict[str, Any]) -> InvoiceItemPayload:
+def normalize_invoice_item_payload(
+    raw_item: dict[str, Any],
+) -> InvoiceItemPayload:
     """
-    Normalize invoice item data from API or tests.
+    Normalize invoice or quotation line data from an API or test.
     """
+    if not isinstance(raw_item, dict):
+        raise ValidationError(
+            {"items": "Each sales document item must be an object."}
+        )
+
     return InvoiceItemPayload(
-        catalog_item_id=raw_item.get("catalog_item_id") or raw_item.get("item_id"),
-        description=normalize_text(raw_item.get("description")),
-        quantity=quantize_quantity(raw_item.get("quantity") or Decimal("1.0000")),
+        catalog_item_id=(
+            raw_item.get("catalog_item_id")
+            or raw_item.get("item_id")
+        ),
+        description=normalize_text(
+            raw_item.get("description")
+        ),
+        quantity=quantize_quantity(
+            raw_item.get("quantity")
+            or Decimal("1.0000")
+        ),
         unit_price=(
             quantize_money(raw_item.get("unit_price"))
             if raw_item.get("unit_price") not in [None, ""]
             else None
         ),
-        discount_amount=quantize_money(raw_item.get("discount_amount") or MONEY_ZERO),
-        taxable=raw_item.get("taxable") if raw_item.get("taxable") is not None else None,
+        discount_amount=quantize_money(
+            raw_item.get("discount_amount")
+            or MONEY_ZERO
+        ),
+        taxable=(
+            raw_item.get("taxable")
+            if raw_item.get("taxable") is not None
+            else None
+        ),
         tax_rate=(
             quantize_money(raw_item.get("tax_rate"))
             if raw_item.get("tax_rate") not in [None, ""]
@@ -306,50 +423,83 @@ def create_sales_invoice(
     extra_data: dict[str, Any] | None = None,
 ) -> SalesInvoice:
     """
-    Create a draft sales invoice with optional items.
+    Create a draft sales invoice with optional lines.
 
-    The invoice is created as DRAFT. Issuing is a separate explicit step.
+    Issuing remains a separate explicit operation.
     """
     if not company:
-        raise ValidationError({"company": "Company context is required."})
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
 
-    invoice_date = normalize_invoice_date(
+    normalized_invoice_date = normalize_invoice_date(
         invoice_date,
         field_name="invoice_date",
         default_today=True,
     )
-    due_date = normalize_invoice_date(
+    normalized_due_date = normalize_invoice_date(
         due_date,
         field_name="due_date",
         default_today=False,
     )
 
-    branch = resolve_company_branch(company, branch_id)
-    customer = resolve_customer(company, customer_id)
+    if (
+        normalized_due_date
+        and normalized_due_date < normalized_invoice_date
+    ):
+        raise ValidationError(
+            {
+                "due_date":
+                "Due date cannot be before invoice date."
+            }
+        )
+
+    branch = resolve_company_branch(
+        company,
+        branch_id,
+    )
+    customer = resolve_customer(
+        company,
+        customer_id,
+    )
+
+    actor = (
+        user
+        if getattr(user, "is_authenticated", False)
+        else None
+    )
 
     invoice = SalesInvoice(
         company=company,
         branch=branch,
         customer=customer,
-        invoice_number=generate_invoice_number(company, invoice_date=invoice_date),
+        invoice_number=generate_invoice_number(
+            company,
+            invoice_date=normalized_invoice_date,
+        ),
         status=SalesInvoiceStatus.DRAFT,
         source=source or SalesInvoiceSource.MANUAL,
-        invoice_date=invoice_date,
-        due_date=due_date,
+        invoice_date=normalized_invoice_date,
+        due_date=normalized_due_date,
         public_notes=normalize_text(public_notes),
         internal_notes=normalize_text(internal_notes),
-        currency_code=normalize_text(company.currency_code) or "SAR",
+        currency_code=(
+            normalize_text(company.currency_code)
+            or "SAR"
+        ),
         extra_data=extra_data or {},
-        created_by=user if getattr(user, "is_authenticated", False) else None,
-        updated_by=user if getattr(user, "is_authenticated", False) else None,
+        created_by=actor,
+        updated_by=actor,
     )
 
     invoice.full_clean()
     invoice.save()
-
     invoice.refresh_snapshots(save=True)
 
-    for index, item_payload in enumerate(items or [], start=1):
+    for index, item_payload in enumerate(
+        items or [],
+        start=1,
+    ):
         create_sales_invoice_item(
             invoice=invoice,
             company=company,
@@ -371,27 +521,65 @@ def create_sales_invoice_item(
     line_number: int | None = None,
 ) -> SalesInvoiceItem:
     """
-    Create one invoice item and refresh invoice totals.
+    Create one invoice line and refresh invoice totals.
     """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
     if not invoice:
-        raise ValidationError({"invoice": "Invoice is required."})
+        raise ValidationError(
+            {"invoice": "Invoice is required."}
+        )
 
     if invoice.company_id != company.id:
-        raise ValidationError({"company": "Invoice does not belong to this company."})
+        raise ValidationError(
+            {
+                "company":
+                "Invoice does not belong to this company."
+            }
+        )
 
     if invoice.status != SalesInvoiceStatus.DRAFT:
-        raise ValidationError({"invoice": "Only draft invoices can be edited."})
+        raise ValidationError(
+            {"invoice": "Only draft invoices can be edited."}
+        )
 
     normalized = normalize_invoice_item_payload(payload)
-    catalog_item = resolve_catalog_item(company, normalized.catalog_item_id)
+
+    if normalized.quantity <= Decimal("0.0000"):
+        raise ValidationError(
+            {"quantity": "Quantity must be greater than zero."}
+        )
+
+    catalog_item = resolve_catalog_item(
+        company,
+        normalized.catalog_item_id,
+    )
+
+    if not catalog_item and not normalized.item_name:
+        raise ValidationError(
+            {
+                "item_name":
+                "Item name is required when no catalog item is selected."
+            }
+        )
 
     if line_number is None:
         last_line = (
-            SalesInvoiceItem.objects.filter(invoice=invoice)
+            SalesInvoiceItem.objects.filter(
+                invoice=invoice,
+            )
             .order_by("-line_number")
             .first()
         )
-        line_number = (last_line.line_number + 1) if last_line else 1
+
+        line_number = (
+            last_line.line_number + 1
+            if last_line
+            else 1
+        )
 
     item = SalesInvoiceItem(
         invoice=invoice,
@@ -410,7 +598,9 @@ def create_sales_invoice_item(
         item.item_name_snapshot = normalized.item_name
 
     if normalized.description:
-        item.item_description_snapshot = normalized.description
+        item.item_description_snapshot = (
+            normalized.description
+        )
 
     if normalized.unit_price is not None:
         item.unit_price = normalized.unit_price
@@ -437,21 +627,27 @@ def issue_sales_invoice(
     user=None,
 ) -> SalesInvoice:
     """
-    Issue a draft invoice and create its automatic accounting journal entry.
+    Issue a draft invoice and create its automatic accounting entry.
 
-    Phase 10.1:
-    - Sales invoice issue is still handled here as the single source of truth.
-    - Accounting posting is delegated to accounting.services.
-    - If accounting posting fails, the transaction is rolled back and the invoice remains unissued.
+    If accounting posting fails, the transaction is rolled back.
     """
     if not company:
-        raise ValidationError({"company": "Company context is required."})
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
 
     if not invoice:
-        raise ValidationError({"invoice": "Invoice is required."})
+        raise ValidationError(
+            {"invoice": "Invoice is required."}
+        )
 
     if invoice.company_id != company.id:
-        raise ValidationError({"invoice": "Invoice does not belong to this company."})
+        raise ValidationError(
+            {
+                "invoice":
+                "Invoice does not belong to this company."
+            }
+        )
 
     invoice.recalculate_totals(save=True)
     invoice.issue(user=user)
@@ -467,7 +663,7 @@ def issue_sales_invoice(
             {
                 "accounting": str(exc),
             }
-        )
+        ) from exc
 
     return invoice
 
@@ -482,28 +678,38 @@ def cancel_sales_invoice(
 ) -> SalesInvoice:
     """
     Cancel an issued invoice.
-
-    Phase 10 note:
-    - Reversing/cancelling the linked accounting entry will be handled in a later step.
-    - Current behavior keeps the existing sales cancellation behavior unchanged.
     """
     if not company:
-        raise ValidationError({"company": "Company context is required."})
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
 
     if not invoice:
-        raise ValidationError({"invoice": "Invoice is required."})
+        raise ValidationError(
+            {"invoice": "Invoice is required."}
+        )
 
     if invoice.company_id != company.id:
-        raise ValidationError({"invoice": "Invoice does not belong to this company."})
+        raise ValidationError(
+            {
+                "invoice":
+                "Invoice does not belong to this company."
+            }
+        )
 
-    invoice.cancel(reason=reason, user=user)
+    invoice.cancel(
+        reason=reason,
+        user=user,
+    )
 
     return invoice
 
 
-def serialize_invoice_item(item: SalesInvoiceItem) -> dict[str, Any]:
+def serialize_invoice_item(
+    item: SalesInvoiceItem,
+) -> dict[str, Any]:
     """
-    Serialize invoice line for APIs.
+    Serialize an invoice line for APIs.
     """
     return {
         "id": item.id,
@@ -523,42 +729,77 @@ def serialize_invoice_item(item: SalesInvoiceItem) -> dict[str, Any]:
         "tax_amount": str(item.tax_amount),
         "line_total": str(item.line_total),
         "notes": item.notes,
-        "created_at": item.created_at.isoformat() if item.created_at else None,
+        "extra_data": item.extra_data,
+        "created_at": (
+            item.created_at.isoformat()
+            if item.created_at
+            else None
+        ),
+        "updated_at": (
+            item.updated_at.isoformat()
+            if item.updated_at
+            else None
+        ),
     }
 
 
-def serialize_sales_invoice(invoice: SalesInvoice, include_items: bool = False) -> dict[str, Any]:
+def serialize_sales_invoice(
+    invoice: SalesInvoice,
+    include_items: bool = False,
+) -> dict[str, Any]:
     """
-    Serialize sales invoice for APIs.
+    Serialize a sales invoice for APIs.
     """
     data = {
         "id": invoice.id,
         "company_id": invoice.company_id,
-        "branch": {
-            "id": invoice.branch_id,
-            "name": invoice.branch.display_name if invoice.branch_id else "",
-            "code": invoice.branch.branch_code if invoice.branch_id else "",
-        }
-        if invoice.branch_id
-        else None,
-        "customer": {
-            "id": invoice.customer_id,
-            "display_name": invoice.customer.display_name if invoice.customer_id else "",
-            "code": invoice.customer.code if invoice.customer_id else "",
-            "phone": invoice.customer.phone if invoice.customer_id else "",
-            "mobile": invoice.customer.mobile if invoice.customer_id else "",
-            "vat_number": invoice.customer.vat_number if invoice.customer_id else "",
-        }
-        if invoice.customer_id
-        else None,
+        "branch": (
+            {
+                "id": invoice.branch_id,
+                "name": invoice.branch.display_name,
+                "code": invoice.branch.branch_code,
+            }
+            if invoice.branch_id
+            else None
+        ),
+        "customer": (
+            {
+                "id": invoice.customer_id,
+                "display_name": (
+                    invoice.customer.display_name
+                ),
+                "code": invoice.customer.code,
+                "phone": invoice.customer.phone,
+                "mobile": invoice.customer.mobile,
+                "vat_number": invoice.customer.vat_number,
+            }
+            if invoice.customer_id
+            else None
+        ),
         "invoice_number": invoice.invoice_number,
         "status": invoice.status,
         "payment_status": invoice.payment_status,
         "source": invoice.source,
-        "invoice_date": invoice.invoice_date.isoformat() if invoice.invoice_date else None,
-        "due_date": invoice.due_date.isoformat() if invoice.due_date else None,
-        "issued_at": invoice.issued_at.isoformat() if invoice.issued_at else None,
-        "cancelled_at": invoice.cancelled_at.isoformat() if invoice.cancelled_at else None,
+        "invoice_date": (
+            invoice.invoice_date.isoformat()
+            if invoice.invoice_date
+            else None
+        ),
+        "due_date": (
+            invoice.due_date.isoformat()
+            if invoice.due_date
+            else None
+        ),
+        "issued_at": (
+            invoice.issued_at.isoformat()
+            if invoice.issued_at
+            else None
+        ),
+        "cancelled_at": (
+            invoice.cancelled_at.isoformat()
+            if invoice.cancelled_at
+            else None
+        ),
         "cancelled_reason": invoice.cancelled_reason,
         "subtotal": str(invoice.subtotal),
         "discount_amount": str(invoice.discount_amount),
@@ -569,7 +810,9 @@ def serialize_sales_invoice(invoice: SalesInvoice, include_items: bool = False) 
         "balance_due": str(invoice.balance_due),
         "currency_code": invoice.currency_code,
         "customer_snapshot": invoice.customer_snapshot,
-        "billing_address_snapshot": invoice.billing_address_snapshot,
+        "billing_address_snapshot": (
+            invoice.billing_address_snapshot
+        ),
         "tax_snapshot": invoice.tax_snapshot,
         "public_notes": invoice.public_notes,
         "internal_notes": invoice.internal_notes,
@@ -577,14 +820,634 @@ def serialize_sales_invoice(invoice: SalesInvoice, include_items: bool = False) 
         "can_be_edited": invoice.can_be_edited,
         "can_be_issued": invoice.can_be_issued,
         "can_be_cancelled": invoice.can_be_cancelled,
-        "created_at": invoice.created_at.isoformat() if invoice.created_at else None,
-        "updated_at": invoice.updated_at.isoformat() if invoice.updated_at else None,
+        "created_at": (
+            invoice.created_at.isoformat()
+            if invoice.created_at
+            else None
+        ),
+        "updated_at": (
+            invoice.updated_at.isoformat()
+            if invoice.updated_at
+            else None
+        ),
     }
 
     if include_items:
         data["items"] = [
             serialize_invoice_item(item)
-            for item in invoice.items.select_related("catalog_item").order_by("line_number", "id")
+            for item in invoice.items.select_related(
+                "catalog_item"
+            ).order_by(
+                "line_number",
+                "id",
+            )
+        ]
+
+    return data
+
+def generate_quotation_number(
+    company: Company,
+    quotation_date=None,
+) -> str:
+    """
+    Generate a company-scoped sales quotation number.
+
+    Format:
+        QUO-YYYY-000001
+    """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    normalized_date = normalize_invoice_date(
+        quotation_date,
+        field_name="quotation_date",
+        default_today=True,
+    )
+    year = normalized_date.year
+    prefix = "QUO"
+    starts_with = f"{prefix}-{year}-"
+
+    last_quotation = (
+        SalesQuotation.objects.filter(
+            company=company,
+            quotation_number__startswith=starts_with,
+        )
+        .order_by("-quotation_number", "-id")
+        .first()
+    )
+
+    next_number = 1
+
+    if last_quotation and last_quotation.quotation_number:
+        try:
+            next_number = (
+                int(
+                    last_quotation.quotation_number
+                    .split("-")[-1]
+                )
+                + 1
+            )
+        except (TypeError, ValueError):
+            next_number = last_quotation.id + 1
+
+    return f"{starts_with}{next_number:06d}"
+
+
+@transaction.atomic
+def create_sales_quotation(
+    *,
+    company: Company,
+    user=None,
+    branch_id: int | str | None = None,
+    customer_id: int | str | None = None,
+    quotation_date=None,
+    valid_until=None,
+    source: str = SalesQuotationSource.MANUAL,
+    terms_and_conditions: str = "",
+    public_notes: str = "",
+    internal_notes: str = "",
+    items: list[dict[str, Any]] | None = None,
+    extra_data: dict[str, Any] | None = None,
+) -> SalesQuotation:
+    """
+    Create a company-scoped draft sales quotation.
+
+    Quotations do not move inventory and do not create accounting entries.
+    """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    normalized_quotation_date = normalize_invoice_date(
+        quotation_date,
+        field_name="quotation_date",
+        default_today=True,
+    )
+    normalized_valid_until = normalize_invoice_date(
+        valid_until,
+        field_name="valid_until",
+        default_today=False,
+    )
+
+    if (
+        normalized_valid_until
+        and normalized_valid_until
+        < normalized_quotation_date
+    ):
+        raise ValidationError(
+            {
+                "valid_until":
+                "Valid until date cannot be before quotation date."
+            }
+        )
+
+    branch = resolve_company_branch(
+        company,
+        branch_id,
+    )
+    customer = resolve_customer(
+        company,
+        customer_id,
+    )
+
+    actor = (
+        user
+        if getattr(user, "is_authenticated", False)
+        else None
+    )
+
+    quotation = SalesQuotation(
+        company=company,
+        branch=branch,
+        customer=customer,
+        quotation_number=generate_quotation_number(
+            company,
+            quotation_date=normalized_quotation_date,
+        ),
+        status=SalesQuotationStatus.DRAFT,
+        source=source or SalesQuotationSource.MANUAL,
+        quotation_date=normalized_quotation_date,
+        valid_until=normalized_valid_until,
+        terms_and_conditions=normalize_text(
+            terms_and_conditions
+        ),
+        public_notes=normalize_text(public_notes),
+        internal_notes=normalize_text(internal_notes),
+        currency_code=(
+            normalize_text(company.currency_code)
+            or "SAR"
+        ),
+        extra_data=extra_data or {},
+        created_by=actor,
+        updated_by=actor,
+    )
+
+    quotation.full_clean()
+    quotation.save()
+    quotation.refresh_snapshots(save=True)
+
+    for index, item_payload in enumerate(
+        items or [],
+        start=1,
+    ):
+        create_sales_quotation_item(
+            quotation=quotation,
+            company=company,
+            payload=item_payload,
+            line_number=index,
+        )
+
+    quotation.recalculate_totals(save=True)
+
+    return quotation
+
+
+@transaction.atomic
+def create_sales_quotation_item(
+    *,
+    quotation: SalesQuotation,
+    company: Company,
+    payload: dict[str, Any],
+    line_number: int | None = None,
+) -> SalesQuotationItem:
+    """
+    Create one quotation line and refresh quotation totals.
+    """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    if not quotation:
+        raise ValidationError(
+            {"quotation": "Quotation is required."}
+        )
+
+    if quotation.company_id != company.id:
+        raise ValidationError(
+            {
+                "company":
+                "Quotation does not belong to this company."
+            }
+        )
+
+    if quotation.status != SalesQuotationStatus.DRAFT:
+        raise ValidationError(
+            {
+                "quotation":
+                "Only draft quotations can be edited."
+            }
+        )
+
+    normalized = normalize_invoice_item_payload(payload)
+
+    if normalized.quantity <= Decimal("0.0000"):
+        raise ValidationError(
+            {"quantity": "Quantity must be greater than zero."}
+        )
+
+    catalog_item = resolve_catalog_item(
+        company,
+        normalized.catalog_item_id,
+    )
+
+    if not catalog_item and not normalized.item_name:
+        raise ValidationError(
+            {
+                "item_name":
+                "Item name is required when no catalog item is selected."
+            }
+        )
+
+    if line_number is None:
+        last_line = (
+            SalesQuotationItem.objects.filter(
+                quotation=quotation,
+            )
+            .order_by("-line_number")
+            .first()
+        )
+
+        line_number = (
+            last_line.line_number + 1
+            if last_line
+            else 1
+        )
+
+    item = SalesQuotationItem(
+        quotation=quotation,
+        company=company,
+        catalog_item=catalog_item,
+        line_number=line_number,
+        quantity=normalized.quantity,
+        discount_amount=normalized.discount_amount,
+        notes=normalized.description,
+    )
+
+    if catalog_item:
+        item.apply_catalog_snapshot()
+
+    if normalized.item_name:
+        item.item_name_snapshot = normalized.item_name
+
+    if normalized.description:
+        item.item_description_snapshot = (
+            normalized.description
+        )
+
+    if normalized.unit_price is not None:
+        item.unit_price = normalized.unit_price
+
+    if normalized.taxable is not None:
+        item.taxable = bool(normalized.taxable)
+
+    if normalized.tax_rate is not None:
+        item.tax_rate = normalized.tax_rate
+
+    item.full_clean()
+    item.save()
+
+    quotation.recalculate_totals(save=True)
+
+    return item
+
+
+@transaction.atomic
+def send_sales_quotation(
+    *,
+    company: Company,
+    quotation: SalesQuotation,
+    user=None,
+) -> SalesQuotation:
+    """
+    Send a draft sales quotation.
+    """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    if not quotation:
+        raise ValidationError(
+            {"quotation": "Quotation is required."}
+        )
+
+    if quotation.company_id != company.id:
+        raise ValidationError(
+            {
+                "quotation":
+                "Quotation does not belong to this company."
+            }
+        )
+
+    quotation.recalculate_totals(save=True)
+    quotation.send(user=user)
+
+    return quotation
+
+
+@transaction.atomic
+def accept_sales_quotation(
+    *,
+    company: Company,
+    quotation: SalesQuotation,
+    user=None,
+) -> SalesQuotation:
+    """
+    Accept a sent sales quotation.
+    """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    if not quotation:
+        raise ValidationError(
+            {"quotation": "Quotation is required."}
+        )
+
+    if quotation.company_id != company.id:
+        raise ValidationError(
+            {
+                "quotation":
+                "Quotation does not belong to this company."
+            }
+        )
+
+    quotation.accept(user=user)
+
+    return quotation
+
+
+@transaction.atomic
+def reject_sales_quotation(
+    *,
+    company: Company,
+    quotation: SalesQuotation,
+    reason: str = "",
+    user=None,
+) -> SalesQuotation:
+    """
+    Reject a sent sales quotation.
+    """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    if not quotation:
+        raise ValidationError(
+            {"quotation": "Quotation is required."}
+        )
+
+    if quotation.company_id != company.id:
+        raise ValidationError(
+            {
+                "quotation":
+                "Quotation does not belong to this company."
+            }
+        )
+
+    quotation.reject(
+        reason=reason,
+        user=user,
+    )
+
+    return quotation
+
+
+@transaction.atomic
+def expire_sales_quotation(
+    *,
+    company: Company,
+    quotation: SalesQuotation,
+    user=None,
+) -> SalesQuotation:
+    """
+    Mark a sent sales quotation as expired.
+    """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    if not quotation:
+        raise ValidationError(
+            {"quotation": "Quotation is required."}
+        )
+
+    if quotation.company_id != company.id:
+        raise ValidationError(
+            {
+                "quotation":
+                "Quotation does not belong to this company."
+            }
+        )
+
+    quotation.expire(user=user)
+
+    return quotation
+
+
+@transaction.atomic
+def cancel_sales_quotation(
+    *,
+    company: Company,
+    quotation: SalesQuotation,
+    reason: str = "",
+    user=None,
+) -> SalesQuotation:
+    """
+    Cancel a draft or sent sales quotation.
+    """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    if not quotation:
+        raise ValidationError(
+            {"quotation": "Quotation is required."}
+        )
+
+    if quotation.company_id != company.id:
+        raise ValidationError(
+            {
+                "quotation":
+                "Quotation does not belong to this company."
+            }
+        )
+
+    quotation.cancel(
+        reason=reason,
+        user=user,
+    )
+
+    return quotation
+
+
+def serialize_quotation_item(
+    item: SalesQuotationItem,
+) -> dict[str, Any]:
+    """
+    Serialize a quotation line for APIs.
+    """
+    return {
+        "id": item.id,
+        "line_number": item.line_number,
+        "catalog_item_id": item.catalog_item_id,
+        "item_code": item.item_code_snapshot,
+        "item_name": item.item_name_snapshot,
+        "description": item.item_description_snapshot,
+        "unit_name": item.unit_name_snapshot,
+        "quantity": str(item.quantity),
+        "unit_price": str(item.unit_price),
+        "line_subtotal": str(item.line_subtotal),
+        "discount_amount": str(item.discount_amount),
+        "taxable": item.taxable,
+        "tax_rate": str(item.tax_rate),
+        "taxable_amount": str(item.taxable_amount),
+        "tax_amount": str(item.tax_amount),
+        "line_total": str(item.line_total),
+        "notes": item.notes,
+        "extra_data": item.extra_data,
+        "created_at": (
+            item.created_at.isoformat()
+            if item.created_at
+            else None
+        ),
+        "updated_at": (
+            item.updated_at.isoformat()
+            if item.updated_at
+            else None
+        ),
+    }
+
+
+def serialize_sales_quotation(
+    quotation: SalesQuotation,
+    include_items: bool = False,
+) -> dict[str, Any]:
+    """
+    Serialize a sales quotation for APIs.
+    """
+    data = {
+        "id": quotation.id,
+        "company_id": quotation.company_id,
+        "branch": (
+            {
+                "id": quotation.branch_id,
+                "name": quotation.branch.display_name,
+                "code": quotation.branch.branch_code,
+            }
+            if quotation.branch_id
+            else None
+        ),
+        "customer": (
+            {
+                "id": quotation.customer_id,
+                "display_name": (
+                    quotation.customer.display_name
+                ),
+                "code": quotation.customer.code,
+                "phone": quotation.customer.phone,
+                "mobile": quotation.customer.mobile,
+                "vat_number": quotation.customer.vat_number,
+            }
+            if quotation.customer_id
+            else None
+        ),
+        "quotation_number": quotation.quotation_number,
+        "status": quotation.status,
+        "source": quotation.source,
+        "quotation_date": (
+            quotation.quotation_date.isoformat()
+            if quotation.quotation_date
+            else None
+        ),
+        "valid_until": (
+            quotation.valid_until.isoformat()
+            if quotation.valid_until
+            else None
+        ),
+        "sent_at": (
+            quotation.sent_at.isoformat()
+            if quotation.sent_at
+            else None
+        ),
+        "accepted_at": (
+            quotation.accepted_at.isoformat()
+            if quotation.accepted_at
+            else None
+        ),
+        "rejected_at": (
+            quotation.rejected_at.isoformat()
+            if quotation.rejected_at
+            else None
+        ),
+        "expired_at": (
+            quotation.expired_at.isoformat()
+            if quotation.expired_at
+            else None
+        ),
+        "cancelled_at": (
+            quotation.cancelled_at.isoformat()
+            if quotation.cancelled_at
+            else None
+        ),
+        "rejection_reason": quotation.rejection_reason,
+        "cancelled_reason": quotation.cancelled_reason,
+        "subtotal": str(quotation.subtotal),
+        "discount_amount": str(
+            quotation.discount_amount
+        ),
+        "taxable_amount": str(
+            quotation.taxable_amount
+        ),
+        "tax_amount": str(quotation.tax_amount),
+        "total_amount": str(quotation.total_amount),
+        "currency_code": quotation.currency_code,
+        "customer_snapshot": quotation.customer_snapshot,
+        "billing_address_snapshot": (
+            quotation.billing_address_snapshot
+        ),
+        "tax_snapshot": quotation.tax_snapshot,
+        "terms_and_conditions": (
+            quotation.terms_and_conditions
+        ),
+        "public_notes": quotation.public_notes,
+        "internal_notes": quotation.internal_notes,
+        "extra_data": quotation.extra_data,
+        "can_be_edited": quotation.can_be_edited,
+        "can_be_sent": quotation.can_be_sent,
+        "can_be_accepted": quotation.can_be_accepted,
+        "can_be_rejected": quotation.can_be_rejected,
+        "can_be_expired": quotation.can_be_expired,
+        "can_be_cancelled": quotation.can_be_cancelled,
+        "created_at": (
+            quotation.created_at.isoformat()
+            if quotation.created_at
+            else None
+        ),
+        "updated_at": (
+            quotation.updated_at.isoformat()
+            if quotation.updated_at
+            else None
+        ),
+    }
+
+    if include_items:
+        data["items"] = [
+            serialize_quotation_item(item)
+            for item in quotation.items.select_related(
+                "catalog_item"
+            ).order_by(
+                "line_number",
+                "id",
+            )
         ]
 
     return data

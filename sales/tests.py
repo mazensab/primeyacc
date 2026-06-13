@@ -1,6 +1,6 @@
-# ============================================================
+﻿# ============================================================
 # 📂 sales/tests.py
-# 🧠 PrimeyAcc | Sales Tests V1.3
+# 🧠 PrimeyAcc | Sales Tests V1.4
 # ------------------------------------------------------------
 # ✅ Sales invoice model tests
 # ✅ Sales invoice services tests
@@ -24,6 +24,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -42,16 +43,21 @@ from sales.models import (
     SalesInvoiceItem,
     SalesInvoicePaymentStatus,
     SalesInvoiceStatus,
+    SalesQuotation,
+    SalesQuotationItem,
+    SalesQuotationStatus,
 )
 from sales.services import (
     cancel_sales_invoice,
     create_sales_invoice,
     create_sales_invoice_item,
+    create_sales_quotation,
     generate_invoice_number,
     issue_sales_invoice,
     resolve_catalog_item,
     resolve_company_branch,
     resolve_customer,
+    send_sales_quotation,
     serialize_sales_invoice,
 )
 
@@ -65,10 +71,19 @@ SALES_OWNER_PERMISSIONS = [
     "company.sales.invoices.update",
     "company.sales.invoices.issue",
     "company.sales.invoices.cancel",
+    "company.sales.quotations.view",
+    "company.sales.quotations.create",
+    "company.sales.quotations.update",
+    "company.sales.quotations.send",
+    "company.sales.quotations.accept",
+    "company.sales.quotations.reject",
+    "company.sales.quotations.expire",
+    "company.sales.quotations.cancel",
 ]
 
 SALES_VIEWER_PERMISSIONS = [
     "company.sales.invoices.view",
+    "company.sales.quotations.view",
 ]
 
 
@@ -615,6 +630,534 @@ class SalesModelTests(SalesTestCase):
 
         with self.assertRaises(ValidationError):
             item.full_clean()
+
+
+
+class SalesQuotationModelTests(SalesTestCase):
+    """
+    Tests for the Phase 21.1 sales quotation model foundation.
+    """
+
+    _DEFAULT = object()
+
+    def _create_draft_quotation(
+        self,
+        *,
+        company=None,
+        branch=_DEFAULT,
+        customer=_DEFAULT,
+        quotation_number="QUO-MODEL-001",
+        valid_until=None,
+    ) -> SalesQuotation:
+        quotation = SalesQuotation(
+            company=company or self.company,
+            branch=(
+                self.branch
+                if branch is self._DEFAULT
+                else branch
+            ),
+            customer=(
+                self.customer
+                if customer is self._DEFAULT
+                else customer
+            ),
+            quotation_number=quotation_number,
+            quotation_date=timezone.localdate(),
+            valid_until=valid_until,
+            currency_code="SAR",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        quotation.full_clean()
+        quotation.save()
+        return quotation
+
+    def _create_quotation_item(
+        self,
+        quotation: SalesQuotation,
+        *,
+        catalog_item=None,
+        line_number=1,
+        quantity=Decimal("2.0000"),
+        unit_price=Decimal("100.00"),
+        discount_amount=Decimal("10.00"),
+        taxable=True,
+        tax_rate=Decimal("15.00"),
+    ) -> SalesQuotationItem:
+        selected_item = catalog_item or self.item
+
+        item = SalesQuotationItem(
+            company=quotation.company,
+            quotation=quotation,
+            catalog_item=selected_item,
+            line_number=line_number,
+            item_code_snapshot=selected_item.code,
+            item_name_snapshot=selected_item.name,
+            unit_name_snapshot="Piece",
+            quantity=quantity,
+            unit_price=unit_price,
+            discount_amount=discount_amount,
+            taxable=taxable,
+            tax_rate=tax_rate,
+        )
+        item.full_clean()
+        item.save()
+        return item
+
+    def test_quotation_model_defaults_to_draft(self):
+        quotation = self._create_draft_quotation()
+
+        self.assertEqual(
+            quotation.status,
+            SalesQuotationStatus.DRAFT,
+        )
+        self.assertTrue(quotation.is_draft)
+        self.assertTrue(quotation.can_be_edited)
+        self.assertTrue(quotation.can_be_sent)
+        self.assertFalse(quotation.can_be_accepted)
+
+    def test_quotation_model_validates_branch_company(self):
+        quotation = SalesQuotation(
+            company=self.company,
+            branch=self.other_branch,
+            customer=self.customer,
+            quotation_number="QUO-INVALID-BRANCH",
+            quotation_date=timezone.localdate(),
+        )
+
+        with self.assertRaises(ValidationError):
+            quotation.full_clean()
+
+    def test_quotation_model_validates_customer_company(self):
+        quotation = SalesQuotation(
+            company=self.company,
+            branch=self.branch,
+            customer=self.other_customer,
+            quotation_number="QUO-INVALID-CUSTOMER",
+            quotation_date=timezone.localdate(),
+        )
+
+        with self.assertRaises(ValidationError):
+            quotation.full_clean()
+
+    def test_quotation_model_rejects_supplier_as_customer(self):
+        quotation = SalesQuotation(
+            company=self.company,
+            branch=self.branch,
+            customer=self.supplier,
+            quotation_number="QUO-INVALID-SUPPLIER",
+            quotation_date=timezone.localdate(),
+        )
+
+        with self.assertRaises(ValidationError):
+            quotation.full_clean()
+
+    def test_quotation_model_rejects_invalid_valid_until(self):
+        quotation = SalesQuotation(
+            company=self.company,
+            branch=self.branch,
+            customer=self.customer,
+            quotation_number="QUO-INVALID-DATE",
+            quotation_date=timezone.localdate(),
+            valid_until=(
+                timezone.localdate() - timedelta(days=1)
+            ),
+        )
+
+        with self.assertRaises(ValidationError):
+            quotation.full_clean()
+
+    def test_quotation_number_is_unique_inside_company(self):
+        self._create_draft_quotation(
+            quotation_number="QUO-UNIQUE-001",
+        )
+
+        duplicate = SalesQuotation(
+            company=self.company,
+            branch=self.branch,
+            customer=self.customer,
+            quotation_number="QUO-UNIQUE-001",
+            quotation_date=timezone.localdate(),
+        )
+
+        with self.assertRaises(ValidationError):
+            duplicate.full_clean()
+
+    def test_same_quotation_number_is_allowed_for_other_company(self):
+        self._create_draft_quotation(
+            quotation_number="QUO-SHARED-001",
+        )
+
+        other_quotation = SalesQuotation(
+            company=self.other_company,
+            branch=self.other_branch,
+            customer=self.other_customer,
+            quotation_number="QUO-SHARED-001",
+            quotation_date=timezone.localdate(),
+            currency_code="SAR",
+            created_by=self.other_user,
+            updated_by=self.other_user,
+        )
+        other_quotation.full_clean()
+        other_quotation.save()
+
+        self.assertEqual(
+            SalesQuotation.objects.filter(
+                quotation_number="QUO-SHARED-001"
+            ).count(),
+            2,
+        )
+
+    def test_quotation_item_calculates_totals_and_updates_header(
+        self,
+    ):
+        quotation = self._create_draft_quotation()
+        item = self._create_quotation_item(quotation)
+
+        item.refresh_from_db()
+        quotation.refresh_from_db()
+
+        self.assertEqual(
+            item.line_subtotal,
+            Decimal("200.00"),
+        )
+        self.assertEqual(
+            item.taxable_amount,
+            Decimal("190.00"),
+        )
+        self.assertEqual(
+            item.tax_amount,
+            Decimal("28.50"),
+        )
+        self.assertEqual(
+            item.line_total,
+            Decimal("218.50"),
+        )
+
+        self.assertEqual(
+            quotation.subtotal,
+            Decimal("200.00"),
+        )
+        self.assertEqual(
+            quotation.discount_amount,
+            Decimal("10.00"),
+        )
+        self.assertEqual(
+            quotation.taxable_amount,
+            Decimal("190.00"),
+        )
+        self.assertEqual(
+            quotation.tax_amount,
+            Decimal("28.50"),
+        )
+        self.assertEqual(
+            quotation.total_amount,
+            Decimal("218.50"),
+        )
+
+    def test_quotation_item_rejects_other_company_catalog_item(
+        self,
+    ):
+        quotation = self._create_draft_quotation()
+
+        item = SalesQuotationItem(
+            company=self.company,
+            quotation=quotation,
+            catalog_item=self.other_item,
+            line_number=1,
+            item_code_snapshot="ITEM-002",
+            item_name_snapshot="Other Item",
+            unit_name_snapshot="Other Piece",
+            quantity=Decimal("1.0000"),
+            unit_price=Decimal("200.00"),
+            taxable=True,
+            tax_rate=Decimal("15.00"),
+        )
+
+        with self.assertRaises(ValidationError):
+            item.full_clean()
+
+    def test_quotation_item_rejects_inactive_catalog_item(
+        self,
+    ):
+        quotation = self._create_draft_quotation()
+
+        item = SalesQuotationItem(
+            company=self.company,
+            quotation=quotation,
+            catalog_item=self.inactive_item,
+            line_number=1,
+            item_name_snapshot="Inactive Item",
+            quantity=Decimal("1.0000"),
+            unit_price=Decimal("100.00"),
+        )
+
+        with self.assertRaises(ValidationError):
+            item.full_clean()
+
+    def test_quotation_item_rejects_not_sellable_catalog_item(
+        self,
+    ):
+        quotation = self._create_draft_quotation()
+
+        item = SalesQuotationItem(
+            company=self.company,
+            quotation=quotation,
+            catalog_item=self.not_sellable_item,
+            line_number=1,
+            item_name_snapshot="Not Sellable Item",
+            quantity=Decimal("1.0000"),
+            unit_price=Decimal("100.00"),
+        )
+
+        with self.assertRaises(ValidationError):
+            item.full_clean()
+
+    def test_quotation_item_line_number_is_unique_per_quotation(
+        self,
+    ):
+        quotation = self._create_draft_quotation()
+
+        self._create_quotation_item(
+            quotation,
+            line_number=1,
+        )
+
+        duplicate = SalesQuotationItem(
+            company=self.company,
+            quotation=quotation,
+            catalog_item=self.service,
+            line_number=1,
+            item_code_snapshot=self.service.code,
+            item_name_snapshot=self.service.name,
+            quantity=Decimal("1.0000"),
+            unit_price=Decimal("250.00"),
+            taxable=True,
+            tax_rate=Decimal("15.00"),
+        )
+
+        with self.assertRaises(ValidationError):
+            duplicate.full_clean()
+
+    def test_send_quotation_requires_customer(self):
+        quotation = self._create_draft_quotation(
+            customer=None,
+            quotation_number="QUO-NO-CUSTOMER",
+        )
+        self._create_quotation_item(quotation)
+
+        with self.assertRaises(ValidationError):
+            quotation.send(user=self.user)
+
+    def test_send_quotation_requires_items(self):
+        quotation = self._create_draft_quotation(
+            quotation_number="QUO-NO-ITEMS",
+        )
+
+        with self.assertRaises(ValidationError):
+            quotation.send(user=self.user)
+
+    def test_send_quotation_refreshes_snapshots(self):
+        quotation = self._create_draft_quotation(
+            quotation_number="QUO-SEND-001",
+        )
+        self._create_quotation_item(quotation)
+
+        quotation.send(user=self.user)
+        quotation.refresh_from_db()
+
+        self.assertEqual(
+            quotation.status,
+            SalesQuotationStatus.SENT,
+        )
+        self.assertIsNotNone(quotation.sent_at)
+        self.assertEqual(quotation.sent_by, self.user)
+        self.assertEqual(
+            quotation.customer_snapshot["display_name"],
+            "Customer One",
+        )
+        self.assertEqual(
+            quotation.tax_snapshot["currency_code"],
+            "SAR",
+        )
+
+    def test_sent_quotation_items_cannot_be_modified(self):
+        quotation = self._create_draft_quotation(
+            quotation_number="QUO-LOCKED-001",
+        )
+        item = self._create_quotation_item(quotation)
+
+        quotation.send(user=self.user)
+        quotation.refresh_from_db()
+
+        item.quantity = Decimal("3.0000")
+
+        with self.assertRaises(ValidationError):
+            item.full_clean()
+
+    def test_sent_quotation_items_cannot_be_deleted(self):
+        quotation = self._create_draft_quotation(
+            quotation_number="QUO-LOCKED-DELETE",
+        )
+        item = self._create_quotation_item(quotation)
+
+        quotation.send(user=self.user)
+        quotation.refresh_from_db()
+
+        with self.assertRaises(ValidationError):
+            item.delete()
+
+    def test_accept_sent_quotation(self):
+        quotation = self._create_draft_quotation(
+            quotation_number="QUO-ACCEPT-001",
+            valid_until=(
+                timezone.localdate() + timedelta(days=7)
+            ),
+        )
+        self._create_quotation_item(quotation)
+        quotation.send(user=self.user)
+
+        quotation.accept(user=self.user)
+        quotation.refresh_from_db()
+
+        self.assertEqual(
+            quotation.status,
+            SalesQuotationStatus.ACCEPTED,
+        )
+        self.assertIsNotNone(quotation.accepted_at)
+        self.assertEqual(quotation.accepted_by, self.user)
+
+    def test_accept_rejects_expired_quotation(self):
+        quotation = self._create_draft_quotation(
+            quotation_number="QUO-EXPIRED-ACCEPT",
+            valid_until=timezone.localdate(),
+        )
+        self._create_quotation_item(quotation)
+        quotation.send(user=self.user)
+
+        SalesQuotation.objects.filter(
+            pk=quotation.pk
+        ).update(
+            valid_until=(
+                timezone.localdate() - timedelta(days=1)
+            )
+        )
+        quotation.refresh_from_db()
+
+        with self.assertRaises(ValidationError):
+            quotation.accept(user=self.user)
+
+    def test_reject_sent_quotation(self):
+        quotation = self._create_draft_quotation(
+            quotation_number="QUO-REJECT-001",
+        )
+        self._create_quotation_item(quotation)
+        quotation.send(user=self.user)
+
+        quotation.reject(
+            reason="Customer rejected the offer",
+            user=self.user,
+        )
+        quotation.refresh_from_db()
+
+        self.assertEqual(
+            quotation.status,
+            SalesQuotationStatus.REJECTED,
+        )
+        self.assertEqual(
+            quotation.rejection_reason,
+            "Customer rejected the offer",
+        )
+        self.assertEqual(
+            quotation.rejected_by,
+            self.user,
+        )
+
+    def test_expire_sent_quotation_after_validity_date(self):
+        quotation = self._create_draft_quotation(
+            quotation_number="QUO-EXPIRE-001",
+            valid_until=timezone.localdate(),
+        )
+        self._create_quotation_item(quotation)
+        quotation.send(user=self.user)
+
+        SalesQuotation.objects.filter(
+            pk=quotation.pk
+        ).update(
+            valid_until=(
+                timezone.localdate() - timedelta(days=1)
+            )
+        )
+        quotation.refresh_from_db()
+
+        quotation.expire(user=self.user)
+        quotation.refresh_from_db()
+
+        self.assertEqual(
+            quotation.status,
+            SalesQuotationStatus.EXPIRED,
+        )
+        self.assertIsNotNone(quotation.expired_at)
+        self.assertEqual(
+            quotation.expired_by,
+            self.user,
+        )
+
+    def test_expire_rejects_quotation_before_validity_date(
+        self,
+    ):
+        quotation = self._create_draft_quotation(
+            quotation_number="QUO-NOT-EXPIRED",
+            valid_until=(
+                timezone.localdate() + timedelta(days=1)
+            ),
+        )
+        self._create_quotation_item(quotation)
+        quotation.send(user=self.user)
+
+        with self.assertRaises(ValidationError):
+            quotation.expire(user=self.user)
+
+    def test_cancel_draft_quotation(self):
+        quotation = self._create_draft_quotation(
+            quotation_number="QUO-CANCEL-001",
+        )
+
+        quotation.cancel(
+            reason="Quotation no longer required",
+            user=self.user,
+        )
+        quotation.refresh_from_db()
+
+        self.assertEqual(
+            quotation.status,
+            SalesQuotationStatus.CANCELLED,
+        )
+        self.assertEqual(
+            quotation.cancelled_reason,
+            "Quotation no longer required",
+        )
+        self.assertEqual(
+            quotation.cancelled_by,
+            self.user,
+        )
+
+    def test_cancel_accepted_quotation_is_rejected(self):
+        quotation = self._create_draft_quotation(
+            quotation_number="QUO-CANNOT-CANCEL",
+            valid_until=(
+                timezone.localdate() + timedelta(days=7)
+            ),
+        )
+        self._create_quotation_item(quotation)
+        quotation.send(user=self.user)
+        quotation.accept(user=self.user)
+
+        with self.assertRaises(ValidationError):
+            quotation.cancel(
+                reason="Invalid cancellation",
+                user=self.user,
+            )
 
 
 class SalesServicesTests(SalesTestCase):
@@ -1260,3 +1803,566 @@ class SalesInvoicesAPITests(SalesTestCase):
         self.assertEqual(payload["summary"]["all_totals"]["total_amount"], "115.00")
 
         self.assertNotEqual(today_invoice.id, old_invoice.id)
+
+
+class SalesQuotationsAPITests(SalesTestCase):
+    """
+    Tests for company sales quotation API endpoints.
+    """
+
+    def _create_quotation_for_api(
+        self,
+        *,
+        company=None,
+        user=None,
+        customer=None,
+        catalog_item=None,
+        valid_until=None,
+    ) -> SalesQuotation:
+        selected_company = company or self.company
+        selected_user = user or self.user
+        selected_customer = customer or self.customer
+        selected_item = catalog_item or self.item
+
+        return create_sales_quotation(
+            company=selected_company,
+            user=selected_user,
+            customer_id=selected_customer.id,
+            valid_until=valid_until,
+            items=[
+                {
+                    "catalog_item_id": selected_item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+    def test_sales_quotations_list_returns_current_company_only(
+        self,
+    ):
+        current_quotation = self._create_quotation_for_api()
+
+        other_quotation = self._create_quotation_for_api(
+            company=self.other_company,
+            user=self.other_user,
+            customer=self.other_customer,
+            catalog_item=self.other_item,
+        )
+
+        response = self.client.get(
+            "/api/company/sales/quotations/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(
+            payload["results"][0]["id"],
+            current_quotation.id,
+        )
+        self.assertNotEqual(
+            payload["results"][0]["id"],
+            other_quotation.id,
+        )
+
+    def test_sales_quotations_list_supports_search(self):
+        quotation = self._create_quotation_for_api()
+
+        response = self.client.get(
+            "/api/company/sales/quotations/",
+            {
+                "q": quotation.quotation_number,
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(
+            payload["results"][0]["id"],
+            quotation.id,
+        )
+
+    def test_sales_quotation_create_endpoint_creates_draft(
+        self,
+    ):
+        response = self.client.post(
+            "/api/company/sales/quotations/create/",
+            data={
+                "customer_id": self.customer.id,
+                "valid_until": str(
+                    timezone.localdate()
+                    + timedelta(days=14)
+                ),
+                "terms_and_conditions": "Valid for 14 days",
+                "public_notes": "Quotation note",
+                "items": [
+                    {
+                        "catalog_item_id": self.item.id,
+                        "quantity": "2",
+                        "discount_amount": "10.00",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(
+            payload["quotation"]["status"],
+            SalesQuotationStatus.DRAFT,
+        )
+        self.assertEqual(
+            payload["quotation"]["total_amount"],
+            "218.50",
+        )
+        self.assertEqual(
+            payload["quotation"]["terms_and_conditions"],
+            "Valid for 14 days",
+        )
+        self.assertEqual(
+            len(payload["quotation"]["items"]),
+            1,
+        )
+
+        self.assertEqual(
+            SalesQuotation.objects.filter(
+                company=self.company
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            SalesQuotationItem.objects.filter(
+                company=self.company
+            ).count(),
+            1,
+        )
+
+    def test_sales_quotation_create_endpoint_can_send_now(
+        self,
+    ):
+        response = self.client.post(
+            "/api/company/sales/quotations/create/",
+            data={
+                "customer_id": self.customer.id,
+                "send_now": True,
+                "valid_until": str(
+                    timezone.localdate()
+                    + timedelta(days=7)
+                ),
+                "items": [
+                    {
+                        "catalog_item_id": self.item.id,
+                        "quantity": "1",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(
+            payload["quotation"]["status"],
+            SalesQuotationStatus.SENT,
+        )
+        self.assertIsNotNone(
+            payload["quotation"]["sent_at"]
+        )
+
+    def test_sales_quotation_create_rejects_cross_company_item(
+        self,
+    ):
+        response = self.client.post(
+            "/api/company/sales/quotations/create/",
+            data={
+                "customer_id": self.customer.id,
+                "items": [
+                    {
+                        "catalog_item_id": self.other_item.id,
+                        "quantity": "1",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.json()["success"])
+
+    def test_sales_quotation_detail_returns_items(self):
+        quotation = self._create_quotation_for_api()
+
+        response = self.client.get(
+            f"/api/company/sales/quotations/"
+            f"{quotation.id}/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(
+            payload["quotation"]["id"],
+            quotation.id,
+        )
+        self.assertEqual(
+            len(payload["quotation"]["items"]),
+            1,
+        )
+
+    def test_sales_quotation_detail_blocks_cross_company_access(
+        self,
+    ):
+        other_quotation = self._create_quotation_for_api(
+            company=self.other_company,
+            user=self.other_user,
+            customer=self.other_customer,
+            catalog_item=self.other_item,
+        )
+
+        response = self.client.get(
+            f"/api/company/sales/quotations/"
+            f"{other_quotation.id}/"
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_sales_quotation_update_endpoint_updates_draft(
+        self,
+    ):
+        quotation = self._create_quotation_for_api()
+
+        response = self.client.patch(
+            f"/api/company/sales/quotations/"
+            f"{quotation.id}/update/",
+            data={
+                "public_notes": "Updated quotation note",
+                "terms_and_conditions": "Updated terms",
+                "items": [
+                    {
+                        "catalog_item_id": self.service.id,
+                        "quantity": "1",
+                        "unit_price": "300.00",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        payload = response.json()
+        quotation.refresh_from_db()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(
+            quotation.public_notes,
+            "Updated quotation note",
+        )
+        self.assertEqual(
+            quotation.terms_and_conditions,
+            "Updated terms",
+        )
+        self.assertEqual(quotation.items.count(), 1)
+        self.assertEqual(
+            quotation.total_amount,
+            Decimal("345.00"),
+        )
+
+    def test_sales_quotation_update_rejects_sent_quotation(
+        self,
+    ):
+        quotation = self._create_quotation_for_api(
+            valid_until=(
+                timezone.localdate()
+                + timedelta(days=7)
+            ),
+        )
+
+        send_sales_quotation(
+            company=self.company,
+            quotation=quotation,
+            user=self.user,
+        )
+
+        response = self.client.patch(
+            f"/api/company/sales/quotations/"
+            f"{quotation.id}/update/",
+            data={
+                "public_notes": "Should not update",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_sales_quotation_send_endpoint(self):
+        quotation = self._create_quotation_for_api(
+            valid_until=(
+                timezone.localdate()
+                + timedelta(days=7)
+            ),
+        )
+
+        response = self.client.post(
+            f"/api/company/sales/quotations/"
+            f"{quotation.id}/send/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        quotation.refresh_from_db()
+
+        self.assertEqual(
+            quotation.status,
+            SalesQuotationStatus.SENT,
+        )
+        self.assertEqual(
+            quotation.sent_by,
+            self.user,
+        )
+
+    def test_sales_quotation_accept_endpoint(self):
+        quotation = self._create_quotation_for_api(
+            valid_until=(
+                timezone.localdate()
+                + timedelta(days=7)
+            ),
+        )
+
+        send_sales_quotation(
+            company=self.company,
+            quotation=quotation,
+            user=self.user,
+        )
+
+        response = self.client.post(
+            f"/api/company/sales/quotations/"
+            f"{quotation.id}/accept/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        quotation.refresh_from_db()
+
+        self.assertEqual(
+            quotation.status,
+            SalesQuotationStatus.ACCEPTED,
+        )
+        self.assertEqual(
+            quotation.accepted_by,
+            self.user,
+        )
+
+    def test_sales_quotation_reject_endpoint(self):
+        quotation = self._create_quotation_for_api(
+            valid_until=(
+                timezone.localdate()
+                + timedelta(days=7)
+            ),
+        )
+
+        send_sales_quotation(
+            company=self.company,
+            quotation=quotation,
+            user=self.user,
+        )
+
+        response = self.client.post(
+            f"/api/company/sales/quotations/"
+            f"{quotation.id}/reject/",
+            data={
+                "reason": "Customer rejected quotation",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        quotation.refresh_from_db()
+
+        self.assertEqual(
+            quotation.status,
+            SalesQuotationStatus.REJECTED,
+        )
+        self.assertEqual(
+            quotation.rejection_reason,
+            "Customer rejected quotation",
+        )
+        self.assertEqual(
+            quotation.rejected_by,
+            self.user,
+        )
+
+    def test_sales_quotation_cancel_endpoint(self):
+        quotation = self._create_quotation_for_api()
+
+        response = self.client.post(
+            f"/api/company/sales/quotations/"
+            f"{quotation.id}/cancel/",
+            data={
+                "reason": "Quotation cancelled by user",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        quotation.refresh_from_db()
+
+        self.assertEqual(
+            quotation.status,
+            SalesQuotationStatus.CANCELLED,
+        )
+        self.assertEqual(
+            quotation.cancelled_reason,
+            "Quotation cancelled by user",
+        )
+        self.assertEqual(
+            quotation.cancelled_by,
+            self.user,
+        )
+
+    def test_sales_quotation_expire_endpoint(self):
+        quotation = self._create_quotation_for_api(
+            valid_until=timezone.localdate(),
+        )
+
+        send_sales_quotation(
+            company=self.company,
+            quotation=quotation,
+            user=self.user,
+        )
+
+        SalesQuotation.objects.filter(
+            pk=quotation.pk
+        ).update(
+            valid_until=(
+                timezone.localdate()
+                - timedelta(days=1)
+            )
+        )
+
+        response = self.client.post(
+            f"/api/company/sales/quotations/"
+            f"{quotation.id}/expire/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        quotation.refresh_from_db()
+
+        self.assertEqual(
+            quotation.status,
+            SalesQuotationStatus.EXPIRED,
+        )
+        self.assertEqual(
+            quotation.expired_by,
+            self.user,
+        )
+
+    def test_viewer_can_list_but_cannot_create_quotation(
+        self,
+    ):
+        self.client.force_login(self.viewer_user)
+
+        list_response = self.client.get(
+            "/api/company/sales/quotations/"
+        )
+
+        self.assertEqual(
+            list_response.status_code,
+            200,
+            list_response.content,
+        )
+
+        create_response = self.client.post(
+            "/api/company/sales/quotations/create/",
+            data={
+                "customer_id": self.customer.id,
+                "items": [
+                    {
+                        "catalog_item_id": self.item.id,
+                        "quantity": "1",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            create_response.status_code,
+            403,
+            create_response.content,
+        )
+
+    def test_unauthenticated_user_cannot_list_quotations(
+        self,
+    ):
+        self.client.logout()
+
+        response = self.client.get(
+            "/api/company/sales/quotations/"
+        )
+
+        self.assertEqual(response.status_code, 401)
+

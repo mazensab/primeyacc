@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 accounts/models.py
-# 🧠 PrimeyAcc | Accounts Models V2.8
+# 🧠 PrimeyAcc | Accounts Models V2.9
 # ------------------------------------------------------------
 # ✅ User Profile
 # ✅ Workspace Type Foundation
@@ -353,6 +353,14 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.hr.performance.goals.complete",
         "company.hr.performance.goals.cancel",
         "company.reports.view",
+        "company.sales.quotations.view",
+        "company.sales.quotations.create",
+        "company.sales.quotations.update",
+        "company.sales.quotations.send",
+        "company.sales.quotations.accept",
+        "company.sales.quotations.reject",
+        "company.sales.quotations.expire",
+        "company.sales.quotations.cancel",
     ],
     CompanyRole.MANAGER: [
         "company.dashboard.view",
@@ -489,6 +497,14 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.hr.performance.goals.complete",
         "company.hr.performance.goals.cancel",
         "company.reports.view",
+        "company.sales.quotations.view",
+        "company.sales.quotations.create",
+        "company.sales.quotations.update",
+        "company.sales.quotations.send",
+        "company.sales.quotations.accept",
+        "company.sales.quotations.reject",
+        "company.sales.quotations.expire",
+        "company.sales.quotations.cancel",
     ],
     CompanyRole.ACCOUNTANT: [
         "company.dashboard.view",
@@ -562,6 +578,7 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.whatsapp.view",
         "company.whatsapp.messages.view",
         "company.reports.view",
+        "company.sales.quotations.view",
     ],
     CompanyRole.CASHIER: [
         "company.dashboard.view",
@@ -591,6 +608,7 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.whatsapp.view",
         "company.whatsapp.messages.view",
         "company.whatsapp.messages.send",
+        "company.sales.quotations.view",
     ],
     CompanyRole.SALES: [
         "company.dashboard.view",
@@ -619,6 +637,14 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.whatsapp.view",
         "company.whatsapp.messages.view",
         "company.whatsapp.messages.send",
+        "company.sales.quotations.view",
+        "company.sales.quotations.create",
+        "company.sales.quotations.update",
+        "company.sales.quotations.send",
+        "company.sales.quotations.accept",
+        "company.sales.quotations.reject",
+        "company.sales.quotations.expire",
+        "company.sales.quotations.cancel",
     ],
     CompanyRole.INVENTORY: [
         "company.dashboard.view",
@@ -806,6 +832,7 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.hr.performance.goals.view",
         "company.documents.templates.view",
         "company.reports.view",
+        "company.sales.quotations.view",
     ],
 }
 
