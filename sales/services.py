@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 sales/services.py
-# 🧠 PrimeyAcc | Sales Services V1.4
+# 🧠 PrimeyAcc | Sales Services V1.5
 # ------------------------------------------------------------
 # ✅ Company-scoped invoice helpers
 # ✅ Invoice number generation
@@ -53,6 +53,7 @@ from sales.models import (
     SalesInvoiceSource,
     SalesInvoiceStatus,
     SalesOrder,
+    SalesOrderBillingStatus,
     SalesOrderItem,
     SalesOrderSource,
     SalesOrderStatus,
@@ -701,10 +702,22 @@ def cancel_sales_invoice(
             }
         )
 
+    source_order = (
+        invoice.source_order
+        if invoice.source_order_id
+        else None
+    )
+
     invoice.cancel(
         reason=reason,
         user=user,
     )
+
+    if source_order:
+        source_order.refresh_invoice_progress(
+            save=True
+        )
+        source_order.refresh_from_db()
 
     return invoice
 
@@ -719,6 +732,9 @@ def serialize_invoice_item(
         "id": item.id,
         "line_number": item.line_number,
         "catalog_item_id": item.catalog_item_id,
+        "source_order_item_id": (
+            item.source_order_item_id
+        ),
         "item_code": item.item_code_snapshot,
         "item_name": item.item_name_snapshot,
         "description": item.item_description_snapshot,
@@ -778,6 +794,28 @@ def serialize_sales_invoice(
                 "vat_number": invoice.customer.vat_number,
             }
             if invoice.customer_id
+            else None
+        ),
+        "source_order": (
+            {
+                "id": invoice.source_order_id,
+                "order_number": (
+                    invoice.source_order.order_number
+                ),
+                "status": invoice.source_order.status,
+                "billing_status": (
+                    invoice.source_order.billing_status
+                ),
+                "order_date": (
+                    invoice.source_order.order_date.isoformat()
+                    if invoice.source_order.order_date
+                    else None
+                ),
+                "total_amount": str(
+                    invoice.source_order.total_amount
+                ),
+            }
+            if invoice.source_order_id
             else None
         ),
         "invoice_number": invoice.invoice_number,
@@ -2100,6 +2138,12 @@ def serialize_order_item(
         ),
         "unit_name": item.unit_name_snapshot,
         "quantity": str(item.quantity),
+        "invoiced_quantity": str(
+            item.invoiced_quantity
+        ),
+        "remaining_quantity": str(
+            item.remaining_quantity
+        ),
         "unit_price": str(item.unit_price),
         "line_subtotal": str(item.line_subtotal),
         "discount_amount": str(
@@ -2182,6 +2226,13 @@ def serialize_sales_order(
         ),
         "order_number": order.order_number,
         "status": order.status,
+        "billing_status": order.billing_status,
+        "invoiced_amount": str(
+            order.invoiced_amount
+        ),
+        "remaining_invoice_amount": str(
+            order.remaining_invoice_amount
+        ),
         "source": order.source,
         "order_date": (
             order.order_date.isoformat()
@@ -2248,6 +2299,10 @@ def serialize_sales_order(
         "can_be_cancelled": (
             order.can_be_cancelled
         ),
+        "can_be_invoiced": order.can_be_invoiced,
+        "generated_invoices_count": (
+            order.generated_invoices.count()
+        ),
         "created_at": (
             order.created_at.isoformat()
             if order.created_at
@@ -2277,3 +2332,485 @@ def serialize_sales_order(
 
 # End Phase 21.2 - Sales Orders Services Foundation
 # ============================================================
+
+# ============================================================
+# Phase 21.3 - Sales Order Fulfillment & Invoice Conversion Services
+# ============================================================
+
+
+def normalize_order_invoice_items(
+    *,
+    order: SalesOrder,
+    items: list[dict[str, Any]] | None,
+) -> list[tuple[SalesOrderItem, Decimal]]:
+    """
+    Resolve requested sales-order quantities for invoicing.
+
+    When items is omitted, every remaining order quantity is selected.
+    """
+    order_items = list(
+        SalesOrderItem.objects
+        .select_for_update()
+        .select_related(
+            "catalog_item",
+            "catalog_item__unit",
+        )
+        .filter(order=order)
+        .order_by(
+            "line_number",
+            "id",
+        )
+    )
+
+    if not order_items:
+        raise ValidationError(
+            {
+                "items":
+                "Sales order cannot be invoiced without items."
+            }
+        )
+
+    for order_item in order_items:
+        order_item.refresh_invoicing_quantities(
+            save=True
+        )
+
+    order_items_by_id = {
+        item.id: item
+        for item in order_items
+    }
+
+    if items is None:
+        selected = []
+
+        for order_item in order_items:
+            remaining = quantize_quantity(
+                order_item.remaining_quantity
+            )
+
+            if remaining > Decimal("0.0000"):
+                selected.append(
+                    (order_item, remaining)
+                )
+
+        if not selected:
+            raise ValidationError(
+                {
+                    "items":
+                    "Sales order is already fully invoiced."
+                }
+            )
+
+        return selected
+
+    if not isinstance(items, list) or not items:
+        raise ValidationError(
+            {
+                "items":
+                "At least one order item is required."
+            }
+        )
+
+    selected = []
+    seen_ids = set()
+
+    for raw_item in items:
+        if not isinstance(raw_item, dict):
+            raise ValidationError(
+                {
+                    "items":
+                    "Each invoice item must be an object."
+                }
+            )
+
+        order_item_id = (
+            raw_item.get("order_item_id")
+            or raw_item.get("sales_order_item_id")
+            or raw_item.get("source_order_item_id")
+        )
+
+        if not order_item_id:
+            raise ValidationError(
+                {
+                    "order_item_id":
+                    "Sales order item is required."
+                }
+            )
+
+        try:
+            normalized_order_item_id = int(
+                order_item_id
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(
+                {
+                    "order_item_id":
+                    "Invalid sales order item."
+                }
+            ) from exc
+
+        if normalized_order_item_id in seen_ids:
+            raise ValidationError(
+                {
+                    "items":
+                    "A sales order item cannot appear "
+                    "more than once in the same invoice."
+                }
+            )
+
+        seen_ids.add(normalized_order_item_id)
+
+        order_item = order_items_by_id.get(
+            normalized_order_item_id
+        )
+
+        if not order_item:
+            raise ValidationError(
+                {
+                    "order_item_id":
+                    "Sales order item was not found "
+                    "inside this order."
+                }
+            )
+
+        quantity = quantize_quantity(
+            raw_item.get("quantity")
+        )
+
+        if quantity <= Decimal("0.0000"):
+            raise ValidationError(
+                {
+                    "quantity":
+                    "Invoice quantity must be greater than zero."
+                }
+            )
+
+        remaining = quantize_quantity(
+            order_item.remaining_quantity
+        )
+
+        if quantity > remaining:
+            raise ValidationError(
+                {
+                    "quantity":
+                    "Invoice quantity cannot exceed "
+                    "the remaining sales order quantity."
+                }
+            )
+
+        selected.append(
+            (order_item, quantity)
+        )
+
+    return selected
+
+
+def prorate_order_item_discount(
+    *,
+    order_item: SalesOrderItem,
+    invoice_quantity: Decimal,
+) -> Decimal:
+    """
+    Prorate the order-line discount for partial invoicing.
+    """
+    ordered_quantity = quantize_quantity(
+        order_item.quantity
+    )
+
+    if (
+        ordered_quantity <= Decimal("0.0000")
+        or order_item.discount_amount <= MONEY_ZERO
+    ):
+        return MONEY_ZERO
+
+    ratio = (
+        invoice_quantity
+        / ordered_quantity
+    )
+
+    return quantize_money(
+        order_item.discount_amount * ratio
+    )
+
+
+@transaction.atomic
+def create_sales_invoice_from_order(
+    *,
+    company: Company,
+    order: SalesOrder,
+    user=None,
+    invoice_date=None,
+    due_date=None,
+    items: list[dict[str, Any]] | None = None,
+    issue_now: bool = False,
+    public_notes: str | None = None,
+    internal_notes: str | None = None,
+    extra_data: dict[str, Any] | None = None,
+) -> SalesInvoice:
+    """
+    Create a full or partial sales invoice from a sales order.
+
+    When items is omitted, all remaining quantities are invoiced.
+    """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    if not order:
+        raise ValidationError(
+            {"order": "Sales order is required."}
+        )
+
+    locked_order = (
+        SalesOrder.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "branch",
+            "customer",
+        )
+        .filter(
+            id=order.id,
+            company=company,
+        )
+        .first()
+    )
+
+    if not locked_order:
+        raise ValidationError(
+            {
+                "order":
+                "Sales order does not belong to this company."
+            }
+        )
+
+    locked_order.refresh_invoice_progress(
+        save=True
+    )
+    locked_order.refresh_from_db()
+
+    if locked_order.status in [
+        SalesOrderStatus.DRAFT,
+        SalesOrderStatus.CANCELLED,
+    ]:
+        raise ValidationError(
+            {
+                "status":
+                "Only confirmed, processing, or completed "
+                "sales orders can be invoiced."
+            }
+        )
+
+    if not locked_order.customer_id:
+        raise ValidationError(
+            {
+                "customer":
+                "Sales order customer is required."
+            }
+        )
+
+    if (
+        locked_order.billing_status
+        == SalesOrderBillingStatus.FULL
+    ):
+        raise ValidationError(
+            {
+                "billing_status":
+                "Sales order is already fully invoiced."
+            }
+        )
+
+    selected_items = normalize_order_invoice_items(
+        order=locked_order,
+        items=items,
+    )
+
+    normalized_invoice_date = normalize_invoice_date(
+        invoice_date,
+        field_name="invoice_date",
+        default_today=True,
+    )
+
+    normalized_due_date = normalize_invoice_date(
+        due_date,
+        field_name="due_date",
+        default_today=False,
+    )
+
+    if (
+        normalized_due_date
+        and normalized_due_date
+        < normalized_invoice_date
+    ):
+        raise ValidationError(
+            {
+                "due_date":
+                "Due date cannot be before invoice date."
+            }
+        )
+
+    actor = (
+        user
+        if getattr(user, "is_authenticated", False)
+        else None
+    )
+
+    invoice = SalesInvoice(
+        company=company,
+        branch=locked_order.branch,
+        customer=locked_order.customer,
+        source_order=locked_order,
+        invoice_number=generate_invoice_number(
+            company,
+            invoice_date=normalized_invoice_date,
+        ),
+        status=SalesInvoiceStatus.DRAFT,
+        source=SalesInvoiceSource.SALES_ORDER,
+        invoice_date=normalized_invoice_date,
+        due_date=normalized_due_date,
+        public_notes=(
+            normalize_text(public_notes)
+            if public_notes is not None
+            else locked_order.public_notes
+        ),
+        internal_notes=(
+            normalize_text(internal_notes)
+            if internal_notes is not None
+            else locked_order.internal_notes
+        ),
+        currency_code=(
+            normalize_text(locked_order.currency_code)
+            or normalize_text(company.currency_code)
+            or "SAR"
+        ),
+        extra_data={
+            **dict(extra_data or {}),
+            "source_order_id": locked_order.id,
+            "source_order_number": (
+                locked_order.order_number
+            ),
+        },
+        created_by=actor,
+        updated_by=actor,
+    )
+
+    invoice.full_clean()
+    invoice.save()
+    invoice.refresh_snapshots(save=True)
+
+    for line_number, (
+        order_item,
+        invoice_quantity,
+    ) in enumerate(
+        selected_items,
+        start=1,
+    ):
+        invoice_item = SalesInvoiceItem(
+            invoice=invoice,
+            company=company,
+            catalog_item=order_item.catalog_item,
+            source_order_item=order_item,
+            line_number=line_number,
+            item_code_snapshot=(
+                order_item.item_code_snapshot
+            ),
+            item_name_snapshot=(
+                order_item.item_name_snapshot
+            ),
+            item_description_snapshot=(
+                order_item.item_description_snapshot
+            ),
+            unit_name_snapshot=(
+                order_item.unit_name_snapshot
+            ),
+            quantity=invoice_quantity,
+            unit_price=order_item.unit_price,
+            discount_amount=(
+                prorate_order_item_discount(
+                    order_item=order_item,
+                    invoice_quantity=invoice_quantity,
+                )
+            ),
+            taxable=order_item.taxable,
+            tax_rate=order_item.tax_rate,
+            notes=order_item.notes,
+            extra_data={
+                **dict(order_item.extra_data or {}),
+                "source_order_item_id": (
+                    order_item.id
+                ),
+                "source_order_line_number": (
+                    order_item.line_number
+                ),
+            },
+        )
+
+        invoice_item.full_clean()
+        invoice_item.save()
+
+    invoice.recalculate_totals(save=True)
+    locked_order.refresh_invoice_progress(
+        save=True
+    )
+
+    if issue_now:
+        invoice = issue_sales_invoice(
+            company=company,
+            invoice=invoice,
+            user=user,
+        )
+
+    invoice.refresh_from_db()
+    locked_order.refresh_from_db()
+
+    return invoice
+
+
+def serialize_order_invoice_summary(
+    order: SalesOrder,
+) -> dict[str, Any]:
+    """
+    Serialize invoice fulfillment data for a sales order.
+    """
+    order.refresh_invoice_progress(save=True)
+    order.refresh_from_db()
+
+    invoices = (
+        order.generated_invoices
+        .select_related(
+            "customer",
+            "branch",
+        )
+        .order_by(
+            "invoice_date",
+            "id",
+        )
+    )
+
+    return {
+        "order_id": order.id,
+        "order_number": order.order_number,
+        "billing_status": order.billing_status,
+        "total_amount": str(order.total_amount),
+        "invoiced_amount": str(
+            order.invoiced_amount
+        ),
+        "remaining_invoice_amount": str(
+            order.remaining_invoice_amount
+        ),
+        "can_be_invoiced": order.can_be_invoiced,
+        "invoices_count": invoices.count(),
+        "invoices": [
+            serialize_sales_invoice(
+                invoice,
+                include_items=True,
+            )
+            for invoice in invoices
+        ],
+    }
+
+
+# End Phase 21.3 - Sales Order Fulfillment & Invoice Conversion Services
+# ============================================================
+

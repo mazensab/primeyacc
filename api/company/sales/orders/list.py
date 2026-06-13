@@ -45,6 +45,12 @@ def sales_orders_list(request):
         "",
     ).strip()
 
+    billing_status_value = request.GET.get(
+        "billing_status",
+        "",
+    ).strip()
+
+
     branch_id = request.GET.get(
         "branch_id",
         "",
@@ -78,6 +84,11 @@ def sales_orders_list(request):
     if source_value:
         queryset = queryset.filter(
             source=source_value,
+        )
+
+    if billing_status_value:
+        queryset = queryset.filter(
+            billing_status=billing_status_value,
         )
 
     if branch_id:

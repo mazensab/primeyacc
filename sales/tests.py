@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 sales/tests.py
-# 🧠 PrimeyAcc | Sales Tests V1.5
+# 🧠 PrimeyAcc | Sales Tests V1.6
 # ------------------------------------------------------------
 # ✅ Sales invoice model tests
 # ✅ Sales invoice services tests
@@ -42,8 +42,10 @@ from sales.models import (
     SalesInvoice,
     SalesInvoiceItem,
     SalesInvoicePaymentStatus,
+    SalesInvoiceSource,
     SalesInvoiceStatus,
     SalesOrder,
+    SalesOrderBillingStatus,
     SalesOrderItem,
     SalesOrderSource,
     SalesOrderStatus,
@@ -58,6 +60,7 @@ from sales.services import (
     complete_sales_order,
     confirm_sales_order,
     create_sales_invoice,
+    create_sales_invoice_from_order,
     create_sales_invoice_item,
     create_sales_quotation,
     create_sales_order,
@@ -70,6 +73,7 @@ from sales.services import (
     resolve_company_branch,
     resolve_customer,
     send_sales_quotation,
+    serialize_order_invoice_summary,
     serialize_sales_invoice,
     serialize_sales_order,
     start_processing_sales_order,
@@ -3545,4 +3549,722 @@ class SalesOrdersAPITests(SalesTestCase):
 
 
 # End Phase 21.2 - Sales Orders Tests
+# ============================================================
+
+# ============================================================
+# Phase 21.3 - Sales Order Fulfillment & Invoice Conversion Tests
+# ============================================================
+
+
+class SalesOrderInvoiceConversionServicesTests(
+    SalesTestCase
+):
+    """
+    Service and model integration tests for order invoicing.
+    """
+
+    def _create_confirmed_order(
+        self,
+        *,
+        company=None,
+        user=None,
+        customer=None,
+        catalog_item=None,
+        quantity="4",
+        discount_amount="40.00",
+    ) -> SalesOrder:
+        selected_company = company or self.company
+        selected_user = user or self.user
+        selected_customer = customer or self.customer
+        selected_item = catalog_item or self.item
+
+        order = create_sales_order(
+            company=selected_company,
+            user=selected_user,
+            customer_id=selected_customer.id,
+            items=[
+                {
+                    "catalog_item_id": selected_item.id,
+                    "quantity": quantity,
+                    "discount_amount": discount_amount,
+                }
+            ],
+        )
+
+        return confirm_sales_order(
+            company=selected_company,
+            order=order,
+            user=selected_user,
+        )
+
+    def test_create_full_invoice_from_confirmed_order(
+        self,
+    ):
+        order = self._create_confirmed_order()
+
+        invoice = create_sales_invoice_from_order(
+            company=self.company,
+            order=order,
+            user=self.user,
+        )
+
+        order.refresh_from_db()
+        order_item = order.items.get()
+        invoice_item = invoice.items.get()
+
+        order_item.refresh_from_db()
+
+        self.assertEqual(
+            invoice.source,
+            SalesInvoiceSource.SALES_ORDER,
+        )
+        self.assertEqual(
+            invoice.source_order,
+            order,
+        )
+        self.assertEqual(
+            invoice_item.source_order_item,
+            order_item,
+        )
+        self.assertEqual(
+            invoice_item.quantity,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            invoice.total_amount,
+            Decimal("414.00"),
+        )
+        self.assertEqual(
+            order.billing_status,
+            SalesOrderBillingStatus.FULL,
+        )
+        self.assertEqual(
+            order.invoiced_amount,
+            Decimal("414.00"),
+        )
+        self.assertEqual(
+            order_item.invoiced_quantity,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            order_item.remaining_quantity,
+            Decimal("0.0000"),
+        )
+
+    def test_create_partial_invoice_from_order(
+        self,
+    ):
+        order = self._create_confirmed_order()
+        order_item = order.items.get()
+
+        invoice = create_sales_invoice_from_order(
+            company=self.company,
+            order=order,
+            user=self.user,
+            items=[
+                {
+                    "order_item_id": order_item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        order.refresh_from_db()
+        order_item.refresh_from_db()
+        invoice_item = invoice.items.get()
+
+        self.assertEqual(
+            invoice_item.quantity,
+            Decimal("1.0000"),
+        )
+        self.assertEqual(
+            invoice_item.discount_amount,
+            Decimal("10.00"),
+        )
+        self.assertEqual(
+            invoice.total_amount,
+            Decimal("103.50"),
+        )
+        self.assertEqual(
+            order.billing_status,
+            SalesOrderBillingStatus.PARTIAL,
+        )
+        self.assertEqual(
+            order.invoiced_amount,
+            Decimal("103.50"),
+        )
+        self.assertEqual(
+            order_item.invoiced_quantity,
+            Decimal("1.0000"),
+        )
+        self.assertEqual(
+            order_item.remaining_quantity,
+            Decimal("3.0000"),
+        )
+
+    def test_second_invoice_completes_remaining_order(
+        self,
+    ):
+        order = self._create_confirmed_order()
+        order_item = order.items.get()
+
+        create_sales_invoice_from_order(
+            company=self.company,
+            order=order,
+            user=self.user,
+            items=[
+                {
+                    "order_item_id": order_item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        second_invoice = (
+            create_sales_invoice_from_order(
+                company=self.company,
+                order=order,
+                user=self.user,
+            )
+        )
+
+        order.refresh_from_db()
+        order_item.refresh_from_db()
+
+        self.assertEqual(
+            second_invoice.items.get().quantity,
+            Decimal("3.0000"),
+        )
+        self.assertEqual(
+            second_invoice.total_amount,
+            Decimal("310.50"),
+        )
+        self.assertEqual(
+            order.billing_status,
+            SalesOrderBillingStatus.FULL,
+        )
+        self.assertEqual(
+            order.invoiced_amount,
+            Decimal("414.00"),
+        )
+        self.assertEqual(
+            order_item.remaining_quantity,
+            Decimal("0.0000"),
+        )
+
+    def test_order_invoice_rejects_quantity_over_remaining(
+        self,
+    ):
+        order = self._create_confirmed_order()
+        order_item = order.items.get()
+
+        with self.assertRaises(ValidationError):
+            create_sales_invoice_from_order(
+                company=self.company,
+                order=order,
+                user=self.user,
+                items=[
+                    {
+                        "order_item_id": order_item.id,
+                        "quantity": "5",
+                    }
+                ],
+            )
+
+        self.assertFalse(
+            SalesInvoice.objects.filter(
+                source_order=order,
+            ).exists()
+        )
+
+    def test_draft_order_cannot_be_invoiced(self):
+        order = create_sales_order(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            items=[
+                {
+                    "catalog_item_id": self.item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        with self.assertRaises(ValidationError):
+            create_sales_invoice_from_order(
+                company=self.company,
+                order=order,
+                user=self.user,
+            )
+
+    def test_cross_company_order_cannot_be_invoiced(
+        self,
+    ):
+        other_order = self._create_confirmed_order(
+            company=self.other_company,
+            user=self.other_user,
+            customer=self.other_customer,
+            catalog_item=self.other_item,
+            quantity="1",
+            discount_amount="0.00",
+        )
+
+        with self.assertRaises(ValidationError):
+            create_sales_invoice_from_order(
+                company=self.company,
+                order=other_order,
+                user=self.user,
+            )
+
+    def test_invoiced_order_cannot_be_cancelled(self):
+        order = self._create_confirmed_order()
+
+        create_sales_invoice_from_order(
+            company=self.company,
+            order=order,
+            user=self.user,
+            items=[
+                {
+                    "order_item_id": order.items.get().id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        with self.assertRaises(ValidationError):
+            cancel_sales_order(
+                company=self.company,
+                order=order,
+                reason="Cannot cancel invoiced order",
+                user=self.user,
+            )
+
+    def test_cancelled_invoice_releases_order_quantity(
+        self,
+    ):
+        order = self._create_confirmed_order()
+        order_item = order.items.get()
+
+        invoice = create_sales_invoice_from_order(
+            company=self.company,
+            order=order,
+            user=self.user,
+            items=[
+                {
+                    "order_item_id": order_item.id,
+                    "quantity": "2",
+                }
+            ],
+            issue_now=True,
+        )
+
+        order.refresh_from_db()
+
+        self.assertEqual(
+            order.billing_status,
+            SalesOrderBillingStatus.PARTIAL,
+        )
+
+        cancel_sales_invoice(
+            company=self.company,
+            invoice=invoice,
+            reason="Invoice cancelled",
+            user=self.user,
+        )
+
+        order.refresh_from_db()
+        order_item.refresh_from_db()
+
+        self.assertEqual(
+            order.billing_status,
+            SalesOrderBillingStatus.NOT_INVOICED,
+        )
+        self.assertEqual(
+            order.invoiced_amount,
+            Decimal("0.00"),
+        )
+        self.assertEqual(
+            order_item.invoiced_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            order_item.remaining_quantity,
+            Decimal("4.0000"),
+        )
+
+    def test_order_invoice_summary_excludes_cancelled_invoice(
+        self,
+    ):
+        order = self._create_confirmed_order()
+        order_item = order.items.get()
+
+        cancelled_invoice = (
+            create_sales_invoice_from_order(
+                company=self.company,
+                order=order,
+                user=self.user,
+                items=[
+                    {
+                        "order_item_id": order_item.id,
+                        "quantity": "1",
+                    }
+                ],
+                issue_now=True,
+            )
+        )
+
+        cancel_sales_invoice(
+            company=self.company,
+            invoice=cancelled_invoice,
+            reason="Cancelled",
+            user=self.user,
+        )
+
+        active_invoice = (
+            create_sales_invoice_from_order(
+                company=self.company,
+                order=order,
+                user=self.user,
+                items=[
+                    {
+                        "order_item_id": order_item.id,
+                        "quantity": "2",
+                    }
+                ],
+            )
+        )
+
+        summary = serialize_order_invoice_summary(
+            order
+        )
+
+        self.assertEqual(
+            summary["billing_status"],
+            SalesOrderBillingStatus.PARTIAL,
+        )
+        self.assertEqual(
+            summary["invoiced_amount"],
+            str(active_invoice.total_amount),
+        )
+        self.assertEqual(
+            summary["invoices_count"],
+            2,
+        )
+
+
+class SalesOrderInvoiceConversionAPITests(
+    SalesTestCase
+):
+    """
+    API, permission, and tenant-isolation tests.
+    """
+
+    def _create_confirmed_order(
+        self,
+        *,
+        company=None,
+        user=None,
+        customer=None,
+        catalog_item=None,
+        quantity="4",
+    ) -> SalesOrder:
+        selected_company = company or self.company
+        selected_user = user or self.user
+        selected_customer = customer or self.customer
+        selected_item = catalog_item or self.item
+
+        order = create_sales_order(
+            company=selected_company,
+            user=selected_user,
+            customer_id=selected_customer.id,
+            items=[
+                {
+                    "catalog_item_id": selected_item.id,
+                    "quantity": quantity,
+                }
+            ],
+        )
+
+        return confirm_sales_order(
+            company=selected_company,
+            order=order,
+            user=selected_user,
+        )
+
+    def test_create_partial_invoice_from_order_endpoint(
+        self,
+    ):
+        order = self._create_confirmed_order()
+        order_item = order.items.get()
+
+        response = self.client.post(
+            f"/api/company/sales/orders/"
+            f"{order.id}/create-invoice/",
+            data={
+                "items": [
+                    {
+                        "order_item_id": order_item.id,
+                        "quantity": "1",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+            response.content,
+        )
+
+        payload = response.json()
+        order.refresh_from_db()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(
+            payload["invoice"]["source"],
+            SalesInvoiceSource.SALES_ORDER,
+        )
+        self.assertEqual(
+            payload["invoice"]["source_order"]["id"],
+            order.id,
+        )
+        self.assertEqual(
+            payload["invoice"]["items"][0][
+                "source_order_item_id"
+            ],
+            order_item.id,
+        )
+        self.assertEqual(
+            payload["order"]["billing_status"],
+            SalesOrderBillingStatus.PARTIAL,
+        )
+
+    def test_create_full_invoice_and_issue_endpoint(
+        self,
+    ):
+        order = self._create_confirmed_order(
+            quantity="1"
+        )
+
+        response = self.client.post(
+            f"/api/company/sales/orders/"
+            f"{order.id}/create-invoice/",
+            data={
+                "issue_now": True,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(
+            payload["invoice"]["status"],
+            SalesInvoiceStatus.ISSUED,
+        )
+        self.assertEqual(
+            payload["order"]["billing_status"],
+            SalesOrderBillingStatus.FULL,
+        )
+
+    def test_order_invoices_summary_endpoint(self):
+        order = self._create_confirmed_order()
+        order_item = order.items.get()
+
+        create_sales_invoice_from_order(
+            company=self.company,
+            order=order,
+            user=self.user,
+            items=[
+                {
+                    "order_item_id": order_item.id,
+                    "quantity": "2",
+                }
+            ],
+        )
+
+        response = self.client.get(
+            f"/api/company/sales/orders/"
+            f"{order.id}/invoices/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(
+            payload["company"]["id"],
+            self.company.id,
+        )
+        self.assertEqual(
+            payload["summary"]["order_id"],
+            order.id,
+        )
+        self.assertEqual(
+            payload["summary"]["billing_status"],
+            SalesOrderBillingStatus.PARTIAL,
+        )
+        self.assertEqual(
+            payload["summary"]["invoices_count"],
+            1,
+        )
+
+    def test_order_invoice_endpoints_block_cross_company(
+        self,
+    ):
+        other_order = self._create_confirmed_order(
+            company=self.other_company,
+            user=self.other_user,
+            customer=self.other_customer,
+            catalog_item=self.other_item,
+            quantity="1",
+        )
+
+        create_response = self.client.post(
+            f"/api/company/sales/orders/"
+            f"{other_order.id}/create-invoice/",
+            data={},
+            content_type="application/json",
+        )
+
+        summary_response = self.client.get(
+            f"/api/company/sales/orders/"
+            f"{other_order.id}/invoices/"
+        )
+
+        self.assertEqual(
+            create_response.status_code,
+            404,
+        )
+        self.assertEqual(
+            summary_response.status_code,
+            404,
+        )
+
+    def test_viewer_can_view_but_cannot_create_order_invoice(
+        self,
+    ):
+        order = self._create_confirmed_order()
+
+        self.client.force_login(
+            self.viewer_user
+        )
+
+        summary_response = self.client.get(
+            f"/api/company/sales/orders/"
+            f"{order.id}/invoices/"
+        )
+
+        create_response = self.client.post(
+            f"/api/company/sales/orders/"
+            f"{order.id}/create-invoice/",
+            data={},
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            summary_response.status_code,
+            200,
+            summary_response.content,
+        )
+        self.assertEqual(
+            create_response.status_code,
+            403,
+            create_response.content,
+        )
+
+    def test_orders_list_filters_by_billing_status(
+        self,
+    ):
+        partial_order = self._create_confirmed_order()
+        untouched_order = self._create_confirmed_order(
+            quantity="2"
+        )
+
+        partial_item = partial_order.items.get()
+
+        create_sales_invoice_from_order(
+            company=self.company,
+            order=partial_order,
+            user=self.user,
+            items=[
+                {
+                    "order_item_id": partial_item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        response = self.client.get(
+            "/api/company/sales/orders/",
+            {
+                "billing_status":
+                    SalesOrderBillingStatus.PARTIAL,
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        payload = response.json()
+        result_ids = {
+            result["id"]
+            for result in payload["results"]
+        }
+
+        self.assertIn(
+            partial_order.id,
+            result_ids,
+        )
+        self.assertNotIn(
+            untouched_order.id,
+            result_ids,
+        )
+
+    def test_draft_order_invoice_endpoint_rejected(
+        self,
+    ):
+        order = create_sales_order(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            items=[
+                {
+                    "catalog_item_id": self.item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        response = self.client.post(
+            f"/api/company/sales/orders/"
+            f"{order.id}/create-invoice/",
+            data={},
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+        )
+        self.assertFalse(
+            response.json()["success"]
+        )
+
+
+# End Phase 21.3 - Sales Order Fulfillment & Invoice Conversion Tests
 # ============================================================

@@ -6,10 +6,12 @@ from .cancel import sales_order_cancel
 from .complete import sales_order_complete
 from .confirm import sales_order_confirm
 from .create import sales_order_create
+from .create_invoice import sales_order_create_invoice
 from .create_from_quotation import (
     sales_order_create_from_quotation,
 )
 from .detail import sales_order_detail
+from .invoices import sales_order_invoices
 from .list import sales_orders_list
 from .process import sales_order_process
 from .update import sales_order_update
@@ -43,6 +45,16 @@ urlpatterns = [
         "<int:order_id>/update/",
         sales_order_update,
         name="update",
+    ),
+    path(
+        "<int:order_id>/create-invoice/",
+        sales_order_create_invoice,
+        name="create-invoice",
+    ),
+    path(
+        "<int:order_id>/invoices/",
+        sales_order_invoices,
+        name="invoices",
     ),
     path(
         "<int:order_id>/confirm/",

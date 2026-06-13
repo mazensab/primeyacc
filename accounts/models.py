@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 accounts/models.py
-# 🧠 PrimeyAcc | Accounts Models V3.0
+# 🧠 PrimeyAcc | Accounts Models V3.1
 # ------------------------------------------------------------
 # ✅ User Profile
 # ✅ Workspace Type Foundation
@@ -369,6 +369,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.orders.complete",
         "company.sales.orders.cancel",
         "company.sales.orders.create_from_quotation",
+        "company.sales.orders.create_invoice",
+        "company.sales.orders.invoices.view",
     ],
     CompanyRole.MANAGER: [
         "company.dashboard.view",
@@ -521,6 +523,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.orders.complete",
         "company.sales.orders.cancel",
         "company.sales.orders.create_from_quotation",
+        "company.sales.orders.create_invoice",
+        "company.sales.orders.invoices.view",
     ],
     CompanyRole.ACCOUNTANT: [
         "company.dashboard.view",
@@ -596,6 +600,7 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.reports.view",
         "company.sales.quotations.view",
         "company.sales.orders.view",
+        "company.sales.orders.invoices.view",
     ],
     CompanyRole.CASHIER: [
         "company.dashboard.view",
@@ -627,6 +632,7 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.whatsapp.messages.send",
         "company.sales.quotations.view",
         "company.sales.orders.view",
+        "company.sales.orders.invoices.view",
     ],
     CompanyRole.SALES: [
         "company.dashboard.view",
@@ -671,6 +677,8 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.orders.complete",
         "company.sales.orders.cancel",
         "company.sales.orders.create_from_quotation",
+        "company.sales.orders.create_invoice",
+        "company.sales.orders.invoices.view",
     ],
     CompanyRole.INVENTORY: [
         "company.dashboard.view",
@@ -860,6 +868,7 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.reports.view",
         "company.sales.quotations.view",
         "company.sales.orders.view",
+        "company.sales.orders.invoices.view",
     ],
 }
 

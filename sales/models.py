@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 sales/models.py
-# 🧠 PrimeyAcc | Sales Models V1.2
+# 🧠 PrimeyAcc | Sales Models V1.3
 # ------------------------------------------------------------
 # ✅ Company-scoped sales invoices foundation
 # ✅ SalesInvoice header model
@@ -21,6 +21,11 @@
 # - بند الفاتورة يحفظ snapshot للسعر والضريبة والوصف وقت إنشاء الفاتورة
 # - المدفوعات تعدل paid_amount / balance_due / payment_status فقط
 # - لا يتم إنشاء قيود محاسبية أو حركات مخزون مباشرة من models.py
+# ============================================================
+
+# Phase 21.3 sales order invoice conversion foundation
+# Partial and full order invoicing tracking
+# Ordered, invoiced, and remaining quantities tracking
 # ============================================================
 
 from __future__ import annotations
@@ -102,6 +107,7 @@ class SalesInvoiceSource(models.TextChoices):
     """
 
     MANUAL = "MANUAL", "Manual"
+    SALES_ORDER = "SALES_ORDER", "Sales order"
     POS = "POS", "POS"
     ONLINE = "ONLINE", "Online"
     IMPORT = "IMPORT", "Import"
@@ -145,6 +151,16 @@ class SalesInvoice(models.Model):
         db_index=True,
         verbose_name="Customer",
         help_text="Optional customer. Must be an active customer inside the same company.",
+    )
+
+    source_order = models.ForeignKey(
+        "SalesOrder",
+        on_delete=models.SET_NULL,
+        related_name="generated_invoices",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Source sales order",
     )
 
     invoice_number = models.CharField(
@@ -469,6 +485,62 @@ class SalesInvoice(models.Model):
                 raise ValidationError(
                     {"customer": "Selected customer is not active."}
                 )
+
+        if self.source_order_id:
+            if (
+                self.source_order.company_id
+                != self.company_id
+            ):
+                raise ValidationError(
+                    {
+                        "source_order":
+                        "Source sales order must belong "
+                        "to the same company."
+                    }
+                )
+
+            if self.source_order.status in [
+                SalesOrderStatus.DRAFT,
+                SalesOrderStatus.CANCELLED,
+            ]:
+                raise ValidationError(
+                    {
+                        "source_order":
+                        "Only confirmed, processing, "
+                        "or completed orders can be invoiced."
+                    }
+                )
+
+            if (
+                self.customer_id
+                and self.source_order.customer_id
+                != self.customer_id
+            ):
+                raise ValidationError(
+                    {
+                        "customer":
+                        "Invoice customer must match "
+                        "source order customer."
+                    }
+                )
+
+            if (
+                self.branch_id
+                and self.source_order.branch_id
+                and self.source_order.branch_id
+                != self.branch_id
+            ):
+                raise ValidationError(
+                    {
+                        "branch":
+                        "Invoice branch must match "
+                        "source order branch."
+                    }
+                )
+
+            self.source = (
+                SalesInvoiceSource.SALES_ORDER
+            )
 
         if self.discount_amount > self.subtotal:
             raise ValidationError(
@@ -822,6 +894,16 @@ class SalesInvoiceItem(models.Model):
         help_text="Optional catalog item. Snapshot fields preserve historical data.",
     )
 
+    source_order_item = models.ForeignKey(
+        "SalesOrderItem",
+        on_delete=models.SET_NULL,
+        related_name="invoice_items",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Source sales order item",
+    )
+
     line_number = models.PositiveIntegerField(
         default=1,
         db_index=True,
@@ -1007,6 +1089,93 @@ class SalesInvoiceItem(models.Model):
                     {"catalog_item": "Catalog item is not sellable."}
                 )
 
+        if self.source_order_item_id:
+            source_item = self.source_order_item
+            source_order = source_item.order
+
+            if source_item.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "source_order_item":
+                        "Source order item must belong "
+                        "to the same company."
+                    }
+                )
+
+            if not self.invoice.source_order_id:
+                raise ValidationError(
+                    {
+                        "source_order_item":
+                        "Invoice must reference "
+                        "a source sales order."
+                    }
+                )
+
+            if (
+                source_order.id
+                != self.invoice.source_order_id
+            ):
+                raise ValidationError(
+                    {
+                        "source_order_item":
+                        "Source order item does not "
+                        "belong to invoice order."
+                    }
+                )
+
+            if source_order.status in [
+                SalesOrderStatus.DRAFT,
+                SalesOrderStatus.CANCELLED,
+            ]:
+                raise ValidationError(
+                    {
+                        "source_order_item":
+                        "Source sales order cannot "
+                        "be invoiced in its current status."
+                    }
+                )
+
+            already_invoiced = (
+                source_item.invoice_items
+                .exclude(
+                    invoice__status=(
+                        SalesInvoiceStatus.CANCELLED
+                    )
+                )
+                .exclude(pk=self.pk)
+                .aggregate(total=Sum("quantity"))
+                .get("total")
+                or QUANTITY_ZERO
+            )
+
+            available_quantity = quantize_quantity(
+                source_item.quantity
+                - already_invoiced
+            )
+
+            if self.quantity > available_quantity:
+                raise ValidationError(
+                    {
+                        "quantity":
+                        "Invoice quantity cannot exceed "
+                        "the remaining sales order quantity."
+                    }
+                )
+
+            if (
+                self.catalog_item_id
+                and source_item.catalog_item_id
+                and self.catalog_item_id
+                != source_item.catalog_item_id
+            ):
+                raise ValidationError(
+                    {
+                        "catalog_item":
+                        "Invoice catalog item must match "
+                        "source order item."
+                    }
+                )
+
         if not self.item_name_snapshot:
             if self.catalog_item_id:
                 self.item_name_snapshot = self.catalog_item.name
@@ -1068,12 +1237,34 @@ class SalesInvoiceItem(models.Model):
         if self.invoice_id:
             self.invoice.recalculate_totals(save=True)
 
+        if self.source_order_item_id:
+            self.source_order_item.refresh_invoicing_quantities(
+                save=True
+            )
+            self.source_order_item.order.refresh_invoice_progress(
+                save=True
+            )
+
     def delete(self, *args, **kwargs):
         invoice = self.invoice
+        source_order_item = (
+            self.source_order_item
+            if self.source_order_item_id
+            else None
+        )
+
         result = super().delete(*args, **kwargs)
 
         if invoice.pk:
             invoice.recalculate_totals(save=True)
+
+        if source_order_item:
+            source_order_item.refresh_invoicing_quantities(
+                save=True
+            )
+            source_order_item.order.refresh_invoice_progress(
+                save=True
+            )
 
         return result
 
@@ -2273,6 +2464,19 @@ class SalesOrderStatus(models.TextChoices):
     CANCELLED = "CANCELLED", "Cancelled"
 
 
+class SalesOrderBillingStatus(models.TextChoices):
+    """
+    Sales order invoicing progress.
+    """
+
+    NOT_INVOICED = (
+        "NOT_INVOICED",
+        "Not invoiced",
+    )
+    PARTIAL = "PARTIAL", "Partially invoiced"
+    FULL = "FULL", "Fully invoiced"
+
+
 class SalesOrderSource(models.TextChoices):
     """
     Source of sales order creation.
@@ -2347,6 +2551,24 @@ class SalesOrder(models.Model):
         default=SalesOrderStatus.DRAFT,
         db_index=True,
         verbose_name="Status",
+    )
+
+    billing_status = models.CharField(
+        max_length=20,
+        choices=SalesOrderBillingStatus.choices,
+        default=(
+            SalesOrderBillingStatus.NOT_INVOICED
+        ),
+        db_index=True,
+        verbose_name="Billing status",
+    )
+
+    invoiced_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Invoiced amount",
     )
 
     source = models.CharField(
@@ -2570,6 +2792,9 @@ class SalesOrder(models.Model):
         ]
         indexes = [
             models.Index(fields=["company", "status"]),
+            models.Index(
+                fields=["company", "billing_status"]
+            ),
             models.Index(fields=["company", "source"]),
             models.Index(fields=["company", "order_date"]),
             models.Index(
@@ -2633,6 +2858,26 @@ class SalesOrder(models.Model):
             SalesOrderStatus.PROCESSING,
         ]
 
+    @property
+    def can_be_invoiced(self) -> bool:
+        return (
+            self.status in [
+                SalesOrderStatus.CONFIRMED,
+                SalesOrderStatus.PROCESSING,
+                SalesOrderStatus.COMPLETED,
+            ]
+            and self.billing_status
+            != SalesOrderBillingStatus.FULL
+        )
+
+    @property
+    def remaining_invoice_amount(self) -> Decimal:
+        remaining = quantize_money(
+            self.total_amount
+            - self.invoiced_amount
+        )
+        return max(remaining, MONEY_ZERO)
+
     def clean(self) -> None:
         """
         Validate tenant consistency, source quotation, dates, and totals.
@@ -2661,6 +2906,9 @@ class SalesOrder(models.Model):
         self.tax_amount = quantize_money(self.tax_amount)
         self.total_amount = quantize_money(
             self.total_amount
+        )
+        self.invoiced_amount = quantize_money(
+            self.invoiced_amount
         )
 
         if self.branch_id and self.company_id:
@@ -2935,6 +3183,78 @@ class SalesOrder(models.Model):
                 ]
             )
 
+    def refresh_invoice_progress(
+        self,
+        save: bool = True,
+    ) -> None:
+        """
+        Refresh line quantities and invoice progress.
+        """
+        if not self.pk:
+            return
+
+        items = list(self.items.all())
+
+        for item in items:
+            item.refresh_invoicing_quantities(
+                save=True
+            )
+
+        ordered_quantity = sum(
+            (
+                quantize_quantity(item.quantity)
+                for item in items
+            ),
+            QUANTITY_ZERO,
+        )
+
+        invoiced_quantity = sum(
+            (
+                quantize_quantity(
+                    item.invoiced_quantity
+                )
+                for item in items
+            ),
+            QUANTITY_ZERO,
+        )
+
+        totals = (
+            self.generated_invoices
+            .exclude(
+                status=SalesInvoiceStatus.CANCELLED
+            )
+            .aggregate(total=Sum("total_amount"))
+        )
+
+        self.invoiced_amount = quantize_money(
+            totals.get("total") or MONEY_ZERO
+        )
+
+        if (
+            not items
+            or invoiced_quantity <= QUANTITY_ZERO
+        ):
+            self.billing_status = (
+                SalesOrderBillingStatus.NOT_INVOICED
+            )
+        elif invoiced_quantity < ordered_quantity:
+            self.billing_status = (
+                SalesOrderBillingStatus.PARTIAL
+            )
+        else:
+            self.billing_status = (
+                SalesOrderBillingStatus.FULL
+            )
+
+        if save:
+            SalesOrder.objects.filter(
+                pk=self.pk
+            ).update(
+                billing_status=self.billing_status,
+                invoiced_amount=self.invoiced_amount,
+                updated_at=timezone.now(),
+            )
+
     def confirm(self, user=None) -> None:
         """
         Confirm a draft sales order.
@@ -3081,6 +3401,19 @@ class SalesOrder(models.Model):
                 }
             )
 
+        self.refresh_invoice_progress(save=False)
+
+        if (
+            self.billing_status
+            != SalesOrderBillingStatus.NOT_INVOICED
+        ):
+            raise ValidationError(
+                {
+                    "billing_status":
+                    "Invoiced sales orders cannot be cancelled."
+                }
+            )
+
         self.status = SalesOrderStatus.CANCELLED
         self.cancelled_at = timezone.now()
         self.cancelled_reason = (reason or "").strip()
@@ -3188,6 +3521,26 @@ class SalesOrderItem(models.Model):
             MinValueValidator(Decimal("0.0001"))
         ],
         verbose_name="Quantity",
+    )
+
+    invoiced_quantity = models.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        default=QUANTITY_ZERO,
+        validators=[
+            MinValueValidator(QUANTITY_ZERO)
+        ],
+        verbose_name="Invoiced quantity",
+    )
+
+    remaining_quantity = models.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        default=QUANTITY_ZERO,
+        validators=[
+            MinValueValidator(QUANTITY_ZERO)
+        ],
+        verbose_name="Remaining quantity",
     )
 
     unit_price = models.DecimalField(
@@ -3325,8 +3678,18 @@ class SalesOrderItem(models.Model):
         ).strip()
         self.notes = (self.notes or "").strip()
 
-        self.quantity = quantize_quantity(self.quantity)
-        self.unit_price = quantize_money(self.unit_price)
+        self.quantity = quantize_quantity(
+            self.quantity
+        )
+        self.invoiced_quantity = quantize_quantity(
+            self.invoiced_quantity
+        )
+        self.remaining_quantity = quantize_quantity(
+            self.remaining_quantity
+        )
+        self.unit_price = quantize_money(
+            self.unit_price
+        )
         self.line_subtotal = quantize_money(
             self.quantity * self.unit_price
         )
@@ -3417,6 +3780,20 @@ class SalesOrderItem(models.Model):
                     }
                 )
 
+        if self.invoiced_quantity > self.quantity:
+            raise ValidationError(
+                {
+                    "invoiced_quantity":
+                    "Invoiced quantity cannot exceed "
+                    "ordered quantity."
+                }
+            )
+
+        self.remaining_quantity = quantize_quantity(
+            self.quantity
+            - self.invoiced_quantity
+        )
+
         if self.discount_amount > self.line_subtotal:
             raise ValidationError(
                 {
@@ -3443,6 +3820,57 @@ class SalesOrderItem(models.Model):
         self.line_total = quantize_money(
             net_amount + self.tax_amount
         )
+
+    def refresh_invoicing_quantities(
+        self,
+        save: bool = True,
+    ) -> None:
+        """
+        Refresh invoiced and remaining quantities.
+        """
+        if not self.pk:
+            return
+
+        totals = (
+            self.invoice_items
+            .exclude(
+                invoice__status=(
+                    SalesInvoiceStatus.CANCELLED
+                )
+            )
+            .aggregate(total=Sum("quantity"))
+        )
+
+        self.invoiced_quantity = quantize_quantity(
+            totals.get("total") or QUANTITY_ZERO
+        )
+
+        if self.invoiced_quantity > self.quantity:
+            raise ValidationError(
+                {
+                    "invoiced_quantity":
+                    "Invoiced quantity cannot exceed "
+                    "ordered quantity."
+                }
+            )
+
+        self.remaining_quantity = quantize_quantity(
+            self.quantity
+            - self.invoiced_quantity
+        )
+
+        if save:
+            SalesOrderItem.objects.filter(
+                pk=self.pk
+            ).update(
+                invoiced_quantity=(
+                    self.invoiced_quantity
+                ),
+                remaining_quantity=(
+                    self.remaining_quantity
+                ),
+                updated_at=timezone.now(),
+            )
 
     def apply_catalog_snapshot(self) -> None:
         """
@@ -3527,6 +3955,11 @@ class SalesOrderItem(models.Model):
         ):
             self.apply_catalog_snapshot()
 
+        if not self.pk:
+            self.remaining_quantity = (
+                quantize_quantity(self.quantity)
+            )
+
         self.full_clean()
         super().save(*args, **kwargs)
 
@@ -3556,4 +3989,13 @@ class SalesOrderItem(models.Model):
 
 
 # End Phase 21.2 - Sales Orders Foundation
+# ============================================================
+
+# ============================================================
+# Phase 21.3 - Sales Order Fulfillment & Invoice Conversion Foundation
+# ------------------------------------------------------------
+# SalesInvoice links to its source SalesOrder.
+# SalesInvoiceItem links to its source SalesOrderItem.
+# Partial and full invoicing are supported.
+# Cancelled invoices are excluded from fulfillment progress.
 # ============================================================
