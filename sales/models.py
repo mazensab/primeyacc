@@ -5671,3 +5671,1606 @@ class SalesReturnItem(models.Model):
 # End Phase 21.4.1 - Sales Returns Models Foundation
 # ============================================================
 
+
+# ============================================================
+# Phase 21.5.1 - Sales Credit Notes Models Foundation
+# ------------------------------------------------------------
+# Company-scoped credit note header and lines.
+# One credit note may be created from one confirmed sales return.
+# Commercial values are copied from the return snapshots.
+# Accounting posting remains inside the service layer.
+# ============================================================
+
+
+class SalesCreditNoteStatus(models.TextChoices):
+    """
+    Sales credit note lifecycle.
+    """
+
+    DRAFT = "DRAFT", "Draft"
+    ISSUED = "ISSUED", "Issued"
+    POSTED = "POSTED", "Posted"
+    CANCELLED = "CANCELLED", "Cancelled"
+
+
+class SalesCreditNote(models.Model):
+    """
+    Company-scoped sales credit note.
+
+    The document references one issued sales invoice and may reference
+    one confirmed sales return. Accounting effects are handled later
+    through sales services.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="sales_credit_notes",
+        db_index=True,
+        verbose_name="Company",
+    )
+
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        related_name="sales_credit_notes",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Branch",
+    )
+
+    customer = models.ForeignKey(
+        BusinessParty,
+        on_delete=models.SET_NULL,
+        related_name="sales_credit_notes",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Customer",
+    )
+
+    invoice = models.ForeignKey(
+        SalesInvoice,
+        on_delete=models.PROTECT,
+        related_name="credit_notes",
+        db_index=True,
+        verbose_name="Sales invoice",
+    )
+
+    sales_return = models.OneToOneField(
+        SalesReturn,
+        on_delete=models.PROTECT,
+        related_name="credit_note",
+        blank=True,
+        null=True,
+        verbose_name="Sales return",
+        help_text=(
+            "Optional in draft. A sales return can create "
+            "only one credit note."
+        ),
+    )
+
+    credit_note_number = models.CharField(
+        max_length=60,
+        db_index=True,
+        verbose_name="Credit note number",
+        help_text="Unique inside the same company.",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=SalesCreditNoteStatus.choices,
+        default=SalesCreditNoteStatus.DRAFT,
+        db_index=True,
+        verbose_name="Status",
+    )
+
+    credit_note_date = models.DateField(
+        default=timezone.localdate,
+        db_index=True,
+        verbose_name="Credit note date",
+    )
+
+    issued_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Issued at",
+    )
+
+    posted_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Posted at",
+    )
+
+    cancelled_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Cancelled at",
+    )
+
+    cancelled_reason = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Cancelled reason",
+    )
+
+    subtotal = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Subtotal",
+    )
+
+    discount_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Discount amount",
+    )
+
+    taxable_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Taxable amount",
+    )
+
+    tax_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Tax amount",
+    )
+
+    total_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Total amount",
+    )
+
+    currency_code = models.CharField(
+        max_length=10,
+        default="SAR",
+        verbose_name="Currency code",
+    )
+
+    customer_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Customer snapshot",
+    )
+
+    invoice_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Invoice snapshot",
+    )
+
+    return_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Sales return snapshot",
+    )
+
+    tax_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Tax snapshot",
+    )
+
+    public_notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Public notes",
+    )
+
+    internal_notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Internal notes",
+    )
+
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_sales_credit_notes",
+        blank=True,
+        null=True,
+        verbose_name="Created by",
+    )
+
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="updated_sales_credit_notes",
+        blank=True,
+        null=True,
+        verbose_name="Updated by",
+    )
+
+    issued_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="issued_sales_credit_notes",
+        blank=True,
+        null=True,
+        verbose_name="Issued by",
+    )
+
+    posted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="posted_sales_credit_notes",
+        blank=True,
+        null=True,
+        verbose_name="Posted by",
+    )
+
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="cancelled_sales_credit_notes",
+        blank=True,
+        null=True,
+        verbose_name="Cancelled by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Sales Credit Note"
+        verbose_name_plural = "Sales Credit Notes"
+        ordering = [
+            "-credit_note_date",
+            "-id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "company",
+                    "credit_note_number",
+                ],
+                condition=~Q(
+                    credit_note_number=""
+                ),
+                name=(
+                    "unique_sales_credit_note_number_per_company"
+                ),
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["company", "status"]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "credit_note_date",
+                ]
+            ),
+            models.Index(
+                fields=["company", "invoice"]
+            ),
+            models.Index(
+                fields=["company", "customer"]
+            ),
+            models.Index(
+                fields=["company", "branch"]
+            ),
+            models.Index(
+                fields=["company", "created_at"]
+            ),
+            models.Index(
+                fields=["credit_note_number"]
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.credit_note_number or 'Draft credit note'}"
+            f" - {self.company.display_name}"
+        )
+
+    @property
+    def is_draft(self) -> bool:
+        return (
+            self.status
+            == SalesCreditNoteStatus.DRAFT
+        )
+
+    @property
+    def is_issued(self) -> bool:
+        return (
+            self.status
+            == SalesCreditNoteStatus.ISSUED
+        )
+
+    @property
+    def is_posted(self) -> bool:
+        return (
+            self.status
+            == SalesCreditNoteStatus.POSTED
+        )
+
+    @property
+    def is_cancelled(self) -> bool:
+        return (
+            self.status
+            == SalesCreditNoteStatus.CANCELLED
+        )
+
+    @property
+    def can_be_edited(self) -> bool:
+        return self.is_draft
+
+    @property
+    def can_be_issued(self) -> bool:
+        return self.is_draft
+
+    @property
+    def can_be_posted(self) -> bool:
+        return self.is_issued
+
+    @property
+    def can_be_cancelled(self) -> bool:
+        return self.status in [
+            SalesCreditNoteStatus.DRAFT,
+            SalesCreditNoteStatus.ISSUED,
+        ]
+
+    def clean(self) -> None:
+        """
+        Validate company isolation, source documents, dates, and totals.
+        """
+        super().clean()
+
+        self.credit_note_number = (
+            self.credit_note_number or ""
+        ).strip()
+        self.currency_code = (
+            self.currency_code or "SAR"
+        ).strip().upper()
+        self.cancelled_reason = (
+            self.cancelled_reason or ""
+        ).strip()
+        self.public_notes = (
+            self.public_notes or ""
+        ).strip()
+        self.internal_notes = (
+            self.internal_notes or ""
+        ).strip()
+
+        self.subtotal = quantize_money(
+            self.subtotal
+        )
+        self.discount_amount = quantize_money(
+            self.discount_amount
+        )
+        self.taxable_amount = quantize_money(
+            self.taxable_amount
+        )
+        self.tax_amount = quantize_money(
+            self.tax_amount
+        )
+        self.total_amount = quantize_money(
+            self.total_amount
+        )
+
+        if self.invoice_id and self.company_id:
+            if (
+                self.invoice.company_id
+                != self.company_id
+            ):
+                raise ValidationError(
+                    {
+                        "invoice":
+                        "Sales invoice must belong "
+                        "to the same company."
+                    }
+                )
+
+            if (
+                self.invoice.status
+                != SalesInvoiceStatus.ISSUED
+            ):
+                raise ValidationError(
+                    {
+                        "invoice":
+                        "Only issued sales invoices "
+                        "can receive credit notes."
+                    }
+                )
+
+            if (
+                self.credit_note_date
+                and self.invoice.invoice_date
+                and self.credit_note_date
+                < self.invoice.invoice_date
+            ):
+                raise ValidationError(
+                    {
+                        "credit_note_date":
+                        "Credit note date cannot be before "
+                        "invoice date."
+                    }
+                )
+
+            if (
+                self.customer_id
+                and self.invoice.customer_id
+                and self.customer_id
+                != self.invoice.customer_id
+            ):
+                raise ValidationError(
+                    {
+                        "customer":
+                        "Credit note customer must match "
+                        "invoice customer."
+                    }
+                )
+
+            if (
+                self.branch_id
+                and self.invoice.branch_id
+                and self.branch_id
+                != self.invoice.branch_id
+            ):
+                raise ValidationError(
+                    {
+                        "branch":
+                        "Credit note branch must match "
+                        "invoice branch."
+                    }
+                )
+
+            if (
+                self.currency_code
+                != self.invoice.currency_code
+            ):
+                raise ValidationError(
+                    {
+                        "currency_code":
+                        "Credit note currency must match "
+                        "invoice currency."
+                    }
+                )
+
+        if self.sales_return_id:
+            if (
+                self.sales_return.company_id
+                != self.company_id
+            ):
+                raise ValidationError(
+                    {
+                        "sales_return":
+                        "Sales return must belong "
+                        "to the same company."
+                    }
+                )
+
+            if (
+                self.sales_return.invoice_id
+                != self.invoice_id
+            ):
+                raise ValidationError(
+                    {
+                        "sales_return":
+                        "Sales return must belong "
+                        "to the selected invoice."
+                    }
+                )
+
+            if self.sales_return.status not in [
+                SalesReturnStatus.CONFIRMED,
+                SalesReturnStatus.POSTED,
+            ]:
+                raise ValidationError(
+                    {
+                        "sales_return":
+                        "Only confirmed or posted returns "
+                        "can create credit notes."
+                    }
+                )
+
+            if (
+                self.credit_note_date
+                and self.sales_return.return_date
+                and self.credit_note_date
+                < self.sales_return.return_date
+            ):
+                raise ValidationError(
+                    {
+                        "credit_note_date":
+                        "Credit note date cannot be before "
+                        "sales return date."
+                    }
+                )
+
+        if (
+            self.branch_id
+            and self.branch.company_id
+            != self.company_id
+        ):
+            raise ValidationError(
+                {
+                    "branch":
+                    "Selected branch does not belong "
+                    "to this company."
+                }
+            )
+
+        if (
+            self.customer_id
+            and self.customer.company_id
+            != self.company_id
+        ):
+            raise ValidationError(
+                {
+                    "customer":
+                    "Selected customer does not belong "
+                    "to this company."
+                }
+            )
+
+        if (
+            self.discount_amount
+            > self.subtotal
+        ):
+            raise ValidationError(
+                {
+                    "discount_amount":
+                    "Discount cannot be greater "
+                    "than subtotal."
+                }
+            )
+
+        self.total_amount = quantize_money(
+            self.subtotal
+            - self.discount_amount
+            + self.tax_amount
+        )
+
+    def build_customer_snapshot(self) -> dict:
+        """
+        Copy customer snapshot from return or invoice.
+        """
+        if self.sales_return_id:
+            return dict(
+                self.sales_return.customer_snapshot
+                or {}
+            )
+
+        if self.invoice_id:
+            return dict(
+                self.invoice.customer_snapshot
+                or {}
+            )
+
+        return {}
+
+    def build_invoice_snapshot(self) -> dict:
+        """
+        Copy invoice identity and amount snapshot.
+        """
+        if not self.invoice_id:
+            return {}
+
+        return {
+            "id": self.invoice_id,
+            "invoice_number":
+                self.invoice.invoice_number,
+            "invoice_date": (
+                self.invoice.invoice_date.isoformat()
+                if self.invoice.invoice_date
+                else None
+            ),
+            "status": self.invoice.status,
+            "payment_status":
+                self.invoice.payment_status,
+            "subtotal": str(
+                self.invoice.subtotal
+            ),
+            "discount_amount": str(
+                self.invoice.discount_amount
+            ),
+            "taxable_amount": str(
+                self.invoice.taxable_amount
+            ),
+            "tax_amount": str(
+                self.invoice.tax_amount
+            ),
+            "total_amount": str(
+                self.invoice.total_amount
+            ),
+            "paid_amount": str(
+                self.invoice.paid_amount
+            ),
+            "balance_due": str(
+                self.invoice.balance_due
+            ),
+            "currency_code":
+                self.invoice.currency_code,
+        }
+
+    def build_return_snapshot(self) -> dict:
+        """
+        Copy sales return identity and totals.
+        """
+        if not self.sales_return_id:
+            return {}
+
+        return {
+            "id": self.sales_return_id,
+            "return_number":
+                self.sales_return.return_number,
+            "return_date": (
+                self.sales_return.return_date.isoformat()
+                if self.sales_return.return_date
+                else None
+            ),
+            "status": self.sales_return.status,
+            "reason": self.sales_return.reason,
+            "reason_details":
+                self.sales_return.reason_details,
+            "subtotal": str(
+                self.sales_return.subtotal
+            ),
+            "discount_amount": str(
+                self.sales_return.discount_amount
+            ),
+            "taxable_amount": str(
+                self.sales_return.taxable_amount
+            ),
+            "tax_amount": str(
+                self.sales_return.tax_amount
+            ),
+            "total_amount": str(
+                self.sales_return.total_amount
+            ),
+            "currency_code":
+                self.sales_return.currency_code,
+        }
+
+    def refresh_snapshots(
+        self,
+        save: bool = True,
+    ) -> None:
+        """
+        Refresh historical snapshots.
+        """
+        self.customer_snapshot = (
+            self.build_customer_snapshot()
+        )
+        self.invoice_snapshot = (
+            self.build_invoice_snapshot()
+        )
+        self.return_snapshot = (
+            self.build_return_snapshot()
+        )
+        self.tax_snapshot = (
+            dict(
+                self.sales_return.tax_snapshot
+                or {}
+            )
+            if self.sales_return_id
+            else dict(
+                self.invoice.tax_snapshot
+                or {}
+            )
+            if self.invoice_id
+            else {}
+        )
+
+        if save and self.pk:
+            self.save(
+                update_fields=[
+                    "customer_snapshot",
+                    "invoice_snapshot",
+                    "return_snapshot",
+                    "tax_snapshot",
+                    "updated_at",
+                ]
+            )
+
+    def recalculate_totals(
+        self,
+        save: bool = True,
+    ) -> None:
+        """
+        Recalculate credit note totals from lines.
+        """
+        if not self.pk:
+            return
+
+        totals = self.items.aggregate(
+            subtotal=Sum("line_subtotal"),
+            discount_amount=Sum(
+                "discount_amount"
+            ),
+            taxable_amount=Sum(
+                "taxable_amount"
+            ),
+            tax_amount=Sum("tax_amount"),
+            total_amount=Sum("line_total"),
+        )
+
+        self.subtotal = quantize_money(
+            totals.get("subtotal")
+            or MONEY_ZERO
+        )
+        self.discount_amount = quantize_money(
+            totals.get("discount_amount")
+            or MONEY_ZERO
+        )
+        self.taxable_amount = quantize_money(
+            totals.get("taxable_amount")
+            or MONEY_ZERO
+        )
+        self.tax_amount = quantize_money(
+            totals.get("tax_amount")
+            or MONEY_ZERO
+        )
+        self.total_amount = quantize_money(
+            totals.get("total_amount")
+            or MONEY_ZERO
+        )
+
+        if save:
+            self.save(
+                update_fields=[
+                    "subtotal",
+                    "discount_amount",
+                    "taxable_amount",
+                    "tax_amount",
+                    "total_amount",
+                    "updated_at",
+                ]
+            )
+
+    def validate_items_for_issue(self) -> None:
+        """
+        Validate credit note lines before issuing.
+        """
+        if (
+            not self.pk
+            or not self.items.exists()
+        ):
+            raise ValidationError(
+                {
+                    "items":
+                    "Credit note cannot be issued "
+                    "without items."
+                }
+            )
+
+        for item in self.items.select_related(
+            "sales_return_item",
+            "invoice_item",
+            "catalog_item",
+        ):
+            item.full_clean()
+
+        self.recalculate_totals(
+            save=False
+        )
+
+        if self.total_amount <= MONEY_ZERO:
+            raise ValidationError(
+                {
+                    "total_amount":
+                    "Credit note total must "
+                    "be greater than zero."
+                }
+            )
+
+        if (
+            self.sales_return_id
+            and self.total_amount
+            != quantize_money(
+                self.sales_return.total_amount
+            )
+        ):
+            raise ValidationError(
+                {
+                    "total_amount":
+                    "Credit note total must match "
+                    "sales return total."
+                }
+            )
+
+    def issue(self, user=None) -> None:
+        """
+        Issue a draft credit note.
+        """
+        if not self.can_be_issued:
+            raise ValidationError(
+                {
+                    "status":
+                    "Only draft credit notes "
+                    "can be issued."
+                }
+            )
+
+        self.validate_items_for_issue()
+
+        self.status = (
+            SalesCreditNoteStatus.ISSUED
+        )
+        self.issued_at = timezone.now()
+        self.refresh_snapshots(
+            save=False
+        )
+
+        if user:
+            self.issued_by = user
+            self.updated_by = user
+
+        self.full_clean()
+
+        update_fields = [
+            "status",
+            "issued_at",
+            "subtotal",
+            "discount_amount",
+            "taxable_amount",
+            "tax_amount",
+            "total_amount",
+            "customer_snapshot",
+            "invoice_snapshot",
+            "return_snapshot",
+            "tax_snapshot",
+            "updated_at",
+        ]
+
+        if user:
+            update_fields.extend([
+                "issued_by",
+                "updated_by",
+            ])
+
+        self.save(
+            update_fields=update_fields
+        )
+
+    def mark_posted(self, user=None) -> None:
+        """
+        Mark an issued credit note as posted.
+        """
+        if not self.can_be_posted:
+            raise ValidationError(
+                {
+                    "status":
+                    "Only issued credit notes "
+                    "can be posted."
+                }
+            )
+
+        self.status = (
+            SalesCreditNoteStatus.POSTED
+        )
+        self.posted_at = timezone.now()
+
+        if user:
+            self.posted_by = user
+            self.updated_by = user
+
+        self.full_clean()
+
+        update_fields = [
+            "status",
+            "posted_at",
+            "updated_at",
+        ]
+
+        if user:
+            update_fields.extend([
+                "posted_by",
+                "updated_by",
+            ])
+
+        self.save(
+            update_fields=update_fields
+        )
+
+    def cancel(
+        self,
+        reason: str = "",
+        user=None,
+    ) -> None:
+        """
+        Cancel a draft or issued credit note.
+
+        Posted credit notes require a reversal flow.
+        """
+        if not self.can_be_cancelled:
+            raise ValidationError(
+                {
+                    "status":
+                    "Posted or already cancelled "
+                    "credit notes cannot be cancelled directly."
+                }
+            )
+
+        self.status = (
+            SalesCreditNoteStatus.CANCELLED
+        )
+        self.cancelled_at = timezone.now()
+        self.cancelled_reason = (
+            reason or ""
+        ).strip()
+
+        if user:
+            self.cancelled_by = user
+            self.updated_by = user
+
+        self.full_clean()
+
+        update_fields = [
+            "status",
+            "cancelled_at",
+            "cancelled_reason",
+            "updated_at",
+        ]
+
+        if user:
+            update_fields.extend([
+                "cancelled_by",
+                "updated_by",
+            ])
+
+        self.save(
+            update_fields=update_fields
+        )
+
+
+class SalesCreditNoteItem(models.Model):
+    """
+    Credit note line copied from one sales return item.
+    """
+
+    credit_note = models.ForeignKey(
+        SalesCreditNote,
+        on_delete=models.CASCADE,
+        related_name="items",
+        db_index=True,
+        verbose_name="Credit note",
+    )
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="sales_credit_note_items",
+        db_index=True,
+        verbose_name="Company",
+    )
+
+    sales_return_item = models.OneToOneField(
+        SalesReturnItem,
+        on_delete=models.PROTECT,
+        related_name="credit_note_item",
+        verbose_name="Sales return item",
+    )
+
+    invoice_item = models.ForeignKey(
+        SalesInvoiceItem,
+        on_delete=models.PROTECT,
+        related_name="credit_note_items",
+        db_index=True,
+        verbose_name="Invoice item",
+    )
+
+    catalog_item = models.ForeignKey(
+        CatalogItem,
+        on_delete=models.SET_NULL,
+        related_name="sales_credit_note_items",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Catalog item",
+    )
+
+    line_number = models.PositiveIntegerField(
+        default=1,
+        db_index=True,
+        verbose_name="Line number",
+    )
+
+    item_code_snapshot = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+        verbose_name="Item code snapshot",
+    )
+
+    item_name_snapshot = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="Item name snapshot",
+    )
+
+    item_description_snapshot = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Item description snapshot",
+    )
+
+    unit_name_snapshot = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        verbose_name="Unit name snapshot",
+    )
+
+    quantity = models.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        validators=[
+            MinValueValidator(
+                Decimal("0.0001")
+            )
+        ],
+        verbose_name="Quantity",
+    )
+
+    unit_price = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[
+            MinValueValidator(MONEY_ZERO)
+        ],
+        verbose_name="Unit price",
+    )
+
+    line_subtotal = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[
+            MinValueValidator(MONEY_ZERO)
+        ],
+        verbose_name="Line subtotal",
+    )
+
+    discount_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[
+            MinValueValidator(MONEY_ZERO)
+        ],
+        verbose_name="Discount amount",
+    )
+
+    taxable = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name="Taxable",
+    )
+
+    tax_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("15.00"),
+        validators=[
+            MinValueValidator(TAX_ZERO)
+        ],
+        verbose_name="Tax rate",
+    )
+
+    taxable_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[
+            MinValueValidator(MONEY_ZERO)
+        ],
+        verbose_name="Taxable amount",
+    )
+
+    tax_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[
+            MinValueValidator(MONEY_ZERO)
+        ],
+        verbose_name="Tax amount",
+    )
+
+    line_total = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[
+            MinValueValidator(MONEY_ZERO)
+        ],
+        verbose_name="Line total",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Internal notes",
+    )
+
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Sales Credit Note Item"
+        verbose_name_plural = (
+            "Sales Credit Note Items"
+        )
+        ordering = [
+            "credit_note_id",
+            "line_number",
+            "id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "credit_note",
+                    "line_number",
+                ],
+                name=(
+                    "unique_sales_credit_note_line_number"
+                ),
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=[
+                    "company",
+                    "credit_note",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "invoice_item",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "catalog_item",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "credit_note",
+                    "line_number",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "company",
+                    "created_at",
+                ]
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.credit_note.credit_note_number}"
+            f" - {self.item_name_snapshot}"
+        )
+
+    def apply_sales_return_item_snapshot(
+        self,
+    ) -> None:
+        """
+        Copy immutable commercial values from the return item.
+        """
+        if not self.sales_return_item_id:
+            return
+
+        source_item = self.sales_return_item
+
+        self.invoice_item = (
+            source_item.invoice_item
+        )
+        self.catalog_item = (
+            source_item.catalog_item
+        )
+        self.item_code_snapshot = (
+            source_item.item_code_snapshot
+        )
+        self.item_name_snapshot = (
+            source_item.item_name_snapshot
+        )
+        self.item_description_snapshot = (
+            source_item.item_description_snapshot
+        )
+        self.unit_name_snapshot = (
+            source_item.unit_name_snapshot
+        )
+        self.quantity = quantize_quantity(
+            source_item.quantity
+        )
+        self.unit_price = quantize_money(
+            source_item.unit_price
+        )
+        self.line_subtotal = quantize_money(
+            source_item.line_subtotal
+        )
+        self.discount_amount = quantize_money(
+            source_item.discount_amount
+        )
+        self.taxable = bool(
+            source_item.taxable
+        )
+        self.tax_rate = quantize_money(
+            source_item.tax_rate
+        )
+        self.taxable_amount = quantize_money(
+            source_item.taxable_amount
+        )
+        self.tax_amount = quantize_money(
+            source_item.tax_amount
+        )
+        self.line_total = quantize_money(
+            source_item.line_total
+        )
+        self.notes = (
+            source_item.notes or ""
+        ).strip()
+        self.extra_data = dict(
+            source_item.extra_data or {}
+        )
+
+    def clean(self) -> None:
+        """
+        Validate tenant consistency and snapshot equality.
+        """
+        super().clean()
+
+        self.item_code_snapshot = (
+            self.item_code_snapshot or ""
+        ).strip()
+        self.item_name_snapshot = (
+            self.item_name_snapshot or ""
+        ).strip()
+        self.item_description_snapshot = (
+            self.item_description_snapshot
+            or ""
+        ).strip()
+        self.unit_name_snapshot = (
+            self.unit_name_snapshot or ""
+        ).strip()
+        self.notes = (
+            self.notes or ""
+        ).strip()
+
+        if (
+            self.credit_note_id
+            and self.company_id
+            and self.credit_note.company_id
+            != self.company_id
+        ):
+            raise ValidationError(
+                {
+                    "company":
+                    "Credit note item company must "
+                    "match credit note company."
+                }
+            )
+
+        if (
+            self.credit_note_id
+            and not self.credit_note.can_be_edited
+        ):
+            existing_item = (
+                type(self).objects
+                .filter(pk=self.pk)
+                .first()
+                if self.pk
+                else None
+            )
+
+            if not existing_item:
+                raise ValidationError(
+                    {
+                        "credit_note":
+                        "Only draft credit notes "
+                        "can be modified."
+                    }
+                )
+
+            protected_fields = [
+                "sales_return_item_id",
+                "invoice_item_id",
+                "catalog_item_id",
+                "line_number",
+                "quantity",
+                "unit_price",
+                "line_subtotal",
+                "discount_amount",
+                "taxable",
+                "tax_rate",
+                "taxable_amount",
+                "tax_amount",
+                "line_total",
+                "notes",
+                "extra_data",
+            ]
+
+            for field_name in protected_fields:
+                if (
+                    getattr(
+                        existing_item,
+                        field_name,
+                    )
+                    != getattr(
+                        self,
+                        field_name,
+                    )
+                ):
+                    raise ValidationError(
+                        {
+                            "credit_note":
+                            "Only draft credit notes "
+                            "can be modified."
+                        }
+                    )
+
+        if self.sales_return_item_id:
+            source_item = (
+                self.sales_return_item
+            )
+
+            if (
+                source_item.company_id
+                != self.company_id
+            ):
+                raise ValidationError(
+                    {
+                        "sales_return_item":
+                        "Sales return item must belong "
+                        "to the same company."
+                    }
+                )
+
+            if (
+                self.credit_note.sales_return_id
+                != source_item.sales_return_id
+            ):
+                raise ValidationError(
+                    {
+                        "sales_return_item":
+                        "Sales return item must belong "
+                        "to credit note return."
+                    }
+                )
+
+            if (
+                source_item.sales_return.status
+                not in [
+                    SalesReturnStatus.CONFIRMED,
+                    SalesReturnStatus.POSTED,
+                ]
+            ):
+                raise ValidationError(
+                    {
+                        "sales_return_item":
+                        "Only confirmed or posted return "
+                        "items can create credit note lines."
+                    }
+                )
+
+        if (
+            self.invoice_item_id
+            and self.invoice_item.company_id
+            != self.company_id
+        ):
+            raise ValidationError(
+                {
+                    "invoice_item":
+                    "Invoice item must belong "
+                    "to the same company."
+                }
+            )
+
+        if (
+            self.credit_note_id
+            and self.invoice_item_id
+            and self.invoice_item.invoice_id
+            != self.credit_note.invoice_id
+        ):
+            raise ValidationError(
+                {
+                    "invoice_item":
+                    "Invoice item must belong "
+                    "to credit note invoice."
+                }
+            )
+
+        if (
+            self.catalog_item_id
+            and self.catalog_item.company_id
+            != self.company_id
+        ):
+            raise ValidationError(
+                {
+                    "catalog_item":
+                    "Catalog item must belong "
+                    "to the same company."
+                }
+            )
+
+        if self.sales_return_item_id:
+            expected = (
+                self.sales_return_item
+            )
+
+            expected_values = {
+                "invoice_item_id":
+                    expected.invoice_item_id,
+                "catalog_item_id":
+                    expected.catalog_item_id,
+                "quantity":
+                    quantize_quantity(
+                        expected.quantity
+                    ),
+                "unit_price":
+                    quantize_money(
+                        expected.unit_price
+                    ),
+                "line_subtotal":
+                    quantize_money(
+                        expected.line_subtotal
+                    ),
+                "discount_amount":
+                    quantize_money(
+                        expected.discount_amount
+                    ),
+                "taxable":
+                    bool(expected.taxable),
+                "tax_rate":
+                    quantize_money(
+                        expected.tax_rate
+                    ),
+                "taxable_amount":
+                    quantize_money(
+                        expected.taxable_amount
+                    ),
+                "tax_amount":
+                    quantize_money(
+                        expected.tax_amount
+                    ),
+                "line_total":
+                    quantize_money(
+                        expected.line_total
+                    ),
+            }
+
+            for (
+                field_name,
+                expected_value,
+            ) in expected_values.items():
+                if (
+                    getattr(
+                        self,
+                        field_name,
+                    )
+                    != expected_value
+                ):
+                    raise ValidationError(
+                        {
+                            field_name:
+                            "Credit note line must match "
+                            "the sales return item."
+                        }
+                    )
+
+        if not self.item_name_snapshot:
+            if self.sales_return_item_id:
+                self.apply_sales_return_item_snapshot()
+            else:
+                raise ValidationError(
+                    {
+                        "item_name_snapshot":
+                        "Item name is required."
+                    }
+                )
+
+    def save(self, *args, **kwargs):
+        """
+        Validate and refresh credit note totals.
+        """
+        if (
+            self.credit_note_id
+            and not self.company_id
+        ):
+            self.company_id = (
+                self.credit_note.company_id
+            )
+
+        if self.sales_return_item_id:
+            self.apply_sales_return_item_snapshot()
+
+        self.full_clean()
+
+        super().save(
+            *args,
+            **kwargs,
+        )
+
+        if self.credit_note_id:
+            self.credit_note.recalculate_totals(
+                save=True
+            )
+
+    def delete(self, *args, **kwargs):
+        """
+        Delete lines only while credit note is draft.
+        """
+        credit_note = self.credit_note
+
+        if not credit_note.can_be_edited:
+            raise ValidationError(
+                {
+                    "credit_note":
+                    "Only draft credit notes "
+                    "can be modified."
+                }
+            )
+
+        result = super().delete(
+            *args,
+            **kwargs,
+        )
+
+        if credit_note.pk:
+            credit_note.recalculate_totals(
+                save=True
+            )
+
+        return result
+
+
+# End Phase 21.5.1 - Sales Credit Notes Models Foundation
+# ============================================================
+

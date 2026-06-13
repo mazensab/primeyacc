@@ -23,6 +23,8 @@ from __future__ import annotations
 from django.contrib import admin
 
 from sales.models import (
+    SalesCreditNote,
+    SalesCreditNoteItem,
     SalesInvoice,
     SalesInvoiceItem,
     SalesOrder,
@@ -2265,5 +2267,707 @@ class SalesReturnItemAdmin(admin.ModelAdmin):
 
 
 # End Phase 21.4.1 - Sales Returns Admin Foundation
+# ============================================================
+
+
+# ============================================================
+# Phase 21.5.1 - Sales Credit Notes Admin Foundation
+# ------------------------------------------------------------
+# Sales credit note operational review.
+# Credit note items are copied from confirmed sales returns.
+# Draft-only editing.
+# Posting and accounting remain inside services and APIs.
+# ============================================================
+
+
+class SalesCreditNoteItemInline(admin.TabularInline):
+    """
+    Inline credit note items for operational review.
+    """
+
+    model = SalesCreditNoteItem
+    extra = 0
+
+    fields = [
+        "line_number",
+        "sales_return_item",
+        "invoice_item",
+        "catalog_item",
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "unit_name_snapshot",
+        "quantity",
+        "unit_price",
+        "line_subtotal",
+        "discount_amount",
+        "taxable",
+        "tax_rate",
+        "taxable_amount",
+        "tax_amount",
+        "line_total",
+    ]
+
+    readonly_fields = [
+        "invoice_item",
+        "catalog_item",
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "unit_name_snapshot",
+        "quantity",
+        "unit_price",
+        "line_subtotal",
+        "discount_amount",
+        "taxable",
+        "tax_rate",
+        "taxable_amount",
+        "tax_amount",
+        "line_total",
+    ]
+
+    autocomplete_fields = [
+        "sales_return_item",
+    ]
+
+    ordering = [
+        "line_number",
+        "id",
+    ]
+
+    def has_add_permission(
+        self,
+        request,
+        obj=None,
+    ):
+        """
+        Add lines only while the credit note is draft.
+        """
+        if obj and not obj.can_be_edited:
+            return False
+
+        return super().has_add_permission(
+            request,
+            obj,
+        )
+
+    def has_delete_permission(
+        self,
+        request,
+        obj=None,
+    ):
+        """
+        Delete lines only while the credit note is draft.
+        """
+        if obj and not obj.can_be_edited:
+            return False
+
+        return super().has_delete_permission(
+            request,
+            obj,
+        )
+
+    def get_readonly_fields(
+        self,
+        request,
+        obj=None,
+    ):
+        """
+        Lock all line fields after leaving draft status.
+        """
+        readonly_fields = list(
+            super().get_readonly_fields(
+                request,
+                obj,
+            )
+        )
+
+        if obj and not obj.can_be_edited:
+            return list(self.fields)
+
+        return readonly_fields
+
+
+@admin.register(SalesCreditNote)
+class SalesCreditNoteAdmin(admin.ModelAdmin):
+    """
+    Admin configuration for sales credit notes.
+    """
+
+    list_display = [
+        "credit_note_number",
+        "company",
+        "branch",
+        "customer",
+        "invoice",
+        "sales_return",
+        "status",
+        "credit_note_date",
+        "total_amount",
+        "issued_at",
+        "posted_at",
+        "cancelled_at",
+        "created_at",
+    ]
+
+    list_filter = [
+        "status",
+        "credit_note_date",
+        "company",
+        "branch",
+        "issued_at",
+        "posted_at",
+        "cancelled_at",
+        "created_at",
+    ]
+
+    search_fields = [
+        "credit_note_number",
+        "invoice__invoice_number",
+        "sales_return__return_number",
+        "company__name",
+        "company__name_ar",
+        "company__name_en",
+        "company__company_code",
+        "branch__name",
+        "branch__branch_code",
+        "customer__display_name",
+        "customer__legal_name",
+        "customer__code",
+        "customer__phone",
+        "customer__mobile",
+        "customer__email",
+        "cancelled_reason",
+    ]
+
+    autocomplete_fields = [
+        "company",
+        "branch",
+        "customer",
+        "invoice",
+        "sales_return",
+        "created_by",
+        "updated_by",
+        "issued_by",
+        "posted_by",
+        "cancelled_by",
+    ]
+
+    readonly_fields = [
+        "subtotal",
+        "discount_amount",
+        "taxable_amount",
+        "tax_amount",
+        "total_amount",
+        "customer_snapshot",
+        "invoice_snapshot",
+        "return_snapshot",
+        "tax_snapshot",
+        "issued_at",
+        "posted_at",
+        "cancelled_at",
+        "created_at",
+        "updated_at",
+    ]
+
+    fieldsets = [
+        (
+            "Credit note identity",
+            {
+                "fields": [
+                    "company",
+                    "branch",
+                    "customer",
+                    "invoice",
+                    "sales_return",
+                    "credit_note_number",
+                    "status",
+                    "credit_note_date",
+                    "currency_code",
+                ],
+            },
+        ),
+        (
+            "Totals",
+            {
+                "fields": [
+                    "subtotal",
+                    "discount_amount",
+                    "taxable_amount",
+                    "tax_amount",
+                    "total_amount",
+                ],
+            },
+        ),
+        (
+            "Lifecycle",
+            {
+                "fields": [
+                    "issued_at",
+                    "issued_by",
+                    "posted_at",
+                    "posted_by",
+                    "cancelled_at",
+                    "cancelled_by",
+                    "cancelled_reason",
+                ],
+            },
+        ),
+        (
+            "Snapshots",
+            {
+                "classes": ["collapse"],
+                "fields": [
+                    "customer_snapshot",
+                    "invoice_snapshot",
+                    "return_snapshot",
+                    "tax_snapshot",
+                ],
+            },
+        ),
+        (
+            "Notes and extra data",
+            {
+                "fields": [
+                    "public_notes",
+                    "internal_notes",
+                    "extra_data",
+                ],
+            },
+        ),
+        (
+            "Audit",
+            {
+                "classes": ["collapse"],
+                "fields": [
+                    "created_by",
+                    "updated_by",
+                    "created_at",
+                    "updated_at",
+                ],
+            },
+        ),
+    ]
+
+    inlines = [
+        SalesCreditNoteItemInline,
+    ]
+
+    date_hierarchy = "credit_note_date"
+
+    ordering = [
+        "-credit_note_date",
+        "-id",
+    ]
+
+    list_select_related = [
+        "company",
+        "branch",
+        "customer",
+        "invoice",
+        "sales_return",
+    ]
+
+    save_on_top = True
+
+    def get_readonly_fields(
+        self,
+        request,
+        obj=None,
+    ):
+        """
+        Lock operational fields after leaving draft status.
+        """
+        readonly_fields = list(
+            super().get_readonly_fields(
+                request,
+                obj,
+            )
+        )
+
+        if obj and not obj.can_be_edited:
+            readonly_fields.extend(
+                [
+                    "company",
+                    "branch",
+                    "customer",
+                    "invoice",
+                    "sales_return",
+                    "credit_note_number",
+                    "credit_note_date",
+                    "currency_code",
+                    "public_notes",
+                    "internal_notes",
+                    "extra_data",
+                ]
+            )
+
+        return list(
+            dict.fromkeys(readonly_fields)
+        )
+
+    def save_model(
+        self,
+        request,
+        obj,
+        form,
+        change,
+    ):
+        """
+        Synchronize source documents, company, and audit data.
+        """
+        if obj.sales_return_id:
+            obj.invoice = (
+                obj.sales_return.invoice
+            )
+
+            if not obj.company_id:
+                obj.company_id = (
+                    obj.sales_return.company_id
+                )
+
+            if not obj.customer_id:
+                obj.customer_id = (
+                    obj.sales_return.customer_id
+                )
+
+            if not obj.branch_id:
+                obj.branch_id = (
+                    obj.sales_return.branch_id
+                )
+
+            obj.currency_code = (
+                obj.sales_return.currency_code
+            )
+
+        elif obj.invoice_id:
+            if not obj.company_id:
+                obj.company_id = (
+                    obj.invoice.company_id
+                )
+
+            if not obj.customer_id:
+                obj.customer_id = (
+                    obj.invoice.customer_id
+                )
+
+            if not obj.branch_id:
+                obj.branch_id = (
+                    obj.invoice.branch_id
+                )
+
+            obj.currency_code = (
+                obj.invoice.currency_code
+            )
+
+        if not change and not obj.created_by_id:
+            obj.created_by = request.user
+
+        obj.updated_by = request.user
+        obj.full_clean()
+
+        super().save_model(
+            request,
+            obj,
+            form,
+            change,
+        )
+
+        obj.refresh_snapshots(
+            save=True
+        )
+        obj.recalculate_totals(
+            save=True
+        )
+
+    def save_formset(
+        self,
+        request,
+        form,
+        formset,
+        change,
+    ):
+        """
+        Save credit note lines and refresh totals.
+        """
+        instances = formset.save(
+            commit=False
+        )
+
+        for deleted_object in (
+            formset.deleted_objects
+        ):
+            deleted_object.delete()
+
+        for instance in instances:
+            if isinstance(
+                instance,
+                SalesCreditNoteItem,
+            ):
+                if (
+                    instance.credit_note_id
+                    and not instance.company_id
+                ):
+                    instance.company_id = (
+                        instance
+                        .credit_note
+                        .company_id
+                    )
+
+                if instance.sales_return_item_id:
+                    instance.apply_sales_return_item_snapshot()
+
+                instance.full_clean()
+
+            instance.save()
+
+        formset.save_m2m()
+
+        if form.instance.pk:
+            form.instance.recalculate_totals(
+                save=True
+            )
+
+
+@admin.register(SalesCreditNoteItem)
+class SalesCreditNoteItemAdmin(admin.ModelAdmin):
+    """
+    Admin configuration for sales credit note items.
+    """
+
+    list_display = [
+        "credit_note",
+        "company",
+        "line_number",
+        "sales_return_item",
+        "invoice_item",
+        "catalog_item",
+        "item_name_snapshot",
+        "quantity",
+        "unit_price",
+        "discount_amount",
+        "taxable",
+        "tax_rate",
+        "line_total",
+        "created_at",
+    ]
+
+    list_filter = [
+        "company",
+        "taxable",
+        "tax_rate",
+        "credit_note__status",
+        "created_at",
+    ]
+
+    search_fields = [
+        "credit_note__credit_note_number",
+        "credit_note__invoice__invoice_number",
+        "credit_note__sales_return__return_number",
+        "sales_return_item__sales_return__return_number",
+        "invoice_item__invoice__invoice_number",
+        "company__name",
+        "company__company_code",
+        "catalog_item__name",
+        "catalog_item__code",
+        "catalog_item__sku",
+        "catalog_item__barcode",
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "notes",
+    ]
+
+    autocomplete_fields = [
+        "credit_note",
+        "company",
+        "sales_return_item",
+        "invoice_item",
+        "catalog_item",
+    ]
+
+    readonly_fields = [
+        "invoice_item",
+        "catalog_item",
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "item_description_snapshot",
+        "unit_name_snapshot",
+        "quantity",
+        "unit_price",
+        "line_subtotal",
+        "discount_amount",
+        "taxable",
+        "tax_rate",
+        "taxable_amount",
+        "tax_amount",
+        "line_total",
+        "created_at",
+        "updated_at",
+    ]
+
+    fieldsets = [
+        (
+            "Credit note line",
+            {
+                "fields": [
+                    "credit_note",
+                    "company",
+                    "sales_return_item",
+                    "invoice_item",
+                    "catalog_item",
+                    "line_number",
+                ],
+            },
+        ),
+        (
+            "Snapshot",
+            {
+                "fields": [
+                    "item_code_snapshot",
+                    "item_name_snapshot",
+                    "item_description_snapshot",
+                    "unit_name_snapshot",
+                ],
+            },
+        ),
+        (
+            "Amounts",
+            {
+                "fields": [
+                    "quantity",
+                    "unit_price",
+                    "line_subtotal",
+                    "discount_amount",
+                    "taxable",
+                    "tax_rate",
+                    "taxable_amount",
+                    "tax_amount",
+                    "line_total",
+                ],
+            },
+        ),
+        (
+            "Extra",
+            {
+                "fields": [
+                    "notes",
+                    "extra_data",
+                ],
+            },
+        ),
+        (
+            "Audit",
+            {
+                "classes": ["collapse"],
+                "fields": [
+                    "created_at",
+                    "updated_at",
+                ],
+            },
+        ),
+    ]
+
+    ordering = [
+        "-created_at",
+        "-id",
+    ]
+
+    list_select_related = [
+        "credit_note",
+        "credit_note__invoice",
+        "credit_note__sales_return",
+        "company",
+        "sales_return_item",
+        "sales_return_item__sales_return",
+        "invoice_item",
+        "invoice_item__invoice",
+        "catalog_item",
+    ]
+
+    def get_readonly_fields(
+        self,
+        request,
+        obj=None,
+    ):
+        """
+        Lock source fields when credit note leaves draft.
+        """
+        readonly_fields = list(
+            super().get_readonly_fields(
+                request,
+                obj,
+            )
+        )
+
+        if (
+            obj
+            and obj.credit_note_id
+            and not obj.credit_note.can_be_edited
+        ):
+            readonly_fields.extend(
+                [
+                    "credit_note",
+                    "company",
+                    "sales_return_item",
+                    "line_number",
+                    "notes",
+                    "extra_data",
+                ]
+            )
+
+        return list(
+            dict.fromkeys(readonly_fields)
+        )
+
+    def has_delete_permission(
+        self,
+        request,
+        obj=None,
+    ):
+        """
+        Delete lines only while the credit note is draft.
+        """
+        if (
+            obj
+            and obj.credit_note_id
+            and not obj.credit_note.can_be_edited
+        ):
+            return False
+
+        return super().has_delete_permission(
+            request,
+            obj,
+        )
+
+    def save_model(
+        self,
+        request,
+        obj,
+        form,
+        change,
+    ):
+        """
+        Synchronize company and return-item snapshots.
+        """
+        if (
+            obj.credit_note_id
+            and not obj.company_id
+        ):
+            obj.company_id = (
+                obj.credit_note.company_id
+            )
+
+        if obj.sales_return_item_id:
+            obj.apply_sales_return_item_snapshot()
+
+        obj.full_clean()
+
+        super().save_model(
+            request,
+            obj,
+            form,
+            change,
+        )
+
+
+# End Phase 21.5.1 - Sales Credit Notes Admin Foundation
 # ============================================================
 

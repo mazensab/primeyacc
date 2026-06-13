@@ -375,6 +375,11 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.returns.create",
         "company.sales.returns.confirm",
         "company.sales.returns.cancel",
+        "company.sales.credit_notes.view",
+        "company.sales.credit_notes.create",
+        "company.sales.credit_notes.issue",
+        "company.sales.credit_notes.post",
+        "company.sales.credit_notes.cancel",
 ],
     CompanyRole.MANAGER: [
         "company.dashboard.view",
@@ -533,6 +538,11 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.returns.create",
         "company.sales.returns.confirm",
         "company.sales.returns.cancel",
+        "company.sales.credit_notes.view",
+        "company.sales.credit_notes.create",
+        "company.sales.credit_notes.issue",
+        "company.sales.credit_notes.post",
+        "company.sales.credit_notes.cancel",
 ],
     CompanyRole.ACCOUNTANT: [
         "company.dashboard.view",
@@ -610,6 +620,11 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.orders.view",
         "company.sales.orders.invoices.view",
             "company.sales.returns.view",
+        "company.sales.credit_notes.view",
+        "company.sales.credit_notes.create",
+        "company.sales.credit_notes.issue",
+        "company.sales.credit_notes.post",
+        "company.sales.credit_notes.cancel",
 ],
     CompanyRole.CASHIER: [
         "company.dashboard.view",
@@ -643,6 +658,7 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.orders.view",
         "company.sales.orders.invoices.view",
             "company.sales.returns.view",
+        "company.sales.credit_notes.view",
 ],
     CompanyRole.SALES: [
         "company.dashboard.view",
@@ -693,6 +709,11 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.returns.create",
         "company.sales.returns.confirm",
         "company.sales.returns.cancel",
+        "company.sales.credit_notes.view",
+        "company.sales.credit_notes.create",
+        "company.sales.credit_notes.issue",
+        "company.sales.credit_notes.post",
+        "company.sales.credit_notes.cancel",
 ],
     CompanyRole.INVENTORY: [
         "company.dashboard.view",
@@ -884,6 +905,7 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.sales.orders.view",
         "company.sales.orders.invoices.view",
             "company.sales.returns.view",
+        "company.sales.credit_notes.view",
 ],
 }
 

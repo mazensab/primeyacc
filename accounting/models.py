@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # 📂 accounting/models.py
 # 🧠 PrimeyAcc | Accounting & Automatic Journal Foundation
 # ------------------------------------------------------------
@@ -139,6 +139,8 @@ class PostingSource(models.TextChoices):
     OPENING_BALANCE = "OPENING_BALANCE", "رصيد افتتاحي"
 
     SALES_INVOICE = "SALES_INVOICE", "فاتورة مبيعات"
+
+    SALES_CREDIT_NOTE = "SALES_CREDIT_NOTE", "????? ???? ??????"
     SALES_PAYMENT = "SALES_PAYMENT", "تحصيل مبيعات"
 
     PURCHASE_BILL = "PURCHASE_BILL", "فاتورة مشتريات"
@@ -162,6 +164,7 @@ class PostingSource(models.TextChoices):
 
 class AccountingRoutingSource(models.TextChoices):
     SALES_INVOICE = "SALES_INVOICE", "فاتورة مبيعات"
+    SALES_CREDIT_NOTE = "SALES_CREDIT_NOTE", "????? ???? ??????"
     SALES_PAYMENT = "SALES_PAYMENT", "تحصيل مبيعات"
 
     PURCHASE_BILL = "PURCHASE_BILL", "فاتورة مشتريات"

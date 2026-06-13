@@ -32,13 +32,24 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 
-from accounting.models import JournalEntry, JournalEntryStatus
-from accounting.services import post_sales_invoice_to_accounting
+from accounting.models import (
+    AccountingAccountPurpose,
+    JournalEntry,
+    JournalEntryStatus,
+    PostingSource,
+)
+from accounting.services import (
+    post_sales_credit_note_to_accounting,
+    post_sales_invoice_to_accounting,
+)
 from accounts.models import CompanyMembership, CompanyRole, MembershipStatus
 from catalog.models import CatalogItem, CatalogItemStatus, CatalogItemType, CatalogUnit
 from companies.models import Branch, Company, CompanySettings
 from parties.models import BusinessParty, BusinessPartyStatus, BusinessPartyType
 from sales.models import (
+    SalesCreditNote,
+    SalesCreditNoteItem,
+    SalesCreditNoteStatus,
     SalesInvoice,
     SalesInvoiceItem,
     SalesInvoicePaymentStatus,
@@ -59,10 +70,12 @@ from sales.models import (
 )
 from sales.services import (
     accept_sales_quotation,
+    cancel_sales_credit_note,
     cancel_sales_invoice,
     cancel_sales_order,
     complete_sales_order,
     confirm_sales_order,
+    create_sales_credit_note_from_return,
     create_sales_invoice,
     create_sales_invoice_from_order,
     create_sales_invoice_item,
@@ -75,14 +88,18 @@ from sales.services import (
     cancel_sales_return,
     generate_invoice_number,
     generate_order_number,
+    generate_sales_credit_note_number,
     generate_sales_return_number,
+    issue_sales_credit_note,
     issue_sales_invoice,
+    post_sales_credit_note,
     resolve_catalog_item,
     resolve_company_branch,
     resolve_customer,
     send_sales_quotation,
     serialize_invoice_return_summary,
     serialize_order_invoice_summary,
+    serialize_sales_credit_note,
     serialize_sales_invoice,
     serialize_sales_return,
     serialize_sales_order,
@@ -115,12 +132,18 @@ SALES_OWNER_PERMISSIONS = [
     "company.sales.orders.complete",
     "company.sales.orders.cancel",
     "company.sales.orders.create_from_quotation",
+    "company.sales.credit_notes.view",
+    "company.sales.credit_notes.create",
+    "company.sales.credit_notes.issue",
+    "company.sales.credit_notes.post",
+    "company.sales.credit_notes.cancel",
 ]
 
 SALES_VIEWER_PERMISSIONS = [
     "company.sales.invoices.view",
     "company.sales.quotations.view",
     "company.sales.orders.view",
+    "company.sales.credit_notes.view",
 ]
 
 
@@ -6072,3 +6095,2223 @@ class SalesReturnsAPITests(SalesTestCase):
 # End Phase 21.4.3 - Sales Returns Company APIs Tests
 # ============================================================
 
+
+# ============================================================
+# Phase 21.5.1 - Sales Credit Notes Models Foundation Tests
+# ============================================================
+
+
+class SalesCreditNoteModelTests(SalesTestCase):
+    """
+    Model tests for credit note isolation, snapshots, totals,
+    uniqueness, locking, and lifecycle.
+    """
+
+    def _create_confirmed_return(
+        self,
+        *,
+        company=None,
+        user=None,
+        customer=None,
+        catalog_item=None,
+        invoice_quantity="4",
+        return_quantity="1",
+        discount_amount="40.00",
+    ) -> SalesReturn:
+        selected_company = company or self.company
+        selected_user = user or self.user
+        selected_customer = customer or self.customer
+        selected_item = catalog_item or self.item
+
+        invoice = create_sales_invoice(
+            company=selected_company,
+            user=selected_user,
+            customer_id=selected_customer.id,
+            items=[
+                {
+                    "catalog_item_id":
+                        selected_item.id,
+                    "quantity":
+                        invoice_quantity,
+                    "discount_amount":
+                        discount_amount,
+                }
+            ],
+        )
+
+        invoice = issue_sales_invoice(
+            company=selected_company,
+            invoice=invoice,
+            user=selected_user,
+        )
+
+        sales_return = create_sales_return(
+            company=selected_company,
+            invoice=invoice,
+            user=selected_user,
+            items=[
+                {
+                    "invoice_item_id":
+                        invoice.items.get().id,
+                    "quantity":
+                        return_quantity,
+                }
+            ],
+        )
+
+        return confirm_sales_return(
+            company=selected_company,
+            sales_return=sales_return,
+            user=selected_user,
+        )
+
+    def _create_credit_note(
+        self,
+        sales_return: SalesReturn,
+        *,
+        credit_note_number="SCN-MODEL-001",
+        company=None,
+        user=None,
+        create_item=True,
+    ) -> SalesCreditNote:
+        selected_company = (
+            company or sales_return.company
+        )
+        selected_user = (
+            user or self.user
+        )
+
+        credit_note = SalesCreditNote(
+            company=selected_company,
+            branch=sales_return.branch,
+            customer=sales_return.customer,
+            invoice=sales_return.invoice,
+            sales_return=sales_return,
+            credit_note_number=credit_note_number,
+            credit_note_date=timezone.localdate(),
+            currency_code=sales_return.currency_code,
+            created_by=selected_user,
+            updated_by=selected_user,
+        )
+
+        credit_note.full_clean()
+        credit_note.save()
+
+        if create_item:
+            return_item = (
+                sales_return.items.get()
+            )
+
+            credit_note_item = (
+                SalesCreditNoteItem(
+                    credit_note=credit_note,
+                    company=selected_company,
+                    sales_return_item=return_item,
+                    invoice_item=(
+                        return_item.invoice_item
+                    ),
+                    catalog_item=(
+                        return_item.catalog_item
+                    ),
+                    line_number=1,
+                    quantity=return_item.quantity,
+                )
+            )
+
+            credit_note_item.save()
+
+        credit_note.refresh_from_db()
+        return credit_note
+
+    def test_credit_note_defaults_to_draft(self):
+        sales_return = (
+            self._create_confirmed_return()
+        )
+
+        credit_note = self._create_credit_note(
+            sales_return
+        )
+
+        self.assertEqual(
+            credit_note.status,
+            SalesCreditNoteStatus.DRAFT,
+        )
+        self.assertTrue(
+            credit_note.is_draft
+        )
+        self.assertTrue(
+            credit_note.can_be_edited
+        )
+        self.assertTrue(
+            credit_note.can_be_issued
+        )
+        self.assertFalse(
+            credit_note.can_be_posted
+        )
+
+    def test_credit_note_rejects_cross_company_return(
+        self,
+    ):
+        other_return = (
+            self._create_confirmed_return(
+                company=self.other_company,
+                user=self.other_user,
+                customer=self.other_customer,
+                catalog_item=self.other_item,
+                invoice_quantity="1",
+                return_quantity="1",
+                discount_amount="0.00",
+            )
+        )
+
+        credit_note = SalesCreditNote(
+            company=self.company,
+            branch=self.branch,
+            customer=self.customer,
+            invoice=other_return.invoice,
+            sales_return=other_return,
+            credit_note_number="SCN-CROSS-COMPANY",
+            credit_note_date=timezone.localdate(),
+            currency_code="SAR",
+        )
+
+        with self.assertRaises(
+            ValidationError
+        ):
+            credit_note.full_clean()
+
+    def test_credit_note_rejects_draft_return(self):
+        invoice = create_sales_invoice(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            items=[
+                {
+                    "catalog_item_id":
+                        self.item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        invoice = issue_sales_invoice(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+        )
+
+        sales_return = create_sales_return(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+            items=None,
+        )
+
+        credit_note = SalesCreditNote(
+            company=self.company,
+            branch=self.branch,
+            customer=self.customer,
+            invoice=invoice,
+            sales_return=sales_return,
+            credit_note_number="SCN-DRAFT-RETURN",
+            credit_note_date=timezone.localdate(),
+            currency_code="SAR",
+        )
+
+        with self.assertRaises(
+            ValidationError
+        ):
+            credit_note.full_clean()
+
+    def test_credit_note_rejects_wrong_invoice(
+        self,
+    ):
+        sales_return = (
+            self._create_confirmed_return()
+        )
+
+        other_invoice = create_sales_invoice(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            items=[
+                {
+                    "catalog_item_id":
+                        self.service.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        other_invoice = issue_sales_invoice(
+            company=self.company,
+            invoice=other_invoice,
+            user=self.user,
+        )
+
+        credit_note = SalesCreditNote(
+            company=self.company,
+            branch=self.branch,
+            customer=self.customer,
+            invoice=other_invoice,
+            sales_return=sales_return,
+            credit_note_number="SCN-WRONG-INVOICE",
+            credit_note_date=timezone.localdate(),
+            currency_code="SAR",
+        )
+
+        with self.assertRaises(
+            ValidationError
+        ):
+            credit_note.full_clean()
+
+    def test_credit_note_rejects_date_before_return(
+        self,
+    ):
+        sales_return = (
+            self._create_confirmed_return()
+        )
+
+        credit_note = SalesCreditNote(
+            company=self.company,
+            branch=self.branch,
+            customer=self.customer,
+            invoice=sales_return.invoice,
+            sales_return=sales_return,
+            credit_note_number="SCN-INVALID-DATE",
+            credit_note_date=(
+                sales_return.return_date
+                - timedelta(days=1)
+            ),
+            currency_code="SAR",
+        )
+
+        with self.assertRaises(
+            ValidationError
+        ):
+            credit_note.full_clean()
+
+    def test_credit_note_item_copies_return_snapshot(
+        self,
+    ):
+        sales_return = (
+            self._create_confirmed_return(
+                invoice_quantity="4",
+                return_quantity="1",
+                discount_amount="40.00",
+            )
+        )
+
+        return_item = sales_return.items.get()
+
+        credit_note = self._create_credit_note(
+            sales_return
+        )
+
+        credit_item = (
+            credit_note.items.get()
+        )
+
+        self.assertEqual(
+            credit_item.sales_return_item,
+            return_item,
+        )
+        self.assertEqual(
+            credit_item.invoice_item,
+            return_item.invoice_item,
+        )
+        self.assertEqual(
+            credit_item.catalog_item,
+            return_item.catalog_item,
+        )
+        self.assertEqual(
+            credit_item.item_code_snapshot,
+            return_item.item_code_snapshot,
+        )
+        self.assertEqual(
+            credit_item.item_name_snapshot,
+            return_item.item_name_snapshot,
+        )
+        self.assertEqual(
+            credit_item.quantity,
+            Decimal("1.0000"),
+        )
+        self.assertEqual(
+            credit_item.unit_price,
+            Decimal("100.00"),
+        )
+        self.assertEqual(
+            credit_item.line_subtotal,
+            Decimal("100.00"),
+        )
+        self.assertEqual(
+            credit_item.discount_amount,
+            Decimal("10.00"),
+        )
+        self.assertEqual(
+            credit_item.taxable_amount,
+            Decimal("90.00"),
+        )
+        self.assertEqual(
+            credit_item.tax_amount,
+            Decimal("13.50"),
+        )
+        self.assertEqual(
+            credit_item.line_total,
+            Decimal("103.50"),
+        )
+
+    def test_credit_note_item_updates_header_totals(
+        self,
+    ):
+        sales_return = (
+            self._create_confirmed_return()
+        )
+
+        credit_note = self._create_credit_note(
+            sales_return
+        )
+
+        credit_note.refresh_from_db()
+
+        self.assertEqual(
+            credit_note.subtotal,
+            Decimal("100.00"),
+        )
+        self.assertEqual(
+            credit_note.discount_amount,
+            Decimal("10.00"),
+        )
+        self.assertEqual(
+            credit_note.taxable_amount,
+            Decimal("90.00"),
+        )
+        self.assertEqual(
+            credit_note.tax_amount,
+            Decimal("13.50"),
+        )
+        self.assertEqual(
+            credit_note.total_amount,
+            Decimal("103.50"),
+        )
+
+    def test_return_can_have_only_one_credit_note(
+        self,
+    ):
+        sales_return = (
+            self._create_confirmed_return()
+        )
+
+        self._create_credit_note(
+            sales_return,
+            credit_note_number="SCN-ONE-001",
+        )
+
+        duplicate = SalesCreditNote(
+            company=self.company,
+            branch=self.branch,
+            customer=self.customer,
+            invoice=sales_return.invoice,
+            sales_return=sales_return,
+            credit_note_number="SCN-ONE-002",
+            credit_note_date=timezone.localdate(),
+            currency_code="SAR",
+        )
+
+        with self.assertRaises(
+            ValidationError
+        ):
+            duplicate.full_clean()
+
+    def test_credit_note_number_unique_inside_company(
+        self,
+    ):
+        first_return = (
+            self._create_confirmed_return()
+        )
+
+        self._create_credit_note(
+            first_return,
+            credit_note_number="SCN-UNIQUE-001",
+        )
+
+        second_return = (
+            self._create_confirmed_return(
+                invoice_quantity="2",
+                return_quantity="1",
+                discount_amount="0.00",
+            )
+        )
+
+        duplicate = SalesCreditNote(
+            company=self.company,
+            branch=self.branch,
+            customer=self.customer,
+            invoice=second_return.invoice,
+            sales_return=second_return,
+            credit_note_number="SCN-UNIQUE-001",
+            credit_note_date=timezone.localdate(),
+            currency_code="SAR",
+        )
+
+        with self.assertRaises(
+            ValidationError
+        ):
+            duplicate.full_clean()
+
+    def test_same_credit_note_number_allowed_other_company(
+        self,
+    ):
+        sales_return = (
+            self._create_confirmed_return()
+        )
+
+        self._create_credit_note(
+            sales_return,
+            credit_note_number="SCN-SHARED-001",
+        )
+
+        other_return = (
+            self._create_confirmed_return(
+                company=self.other_company,
+                user=self.other_user,
+                customer=self.other_customer,
+                catalog_item=self.other_item,
+                invoice_quantity="1",
+                return_quantity="1",
+                discount_amount="0.00",
+            )
+        )
+
+        other_credit_note = (
+            self._create_credit_note(
+                other_return,
+                credit_note_number=(
+                    "SCN-SHARED-001"
+                ),
+                company=self.other_company,
+                user=self.other_user,
+            )
+        )
+
+        self.assertEqual(
+            SalesCreditNote.objects.filter(
+                credit_note_number=(
+                    "SCN-SHARED-001"
+                )
+            ).count(),
+            2,
+        )
+        self.assertEqual(
+            other_credit_note.company,
+            self.other_company,
+        )
+
+    def test_issue_credit_note_refreshes_snapshots(
+        self,
+    ):
+        sales_return = (
+            self._create_confirmed_return()
+        )
+
+        credit_note = self._create_credit_note(
+            sales_return
+        )
+
+        credit_note.issue(
+            user=self.user
+        )
+        credit_note.refresh_from_db()
+
+        self.assertEqual(
+            credit_note.status,
+            SalesCreditNoteStatus.ISSUED,
+        )
+        self.assertEqual(
+            credit_note.issued_by,
+            self.user,
+        )
+        self.assertIsNotNone(
+            credit_note.issued_at
+        )
+        self.assertEqual(
+            credit_note.customer_snapshot[
+                "display_name"
+            ],
+            "Customer One",
+        )
+        self.assertEqual(
+            credit_note.invoice_snapshot[
+                "invoice_number"
+            ],
+            sales_return.invoice.invoice_number,
+        )
+        self.assertEqual(
+            credit_note.return_snapshot[
+                "return_number"
+            ],
+            sales_return.return_number,
+        )
+        self.assertEqual(
+            credit_note.return_snapshot[
+                "total_amount"
+            ],
+            str(sales_return.total_amount),
+        )
+
+    def test_issue_credit_note_requires_items(self):
+        sales_return = (
+            self._create_confirmed_return()
+        )
+
+        credit_note = self._create_credit_note(
+            sales_return,
+            create_item=False,
+        )
+
+        with self.assertRaises(
+            ValidationError
+        ):
+            credit_note.issue(
+                user=self.user
+            )
+
+    def test_issued_credit_note_item_cannot_be_modified(
+        self,
+    ):
+        sales_return = (
+            self._create_confirmed_return()
+        )
+
+        credit_note = self._create_credit_note(
+            sales_return
+        )
+
+        credit_note.issue(
+            user=self.user
+        )
+        credit_note.refresh_from_db()
+
+        credit_item = (
+            credit_note.items.get()
+        )
+        credit_item.quantity = (
+            Decimal("2.0000")
+        )
+
+        with self.assertRaises(
+            ValidationError
+        ):
+            credit_item.full_clean()
+
+    def test_issued_credit_note_item_cannot_be_deleted(
+        self,
+    ):
+        sales_return = (
+            self._create_confirmed_return()
+        )
+
+        credit_note = self._create_credit_note(
+            sales_return
+        )
+
+        credit_note.issue(
+            user=self.user
+        )
+        credit_note.refresh_from_db()
+
+        with self.assertRaises(
+            ValidationError
+        ):
+            credit_note.items.get().delete()
+
+    def test_credit_note_lifecycle_to_posted(self):
+        sales_return = (
+            self._create_confirmed_return()
+        )
+
+        credit_note = self._create_credit_note(
+            sales_return
+        )
+
+        credit_note.issue(
+            user=self.user
+        )
+        credit_note.refresh_from_db()
+
+        self.assertTrue(
+            credit_note.can_be_posted
+        )
+
+        credit_note.mark_posted(
+            user=self.user
+        )
+        credit_note.refresh_from_db()
+
+        self.assertEqual(
+            credit_note.status,
+            SalesCreditNoteStatus.POSTED,
+        )
+        self.assertEqual(
+            credit_note.posted_by,
+            self.user,
+        )
+        self.assertIsNotNone(
+            credit_note.posted_at
+        )
+        self.assertFalse(
+            credit_note.can_be_cancelled
+        )
+
+    def test_cancel_issued_credit_note(self):
+        sales_return = (
+            self._create_confirmed_return()
+        )
+
+        credit_note = self._create_credit_note(
+            sales_return
+        )
+
+        credit_note.issue(
+            user=self.user
+        )
+
+        credit_note.cancel(
+            reason="Credit note cancelled",
+            user=self.user,
+        )
+        credit_note.refresh_from_db()
+
+        self.assertEqual(
+            credit_note.status,
+            SalesCreditNoteStatus.CANCELLED,
+        )
+        self.assertEqual(
+            credit_note.cancelled_reason,
+            "Credit note cancelled",
+        )
+        self.assertEqual(
+            credit_note.cancelled_by,
+            self.user,
+        )
+        self.assertIsNotNone(
+            credit_note.cancelled_at
+        )
+
+    def test_posted_credit_note_cannot_be_cancelled(
+        self,
+    ):
+        sales_return = (
+            self._create_confirmed_return()
+        )
+
+        credit_note = self._create_credit_note(
+            sales_return
+        )
+
+        credit_note.issue(
+            user=self.user
+        )
+        credit_note.mark_posted(
+            user=self.user
+        )
+
+        with self.assertRaises(
+            ValidationError
+        ):
+            credit_note.cancel(
+                reason="Invalid cancellation",
+                user=self.user,
+            )
+
+
+# End Phase 21.5.1 - Sales Credit Notes Models Foundation Tests
+# ============================================================
+
+
+# ============================================================
+# Phase 21.5.2 - Sales Credit Notes Services Foundation Tests
+# ============================================================
+
+
+class SalesCreditNoteServicesTests(SalesTestCase):
+    """
+    Service tests for company-scoped sales credit notes.
+    """
+
+    def _create_confirmed_return(
+        self,
+        *,
+        company=None,
+        user=None,
+        customer=None,
+        catalog_item=None,
+        invoice_quantity="4",
+        return_quantity="1",
+        discount_amount="40.00",
+    ) -> SalesReturn:
+        selected_company = company or self.company
+        selected_user = user or self.user
+        selected_customer = customer or self.customer
+        selected_item = catalog_item or self.item
+
+        invoice = create_sales_invoice(
+            company=selected_company,
+            user=selected_user,
+            customer_id=selected_customer.id,
+            items=[
+                {
+                    "catalog_item_id": selected_item.id,
+                    "quantity": invoice_quantity,
+                    "discount_amount": discount_amount,
+                }
+            ],
+        )
+
+        invoice = issue_sales_invoice(
+            company=selected_company,
+            invoice=invoice,
+            user=selected_user,
+        )
+
+        sales_return = create_sales_return(
+            company=selected_company,
+            invoice=invoice,
+            user=selected_user,
+            items=[
+                {
+                    "invoice_item_id":
+                        invoice.items.get().id,
+                    "quantity": return_quantity,
+                }
+            ],
+        )
+
+        return confirm_sales_return(
+            company=selected_company,
+            sales_return=sales_return,
+            user=selected_user,
+        )
+
+    def test_generate_credit_note_number_uses_year(self):
+        number = generate_sales_credit_note_number(
+            self.company,
+            credit_note_date=timezone.localdate(),
+        )
+
+        self.assertTrue(
+            number.startswith(
+                f"SCN-{timezone.localdate().year}-"
+            )
+        )
+        self.assertTrue(
+            number.endswith("000001")
+        )
+
+    def test_create_credit_note_from_confirmed_return(self):
+        sales_return = self._create_confirmed_return()
+
+        credit_note = create_sales_credit_note_from_return(
+            company=self.company,
+            sales_return=sales_return,
+            user=self.user,
+        )
+
+        credit_note.refresh_from_db()
+        item = credit_note.items.get()
+        return_item = sales_return.items.get()
+
+        self.assertEqual(
+            credit_note.status,
+            SalesCreditNoteStatus.DRAFT,
+        )
+        self.assertEqual(
+            credit_note.company,
+            self.company,
+        )
+        self.assertEqual(
+            credit_note.sales_return,
+            sales_return,
+        )
+        self.assertEqual(
+            credit_note.invoice,
+            sales_return.invoice,
+        )
+        self.assertEqual(
+            credit_note.customer,
+            sales_return.customer,
+        )
+        self.assertEqual(
+            credit_note.branch,
+            sales_return.branch,
+        )
+        self.assertEqual(
+            credit_note.items.count(),
+            1,
+        )
+        self.assertEqual(
+            item.sales_return_item,
+            return_item,
+        )
+        self.assertEqual(
+            item.invoice_item,
+            return_item.invoice_item,
+        )
+        self.assertEqual(
+            item.quantity,
+            Decimal("1.0000"),
+        )
+        self.assertEqual(
+            item.line_total,
+            Decimal("103.50"),
+        )
+        self.assertEqual(
+            credit_note.total_amount,
+            sales_return.total_amount,
+        )
+
+    def test_create_credit_note_copies_notes_and_extra_data(
+        self,
+    ):
+        sales_return = self._create_confirmed_return()
+        sales_return.public_notes = "Return public note"
+        sales_return.internal_notes = "Return internal note"
+        sales_return.save(
+            update_fields=[
+                "public_notes",
+                "internal_notes",
+                "updated_at",
+            ]
+        )
+
+        credit_note = create_sales_credit_note_from_return(
+            company=self.company,
+            sales_return=sales_return,
+            user=self.user,
+            extra_data={
+                "requested_by": "customer",
+            },
+        )
+
+        self.assertEqual(
+            credit_note.public_notes,
+            "Return public note",
+        )
+        self.assertEqual(
+            credit_note.internal_notes,
+            "Return internal note",
+        )
+        self.assertEqual(
+            credit_note.extra_data["requested_by"],
+            "customer",
+        )
+        self.assertEqual(
+            credit_note.extra_data[
+                "source_sales_return_id"
+            ],
+            sales_return.id,
+        )
+        self.assertEqual(
+            credit_note.extra_data[
+                "source_invoice_id"
+            ],
+            sales_return.invoice_id,
+        )
+
+    def test_create_credit_note_can_issue_now(self):
+        sales_return = self._create_confirmed_return()
+
+        credit_note = create_sales_credit_note_from_return(
+            company=self.company,
+            sales_return=sales_return,
+            user=self.user,
+            issue_now=True,
+        )
+
+        credit_note.refresh_from_db()
+
+        self.assertEqual(
+            credit_note.status,
+            SalesCreditNoteStatus.ISSUED,
+        )
+        self.assertEqual(
+            credit_note.issued_by,
+            self.user,
+        )
+        self.assertIsNotNone(
+            credit_note.issued_at
+        )
+        self.assertEqual(
+            credit_note.return_snapshot[
+                "return_number"
+            ],
+            sales_return.return_number,
+        )
+
+    def test_create_credit_note_rejects_draft_return(self):
+        invoice = create_sales_invoice(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            items=[
+                {
+                    "catalog_item_id": self.item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        invoice = issue_sales_invoice(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+        )
+
+        sales_return = create_sales_return(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+            items=None,
+        )
+
+        with self.assertRaises(ValidationError):
+            create_sales_credit_note_from_return(
+                company=self.company,
+                sales_return=sales_return,
+                user=self.user,
+            )
+
+    def test_create_credit_note_rejects_duplicate_return(
+        self,
+    ):
+        sales_return = self._create_confirmed_return()
+
+        create_sales_credit_note_from_return(
+            company=self.company,
+            sales_return=sales_return,
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            create_sales_credit_note_from_return(
+                company=self.company,
+                sales_return=sales_return,
+                user=self.user,
+            )
+
+        self.assertEqual(
+            SalesCreditNote.objects.filter(
+                sales_return=sales_return
+            ).count(),
+            1,
+        )
+
+    def test_create_credit_note_blocks_cross_company_return(
+        self,
+    ):
+        sales_return = self._create_confirmed_return()
+
+        with self.assertRaises(ValidationError):
+            create_sales_credit_note_from_return(
+                company=self.other_company,
+                sales_return=sales_return,
+                user=self.other_user,
+            )
+
+    def test_create_credit_note_rejects_invalid_date(self):
+        sales_return = self._create_confirmed_return()
+
+        with self.assertRaises(ValidationError):
+            create_sales_credit_note_from_return(
+                company=self.company,
+                sales_return=sales_return,
+                user=self.user,
+                credit_note_date=(
+                    sales_return.return_date
+                    - timedelta(days=1)
+                ),
+            )
+
+    def test_issue_credit_note_service(self):
+        sales_return = self._create_confirmed_return()
+
+        credit_note = create_sales_credit_note_from_return(
+            company=self.company,
+            sales_return=sales_return,
+            user=self.user,
+        )
+
+        credit_note = issue_sales_credit_note(
+            company=self.company,
+            credit_note=credit_note,
+            user=self.user,
+        )
+
+        self.assertEqual(
+            credit_note.status,
+            SalesCreditNoteStatus.ISSUED,
+        )
+        self.assertEqual(
+            credit_note.issued_by,
+            self.user,
+        )
+        self.assertIsNotNone(
+            credit_note.issued_at
+        )
+
+    def test_issue_credit_note_blocks_cross_company(
+        self,
+    ):
+        sales_return = self._create_confirmed_return()
+
+        credit_note = create_sales_credit_note_from_return(
+            company=self.company,
+            sales_return=sales_return,
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            issue_sales_credit_note(
+                company=self.other_company,
+                credit_note=credit_note,
+                user=self.other_user,
+            )
+
+    def test_cancel_issued_credit_note_service(self):
+        sales_return = self._create_confirmed_return()
+
+        credit_note = create_sales_credit_note_from_return(
+            company=self.company,
+            sales_return=sales_return,
+            user=self.user,
+            issue_now=True,
+        )
+
+        credit_note = cancel_sales_credit_note(
+            company=self.company,
+            credit_note=credit_note,
+            reason="Customer credit note cancelled",
+            user=self.user,
+        )
+
+        self.assertEqual(
+            credit_note.status,
+            SalesCreditNoteStatus.CANCELLED,
+        )
+        self.assertEqual(
+            credit_note.cancelled_reason,
+            "Customer credit note cancelled",
+        )
+        self.assertEqual(
+            credit_note.cancelled_by,
+            self.user,
+        )
+
+    def test_cancel_credit_note_blocks_cross_company(
+        self,
+    ):
+        sales_return = self._create_confirmed_return()
+
+        credit_note = create_sales_credit_note_from_return(
+            company=self.company,
+            sales_return=sales_return,
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            cancel_sales_credit_note(
+                company=self.other_company,
+                credit_note=credit_note,
+                reason="Invalid cancellation",
+                user=self.other_user,
+            )
+
+    def test_serialize_credit_note_with_items(self):
+        sales_return = self._create_confirmed_return()
+
+        credit_note = create_sales_credit_note_from_return(
+            company=self.company,
+            sales_return=sales_return,
+            user=self.user,
+        )
+
+        data = serialize_sales_credit_note(
+            credit_note,
+            include_items=True,
+        )
+
+        self.assertEqual(
+            data["id"],
+            credit_note.id,
+        )
+        self.assertEqual(
+            data["company_id"],
+            self.company.id,
+        )
+        self.assertEqual(
+            data["invoice"]["id"],
+            sales_return.invoice_id,
+        )
+        self.assertEqual(
+            data["sales_return"]["id"],
+            sales_return.id,
+        )
+        self.assertEqual(
+            data["status"],
+            SalesCreditNoteStatus.DRAFT,
+        )
+        self.assertEqual(
+            data["total_amount"],
+            "103.50",
+        )
+        self.assertEqual(
+            len(data["items"]),
+            1,
+        )
+        self.assertEqual(
+            data["items"][0][
+                "sales_return_item_id"
+            ],
+            sales_return.items.get().id,
+        )
+        self.assertEqual(
+            data["items"][0]["line_total"],
+            "103.50",
+        )
+
+
+# End Phase 21.5.2 - Sales Credit Notes Services Foundation Tests
+# ============================================================
+
+
+# ============================================================
+# Phase 21.5.3 - Sales Credit Notes Company APIs Tests
+# ============================================================
+
+
+class SalesCreditNotesAPITests(SalesTestCase):
+    """
+    API, permission, lifecycle, and tenant-isolation tests
+    for company sales credit notes.
+    """
+
+    def _create_confirmed_return(
+        self,
+        *,
+        company=None,
+        user=None,
+        customer=None,
+        catalog_item=None,
+        invoice_quantity="4",
+        return_quantity="1",
+        discount_amount="40.00",
+    ) -> SalesReturn:
+        selected_company = company or self.company
+        selected_user = user or self.user
+        selected_customer = customer or self.customer
+        selected_item = catalog_item or self.item
+
+        invoice = create_sales_invoice(
+            company=selected_company,
+            user=selected_user,
+            customer_id=selected_customer.id,
+            items=[
+                {
+                    "catalog_item_id":
+                        selected_item.id,
+                    "quantity":
+                        invoice_quantity,
+                    "discount_amount":
+                        discount_amount,
+                }
+            ],
+        )
+
+        invoice = issue_sales_invoice(
+            company=selected_company,
+            invoice=invoice,
+            user=selected_user,
+        )
+
+        sales_return = create_sales_return(
+            company=selected_company,
+            invoice=invoice,
+            user=selected_user,
+            items=[
+                {
+                    "invoice_item_id":
+                        invoice.items.get().id,
+                    "quantity":
+                        return_quantity,
+                }
+            ],
+        )
+
+        return confirm_sales_return(
+            company=selected_company,
+            sales_return=sales_return,
+            user=selected_user,
+        )
+
+    def _create_credit_note(
+        self,
+        *,
+        sales_return=None,
+        company=None,
+        user=None,
+        issue_now=False,
+    ) -> SalesCreditNote:
+        selected_company = company or self.company
+        selected_user = user or self.user
+
+        selected_return = (
+            sales_return
+            or self._create_confirmed_return(
+                company=selected_company,
+                user=selected_user,
+                customer=(
+                    self.customer
+                    if selected_company == self.company
+                    else self.other_customer
+                ),
+                catalog_item=(
+                    self.item
+                    if selected_company == self.company
+                    else self.other_item
+                ),
+                invoice_quantity="1",
+                return_quantity="1",
+                discount_amount="0.00",
+            )
+        )
+
+        return create_sales_credit_note_from_return(
+            company=selected_company,
+            sales_return=selected_return,
+            user=selected_user,
+            issue_now=issue_now,
+        )
+
+    def test_credit_notes_list_returns_current_company_only(
+        self,
+    ):
+        current_credit_note = self._create_credit_note()
+
+        other_credit_note = self._create_credit_note(
+            company=self.other_company,
+            user=self.other_user,
+        )
+
+        response = self.client.get(
+            "/api/company/sales/credit-notes/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(
+            payload["results"][0]["id"],
+            current_credit_note.id,
+        )
+        self.assertNotEqual(
+            payload["results"][0]["id"],
+            other_credit_note.id,
+        )
+
+    def test_credit_notes_list_supports_search_and_status(
+        self,
+    ):
+        credit_note = self._create_credit_note(
+            issue_now=True
+        )
+
+        response = self.client.get(
+            "/api/company/sales/credit-notes/",
+            {
+                "q": credit_note.credit_note_number,
+                "status":
+                    SalesCreditNoteStatus.ISSUED,
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(
+            payload["results"][0]["id"],
+            credit_note.id,
+        )
+        self.assertEqual(
+            payload["results"][0]["status"],
+            SalesCreditNoteStatus.ISSUED,
+        )
+
+    def test_credit_notes_list_rejects_invalid_status(
+        self,
+    ):
+        response = self.client.get(
+            "/api/company/sales/credit-notes/",
+            {
+                "status": "INVALID",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+            response.content,
+        )
+        self.assertFalse(
+            response.json()["success"]
+        )
+
+    def test_create_credit_note_endpoint(self):
+        sales_return = (
+            self._create_confirmed_return()
+        )
+
+        response = self.client.post(
+            "/api/company/sales/credit-notes/create/",
+            data={
+                "sales_return_id":
+                    sales_return.id,
+                "public_notes":
+                    "API credit note",
+                "extra_data": {
+                    "channel": "company-api",
+                },
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+            response.content,
+        )
+
+        payload = response.json()
+        credit_note = (
+            SalesCreditNote.objects.get(
+                company=self.company
+            )
+        )
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(
+            payload["credit_note"]["id"],
+            credit_note.id,
+        )
+        self.assertEqual(
+            payload["credit_note"]["status"],
+            SalesCreditNoteStatus.DRAFT,
+        )
+        self.assertEqual(
+            payload["credit_note"][
+                "sales_return"
+            ]["id"],
+            sales_return.id,
+        )
+        self.assertEqual(
+            payload["credit_note"][
+                "total_amount"
+            ],
+            "103.50",
+        )
+        self.assertEqual(
+            len(
+                payload["credit_note"]["items"]
+            ),
+            1,
+        )
+        self.assertEqual(
+            credit_note.public_notes,
+            "API credit note",
+        )
+        self.assertEqual(
+            credit_note.extra_data["channel"],
+            "company-api",
+        )
+
+    def test_create_credit_note_endpoint_can_issue_now(
+        self,
+    ):
+        sales_return = (
+            self._create_confirmed_return()
+        )
+
+        response = self.client.post(
+            "/api/company/sales/credit-notes/create/",
+            data={
+                "sales_return_id":
+                    sales_return.id,
+                "issue_now": True,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(
+            payload["credit_note"]["status"],
+            SalesCreditNoteStatus.ISSUED,
+        )
+        self.assertIsNotNone(
+            payload["credit_note"]["issued_at"]
+        )
+
+    def test_create_credit_note_rejects_draft_return(
+        self,
+    ):
+        invoice = create_sales_invoice(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            items=[
+                {
+                    "catalog_item_id":
+                        self.item.id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        invoice = issue_sales_invoice(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+        )
+
+        sales_return = create_sales_return(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+            items=None,
+        )
+
+        response = self.client.post(
+            "/api/company/sales/credit-notes/create/",
+            data={
+                "sales_return_id":
+                    sales_return.id,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+            response.content,
+        )
+        self.assertFalse(
+            response.json()["success"]
+        )
+
+    def test_create_credit_note_rejects_duplicate_return(
+        self,
+    ):
+        sales_return = (
+            self._create_confirmed_return()
+        )
+
+        first_response = self.client.post(
+            "/api/company/sales/credit-notes/create/",
+            data={
+                "sales_return_id":
+                    sales_return.id,
+            },
+            content_type="application/json",
+        )
+
+        second_response = self.client.post(
+            "/api/company/sales/credit-notes/create/",
+            data={
+                "sales_return_id":
+                    sales_return.id,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            first_response.status_code,
+            201,
+            first_response.content,
+        )
+        self.assertEqual(
+            second_response.status_code,
+            400,
+            second_response.content,
+        )
+        self.assertEqual(
+            SalesCreditNote.objects.filter(
+                sales_return=sales_return
+            ).count(),
+            1,
+        )
+
+    def test_create_credit_note_blocks_cross_company_return(
+        self,
+    ):
+        other_return = (
+            self._create_confirmed_return(
+                company=self.other_company,
+                user=self.other_user,
+                customer=self.other_customer,
+                catalog_item=self.other_item,
+                invoice_quantity="1",
+                return_quantity="1",
+                discount_amount="0.00",
+            )
+        )
+
+        response = self.client.post(
+            "/api/company/sales/credit-notes/create/",
+            data={
+                "sales_return_id":
+                    other_return.id,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+            response.content,
+        )
+        self.assertFalse(
+            response.json()["success"]
+        )
+
+    def test_credit_note_detail_returns_items(self):
+        credit_note = self._create_credit_note()
+
+        response = self.client.get(
+            "/api/company/sales/credit-notes/"
+            f"{credit_note.id}/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(
+            payload["credit_note"]["id"],
+            credit_note.id,
+        )
+        self.assertEqual(
+            len(
+                payload["credit_note"]["items"]
+            ),
+            1,
+        )
+
+    def test_credit_note_detail_blocks_cross_company(
+        self,
+    ):
+        other_credit_note = self._create_credit_note(
+            company=self.other_company,
+            user=self.other_user,
+        )
+
+        response = self.client.get(
+            "/api/company/sales/credit-notes/"
+            f"{other_credit_note.id}/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+            response.content,
+        )
+
+    def test_issue_credit_note_endpoint(self):
+        credit_note = self._create_credit_note()
+
+        response = self.client.post(
+            "/api/company/sales/credit-notes/"
+            f"{credit_note.id}/issue/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        credit_note.refresh_from_db()
+
+        self.assertEqual(
+            credit_note.status,
+            SalesCreditNoteStatus.ISSUED,
+        )
+        self.assertEqual(
+            credit_note.issued_by,
+            self.user,
+        )
+        self.assertIsNotNone(
+            credit_note.issued_at
+        )
+
+    def test_issue_credit_note_blocks_cross_company(
+        self,
+    ):
+        other_credit_note = self._create_credit_note(
+            company=self.other_company,
+            user=self.other_user,
+        )
+
+        response = self.client.post(
+            "/api/company/sales/credit-notes/"
+            f"{other_credit_note.id}/issue/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+            response.content,
+        )
+
+    def test_cancel_issued_credit_note_endpoint(
+        self,
+    ):
+        credit_note = self._create_credit_note(
+            issue_now=True
+        )
+
+        response = self.client.post(
+            "/api/company/sales/credit-notes/"
+            f"{credit_note.id}/cancel/",
+            data={
+                "reason": "API credit cancellation",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        credit_note.refresh_from_db()
+
+        self.assertEqual(
+            credit_note.status,
+            SalesCreditNoteStatus.CANCELLED,
+        )
+        self.assertEqual(
+            credit_note.cancelled_reason,
+            "API credit cancellation",
+        )
+        self.assertEqual(
+            credit_note.cancelled_by,
+            self.user,
+        )
+
+    def test_cancel_credit_note_blocks_cross_company(
+        self,
+    ):
+        other_credit_note = self._create_credit_note(
+            company=self.other_company,
+            user=self.other_user,
+            issue_now=True,
+        )
+
+        response = self.client.post(
+            "/api/company/sales/credit-notes/"
+            f"{other_credit_note.id}/cancel/",
+            data={
+                "reason": "Invalid cancellation",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+            response.content,
+        )
+
+    def test_viewer_can_view_but_cannot_create_credit_note(
+        self,
+    ):
+        sales_return = (
+            self._create_confirmed_return()
+        )
+        credit_note = (
+            create_sales_credit_note_from_return(
+                company=self.company,
+                sales_return=sales_return,
+                user=self.user,
+            )
+        )
+
+        self.client.force_login(
+            self.viewer_user
+        )
+
+        list_response = self.client.get(
+            "/api/company/sales/credit-notes/"
+        )
+
+        detail_response = self.client.get(
+            "/api/company/sales/credit-notes/"
+            f"{credit_note.id}/"
+        )
+
+        other_return = (
+            self._create_confirmed_return(
+                invoice_quantity="1",
+                return_quantity="1",
+                discount_amount="0.00",
+            )
+        )
+
+        create_response = self.client.post(
+            "/api/company/sales/credit-notes/create/",
+            data={
+                "sales_return_id":
+                    other_return.id,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            list_response.status_code,
+            200,
+            list_response.content,
+        )
+        self.assertEqual(
+            detail_response.status_code,
+            200,
+            detail_response.content,
+        )
+        self.assertEqual(
+            create_response.status_code,
+            403,
+            create_response.content,
+        )
+
+    def test_viewer_cannot_issue_or_cancel_credit_note(
+        self,
+    ):
+        draft_credit_note = self._create_credit_note()
+
+        issued_return = (
+            self._create_confirmed_return(
+                invoice_quantity="1",
+                return_quantity="1",
+                discount_amount="0.00",
+            )
+        )
+
+        issued_credit_note = (
+            create_sales_credit_note_from_return(
+                company=self.company,
+                sales_return=issued_return,
+                user=self.user,
+                issue_now=True,
+            )
+        )
+
+        self.client.force_login(
+            self.viewer_user
+        )
+
+        issue_response = self.client.post(
+            "/api/company/sales/credit-notes/"
+            f"{draft_credit_note.id}/issue/"
+        )
+
+        cancel_response = self.client.post(
+            "/api/company/sales/credit-notes/"
+            f"{issued_credit_note.id}/cancel/",
+            data={
+                "reason": "Not allowed",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            issue_response.status_code,
+            403,
+            issue_response.content,
+        )
+        self.assertEqual(
+            cancel_response.status_code,
+            403,
+            cancel_response.content,
+        )
+
+    def test_unauthenticated_user_cannot_list_credit_notes(
+        self,
+    ):
+        self.client.logout()
+
+        response = self.client.get(
+            "/api/company/sales/credit-notes/"
+        )
+
+        self.assertIn(
+            response.status_code,
+            [401, 403],
+        )
+
+
+# End Phase 21.5.3 - Sales Credit Notes Company APIs Tests
+# ============================================================
+# ============================================================
+# Phase 21.5.4 - Credit Note Accounting Posting Tests
+# ============================================================
+
+
+class SalesCreditNotePostingTests(SalesTestCase):
+    """
+    Accounting, lifecycle, duplicate-prevention, and API tests
+    for posting sales credit notes.
+    """
+
+    def _create_issued_credit_note(
+        self,
+    ) -> SalesCreditNote:
+        invoice = create_sales_invoice(
+            company=self.company,
+            user=self.user,
+            customer_id=self.customer.id,
+            items=[
+                {
+                    "catalog_item_id": self.item.id,
+                    "quantity": "4",
+                    "discount_amount": "40.00",
+                }
+            ],
+        )
+
+        invoice = issue_sales_invoice(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+        )
+
+        sales_return = create_sales_return(
+            company=self.company,
+            invoice=invoice,
+            user=self.user,
+            items=[
+                {
+                    "invoice_item_id":
+                        invoice.items.get().id,
+                    "quantity": "1",
+                }
+            ],
+        )
+
+        sales_return = confirm_sales_return(
+            company=self.company,
+            sales_return=sales_return,
+            user=self.user,
+        )
+
+        return create_sales_credit_note_from_return(
+            company=self.company,
+            sales_return=sales_return,
+            user=self.user,
+            issue_now=True,
+        )
+
+    def test_post_credit_note_creates_balanced_entry(
+        self,
+    ):
+        credit_note = self._create_issued_credit_note()
+
+        credit_note = post_sales_credit_note(
+            company=self.company,
+            credit_note=credit_note,
+            user=self.user,
+        )
+
+        credit_note.refresh_from_db()
+        sales_return = credit_note.sales_return
+        sales_return.refresh_from_db()
+
+        entry = JournalEntry.objects.get(
+            company=self.company,
+            source_type="sales_credit_note",
+            source_id=str(credit_note.id),
+        )
+
+        self.assertEqual(
+            credit_note.status,
+            SalesCreditNoteStatus.POSTED,
+        )
+        self.assertEqual(
+            sales_return.status,
+            SalesReturnStatus.POSTED,
+        )
+        self.assertEqual(
+            credit_note.posted_by,
+            self.user,
+        )
+        self.assertEqual(
+            sales_return.posted_by,
+            self.user,
+        )
+
+        self.assertEqual(
+            entry.status,
+            JournalEntryStatus.POSTED,
+        )
+        self.assertEqual(
+            entry.posting_source,
+            PostingSource.SALES_CREDIT_NOTE,
+        )
+        self.assertEqual(
+            entry.total_debit,
+            credit_note.total_amount,
+        )
+        self.assertEqual(
+            entry.total_credit,
+            credit_note.total_amount,
+        )
+        self.assertTrue(entry.is_balanced)
+
+    def test_credit_note_entry_has_correct_directions(
+        self,
+    ):
+        credit_note = self._create_issued_credit_note()
+
+        post_sales_credit_note(
+            company=self.company,
+            credit_note=credit_note,
+            user=self.user,
+        )
+
+        entry = JournalEntry.objects.get(
+            company=self.company,
+            source_type="sales_credit_note",
+            source_id=str(credit_note.id),
+        )
+
+        revenue_line = entry.lines.get(
+            account__purpose=(
+                AccountingAccountPurpose.SALES_REVENUE
+            )
+        )
+        vat_line = entry.lines.get(
+            account__purpose=(
+                AccountingAccountPurpose.OUTPUT_VAT
+            )
+        )
+        receivable_line = entry.lines.get(
+            account__purpose=(
+                AccountingAccountPurpose.ACCOUNTS_RECEIVABLE
+            )
+        )
+
+        self.assertEqual(
+            revenue_line.debit_amount,
+            Decimal("90.00"),
+        )
+        self.assertEqual(
+            revenue_line.credit_amount,
+            Decimal("0.00"),
+        )
+
+        self.assertEqual(
+            vat_line.debit_amount,
+            Decimal("13.50"),
+        )
+        self.assertEqual(
+            vat_line.credit_amount,
+            Decimal("0.00"),
+        )
+
+        self.assertEqual(
+            receivable_line.debit_amount,
+            Decimal("0.00"),
+        )
+        self.assertEqual(
+            receivable_line.credit_amount,
+            Decimal("103.50"),
+        )
+
+    def test_accounting_posting_prevents_duplicate_entry(
+        self,
+    ):
+        credit_note = self._create_issued_credit_note()
+
+        first_entry = post_sales_credit_note_to_accounting(
+            credit_note,
+            actor=self.user,
+            auto_post=True,
+        )
+
+        second_entry = post_sales_credit_note_to_accounting(
+            credit_note,
+            actor=self.user,
+            auto_post=True,
+        )
+
+        self.assertEqual(
+            first_entry.id,
+            second_entry.id,
+        )
+        self.assertEqual(
+            JournalEntry.objects.filter(
+                company=self.company,
+                source_type="sales_credit_note",
+                source_id=str(credit_note.id),
+            ).count(),
+            1,
+        )
+
+    def test_post_credit_note_rejects_draft_document(
+        self,
+    ):
+        issued_credit_note = (
+            self._create_issued_credit_note()
+        )
+
+        draft_return = (
+            issued_credit_note.sales_return
+        )
+
+        SalesCreditNote.objects.filter(
+            pk=issued_credit_note.pk
+        ).update(
+            status=SalesCreditNoteStatus.DRAFT,
+            issued_at=None,
+            issued_by=None,
+        )
+
+        issued_credit_note.refresh_from_db()
+
+        with self.assertRaises(ValidationError):
+            post_sales_credit_note(
+                company=self.company,
+                credit_note=issued_credit_note,
+                user=self.user,
+            )
+
+        draft_return.refresh_from_db()
+
+        self.assertEqual(
+            draft_return.status,
+            SalesReturnStatus.CONFIRMED,
+        )
+        self.assertFalse(
+            JournalEntry.objects.filter(
+                company=self.company,
+                source_type="sales_credit_note",
+                source_id=str(issued_credit_note.id),
+            ).exists()
+        )
+
+    def test_post_credit_note_api_posts_document(
+        self,
+    ):
+        credit_note = self._create_issued_credit_note()
+
+        response = self.client.post(
+            "/api/company/sales/credit-notes/"
+            f"{credit_note.id}/post/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.content,
+        )
+
+        payload = response.json()
+        credit_note.refresh_from_db()
+        credit_note.sales_return.refresh_from_db()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(
+            payload["credit_note"]["status"],
+            SalesCreditNoteStatus.POSTED,
+        )
+        self.assertEqual(
+            credit_note.status,
+            SalesCreditNoteStatus.POSTED,
+        )
+        self.assertEqual(
+            credit_note.sales_return.status,
+            SalesReturnStatus.POSTED,
+        )
+        self.assertEqual(
+            JournalEntry.objects.filter(
+                company=self.company,
+                source_type="sales_credit_note",
+                source_id=str(credit_note.id),
+            ).count(),
+            1,
+        )
+
+    def test_viewer_cannot_post_credit_note(
+        self,
+    ):
+        credit_note = self._create_issued_credit_note()
+
+        self.client.force_login(
+            self.viewer_user
+        )
+
+        response = self.client.post(
+            "/api/company/sales/credit-notes/"
+            f"{credit_note.id}/post/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            403,
+            response.content,
+        )
+
+        credit_note.refresh_from_db()
+        credit_note.sales_return.refresh_from_db()
+
+        self.assertEqual(
+            credit_note.status,
+            SalesCreditNoteStatus.ISSUED,
+        )
+        self.assertEqual(
+            credit_note.sales_return.status,
+            SalesReturnStatus.CONFIRMED,
+        )
+        self.assertFalse(
+            JournalEntry.objects.filter(
+                company=self.company,
+                source_type="sales_credit_note",
+                source_id=str(credit_note.id),
+            ).exists()
+        )
+
+
+# End Phase 21.5.4 - Credit Note Accounting Posting Tests
+# ============================================================

@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # 📂 accounting/services.py
 # 🧠 PrimeyAcc | Accounting Services - Phase 10.1
 # ------------------------------------------------------------
@@ -260,6 +260,26 @@ DEFAULT_ROUTING_RULES: list[RoutingSeedRow] = [
     RoutingSeedRow(AccountingRoutingSource.SALES_INVOICE, AccountingAccountPurpose.ACCOUNTS_RECEIVABLE, "1103", "مدين فاتورة البيع"),
     RoutingSeedRow(AccountingRoutingSource.SALES_INVOICE, AccountingAccountPurpose.SALES_REVENUE, "4101", "دائن إيرادات البيع"),
     RoutingSeedRow(AccountingRoutingSource.SALES_INVOICE, AccountingAccountPurpose.OUTPUT_VAT, "210501", "دائن ضريبة المخرجات"),
+
+    RoutingSeedRow(
+        AccountingRoutingSource.SALES_CREDIT_NOTE,
+        AccountingAccountPurpose.ACCOUNTS_RECEIVABLE,
+        "1103",
+        "???? ??? ??????? ?? ??????? ??????",
+    ),
+    RoutingSeedRow(
+        AccountingRoutingSource.SALES_CREDIT_NOTE,
+        AccountingAccountPurpose.SALES_REVENUE,
+        "4101",
+        "???? ??? ??????? ????????",
+    ),
+    RoutingSeedRow(
+        AccountingRoutingSource.SALES_CREDIT_NOTE,
+        AccountingAccountPurpose.OUTPUT_VAT,
+        "210501",
+        "???? ??? ????? ????????",
+    ),
+
 
     RoutingSeedRow(AccountingRoutingSource.PURCHASE_BILL, ACCOUNT_PURPOSE_EXPENSE, "5215", "مدين مشتريات أو مصروفات"),
     RoutingSeedRow(AccountingRoutingSource.PURCHASE_BILL, AccountingAccountPurpose.INVENTORY, "1108", "مدين المخزون عند الشراء"),
@@ -762,6 +782,7 @@ MONEY_QUANT = Decimal("0.01")
 AUTO_SOURCE_TYPE_SALES_INVOICE = "sales_invoice"
 
 
+AUTO_SOURCE_TYPE_SALES_CREDIT_NOTE = "sales_credit_note"
 @dataclass(slots=True)
 class EntryLinePayload:
     account: Account
@@ -1373,6 +1394,421 @@ def post_sales_invoice_to_accounting(
 
     if auto_post:
         entry = post_journal_entry(entry, actor=actor)
+
+    return entry
+
+
+
+def find_sales_credit_note_journal_entry(
+    credit_note: Any,
+) -> JournalEntry | None:
+    """
+    Find the automatic journal entry linked to a sales
+    credit note.
+    """
+    if not credit_note:
+        return None
+
+    company = getattr(
+        credit_note,
+        "company",
+        None,
+    )
+
+    if not company:
+        return None
+
+    credit_note_number = _clean_text(
+        getattr(
+            credit_note,
+            "credit_note_number",
+            "",
+        )
+    )
+
+    return _get_existing_auto_entry(
+        company=company,
+        source_type=(
+            AUTO_SOURCE_TYPE_SALES_CREDIT_NOTE
+        ),
+        source_id=getattr(
+            credit_note,
+            "pk",
+            None,
+        ),
+        source_number=credit_note_number,
+    )
+
+
+@transaction.atomic
+def post_sales_credit_note_to_accounting(
+    credit_note: Any,
+    *,
+    actor: Any = None,
+    auto_post: bool = True,
+) -> JournalEntry:
+    """
+    Create the accounting entry for an issued sales credit note.
+
+    Treatment:
+    - Debit sales revenue.
+    - Debit output VAT when applicable.
+    - Credit accounts receivable.
+    """
+    if not credit_note:
+        raise AccountingPostingError(
+            "??????? ?????? ????? ??????? ????????."
+        )
+
+    company = getattr(
+        credit_note,
+        "company",
+        None,
+    )
+    _validate_company(company)
+
+    if (
+        getattr(credit_note, "company_id", None)
+        != getattr(company, "pk", None)
+    ):
+        raise AccountingPostingError(
+            "??????? ?????? ?? ???? ?????? ???????."
+        )
+
+    status = _clean_text(
+        getattr(
+            credit_note,
+            "status",
+            "",
+        )
+    ).lower()
+
+    if status not in {
+        "issued",
+        "posted",
+    }:
+        raise AccountingPostingError(
+            "?? ???? ????? ????? ???? ??? ???? ???????."
+        )
+
+    credit_note_number = (
+        _clean_text(
+            getattr(
+                credit_note,
+                "credit_note_number",
+                "",
+            )
+        )
+        or f"SALES-CREDIT-NOTE-{credit_note.pk}"
+    )
+
+    existing = _get_existing_auto_entry(
+        company=company,
+        source_type=(
+            AUTO_SOURCE_TYPE_SALES_CREDIT_NOTE
+        ),
+        source_id=credit_note.pk,
+        source_number=credit_note_number,
+    )
+
+    if existing:
+        if (
+            auto_post
+            and existing.status
+            == JournalEntryStatus.DRAFT
+        ):
+            existing = post_journal_entry(
+                existing,
+                actor=actor,
+            )
+
+        return existing
+
+    total_amount = _money(
+        getattr(
+            credit_note,
+            "total_amount",
+            MONEY_ZERO,
+        )
+    )
+    tax_amount = _money(
+        getattr(
+            credit_note,
+            "tax_amount",
+            MONEY_ZERO,
+        )
+    )
+    revenue_amount = _money(
+        total_amount - tax_amount
+    )
+
+    if total_amount <= MONEY_ZERO:
+        raise AccountingPostingError(
+            "?? ???? ????? ????? ???? ??????? ????."
+        )
+
+    if revenue_amount <= MONEY_ZERO:
+        raise AccountingPostingError(
+            "?? ???? ????? ????? ???? ???? ???? ?????."
+        )
+
+    seed_company_chart_of_accounts(
+        company
+    )
+
+    receivable_account = get_account_by_purpose(
+        company,
+        AccountingAccountPurpose.ACCOUNTS_RECEIVABLE,
+        source=(
+            AccountingRoutingSource
+            .SALES_CREDIT_NOTE
+        ),
+        required=True,
+    )
+
+    revenue_account = get_account_by_purpose(
+        company,
+        AccountingAccountPurpose.SALES_REVENUE,
+        source=(
+            AccountingRoutingSource
+            .SALES_CREDIT_NOTE
+        ),
+        required=True,
+    )
+
+    output_vat_account = None
+    default_tax_rate = None
+
+    if tax_amount > MONEY_ZERO:
+        output_vat_account = get_account_by_purpose(
+            company,
+            AccountingAccountPurpose.OUTPUT_VAT,
+            source=(
+                AccountingRoutingSource
+                .SALES_CREDIT_NOTE
+            ),
+            required=True,
+        )
+        default_tax_rate = get_default_tax_rate(
+            company
+        )
+
+    currency = _clean_currency(
+        getattr(
+            credit_note,
+            "currency_code",
+            "",
+        )
+        or "SAR"
+    )
+
+    entry_date = (
+        getattr(
+            credit_note,
+            "credit_note_date",
+            None,
+        )
+        or timezone.localdate()
+    )
+
+    customer_id = _clean_text(
+        getattr(
+            credit_note,
+            "customer_id",
+            "",
+        )
+        or ""
+    )
+
+    invoice_id = getattr(
+        credit_note,
+        "invoice_id",
+        None,
+    )
+    sales_return_id = getattr(
+        credit_note,
+        "sales_return_id",
+        None,
+    )
+
+    entry = create_journal_entry_header(
+        company=company,
+        entry_date=entry_date,
+        entry_number=generate_journal_entry_number(
+            company,
+            prefix="SCN",
+        ),
+        posting_source=(
+            PostingSource.SALES_CREDIT_NOTE
+        ),
+        reference=credit_note_number,
+        external_reference=credit_note_number,
+        description=(
+            "??? ?????? ?????? ???? ?????? "
+            f"{credit_note_number}"
+        ),
+        notes=(
+            "?? ????? ????? ??????? ??? ????? "
+            "??????? ??????."
+        ),
+        currency=currency,
+        source_type=(
+            AUTO_SOURCE_TYPE_SALES_CREDIT_NOTE
+        ),
+        source_id=_source_id(
+            credit_note.pk
+        ),
+        source_number=credit_note_number,
+        is_auto_posted=True,
+        actor=actor,
+    )
+
+    lines = [
+        EntryLinePayload(
+            account=revenue_account,
+            description=(
+                "??? ????? ?????? ?? ????? ???? "
+                f"{credit_note_number}"
+            ),
+            debit_amount=revenue_amount,
+            currency=currency,
+            party_type=(
+                "customer"
+                if customer_id
+                else ""
+            ),
+            party_id=customer_id,
+            source_line_id=(
+                "credit-note-revenue"
+            ),
+            sort_order=1,
+            metadata={
+                "source": (
+                    AUTO_SOURCE_TYPE_SALES_CREDIT_NOTE
+                ),
+                "credit_note_id": credit_note.pk,
+                "invoice_id": invoice_id,
+                "sales_return_id": sales_return_id,
+            },
+        ),
+    ]
+
+    if (
+        tax_amount > MONEY_ZERO
+        and output_vat_account
+    ):
+        lines.append(
+            EntryLinePayload(
+                account=output_vat_account,
+                description=(
+                    "??? ????? ?????? ?? ????? ???? "
+                    f"{credit_note_number}"
+                ),
+                debit_amount=tax_amount,
+                currency=currency,
+                tax_rate=default_tax_rate,
+                tax_amount=tax_amount,
+                party_type=(
+                    "customer"
+                    if customer_id
+                    else ""
+                ),
+                party_id=customer_id,
+                source_line_id=(
+                    "credit-note-output-vat"
+                ),
+                sort_order=2,
+                metadata={
+                    "source": (
+                        AUTO_SOURCE_TYPE_SALES_CREDIT_NOTE
+                    ),
+                    "credit_note_id": credit_note.pk,
+                    "invoice_id": invoice_id,
+                    "sales_return_id": sales_return_id,
+                },
+            )
+        )
+
+    lines.append(
+        EntryLinePayload(
+            account=receivable_account,
+            description=(
+                "????? ??? ?????? ?? ????? ???? "
+                f"{credit_note_number}"
+            ),
+            credit_amount=total_amount,
+            currency=currency,
+            party_type=(
+                "customer"
+                if customer_id
+                else ""
+            ),
+            party_id=customer_id,
+            source_line_id=(
+                "credit-note-receivable"
+            ),
+            sort_order=3,
+            metadata={
+                "source": (
+                    AUTO_SOURCE_TYPE_SALES_CREDIT_NOTE
+                ),
+                "credit_note_id": credit_note.pk,
+                "invoice_id": invoice_id,
+                "sales_return_id": sales_return_id,
+            },
+        )
+    )
+
+    entry = replace_journal_entry_lines(
+        entry,
+        lines,
+        actor=actor,
+    )
+
+    entry.metadata = {
+        **(entry.metadata or {}),
+        "source": (
+            AUTO_SOURCE_TYPE_SALES_CREDIT_NOTE
+        ),
+        "source_app": "sales",
+        "credit_note_id": credit_note.pk,
+        "credit_note_number": credit_note_number,
+        "invoice_id": invoice_id,
+        "sales_return_id": sales_return_id,
+        "customer_id": customer_id,
+        "total_amount": str(total_amount),
+        "tax_amount": str(tax_amount),
+        "revenue_amount": str(revenue_amount),
+        "auto_posted_by_phase": "phase_21_5_4",
+    }
+
+    update_fields = [
+        "metadata",
+        "updated_at",
+    ]
+
+    if (
+        actor is not None
+        and getattr(
+            actor,
+            "is_authenticated",
+            False,
+        )
+    ):
+        entry.updated_by = actor
+        update_fields.append(
+            "updated_by"
+        )
+
+    entry.save(
+        update_fields=update_fields
+    )
+
+    if auto_post:
+        entry = post_journal_entry(
+            entry,
+            actor=actor,
+        )
 
     return entry
 

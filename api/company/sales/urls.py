@@ -34,4 +34,10 @@ urlpatterns = [
         "returns/",
         include("api.company.sales.returns.urls"),
     ),
+    path(
+        "credit-notes/",
+        include(
+            "api.company.sales.credit_notes.urls"
+        ),
+    ),
 ]

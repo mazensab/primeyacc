@@ -38,6 +38,8 @@ from django.utils import timezone
 from accounting.services import (
     AccountingServiceError,
     post_sales_invoice_to_accounting,
+    post_sales_credit_note_to_accounting,
+
 )
 from catalog.models import CatalogItem, CatalogItemStatus
 from companies.models import Branch, Company
@@ -48,6 +50,9 @@ from parties.models import (
 )
 from sales.models import (
     MONEY_ZERO,
+    SalesCreditNote,
+    SalesCreditNoteItem,
+    SalesCreditNoteStatus,
     SalesInvoice,
     SalesInvoiceItem,
     SalesInvoiceSource,
@@ -3983,5 +3988,988 @@ def serialize_invoice_return_summary(
 
 
 # End Phase 21.4.2 - Sales Returns Services Foundation
+# ============================================================
+
+
+# ============================================================
+# Phase 21.5.2 - Sales Credit Notes Services Foundation
+# ------------------------------------------------------------
+# Company-scoped credit note creation from confirmed returns.
+# Immutable commercial values copied from return items.
+# Issue and cancel lifecycle services.
+# API serializers.
+# Accounting posting and POSTED transition remain deferred.
+# ============================================================
+
+
+def generate_sales_credit_note_number(
+    company: Company,
+    credit_note_date=None,
+) -> str:
+    """
+    Generate a company-scoped sales credit note number.
+
+    Format:
+        SCN-YYYY-000001
+    """
+    if not company:
+        raise ValidationError(
+            {
+                "company":
+                "Company context is required."
+            }
+        )
+
+    normalized_date = normalize_invoice_date(
+        credit_note_date,
+        field_name="credit_note_date",
+        default_today=True,
+    )
+
+    year = normalized_date.year
+    prefix = "SCN"
+    starts_with = f"{prefix}-{year}-"
+
+    last_credit_note = (
+        SalesCreditNote.objects
+        .filter(
+            company=company,
+            credit_note_number__startswith=(
+                starts_with
+            ),
+        )
+        .order_by(
+            "-credit_note_number",
+            "-id",
+        )
+        .first()
+    )
+
+    next_number = 1
+
+    if (
+        last_credit_note
+        and last_credit_note.credit_note_number
+    ):
+        try:
+            next_number = (
+                int(
+                    last_credit_note
+                    .credit_note_number
+                    .split("-")[-1]
+                )
+                + 1
+            )
+        except (TypeError, ValueError):
+            next_number = (
+                last_credit_note.id + 1
+            )
+
+    return (
+        f"{starts_with}"
+        f"{next_number:06d}"
+    )
+
+
+def resolve_sales_credit_note_return(
+    *,
+    company: Company,
+    sales_return_id: int | str | None,
+    lock: bool = False,
+) -> SalesReturn:
+    """
+    Resolve a confirmed or posted sales return inside the company.
+    """
+    if not company:
+        raise ValidationError(
+            {
+                "company":
+                "Company context is required."
+            }
+        )
+
+    if not sales_return_id:
+        raise ValidationError(
+            {
+                "sales_return":
+                "Sales return is required."
+            }
+        )
+
+    queryset = (
+        SalesReturn.objects
+        .select_related(
+            "company",
+            "branch",
+            "customer",
+            "invoice",
+        )
+        .filter(
+            company=company,
+            id=sales_return_id,
+        )
+    )
+
+    if lock:
+        queryset = queryset.select_for_update()
+
+    sales_return = queryset.first()
+
+    if not sales_return:
+        raise ValidationError(
+            {
+                "sales_return":
+                "Sales return was not found "
+                "for this company."
+            }
+        )
+
+    if sales_return.status not in [
+        SalesReturnStatus.CONFIRMED,
+        SalesReturnStatus.POSTED,
+    ]:
+        raise ValidationError(
+            {
+                "sales_return":
+                "Only confirmed or posted sales returns "
+                "can create credit notes."
+            }
+        )
+
+    return sales_return
+
+
+@transaction.atomic
+def create_sales_credit_note_from_return(
+    *,
+    company: Company,
+    sales_return: SalesReturn | None = None,
+    sales_return_id: int | str | None = None,
+    user=None,
+    credit_note_date=None,
+    public_notes: str | None = None,
+    internal_notes: str | None = None,
+    extra_data: dict[str, Any] | None = None,
+    issue_now: bool = False,
+) -> SalesCreditNote:
+    """
+    Create one credit note from one confirmed or posted sales return.
+
+    Rules:
+    - return must belong to the current company
+    - return must be confirmed or posted
+    - one return can create only one credit note
+    - all return lines are copied without accepting commercial overrides
+    - totals must exactly match the sales return
+    """
+    if not company:
+        raise ValidationError(
+            {
+                "company":
+                "Company context is required."
+            }
+        )
+
+    selected_return_id = (
+        sales_return.id
+        if sales_return is not None
+        else sales_return_id
+    )
+
+    locked_return = resolve_sales_credit_note_return(
+        company=company,
+        sales_return_id=selected_return_id,
+        lock=True,
+    )
+
+    if SalesCreditNote.objects.filter(
+        sales_return=locked_return,
+    ).exists():
+        raise ValidationError(
+            {
+                "sales_return":
+                "This sales return already has "
+                "a credit note."
+            }
+        )
+
+    return_items = list(
+        SalesReturnItem.objects
+        .select_for_update()
+        .select_related(
+            "invoice_item",
+            "catalog_item",
+        )
+        .filter(
+            sales_return=locked_return,
+            company=company,
+        )
+        .order_by(
+            "line_number",
+            "id",
+        )
+    )
+
+    if not return_items:
+        raise ValidationError(
+            {
+                "items":
+                "Sales return cannot create a credit note "
+                "without items."
+            }
+        )
+
+    normalized_credit_note_date = (
+        normalize_invoice_date(
+            credit_note_date,
+            field_name="credit_note_date",
+            default_today=True,
+        )
+    )
+
+    if (
+        normalized_credit_note_date
+        < locked_return.return_date
+    ):
+        raise ValidationError(
+            {
+                "credit_note_date":
+                "Credit note date cannot be before "
+                "sales return date."
+            }
+        )
+
+    actor = (
+        user
+        if getattr(
+            user,
+            "is_authenticated",
+            False,
+        )
+        else None
+    )
+
+    credit_note = SalesCreditNote(
+        company=company,
+        branch=locked_return.branch,
+        customer=locked_return.customer,
+        invoice=locked_return.invoice,
+        sales_return=locked_return,
+        credit_note_number=(
+            generate_sales_credit_note_number(
+                company,
+                credit_note_date=(
+                    normalized_credit_note_date
+                ),
+            )
+        ),
+        status=SalesCreditNoteStatus.DRAFT,
+        credit_note_date=(
+            normalized_credit_note_date
+        ),
+        currency_code=(
+            normalize_text(
+                locked_return.currency_code
+            )
+            or normalize_text(
+                company.currency_code
+            )
+            or "SAR"
+        ),
+        public_notes=(
+            normalize_text(public_notes)
+            if public_notes is not None
+            else locked_return.public_notes
+        ),
+        internal_notes=(
+            normalize_text(internal_notes)
+            if internal_notes is not None
+            else locked_return.internal_notes
+        ),
+        extra_data={
+            **dict(extra_data or {}),
+            "source_sales_return_id": (
+                locked_return.id
+            ),
+            "source_sales_return_number": (
+                locked_return.return_number
+            ),
+            "source_invoice_id": (
+                locked_return.invoice_id
+            ),
+            "source_invoice_number": (
+                locked_return
+                .invoice
+                .invoice_number
+            ),
+        },
+        created_by=actor,
+        updated_by=actor,
+    )
+
+    credit_note.full_clean()
+    credit_note.save()
+    credit_note.refresh_snapshots(
+        save=True
+    )
+
+    for line_number, return_item in enumerate(
+        return_items,
+        start=1,
+    ):
+        credit_note_item = SalesCreditNoteItem(
+            credit_note=credit_note,
+            company=company,
+            sales_return_item=return_item,
+            invoice_item=return_item.invoice_item,
+            catalog_item=return_item.catalog_item,
+            line_number=line_number,
+            quantity=return_item.quantity,
+        )
+
+        credit_note_item.apply_sales_return_item_snapshot()
+        credit_note_item.full_clean()
+        credit_note_item.save()
+
+    credit_note.recalculate_totals(
+        save=True
+    )
+    credit_note.refresh_snapshots(
+        save=True
+    )
+    credit_note.refresh_from_db()
+
+    if (
+        quantize_money(
+            credit_note.total_amount
+        )
+        != quantize_money(
+            locked_return.total_amount
+        )
+    ):
+        raise ValidationError(
+            {
+                "total_amount":
+                "Credit note total must match "
+                "sales return total."
+            }
+        )
+
+    if issue_now:
+        credit_note = issue_sales_credit_note(
+            company=company,
+            credit_note=credit_note,
+            user=user,
+        )
+
+    credit_note.refresh_from_db()
+
+    return credit_note
+
+
+@transaction.atomic
+def issue_sales_credit_note(
+    *,
+    company: Company,
+    credit_note: SalesCreditNote,
+    user=None,
+) -> SalesCreditNote:
+    """
+    Issue a draft sales credit note.
+
+    Accounting posting is intentionally deferred.
+    """
+    if not company:
+        raise ValidationError(
+            {
+                "company":
+                "Company context is required."
+            }
+        )
+
+    if not credit_note:
+        raise ValidationError(
+            {
+                "credit_note":
+                "Sales credit note is required."
+            }
+        )
+
+    locked_credit_note = (
+        SalesCreditNote.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "branch",
+            "customer",
+            "invoice",
+            "sales_return",
+        )
+        .filter(
+            id=credit_note.id,
+            company=company,
+        )
+        .first()
+    )
+
+    if not locked_credit_note:
+        raise ValidationError(
+            {
+                "credit_note":
+                "Sales credit note does not belong "
+                "to this company."
+            }
+        )
+
+    locked_credit_note.recalculate_totals(
+        save=True
+    )
+    locked_credit_note.issue(
+        user=user
+    )
+    locked_credit_note.refresh_from_db()
+
+    return locked_credit_note
+
+
+
+@transaction.atomic
+def post_sales_credit_note(
+    *,
+    company: Company,
+    credit_note: SalesCreditNote,
+    user=None,
+) -> SalesCreditNote:
+    """
+    Post an issued sales credit note.
+
+    Atomic workflow:
+    - lock the credit note and linked sales return
+    - validate company isolation and lifecycle
+    - create and post the accounting journal entry
+    - mark the credit note as posted
+    - mark the linked sales return as posted
+
+    Any failure rolls back the full transaction.
+    """
+    if not company:
+        raise ValidationError(
+            {
+                "company":
+                "Company context is required."
+            }
+        )
+
+    if not credit_note:
+        raise ValidationError(
+            {
+                "credit_note":
+                "Sales credit note is required."
+            }
+        )
+
+    locked_credit_note = (
+        SalesCreditNote.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "branch",
+            "customer",
+            "invoice",
+            "sales_return",
+        )
+        .filter(
+            id=credit_note.id,
+            company=company,
+        )
+        .first()
+    )
+
+    if not locked_credit_note:
+        raise ValidationError(
+            {
+                "credit_note":
+                "Sales credit note does not belong "
+                "to this company."
+            }
+        )
+
+    if (
+        locked_credit_note.status
+        != SalesCreditNoteStatus.ISSUED
+    ):
+        raise ValidationError(
+            {
+                "status":
+                "Only issued sales credit notes "
+                "can be posted."
+            }
+        )
+
+    if not locked_credit_note.sales_return_id:
+        raise ValidationError(
+            {
+                "sales_return":
+                "Sales credit note must reference "
+                "a sales return before posting."
+            }
+        )
+
+    locked_return = (
+        SalesReturn.objects
+        .select_for_update()
+        .filter(
+            id=locked_credit_note.sales_return_id,
+            company=company,
+        )
+        .first()
+    )
+
+    if not locked_return:
+        raise ValidationError(
+            {
+                "sales_return":
+                "Linked sales return was not found "
+                "for this company."
+            }
+        )
+
+    if (
+        locked_return.status
+        != SalesReturnStatus.CONFIRMED
+    ):
+        raise ValidationError(
+            {
+                "sales_return":
+                "Only confirmed sales returns "
+                "can be posted with a credit note."
+            }
+        )
+
+    locked_credit_note.recalculate_totals(
+        save=True
+    )
+    locked_credit_note.refresh_from_db()
+
+    if (
+        quantize_money(
+            locked_credit_note.total_amount
+        )
+        != quantize_money(
+            locked_return.total_amount
+        )
+    ):
+        raise ValidationError(
+            {
+                "total_amount":
+                "Credit note total must match "
+                "sales return total before posting."
+            }
+        )
+
+    try:
+        post_sales_credit_note_to_accounting(
+            locked_credit_note,
+            actor=user,
+            auto_post=True,
+        )
+    except AccountingServiceError as exc:
+        raise ValidationError(
+            {
+                "accounting": str(exc),
+            }
+        ) from exc
+
+    locked_credit_note.mark_posted(
+        user=user
+    )
+    locked_return.mark_posted(
+        user=user
+    )
+
+    locked_credit_note.refresh_from_db()
+    locked_return.refresh_from_db()
+
+    return locked_credit_note
+
+
+@transaction.atomic
+def cancel_sales_credit_note(
+    *,
+    company: Company,
+    credit_note: SalesCreditNote,
+    reason: str = "",
+    user=None,
+) -> SalesCreditNote:
+    """
+    Cancel a draft or issued sales credit note.
+
+    Posted credit notes require a dedicated reversal flow.
+    """
+    if not company:
+        raise ValidationError(
+            {
+                "company":
+                "Company context is required."
+            }
+        )
+
+    if not credit_note:
+        raise ValidationError(
+            {
+                "credit_note":
+                "Sales credit note is required."
+            }
+        )
+
+    locked_credit_note = (
+        SalesCreditNote.objects
+        .select_for_update()
+        .filter(
+            id=credit_note.id,
+            company=company,
+        )
+        .first()
+    )
+
+    if not locked_credit_note:
+        raise ValidationError(
+            {
+                "credit_note":
+                "Sales credit note does not belong "
+                "to this company."
+            }
+        )
+
+    locked_credit_note.cancel(
+        reason=reason,
+        user=user,
+    )
+    locked_credit_note.refresh_from_db()
+
+    return locked_credit_note
+
+
+def serialize_sales_credit_note_item(
+    item: SalesCreditNoteItem,
+) -> dict[str, Any]:
+    """
+    Serialize one sales credit note line.
+    """
+    return {
+        "id": item.id,
+        "line_number": item.line_number,
+        "sales_return_item_id": (
+            item.sales_return_item_id
+        ),
+        "invoice_item_id": (
+            item.invoice_item_id
+        ),
+        "catalog_item_id": (
+            item.catalog_item_id
+        ),
+        "item_code": (
+            item.item_code_snapshot
+        ),
+        "item_name": (
+            item.item_name_snapshot
+        ),
+        "description": (
+            item.item_description_snapshot
+        ),
+        "unit_name": (
+            item.unit_name_snapshot
+        ),
+        "quantity": str(
+            item.quantity
+        ),
+        "unit_price": str(
+            item.unit_price
+        ),
+        "line_subtotal": str(
+            item.line_subtotal
+        ),
+        "discount_amount": str(
+            item.discount_amount
+        ),
+        "taxable": item.taxable,
+        "tax_rate": str(
+            item.tax_rate
+        ),
+        "taxable_amount": str(
+            item.taxable_amount
+        ),
+        "tax_amount": str(
+            item.tax_amount
+        ),
+        "line_total": str(
+            item.line_total
+        ),
+        "notes": item.notes,
+        "extra_data": item.extra_data,
+        "created_at": (
+            item.created_at.isoformat()
+            if item.created_at
+            else None
+        ),
+        "updated_at": (
+            item.updated_at.isoformat()
+            if item.updated_at
+            else None
+        ),
+    }
+
+
+def serialize_sales_credit_note(
+    credit_note: SalesCreditNote,
+    include_items: bool = False,
+) -> dict[str, Any]:
+    """
+    Serialize a sales credit note for company APIs.
+    """
+    data = {
+        "id": credit_note.id,
+        "company_id": (
+            credit_note.company_id
+        ),
+        "branch": (
+            {
+                "id": credit_note.branch_id,
+                "name": (
+                    credit_note
+                    .branch
+                    .display_name
+                ),
+                "code": (
+                    credit_note
+                    .branch
+                    .branch_code
+                ),
+            }
+            if credit_note.branch_id
+            else None
+        ),
+        "customer": (
+            {
+                "id": credit_note.customer_id,
+                "display_name": (
+                    credit_note
+                    .customer
+                    .display_name
+                ),
+                "code": (
+                    credit_note
+                    .customer
+                    .code
+                ),
+                "phone": (
+                    credit_note
+                    .customer
+                    .phone
+                ),
+                "mobile": (
+                    credit_note
+                    .customer
+                    .mobile
+                ),
+                "vat_number": (
+                    credit_note
+                    .customer
+                    .vat_number
+                ),
+            }
+            if credit_note.customer_id
+            else None
+        ),
+        "invoice": {
+            "id": credit_note.invoice_id,
+            "invoice_number": (
+                credit_note
+                .invoice
+                .invoice_number
+            ),
+            "invoice_date": (
+                credit_note
+                .invoice
+                .invoice_date
+                .isoformat()
+                if credit_note.invoice.invoice_date
+                else None
+            ),
+            "status": (
+                credit_note.invoice.status
+            ),
+            "payment_status": (
+                credit_note
+                .invoice
+                .payment_status
+            ),
+            "total_amount": str(
+                credit_note
+                .invoice
+                .total_amount
+            ),
+        },
+        "sales_return": (
+            {
+                "id": (
+                    credit_note.sales_return_id
+                ),
+                "return_number": (
+                    credit_note
+                    .sales_return
+                    .return_number
+                ),
+                "return_date": (
+                    credit_note
+                    .sales_return
+                    .return_date
+                    .isoformat()
+                    if (
+                        credit_note
+                        .sales_return
+                        .return_date
+                    )
+                    else None
+                ),
+                "status": (
+                    credit_note
+                    .sales_return
+                    .status
+                ),
+                "total_amount": str(
+                    credit_note
+                    .sales_return
+                    .total_amount
+                ),
+            }
+            if credit_note.sales_return_id
+            else None
+        ),
+        "credit_note_number": (
+            credit_note.credit_note_number
+        ),
+        "status": credit_note.status,
+        "credit_note_date": (
+            credit_note
+            .credit_note_date
+            .isoformat()
+            if credit_note.credit_note_date
+            else None
+        ),
+        "issued_at": (
+            credit_note
+            .issued_at
+            .isoformat()
+            if credit_note.issued_at
+            else None
+        ),
+        "posted_at": (
+            credit_note
+            .posted_at
+            .isoformat()
+            if credit_note.posted_at
+            else None
+        ),
+        "cancelled_at": (
+            credit_note
+            .cancelled_at
+            .isoformat()
+            if credit_note.cancelled_at
+            else None
+        ),
+        "cancelled_reason": (
+            credit_note.cancelled_reason
+        ),
+        "subtotal": str(
+            credit_note.subtotal
+        ),
+        "discount_amount": str(
+            credit_note.discount_amount
+        ),
+        "taxable_amount": str(
+            credit_note.taxable_amount
+        ),
+        "tax_amount": str(
+            credit_note.tax_amount
+        ),
+        "total_amount": str(
+            credit_note.total_amount
+        ),
+        "currency_code": (
+            credit_note.currency_code
+        ),
+        "customer_snapshot": (
+            credit_note.customer_snapshot
+        ),
+        "invoice_snapshot": (
+            credit_note.invoice_snapshot
+        ),
+        "return_snapshot": (
+            credit_note.return_snapshot
+        ),
+        "tax_snapshot": (
+            credit_note.tax_snapshot
+        ),
+        "public_notes": (
+            credit_note.public_notes
+        ),
+        "internal_notes": (
+            credit_note.internal_notes
+        ),
+        "extra_data": (
+            credit_note.extra_data
+        ),
+        "can_be_edited": (
+            credit_note.can_be_edited
+        ),
+        "can_be_issued": (
+            credit_note.can_be_issued
+        ),
+        "can_be_posted": (
+            credit_note.can_be_posted
+        ),
+        "can_be_cancelled": (
+            credit_note.can_be_cancelled
+        ),
+        "created_at": (
+            credit_note
+            .created_at
+            .isoformat()
+            if credit_note.created_at
+            else None
+        ),
+        "updated_at": (
+            credit_note
+            .updated_at
+            .isoformat()
+            if credit_note.updated_at
+            else None
+        ),
+    }
+
+    if include_items:
+        data["items"] = [
+            serialize_sales_credit_note_item(
+                item
+            )
+            for item in (
+                credit_note.items
+                .select_related(
+                    "sales_return_item",
+                    "invoice_item",
+                    "catalog_item",
+                )
+                .order_by(
+                    "line_number",
+                    "id",
+                )
+            )
+        ]
+
+    return data
+
+
+# End Phase 21.5.2 - Sales Credit Notes Services Foundation
 # ============================================================
 
