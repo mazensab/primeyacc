@@ -49,6 +49,9 @@ from purchases.models import (
     PurchaseBill,
     PurchaseBillItem,
     PurchaseBillStatus,
+    PurchaseReceipt,
+    PurchaseReceiptItem,
+    PurchaseReceiptStatus,
     PurchaseReturn,
     PurchaseReturnItem,
     PurchaseReturnReason,
@@ -68,6 +71,12 @@ from purchases.services import (
     post_purchase_bill,
     post_purchase_bill_to_accounting,
     update_purchase_bill,
+    cancel_purchase_receipt,
+    create_purchase_receipt,
+    generate_purchase_receipt_number,
+    post_purchase_receipt,
+    serialize_purchase_receipt,
+    update_purchase_receipt,
     cancel_purchase_return,
     confirm_purchase_return,
     create_purchase_return,
@@ -3538,3 +3547,971 @@ class SupplierDebitNotePostingAPITests(
             response.status_code,
             403,
         )
+
+class PurchaseReceiptsTests(PurchasesTestCase):
+    """
+    Phase 21.8 purchase receiving and inventory integration tests.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        self.item.track_inventory = True
+        self.item.save(
+            update_fields=[
+                "track_inventory",
+                "updated_at",
+            ]
+        )
+
+        self.warehouse = create_warehouse(
+            company=self.company,
+            user=self.user,
+            data={
+                "code": "WH-REC-001",
+                "name": "Purchase Receiving Warehouse",
+                "branch_id": self.branch.id,
+                "is_default": True,
+            },
+        )
+
+        self.other_warehouse = create_warehouse(
+            company=self.other_company,
+            user=self.other_user,
+            data={
+                "code": "WH-REC-999",
+                "name": "Other Receiving Warehouse",
+                "branch_id": self.other_branch.id,
+                "is_default": True,
+            },
+        )
+
+    def _create_posted_bill(
+        self,
+        *,
+        company=None,
+        user=None,
+        supplier=None,
+        branch=None,
+        item=None,
+        quantity="5.0000",
+    ) -> PurchaseBill:
+        company = company or self.company
+        user = user or self.user
+        supplier = supplier or self.supplier
+        branch = branch or self.branch
+        item = item or self.item
+
+        bill = create_purchase_bill(
+            company=company,
+            user=user,
+            payload={
+                "supplier_id": supplier.id,
+                "branch_id": branch.id,
+                "items": [
+                    {
+                        "item_id": item.id,
+                        "quantity": quantity,
+                        "unit_price": "100.00",
+                    }
+                ],
+            },
+        )
+
+        return post_purchase_bill(
+            bill=bill,
+            user=user,
+        )
+
+    def _create_receipt(
+        self,
+        *,
+        bill=None,
+        quantity="2.0000",
+        receive_all=False,
+    ) -> PurchaseReceipt:
+        bill = bill or self._create_posted_bill()
+        bill_item = bill.items.get()
+
+        payload = {
+            "bill_id": bill.id,
+            "warehouse_id": self.warehouse.id,
+            "notes": "Purchase receiving test",
+        }
+
+        if receive_all:
+            payload["receive_all"] = True
+        else:
+            payload["items"] = [
+                {
+                    "bill_item_id": bill_item.id,
+                    "quantity": quantity,
+                }
+            ]
+
+        return create_purchase_receipt(
+            company=self.company,
+            payload=payload,
+            user=self.user,
+        )
+
+    def test_generate_purchase_receipt_number(self):
+        number = generate_purchase_receipt_number(
+            self.company
+        )
+
+        expected_prefix = (
+            "PREC-"
+            f"{timezone.localdate().strftime('%Y%m%d')}-"
+        )
+
+        self.assertTrue(
+            number.startswith(expected_prefix)
+        )
+        self.assertTrue(
+            number.endswith("000001")
+        )
+
+    def test_create_partial_purchase_receipt(self):
+        bill = self._create_posted_bill(
+            quantity="5.0000"
+        )
+
+        receipt = self._create_receipt(
+            bill=bill,
+            quantity="2.0000",
+        )
+
+        receipt.refresh_from_db()
+        receipt_item = receipt.items.get()
+        bill_item = bill.items.get()
+
+        self.assertEqual(
+            receipt.status,
+            PurchaseReceiptStatus.DRAFT,
+        )
+        self.assertEqual(
+            receipt.company,
+            self.company,
+        )
+        self.assertEqual(
+            receipt.bill,
+            bill,
+        )
+        self.assertEqual(
+            receipt.warehouse,
+            self.warehouse,
+        )
+        self.assertEqual(
+            receipt_item.quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            bill_item.received_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            bill_item.receivable_quantity,
+            Decimal("5.0000"),
+        )
+
+    def test_create_receive_all_receipt_uses_remaining_quantity(
+        self,
+    ):
+        bill = self._create_posted_bill(
+            quantity="5.0000"
+        )
+
+        first_receipt = self._create_receipt(
+            bill=bill,
+            quantity="2.0000",
+        )
+
+        post_purchase_receipt(
+            receipt=first_receipt,
+            user=self.user,
+        )
+
+        second_receipt = self._create_receipt(
+            bill=bill,
+            receive_all=True,
+        )
+
+        self.assertEqual(
+            second_receipt.items.get().quantity,
+            Decimal("3.0000"),
+        )
+
+    def test_create_purchase_receipt_rejects_draft_bill(
+        self,
+    ):
+        bill = create_purchase_bill(
+            company=self.company,
+            user=self.user,
+            payload={
+                "supplier_id": self.supplier.id,
+                "branch_id": self.branch.id,
+                "items": [
+                    {
+                        "item_id": self.item.id,
+                        "quantity": "2.0000",
+                    }
+                ],
+            },
+        )
+
+        with self.assertRaises(ValidationError):
+            create_purchase_receipt(
+                company=self.company,
+                user=self.user,
+                payload={
+                    "bill_id": bill.id,
+                    "warehouse_id": self.warehouse.id,
+                    "receive_all": True,
+                },
+            )
+
+    def test_create_purchase_receipt_rejects_other_company_warehouse(
+        self,
+    ):
+        bill = self._create_posted_bill()
+
+        with self.assertRaises(ValidationError):
+            create_purchase_receipt(
+                company=self.company,
+                user=self.user,
+                payload={
+                    "bill_id": bill.id,
+                    "warehouse_id": (
+                        self.other_warehouse.id
+                    ),
+                    "receive_all": True,
+                },
+            )
+
+    def test_post_purchase_receipt_updates_inventory(
+        self,
+    ):
+        bill = self._create_posted_bill(
+            quantity="5.0000"
+        )
+        bill_item = bill.items.get()
+
+        receipt = self._create_receipt(
+            bill=bill,
+            quantity="2.0000",
+        )
+
+        receipt = post_purchase_receipt(
+            receipt=receipt,
+            user=self.user,
+        )
+
+        receipt.refresh_from_db()
+        receipt_item = receipt.items.get()
+        receipt_item.refresh_from_db()
+        bill_item.refresh_from_db()
+
+        stock_item = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            item=self.item,
+        )
+
+        self.assertEqual(
+            receipt.status,
+            PurchaseReceiptStatus.POSTED,
+        )
+        self.assertEqual(
+            receipt.posted_by,
+            self.user,
+        )
+        self.assertEqual(
+            stock_item.quantity_on_hand,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            bill_item.received_quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            bill_item.receivable_quantity,
+            Decimal("3.0000"),
+        )
+        self.assertIsNotNone(
+            receipt_item.stock_movement_id
+        )
+        self.assertEqual(
+            receipt_item.stock_movement.status,
+            StockMovementStatus.POSTED,
+        )
+        self.assertEqual(
+            receipt_item.stock_movement.quantity,
+            Decimal("2.0000"),
+        )
+
+    def test_post_purchase_receipt_is_idempotent(
+        self,
+    ):
+        receipt = self._create_receipt(
+            quantity="2.0000",
+        )
+
+        first_result = post_purchase_receipt(
+            receipt=receipt,
+            user=self.user,
+        )
+
+        second_result = post_purchase_receipt(
+            receipt=first_result,
+            user=self.user,
+        )
+
+        stock_item = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            item=self.item,
+        )
+
+        receipt_item = first_result.items.get()
+
+        self.assertEqual(
+            first_result.id,
+            second_result.id,
+        )
+        self.assertEqual(
+            stock_item.quantity_on_hand,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            StockMovement.objects.filter(
+                company=self.company,
+                reference_type="purchase_receipt_item",
+                reference_id=receipt_item.id,
+            ).count(),
+            1,
+        )
+
+    def test_multiple_partial_receipts_reject_over_receiving(
+        self,
+    ):
+        bill = self._create_posted_bill(
+            quantity="5.0000"
+        )
+
+        first_receipt = self._create_receipt(
+            bill=bill,
+            quantity="3.0000",
+        )
+
+        post_purchase_receipt(
+            receipt=first_receipt,
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            self._create_receipt(
+                bill=bill,
+                quantity="3.0000",
+            )
+
+        stock_item = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            item=self.item,
+        )
+
+        self.assertEqual(
+            stock_item.quantity_on_hand,
+            Decimal("3.0000"),
+        )
+
+    def test_update_purchase_receipt_replaces_draft_items(
+        self,
+    ):
+        bill = self._create_posted_bill(
+            quantity="5.0000"
+        )
+
+        receipt = self._create_receipt(
+            bill=bill,
+            quantity="1.0000",
+        )
+
+        receipt = update_purchase_receipt(
+            receipt=receipt,
+            user=self.user,
+            payload={
+                "notes": "Updated receipt",
+                "items": [
+                    {
+                        "bill_item_id": (
+                            bill.items.get().id
+                        ),
+                        "quantity": "4.0000",
+                    }
+                ],
+            },
+        )
+
+        self.assertEqual(
+            receipt.notes,
+            "Updated receipt",
+        )
+        self.assertEqual(
+            receipt.items.get().quantity,
+            Decimal("4.0000"),
+        )
+
+    def test_cancel_draft_purchase_receipt(
+        self,
+    ):
+        receipt = self._create_receipt()
+
+        receipt = cancel_purchase_receipt(
+            receipt=receipt,
+            reason="Receiving cancelled",
+            user=self.user,
+        )
+
+        self.assertEqual(
+            receipt.status,
+            PurchaseReceiptStatus.CANCELLED,
+        )
+        self.assertEqual(
+            receipt.cancellation_reason,
+            "Receiving cancelled",
+        )
+        self.assertEqual(
+            receipt.cancelled_by,
+            self.user,
+        )
+
+    def test_cancel_posted_purchase_receipt_rejected(
+        self,
+    ):
+        receipt = self._create_receipt()
+
+        receipt = post_purchase_receipt(
+            receipt=receipt,
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            cancel_purchase_receipt(
+                receipt=receipt,
+                reason="Should fail",
+                user=self.user,
+            )
+
+    def test_received_quantity_limits_purchase_return(
+        self,
+    ):
+        bill = self._create_posted_bill(
+            quantity="5.0000"
+        )
+        bill_item = bill.items.get()
+
+        receipt = self._create_receipt(
+            bill=bill,
+            quantity="2.0000",
+        )
+
+        post_purchase_receipt(
+            receipt=receipt,
+            user=self.user,
+        )
+
+        bill_item.refresh_from_db()
+
+        self.assertEqual(
+            bill_item.returnable_quantity,
+            Decimal("2.0000"),
+        )
+
+        with self.assertRaises(ValidationError):
+            create_purchase_return(
+                company=self.company,
+                user=self.user,
+                payload={
+                    "bill_id": bill.id,
+                    "items": [
+                        {
+                            "bill_item_id": bill_item.id,
+                            "quantity": "3.0000",
+                        }
+                    ],
+                },
+            )
+
+    def test_serialize_purchase_receipt(
+        self,
+    ):
+        receipt = self._create_receipt()
+
+        data = serialize_purchase_receipt(
+            receipt,
+            include_items=True,
+        )
+
+        self.assertEqual(
+            data["id"],
+            receipt.id,
+        )
+        self.assertEqual(
+            data["status"],
+            PurchaseReceiptStatus.DRAFT,
+        )
+        self.assertEqual(
+            data["bill"]["id"],
+            receipt.bill_id,
+        )
+        self.assertEqual(
+            data["warehouse"]["id"],
+            self.warehouse.id,
+        )
+        self.assertEqual(
+            len(data["items"]),
+            1,
+        )
+        self.assertTrue(
+            data["allowed_actions"]["post"]
+        )
+
+    def test_purchase_receipt_permissions(
+        self,
+    ):
+        admin_user = User.objects.create_user(
+            username="receipt_admin",
+            email="receipt_admin@example.com",
+            password="StrongPass123!",
+        )
+
+        admin_membership = (
+            CompanyMembership.objects.create(
+                user=admin_user,
+                company=self.company,
+                role=CompanyRole.ADMIN,
+                status=MembershipStatus.ACTIVE,
+                is_primary=True,
+                created_by=self.user,
+            )
+        )
+
+        permissions = (
+            admin_membership.company_permissions
+        )
+
+        expected_permissions = [
+            "company.purchases.receipts.view",
+            "company.purchases.receipts.create",
+            "company.purchases.receipts.update",
+            "company.purchases.receipts.post",
+            "company.purchases.receipts.cancel",
+        ]
+
+        for permission in expected_permissions:
+            self.assertIn(
+                permission,
+                permissions,
+            )
+
+        viewer_permissions = (
+            self.viewer_membership.company_permissions
+        )
+
+        self.assertIn(
+            "company.purchases.receipts.view",
+            viewer_permissions,
+        )
+        self.assertNotIn(
+            "company.purchases.receipts.create",
+            viewer_permissions,
+        )
+        self.assertNotIn(
+            "company.purchases.receipts.post",
+            viewer_permissions,
+        )
+
+
+class PurchaseReceiptsAPITests(PurchasesTestCase):
+    """
+    Phase 21.8 company purchase receipt API tests.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.user)
+
+        self.item.track_inventory = True
+        self.item.save(
+            update_fields=[
+                "track_inventory",
+                "updated_at",
+            ]
+        )
+
+        self.warehouse = create_warehouse(
+            company=self.company,
+            user=self.user,
+            data={
+                "code": "WH-API-REC-001",
+                "name": "API Receiving Warehouse",
+                "branch_id": self.branch.id,
+                "is_default": True,
+            },
+        )
+
+    def _create_posted_bill(
+        self,
+        *,
+        company=None,
+        user=None,
+        supplier=None,
+        branch=None,
+        item=None,
+        quantity="5.0000",
+    ) -> PurchaseBill:
+        company = company or self.company
+        user = user or self.user
+        supplier = supplier or self.supplier
+        branch = branch or self.branch
+        item = item or self.item
+
+        bill = create_purchase_bill(
+            company=company,
+            user=user,
+            payload={
+                "supplier_id": supplier.id,
+                "branch_id": branch.id,
+                "items": [
+                    {
+                        "item_id": item.id,
+                        "quantity": quantity,
+                        "unit_price": "100.00",
+                    }
+                ],
+            },
+        )
+
+        return post_purchase_bill(
+            bill=bill,
+            user=user,
+        )
+
+    def _create_receipt(
+        self,
+        *,
+        bill=None,
+        quantity="2.0000",
+    ) -> PurchaseReceipt:
+        bill = bill or self._create_posted_bill()
+
+        return create_purchase_receipt(
+            company=self.company,
+            user=self.user,
+            payload={
+                "bill_id": bill.id,
+                "warehouse_id": self.warehouse.id,
+                "items": [
+                    {
+                        "bill_item_id": (
+                            bill.items.get().id
+                        ),
+                        "quantity": quantity,
+                    }
+                ],
+            },
+        )
+
+    def test_purchase_receipt_create_endpoint(
+        self,
+    ):
+        bill = self._create_posted_bill()
+
+        response = self.client.post(
+            "/api/company/purchases/receipts/create/",
+            data={
+                "bill_id": bill.id,
+                "warehouse_id": self.warehouse.id,
+                "items": [
+                    {
+                        "bill_item_id": (
+                            bill.items.get().id
+                        ),
+                        "quantity": "2.0000",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+        )
+
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(
+            payload["purchase_receipt"]["status"],
+            PurchaseReceiptStatus.DRAFT,
+        )
+        self.assertEqual(
+            len(payload["purchase_receipt"]["items"]),
+            1,
+        )
+
+    def test_purchase_receipts_list_is_company_scoped(
+        self,
+    ):
+        receipt = self._create_receipt()
+
+        response = self.client.get(
+            "/api/company/purchases/receipts/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(
+            payload["results"][0]["id"],
+            receipt.id,
+        )
+
+    def test_purchase_receipt_detail_endpoint(
+        self,
+    ):
+        receipt = self._create_receipt()
+
+        response = self.client.get(
+            (
+                "/api/company/purchases/receipts/"
+                f"{receipt.id}/"
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+        self.assertEqual(
+            response.json()["purchase_receipt"]["id"],
+            receipt.id,
+        )
+
+    def test_purchase_receipt_detail_blocks_cross_company(
+        self,
+    ):
+        self.other_item.track_inventory = True
+        self.other_item.save(
+            update_fields=[
+                "track_inventory",
+                "updated_at",
+            ]
+        )
+
+        other_warehouse = create_warehouse(
+            company=self.other_company,
+            user=self.other_user,
+            data={
+                "code": "WH-OTHER-REC",
+                "name": "Other Receipt Warehouse",
+                "branch_id": self.other_branch.id,
+                "is_default": True,
+            },
+        )
+
+        other_bill = self._create_posted_bill(
+            company=self.other_company,
+            user=self.other_user,
+            supplier=self.other_supplier,
+            branch=self.other_branch,
+            item=self.other_item,
+        )
+
+        other_receipt = create_purchase_receipt(
+            company=self.other_company,
+            user=self.other_user,
+            payload={
+                "bill_id": other_bill.id,
+                "warehouse_id": other_warehouse.id,
+                "receive_all": True,
+            },
+        )
+
+        response = self.client.get(
+            (
+                "/api/company/purchases/receipts/"
+                f"{other_receipt.id}/"
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+    def test_purchase_receipt_update_endpoint(
+        self,
+    ):
+        receipt = self._create_receipt(
+            quantity="1.0000",
+        )
+
+        response = self.client.patch(
+            (
+                "/api/company/purchases/receipts/"
+                f"{receipt.id}/update/"
+            ),
+            data={
+                "notes": "Updated through API",
+                "items": [
+                    {
+                        "bill_item_id": (
+                            receipt.bill.items.get().id
+                        ),
+                        "quantity": "3.0000",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(
+            payload["purchase_receipt"]["notes"],
+            "Updated through API",
+        )
+        self.assertEqual(
+            payload["purchase_receipt"]["items"][0][
+                "quantity"
+            ],
+            "3.0000",
+        )
+
+    def test_purchase_receipt_post_endpoint(
+        self,
+    ):
+        receipt = self._create_receipt()
+
+        response = self.client.post(
+            (
+                "/api/company/purchases/receipts/"
+                f"{receipt.id}/post/"
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        receipt.refresh_from_db()
+
+        self.assertEqual(
+            receipt.status,
+            PurchaseReceiptStatus.POSTED,
+        )
+
+        stock_item = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            item=self.item,
+        )
+
+        self.assertEqual(
+            stock_item.quantity_on_hand,
+            Decimal("2.0000"),
+        )
+
+    def test_purchase_receipt_cancel_endpoint(
+        self,
+    ):
+        receipt = self._create_receipt()
+
+        response = self.client.post(
+            (
+                "/api/company/purchases/receipts/"
+                f"{receipt.id}/cancel/"
+            ),
+            data={
+                "reason": "Cancelled through API",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        receipt.refresh_from_db()
+
+        self.assertEqual(
+            receipt.status,
+            PurchaseReceiptStatus.CANCELLED,
+        )
+        self.assertEqual(
+            receipt.cancellation_reason,
+            "Cancelled through API",
+        )
+
+    def test_viewer_can_view_but_cannot_create_receipt(
+        self,
+    ):
+        receipt = self._create_receipt()
+
+        self.client.force_login(
+            self.viewer_user
+        )
+
+        list_response = self.client.get(
+            "/api/company/purchases/receipts/"
+        )
+
+        self.assertEqual(
+            list_response.status_code,
+            200,
+        )
+
+        detail_response = self.client.get(
+            (
+                "/api/company/purchases/receipts/"
+                f"{receipt.id}/"
+            )
+        )
+
+        self.assertEqual(
+            detail_response.status_code,
+            200,
+        )
+
+        create_response = self.client.post(
+            "/api/company/purchases/receipts/create/",
+            data={
+                "bill_id": receipt.bill_id,
+                "warehouse_id": self.warehouse.id,
+                "receive_all": True,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            create_response.status_code,
+            403,
+        )
+
+

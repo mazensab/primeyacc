@@ -1009,6 +1009,38 @@ class PurchaseBillItem(models.Model):
         return f"{self.bill.bill_number} - {self.item_name_snapshot}"
 
     @property
+    def received_quantity(self) -> Decimal:
+        """
+        Quantity received through posted purchase receipts.
+        """
+        result = (
+            self.purchase_receipt_items
+            .filter(
+                receipt__status=PurchaseReceiptStatus.POSTED,
+            )
+            .aggregate(total=Sum("quantity"))
+            .get("total")
+        )
+
+        return quantize_quantity(
+            result or QUANTITY_ZERO
+        )
+
+    @property
+    def receivable_quantity(self) -> Decimal:
+        """
+        Remaining quantity available for receiving.
+        """
+        remaining = quantize_quantity(
+            self.quantity - self.received_quantity
+        )
+
+        if remaining < QUANTITY_ZERO:
+            return QUANTITY_ZERO
+
+        return remaining
+
+    @property
     def returned_quantity(self) -> Decimal:
         """
         Quantity consumed by confirmed or posted purchase returns.
@@ -1033,9 +1065,30 @@ class PurchaseBillItem(models.Model):
     def returnable_quantity(self) -> Decimal:
         """
         Remaining quantity available for purchase return.
+
+        Compatibility rule:
+        - When posted purchase receipts exist, returns are limited
+          to the quantity actually received.
+        - When no posted receipt exists yet, preserve the previous
+          bill-based behavior for legacy purchase bills.
         """
+        has_posted_receipt = (
+            self.purchase_receipt_items
+            .filter(
+                receipt__status=PurchaseReceiptStatus.POSTED,
+            )
+            .exists()
+        )
+
+        base_quantity = (
+            self.received_quantity
+            if has_posted_receipt
+            else quantize_quantity(self.quantity)
+        )
+
         remaining = quantize_quantity(
-            self.quantity - self.returned_quantity
+            base_quantity
+            - self.returned_quantity
         )
 
         if remaining < QUANTITY_ZERO:
@@ -1168,6 +1221,700 @@ class PurchaseBillItem(models.Model):
             bill.recalculate_totals(save=True)
 
         return result
+
+
+# ============================================================
+# Purchase Receiving Foundation
+# ============================================================
+
+
+class PurchaseReceiptStatus(models.TextChoices):
+    """
+    Purchase receipt lifecycle.
+    """
+
+    DRAFT = "DRAFT", "Draft"
+    POSTED = "POSTED", "Posted"
+    CANCELLED = "CANCELLED", "Cancelled"
+
+
+class PurchaseReceipt(models.Model):
+    """
+    Company-scoped warehouse receipt linked to a posted purchase bill.
+
+    Stock effects are created by the purchases service layer.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="purchase_receipts",
+        db_index=True,
+    )
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        related_name="purchase_receipts",
+        blank=True,
+        null=True,
+        db_index=True,
+    )
+    supplier = models.ForeignKey(
+        BusinessParty,
+        on_delete=models.PROTECT,
+        related_name="purchase_receipts",
+        db_index=True,
+    )
+    bill = models.ForeignKey(
+        PurchaseBill,
+        on_delete=models.PROTECT,
+        related_name="receipts",
+        db_index=True,
+    )
+    warehouse = models.ForeignKey(
+        "inventory.Warehouse",
+        on_delete=models.PROTECT,
+        related_name="purchase_receipts",
+        db_index=True,
+    )
+
+    receipt_number = models.CharField(
+        max_length=80,
+        db_index=True,
+    )
+    receipt_date = models.DateField(
+        default=timezone.localdate,
+        db_index=True,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=PurchaseReceiptStatus.choices,
+        default=PurchaseReceiptStatus.DRAFT,
+        db_index=True,
+    )
+
+    posted_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+    )
+    posted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="posted_purchase_receipts",
+        blank=True,
+        null=True,
+    )
+    cancelled_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+    )
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="cancelled_purchase_receipts",
+        blank=True,
+        null=True,
+    )
+    cancellation_reason = models.TextField(
+        blank=True,
+        default="",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_purchase_receipts",
+        blank=True,
+        null=True,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="updated_purchase_receipts",
+        blank=True,
+        null=True,
+    )
+
+    notes = models.TextField(
+        blank=True,
+        default="",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = [
+            "-receipt_date",
+            "-created_at",
+            "-id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "receipt_number"],
+                name=(
+                    "unique_purchase_receipt_number_"
+                    "per_company"
+                ),
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["company", "status"],
+            ),
+            models.Index(
+                fields=["company", "receipt_date"],
+            ),
+            models.Index(
+                fields=["company", "supplier"],
+            ),
+            models.Index(
+                fields=["company", "bill"],
+            ),
+            models.Index(
+                fields=["company", "warehouse"],
+            ),
+            models.Index(
+                fields=["bill", "status"],
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.receipt_number} - "
+            f"{self.bill.bill_number}"
+        )
+
+    @property
+    def is_draft(self) -> bool:
+        return self.status == PurchaseReceiptStatus.DRAFT
+
+    @property
+    def is_posted(self) -> bool:
+        return self.status == PurchaseReceiptStatus.POSTED
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self.status == PurchaseReceiptStatus.CANCELLED
+
+    @property
+    def can_be_edited(self) -> bool:
+        return self.is_draft
+
+    @property
+    def can_be_posted(self) -> bool:
+        return self.is_draft
+
+    @property
+    def can_be_cancelled(self) -> bool:
+        return self.is_draft
+
+    @property
+    def total_quantity(self) -> Decimal:
+        result = (
+            self.items
+            .aggregate(total=Sum("quantity"))
+            .get("total")
+        )
+
+        return quantize_quantity(
+            result or QUANTITY_ZERO
+        )
+
+    def clean(self) -> None:
+        super().clean()
+
+        self.receipt_number = (
+            self.receipt_number or ""
+        ).strip()
+        self.cancellation_reason = (
+            self.cancellation_reason or ""
+        ).strip()
+        self.notes = (
+            self.notes or ""
+        ).strip()
+
+        if not self.receipt_number:
+            raise ValidationError(
+                {
+                    "receipt_number":
+                        "Purchase receipt number is required."
+                }
+            )
+
+        if self.bill_id and self.company_id:
+            if self.bill.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "bill":
+                            "Purchase bill does not belong "
+                            "to this company."
+                    }
+                )
+
+            if self.bill.status != PurchaseBillStatus.POSTED:
+                raise ValidationError(
+                    {
+                        "bill":
+                            "Only posted purchase bills "
+                            "can be received."
+                    }
+                )
+
+        if self.supplier_id and self.company_id:
+            if self.supplier.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "supplier":
+                            "Supplier does not belong "
+                            "to this company."
+                    }
+                )
+
+        if self.bill_id and self.supplier_id:
+            if self.bill.supplier_id != self.supplier_id:
+                raise ValidationError(
+                    {
+                        "supplier":
+                            "Supplier must match purchase bill."
+                    }
+                )
+
+        if self.branch_id and self.company_id:
+            if self.branch.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "branch":
+                            "Branch does not belong "
+                            "to this company."
+                    }
+                )
+
+        if self.bill_id and self.branch_id:
+            if (
+                self.bill.branch_id
+                and self.bill.branch_id != self.branch_id
+            ):
+                raise ValidationError(
+                    {
+                        "branch":
+                            "Branch must match purchase bill."
+                    }
+                )
+
+        if self.warehouse_id and self.company_id:
+            if self.warehouse.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "warehouse":
+                            "Warehouse does not belong "
+                            "to this company."
+                    }
+                )
+
+            if not self.warehouse.is_active_warehouse:
+                raise ValidationError(
+                    {
+                        "warehouse":
+                            "Warehouse must be active."
+                    }
+                )
+
+        if (
+            self.bill_id
+            and self.receipt_date
+            and self.receipt_date < self.bill.bill_date
+        ):
+            raise ValidationError(
+                {
+                    "receipt_date":
+                        "Receipt date cannot be before bill date."
+                }
+            )
+
+    def mark_posted(self, user=None) -> None:
+        if not self.can_be_posted:
+            raise ValidationError(
+                "Only draft purchase receipts can be posted."
+            )
+
+        if not self.items.exists():
+            raise ValidationError(
+                "Cannot post a purchase receipt without items."
+            )
+
+        self.status = PurchaseReceiptStatus.POSTED
+        self.posted_at = timezone.now()
+
+        if user:
+            self.posted_by = user
+            self.updated_by = user
+
+        self.full_clean()
+        self.save(
+            update_fields=[
+                "status",
+                "posted_at",
+                "posted_by",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+    def cancel(
+        self,
+        reason: str = "",
+        user=None,
+    ) -> None:
+        if not self.can_be_cancelled:
+            raise ValidationError(
+                "Only draft purchase receipts can be cancelled."
+            )
+
+        self.status = PurchaseReceiptStatus.CANCELLED
+        self.cancelled_at = timezone.now()
+        self.cancellation_reason = reason or ""
+
+        if user:
+            self.cancelled_by = user
+            self.updated_by = user
+
+        self.full_clean()
+        self.save(
+            update_fields=[
+                "status",
+                "cancelled_at",
+                "cancelled_by",
+                "cancellation_reason",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+
+class PurchaseReceiptItem(models.Model):
+    """
+    Purchase receipt line linked to one purchase bill item.
+    """
+
+    receipt = models.ForeignKey(
+        PurchaseReceipt,
+        on_delete=models.CASCADE,
+        related_name="items",
+        db_index=True,
+    )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="purchase_receipt_items",
+        db_index=True,
+    )
+    bill_item = models.ForeignKey(
+        PurchaseBillItem,
+        on_delete=models.PROTECT,
+        related_name="purchase_receipt_items",
+        db_index=True,
+    )
+    item = models.ForeignKey(
+        CatalogItem,
+        on_delete=models.PROTECT,
+        related_name="purchase_receipt_items",
+        db_index=True,
+    )
+    stock_movement = models.OneToOneField(
+        "inventory.StockMovement",
+        on_delete=models.PROTECT,
+        related_name="purchase_receipt_item",
+        blank=True,
+        null=True,
+    )
+
+    line_number = models.PositiveIntegerField(
+        default=1,
+        db_index=True,
+    )
+    quantity = models.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        validators=[
+            MinValueValidator(Decimal("0.0001"))
+        ],
+    )
+    unit_cost = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+    )
+
+    item_code_snapshot = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+    )
+    item_name_snapshot = models.CharField(
+        max_length=255,
+    )
+    item_name_ar_snapshot = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+    item_name_en_snapshot = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+    unit_name_snapshot = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        default="",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = [
+            "receipt_id",
+            "line_number",
+            "id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "receipt",
+                    "line_number",
+                ],
+                name=(
+                    "unique_purchase_receipt_item_line"
+                ),
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "receipt",
+                    "bill_item",
+                ],
+                name=(
+                    "unique_purchase_receipt_bill_item"
+                ),
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["company", "item"],
+            ),
+            models.Index(
+                fields=["company", "bill_item"],
+            ),
+            models.Index(
+                fields=[
+                    "receipt",
+                    "line_number",
+                ],
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.receipt.receipt_number} - "
+            f"{self.item_name_snapshot}"
+        )
+
+    def apply_bill_item_snapshot(self) -> None:
+        if not self.bill_item_id:
+            return
+
+        source = self.bill_item
+
+        self.item = source.item
+        self.item_code_snapshot = (
+            source.item_code_snapshot
+        )
+        self.item_name_snapshot = (
+            source.item_name_snapshot
+        )
+        self.item_name_ar_snapshot = (
+            source.item_name_ar_snapshot
+        )
+        self.item_name_en_snapshot = (
+            source.item_name_en_snapshot
+        )
+        self.unit_name_snapshot = (
+            source.unit_name_snapshot
+        )
+        self.unit_cost = quantize_money(
+            source.taxable_amount / source.quantity
+            if source.quantity > QUANTITY_ZERO
+            else source.unit_price
+        )
+
+    def clean(self) -> None:
+        super().clean()
+
+        if (
+            self.receipt_id
+            and self.company_id
+            and self.receipt.company_id
+            != self.company_id
+        ):
+            raise ValidationError(
+                {
+                    "company":
+                        "Item company must match receipt company."
+                }
+            )
+
+        if (
+            self.receipt_id
+            and not self.receipt.can_be_edited
+        ):
+            raise ValidationError(
+                "Cannot edit items for a posted "
+                "or cancelled purchase receipt."
+            )
+
+        if (
+            self.bill_item_id
+            and self.receipt_id
+            and self.bill_item.bill_id
+            != self.receipt.bill_id
+        ):
+            raise ValidationError(
+                {
+                    "bill_item":
+                        "Bill item must belong to receipt bill."
+                }
+            )
+
+        if (
+            self.bill_item_id
+            and self.company_id
+            and self.bill_item.company_id
+            != self.company_id
+        ):
+            raise ValidationError(
+                {
+                    "bill_item":
+                        "Bill item does not belong "
+                        "to this company."
+                }
+            )
+
+        if self.item_id and self.company_id:
+            if self.item.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "item":
+                            "Catalog item does not belong "
+                            "to this company."
+                    }
+                )
+
+        self.quantity = quantize_quantity(
+            self.quantity
+        )
+        self.unit_cost = quantize_money(
+            self.unit_cost
+        )
+        self.notes = (
+            self.notes or ""
+        ).strip()
+
+        if self.quantity <= QUANTITY_ZERO:
+            raise ValidationError(
+                {
+                    "quantity":
+                        "Receipt quantity must be greater "
+                        "than zero."
+                }
+            )
+
+        if self.unit_cost < MONEY_ZERO:
+            raise ValidationError(
+                {
+                    "unit_cost":
+                        "Unit cost cannot be negative."
+                }
+            )
+
+        if self.bill_item_id:
+            available = (
+                self.bill_item.receivable_quantity
+            )
+
+            existing_quantity = QUANTITY_ZERO
+            if self.pk:
+                existing = (
+                    PurchaseReceiptItem.objects
+                    .filter(pk=self.pk)
+                    .values_list(
+                        "quantity",
+                        flat=True,
+                    )
+                    .first()
+                )
+                existing_quantity = quantize_quantity(
+                    existing or QUANTITY_ZERO
+                )
+
+            allowed_quantity = quantize_quantity(
+                available + existing_quantity
+            )
+
+            if self.quantity > allowed_quantity:
+                raise ValidationError(
+                    {
+                        "quantity":
+                            "Receipt quantity cannot exceed "
+                            "the remaining bill quantity."
+                    }
+                )
+
+    def save(self, *args, **kwargs):
+        if (
+            self.receipt_id
+            and not self.company_id
+        ):
+            self.company = self.receipt.company
+
+        if self.bill_item_id:
+            self.apply_bill_item_snapshot()
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if not self.receipt.can_be_edited:
+            raise ValidationError(
+                "Cannot delete items from a posted "
+                "or cancelled purchase receipt."
+            )
+
+        return super().delete(*args, **kwargs)
 
 
 # ============================================================

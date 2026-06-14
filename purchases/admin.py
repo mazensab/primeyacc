@@ -16,6 +16,8 @@ from django.contrib import admin
 from purchases.models import (
     PurchaseBill,
     PurchaseBillItem,
+    PurchaseReceipt,
+    PurchaseReceiptItem,
     PurchaseReturn,
     PurchaseReturnItem,
     SupplierDebitNote,
@@ -245,6 +247,212 @@ class PurchaseBillItemAdmin(admin.ModelAdmin):
         "bill",
         "company",
         "item",
+    ]
+
+
+class PurchaseReceiptItemInline(admin.TabularInline):
+    model = PurchaseReceiptItem
+    extra = 0
+
+    fields = [
+        "line_number",
+        "bill_item",
+        "item",
+        "item_name_snapshot",
+        "unit_name_snapshot",
+        "quantity",
+        "unit_cost",
+        "stock_movement",
+        "notes",
+    ]
+
+    readonly_fields = [
+        "item",
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "item_name_ar_snapshot",
+        "item_name_en_snapshot",
+        "unit_name_snapshot",
+        "unit_cost",
+        "stock_movement",
+    ]
+
+    autocomplete_fields = [
+        "bill_item",
+    ]
+
+
+@admin.register(PurchaseReceipt)
+class PurchaseReceiptAdmin(admin.ModelAdmin):
+    list_display = [
+        "receipt_number",
+        "bill",
+        "supplier",
+        "warehouse",
+        "company",
+        "branch",
+        "status",
+        "receipt_date",
+        "posted_at",
+        "created_at",
+    ]
+
+    list_filter = [
+        "status",
+        "receipt_date",
+        "company",
+        "branch",
+        "warehouse",
+        "created_at",
+    ]
+
+    search_fields = [
+        "receipt_number",
+        "bill__bill_number",
+        "bill__supplier_bill_number",
+        "supplier__display_name",
+        "supplier__legal_name",
+        "warehouse__code",
+        "warehouse__name",
+        "company__name",
+        "company__name_ar",
+        "company__name_en",
+        "notes",
+    ]
+
+    readonly_fields = [
+        "posted_at",
+        "posted_by",
+        "cancelled_at",
+        "cancelled_by",
+        "created_at",
+        "updated_at",
+    ]
+
+    autocomplete_fields = [
+        "company",
+        "branch",
+        "supplier",
+        "bill",
+        "warehouse",
+        "created_by",
+        "updated_by",
+        "posted_by",
+        "cancelled_by",
+    ]
+
+    fieldsets = [
+        (
+            "Basic information",
+            {
+                "fields": [
+                    "company",
+                    "branch",
+                    "supplier",
+                    "bill",
+                    "warehouse",
+                    "receipt_number",
+                    "receipt_date",
+                    "status",
+                ],
+            },
+        ),
+        (
+            "Posting",
+            {
+                "fields": [
+                    "posted_at",
+                    "posted_by",
+                ],
+            },
+        ),
+        (
+            "Cancellation",
+            {
+                "fields": [
+                    "cancelled_at",
+                    "cancelled_by",
+                    "cancellation_reason",
+                ],
+            },
+        ),
+        (
+            "Audit",
+            {
+                "fields": [
+                    "created_by",
+                    "updated_by",
+                    "created_at",
+                    "updated_at",
+                ],
+            },
+        ),
+        (
+            "Extra",
+            {
+                "classes": [
+                    "collapse",
+                ],
+                "fields": [
+                    "notes",
+                    "extra_data",
+                ],
+            },
+        ),
+    ]
+
+    inlines = [
+        PurchaseReceiptItemInline,
+    ]
+
+
+@admin.register(PurchaseReceiptItem)
+class PurchaseReceiptItemAdmin(admin.ModelAdmin):
+    list_display = [
+        "receipt",
+        "line_number",
+        "bill_item",
+        "item",
+        "company",
+        "quantity",
+        "unit_cost",
+        "stock_movement",
+        "created_at",
+    ]
+
+    list_filter = [
+        "company",
+        "receipt__status",
+        "created_at",
+    ]
+
+    search_fields = [
+        "receipt__receipt_number",
+        "receipt__bill__bill_number",
+        "item__name",
+        "item__name_ar",
+        "item__name_en",
+        "item_code_snapshot",
+        "item_name_snapshot",
+    ]
+
+    readonly_fields = [
+        "item",
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "item_name_ar_snapshot",
+        "item_name_en_snapshot",
+        "unit_name_snapshot",
+        "unit_cost",
+        "stock_movement",
+        "created_at",
+        "updated_at",
+    ]
+
+    autocomplete_fields = [
+        "receipt",
+        "company",
+        "bill_item",
     ]
 
 

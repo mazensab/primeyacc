@@ -13,6 +13,12 @@ from django.urls import include, path
 
 
 urlpatterns = [
+    path(
+        "receipts/",
+        include(
+            "api.company.purchases.receipts.urls"
+        ),
+    ),
     path("bills/", include("api.company.purchases.bills.urls")),
     path("returns/", include("api.company.purchases.returns.urls")),
     path(

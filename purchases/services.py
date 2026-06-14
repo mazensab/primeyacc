@@ -29,6 +29,7 @@ from typing import Any
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Sum
 from django.utils import timezone
 
 from accounting.models import (
@@ -57,16 +58,24 @@ from catalog.models import (
 from companies.models import Branch, Company
 from inventory.models import (
     StockItem,
+    StockMovement,
     StockMovementStatus,
+    StockMovementType,
     Warehouse,
     WarehouseStatus,
 )
-from inventory.services import issue_stock
+from inventory.services import (
+    create_stock_movement,
+    issue_stock,
+)
 from parties.models import BusinessParty, BusinessPartyStatus, BusinessPartyType
 from purchases.models import (
     PurchaseBill,
     PurchaseBillItem,
     PurchaseBillStatus,
+    PurchaseReceipt,
+    PurchaseReceiptItem,
+    PurchaseReceiptStatus,
     PurchaseReturn,
     PurchaseReturnItem,
     PurchaseReturnReason,
@@ -86,6 +95,10 @@ AUTO_SOURCE_TYPE_PURCHASE_BILL = "purchase_bill"
 
 PURCHASE_RETURN_STOCK_REFERENCE = (
     "purchase_return_item"
+)
+
+PURCHASE_RECEIPT_STOCK_REFERENCE = (
+    "purchase_receipt_item"
 )
 
 ACCOUNT_PURPOSE_EXPENSE = getattr(
@@ -859,6 +872,1004 @@ def cancel_purchase_bill(
     bill.cancel(reason=reason, user=user)
     bill.refresh_from_db()
     return bill
+
+
+# ============================================================
+# Purchase Receiving Services Foundation
+# ============================================================
+
+
+def get_company_purchase_receipt_prefix(
+    company: Company,
+) -> str:
+    """
+    Resolve purchase receipt number prefix.
+    """
+    settings_obj = getattr(
+        company,
+        "operational_settings",
+        None,
+    )
+
+    configured_prefix = (
+        getattr(
+            settings_obj,
+            "purchase_receipt_prefix",
+            "",
+        )
+        if settings_obj
+        else ""
+    )
+
+    return normalize_text(
+        configured_prefix
+    ) or "PREC"
+
+
+def generate_purchase_receipt_number(
+    company: Company,
+) -> str:
+    """
+    Generate a company-scoped purchase receipt number.
+
+    Format:
+    PREC-YYYYMMDD-000001
+    """
+    today = timezone.localdate()
+    prefix = get_company_purchase_receipt_prefix(
+        company
+    )
+    date_part = today.strftime("%Y%m%d")
+    starts_with = f"{prefix}-{date_part}-"
+
+    last_receipt = (
+        PurchaseReceipt.objects
+        .filter(
+            company=company,
+            receipt_number__startswith=starts_with,
+        )
+        .order_by("-receipt_number")
+        .first()
+    )
+
+    next_number = 1
+
+    if last_receipt:
+        try:
+            next_number = (
+                int(
+                    last_receipt.receipt_number
+                    .split("-")[-1]
+                )
+                + 1
+            )
+        except (TypeError, ValueError):
+            next_number = 1
+
+    return (
+        f"{starts_with}"
+        f"{next_number:06d}"
+    )
+
+
+def get_active_warehouse_for_company(
+    *,
+    company: Company,
+    warehouse_id: int | str,
+) -> Warehouse:
+    """
+    Return an active warehouse owned by the company.
+    """
+    try:
+        warehouse = (
+            Warehouse.objects
+            .select_related(
+                "company",
+                "branch",
+            )
+            .get(
+                id=warehouse_id,
+                company=company,
+                status=WarehouseStatus.ACTIVE,
+                is_active=True,
+            )
+        )
+    except Warehouse.DoesNotExist as exc:
+        raise ValidationError(
+            {
+                "warehouse":
+                    "Active warehouse was not found "
+                    "for this company."
+            }
+        ) from exc
+
+    return warehouse
+
+
+def get_purchase_bill_item_for_receipt(
+    *,
+    company: Company,
+    bill: PurchaseBill,
+    bill_item_id: int | str,
+) -> PurchaseBillItem:
+    """
+    Return a stock-tracked purchase bill item
+    eligible for receiving.
+    """
+    try:
+        bill_item = (
+            PurchaseBillItem.objects
+            .select_related(
+                "bill",
+                "company",
+                "item",
+            )
+            .get(
+                id=bill_item_id,
+                company=company,
+                bill=bill,
+            )
+        )
+    except PurchaseBillItem.DoesNotExist as exc:
+        raise ValidationError(
+            {
+                "bill_item":
+                    "Purchase bill item was not found "
+                    "for this bill and company."
+            }
+        ) from exc
+
+    item = bill_item.item
+
+    if (
+        item.item_type != CatalogItemType.PRODUCT
+        or not bool(
+            getattr(
+                item,
+                "track_inventory",
+                False,
+            )
+        )
+    ):
+        raise ValidationError(
+            {
+                "bill_item":
+                    "Only stock-tracked product items "
+                    "can be received into inventory."
+            }
+        )
+
+    if bill_item.receivable_quantity <= Decimal("0.0000"):
+        raise ValidationError(
+            {
+                "bill_item":
+                    "This purchase bill item is already "
+                    "fully received."
+            }
+        )
+
+    return bill_item
+
+
+def build_purchase_receipt_item(
+    *,
+    receipt: PurchaseReceipt,
+    company: Company,
+    payload: dict[str, Any],
+    line_number: int,
+) -> PurchaseReceiptItem:
+    """
+    Build and save one draft purchase receipt item.
+    """
+    if not receipt.can_be_edited:
+        raise ValidationError(
+            "Only draft purchase receipts can be edited."
+        )
+
+    bill_item_id = (
+        payload.get("bill_item_id")
+        or payload.get("bill_item")
+    )
+
+    if not bill_item_id:
+        raise ValidationError(
+            {
+                "bill_item":
+                    "Purchase bill item is required."
+            }
+        )
+
+    bill_item = get_purchase_bill_item_for_receipt(
+        company=company,
+        bill=receipt.bill,
+        bill_item_id=bill_item_id,
+    )
+
+    quantity = quantize_quantity(
+        normalize_decimal(
+            payload.get("quantity"),
+            field_name="quantity",
+            default=Decimal("0.0000"),
+        )
+    )
+
+    if quantity <= Decimal("0.0000"):
+        raise ValidationError(
+            {
+                "quantity":
+                    "Receipt quantity must be greater "
+                    "than zero."
+            }
+        )
+
+    if quantity > bill_item.receivable_quantity:
+        raise ValidationError(
+            {
+                "quantity":
+                    "Receipt quantity cannot exceed "
+                    "the remaining bill quantity."
+            }
+        )
+
+    receipt_item = PurchaseReceiptItem(
+        receipt=receipt,
+        company=company,
+        bill_item=bill_item,
+        item=bill_item.item,
+        line_number=int(
+            payload.get("line_number")
+            or line_number
+        ),
+        quantity=quantity,
+        notes=normalize_text(
+            payload.get("notes")
+        ),
+        extra_data=(
+            payload.get("extra_data")
+            if isinstance(
+                payload.get("extra_data"),
+                dict,
+            )
+            else {}
+        ),
+    )
+
+    receipt_item.save()
+
+    return receipt_item
+
+
+@transaction.atomic
+def create_purchase_receipt(
+    *,
+    company: Company,
+    payload: dict[str, Any],
+    user=None,
+) -> PurchaseReceipt:
+    """
+    Create a draft purchase receipt.
+
+    When items are omitted or receive_all=True, all remaining
+    stock-tracked bill quantities are added automatically.
+    """
+    if not company:
+        raise ValidationError(
+            "Company is required."
+        )
+
+    bill_id = (
+        payload.get("bill_id")
+        or payload.get("bill")
+    )
+
+    if not bill_id:
+        raise ValidationError(
+            {
+                "bill":
+                    "Purchase bill is required."
+            }
+        )
+
+    bill = get_posted_purchase_bill_for_company(
+        company=company,
+        bill_id=bill_id,
+    )
+
+    warehouse_id = (
+        payload.get("warehouse_id")
+        or payload.get("warehouse")
+    )
+
+    if not warehouse_id:
+        raise ValidationError(
+            {
+                "warehouse":
+                    "Warehouse is required."
+            }
+        )
+
+    warehouse = get_active_warehouse_for_company(
+        company=company,
+        warehouse_id=warehouse_id,
+    )
+
+    if (
+        bill.branch_id
+        and warehouse.branch_id
+        and bill.branch_id != warehouse.branch_id
+    ):
+        raise ValidationError(
+            {
+                "warehouse":
+                    "Warehouse branch must match "
+                    "the purchase bill branch."
+            }
+        )
+
+    receipt_date = normalize_date(
+        payload.get("receipt_date")
+        or timezone.localdate(),
+        field_name="receipt_date",
+    )
+
+    receipt = PurchaseReceipt(
+        company=company,
+        branch=bill.branch,
+        supplier=bill.supplier,
+        bill=bill,
+        warehouse=warehouse,
+        receipt_number=(
+            normalize_text(
+                payload.get("receipt_number")
+            )
+            or generate_purchase_receipt_number(
+                company
+            )
+        ),
+        receipt_date=(
+            receipt_date
+            or timezone.localdate()
+        ),
+        status=PurchaseReceiptStatus.DRAFT,
+        notes=normalize_text(
+            payload.get("notes")
+        ),
+        extra_data=(
+            payload.get("extra_data")
+            if isinstance(
+                payload.get("extra_data"),
+                dict,
+            )
+            else {}
+        ),
+        created_by=user,
+        updated_by=user,
+    )
+
+    receipt.full_clean()
+    receipt.save()
+
+    items_payload = payload.get("items")
+    receive_all = bool(
+        payload.get("receive_all")
+    )
+
+    if receive_all or items_payload in [None, []]:
+        items_payload = []
+
+        bill_items = (
+            bill.items
+            .select_related("item")
+            .order_by(
+                "line_number",
+                "id",
+            )
+        )
+
+        for bill_item in bill_items:
+            item = bill_item.item
+
+            if (
+                item.item_type == CatalogItemType.PRODUCT
+                and bool(
+                    getattr(
+                        item,
+                        "track_inventory",
+                        False,
+                    )
+                )
+                and bill_item.receivable_quantity
+                > Decimal("0.0000")
+            ):
+                items_payload.append(
+                    {
+                        "bill_item_id": bill_item.id,
+                        "quantity": str(
+                            bill_item.receivable_quantity
+                        ),
+                    }
+                )
+
+    if (
+        not isinstance(items_payload, list)
+        or not items_payload
+    ):
+        raise ValidationError(
+            {
+                "items":
+                    "At least one receivable inventory "
+                    "item is required."
+            }
+        )
+
+    for index, item_payload in enumerate(
+        items_payload,
+        start=1,
+    ):
+        if not isinstance(item_payload, dict):
+            raise ValidationError(
+                {
+                    "items":
+                        "Each purchase receipt item "
+                        "must be an object."
+                }
+            )
+
+        build_purchase_receipt_item(
+            receipt=receipt,
+            company=company,
+            payload=item_payload,
+            line_number=index,
+        )
+
+    receipt.refresh_from_db()
+
+    return receipt
+
+
+@transaction.atomic
+def update_purchase_receipt(
+    *,
+    receipt: PurchaseReceipt,
+    payload: dict[str, Any],
+    user=None,
+) -> PurchaseReceipt:
+    """
+    Update a draft purchase receipt.
+    """
+    locked_receipt = (
+        PurchaseReceipt.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "bill",
+            "warehouse",
+        )
+        .get(pk=receipt.pk)
+    )
+
+    if not locked_receipt.can_be_edited:
+        raise ValidationError(
+            "Only draft purchase receipts can be updated."
+        )
+
+    if "receipt_number" in payload:
+        locked_receipt.receipt_number = (
+            normalize_text(
+                payload.get("receipt_number")
+            )
+        )
+
+    if "receipt_date" in payload:
+        locked_receipt.receipt_date = (
+            normalize_date(
+                payload.get("receipt_date"),
+                field_name="receipt_date",
+            )
+            or locked_receipt.receipt_date
+        )
+
+    if "warehouse_id" in payload or "warehouse" in payload:
+        warehouse_id = (
+            payload.get("warehouse_id")
+            or payload.get("warehouse")
+        )
+
+        warehouse = get_active_warehouse_for_company(
+            company=locked_receipt.company,
+            warehouse_id=warehouse_id,
+        )
+
+        if (
+            locked_receipt.bill.branch_id
+            and warehouse.branch_id
+            and locked_receipt.bill.branch_id
+            != warehouse.branch_id
+        ):
+            raise ValidationError(
+                {
+                    "warehouse":
+                        "Warehouse branch must match "
+                        "the purchase bill branch."
+                }
+            )
+
+        locked_receipt.warehouse = warehouse
+
+    if "notes" in payload:
+        locked_receipt.notes = normalize_text(
+            payload.get("notes")
+        )
+
+    if isinstance(
+        payload.get("extra_data"),
+        dict,
+    ):
+        locked_receipt.extra_data = (
+            payload["extra_data"]
+        )
+
+    locked_receipt.updated_by = user
+    locked_receipt.full_clean()
+    locked_receipt.save()
+
+    if "items" in payload:
+        items_payload = payload.get("items") or []
+
+        if (
+            not isinstance(items_payload, list)
+            or not items_payload
+        ):
+            raise ValidationError(
+                {
+                    "items":
+                        "At least one purchase receipt "
+                        "item is required."
+                }
+            )
+
+        locked_receipt.items.all().delete()
+
+        for index, item_payload in enumerate(
+            items_payload,
+            start=1,
+        ):
+            if not isinstance(item_payload, dict):
+                raise ValidationError(
+                    {
+                        "items":
+                            "Each purchase receipt item "
+                            "must be an object."
+                    }
+                )
+
+            build_purchase_receipt_item(
+                receipt=locked_receipt,
+                company=locked_receipt.company,
+                payload=item_payload,
+                line_number=index,
+            )
+
+    locked_receipt.refresh_from_db()
+
+    return locked_receipt
+
+
+def get_existing_purchase_receipt_stock_movement(
+    receipt_item: PurchaseReceiptItem,
+) -> StockMovement | None:
+    """
+    Return the stock movement already linked to a receipt item.
+    """
+    if receipt_item.stock_movement_id:
+        return receipt_item.stock_movement
+
+    return (
+        StockMovement.objects
+        .filter(
+            company=receipt_item.company,
+            reference_type=(
+                PURCHASE_RECEIPT_STOCK_REFERENCE
+            ),
+            reference_id=receipt_item.id,
+        )
+        .exclude(
+            status=StockMovementStatus.CANCELLED,
+        )
+        .order_by("id")
+        .first()
+    )
+
+
+def post_purchase_receipt_item_to_inventory(
+    *,
+    receipt_item: PurchaseReceiptItem,
+    user=None,
+) -> StockMovement:
+    """
+    Create one posted inventory receipt movement.
+
+    No separate accounting entry is created because the
+    purchase bill already created the financial entry.
+    """
+    existing = (
+        get_existing_purchase_receipt_stock_movement(
+            receipt_item
+        )
+    )
+
+    if existing:
+        if existing.status != StockMovementStatus.POSTED:
+            raise ValidationError(
+                {
+                    "inventory":
+                        "Existing receipt stock movement "
+                        "is not posted."
+                }
+            )
+
+        if not receipt_item.stock_movement_id:
+            PurchaseReceiptItem.objects.filter(
+                pk=receipt_item.pk,
+                stock_movement__isnull=True,
+            ).update(
+                stock_movement=existing,
+                updated_at=timezone.now(),
+            )
+            receipt_item.stock_movement = existing
+
+        return existing
+
+    movement = create_stock_movement(
+        company=receipt_item.company,
+        warehouse=receipt_item.receipt.warehouse,
+        item=receipt_item.item,
+        movement_type=StockMovementType.IN,
+        quantity=receipt_item.quantity,
+        unit_cost=receipt_item.unit_cost,
+        movement_date=(
+            receipt_item.receipt.receipt_date
+        ),
+        reference_type=(
+            PURCHASE_RECEIPT_STOCK_REFERENCE
+        ),
+        reference_id=receipt_item.id,
+        reference_number=(
+            receipt_item.receipt.receipt_number
+        ),
+        notes=(
+            "Purchase bill inventory receipt "
+            f"{receipt_item.receipt.receipt_number}"
+        ),
+        extra_data={
+            "source": "purchase_receipt",
+            "purchase_receipt_id": (
+                receipt_item.receipt_id
+            ),
+            "purchase_receipt_item_id": (
+                receipt_item.id
+            ),
+            "purchase_bill_id": (
+                receipt_item.bill_item.bill_id
+            ),
+            "purchase_bill_item_id": (
+                receipt_item.bill_item_id
+            ),
+        },
+        user=user,
+        post_immediately=True,
+        post_accounting=False,
+    )
+
+    PurchaseReceiptItem.objects.filter(
+        pk=receipt_item.pk,
+        stock_movement__isnull=True,
+    ).update(
+        stock_movement=movement,
+        updated_at=timezone.now(),
+    )
+    receipt_item.stock_movement = movement
+
+    return movement
+
+
+@transaction.atomic
+def post_purchase_receipt(
+    *,
+    receipt: PurchaseReceipt,
+    user=None,
+) -> PurchaseReceipt:
+    """
+    Atomically post a purchase receipt and increase inventory.
+
+    Safety:
+    - Locks receipt and bill items.
+    - Prevents receipt quantities above remaining bill quantity.
+    - Prevents duplicate stock movements.
+    - Supports partial and full receiving.
+    """
+    locked_receipt = (
+        PurchaseReceipt.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "branch",
+            "supplier",
+            "bill",
+            "warehouse",
+        )
+        .get(pk=receipt.pk)
+    )
+
+    if locked_receipt.status == PurchaseReceiptStatus.POSTED:
+        return locked_receipt
+
+    if not locked_receipt.can_be_posted:
+        raise ValidationError(
+            "Only draft purchase receipts can be posted."
+        )
+
+    if locked_receipt.bill.status != PurchaseBillStatus.POSTED:
+        raise ValidationError(
+            {
+                "bill":
+                    "Linked purchase bill must remain posted."
+            }
+        )
+
+    locked_items = list(
+        locked_receipt.items
+        .select_for_update()
+        .select_related(
+            "receipt",
+            "receipt__warehouse",
+            "bill_item",
+            "bill_item__bill",
+            "item",
+            "stock_movement",
+        )
+        .order_by(
+            "line_number",
+            "id",
+        )
+    )
+
+    if not locked_items:
+        raise ValidationError(
+            "Cannot post a purchase receipt without items."
+        )
+
+    for receipt_item in locked_items:
+        bill_item = (
+            PurchaseBillItem.objects
+            .select_for_update()
+            .get(pk=receipt_item.bill_item_id)
+        )
+
+        received_before = (
+            PurchaseReceiptItem.objects
+            .filter(
+                bill_item=bill_item,
+                receipt__status=(
+                    PurchaseReceiptStatus.POSTED
+                ),
+            )
+            .exclude(pk=receipt_item.pk)
+            .aggregate(total=Sum("quantity"))
+            .get("total")
+        )
+
+        received_before = quantize_quantity(
+            received_before or Decimal("0.0000")
+        )
+
+        remaining = quantize_quantity(
+            bill_item.quantity
+            - received_before
+        )
+
+        if receipt_item.quantity > remaining:
+            raise ValidationError(
+                {
+                    "quantity":
+                        "One or more receipt quantities "
+                        "exceed the remaining purchase "
+                        "bill quantities."
+                }
+            )
+
+        post_purchase_receipt_item_to_inventory(
+            receipt_item=receipt_item,
+            user=user,
+        )
+
+    locked_receipt.mark_posted(
+        user=user
+    )
+    locked_receipt.refresh_from_db()
+
+    return locked_receipt
+
+
+@transaction.atomic
+def cancel_purchase_receipt(
+    *,
+    receipt: PurchaseReceipt,
+    reason: str = "",
+    user=None,
+) -> PurchaseReceipt:
+    """
+    Cancel a draft purchase receipt.
+    """
+    locked_receipt = (
+        PurchaseReceipt.objects
+        .select_for_update()
+        .get(pk=receipt.pk)
+    )
+
+    locked_receipt.cancel(
+        reason=normalize_text(reason),
+        user=user,
+    )
+    locked_receipt.refresh_from_db()
+
+    return locked_receipt
+
+
+def serialize_purchase_receipt_item(
+    item: PurchaseReceiptItem,
+) -> dict[str, Any]:
+    """
+    Serialize one purchase receipt item.
+    """
+    return {
+        "id": item.id,
+        "line_number": item.line_number,
+        "bill_item_id": item.bill_item_id,
+        "catalog_item_id": item.item_id,
+        "item_code": item.item_code_snapshot,
+        "item_name": item.item_name_snapshot,
+        "item_name_ar": (
+            item.item_name_ar_snapshot
+        ),
+        "item_name_en": (
+            item.item_name_en_snapshot
+        ),
+        "unit_name": item.unit_name_snapshot,
+        "quantity": str(item.quantity),
+        "unit_cost": str(item.unit_cost),
+        "stock_movement_id": (
+            item.stock_movement_id
+        ),
+        "original_bill_quantity": str(
+            item.bill_item.quantity
+        ),
+        "received_quantity": str(
+            item.bill_item.received_quantity
+        ),
+        "remaining_receivable_quantity": str(
+            item.bill_item.receivable_quantity
+        ),
+        "notes": item.notes,
+        "extra_data": item.extra_data or {},
+        "created_at": (
+            item.created_at.isoformat()
+            if item.created_at
+            else None
+        ),
+        "updated_at": (
+            item.updated_at.isoformat()
+            if item.updated_at
+            else None
+        ),
+    }
+
+
+def serialize_purchase_receipt(
+    receipt: PurchaseReceipt,
+    *,
+    include_items: bool = True,
+) -> dict[str, Any]:
+    """
+    Serialize a purchase receipt for company APIs.
+    """
+    result = {
+        "id": receipt.id,
+        "receipt_number": receipt.receipt_number,
+        "receipt_date": (
+            receipt.receipt_date.isoformat()
+            if receipt.receipt_date
+            else None
+        ),
+        "status": receipt.status,
+        "total_quantity": str(
+            receipt.total_quantity
+        ),
+        "company": {
+            "id": receipt.company_id,
+            "name": receipt.company.name,
+        },
+        "branch": (
+            {
+                "id": receipt.branch_id,
+                "name": receipt.branch.name,
+            }
+            if receipt.branch_id
+            else None
+        ),
+        "supplier": {
+            "id": receipt.supplier_id,
+            "display_name": (
+                receipt.supplier.display_name
+            ),
+        },
+        "bill": {
+            "id": receipt.bill_id,
+            "bill_number": (
+                receipt.bill.bill_number
+            ),
+            "supplier_bill_number": (
+                receipt.bill.supplier_bill_number
+            ),
+            "bill_date": (
+                receipt.bill.bill_date.isoformat()
+            ),
+        },
+        "warehouse": {
+            "id": receipt.warehouse_id,
+            "code": receipt.warehouse.code,
+            "name": receipt.warehouse.display_name,
+        },
+        "notes": receipt.notes,
+        "extra_data": receipt.extra_data or {},
+        "posted_at": (
+            receipt.posted_at.isoformat()
+            if receipt.posted_at
+            else None
+        ),
+        "cancelled_at": (
+            receipt.cancelled_at.isoformat()
+            if receipt.cancelled_at
+            else None
+        ),
+        "cancellation_reason": (
+            receipt.cancellation_reason
+        ),
+        "allowed_actions": {
+            "update": receipt.can_be_edited,
+            "post": receipt.can_be_posted,
+            "cancel": receipt.can_be_cancelled,
+        },
+        "created_at": (
+            receipt.created_at.isoformat()
+            if receipt.created_at
+            else None
+        ),
+        "updated_at": (
+            receipt.updated_at.isoformat()
+            if receipt.updated_at
+            else None
+        ),
+    }
+
+    if include_items:
+        result["items"] = [
+            serialize_purchase_receipt_item(item)
+            for item in (
+                receipt.items
+                .select_related(
+                    "bill_item",
+                    "item",
+                    "stock_movement",
+                )
+                .order_by(
+                    "line_number",
+                    "id",
+                )
+            )
+        ]
+
+    return result
 
 
 # ============================================================
