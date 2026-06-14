@@ -16,6 +16,8 @@ from django.contrib import admin
 from purchases.models import (
     PurchaseBill,
     PurchaseBillItem,
+    PurchaseOrder,
+    PurchaseOrderItem,
     PurchaseReceipt,
     PurchaseReceiptItem,
     PurchaseReturn,
@@ -23,6 +25,241 @@ from purchases.models import (
     SupplierDebitNote,
     SupplierDebitNoteItem,
 )
+
+
+class PurchaseOrderItemInline(admin.TabularInline):
+    model = PurchaseOrderItem
+    extra = 0
+
+    fields = [
+        "line_number",
+        "purchase_order_item",
+        "item",
+        "item_name_snapshot",
+        "unit_name_snapshot",
+        "quantity",
+        "unit_price",
+        "discount_amount",
+        "taxable",
+        "tax_rate",
+        "subtotal_amount",
+        "taxable_amount",
+        "tax_amount",
+        "total_amount",
+        "notes",
+    ]
+
+    readonly_fields = [
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "item_name_ar_snapshot",
+        "item_name_en_snapshot",
+        "unit_name_snapshot",
+        "subtotal_amount",
+        "taxable_amount",
+        "tax_amount",
+        "total_amount",
+    ]
+
+    autocomplete_fields = [
+        "item",
+    ]
+
+
+@admin.register(PurchaseOrder)
+class PurchaseOrderAdmin(admin.ModelAdmin):
+    list_display = [
+        "order_number",
+        "supplier",
+        "company",
+        "branch",
+        "status",
+        "order_date",
+        "expected_date",
+        "subtotal_amount",
+        "tax_amount",
+        "total_amount",
+        "approved_at",
+        "created_at",
+    ]
+
+    list_filter = [
+        "status",
+        "order_date",
+        "expected_date",
+        "company",
+        "branch",
+        "created_at",
+    ]
+
+    search_fields = [
+        "order_number",
+        "supplier_reference",
+        "supplier__display_name",
+        "supplier__legal_name",
+        "supplier__phone",
+        "supplier__mobile",
+        "company__name",
+        "company__name_ar",
+        "company__name_en",
+        "notes",
+    ]
+
+    readonly_fields = [
+        "subtotal_amount",
+        "discount_amount",
+        "taxable_amount",
+        "tax_amount",
+        "total_amount",
+        "approved_at",
+        "approved_by",
+        "cancelled_at",
+        "cancelled_by",
+        "created_at",
+        "updated_at",
+    ]
+
+    autocomplete_fields = [
+        "company",
+        "branch",
+        "supplier",
+        "created_by",
+        "updated_by",
+        "approved_by",
+        "cancelled_by",
+    ]
+
+    fieldsets = [
+        (
+            "Basic information",
+            {
+                "fields": [
+                    "company",
+                    "branch",
+                    "supplier",
+                    "order_number",
+                    "supplier_reference",
+                    "order_date",
+                    "expected_date",
+                    "status",
+                    "currency_code",
+                ],
+            },
+        ),
+        (
+            "Totals",
+            {
+                "fields": [
+                    "subtotal_amount",
+                    "discount_amount",
+                    "taxable_amount",
+                    "tax_amount",
+                    "total_amount",
+                ],
+            },
+        ),
+        (
+            "Approval",
+            {
+                "fields": [
+                    "approved_at",
+                    "approved_by",
+                ],
+            },
+        ),
+        (
+            "Cancellation",
+            {
+                "fields": [
+                    "cancelled_at",
+                    "cancelled_by",
+                    "cancellation_reason",
+                ],
+            },
+        ),
+        (
+            "Audit",
+            {
+                "fields": [
+                    "created_by",
+                    "updated_by",
+                    "created_at",
+                    "updated_at",
+                ],
+            },
+        ),
+        (
+            "Extra",
+            {
+                "classes": [
+                    "collapse",
+                ],
+                "fields": [
+                    "notes",
+                    "extra_data",
+                ],
+            },
+        ),
+    ]
+
+    inlines = [
+        PurchaseOrderItemInline,
+    ]
+
+
+@admin.register(PurchaseOrderItem)
+class PurchaseOrderItemAdmin(admin.ModelAdmin):
+    list_display = [
+        "order",
+        "line_number",
+        "item",
+        "company",
+        "quantity",
+        "unit_price",
+        "discount_amount",
+        "tax_rate",
+        "subtotal_amount",
+        "tax_amount",
+        "total_amount",
+        "created_at",
+    ]
+
+    list_filter = [
+        "taxable",
+        "company",
+        "order__status",
+        "created_at",
+    ]
+
+    search_fields = [
+        "order__order_number",
+        "order__supplier_reference",
+        "item__name",
+        "item__name_ar",
+        "item__name_en",
+        "item_code_snapshot",
+        "item_name_snapshot",
+    ]
+
+    readonly_fields = [
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "item_name_ar_snapshot",
+        "item_name_en_snapshot",
+        "unit_name_snapshot",
+        "subtotal_amount",
+        "taxable_amount",
+        "tax_amount",
+        "total_amount",
+        "created_at",
+        "updated_at",
+    ]
+
+    autocomplete_fields = [
+        "order",
+        "company",
+        "item",
+    ]
 
 
 class PurchaseBillItemInline(admin.TabularInline):
@@ -127,6 +364,7 @@ class PurchaseBillAdmin(admin.ModelAdmin):
                     "company",
                     "branch",
                     "supplier",
+                    "purchase_order",
                     "status",
                     "bill_number",
                     "supplier_bill_number",
@@ -247,6 +485,7 @@ class PurchaseBillItemAdmin(admin.ModelAdmin):
         "bill",
         "company",
         "item",
+        "purchase_order_item",
     ]
 
 

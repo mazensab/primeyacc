@@ -70,6 +70,919 @@ def quantize_quantity(value: Decimal | int | float | str | None) -> Decimal:
     )
 
 
+# ============================================================
+# Purchase Orders Foundation
+# ============================================================
+
+
+class PurchaseOrderStatus(models.TextChoices):
+    """
+    Purchase order lifecycle.
+    """
+
+    DRAFT = "DRAFT", "Draft"
+    APPROVED = "APPROVED", "Approved"
+    PARTIALLY_RECEIVED = (
+        "PARTIALLY_RECEIVED",
+        "Partially received",
+    )
+    RECEIVED = "RECEIVED", "Received"
+    BILLED = "BILLED", "Billed"
+    CANCELLED = "CANCELLED", "Cancelled"
+
+
+class PurchaseOrder(models.Model):
+    """
+    Company-scoped purchase order issued to a supplier.
+
+    Financial, receiving, and billing effects are handled
+    in the purchases service layer.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="purchase_orders",
+        db_index=True,
+        verbose_name="Company",
+    )
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        related_name="purchase_orders",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Branch",
+    )
+    supplier = models.ForeignKey(
+        BusinessParty,
+        on_delete=models.PROTECT,
+        related_name="purchase_orders",
+        db_index=True,
+        verbose_name="Supplier",
+    )
+
+    order_number = models.CharField(
+        max_length=80,
+        db_index=True,
+        verbose_name="Order number",
+    )
+    supplier_reference = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name="Supplier reference",
+    )
+    order_date = models.DateField(
+        default=timezone.localdate,
+        db_index=True,
+        verbose_name="Order date",
+    )
+    expected_date = models.DateField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Expected delivery date",
+    )
+    status = models.CharField(
+        max_length=30,
+        choices=PurchaseOrderStatus.choices,
+        default=PurchaseOrderStatus.DRAFT,
+        db_index=True,
+        verbose_name="Status",
+    )
+    currency_code = models.CharField(
+        max_length=10,
+        default="SAR",
+        verbose_name="Currency code",
+    )
+
+    subtotal_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Subtotal amount",
+    )
+    discount_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Discount amount",
+    )
+    taxable_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Taxable amount",
+    )
+    tax_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Tax amount",
+    )
+    total_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Total amount",
+    )
+
+    approved_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Approved at",
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="approved_purchase_orders",
+        blank=True,
+        null=True,
+        verbose_name="Approved by",
+    )
+    cancelled_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Cancelled at",
+    )
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="cancelled_purchase_orders",
+        blank=True,
+        null=True,
+        verbose_name="Cancelled by",
+    )
+    cancellation_reason = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Cancellation reason",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_purchase_orders",
+        blank=True,
+        null=True,
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="updated_purchase_orders",
+        blank=True,
+        null=True,
+        verbose_name="Updated by",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Purchase order"
+        verbose_name_plural = "Purchase orders"
+        ordering = [
+            "-order_date",
+            "-created_at",
+            "-id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "order_number"],
+                name=(
+                    "unique_purchase_order_number_"
+                    "per_company"
+                ),
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["company", "status"],
+            ),
+            models.Index(
+                fields=["company", "order_date"],
+            ),
+            models.Index(
+                fields=["company", "expected_date"],
+            ),
+            models.Index(
+                fields=["company", "supplier"],
+            ),
+            models.Index(
+                fields=["company", "branch"],
+            ),
+            models.Index(
+                fields=["supplier", "status"],
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.order_number} - "
+            f"{self.supplier.display_name}"
+        )
+
+    @property
+    def is_draft(self) -> bool:
+        return self.status == PurchaseOrderStatus.DRAFT
+
+    @property
+    def is_approved(self) -> bool:
+        return self.status == PurchaseOrderStatus.APPROVED
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self.status == PurchaseOrderStatus.CANCELLED
+
+    @property
+    def can_be_edited(self) -> bool:
+        return self.is_draft
+
+    @property
+    def can_be_approved(self) -> bool:
+        return self.is_draft
+
+    @property
+    def can_be_cancelled(self) -> bool:
+        return self.status in [
+            PurchaseOrderStatus.DRAFT,
+            PurchaseOrderStatus.APPROVED,
+            PurchaseOrderStatus.PARTIALLY_RECEIVED,
+        ]
+
+    @property
+    def ordered_quantity(self) -> Decimal:
+        result = (
+            self.items
+            .aggregate(total=Sum("quantity"))
+            .get("total")
+        )
+
+        return quantize_quantity(
+            result or QUANTITY_ZERO
+        )
+
+    @property
+    def received_quantity(self) -> Decimal:
+        total = QUANTITY_ZERO
+
+        for item in self.items.all():
+            total += item.received_quantity
+
+        return quantize_quantity(total)
+
+    @property
+    def billed_quantity(self) -> Decimal:
+        total = QUANTITY_ZERO
+
+        for item in self.items.all():
+            total += item.billed_quantity
+
+        return quantize_quantity(total)
+
+    def clean(self) -> None:
+        super().clean()
+
+        self.order_number = (
+            self.order_number or ""
+        ).strip()
+        self.supplier_reference = (
+            self.supplier_reference or ""
+        ).strip()
+        self.currency_code = (
+            self.currency_code or "SAR"
+        ).strip().upper()
+        self.cancellation_reason = (
+            self.cancellation_reason or ""
+        ).strip()
+        self.notes = (
+            self.notes or ""
+        ).strip()
+
+        self.subtotal_amount = quantize_money(
+            self.subtotal_amount
+        )
+        self.discount_amount = quantize_money(
+            self.discount_amount
+        )
+        self.taxable_amount = quantize_money(
+            self.taxable_amount
+        )
+        self.tax_amount = quantize_money(
+            self.tax_amount
+        )
+        self.total_amount = quantize_money(
+            self.total_amount
+        )
+
+        if not self.order_number:
+            raise ValidationError(
+                {
+                    "order_number":
+                        "Purchase order number is required."
+                }
+            )
+
+        if self.branch_id and self.company_id:
+            if self.branch.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "branch":
+                            "Branch does not belong "
+                            "to this company."
+                    }
+                )
+
+        if self.supplier_id and self.company_id:
+            if self.supplier.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "supplier":
+                            "Supplier does not belong "
+                            "to this company."
+                    }
+                )
+
+            if self.supplier.party_type not in [
+                BusinessPartyType.SUPPLIER,
+                BusinessPartyType.BOTH,
+            ]:
+                raise ValidationError(
+                    {
+                        "supplier":
+                            "Selected party is not a supplier."
+                    }
+                )
+
+        if (
+            self.expected_date
+            and self.order_date
+            and self.expected_date < self.order_date
+        ):
+            raise ValidationError(
+                {
+                    "expected_date":
+                        "Expected date cannot be before "
+                        "order date."
+                }
+            )
+
+    def recalculate_totals(
+        self,
+        save: bool = True,
+    ) -> None:
+        totals = self.items.aggregate(
+            subtotal=Sum("subtotal_amount"),
+            discount=Sum("discount_amount"),
+            taxable=Sum("taxable_amount"),
+            tax=Sum("tax_amount"),
+            total=Sum("total_amount"),
+        )
+
+        self.subtotal_amount = quantize_money(
+            totals["subtotal"] or MONEY_ZERO
+        )
+        self.discount_amount = quantize_money(
+            totals["discount"] or MONEY_ZERO
+        )
+        self.taxable_amount = quantize_money(
+            totals["taxable"] or MONEY_ZERO
+        )
+        self.tax_amount = quantize_money(
+            totals["tax"] or MONEY_ZERO
+        )
+        self.total_amount = quantize_money(
+            totals["total"] or MONEY_ZERO
+        )
+
+        if save:
+            self.full_clean()
+            self.save(
+                update_fields=[
+                    "subtotal_amount",
+                    "discount_amount",
+                    "taxable_amount",
+                    "tax_amount",
+                    "total_amount",
+                    "updated_at",
+                ]
+            )
+
+    def approve(self, user=None) -> None:
+        if not self.can_be_approved:
+            raise ValidationError(
+                "Only draft purchase orders can be approved."
+            )
+
+        if not self.items.exists():
+            raise ValidationError(
+                "Cannot approve a purchase order without items."
+            )
+
+        self.recalculate_totals(save=False)
+        self.status = PurchaseOrderStatus.APPROVED
+        self.approved_at = timezone.now()
+
+        if user:
+            self.approved_by = user
+            self.updated_by = user
+
+        self.full_clean()
+        self.save(
+            update_fields=[
+                "status",
+                "approved_at",
+                "approved_by",
+                "updated_by",
+                "subtotal_amount",
+                "discount_amount",
+                "taxable_amount",
+                "tax_amount",
+                "total_amount",
+                "updated_at",
+            ]
+        )
+
+    def refresh_fulfillment_status(
+        self,
+        *,
+        save: bool = True,
+    ) -> None:
+        if self.is_cancelled or self.is_draft:
+            return
+
+        ordered = self.ordered_quantity
+        received = self.received_quantity
+        billed = self.billed_quantity
+
+        if ordered > QUANTITY_ZERO and billed >= ordered:
+            new_status = PurchaseOrderStatus.BILLED
+        elif (
+            ordered > QUANTITY_ZERO
+            and received >= ordered
+        ):
+            new_status = PurchaseOrderStatus.RECEIVED
+        elif received > QUANTITY_ZERO:
+            new_status = (
+                PurchaseOrderStatus.PARTIALLY_RECEIVED
+            )
+        else:
+            new_status = PurchaseOrderStatus.APPROVED
+
+        self.status = new_status
+
+        if save:
+            self.save(
+                update_fields=[
+                    "status",
+                    "updated_at",
+                ]
+            )
+
+    def cancel(
+        self,
+        reason: str = "",
+        user=None,
+    ) -> None:
+        if not self.can_be_cancelled:
+            raise ValidationError(
+                "This purchase order cannot be cancelled."
+            )
+
+        if (
+            self.received_quantity > QUANTITY_ZERO
+            or self.billed_quantity > QUANTITY_ZERO
+        ):
+            raise ValidationError(
+                "Purchase orders with received or billed "
+                "quantities cannot be cancelled directly."
+            )
+
+        self.status = PurchaseOrderStatus.CANCELLED
+        self.cancelled_at = timezone.now()
+        self.cancellation_reason = reason or ""
+
+        if user:
+            self.cancelled_by = user
+            self.updated_by = user
+
+        self.full_clean()
+        self.save(
+            update_fields=[
+                "status",
+                "cancelled_at",
+                "cancelled_by",
+                "cancellation_reason",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+
+class PurchaseOrderItem(models.Model):
+    """
+    Purchase order line with catalog snapshots and totals.
+    """
+
+    order = models.ForeignKey(
+        PurchaseOrder,
+        on_delete=models.CASCADE,
+        related_name="items",
+        db_index=True,
+        verbose_name="Purchase order",
+    )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="purchase_order_items",
+        db_index=True,
+        verbose_name="Company",
+    )
+    item = models.ForeignKey(
+        CatalogItem,
+        on_delete=models.PROTECT,
+        related_name="purchase_order_items",
+        db_index=True,
+        verbose_name="Catalog item",
+    )
+
+    line_number = models.PositiveIntegerField(
+        default=1,
+        db_index=True,
+        verbose_name="Line number",
+    )
+
+    item_code_snapshot = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+    )
+    item_name_snapshot = models.CharField(
+        max_length=255,
+    )
+    item_name_ar_snapshot = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+    item_name_en_snapshot = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+    unit_name_snapshot = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+    )
+
+    quantity = models.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        default=Decimal("1.0000"),
+        validators=[
+            MinValueValidator(Decimal("0.0001"))
+        ],
+    )
+    unit_price = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+    )
+    discount_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+    )
+    taxable = models.BooleanField(
+        default=True,
+        db_index=True,
+    )
+    tax_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("15.00"),
+        validators=[MinValueValidator(MONEY_ZERO)],
+    )
+
+    subtotal_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+    )
+    taxable_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+    )
+    tax_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+    )
+    total_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+    )
+
+    notes = models.TextField(
+        blank=True,
+        default="",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = [
+            "order_id",
+            "line_number",
+            "id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["order", "line_number"],
+                name=(
+                    "unique_purchase_order_item_line"
+                ),
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["company", "item"],
+            ),
+            models.Index(
+                fields=["order", "line_number"],
+            ),
+            models.Index(
+                fields=["company", "created_at"],
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.order.order_number} - "
+            f"{self.item_name_snapshot}"
+        )
+
+    @property
+    def billed_quantity(self) -> Decimal:
+        result = (
+            self.purchase_bill_items
+            .filter(
+                bill__status="POSTED",
+            )
+            .aggregate(total=Sum("quantity"))
+            .get("total")
+        )
+
+        return quantize_quantity(
+            result or QUANTITY_ZERO
+        )
+
+    @property
+    def received_quantity(self) -> Decimal:
+        result = (
+            self.purchase_bill_items
+            .filter(
+                purchase_receipt_items__receipt__status=(
+                    "POSTED"
+                ),
+            )
+            .aggregate(
+                total=Sum(
+                    "purchase_receipt_items__quantity"
+                )
+            )
+            .get("total")
+        )
+
+        return quantize_quantity(
+            result or QUANTITY_ZERO
+        )
+
+    @property
+    def remaining_to_bill_quantity(self) -> Decimal:
+        remaining = quantize_quantity(
+            self.quantity - self.billed_quantity
+        )
+
+        return max(
+            remaining,
+            QUANTITY_ZERO,
+        )
+
+    @property
+    def remaining_to_receive_quantity(self) -> Decimal:
+        remaining = quantize_quantity(
+            self.quantity - self.received_quantity
+        )
+
+        return max(
+            remaining,
+            QUANTITY_ZERO,
+        )
+
+    def apply_item_snapshot(self) -> None:
+        if not self.item_id:
+            return
+
+        self.item_code_snapshot = (
+            self.item.code
+            or self.item.sku
+            or self.item.barcode
+            or ""
+        )
+        self.item_name_snapshot = self.item.name
+        self.item_name_ar_snapshot = (
+            self.item.name_ar or ""
+        )
+        self.item_name_en_snapshot = (
+            self.item.name_en or ""
+        )
+        self.unit_name_snapshot = (
+            self.item.unit.name
+            if self.item.unit_id
+            else ""
+        )
+
+        if (
+            not self.unit_price
+            or self.unit_price == MONEY_ZERO
+        ):
+            self.unit_price = (
+                self.item.purchase_price
+                or self.item.cost_price
+                or MONEY_ZERO
+            )
+
+        self.taxable = bool(self.item.taxable)
+        self.tax_rate = (
+            self.item.tax_rate or MONEY_ZERO
+        )
+
+    def calculate_totals(self) -> None:
+        self.quantity = quantize_quantity(
+            self.quantity
+        )
+        self.unit_price = quantize_money(
+            self.unit_price
+        )
+        self.discount_amount = quantize_money(
+            self.discount_amount
+        )
+        self.tax_rate = quantize_money(
+            self.tax_rate
+        )
+
+        subtotal = quantize_money(
+            self.quantity * self.unit_price
+        )
+
+        if self.discount_amount > subtotal:
+            raise ValidationError(
+                {
+                    "discount_amount":
+                        "Discount cannot exceed subtotal."
+                }
+            )
+
+        taxable_amount = quantize_money(
+            subtotal - self.discount_amount
+        )
+
+        tax_amount = MONEY_ZERO
+        if self.taxable:
+            tax_amount = quantize_money(
+                taxable_amount
+                * self.tax_rate
+                / Decimal("100.00")
+            )
+
+        self.subtotal_amount = subtotal
+        self.taxable_amount = taxable_amount
+        self.tax_amount = tax_amount
+        self.total_amount = quantize_money(
+            taxable_amount + tax_amount
+        )
+
+    def clean(self) -> None:
+        super().clean()
+
+        if self.order_id and self.company_id:
+            if self.order.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "company":
+                            "Item company must match "
+                            "purchase order company."
+                    }
+                )
+
+        if self.order_id and not self.order.can_be_edited:
+            raise ValidationError(
+                "Cannot edit items for an approved "
+                "or cancelled purchase order."
+            )
+
+        if self.item_id and self.company_id:
+            if self.item.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "item":
+                            "Catalog item does not belong "
+                            "to this company."
+                    }
+                )
+
+            if not self.item.is_purchasable:
+                raise ValidationError(
+                    {
+                        "item":
+                            "Catalog item is not purchasable."
+                    }
+                )
+
+        self.quantity = quantize_quantity(
+            self.quantity
+        )
+
+        if self.quantity <= QUANTITY_ZERO:
+            raise ValidationError(
+                {
+                    "quantity":
+                        "Quantity must be greater than zero."
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        if self.order_id and not self.company_id:
+            self.company = self.order.company
+
+        if self.item_id:
+            self.apply_item_snapshot()
+
+        self.calculate_totals()
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+        if self.order_id:
+            self.order.recalculate_totals(save=True)
+
+    def delete(self, *args, **kwargs):
+        order = self.order
+
+        if not order.can_be_edited:
+            raise ValidationError(
+                "Cannot delete items from an approved "
+                "or cancelled purchase order."
+            )
+
+        result = super().delete(*args, **kwargs)
+        order.recalculate_totals(save=True)
+
+        return result
+
+
 class PurchaseBillStatus(models.TextChoices):
     """
     Purchase bill lifecycle.
@@ -129,6 +1042,20 @@ class PurchaseBill(models.Model):
         db_index=True,
         verbose_name="Supplier",
         help_text="Supplier must belong to the same company and be supplier or both.",
+    )
+
+    purchase_order = models.ForeignKey(
+        PurchaseOrder,
+        on_delete=models.PROTECT,
+        related_name="bills",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Purchase order",
+        help_text=(
+            "Optional source purchase order used "
+            "to create this supplier bill."
+        ),
     )
 
     status = models.CharField(
@@ -432,6 +1359,42 @@ class PurchaseBill(models.Model):
             ]:
                 raise ValidationError(
                     {"supplier": "Selected party is not a supplier."}
+                )
+
+        if self.purchase_order_id:
+            if self.purchase_order.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "purchase_order":
+                            "Purchase order does not belong "
+                            "to this company."
+                    }
+                )
+
+            if (
+                self.purchase_order.supplier_id
+                != self.supplier_id
+            ):
+                raise ValidationError(
+                    {
+                        "purchase_order":
+                            "Purchase order supplier must "
+                            "match bill supplier."
+                    }
+                )
+
+            if self.purchase_order.status not in [
+                PurchaseOrderStatus.APPROVED,
+                PurchaseOrderStatus.PARTIALLY_RECEIVED,
+                PurchaseOrderStatus.RECEIVED,
+                PurchaseOrderStatus.BILLED,
+            ]:
+                raise ValidationError(
+                    {
+                        "purchase_order":
+                            "Purchase bill requires an "
+                            "approved purchase order."
+                    }
                 )
 
         if self.discount_amount < MONEY_ZERO:
@@ -867,6 +1830,19 @@ class PurchaseBillItem(models.Model):
         verbose_name="Catalog item",
     )
 
+    purchase_order_item = models.ForeignKey(
+        PurchaseOrderItem,
+        on_delete=models.PROTECT,
+        related_name="purchase_bill_items",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Purchase order item",
+        help_text=(
+            "Optional source purchase order line."
+        ),
+    )
+
     line_number = models.PositiveIntegerField(
         default=1,
         db_index=True,
@@ -1114,6 +2090,52 @@ class PurchaseBillItem(models.Model):
             if not self.item.is_purchasable:
                 raise ValidationError(
                     {"item": "Selected catalog item is not purchasable."}
+                )
+
+        if self.purchase_order_item_id:
+            source = self.purchase_order_item
+
+            if source.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "purchase_order_item":
+                            "Purchase order item does not "
+                            "belong to this company."
+                    }
+                )
+
+            if (
+                self.bill_id
+                and not self.bill.purchase_order_id
+            ):
+                raise ValidationError(
+                    {
+                        "purchase_order_item":
+                            "Bill must reference the source "
+                            "purchase order."
+                    }
+                )
+
+            if (
+                self.bill_id
+                and self.bill.purchase_order_id
+                != source.order_id
+            ):
+                raise ValidationError(
+                    {
+                        "purchase_order_item":
+                            "Purchase order item must belong "
+                            "to the bill purchase order."
+                    }
+                )
+
+            if self.item_id != source.item_id:
+                raise ValidationError(
+                    {
+                        "purchase_order_item":
+                            "Bill item must match purchase "
+                            "order item catalog item."
+                    }
                 )
 
         if self.bill_id and not self.bill.can_edit:

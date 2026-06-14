@@ -73,6 +73,9 @@ from purchases.models import (
     PurchaseBill,
     PurchaseBillItem,
     PurchaseBillStatus,
+    PurchaseOrder,
+    PurchaseOrderItem,
+    PurchaseOrderStatus,
     PurchaseReceipt,
     PurchaseReceiptItem,
     PurchaseReceiptStatus,
@@ -872,6 +875,1075 @@ def cancel_purchase_bill(
     bill.cancel(reason=reason, user=user)
     bill.refresh_from_db()
     return bill
+
+
+# ============================================================
+# Purchase Orders Services Foundation
+# ============================================================
+
+
+def get_company_purchase_order_prefix(
+    company: Company,
+) -> str:
+    """
+    Resolve purchase order number prefix.
+    """
+    settings_obj = getattr(
+        company,
+        "operational_settings",
+        None,
+    )
+
+    configured_prefix = (
+        getattr(
+            settings_obj,
+            "purchase_order_prefix",
+            "",
+        )
+        if settings_obj
+        else ""
+    )
+
+    return normalize_text(
+        configured_prefix
+    ) or "PO"
+
+
+def generate_purchase_order_number(
+    company: Company,
+) -> str:
+    """
+    Generate a company-scoped purchase order number.
+
+    Format:
+    PO-YYYYMMDD-000001
+    """
+    today = timezone.localdate()
+    prefix = get_company_purchase_order_prefix(
+        company
+    )
+    date_part = today.strftime("%Y%m%d")
+    starts_with = f"{prefix}-{date_part}-"
+
+    last_order = (
+        PurchaseOrder.objects
+        .filter(
+            company=company,
+            order_number__startswith=starts_with,
+        )
+        .order_by("-order_number")
+        .first()
+    )
+
+    next_number = 1
+
+    if last_order:
+        try:
+            next_number = (
+                int(
+                    last_order.order_number
+                    .split("-")[-1]
+                )
+                + 1
+            )
+        except (TypeError, ValueError):
+            next_number = 1
+
+    return (
+        f"{starts_with}"
+        f"{next_number:06d}"
+    )
+
+
+def get_purchase_order_for_company(
+    *,
+    company: Company,
+    order_id: int | str,
+) -> PurchaseOrder:
+    """
+    Return one company-scoped purchase order.
+    """
+    try:
+        return (
+            PurchaseOrder.objects
+            .select_related(
+                "company",
+                "branch",
+                "supplier",
+            )
+            .get(
+                id=order_id,
+                company=company,
+            )
+        )
+    except PurchaseOrder.DoesNotExist as exc:
+        raise ValidationError(
+            {
+                "purchase_order":
+                    "Purchase order was not found "
+                    "for this company."
+            }
+        ) from exc
+
+
+def get_approved_purchase_order_for_company(
+    *,
+    company: Company,
+    order_id: int | str,
+) -> PurchaseOrder:
+    """
+    Return a purchase order eligible for receiving or billing.
+    """
+    order = get_purchase_order_for_company(
+        company=company,
+        order_id=order_id,
+    )
+
+    if order.status not in [
+        PurchaseOrderStatus.APPROVED,
+        PurchaseOrderStatus.PARTIALLY_RECEIVED,
+        PurchaseOrderStatus.RECEIVED,
+        PurchaseOrderStatus.BILLED,
+    ]:
+        raise ValidationError(
+            {
+                "purchase_order":
+                    "Purchase order must be approved "
+                    "before receiving or billing."
+            }
+        )
+
+    return order
+
+
+def get_purchase_order_item_for_company(
+    *,
+    company: Company,
+    order: PurchaseOrder,
+    order_item_id: int | str,
+) -> PurchaseOrderItem:
+    """
+    Return one purchase order item for the same company and order.
+    """
+    try:
+        return (
+            PurchaseOrderItem.objects
+            .select_related(
+                "order",
+                "company",
+                "item",
+            )
+            .get(
+                id=order_item_id,
+                company=company,
+                order=order,
+            )
+        )
+    except PurchaseOrderItem.DoesNotExist as exc:
+        raise ValidationError(
+            {
+                "purchase_order_item":
+                    "Purchase order item was not found "
+                    "for this order and company."
+            }
+        ) from exc
+
+
+def build_purchase_order_item(
+    *,
+    order: PurchaseOrder,
+    company: Company,
+    payload: dict[str, Any],
+    line_number: int,
+) -> PurchaseOrderItem:
+    """
+    Build and save one draft purchase order item.
+    """
+    if not order.can_be_edited:
+        raise ValidationError(
+            "Only draft purchase orders can be edited."
+        )
+
+    item_id = (
+        payload.get("item_id")
+        or payload.get("item")
+    )
+
+    if not item_id:
+        raise ValidationError(
+            {
+                "item":
+                    "Catalog item is required."
+            }
+        )
+
+    item = get_purchase_item_for_company(
+        company,
+        item_id,
+    )
+    default_price = get_item_purchase_price(
+        item
+    )
+
+    order_item = PurchaseOrderItem(
+        order=order,
+        company=company,
+        item=item,
+        line_number=int(
+            payload.get("line_number")
+            or line_number
+        ),
+        quantity=normalize_decimal(
+            payload.get(
+                "quantity",
+                Decimal("1.0000"),
+            ),
+            field_name="quantity",
+            default=Decimal("1.0000"),
+        ),
+        unit_price=normalize_decimal(
+            payload.get(
+                "unit_price",
+                default_price,
+            ),
+            field_name="unit_price",
+            default=default_price,
+        ),
+        discount_amount=normalize_decimal(
+            payload.get(
+                "discount_amount",
+                MONEY_ZERO,
+            ),
+            field_name="discount_amount",
+            default=MONEY_ZERO,
+        ),
+        notes=normalize_text(
+            payload.get("notes")
+        ),
+        extra_data=(
+            payload.get("extra_data")
+            if isinstance(
+                payload.get("extra_data"),
+                dict,
+            )
+            else {}
+        ),
+    )
+    order_item.save()
+
+    return order_item
+
+
+@transaction.atomic
+def create_purchase_order(
+    *,
+    company: Company,
+    payload: dict[str, Any],
+    user=None,
+) -> PurchaseOrder:
+    """
+    Create a draft purchase order with items.
+    """
+    if not company:
+        raise ValidationError(
+            "Company is required."
+        )
+
+    supplier_id = (
+        payload.get("supplier_id")
+        or payload.get("supplier")
+    )
+
+    if not supplier_id:
+        raise ValidationError(
+            {
+                "supplier":
+                    "Supplier is required."
+            }
+        )
+
+    supplier = get_supplier_for_company(
+        company,
+        supplier_id,
+    )
+    branch = get_branch_for_company(
+        company,
+        payload.get("branch_id")
+        or payload.get("branch"),
+    )
+
+    items_payload = payload.get("items") or []
+
+    if (
+        not isinstance(items_payload, list)
+        or not items_payload
+    ):
+        raise ValidationError(
+            {
+                "items":
+                    "At least one purchase order "
+                    "item is required."
+            }
+        )
+
+    order_date = normalize_date(
+        payload.get("order_date")
+        or timezone.localdate(),
+        field_name="order_date",
+    )
+    expected_date = normalize_date(
+        payload.get("expected_date"),
+        field_name="expected_date",
+    )
+
+    order = PurchaseOrder(
+        company=company,
+        branch=branch,
+        supplier=supplier,
+        order_number=(
+            normalize_text(
+                payload.get("order_number")
+            )
+            or generate_purchase_order_number(
+                company
+            )
+        ),
+        supplier_reference=normalize_text(
+            payload.get("supplier_reference")
+        ),
+        order_date=(
+            order_date
+            or timezone.localdate()
+        ),
+        expected_date=expected_date,
+        status=PurchaseOrderStatus.DRAFT,
+        currency_code=normalize_text(
+            payload.get("currency_code")
+            or company.currency_code
+            or "SAR"
+        ).upper(),
+        notes=normalize_text(
+            payload.get("notes")
+        ),
+        extra_data=(
+            payload.get("extra_data")
+            if isinstance(
+                payload.get("extra_data"),
+                dict,
+            )
+            else {}
+        ),
+        created_by=user,
+        updated_by=user,
+    )
+    order.full_clean()
+    order.save()
+
+    for index, item_payload in enumerate(
+        items_payload,
+        start=1,
+    ):
+        if not isinstance(item_payload, dict):
+            raise ValidationError(
+                {
+                    "items":
+                        "Each purchase order item "
+                        "must be an object."
+                }
+            )
+
+        build_purchase_order_item(
+            order=order,
+            company=company,
+            payload=item_payload,
+            line_number=index,
+        )
+
+    order.recalculate_totals(save=True)
+    order.refresh_from_db()
+
+    return order
+
+
+@transaction.atomic
+def update_purchase_order(
+    *,
+    order: PurchaseOrder,
+    payload: dict[str, Any],
+    user=None,
+) -> PurchaseOrder:
+    """
+    Update a draft purchase order.
+
+    When items are included, existing lines are replaced.
+    """
+    locked_order = (
+        PurchaseOrder.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "branch",
+            "supplier",
+        )
+        .get(pk=order.pk)
+    )
+
+    if not locked_order.can_be_edited:
+        raise ValidationError(
+            "Only draft purchase orders can be updated."
+        )
+
+    company = locked_order.company
+
+    if "supplier_id" in payload or "supplier" in payload:
+        locked_order.supplier = (
+            get_supplier_for_company(
+                company,
+                payload.get("supplier_id")
+                or payload.get("supplier"),
+            )
+        )
+
+    if "branch_id" in payload or "branch" in payload:
+        locked_order.branch = (
+            get_branch_for_company(
+                company,
+                payload.get("branch_id")
+                or payload.get("branch"),
+            )
+        )
+
+    if "order_number" in payload:
+        locked_order.order_number = normalize_text(
+            payload.get("order_number")
+        )
+
+    if "supplier_reference" in payload:
+        locked_order.supplier_reference = (
+            normalize_text(
+                payload.get("supplier_reference")
+            )
+        )
+
+    if "order_date" in payload:
+        locked_order.order_date = (
+            normalize_date(
+                payload.get("order_date"),
+                field_name="order_date",
+            )
+            or locked_order.order_date
+        )
+
+    if "expected_date" in payload:
+        locked_order.expected_date = (
+            normalize_date(
+                payload.get("expected_date"),
+                field_name="expected_date",
+            )
+        )
+
+    if "currency_code" in payload:
+        locked_order.currency_code = normalize_text(
+            payload.get("currency_code")
+            or "SAR"
+        ).upper()
+
+    if "notes" in payload:
+        locked_order.notes = normalize_text(
+            payload.get("notes")
+        )
+
+    if isinstance(
+        payload.get("extra_data"),
+        dict,
+    ):
+        locked_order.extra_data = (
+            payload["extra_data"]
+        )
+
+    locked_order.updated_by = user
+    locked_order.full_clean()
+    locked_order.save()
+
+    if "items" in payload:
+        items_payload = payload.get("items") or []
+
+        if (
+            not isinstance(items_payload, list)
+            or not items_payload
+        ):
+            raise ValidationError(
+                {
+                    "items":
+                        "At least one purchase order "
+                        "item is required."
+                }
+            )
+
+        locked_order.items.all().delete()
+
+        for index, item_payload in enumerate(
+            items_payload,
+            start=1,
+        ):
+            if not isinstance(item_payload, dict):
+                raise ValidationError(
+                    {
+                        "items":
+                            "Each purchase order item "
+                            "must be an object."
+                    }
+                )
+
+            build_purchase_order_item(
+                order=locked_order,
+                company=company,
+                payload=item_payload,
+                line_number=index,
+            )
+
+    locked_order.recalculate_totals(save=True)
+    locked_order.refresh_from_db()
+
+    return locked_order
+
+
+@transaction.atomic
+def approve_purchase_order(
+    *,
+    order: PurchaseOrder,
+    user=None,
+) -> PurchaseOrder:
+    """
+    Approve a draft purchase order.
+    """
+    locked_order = (
+        PurchaseOrder.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "supplier",
+            "branch",
+        )
+        .get(pk=order.pk)
+    )
+
+    locked_order.approve(user=user)
+    locked_order.refresh_from_db()
+
+    return locked_order
+
+
+@transaction.atomic
+def cancel_purchase_order(
+    *,
+    order: PurchaseOrder,
+    reason: str = "",
+    user=None,
+) -> PurchaseOrder:
+    """
+    Cancel an eligible purchase order.
+    """
+    locked_order = (
+        PurchaseOrder.objects
+        .select_for_update()
+        .get(pk=order.pk)
+    )
+
+    locked_order.cancel(
+        reason=normalize_text(reason),
+        user=user,
+    )
+    locked_order.refresh_from_db()
+
+    return locked_order
+
+
+def validate_purchase_order_bill_item_quantity(
+    *,
+    order_item: PurchaseOrderItem,
+    quantity: Decimal,
+) -> None:
+    """
+    Prevent billing above the remaining ordered quantity.
+    """
+    quantity = quantize_quantity(quantity)
+
+    if quantity <= Decimal("0.0000"):
+        raise ValidationError(
+            {
+                "quantity":
+                    "Bill quantity must be greater than zero."
+            }
+        )
+
+    if quantity > order_item.remaining_to_bill_quantity:
+        raise ValidationError(
+            {
+                "quantity":
+                    "Bill quantity cannot exceed "
+                    "the remaining purchase order quantity."
+            }
+        )
+
+
+def build_purchase_bill_item_from_order(
+    *,
+    bill: PurchaseBill,
+    order_item: PurchaseOrderItem,
+    quantity: Decimal,
+    line_number: int,
+) -> PurchaseBillItem:
+    """
+    Create one purchase bill item from an order item.
+    """
+    validate_purchase_order_bill_item_quantity(
+        order_item=order_item,
+        quantity=quantity,
+    )
+
+    ratio = (
+        quantity / order_item.quantity
+        if order_item.quantity > Decimal("0.0000")
+        else Decimal("0")
+    )
+
+    discount_amount = quantize_money(
+        order_item.discount_amount * ratio
+    )
+
+    bill_item = PurchaseBillItem(
+        bill=bill,
+        company=bill.company,
+        item=order_item.item,
+        purchase_order_item=order_item,
+        line_number=line_number,
+        quantity=quantity,
+        unit_price=order_item.unit_price,
+        discount_amount=discount_amount,
+        notes=order_item.notes,
+        extra_data={
+            **(order_item.extra_data or {}),
+            "source": "purchase_order",
+            "purchase_order_id": order_item.order_id,
+            "purchase_order_item_id": order_item.id,
+        },
+    )
+    bill_item.save()
+
+    return bill_item
+
+
+@transaction.atomic
+def create_purchase_bill_from_order(
+    *,
+    company: Company,
+    order: PurchaseOrder,
+    payload: dict[str, Any] | None = None,
+    user=None,
+) -> PurchaseBill:
+    """
+    Create a draft supplier bill from remaining order quantities.
+
+    Optional payload items:
+    [
+        {
+            "purchase_order_item_id": 1,
+            "quantity": "2.0000"
+        }
+    ]
+
+    When items are omitted, all remaining quantities are billed.
+    """
+    payload = payload or {}
+
+    locked_order = (
+        PurchaseOrder.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "branch",
+            "supplier",
+        )
+        .filter(
+            pk=order.pk,
+            company=company,
+        )
+        .first()
+    )
+
+    if not locked_order:
+        raise ValidationError(
+            {
+                "purchase_order":
+                    "Purchase order was not found "
+                    "for the current company."
+            }
+        )
+
+    if locked_order.status not in [
+        PurchaseOrderStatus.APPROVED,
+        PurchaseOrderStatus.PARTIALLY_RECEIVED,
+        PurchaseOrderStatus.RECEIVED,
+    ]:
+        raise ValidationError(
+            {
+                "purchase_order":
+                    "Purchase order is not eligible "
+                    "for bill conversion."
+            }
+        )
+
+    bill_date = normalize_date(
+        payload.get("bill_date")
+        or timezone.localdate(),
+        field_name="bill_date",
+    )
+    due_date = normalize_date(
+        payload.get("due_date"),
+        field_name="due_date",
+    )
+
+    bill = PurchaseBill(
+        company=company,
+        branch=locked_order.branch,
+        supplier=locked_order.supplier,
+        purchase_order=locked_order,
+        status=PurchaseBillStatus.DRAFT,
+        bill_number=(
+            normalize_text(
+                payload.get("bill_number")
+            )
+            or generate_purchase_bill_number(
+                company
+            )
+        ),
+        supplier_bill_number=normalize_text(
+            payload.get("supplier_bill_number")
+        ),
+        bill_date=(
+            bill_date
+            or timezone.localdate()
+        ),
+        due_date=due_date,
+        currency_code=locked_order.currency_code,
+        notes=normalize_text(
+            payload.get("notes")
+        ),
+        extra_data={
+            **(
+                payload.get("extra_data")
+                if isinstance(
+                    payload.get("extra_data"),
+                    dict,
+                )
+                else {}
+            ),
+            "source": "purchase_order",
+            "purchase_order_id": locked_order.id,
+        },
+        created_by=user,
+        updated_by=user,
+    )
+    bill.full_clean()
+    bill.save()
+
+    requested_items = payload.get("items")
+
+    if requested_items in [None, []]:
+        source_items = []
+
+        for order_item in (
+            locked_order.items
+            .select_related("item")
+            .order_by("line_number", "id")
+        ):
+            remaining = (
+                order_item.remaining_to_bill_quantity
+            )
+
+            if remaining > Decimal("0.0000"):
+                source_items.append(
+                    {
+                        "order_item": order_item,
+                        "quantity": remaining,
+                    }
+                )
+    else:
+        if not isinstance(requested_items, list):
+            raise ValidationError(
+                {
+                    "items":
+                        "Purchase bill items must be a list."
+                }
+            )
+
+        source_items = []
+
+        for item_payload in requested_items:
+            if not isinstance(item_payload, dict):
+                raise ValidationError(
+                    {
+                        "items":
+                            "Each purchase bill item "
+                            "must be an object."
+                    }
+                )
+
+            order_item_id = (
+                item_payload.get(
+                    "purchase_order_item_id"
+                )
+                or item_payload.get(
+                    "order_item_id"
+                )
+                or item_payload.get(
+                    "purchase_order_item"
+                )
+            )
+
+            if not order_item_id:
+                raise ValidationError(
+                    {
+                        "purchase_order_item":
+                            "Purchase order item is required."
+                    }
+                )
+
+            order_item = (
+                get_purchase_order_item_for_company(
+                    company=company,
+                    order=locked_order,
+                    order_item_id=order_item_id,
+                )
+            )
+
+            quantity = quantize_quantity(
+                normalize_decimal(
+                    item_payload.get("quantity"),
+                    field_name="quantity",
+                    default=(
+                        order_item
+                        .remaining_to_bill_quantity
+                    ),
+                )
+            )
+
+            source_items.append(
+                {
+                    "order_item": order_item,
+                    "quantity": quantity,
+                }
+            )
+
+    if not source_items:
+        raise ValidationError(
+            {
+                "items":
+                    "Purchase order has no remaining "
+                    "quantity available for billing."
+            }
+        )
+
+    for index, source in enumerate(
+        source_items,
+        start=1,
+    ):
+        build_purchase_bill_item_from_order(
+            bill=bill,
+            order_item=source["order_item"],
+            quantity=source["quantity"],
+            line_number=index,
+        )
+
+    bill.recalculate_totals(save=True)
+    locked_order.refresh_fulfillment_status(
+        save=True
+    )
+    bill.refresh_from_db()
+
+    return bill
+
+
+def serialize_purchase_order_item(
+    item: PurchaseOrderItem,
+) -> dict[str, Any]:
+    """
+    Serialize one purchase order item.
+    """
+    return {
+        "id": item.id,
+        "line_number": item.line_number,
+        "catalog_item_id": item.item_id,
+        "item_code": item.item_code_snapshot,
+        "item_name": item.item_name_snapshot,
+        "item_name_ar": (
+            item.item_name_ar_snapshot
+        ),
+        "item_name_en": (
+            item.item_name_en_snapshot
+        ),
+        "unit_name": item.unit_name_snapshot,
+        "quantity": str(item.quantity),
+        "received_quantity": str(
+            item.received_quantity
+        ),
+        "billed_quantity": str(
+            item.billed_quantity
+        ),
+        "remaining_to_receive_quantity": str(
+            item.remaining_to_receive_quantity
+        ),
+        "remaining_to_bill_quantity": str(
+            item.remaining_to_bill_quantity
+        ),
+        "unit_price": str(item.unit_price),
+        "discount_amount": str(
+            item.discount_amount
+        ),
+        "taxable": item.taxable,
+        "tax_rate": str(item.tax_rate),
+        "subtotal_amount": str(
+            item.subtotal_amount
+        ),
+        "taxable_amount": str(
+            item.taxable_amount
+        ),
+        "tax_amount": str(item.tax_amount),
+        "total_amount": str(
+            item.total_amount
+        ),
+        "notes": item.notes,
+        "extra_data": item.extra_data or {},
+        "created_at": (
+            item.created_at.isoformat()
+            if item.created_at
+            else None
+        ),
+        "updated_at": (
+            item.updated_at.isoformat()
+            if item.updated_at
+            else None
+        ),
+    }
+
+
+def serialize_purchase_order(
+    order: PurchaseOrder,
+    *,
+    include_items: bool = True,
+) -> dict[str, Any]:
+    """
+    Serialize a purchase order for company APIs.
+    """
+    result = {
+        "id": order.id,
+        "order_number": order.order_number,
+        "supplier_reference": (
+            order.supplier_reference
+        ),
+        "order_date": (
+            order.order_date.isoformat()
+            if order.order_date
+            else None
+        ),
+        "expected_date": (
+            order.expected_date.isoformat()
+            if order.expected_date
+            else None
+        ),
+        "status": order.status,
+        "currency_code": order.currency_code,
+        "company": {
+            "id": order.company_id,
+            "name": order.company.name,
+        },
+        "branch": (
+            {
+                "id": order.branch_id,
+                "name": order.branch.name,
+            }
+            if order.branch_id
+            else None
+        ),
+        "supplier": {
+            "id": order.supplier_id,
+            "display_name": (
+                order.supplier.display_name
+            ),
+        },
+        "ordered_quantity": str(
+            order.ordered_quantity
+        ),
+        "received_quantity": str(
+            order.received_quantity
+        ),
+        "billed_quantity": str(
+            order.billed_quantity
+        ),
+        "subtotal_amount": str(
+            order.subtotal_amount
+        ),
+        "discount_amount": str(
+            order.discount_amount
+        ),
+        "taxable_amount": str(
+            order.taxable_amount
+        ),
+        "tax_amount": str(
+            order.tax_amount
+        ),
+        "total_amount": str(
+            order.total_amount
+        ),
+        "notes": order.notes,
+        "extra_data": order.extra_data or {},
+        "approved_at": (
+            order.approved_at.isoformat()
+            if order.approved_at
+            else None
+        ),
+        "cancelled_at": (
+            order.cancelled_at.isoformat()
+            if order.cancelled_at
+            else None
+        ),
+        "cancellation_reason": (
+            order.cancellation_reason
+        ),
+        "allowed_actions": {
+            "update": order.can_be_edited,
+            "approve": order.can_be_approved,
+            "cancel": order.can_be_cancelled,
+            "create_bill": order.status in [
+                PurchaseOrderStatus.APPROVED,
+                PurchaseOrderStatus.PARTIALLY_RECEIVED,
+                PurchaseOrderStatus.RECEIVED,
+            ],
+        },
+        "created_at": (
+            order.created_at.isoformat()
+            if order.created_at
+            else None
+        ),
+        "updated_at": (
+            order.updated_at.isoformat()
+            if order.updated_at
+            else None
+        ),
+    }
+
+    if include_items:
+        result["items"] = [
+            serialize_purchase_order_item(item)
+            for item in (
+                order.items
+                .select_related("item")
+                .order_by("line_number", "id")
+            )
+        ]
+
+    return result
 
 
 # ============================================================

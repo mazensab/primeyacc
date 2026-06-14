@@ -49,6 +49,9 @@ from purchases.models import (
     PurchaseBill,
     PurchaseBillItem,
     PurchaseBillStatus,
+    PurchaseOrder,
+    PurchaseOrderItem,
+    PurchaseOrderStatus,
     PurchaseReceipt,
     PurchaseReceiptItem,
     PurchaseReceiptStatus,
@@ -62,8 +65,12 @@ from purchases.models import (
     SupplierCredit,
 )
 from purchases.services import (
+    approve_purchase_order,
     cancel_purchase_bill,
+    cancel_purchase_order,
     create_purchase_bill,
+    create_purchase_bill_from_order,
+    create_purchase_order,
     generate_purchase_bill_number,
     get_branch_for_company,
     get_purchase_item_for_company,
@@ -71,6 +78,8 @@ from purchases.services import (
     post_purchase_bill,
     post_purchase_bill_to_accounting,
     update_purchase_bill,
+    update_purchase_order,
+    serialize_purchase_order,
     cancel_purchase_receipt,
     create_purchase_receipt,
     generate_purchase_receipt_number,
@@ -4505,6 +4514,793 @@ class PurchaseReceiptsAPITests(PurchasesTestCase):
                 "bill_id": receipt.bill_id,
                 "warehouse_id": self.warehouse.id,
                 "receive_all": True,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            create_response.status_code,
+            403,
+        )
+
+class PurchaseOrdersTests(PurchasesTestCase):
+    """
+    Phase 21.9 purchase order model and service tests.
+    """
+
+    def _create_order(
+        self,
+        *,
+        company=None,
+        user=None,
+        supplier=None,
+        branch=None,
+        item=None,
+        quantity="5.0000",
+        unit_price="100.00",
+    ) -> PurchaseOrder:
+        company = company or self.company
+        user = user or self.user
+        supplier = supplier or self.supplier
+        branch = branch or self.branch
+        item = item or self.item
+
+        return create_purchase_order(
+            company=company,
+            user=user,
+            payload={
+                "supplier_id": supplier.id,
+                "branch_id": branch.id,
+                "order_date": (
+                    timezone.localdate().isoformat()
+                ),
+                "expected_date": (
+                    timezone.localdate().isoformat()
+                ),
+                "supplier_reference": "PO-SUP-001",
+                "items": [
+                    {
+                        "item_id": item.id,
+                        "quantity": quantity,
+                        "unit_price": unit_price,
+                    }
+                ],
+                "notes": "Purchase order test",
+            },
+        )
+
+    def test_create_purchase_order_calculates_totals(
+        self,
+    ):
+        order = self._create_order(
+            quantity="2.0000",
+            unit_price="100.00",
+        )
+
+        order.refresh_from_db()
+        order_item = order.items.get()
+
+        self.assertEqual(
+            order.status,
+            PurchaseOrderStatus.DRAFT,
+        )
+        self.assertEqual(
+            order.company,
+            self.company,
+        )
+        self.assertEqual(
+            order.supplier,
+            self.supplier,
+        )
+        self.assertEqual(
+            order.items.count(),
+            1,
+        )
+        self.assertEqual(
+            order_item.quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            order_item.subtotal_amount,
+            Decimal("200.00"),
+        )
+        self.assertEqual(
+            order_item.tax_amount,
+            Decimal("30.00"),
+        )
+        self.assertEqual(
+            order_item.total_amount,
+            Decimal("230.00"),
+        )
+        self.assertEqual(
+            order.total_amount,
+            Decimal("230.00"),
+        )
+
+    def test_create_purchase_order_rejects_other_company_item(
+        self,
+    ):
+        with self.assertRaises(ValidationError):
+            self._create_order(
+                item=self.other_item,
+            )
+
+    def test_create_purchase_order_rejects_other_company_supplier(
+        self,
+    ):
+        with self.assertRaises(ValidationError):
+            self._create_order(
+                supplier=self.other_supplier,
+            )
+
+    def test_approve_purchase_order(
+        self,
+    ):
+        order = self._create_order()
+
+        order = approve_purchase_order(
+            order=order,
+            user=self.user,
+        )
+
+        order.refresh_from_db()
+
+        self.assertEqual(
+            order.status,
+            PurchaseOrderStatus.APPROVED,
+        )
+        self.assertIsNotNone(
+            order.approved_at,
+        )
+        self.assertEqual(
+            order.approved_by,
+            self.user,
+        )
+
+    def test_update_purchase_order_replaces_items(
+        self,
+    ):
+        order = self._create_order()
+
+        order = update_purchase_order(
+            order=order,
+            user=self.user,
+            payload={
+                "notes": "Updated purchase order",
+                "items": [
+                    {
+                        "item_id": self.service.id,
+                        "quantity": "1.0000",
+                        "unit_price": "250.00",
+                    }
+                ],
+            },
+        )
+
+        order.refresh_from_db()
+
+        self.assertEqual(
+            order.notes,
+            "Updated purchase order",
+        )
+        self.assertEqual(
+            order.items.count(),
+            1,
+        )
+        self.assertEqual(
+            order.items.get().item,
+            self.service,
+        )
+        self.assertEqual(
+            order.total_amount,
+            Decimal("287.50"),
+        )
+
+    def test_update_purchase_order_rejects_approved_order(
+        self,
+    ):
+        order = self._create_order()
+
+        order = approve_purchase_order(
+            order=order,
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            update_purchase_order(
+                order=order,
+                user=self.user,
+                payload={
+                    "notes": "Should fail",
+                },
+            )
+
+    def test_cancel_purchase_order(
+        self,
+    ):
+        order = self._create_order()
+
+        order = cancel_purchase_order(
+            order=order,
+            reason="Supplier unavailable",
+            user=self.user,
+        )
+
+        order.refresh_from_db()
+
+        self.assertEqual(
+            order.status,
+            PurchaseOrderStatus.CANCELLED,
+        )
+        self.assertEqual(
+            order.cancellation_reason,
+            "Supplier unavailable",
+        )
+        self.assertEqual(
+            order.cancelled_by,
+            self.user,
+        )
+
+    def test_create_full_purchase_bill_from_order(
+        self,
+    ):
+        order = self._create_order(
+            quantity="5.0000",
+        )
+
+        order = approve_purchase_order(
+            order=order,
+            user=self.user,
+        )
+
+        bill = create_purchase_bill_from_order(
+            company=self.company,
+            order=order,
+            user=self.user,
+            payload={
+                "bill_date": (
+                    timezone.localdate().isoformat()
+                ),
+                "supplier_bill_number": "SUP-BILL-001",
+            },
+        )
+
+        bill.refresh_from_db()
+        bill_item = bill.items.get()
+        order_item = order.items.get()
+
+        self.assertEqual(
+            bill.purchase_order,
+            order,
+        )
+        self.assertEqual(
+            bill_item.purchase_order_item,
+            order_item,
+        )
+        self.assertEqual(
+            bill_item.quantity,
+            Decimal("5.0000"),
+        )
+        self.assertEqual(
+            bill.total_amount,
+            order.total_amount,
+        )
+
+    def test_create_partial_purchase_bill_from_order(
+        self,
+    ):
+        order = self._create_order(
+            quantity="5.0000",
+        )
+
+        order = approve_purchase_order(
+            order=order,
+            user=self.user,
+        )
+
+        order_item = order.items.get()
+
+        bill = create_purchase_bill_from_order(
+            company=self.company,
+            order=order,
+            user=self.user,
+            payload={
+                "items": [
+                    {
+                        "purchase_order_item_id": (
+                            order_item.id
+                        ),
+                        "quantity": "2.0000",
+                    }
+                ],
+            },
+        )
+
+        self.assertEqual(
+            bill.items.get().quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            bill.items.get().purchase_order_item,
+            order_item,
+        )
+
+    def test_create_bill_from_order_rejects_unapproved_order(
+        self,
+    ):
+        order = self._create_order()
+
+        with self.assertRaises(ValidationError):
+            create_purchase_bill_from_order(
+                company=self.company,
+                order=order,
+                user=self.user,
+                payload={},
+            )
+
+    def test_create_bill_from_order_rejects_other_company(
+        self,
+    ):
+        order = self._create_order(
+            company=self.other_company,
+            user=self.other_user,
+            supplier=self.other_supplier,
+            branch=self.other_branch,
+            item=self.other_item,
+        )
+
+        order = approve_purchase_order(
+            order=order,
+            user=self.other_user,
+        )
+
+        with self.assertRaises(ValidationError):
+            create_purchase_bill_from_order(
+                company=self.company,
+                order=order,
+                user=self.user,
+                payload={},
+            )
+
+    def test_serialize_purchase_order(
+        self,
+    ):
+        order = self._create_order()
+
+        data = serialize_purchase_order(
+            order,
+            include_items=True,
+        )
+
+        self.assertEqual(
+            data["id"],
+            order.id,
+        )
+        self.assertEqual(
+            data["status"],
+            PurchaseOrderStatus.DRAFT,
+        )
+        self.assertEqual(
+            data["supplier"]["id"],
+            self.supplier.id,
+        )
+        self.assertEqual(
+            len(data["items"]),
+            1,
+        )
+
+    def test_purchase_order_permissions(
+        self,
+    ):
+        admin_user = User.objects.create_user(
+            username="purchase_order_admin",
+            email="purchase_order_admin@example.com",
+            password="StrongPass123!",
+        )
+
+        admin_membership = (
+            CompanyMembership.objects.create(
+                user=admin_user,
+                company=self.company,
+                role=CompanyRole.ADMIN,
+                status=MembershipStatus.ACTIVE,
+                is_primary=True,
+                created_by=self.user,
+            )
+        )
+
+        admin_permissions = (
+            admin_membership.company_permissions
+        )
+
+        expected_permissions = [
+            "company.purchases.orders.view",
+            "company.purchases.orders.create",
+            "company.purchases.orders.update",
+            "company.purchases.orders.approve",
+            "company.purchases.orders.cancel",
+            "company.purchases.orders.create_bill",
+        ]
+
+        for permission in expected_permissions:
+            self.assertIn(
+                permission,
+                admin_permissions,
+            )
+
+        viewer_permissions = (
+            self.viewer_membership.company_permissions
+        )
+
+        self.assertIn(
+            "company.purchases.orders.view",
+            viewer_permissions,
+        )
+        self.assertNotIn(
+            "company.purchases.orders.create",
+            viewer_permissions,
+        )
+        self.assertNotIn(
+            "company.purchases.orders.approve",
+            viewer_permissions,
+        )
+        self.assertNotIn(
+            "company.purchases.orders.create_bill",
+            viewer_permissions,
+        )
+
+
+class PurchaseOrdersAPITests(PurchasesTestCase):
+    """
+    Phase 21.9 company purchase order API tests.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.user)
+
+    def _create_order(
+        self,
+        *,
+        company=None,
+        user=None,
+        supplier=None,
+        branch=None,
+        item=None,
+        quantity="5.0000",
+    ) -> PurchaseOrder:
+        company = company or self.company
+        user = user or self.user
+        supplier = supplier or self.supplier
+        branch = branch or self.branch
+        item = item or self.item
+
+        return create_purchase_order(
+            company=company,
+            user=user,
+            payload={
+                "supplier_id": supplier.id,
+                "branch_id": branch.id,
+                "items": [
+                    {
+                        "item_id": item.id,
+                        "quantity": quantity,
+                        "unit_price": "100.00",
+                    }
+                ],
+            },
+        )
+
+    def test_purchase_order_create_endpoint(
+        self,
+    ):
+        response = self.client.post(
+            "/api/company/purchases/orders/create/",
+            data={
+                "supplier_id": self.supplier.id,
+                "branch_id": self.branch.id,
+                "items": [
+                    {
+                        "item_id": self.item.id,
+                        "quantity": "2.0000",
+                        "unit_price": "100.00",
+                    }
+                ],
+                "notes": "Created through API",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+        )
+
+        payload = response.json()
+
+        self.assertTrue(
+            payload["success"],
+        )
+        self.assertEqual(
+            payload["purchase_order"]["status"],
+            PurchaseOrderStatus.DRAFT,
+        )
+        self.assertEqual(
+            payload["purchase_order"]["total_amount"],
+            "230.00",
+        )
+        self.assertEqual(
+            len(payload["purchase_order"]["items"]),
+            1,
+        )
+
+    def test_purchase_orders_list_is_company_scoped(
+        self,
+    ):
+        order = self._create_order()
+
+        self._create_order(
+            company=self.other_company,
+            user=self.other_user,
+            supplier=self.other_supplier,
+            branch=self.other_branch,
+            item=self.other_item,
+        )
+
+        response = self.client.get(
+            "/api/company/purchases/orders/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(
+            payload["count"],
+            1,
+        )
+        self.assertEqual(
+            payload["results"][0]["id"],
+            order.id,
+        )
+
+    def test_purchase_order_detail_endpoint(
+        self,
+    ):
+        order = self._create_order()
+
+        response = self.client.get(
+            (
+                "/api/company/purchases/orders/"
+                f"{order.id}/"
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+        self.assertEqual(
+            response.json()["purchase_order"]["id"],
+            order.id,
+        )
+
+    def test_purchase_order_detail_blocks_cross_company(
+        self,
+    ):
+        order = self._create_order(
+            company=self.other_company,
+            user=self.other_user,
+            supplier=self.other_supplier,
+            branch=self.other_branch,
+            item=self.other_item,
+        )
+
+        response = self.client.get(
+            (
+                "/api/company/purchases/orders/"
+                f"{order.id}/"
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+    def test_purchase_order_update_endpoint(
+        self,
+    ):
+        order = self._create_order()
+
+        response = self.client.patch(
+            (
+                "/api/company/purchases/orders/"
+                f"{order.id}/update/"
+            ),
+            data={
+                "notes": "Updated through API",
+                "items": [
+                    {
+                        "item_id": self.service.id,
+                        "quantity": "1.0000",
+                        "unit_price": "250.00",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(
+            payload["purchase_order"]["notes"],
+            "Updated through API",
+        )
+        self.assertEqual(
+            payload["purchase_order"]["total_amount"],
+            "287.50",
+        )
+
+    def test_purchase_order_approve_endpoint(
+        self,
+    ):
+        order = self._create_order()
+
+        response = self.client.post(
+            (
+                "/api/company/purchases/orders/"
+                f"{order.id}/approve/"
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        order.refresh_from_db()
+
+        self.assertEqual(
+            order.status,
+            PurchaseOrderStatus.APPROVED,
+        )
+        self.assertEqual(
+            order.approved_by,
+            self.user,
+        )
+
+    def test_purchase_order_cancel_endpoint(
+        self,
+    ):
+        order = self._create_order()
+
+        response = self.client.post(
+            (
+                "/api/company/purchases/orders/"
+                f"{order.id}/cancel/"
+            ),
+            data={
+                "reason": "Cancelled through API",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        order.refresh_from_db()
+
+        self.assertEqual(
+            order.status,
+            PurchaseOrderStatus.CANCELLED,
+        )
+        self.assertEqual(
+            order.cancellation_reason,
+            "Cancelled through API",
+        )
+
+    def test_purchase_order_create_bill_endpoint(
+        self,
+    ):
+        order = self._create_order(
+            quantity="3.0000",
+        )
+
+        order = approve_purchase_order(
+            order=order,
+            user=self.user,
+        )
+
+        response = self.client.post(
+            (
+                "/api/company/purchases/orders/"
+                f"{order.id}/create-bill/"
+            ),
+            data={
+                "supplier_bill_number": "API-SUP-001",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+        )
+
+        payload = response.json()
+
+        self.assertTrue(
+            payload["success"],
+        )
+        self.assertEqual(
+            payload["bill"]["purchase_order_id"],
+            order.id,
+        )
+        self.assertEqual(
+            len(payload["bill"]["items"]),
+            1,
+        )
+
+        bill = PurchaseBill.objects.get(
+            id=payload["bill"]["id"],
+        )
+
+        self.assertEqual(
+            bill.purchase_order,
+            order,
+        )
+
+    def test_viewer_can_view_but_cannot_create_order(
+        self,
+    ):
+        order = self._create_order()
+
+        self.client.force_login(
+            self.viewer_user,
+        )
+
+        list_response = self.client.get(
+            "/api/company/purchases/orders/"
+        )
+
+        self.assertEqual(
+            list_response.status_code,
+            200,
+        )
+
+        detail_response = self.client.get(
+            (
+                "/api/company/purchases/orders/"
+                f"{order.id}/"
+            )
+        )
+
+        self.assertEqual(
+            detail_response.status_code,
+            200,
+        )
+
+        create_response = self.client.post(
+            "/api/company/purchases/orders/create/",
+            data={
+                "supplier_id": self.supplier.id,
+                "items": [
+                    {
+                        "item_id": self.item.id,
+                        "quantity": "1.0000",
+                    }
+                ],
             },
             content_type="application/json",
         )
