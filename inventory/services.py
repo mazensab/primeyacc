@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # 📂 inventory/services.py
 # 🧠 PrimeyAcc | Company Inventory Services V1.1
 # ------------------------------------------------------------
@@ -622,11 +622,16 @@ def create_stock_movement(
     extra_data: dict[str, Any] | None = None,
     user=None,
     post_immediately: bool = True,
+    post_accounting: bool = True,
 ) -> StockMovement:
     """
     Create stock movement.
 
     If post_immediately=True, movement is posted and stock balance is updated.
+
+    If post_accounting=False, the stock ledger is posted without creating
+    a separate accounting journal entry. This is used when a parent
+    operational document creates one unified accounting entry.
     """
     validate_warehouse_for_company(
         company=company,
@@ -685,6 +690,7 @@ def create_stock_movement(
             company=company,
             movement=movement,
             user=user,
+            post_accounting=post_accounting,
         )
 
     return movement
@@ -1095,9 +1101,14 @@ def post_stock_movement(
     company: Company,
     movement: StockMovement,
     user=None,
+    post_accounting: bool = True,
 ) -> StockMovement:
     """
-    Post draft movement, update StockItem balance, and create accounting entry when applicable.
+    Post draft movement and update StockItem balance.
+
+    When post_accounting=True, create the normal inventory accounting
+    entry when applicable. Parent document workflows can set it to False
+    when they create one unified accounting entry.
     """
     if movement.company_id != company.id:
         raise ValidationError("Selected stock movement does not belong to this company.")
@@ -1180,18 +1191,19 @@ def post_stock_movement(
         ]
     )
 
-    try:
-        post_stock_movement_to_accounting(
-            movement,
-            actor=user,
-            auto_post=True,
-        )
-    except AccountingPostingError as exc:
-        raise ValidationError(
-            {
-                "accounting": str(exc),
-            }
-        ) from exc
+    if post_accounting:
+        try:
+            post_stock_movement_to_accounting(
+                movement,
+                actor=user,
+                auto_post=True,
+            )
+        except AccountingPostingError as exc:
+            raise ValidationError(
+                {
+                    "accounting": str(exc),
+                }
+            ) from exc
 
     return movement
 
@@ -1277,11 +1289,14 @@ def issue_stock(
     warehouse: Warehouse,
     item: CatalogItem,
     quantity: Decimal | int | float | str,
+    unit_cost: Decimal | int | float | str | None = None,
     reference_type: str = "",
     reference_id: int | None = None,
     reference_number: str = "",
     notes: str = "",
+    extra_data: dict[str, Any] | None = None,
     user=None,
+    post_accounting: bool = True,
 ) -> StockMovement:
     """
     Issue stock from warehouse.
@@ -1292,13 +1307,15 @@ def issue_stock(
         item=item,
         movement_type=StockMovementType.OUT,
         quantity=quantity,
-        unit_cost=None,
+        unit_cost=unit_cost,
         reference_type=reference_type,
         reference_id=reference_id,
         reference_number=reference_number,
         notes=notes,
+        extra_data=extra_data,
         user=user,
         post_immediately=True,
+        post_accounting=post_accounting,
     )
 
 

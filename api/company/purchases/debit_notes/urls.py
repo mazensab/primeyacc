@@ -17,6 +17,9 @@ from .issue import (
 from .list import (
     company_supplier_debit_notes_list,
 )
+from .post import (
+    company_supplier_debit_note_post,
+)
 from .update import (
     company_supplier_debit_note_update,
 )
@@ -47,6 +50,11 @@ urlpatterns = [
         "<int:debit_note_id>/issue/",
         company_supplier_debit_note_issue,
         name="company-supplier-debit-note-issue",
+    ),
+    path(
+        "<int:debit_note_id>/post/",
+        company_supplier_debit_note_post,
+        name="company-supplier-debit-note-post",
     ),
     path(
         "<int:debit_note_id>/cancel/",

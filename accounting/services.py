@@ -286,6 +286,31 @@ DEFAULT_ROUTING_RULES: list[RoutingSeedRow] = [
     RoutingSeedRow(AccountingRoutingSource.PURCHASE_BILL, AccountingAccountPurpose.INPUT_VAT, "210502", "مدين ضريبة المدخلات"),
     RoutingSeedRow(AccountingRoutingSource.PURCHASE_BILL, AccountingAccountPurpose.ACCOUNTS_PAYABLE, "2101", "دائن الموردين"),
 
+
+    RoutingSeedRow(
+        AccountingRoutingSource.SUPPLIER_DEBIT_NOTE,
+        AccountingAccountPurpose.ACCOUNTS_PAYABLE,
+        "2101",
+        "???? ???????? ?? ????? ?????",
+    ),
+    RoutingSeedRow(
+        AccountingRoutingSource.SUPPLIER_DEBIT_NOTE,
+        AccountingAccountPurpose.INVENTORY,
+        "1108",
+        "???? ??????? ??????? ??????",
+    ),
+    RoutingSeedRow(
+        AccountingRoutingSource.SUPPLIER_DEBIT_NOTE,
+        ACCOUNT_PURPOSE_EXPENSE,
+        "5215",
+        "???? ????? ????????? ???????",
+    ),
+    RoutingSeedRow(
+        AccountingRoutingSource.SUPPLIER_DEBIT_NOTE,
+        AccountingAccountPurpose.INPUT_VAT,
+        "210502",
+        "???? ????? ???????? ????????",
+    ),
     RoutingSeedRow(AccountingRoutingSource.INVENTORY_RECEIPT, AccountingAccountPurpose.INVENTORY, "1108", "مدين المخزون"),
     RoutingSeedRow(AccountingRoutingSource.INVENTORY_ISSUE, ACCOUNT_PURPOSE_COST_OF_SALES, "5101", "مدين تكلفة البضاعة المباعة"),
     RoutingSeedRow(AccountingRoutingSource.INVENTORY_ISSUE, AccountingAccountPurpose.INVENTORY, "1108", "دائن المخزون"),
@@ -783,6 +808,10 @@ AUTO_SOURCE_TYPE_SALES_INVOICE = "sales_invoice"
 
 
 AUTO_SOURCE_TYPE_SALES_CREDIT_NOTE = "sales_credit_note"
+
+AUTO_SOURCE_TYPE_SUPPLIER_DEBIT_NOTE = (
+    "supplier_debit_note"
+)
 @dataclass(slots=True)
 class EntryLinePayload:
     account: Account
@@ -1780,6 +1809,588 @@ def post_sales_credit_note_to_accounting(
         "tax_amount": str(tax_amount),
         "revenue_amount": str(revenue_amount),
         "auto_posted_by_phase": "phase_21_5_4",
+    }
+
+    update_fields = [
+        "metadata",
+        "updated_at",
+    ]
+
+    if (
+        actor is not None
+        and getattr(
+            actor,
+            "is_authenticated",
+            False,
+        )
+    ):
+        entry.updated_by = actor
+        update_fields.append(
+            "updated_by"
+        )
+
+    entry.save(
+        update_fields=update_fields
+    )
+
+    if auto_post:
+        entry = post_journal_entry(
+            entry,
+            actor=actor,
+        )
+
+    return entry
+
+
+
+def find_supplier_debit_note_journal_entry(
+    debit_note: Any,
+) -> JournalEntry | None:
+    """
+    Find the automatic accounting entry linked to
+    a supplier debit note.
+    """
+    if not debit_note:
+        return None
+
+    company = getattr(
+        debit_note,
+        "company",
+        None,
+    )
+
+    if not company:
+        return None
+
+    debit_note_number = _clean_text(
+        getattr(
+            debit_note,
+            "debit_note_number",
+            "",
+        )
+    )
+
+    return _get_existing_auto_entry(
+        company=company,
+        source_type=(
+            AUTO_SOURCE_TYPE_SUPPLIER_DEBIT_NOTE
+        ),
+        source_id=getattr(
+            debit_note,
+            "pk",
+            None,
+        ),
+        source_number=debit_note_number,
+    )
+
+
+def get_supplier_debit_note_posting_buckets(
+    debit_note: Any,
+) -> dict[str, Decimal]:
+    """
+    Split supplier debit note net amount between
+    inventory and purchase expense.
+    """
+    inventory_amount = MONEY_ZERO
+    expense_amount = MONEY_ZERO
+
+    items = debit_note.items.select_related(
+        "item"
+    ).order_by(
+        "line_number",
+        "id",
+    )
+
+    for line in items:
+        line_amount = _money(
+            getattr(
+                line,
+                "taxable_amount",
+                MONEY_ZERO,
+            )
+        )
+
+        item = getattr(
+            line,
+            "item",
+            None,
+        )
+
+        if (
+            item
+            and bool(
+                getattr(
+                    item,
+                    "track_inventory",
+                    False,
+                )
+            )
+        ):
+            inventory_amount += line_amount
+        else:
+            expense_amount += line_amount
+
+    return {
+        "inventory_amount": _money(
+            inventory_amount
+        ),
+        "expense_amount": _money(
+            expense_amount
+        ),
+    }
+
+
+@transaction.atomic
+def post_supplier_debit_note_to_accounting(
+    debit_note: Any,
+    *,
+    actor: Any = None,
+    auto_post: bool = True,
+) -> JournalEntry:
+    """
+    Create the accounting entry for an issued
+    supplier debit note.
+
+    Treatment:
+    - Debit accounts payable.
+    - Credit inventory for returned products.
+    - Credit purchase expense for service/non-stock lines.
+    - Credit input VAT when applicable.
+    """
+    if not debit_note:
+        raise AccountingPostingError(
+            "????? ??? ?????? ????? ??????? ????????."
+        )
+
+    company = getattr(
+        debit_note,
+        "company",
+        None,
+    )
+    _validate_company(company)
+
+    if (
+        getattr(debit_note, "company_id", None)
+        != getattr(company, "pk", None)
+    ):
+        raise AccountingPostingError(
+            "????? ??? ?????? ?? ???? ?????? ???????."
+        )
+
+    status = _clean_text(
+        getattr(
+            debit_note,
+            "status",
+            "",
+        )
+    ).upper()
+
+    if status not in {
+        "ISSUED",
+        "POSTED",
+    }:
+        raise AccountingPostingError(
+            "?? ???? ????? ????? ??? ???? ??? ????."
+        )
+
+    debit_note_number = (
+        _clean_text(
+            getattr(
+                debit_note,
+                "debit_note_number",
+                "",
+            )
+        )
+        or (
+            "SUPPLIER-DEBIT-NOTE-"
+            f"{debit_note.pk}"
+        )
+    )
+
+    existing = _get_existing_auto_entry(
+        company=company,
+        source_type=(
+            AUTO_SOURCE_TYPE_SUPPLIER_DEBIT_NOTE
+        ),
+        source_id=debit_note.pk,
+        source_number=debit_note_number,
+    )
+
+    if existing:
+        if (
+            auto_post
+            and existing.status
+            == JournalEntryStatus.DRAFT
+        ):
+            return post_journal_entry(
+                existing,
+                actor=actor,
+            )
+
+        return existing
+
+    total_amount = _money(
+        getattr(
+            debit_note,
+            "total_amount",
+            MONEY_ZERO,
+        )
+    )
+    tax_amount = _money(
+        getattr(
+            debit_note,
+            "tax_amount",
+            MONEY_ZERO,
+        )
+    )
+
+    if total_amount <= MONEY_ZERO:
+        raise AccountingPostingError(
+            "?? ???? ????? ????? ??? ???? ??????? ????."
+        )
+
+    if tax_amount < MONEY_ZERO:
+        raise AccountingPostingError(
+            "????? ????? ??? ?????? ?? ???? ?? ???? ?????."
+        )
+
+    seed_company_chart_of_accounts(
+        company
+    )
+
+    payable_account = get_account_by_purpose(
+        company,
+        AccountingAccountPurpose.ACCOUNTS_PAYABLE,
+        source=(
+            AccountingRoutingSource
+            .SUPPLIER_DEBIT_NOTE
+        ),
+        required=True,
+    )
+
+    inventory_account = get_account_by_purpose(
+        company,
+        AccountingAccountPurpose.INVENTORY,
+        source=(
+            AccountingRoutingSource
+            .SUPPLIER_DEBIT_NOTE
+        ),
+        required=False,
+    )
+
+    expense_account = get_account_by_purpose(
+        company,
+        ACCOUNT_PURPOSE_EXPENSE,
+        source=(
+            AccountingRoutingSource
+            .SUPPLIER_DEBIT_NOTE
+        ),
+        required=False,
+    )
+
+    input_vat_account = None
+    default_tax_rate = None
+
+    if tax_amount > MONEY_ZERO:
+        input_vat_account = get_account_by_purpose(
+            company,
+            AccountingAccountPurpose.INPUT_VAT,
+            source=(
+                AccountingRoutingSource
+                .SUPPLIER_DEBIT_NOTE
+            ),
+            required=True,
+        )
+        default_tax_rate = get_default_tax_rate(
+            company
+        )
+
+    buckets = (
+        get_supplier_debit_note_posting_buckets(
+            debit_note
+        )
+    )
+    inventory_amount = buckets[
+        "inventory_amount"
+    ]
+    expense_amount = buckets[
+        "expense_amount"
+    ]
+
+    base_amount = _money(
+        total_amount - tax_amount
+    )
+
+    if (
+        inventory_amount
+        + expense_amount
+        != base_amount
+    ):
+        raise AccountingPostingError(
+            "?????? ????? ??? ?????? ?? ????? "
+            "???????? ??? ???????."
+        )
+
+    if (
+        inventory_amount > MONEY_ZERO
+        and not inventory_account
+    ):
+        raise AccountingPostingError(
+            "?? ???? ???? ????? ???? ?????? "
+            "????? ??? ??????."
+        )
+
+    if (
+        expense_amount > MONEY_ZERO
+        and not expense_account
+    ):
+        raise AccountingPostingError(
+            "?? ???? ???? ????? ??????? ???? "
+            "?????? ????? ??? ??????."
+        )
+
+    currency = _clean_currency(
+        getattr(
+            debit_note,
+            "currency_code",
+            "",
+        )
+        or "SAR"
+    )
+    entry_date = (
+        getattr(
+            debit_note,
+            "debit_note_date",
+            None,
+        )
+        or timezone.localdate()
+    )
+    supplier_id = _clean_text(
+        getattr(
+            debit_note,
+            "supplier_id",
+            "",
+        )
+        or ""
+    )
+
+    entry = create_journal_entry_header(
+        company=company,
+        entry_date=entry_date,
+        entry_number=generate_journal_entry_number(
+            company,
+            prefix="SDN",
+        ),
+        posting_source=(
+            PostingSource.SUPPLIER_DEBIT_NOTE
+        ),
+        reference=debit_note_number,
+        external_reference=(
+            _clean_text(
+                getattr(
+                    debit_note,
+                    "supplier_reference",
+                    "",
+                )
+            )
+            or debit_note_number
+        ),
+        description=(
+            "??? ?????? ?????? ??? ???? "
+            f"{debit_note_number}"
+        ),
+        notes=(
+            "?? ????? ??? ????? ???????? ??? "
+            "????? ????? ??? ??????."
+        ),
+        currency=currency,
+        source_type=(
+            AUTO_SOURCE_TYPE_SUPPLIER_DEBIT_NOTE
+        ),
+        source_id=_source_id(
+            debit_note.pk
+        ),
+        source_number=debit_note_number,
+        is_auto_posted=True,
+        actor=actor,
+    )
+
+    lines: list[EntryLinePayload] = [
+        EntryLinePayload(
+            account=payable_account,
+            description=(
+                "????? ??? ?????? ?? ????? ????? "
+                f"{debit_note_number}"
+            ),
+            debit_amount=total_amount,
+            currency=currency,
+            party_type=(
+                "supplier"
+                if supplier_id
+                else ""
+            ),
+            party_id=supplier_id,
+            source_line_id=(
+                "supplier-debit-note-payable"
+            ),
+            sort_order=1,
+            metadata={
+                "source": (
+                    AUTO_SOURCE_TYPE_SUPPLIER_DEBIT_NOTE
+                ),
+                "debit_note_id": debit_note.pk,
+                "bill_id": getattr(
+                    debit_note,
+                    "bill_id",
+                    None,
+                ),
+                "purchase_return_id": getattr(
+                    debit_note,
+                    "purchase_return_id",
+                    None,
+                ),
+                "bucket": "payable",
+            },
+        ),
+    ]
+
+    sort_order = 2
+
+    if inventory_amount > MONEY_ZERO:
+        lines.append(
+            EntryLinePayload(
+                account=inventory_account,
+                description=(
+                    "????? ????? ?????? ?? ????? "
+                    f"{debit_note_number}"
+                ),
+                credit_amount=inventory_amount,
+                currency=currency,
+                party_type=(
+                    "supplier"
+                    if supplier_id
+                    else ""
+                ),
+                party_id=supplier_id,
+                source_line_id=(
+                    "supplier-debit-note-inventory"
+                ),
+                sort_order=sort_order,
+                metadata={
+                    "source": (
+                        AUTO_SOURCE_TYPE_SUPPLIER_DEBIT_NOTE
+                    ),
+                    "debit_note_id": debit_note.pk,
+                    "bucket": "inventory",
+                },
+            )
+        )
+        sort_order += 1
+
+    if expense_amount > MONEY_ZERO:
+        lines.append(
+            EntryLinePayload(
+                account=expense_account,
+                description=(
+                    "??? ????? ??????? ?? ????? "
+                    f"{debit_note_number}"
+                ),
+                credit_amount=expense_amount,
+                currency=currency,
+                party_type=(
+                    "supplier"
+                    if supplier_id
+                    else ""
+                ),
+                party_id=supplier_id,
+                source_line_id=(
+                    "supplier-debit-note-expense"
+                ),
+                sort_order=sort_order,
+                metadata={
+                    "source": (
+                        AUTO_SOURCE_TYPE_SUPPLIER_DEBIT_NOTE
+                    ),
+                    "debit_note_id": debit_note.pk,
+                    "bucket": "expense",
+                },
+            )
+        )
+        sort_order += 1
+
+    if (
+        tax_amount > MONEY_ZERO
+        and input_vat_account
+    ):
+        lines.append(
+            EntryLinePayload(
+                account=input_vat_account,
+                description=(
+                    "??? ????? ?????? ?? ????? "
+                    f"{debit_note_number}"
+                ),
+                credit_amount=tax_amount,
+                currency=currency,
+                tax_rate=default_tax_rate,
+                tax_amount=tax_amount,
+                party_type=(
+                    "supplier"
+                    if supplier_id
+                    else ""
+                ),
+                party_id=supplier_id,
+                source_line_id=(
+                    "supplier-debit-note-input-vat"
+                ),
+                sort_order=sort_order,
+                metadata={
+                    "source": (
+                        AUTO_SOURCE_TYPE_SUPPLIER_DEBIT_NOTE
+                    ),
+                    "debit_note_id": debit_note.pk,
+                    "bucket": "input_vat",
+                },
+            )
+        )
+
+    entry = replace_journal_entry_lines(
+        entry,
+        lines,
+        actor=actor,
+    )
+
+    entry.metadata = {
+        **(entry.metadata or {}),
+        "source": (
+            AUTO_SOURCE_TYPE_SUPPLIER_DEBIT_NOTE
+        ),
+        "source_app": "purchases",
+        "debit_note_id": debit_note.pk,
+        "debit_note_number": (
+            debit_note_number
+        ),
+        "bill_id": getattr(
+            debit_note,
+            "bill_id",
+            None,
+        ),
+        "purchase_return_id": getattr(
+            debit_note,
+            "purchase_return_id",
+            None,
+        ),
+        "supplier_id": supplier_id,
+        "total_amount": str(total_amount),
+        "tax_amount": str(tax_amount),
+        "inventory_amount": str(
+            inventory_amount
+        ),
+        "expense_amount": str(
+            expense_amount
+        ),
+        "auto_posted_by_phase": (
+            "phase_21_7_c"
+        ),
     }
 
     update_fields = [

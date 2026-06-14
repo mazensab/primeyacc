@@ -144,6 +144,7 @@ class PostingSource(models.TextChoices):
     SALES_PAYMENT = "SALES_PAYMENT", "تحصيل مبيعات"
 
     PURCHASE_BILL = "PURCHASE_BILL", "فاتورة مشتريات"
+    SUPPLIER_DEBIT_NOTE = "SUPPLIER_DEBIT_NOTE", "????? ??? ????"
     SUPPLIER_PAYMENT = "SUPPLIER_PAYMENT", "سداد مورد"
 
     INVENTORY_RECEIPT = "INVENTORY_RECEIPT", "استلام مخزون"
@@ -168,6 +169,7 @@ class AccountingRoutingSource(models.TextChoices):
     SALES_PAYMENT = "SALES_PAYMENT", "تحصيل مبيعات"
 
     PURCHASE_BILL = "PURCHASE_BILL", "فاتورة مشتريات"
+    SUPPLIER_DEBIT_NOTE = "SUPPLIER_DEBIT_NOTE", "????? ??? ????"
     SUPPLIER_PAYMENT = "SUPPLIER_PAYMENT", "سداد مورد"
 
     INVENTORY_RECEIPT = "INVENTORY_RECEIPT", "استلام مخزون"

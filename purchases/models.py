@@ -225,6 +225,18 @@ class PurchaseBill(models.Model):
         help_text="Updated by treasury supplier payment allocation services.",
     )
 
+    debit_note_applied_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Debit note applied amount",
+        help_text=(
+            "Total posted supplier debit note amount "
+            "applied against this purchase bill."
+        ),
+    )
+
     balance_due = models.DecimalField(
         max_digits=14,
         decimal_places=2,
@@ -394,6 +406,9 @@ class PurchaseBill(models.Model):
         self.tax_amount = quantize_money(self.tax_amount)
         self.total_amount = quantize_money(self.total_amount)
         self.paid_amount = quantize_money(self.paid_amount)
+        self.debit_note_applied_amount = quantize_money(
+            self.debit_note_applied_amount
+        )
         self.balance_due = quantize_money(self.balance_due)
 
         if not self.bill_number:
@@ -439,6 +454,20 @@ class PurchaseBill(models.Model):
                 {"paid_amount": "Paid amount cannot be greater than bill total."}
             )
 
+        allocated_amount = quantize_money(
+            self.paid_amount
+            + self.debit_note_applied_amount
+        )
+
+        if allocated_amount > self.total_amount:
+            raise ValidationError(
+                {
+                    "debit_note_applied_amount":
+                        "Payments and applied debit notes "
+                        "cannot exceed bill total."
+                }
+            )
+
         if self.due_date and self.bill_date and self.due_date < self.bill_date:
             raise ValidationError({"due_date": "Due date cannot be before bill date."})
 
@@ -453,18 +482,25 @@ class PurchaseBill(models.Model):
         self.total_amount = quantize_money(self.total_amount)
         self.paid_amount = quantize_money(self.paid_amount)
 
-        balance = quantize_money(self.total_amount - self.paid_amount)
+        balance = quantize_money(
+            self.total_amount
+            - self.paid_amount
+            - self.debit_note_applied_amount
+        )
         if balance < MONEY_ZERO:
             balance = MONEY_ZERO
 
         self.balance_due = balance
 
-        if self.paid_amount <= MONEY_ZERO:
-            self.payment_status = PurchaseBillPaymentStatus.UNPAID
-        elif self.paid_amount < self.total_amount:
-            self.payment_status = PurchaseBillPaymentStatus.PARTIAL
-        else:
+        if self.balance_due <= MONEY_ZERO:
             self.payment_status = PurchaseBillPaymentStatus.PAID
+        elif (
+            self.paid_amount <= MONEY_ZERO
+            and self.debit_note_applied_amount <= MONEY_ZERO
+        ):
+            self.payment_status = PurchaseBillPaymentStatus.UNPAID
+        else:
+            self.payment_status = PurchaseBillPaymentStatus.PARTIAL
 
     def apply_payment_allocation(
         self,
@@ -506,6 +542,7 @@ class PurchaseBill(models.Model):
         if save:
             update_fields = [
                 "paid_amount",
+                "debit_note_applied_amount",
                 "balance_due",
                 "payment_status",
                 "updated_by",
@@ -548,6 +585,126 @@ class PurchaseBill(models.Model):
         if save:
             update_fields = [
                 "paid_amount",
+                "debit_note_applied_amount",
+                "balance_due",
+                "payment_status",
+                "updated_by",
+                "updated_at",
+            ]
+
+            if not user:
+                update_fields.remove("updated_by")
+
+            self.save(update_fields=update_fields)
+
+    def apply_debit_note_amount(
+        self,
+        amount: Decimal | int | float | str,
+        *,
+        save: bool = True,
+        user=None,
+    ) -> None:
+        """
+        Apply a posted supplier debit note amount to this bill.
+        """
+        applied_amount = quantize_money(amount)
+
+        if applied_amount <= MONEY_ZERO:
+            raise ValidationError(
+                {
+                    "amount":
+                        "Debit note applied amount must be "
+                        "greater than zero."
+                }
+            )
+
+        if self.status != PurchaseBillStatus.POSTED:
+            raise ValidationError(
+                {
+                    "status":
+                        "Debit notes can only be applied "
+                        "to posted purchase bills."
+                }
+            )
+
+        if applied_amount > self.balance_due:
+            raise ValidationError(
+                {
+                    "amount":
+                        "Debit note applied amount cannot "
+                        "exceed bill balance due."
+                }
+            )
+
+        self.debit_note_applied_amount = quantize_money(
+            self.debit_note_applied_amount
+            + applied_amount
+        )
+        self.refresh_payment_status()
+
+        if user:
+            self.updated_by = user
+
+        self.full_clean()
+
+        if save:
+            update_fields = [
+                "debit_note_applied_amount",
+                "balance_due",
+                "payment_status",
+                "updated_by",
+                "updated_at",
+            ]
+
+            if not user:
+                update_fields.remove("updated_by")
+
+            self.save(update_fields=update_fields)
+
+    def reverse_debit_note_amount(
+        self,
+        amount: Decimal | int | float | str,
+        *,
+        save: bool = True,
+        user=None,
+    ) -> None:
+        """
+        Reverse a previously applied supplier debit note amount.
+        """
+        reversal_amount = quantize_money(amount)
+
+        if reversal_amount <= MONEY_ZERO:
+            raise ValidationError(
+                {
+                    "amount":
+                        "Debit note reversal amount must be "
+                        "greater than zero."
+                }
+            )
+
+        if reversal_amount > self.debit_note_applied_amount:
+            raise ValidationError(
+                {
+                    "amount":
+                        "Debit note reversal cannot exceed "
+                        "the applied debit note amount."
+                }
+            )
+
+        self.debit_note_applied_amount = quantize_money(
+            self.debit_note_applied_amount
+            - reversal_amount
+        )
+        self.refresh_payment_status()
+
+        if user:
+            self.updated_by = user
+
+        self.full_clean()
+
+        if save:
+            update_fields = [
+                "debit_note_applied_amount",
                 "balance_due",
                 "payment_status",
                 "updated_by",
@@ -638,6 +795,7 @@ class PurchaseBill(models.Model):
                 "tax_amount",
                 "total_amount",
                 "paid_amount",
+                "debit_note_applied_amount",
                 "balance_due",
                 "payment_status",
                 "updated_at",
@@ -1554,6 +1712,19 @@ class PurchaseReturnItem(models.Model):
         on_delete=models.PROTECT,
         related_name="purchase_return_items",
         db_index=True,
+    )
+
+    stock_movement = models.OneToOneField(
+        "inventory.StockMovement",
+        on_delete=models.PROTECT,
+        related_name="purchase_return_item",
+        blank=True,
+        null=True,
+        verbose_name="Stock movement",
+        help_text=(
+            "Posted stock issue created for this "
+            "purchase return item."
+        ),
     )
 
     line_number = models.PositiveIntegerField(
@@ -2698,6 +2869,162 @@ class SupplierDebitNote(models.Model):
                 "updated_at",
             ]
         )
+
+
+
+
+class SupplierCreditStatus(models.TextChoices):
+    ACTIVE = "ACTIVE", "Active"
+    CONSUMED = "CONSUMED", "Consumed"
+    CANCELLED = "CANCELLED", "Cancelled"
+
+
+class SupplierCredit(models.Model):
+    """
+    Supplier credit balance created from the excess amount
+    of a posted supplier debit note.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="supplier_credits",
+        db_index=True,
+    )
+    supplier = models.ForeignKey(
+        BusinessParty,
+        on_delete=models.PROTECT,
+        related_name="supplier_credits",
+        db_index=True,
+    )
+    debit_note = models.OneToOneField(
+        SupplierDebitNote,
+        on_delete=models.PROTECT,
+        related_name="supplier_credit",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=SupplierCreditStatus.choices,
+        default=SupplierCreditStatus.ACTIVE,
+        db_index=True,
+    )
+    currency_code = models.CharField(
+        max_length=10,
+        default="SAR",
+    )
+    original_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+    )
+    remaining_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_supplier_credits",
+        blank=True,
+        null=True,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="updated_supplier_credits",
+        blank=True,
+        null=True,
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["company", "supplier"]),
+            models.Index(fields=["company", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.debit_note.debit_note_number} - "
+            f"{self.remaining_amount}"
+        )
+
+    def clean(self) -> None:
+        super().clean()
+
+        self.currency_code = (
+            self.currency_code or "SAR"
+        ).strip().upper()
+        self.original_amount = quantize_money(
+            self.original_amount
+        )
+        self.remaining_amount = quantize_money(
+            self.remaining_amount
+        )
+
+        if self.supplier_id and self.company_id:
+            if self.supplier.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "supplier":
+                            "Supplier credit supplier must "
+                            "belong to the same company."
+                    }
+                )
+
+        if self.debit_note_id and self.company_id:
+            if self.debit_note.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "debit_note":
+                            "Supplier debit note must belong "
+                            "to the same company."
+                    }
+                )
+
+            if self.debit_note.supplier_id != self.supplier_id:
+                raise ValidationError(
+                    {
+                        "supplier":
+                            "Supplier credit supplier must "
+                            "match debit note supplier."
+                    }
+                )
+
+        if self.remaining_amount > self.original_amount:
+            raise ValidationError(
+                {
+                    "remaining_amount":
+                        "Remaining supplier credit cannot "
+                        "exceed original amount."
+                }
+            )
+
+        if self.status == SupplierCreditStatus.CONSUMED:
+            if self.remaining_amount != MONEY_ZERO:
+                raise ValidationError(
+                    {
+                        "remaining_amount":
+                            "Consumed supplier credit must "
+                            "have zero remaining amount."
+                    }
+                )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 
 class SupplierDebitNoteItem(models.Model):

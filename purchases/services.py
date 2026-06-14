@@ -48,9 +48,20 @@ from accounting.services import (
     post_journal_entry,
     replace_journal_entry_lines,
     seed_company_chart_of_accounts,
+    post_supplier_debit_note_to_accounting,
 )
-from catalog.models import CatalogItem
+from catalog.models import (
+    CatalogItem,
+    CatalogItemType,
+)
 from companies.models import Branch, Company
+from inventory.models import (
+    StockItem,
+    StockMovementStatus,
+    Warehouse,
+    WarehouseStatus,
+)
+from inventory.services import issue_stock
 from parties.models import BusinessParty, BusinessPartyStatus, BusinessPartyType
 from purchases.models import (
     PurchaseBill,
@@ -63,6 +74,8 @@ from purchases.models import (
     SupplierDebitNote,
     SupplierDebitNoteItem,
     SupplierDebitNoteStatus,
+    SupplierCredit,
+    SupplierCreditStatus,
     quantize_quantity,
 )
 
@@ -70,6 +83,10 @@ from purchases.models import (
 MONEY_ZERO = Decimal("0.00")
 MONEY_QUANT = Decimal("0.01")
 AUTO_SOURCE_TYPE_PURCHASE_BILL = "purchase_bill"
+
+PURCHASE_RETURN_STOCK_REFERENCE = (
+    "purchase_return_item"
+)
 
 ACCOUNT_PURPOSE_EXPENSE = getattr(
     AccountingAccountPurpose,
@@ -2179,6 +2196,568 @@ def cancel_supplier_debit_note(
     return locked_note
 
 
+
+def resolve_purchase_return_warehouse(
+    *,
+    company: Company,
+    branch: Branch | None = None,
+) -> Warehouse:
+    """
+    Resolve the active warehouse used for a purchase return.
+
+    Priority:
+    1. Default active warehouse for the bill branch.
+    2. Any active warehouse for the bill branch.
+    3. Default active company warehouse.
+    4. Any active company warehouse.
+    """
+    warehouses = Warehouse.objects.filter(
+        company=company,
+        status=WarehouseStatus.ACTIVE,
+        is_active=True,
+    )
+
+    if branch:
+        branch_warehouse = (
+            warehouses.filter(
+                branch=branch,
+                is_default=True,
+            )
+            .order_by("id")
+            .first()
+        )
+
+        if branch_warehouse:
+            return branch_warehouse
+
+        branch_warehouse = (
+            warehouses.filter(
+                branch=branch,
+            )
+            .order_by("id")
+            .first()
+        )
+
+        if branch_warehouse:
+            return branch_warehouse
+
+    warehouse = (
+        warehouses.filter(
+            is_default=True,
+        )
+        .order_by("id")
+        .first()
+    )
+
+    if warehouse:
+        return warehouse
+
+    warehouse = warehouses.order_by("id").first()
+
+    if not warehouse:
+        raise ValidationError(
+            {
+                "warehouse":
+                    "An active warehouse is required "
+                    "before posting a supplier debit note "
+                    "containing inventory items."
+            }
+        )
+
+    return warehouse
+
+
+def is_supplier_debit_note_inventory_item(
+    item: CatalogItem | None,
+) -> bool:
+    """
+    Determine whether a debit note item affects stock.
+    """
+    if not item:
+        return False
+
+    return (
+        item.item_type == CatalogItemType.PRODUCT
+        and bool(
+            getattr(
+                item,
+                "track_inventory",
+                False,
+            )
+        )
+    )
+
+
+def calculate_return_unit_cost(
+    return_item: PurchaseReturnItem,
+) -> Decimal:
+    """
+    Resolve the stock issue cost used for the purchase return.
+
+    The value is based on the returned taxable/net amount so
+    the stock movement value matches the unified debit note
+    accounting inventory bucket.
+    """
+    quantity = Decimal(
+        str(
+            return_item.quantity
+            or "0.0000"
+        )
+    )
+
+    if quantity <= Decimal("0.0000"):
+        raise ValidationError(
+            {
+                "quantity":
+                    "Purchase return item quantity "
+                    "must be greater than zero."
+            }
+        )
+
+    return quantize_money(
+        Decimal(
+            str(
+                return_item.taxable_amount
+                or "0.00"
+            )
+        )
+        / quantity
+    )
+
+
+def get_existing_purchase_return_stock_movement(
+    return_item: PurchaseReturnItem,
+):
+    """
+    Find an existing posted stock movement for one
+    purchase return item.
+    """
+    if return_item.stock_movement_id:
+        return return_item.stock_movement
+
+    return (
+        return_item.company.stock_movements.filter(
+            reference_type=(
+                PURCHASE_RETURN_STOCK_REFERENCE
+            ),
+            reference_id=return_item.id,
+        )
+        .exclude(
+            status=StockMovementStatus.CANCELLED,
+        )
+        .order_by("id")
+        .first()
+    )
+
+
+def post_purchase_return_item_to_inventory(
+    *,
+    return_item: PurchaseReturnItem,
+    warehouse: Warehouse,
+    debit_note: SupplierDebitNote,
+    user=None,
+):
+    """
+    Post one purchase return item to inventory.
+
+    Service and non-stock items do not create movements.
+    """
+    item = return_item.item
+
+    if not is_supplier_debit_note_inventory_item(
+        item
+    ):
+        return None
+
+    existing = (
+        get_existing_purchase_return_stock_movement(
+            return_item
+        )
+    )
+
+    if existing:
+        if (
+            existing.status
+            != StockMovementStatus.POSTED
+        ):
+            raise ValidationError(
+                {
+                    "inventory":
+                        "An existing purchase return "
+                        "stock movement is not posted."
+                }
+            )
+
+        if not return_item.stock_movement_id:
+            PurchaseReturnItem.objects.filter(
+                pk=return_item.pk,
+                stock_movement__isnull=True,
+            ).update(
+                stock_movement=existing,
+                updated_at=timezone.now(),
+            )
+            return_item.stock_movement = existing
+
+        return existing
+
+    stock_item = (
+        StockItem.objects
+        .select_for_update()
+        .filter(
+            company=return_item.company,
+            warehouse=warehouse,
+            item=item,
+        )
+        .first()
+    )
+
+    if not stock_item:
+        raise ValidationError(
+            {
+                "inventory":
+                    "No stock balance exists for "
+                    f"{item.name} in the selected warehouse."
+            }
+        )
+
+    if stock_item.quantity_on_hand < return_item.quantity:
+        raise ValidationError(
+            {
+                "inventory":
+                    "Insufficient stock quantity for "
+                    f"{item.name}."
+            }
+        )
+
+    movement = issue_stock(
+        company=return_item.company,
+        warehouse=warehouse,
+        item=item,
+        quantity=return_item.quantity,
+        unit_cost=calculate_return_unit_cost(
+            return_item
+        ),
+        reference_type=(
+            PURCHASE_RETURN_STOCK_REFERENCE
+        ),
+        reference_id=return_item.id,
+        reference_number=(
+            return_item
+            .purchase_return
+            .return_number
+        ),
+        notes=(
+            "Supplier return posted through "
+            f"debit note {debit_note.debit_note_number}"
+        ),
+        extra_data={
+            "source": "supplier_debit_note",
+            "debit_note_id": debit_note.id,
+            "debit_note_number": (
+                debit_note.debit_note_number
+            ),
+            "purchase_return_id": (
+                return_item.purchase_return_id
+            ),
+            "purchase_return_item_id": (
+                return_item.id
+            ),
+            "bill_id": debit_note.bill_id,
+        },
+        user=user,
+        post_accounting=False,
+    )
+
+    PurchaseReturnItem.objects.filter(
+        pk=return_item.pk,
+        stock_movement__isnull=True,
+    ).update(
+        stock_movement=movement,
+        updated_at=timezone.now(),
+    )
+    return_item.stock_movement = movement
+
+    return movement
+
+
+@transaction.atomic
+def post_supplier_debit_note(
+    *,
+    debit_note: SupplierDebitNote,
+    user=None,
+) -> SupplierDebitNote:
+    """
+    Atomically post an issued supplier debit note.
+
+    Effects:
+    - Apply the note against the purchase bill balance.
+    - Create supplier credit for any excess.
+    - Issue stock for returned inventory products.
+    - Create one unified accounting journal entry.
+    - Mark the purchase return and debit note as posted.
+    - Prevent duplicate effects.
+    """
+    locked_note = (
+        SupplierDebitNote.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "branch",
+            "supplier",
+            "bill",
+            "purchase_return",
+        )
+        .get(pk=debit_note.pk)
+    )
+
+    if (
+        locked_note.status
+        == SupplierDebitNoteStatus.POSTED
+    ):
+        return locked_note
+
+    if not locked_note.can_be_posted:
+        raise ValidationError(
+            "Only issued supplier debit notes "
+            "can be posted."
+        )
+
+    if not locked_note.purchase_return_id:
+        raise ValidationError(
+            {
+                "purchase_return":
+                    "Supplier debit note must reference "
+                    "a purchase return."
+            }
+        )
+
+    locked_bill = (
+        PurchaseBill.objects
+        .select_for_update()
+        .get(pk=locked_note.bill_id)
+    )
+
+    locked_return = (
+        PurchaseReturn.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "branch",
+            "supplier",
+            "bill",
+        )
+        .get(
+            pk=locked_note.purchase_return_id
+        )
+    )
+
+    if (
+        locked_return.status
+        == PurchaseReturnStatus.POSTED
+    ):
+        raise ValidationError(
+            {
+                "purchase_return":
+                    "Linked purchase return has already "
+                    "been posted."
+            }
+        )
+
+    if not locked_return.can_be_posted:
+        raise ValidationError(
+            {
+                "purchase_return":
+                    "Linked purchase return must be "
+                    "confirmed before posting."
+            }
+        )
+
+    if (
+        locked_return.company_id
+        != locked_note.company_id
+        or locked_return.bill_id
+        != locked_note.bill_id
+        or locked_return.supplier_id
+        != locked_note.supplier_id
+    ):
+        raise ValidationError(
+            {
+                "purchase_return":
+                    "Linked purchase return does not match "
+                    "the supplier debit note."
+            }
+        )
+
+    locked_items = list(
+        locked_note.items
+        .select_for_update()
+        .select_related(
+            "item",
+            "bill_item",
+            "purchase_return_item",
+            "purchase_return_item__purchase_return",
+        )
+        .order_by(
+            "line_number",
+            "id",
+        )
+    )
+
+    if not locked_items:
+        raise ValidationError(
+            "Cannot post a supplier debit note "
+            "without items."
+        )
+
+    total_amount = quantize_money(
+        locked_note.total_amount
+    )
+
+    if total_amount <= MONEY_ZERO:
+        raise ValidationError(
+            {
+                "total_amount":
+                    "Supplier debit note total must be "
+                    "greater than zero."
+            }
+        )
+
+    current_balance = quantize_money(
+        locked_bill.balance_due
+    )
+    applied_to_bill_amount = min(
+        total_amount,
+        current_balance,
+    )
+    supplier_credit_amount = quantize_money(
+        total_amount
+        - applied_to_bill_amount
+    )
+
+    inventory_items = [
+        note_item.purchase_return_item
+        for note_item in locked_items
+        if (
+            note_item.purchase_return_item_id
+            and is_supplier_debit_note_inventory_item(
+                note_item.item
+            )
+        )
+    ]
+
+    warehouse = None
+
+    if inventory_items:
+        warehouse = resolve_purchase_return_warehouse(
+            company=locked_note.company,
+            branch=locked_note.branch,
+        )
+
+        for return_item in inventory_items:
+            post_purchase_return_item_to_inventory(
+                return_item=return_item,
+                warehouse=warehouse,
+                debit_note=locked_note,
+                user=user,
+            )
+
+    if applied_to_bill_amount > MONEY_ZERO:
+        locked_bill.apply_debit_note_amount(
+            applied_to_bill_amount,
+            save=True,
+            user=user,
+        )
+
+    if supplier_credit_amount > MONEY_ZERO:
+        supplier_credit, created = (
+            SupplierCredit.objects.get_or_create(
+                debit_note=locked_note,
+                defaults={
+                    "company": locked_note.company,
+                    "supplier": locked_note.supplier,
+                    "status": (
+                        SupplierCreditStatus.ACTIVE
+                    ),
+                    "currency_code": (
+                        locked_note.currency_code
+                    ),
+                    "original_amount": (
+                        supplier_credit_amount
+                    ),
+                    "remaining_amount": (
+                        supplier_credit_amount
+                    ),
+                    "created_by": (
+                        user
+                        if getattr(
+                            user,
+                            "is_authenticated",
+                            False,
+                        )
+                        else None
+                    ),
+                    "updated_by": (
+                        user
+                        if getattr(
+                            user,
+                            "is_authenticated",
+                            False,
+                        )
+                        else None
+                    ),
+                },
+            )
+        )
+
+        if not created:
+            if (
+                supplier_credit.original_amount
+                != supplier_credit_amount
+                or supplier_credit.remaining_amount
+                != supplier_credit_amount
+                or supplier_credit.status
+                != SupplierCreditStatus.ACTIVE
+            ):
+                raise ValidationError(
+                    {
+                        "supplier_credit":
+                            "Existing supplier credit "
+                            "does not match this debit note."
+                    }
+                )
+
+    try:
+        post_supplier_debit_note_to_accounting(
+            locked_note,
+            actor=user,
+            auto_post=True,
+        )
+    except AccountingPostingError as exc:
+        raise ValidationError(
+            {
+                "accounting": str(exc),
+            }
+        ) from exc
+
+    locked_return.mark_posted(
+        user=user
+    )
+
+    locked_note.mark_posted(
+        applied_to_bill_amount=(
+            applied_to_bill_amount
+        ),
+        supplier_credit_amount=(
+            supplier_credit_amount
+        ),
+        user=user,
+    )
+
+    locked_note.refresh_from_db()
+
+    return locked_note
+
+
 def serialize_supplier_debit_note_item(
     item: SupplierDebitNoteItem,
 ) -> dict[str, Any]:
@@ -2296,6 +2875,11 @@ def serialize_supplier_debit_note(
             "paid_amount": str(
                 debit_note.bill.paid_amount
             ),
+            "debit_note_applied_amount": str(
+                debit_note
+                .bill
+                .debit_note_applied_amount
+            ),
             "balance_due": str(
                 debit_note.bill.balance_due
             ),
@@ -2346,6 +2930,34 @@ def serialize_supplier_debit_note(
         ),
         "unapplied_amount": str(
             debit_note.unapplied_amount
+        ),
+        "supplier_credit": (
+            {
+                "id": debit_note.supplier_credit.id,
+                "status": (
+                    debit_note.supplier_credit.status
+                ),
+                "original_amount": str(
+                    debit_note
+                    .supplier_credit
+                    .original_amount
+                ),
+                "remaining_amount": str(
+                    debit_note
+                    .supplier_credit
+                    .remaining_amount
+                ),
+                "currency_code": (
+                    debit_note
+                    .supplier_credit
+                    .currency_code
+                ),
+            }
+            if hasattr(
+                debit_note,
+                "supplier_credit",
+            )
+            else None
         ),
         "notes": debit_note.notes,
         "extra_data": (

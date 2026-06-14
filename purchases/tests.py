@@ -31,10 +31,19 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 
-from accounting.models import JournalEntry, JournalEntryStatus
+from accounting.models import (
+    JournalEntry,
+    JournalEntryStatus,
+)
 from accounts.models import CompanyMembership, CompanyRole, MembershipStatus
 from catalog.models import CatalogItem, CatalogItemStatus, CatalogItemType, CatalogUnit
 from companies.models import Branch, Company, CompanySettings
+from inventory.models import (
+    StockItem,
+    StockMovement,
+    StockMovementStatus,
+)
+from inventory.services import create_warehouse
 from parties.models import BusinessParty, BusinessPartyStatus, BusinessPartyType
 from purchases.models import (
     PurchaseBill,
@@ -47,6 +56,7 @@ from purchases.models import (
     SupplierDebitNote,
     SupplierDebitNoteItem,
     SupplierDebitNoteStatus,
+    SupplierCredit,
 )
 from purchases.services import (
     cancel_purchase_bill,
@@ -68,6 +78,7 @@ from purchases.services import (
     create_supplier_debit_note,
     generate_supplier_debit_note_number,
     issue_supplier_debit_note,
+    post_supplier_debit_note,
     serialize_supplier_debit_note,
     update_supplier_debit_note,
 )
@@ -3054,4 +3065,476 @@ class SupplierDebitNotesAPITests(PurchasesTestCase):
         self.assertNotIn(
             "company.purchases.debit_notes.post",
             viewer_permissions,
+        )
+
+
+
+class SupplierDebitNotePostingIntegrationTests(
+    PurchasesTestCase
+):
+    """
+    Phase 21.7C supplier debit note posting tests.
+    """
+
+    def _prepare_inventory_item(self):
+        self.item.track_inventory = True
+        self.item.save(
+            update_fields=[
+                "track_inventory",
+                "updated_at",
+            ]
+        )
+
+        warehouse = create_warehouse(
+            company=self.company,
+            user=self.user,
+            data={
+                "code": "WH-PUR-001",
+                "name": "Purchase Returns Warehouse",
+                "branch_id": self.branch.id,
+                "is_default": True,
+            },
+        )
+
+        stock_item = StockItem.objects.create(
+            company=self.company,
+            warehouse=warehouse,
+            item=self.item,
+            quantity_on_hand=Decimal("10.0000"),
+            reserved_quantity=Decimal("0.0000"),
+            average_cost=Decimal("100.00"),
+        )
+
+        return warehouse, stock_item
+
+    def _create_issued_debit_note(
+        self,
+        *,
+        bill_quantity="5.0000",
+        return_quantity="2.0000",
+    ):
+        bill = create_purchase_bill(
+            company=self.company,
+            user=self.user,
+            payload={
+                "supplier_id": self.supplier.id,
+                "branch_id": self.branch.id,
+                "items": [
+                    {
+                        "item_id": self.item.id,
+                        "quantity": bill_quantity,
+                        "unit_price": "100.00",
+                    }
+                ],
+            },
+        )
+
+        bill = post_purchase_bill(
+            bill=bill,
+            user=self.user,
+        )
+
+        purchase_return = create_purchase_return(
+            company=self.company,
+            user=self.user,
+            payload={
+                "bill_id": bill.id,
+                "reason": PurchaseReturnReason.DAMAGED,
+                "items": [
+                    {
+                        "bill_item_id": (
+                            bill.items.first().id
+                        ),
+                        "quantity": return_quantity,
+                    }
+                ],
+            },
+        )
+
+        purchase_return = confirm_purchase_return(
+            purchase_return=purchase_return,
+            user=self.user,
+        )
+
+        debit_note = create_supplier_debit_note(
+            company=self.company,
+            user=self.user,
+            payload={
+                "purchase_return_id": (
+                    purchase_return.id
+                ),
+            },
+        )
+
+        debit_note = issue_supplier_debit_note(
+            debit_note=debit_note,
+            user=self.user,
+        )
+
+        return bill, purchase_return, debit_note
+
+    def test_post_supplier_debit_note_applies_bill_inventory_and_accounting(
+        self,
+    ):
+        _warehouse, stock_item = (
+            self._prepare_inventory_item()
+        )
+
+        bill, purchase_return, debit_note = (
+            self._create_issued_debit_note()
+        )
+
+        posted_note = post_supplier_debit_note(
+            debit_note=debit_note,
+            user=self.user,
+        )
+
+        bill.refresh_from_db()
+        purchase_return.refresh_from_db()
+        posted_note.refresh_from_db()
+        stock_item.refresh_from_db()
+
+        return_item = purchase_return.items.get()
+        return_item.refresh_from_db()
+
+        self.assertEqual(
+            posted_note.status,
+            SupplierDebitNoteStatus.POSTED,
+        )
+        self.assertEqual(
+            purchase_return.status,
+            PurchaseReturnStatus.POSTED,
+        )
+        self.assertEqual(
+            posted_note.applied_to_bill_amount,
+            Decimal("230.00"),
+        )
+        self.assertEqual(
+            posted_note.supplier_credit_amount,
+            Decimal("0.00"),
+        )
+
+        self.assertEqual(
+            bill.paid_amount,
+            Decimal("0.00"),
+        )
+        self.assertEqual(
+            bill.debit_note_applied_amount,
+            Decimal("230.00"),
+        )
+        self.assertEqual(
+            bill.balance_due,
+            Decimal("345.00"),
+        )
+
+        self.assertEqual(
+            stock_item.quantity_on_hand,
+            Decimal("8.0000"),
+        )
+        self.assertIsNotNone(
+            return_item.stock_movement_id
+        )
+        self.assertEqual(
+            return_item.stock_movement.status,
+            StockMovementStatus.POSTED,
+        )
+        self.assertEqual(
+            return_item.stock_movement.quantity,
+            Decimal("2.0000"),
+        )
+
+        debit_note_entries = JournalEntry.objects.filter(
+            company=self.company,
+            source_type="supplier_debit_note",
+            source_id=str(posted_note.id),
+            source_number=(
+                posted_note.debit_note_number
+            ),
+            is_auto_posted=True,
+        )
+
+        self.assertEqual(
+            debit_note_entries.count(),
+            1,
+        )
+
+        entry = debit_note_entries.get()
+
+        self.assertEqual(
+            entry.status,
+            JournalEntryStatus.POSTED,
+        )
+        self.assertEqual(
+            entry.total_debit,
+            Decimal("230.00"),
+        )
+        self.assertEqual(
+            entry.total_credit,
+            Decimal("230.00"),
+        )
+
+        self.assertFalse(
+            JournalEntry.objects.filter(
+                company=self.company,
+                source_type="stock_movement",
+                source_id=str(
+                    return_item.stock_movement_id
+                ),
+            ).exists()
+        )
+
+    def test_post_supplier_debit_note_creates_supplier_credit_for_excess(
+        self,
+    ):
+        self._prepare_inventory_item()
+
+        bill, _purchase_return, debit_note = (
+            self._create_issued_debit_note()
+        )
+
+        bill.paid_amount = Decimal("500.00")
+        bill.refresh_payment_status()
+        bill.full_clean()
+        bill.save(
+            update_fields=[
+                "paid_amount",
+                "balance_due",
+                "payment_status",
+                "updated_at",
+            ]
+        )
+
+        posted_note = post_supplier_debit_note(
+            debit_note=debit_note,
+            user=self.user,
+        )
+
+        bill.refresh_from_db()
+        posted_note.refresh_from_db()
+
+        supplier_credit = SupplierCredit.objects.get(
+            debit_note=posted_note,
+        )
+
+        self.assertEqual(
+            posted_note.applied_to_bill_amount,
+            Decimal("75.00"),
+        )
+        self.assertEqual(
+            posted_note.supplier_credit_amount,
+            Decimal("155.00"),
+        )
+        self.assertEqual(
+            bill.debit_note_applied_amount,
+            Decimal("75.00"),
+        )
+        self.assertEqual(
+            bill.balance_due,
+            Decimal("0.00"),
+        )
+        self.assertEqual(
+            supplier_credit.original_amount,
+            Decimal("155.00"),
+        )
+        self.assertEqual(
+            supplier_credit.remaining_amount,
+            Decimal("155.00"),
+        )
+
+    def test_post_supplier_debit_note_is_idempotent(
+        self,
+    ):
+        _warehouse, stock_item = (
+            self._prepare_inventory_item()
+        )
+
+        bill, purchase_return, debit_note = (
+            self._create_issued_debit_note()
+        )
+
+        first_result = post_supplier_debit_note(
+            debit_note=debit_note,
+            user=self.user,
+        )
+
+        second_result = post_supplier_debit_note(
+            debit_note=first_result,
+            user=self.user,
+        )
+
+        bill.refresh_from_db()
+        stock_item.refresh_from_db()
+
+        return_item = purchase_return.items.get()
+        return_item.refresh_from_db()
+
+        self.assertEqual(
+            first_result.id,
+            second_result.id,
+        )
+        self.assertEqual(
+            bill.debit_note_applied_amount,
+            Decimal("230.00"),
+        )
+        self.assertEqual(
+            stock_item.quantity_on_hand,
+            Decimal("8.0000"),
+        )
+        self.assertEqual(
+            StockMovement.objects.filter(
+                company=self.company,
+                reference_type=(
+                    "purchase_return_item"
+                ),
+                reference_id=return_item.id,
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            JournalEntry.objects.filter(
+                company=self.company,
+                source_type="supplier_debit_note",
+                source_id=str(debit_note.id),
+                is_auto_posted=True,
+            ).count(),
+            1,
+        )
+
+
+class SupplierDebitNotePostingAPITests(
+    PurchasesTestCase
+):
+    """
+    Phase 21.7C supplier debit note post API tests.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.user)
+
+    def _create_issued_note(self):
+        self.item.track_inventory = False
+        self.item.save(
+            update_fields=[
+                "track_inventory",
+                "updated_at",
+            ]
+        )
+
+        bill = create_purchase_bill(
+            company=self.company,
+            user=self.user,
+            payload={
+                "supplier_id": self.supplier.id,
+                "branch_id": self.branch.id,
+                "items": [
+                    {
+                        "item_id": self.item.id,
+                        "quantity": "3.0000",
+                        "unit_price": "100.00",
+                    }
+                ],
+            },
+        )
+
+        bill = post_purchase_bill(
+            bill=bill,
+            user=self.user,
+        )
+
+        purchase_return = create_purchase_return(
+            company=self.company,
+            user=self.user,
+            payload={
+                "bill_id": bill.id,
+                "items": [
+                    {
+                        "bill_item_id": (
+                            bill.items.first().id
+                        ),
+                        "quantity": "1.0000",
+                    }
+                ],
+            },
+        )
+
+        purchase_return = confirm_purchase_return(
+            purchase_return=purchase_return,
+            user=self.user,
+        )
+
+        debit_note = create_supplier_debit_note(
+            company=self.company,
+            user=self.user,
+            payload={
+                "purchase_return_id": (
+                    purchase_return.id
+                ),
+            },
+        )
+
+        return issue_supplier_debit_note(
+            debit_note=debit_note,
+            user=self.user,
+        )
+
+    def test_supplier_debit_note_post_endpoint(
+        self,
+    ):
+        debit_note = self._create_issued_note()
+
+        response = self.client.post(
+            (
+                "/api/company/purchases/"
+                f"debit-notes/{debit_note.id}/post/"
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        payload = response.json()
+
+        self.assertTrue(
+            payload["success"]
+        )
+        self.assertEqual(
+            payload["debit_note"]["status"],
+            SupplierDebitNoteStatus.POSTED,
+        )
+        self.assertEqual(
+            payload["debit_note"][
+                "applied_to_bill_amount"
+            ],
+            "115.00",
+        )
+
+        debit_note.refresh_from_db()
+
+        self.assertEqual(
+            debit_note.status,
+            SupplierDebitNoteStatus.POSTED,
+        )
+
+    def test_viewer_cannot_post_supplier_debit_note(
+        self,
+    ):
+        debit_note = self._create_issued_note()
+
+        self.client.force_login(
+            self.viewer_user
+        )
+
+        response = self.client.post(
+            (
+                "/api/company/purchases/"
+                f"debit-notes/{debit_note.id}/post/"
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            403,
         )
