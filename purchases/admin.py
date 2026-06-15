@@ -18,6 +18,8 @@ from purchases.models import (
     PurchaseBillItem,
     PurchaseOrder,
     PurchaseOrderItem,
+    PurchaseRequest,
+    PurchaseRequestItem,
     PurchaseReceipt,
     PurchaseReceiptItem,
     PurchaseReturn,
@@ -27,13 +29,339 @@ from purchases.models import (
 )
 
 
+class PurchaseRequestItemInline(admin.TabularInline):
+    """
+    Inline purchase request items.
+    """
+
+    model = PurchaseRequestItem
+    extra = 0
+
+    fields = [
+        "line_number",
+        "item",
+        "item_name_snapshot",
+        "unit_name_snapshot",
+        "quantity",
+        "suggested_unit_price",
+        "converted_quantity_display",
+        "remaining_quantity_display",
+        "notes",
+    ]
+
+    readonly_fields = [
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "item_name_ar_snapshot",
+        "item_name_en_snapshot",
+        "unit_name_snapshot",
+        "converted_quantity_display",
+        "remaining_quantity_display",
+    ]
+
+    autocomplete_fields = [
+        "item",
+    ]
+
+    @admin.display(
+        description="Converted quantity",
+    )
+    def converted_quantity_display(
+        self,
+        obj,
+    ):
+        if not obj or not obj.pk:
+            return "0.0000"
+
+        return obj.converted_quantity
+
+    @admin.display(
+        description="Remaining quantity",
+    )
+    def remaining_quantity_display(
+        self,
+        obj,
+    ):
+        if not obj or not obj.pk:
+            return obj.quantity if obj else "0.0000"
+
+        return obj.remaining_quantity
+
+
+@admin.register(PurchaseRequest)
+class PurchaseRequestAdmin(admin.ModelAdmin):
+    """
+    Purchase requests administration.
+    """
+
+    list_display = [
+        "request_number",
+        "company",
+        "branch",
+        "status",
+        "priority",
+        "request_date",
+        "required_date",
+        "requested_quantity_display",
+        "converted_quantity_display",
+        "remaining_quantity_display",
+        "submitted_at",
+        "approved_at",
+        "created_at",
+    ]
+
+    list_filter = [
+        "status",
+        "priority",
+        "request_date",
+        "required_date",
+        "company",
+        "branch",
+        "created_at",
+    ]
+
+    search_fields = [
+        "request_number",
+        "purpose",
+        "company__name",
+        "company__name_ar",
+        "company__name_en",
+        "branch__name",
+        "notes",
+        "rejection_reason",
+        "cancellation_reason",
+    ]
+
+    readonly_fields = [
+        "requested_quantity_display",
+        "converted_quantity_display",
+        "remaining_quantity_display",
+        "submitted_at",
+        "submitted_by",
+        "approved_at",
+        "approved_by",
+        "rejected_at",
+        "rejected_by",
+        "cancelled_at",
+        "cancelled_by",
+        "created_at",
+        "updated_at",
+    ]
+
+    autocomplete_fields = [
+        "company",
+        "branch",
+        "created_by",
+        "updated_by",
+        "submitted_by",
+        "approved_by",
+        "rejected_by",
+        "cancelled_by",
+    ]
+
+    fieldsets = [
+        (
+            "Basic information",
+            {
+                "fields": [
+                    "company",
+                    "branch",
+                    "request_number",
+                    "request_date",
+                    "required_date",
+                    "status",
+                    "priority",
+                    "purpose",
+                ],
+            },
+        ),
+        (
+            "Quantities",
+            {
+                "fields": [
+                    "requested_quantity_display",
+                    "converted_quantity_display",
+                    "remaining_quantity_display",
+                ],
+            },
+        ),
+        (
+            "Submission",
+            {
+                "fields": [
+                    "submitted_at",
+                    "submitted_by",
+                ],
+            },
+        ),
+        (
+            "Approval",
+            {
+                "fields": [
+                    "approved_at",
+                    "approved_by",
+                ],
+            },
+        ),
+        (
+            "Rejection",
+            {
+                "fields": [
+                    "rejected_at",
+                    "rejected_by",
+                    "rejection_reason",
+                ],
+            },
+        ),
+        (
+            "Cancellation",
+            {
+                "fields": [
+                    "cancelled_at",
+                    "cancelled_by",
+                    "cancellation_reason",
+                ],
+            },
+        ),
+        (
+            "Audit",
+            {
+                "fields": [
+                    "created_by",
+                    "updated_by",
+                    "created_at",
+                    "updated_at",
+                ],
+            },
+        ),
+        (
+            "Extra",
+            {
+                "classes": [
+                    "collapse",
+                ],
+                "fields": [
+                    "notes",
+                    "extra_data",
+                ],
+            },
+        ),
+    ]
+
+    inlines = [
+        PurchaseRequestItemInline,
+    ]
+
+    @admin.display(
+        description="Requested quantity",
+    )
+    def requested_quantity_display(
+        self,
+        obj,
+    ):
+        return obj.requested_quantity
+
+    @admin.display(
+        description="Converted quantity",
+    )
+    def converted_quantity_display(
+        self,
+        obj,
+    ):
+        return obj.converted_quantity
+
+    @admin.display(
+        description="Remaining quantity",
+    )
+    def remaining_quantity_display(
+        self,
+        obj,
+    ):
+        return obj.remaining_quantity
+
+
+@admin.register(PurchaseRequestItem)
+class PurchaseRequestItemAdmin(admin.ModelAdmin):
+    """
+    Purchase request items administration.
+    """
+
+    list_display = [
+        "request",
+        "line_number",
+        "item",
+        "company",
+        "quantity",
+        "suggested_unit_price",
+        "converted_quantity_display",
+        "remaining_quantity_display",
+        "created_at",
+    ]
+
+    list_filter = [
+        "company",
+        "request__status",
+        "request__priority",
+        "created_at",
+    ]
+
+    search_fields = [
+        "request__request_number",
+        "request__purpose",
+        "item__name",
+        "item__name_ar",
+        "item__name_en",
+        "item__code",
+        "item__sku",
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "notes",
+    ]
+
+    readonly_fields = [
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "item_name_ar_snapshot",
+        "item_name_en_snapshot",
+        "unit_name_snapshot",
+        "converted_quantity_display",
+        "remaining_quantity_display",
+        "created_at",
+        "updated_at",
+    ]
+
+    autocomplete_fields = [
+        "request",
+        "company",
+        "item",
+    ]
+
+    @admin.display(
+        description="Converted quantity",
+    )
+    def converted_quantity_display(
+        self,
+        obj,
+    ):
+        return obj.converted_quantity
+
+    @admin.display(
+        description="Remaining quantity",
+    )
+    def remaining_quantity_display(
+        self,
+        obj,
+    ):
+        return obj.remaining_quantity
+
+
 class PurchaseOrderItemInline(admin.TabularInline):
     model = PurchaseOrderItem
     extra = 0
 
     fields = [
         "line_number",
-        "purchase_order_item",
+        "purchase_request_item",
         "item",
         "item_name_snapshot",
         "unit_name_snapshot",
@@ -137,6 +465,7 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
                     "company",
                     "branch",
                     "supplier",
+                    "purchase_request",
                     "order_number",
                     "supplier_reference",
                     "order_date",
@@ -259,6 +588,7 @@ class PurchaseOrderItemAdmin(admin.ModelAdmin):
         "order",
         "company",
         "item",
+        "purchase_request_item",
     ]
 
 

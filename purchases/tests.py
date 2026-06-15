@@ -52,6 +52,9 @@ from purchases.models import (
     PurchaseOrder,
     PurchaseOrderItem,
     PurchaseOrderStatus,
+    PurchaseRequest,
+    PurchaseRequestItem,
+    PurchaseRequestStatus,
     PurchaseReceipt,
     PurchaseReceiptItem,
     PurchaseReceiptStatus,
@@ -66,19 +69,28 @@ from purchases.models import (
 )
 from purchases.services import (
     approve_purchase_order,
+    approve_purchase_request,
     cancel_purchase_bill,
+    cancel_purchase_request,
     cancel_purchase_order,
     create_purchase_bill,
     create_purchase_bill_from_order,
     create_purchase_order,
+    create_purchase_request,
+    convert_purchase_request_to_order,
     generate_purchase_bill_number,
+    generate_purchase_request_number,
     get_branch_for_company,
     get_purchase_item_for_company,
     get_supplier_for_company,
     post_purchase_bill,
     post_purchase_bill_to_accounting,
+    reject_purchase_request,
+    serialize_purchase_request,
+    submit_purchase_request,
     update_purchase_bill,
     update_purchase_order,
+    update_purchase_request,
     serialize_purchase_order,
     cancel_purchase_receipt,
     create_purchase_receipt,
@@ -5310,4 +5322,1257 @@ class PurchaseOrdersAPITests(PurchasesTestCase):
             403,
         )
 
+# ============================================================
+# Phase 21.10.5 Purchase Requests Tests
+# ============================================================
+
+
+class PurchaseRequestsTests(PurchasesTestCase):
+    """
+    Phase 21.10 purchase request model and service tests.
+    """
+
+    def _create_request(
+        self,
+        *,
+        company=None,
+        user=None,
+        branch=None,
+        item=None,
+        quantity="5.0000",
+        suggested_unit_price="100.00",
+    ) -> PurchaseRequest:
+        company = company or self.company
+        user = user or self.user
+        branch = branch or self.branch
+        item = item or self.item
+
+        return create_purchase_request(
+            company=company,
+            user=user,
+            payload={
+                "branch_id": branch.id,
+                "request_date": (
+                    timezone.localdate().isoformat()
+                ),
+                "required_date": (
+                    timezone.localdate().isoformat()
+                ),
+                "priority": "HIGH",
+                "purpose": "Restock requested items",
+                "notes": "Purchase request test",
+                "items": [
+                    {
+                        "item_id": item.id,
+                        "quantity": quantity,
+                        "suggested_unit_price": (
+                            suggested_unit_price
+                        ),
+                    }
+                ],
+            },
+        )
+
+    def _create_approved_request(
+        self,
+        **kwargs,
+    ) -> PurchaseRequest:
+        purchase_request = self._create_request(
+            **kwargs
+        )
+
+        purchase_request = submit_purchase_request(
+            purchase_request=purchase_request,
+            user=kwargs.get("user") or self.user,
+        )
+
+        return approve_purchase_request(
+            purchase_request=purchase_request,
+            user=kwargs.get("user") or self.user,
+        )
+
+    def test_generate_purchase_request_number(
+        self,
+    ):
+        number = generate_purchase_request_number(
+            self.company
+        )
+
+        expected_prefix = (
+            "PR-"
+            f"{timezone.localdate().strftime('%Y%m%d')}-"
+        )
+
+        self.assertTrue(
+            number.startswith(expected_prefix)
+        )
+        self.assertTrue(
+            number.endswith("000001")
+        )
+
+    def test_create_purchase_request_with_items(
+        self,
+    ):
+        purchase_request = self._create_request(
+            quantity="2.0000",
+            suggested_unit_price="90.00",
+        )
+
+        purchase_request.refresh_from_db()
+        request_item = purchase_request.items.get()
+
+        self.assertEqual(
+            purchase_request.status,
+            PurchaseRequestStatus.DRAFT,
+        )
+        self.assertEqual(
+            purchase_request.company,
+            self.company,
+        )
+        self.assertEqual(
+            purchase_request.branch,
+            self.branch,
+        )
+        self.assertEqual(
+            purchase_request.priority,
+            "HIGH",
+        )
+        self.assertEqual(
+            purchase_request.requested_quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            purchase_request.converted_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            purchase_request.remaining_quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            request_item.quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            request_item.suggested_unit_price,
+            Decimal("90.00"),
+        )
+        self.assertEqual(
+            request_item.item_name_snapshot,
+            self.item.name,
+        )
+
+    def test_create_purchase_request_rejects_empty_items(
+        self,
+    ):
+        with self.assertRaises(ValidationError):
+            create_purchase_request(
+                company=self.company,
+                user=self.user,
+                payload={
+                    "branch_id": self.branch.id,
+                    "items": [],
+                },
+            )
+
+    def test_create_purchase_request_rejects_other_company_item(
+        self,
+    ):
+        with self.assertRaises(ValidationError):
+            self._create_request(
+                item=self.other_item,
+            )
+
+    def test_create_purchase_request_rejects_other_company_branch(
+        self,
+    ):
+        with self.assertRaises(ValidationError):
+            self._create_request(
+                branch=self.other_branch,
+            )
+
+    def test_update_purchase_request_replaces_items(
+        self,
+    ):
+        purchase_request = self._create_request()
+
+        purchase_request = update_purchase_request(
+            purchase_request=purchase_request,
+            user=self.user,
+            payload={
+                "priority": "URGENT",
+                "purpose": "Urgent services",
+                "notes": "Updated request",
+                "items": [
+                    {
+                        "item_id": self.service.id,
+                        "quantity": "3.0000",
+                        "suggested_unit_price": "250.00",
+                    }
+                ],
+            },
+        )
+
+        purchase_request.refresh_from_db()
+        request_item = purchase_request.items.get()
+
+        self.assertEqual(
+            purchase_request.priority,
+            "URGENT",
+        )
+        self.assertEqual(
+            purchase_request.purpose,
+            "Urgent services",
+        )
+        self.assertEqual(
+            purchase_request.notes,
+            "Updated request",
+        )
+        self.assertEqual(
+            purchase_request.items.count(),
+            1,
+        )
+        self.assertEqual(
+            request_item.item,
+            self.service,
+        )
+        self.assertEqual(
+            request_item.quantity,
+            Decimal("3.0000"),
+        )
+
+    def test_purchase_request_submit_and_approve(
+        self,
+    ):
+        purchase_request = self._create_request()
+
+        purchase_request = submit_purchase_request(
+            purchase_request=purchase_request,
+            user=self.user,
+        )
+
+        self.assertEqual(
+            purchase_request.status,
+            PurchaseRequestStatus.SUBMITTED,
+        )
+        self.assertEqual(
+            purchase_request.submitted_by,
+            self.user,
+        )
+        self.assertIsNotNone(
+            purchase_request.submitted_at,
+        )
+
+        purchase_request = approve_purchase_request(
+            purchase_request=purchase_request,
+            user=self.user,
+        )
+
+        self.assertEqual(
+            purchase_request.status,
+            PurchaseRequestStatus.APPROVED,
+        )
+        self.assertEqual(
+            purchase_request.approved_by,
+            self.user,
+        )
+        self.assertIsNotNone(
+            purchase_request.approved_at,
+        )
+
+    def test_purchase_request_reject(
+        self,
+    ):
+        purchase_request = self._create_request()
+
+        purchase_request = submit_purchase_request(
+            purchase_request=purchase_request,
+            user=self.user,
+        )
+
+        purchase_request = reject_purchase_request(
+            purchase_request=purchase_request,
+            reason="Budget was not approved",
+            user=self.user,
+        )
+
+        self.assertEqual(
+            purchase_request.status,
+            PurchaseRequestStatus.REJECTED,
+        )
+        self.assertEqual(
+            purchase_request.rejected_by,
+            self.user,
+        )
+        self.assertEqual(
+            purchase_request.rejection_reason,
+            "Budget was not approved",
+        )
+
+    def test_purchase_request_cancel(
+        self,
+    ):
+        purchase_request = self._create_request()
+
+        purchase_request = cancel_purchase_request(
+            purchase_request=purchase_request,
+            reason="Request no longer required",
+            user=self.user,
+        )
+
+        self.assertEqual(
+            purchase_request.status,
+            PurchaseRequestStatus.CANCELLED,
+        )
+        self.assertEqual(
+            purchase_request.cancelled_by,
+            self.user,
+        )
+        self.assertEqual(
+            purchase_request.cancellation_reason,
+            "Request no longer required",
+        )
+
+    def test_update_purchase_request_rejects_submitted_request(
+        self,
+    ):
+        purchase_request = self._create_request()
+
+        purchase_request = submit_purchase_request(
+            purchase_request=purchase_request,
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            update_purchase_request(
+                purchase_request=purchase_request,
+                user=self.user,
+                payload={
+                    "notes": "Should fail",
+                },
+            )
+
+    def test_convert_full_request_to_purchase_order(
+        self,
+    ):
+        purchase_request = self._create_approved_request(
+            quantity="5.0000",
+        )
+
+        request_item = purchase_request.items.get()
+
+        order = convert_purchase_request_to_order(
+            company=self.company,
+            purchase_request=purchase_request,
+            user=self.user,
+            payload={
+                "supplier_id": self.supplier.id,
+            },
+        )
+
+        order.refresh_from_db()
+        purchase_request.refresh_from_db()
+        order_item = order.items.get()
+        request_item.refresh_from_db()
+
+        self.assertEqual(
+            order.purchase_request,
+            purchase_request,
+        )
+        self.assertEqual(
+            order.status,
+            PurchaseOrderStatus.DRAFT,
+        )
+        self.assertEqual(
+            order.supplier,
+            self.supplier,
+        )
+        self.assertEqual(
+            order_item.purchase_request_item,
+            request_item,
+        )
+        self.assertEqual(
+            order_item.quantity,
+            Decimal("5.0000"),
+        )
+        self.assertEqual(
+            purchase_request.converted_quantity,
+            Decimal("5.0000"),
+        )
+        self.assertEqual(
+            purchase_request.remaining_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            purchase_request.status,
+            PurchaseRequestStatus.CONVERTED,
+        )
+
+    def test_convert_request_partially_then_fully(
+        self,
+    ):
+        purchase_request = self._create_approved_request(
+            quantity="5.0000",
+        )
+
+        request_item = purchase_request.items.get()
+
+        first_order = convert_purchase_request_to_order(
+            company=self.company,
+            purchase_request=purchase_request,
+            user=self.user,
+            payload={
+                "supplier_id": self.supplier.id,
+                "items": [
+                    {
+                        "purchase_request_item_id": (
+                            request_item.id
+                        ),
+                        "quantity": "2.0000",
+                        "unit_price": "95.00",
+                    }
+                ],
+            },
+        )
+
+        purchase_request.refresh_from_db()
+        request_item.refresh_from_db()
+
+        self.assertEqual(
+            first_order.items.get().quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            purchase_request.status,
+            PurchaseRequestStatus.PARTIALLY_CONVERTED,
+        )
+        self.assertEqual(
+            purchase_request.converted_quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            purchase_request.remaining_quantity,
+            Decimal("3.0000"),
+        )
+
+        second_order = convert_purchase_request_to_order(
+            company=self.company,
+            purchase_request=purchase_request,
+            user=self.user,
+            payload={
+                "supplier_id": self.supplier.id,
+            },
+        )
+
+        purchase_request.refresh_from_db()
+
+        self.assertEqual(
+            second_order.items.get().quantity,
+            Decimal("3.0000"),
+        )
+        self.assertEqual(
+            purchase_request.status,
+            PurchaseRequestStatus.CONVERTED,
+        )
+        self.assertEqual(
+            purchase_request.converted_quantity,
+            Decimal("5.0000"),
+        )
+        self.assertEqual(
+            purchase_request.remaining_quantity,
+            Decimal("0.0000"),
+        )
+
+    def test_convert_request_rejects_over_conversion(
+        self,
+    ):
+        purchase_request = self._create_approved_request(
+            quantity="3.0000",
+        )
+        request_item = purchase_request.items.get()
+
+        with self.assertRaises(ValidationError):
+            convert_purchase_request_to_order(
+                company=self.company,
+                purchase_request=purchase_request,
+                user=self.user,
+                payload={
+                    "supplier_id": self.supplier.id,
+                    "items": [
+                        {
+                            "purchase_request_item_id": (
+                                request_item.id
+                            ),
+                            "quantity": "4.0000",
+                        }
+                    ],
+                },
+            )
+
+    def test_convert_request_rejects_duplicate_request_item(
+        self,
+    ):
+        purchase_request = self._create_approved_request(
+            quantity="5.0000",
+        )
+        request_item = purchase_request.items.get()
+
+        with self.assertRaises(ValidationError):
+            convert_purchase_request_to_order(
+                company=self.company,
+                purchase_request=purchase_request,
+                user=self.user,
+                payload={
+                    "supplier_id": self.supplier.id,
+                    "items": [
+                        {
+                            "purchase_request_item_id": (
+                                request_item.id
+                            ),
+                            "quantity": "2.0000",
+                        },
+                        {
+                            "purchase_request_item_id": (
+                                request_item.id
+                            ),
+                            "quantity": "1.0000",
+                        },
+                    ],
+                },
+            )
+
+    def test_convert_request_rejects_unapproved_request(
+        self,
+    ):
+        purchase_request = self._create_request()
+
+        with self.assertRaises(ValidationError):
+            convert_purchase_request_to_order(
+                company=self.company,
+                purchase_request=purchase_request,
+                user=self.user,
+                payload={
+                    "supplier_id": self.supplier.id,
+                },
+            )
+
+    def test_convert_request_rejects_other_company_supplier(
+        self,
+    ):
+        purchase_request = self._create_approved_request()
+
+        with self.assertRaises(ValidationError):
+            convert_purchase_request_to_order(
+                company=self.company,
+                purchase_request=purchase_request,
+                user=self.user,
+                payload={
+                    "supplier_id": self.other_supplier.id,
+                },
+            )
+
+    def test_cancel_converted_order_restores_request_quantity(
+        self,
+    ):
+        purchase_request = self._create_approved_request(
+            quantity="5.0000",
+        )
+
+        order = convert_purchase_request_to_order(
+            company=self.company,
+            purchase_request=purchase_request,
+            user=self.user,
+            payload={
+                "supplier_id": self.supplier.id,
+                "items": [
+                    {
+                        "purchase_request_item_id": (
+                            purchase_request.items.get().id
+                        ),
+                        "quantity": "2.0000",
+                    }
+                ],
+            },
+        )
+
+        purchase_request.refresh_from_db()
+
+        self.assertEqual(
+            purchase_request.status,
+            PurchaseRequestStatus.PARTIALLY_CONVERTED,
+        )
+
+        cancel_purchase_order(
+            order=order,
+            reason="Order conversion cancelled",
+            user=self.user,
+        )
+
+        purchase_request.refresh_from_db()
+
+        self.assertEqual(
+            purchase_request.status,
+            PurchaseRequestStatus.APPROVED,
+        )
+        self.assertEqual(
+            purchase_request.converted_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            purchase_request.remaining_quantity,
+            Decimal("5.0000"),
+        )
+
+    def test_serialize_purchase_request(
+        self,
+    ):
+        purchase_request = self._create_request()
+
+        data = serialize_purchase_request(
+            purchase_request,
+            include_items=True,
+        )
+
+        self.assertEqual(
+            data["id"],
+            purchase_request.id,
+        )
+        self.assertEqual(
+            data["status"],
+            PurchaseRequestStatus.DRAFT,
+        )
+        self.assertEqual(
+            data["priority"],
+            "HIGH",
+        )
+        self.assertEqual(
+            data["requested_quantity"],
+            "5.0000",
+        )
+        self.assertEqual(
+            len(data["items"]),
+            1,
+        )
+        self.assertTrue(
+            data["allowed_actions"]["submit"],
+        )
+        self.assertFalse(
+            data["allowed_actions"]["convert_to_order"],
+        )
+
+    def test_purchase_request_permissions(
+        self,
+    ):
+        admin_user = User.objects.create_user(
+            username="purchase_request_admin",
+            email="purchase_request_admin@example.com",
+            password="StrongPass123!",
+        )
+
+        admin_membership = (
+            CompanyMembership.objects.create(
+                user=admin_user,
+                company=self.company,
+                role=CompanyRole.ADMIN,
+                status=MembershipStatus.ACTIVE,
+                is_primary=True,
+                created_by=self.user,
+            )
+        )
+
+        admin_permissions = (
+            admin_membership.company_permissions
+        )
+
+        expected_permissions = [
+            "company.purchases.requests.view",
+            "company.purchases.requests.create",
+            "company.purchases.requests.update",
+            "company.purchases.requests.submit",
+            "company.purchases.requests.approve",
+            "company.purchases.requests.reject",
+            "company.purchases.requests.cancel",
+            "company.purchases.requests.convert_order",
+        ]
+
+        for permission in expected_permissions:
+            self.assertIn(
+                permission,
+                admin_permissions,
+            )
+
+        viewer_permissions = (
+            self.viewer_membership.company_permissions
+        )
+
+        self.assertIn(
+            "company.purchases.requests.view",
+            viewer_permissions,
+        )
+        self.assertNotIn(
+            "company.purchases.requests.create",
+            viewer_permissions,
+        )
+        self.assertNotIn(
+            "company.purchases.requests.approve",
+            viewer_permissions,
+        )
+        self.assertNotIn(
+            "company.purchases.requests.convert_order",
+            viewer_permissions,
+        )
+
+
+class PurchaseRequestsAPITests(PurchasesTestCase):
+    """
+    Phase 21.10 company purchase request API tests.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.user)
+
+    def _create_request(
+        self,
+        *,
+        company=None,
+        user=None,
+        branch=None,
+        item=None,
+        quantity="5.0000",
+    ) -> PurchaseRequest:
+        company = company or self.company
+        user = user or self.user
+        branch = branch or self.branch
+        item = item or self.item
+
+        return create_purchase_request(
+            company=company,
+            user=user,
+            payload={
+                "branch_id": branch.id,
+                "priority": "NORMAL",
+                "purpose": "API purchase request",
+                "items": [
+                    {
+                        "item_id": item.id,
+                        "quantity": quantity,
+                        "suggested_unit_price": "100.00",
+                    }
+                ],
+            },
+        )
+
+    def test_purchase_request_create_endpoint(
+        self,
+    ):
+        response = self.client.post(
+            "/api/company/purchases/requests/create/",
+            data={
+                "branch_id": self.branch.id,
+                "priority": "URGENT",
+                "purpose": "Created through API",
+                "items": [
+                    {
+                        "item_id": self.item.id,
+                        "quantity": "2.0000",
+                        "suggested_unit_price": "100.00",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+        )
+
+        payload = response.json()
+
+        self.assertTrue(
+            payload["success"],
+        )
+        self.assertEqual(
+            payload["purchase_request"]["status"],
+            PurchaseRequestStatus.DRAFT,
+        )
+        self.assertEqual(
+            payload["purchase_request"]["priority"],
+            "URGENT",
+        )
+        self.assertEqual(
+            payload["purchase_request"][
+                "requested_quantity"
+            ],
+            "2.0000",
+        )
+        self.assertEqual(
+            len(
+                payload["purchase_request"]["items"]
+            ),
+            1,
+        )
+
+    def test_purchase_request_create_can_submit_now(
+        self,
+    ):
+        response = self.client.post(
+            "/api/company/purchases/requests/create/",
+            data={
+                "branch_id": self.branch.id,
+                "submit_now": True,
+                "items": [
+                    {
+                        "item_id": self.item.id,
+                        "quantity": "1.0000",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+        )
+        self.assertEqual(
+            response.json()["purchase_request"]["status"],
+            PurchaseRequestStatus.SUBMITTED,
+        )
+
+    def test_purchase_requests_list_is_company_scoped(
+        self,
+    ):
+        purchase_request = self._create_request()
+
+        self._create_request(
+            company=self.other_company,
+            user=self.other_user,
+            branch=self.other_branch,
+            item=self.other_item,
+        )
+
+        response = self.client.get(
+            "/api/company/purchases/requests/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(
+            payload["count"],
+            1,
+        )
+        self.assertEqual(
+            payload["results"][0]["id"],
+            purchase_request.id,
+        )
+
+    def test_purchase_request_list_supports_search(
+        self,
+    ):
+        purchase_request = self._create_request()
+
+        response = self.client.get(
+            "/api/company/purchases/requests/",
+            {
+                "search": (
+                    purchase_request.request_number
+                ),
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+        self.assertEqual(
+            response.json()["count"],
+            1,
+        )
+
+    def test_purchase_request_detail_endpoint(
+        self,
+    ):
+        purchase_request = self._create_request()
+
+        response = self.client.get(
+            (
+                "/api/company/purchases/requests/"
+                f"{purchase_request.id}/"
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(
+            payload["purchase_request"]["id"],
+            purchase_request.id,
+        )
+        self.assertEqual(
+            len(
+                payload["purchase_request"]["items"]
+            ),
+            1,
+        )
+        self.assertEqual(
+            payload["purchase_request"][
+                "purchase_orders"
+            ],
+            [],
+        )
+
+    def test_purchase_request_detail_blocks_cross_company(
+        self,
+    ):
+        other_request = self._create_request(
+            company=self.other_company,
+            user=self.other_user,
+            branch=self.other_branch,
+            item=self.other_item,
+        )
+
+        response = self.client.get(
+            (
+                "/api/company/purchases/requests/"
+                f"{other_request.id}/"
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+    def test_purchase_request_update_endpoint(
+        self,
+    ):
+        purchase_request = self._create_request()
+
+        response = self.client.patch(
+            (
+                "/api/company/purchases/requests/"
+                f"{purchase_request.id}/update/"
+            ),
+            data={
+                "priority": "HIGH",
+                "notes": "Updated through API",
+                "items": [
+                    {
+                        "item_id": self.service.id,
+                        "quantity": "3.0000",
+                        "suggested_unit_price": "250.00",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        payload = response.json()
+
+        self.assertEqual(
+            payload["purchase_request"]["priority"],
+            "HIGH",
+        )
+        self.assertEqual(
+            payload["purchase_request"]["notes"],
+            "Updated through API",
+        )
+        self.assertEqual(
+            payload["purchase_request"][
+                "requested_quantity"
+            ],
+            "3.0000",
+        )
+
+    def test_purchase_request_submit_and_approve_endpoints(
+        self,
+    ):
+        purchase_request = self._create_request()
+
+        submit_response = self.client.post(
+            (
+                "/api/company/purchases/requests/"
+                f"{purchase_request.id}/submit/"
+            )
+        )
+
+        self.assertEqual(
+            submit_response.status_code,
+            200,
+        )
+        self.assertEqual(
+            submit_response.json()[
+                "purchase_request"
+            ]["status"],
+            PurchaseRequestStatus.SUBMITTED,
+        )
+
+        approve_response = self.client.post(
+            (
+                "/api/company/purchases/requests/"
+                f"{purchase_request.id}/approve/"
+            )
+        )
+
+        self.assertEqual(
+            approve_response.status_code,
+            200,
+        )
+
+        purchase_request.refresh_from_db()
+
+        self.assertEqual(
+            purchase_request.status,
+            PurchaseRequestStatus.APPROVED,
+        )
+        self.assertEqual(
+            purchase_request.approved_by,
+            self.user,
+        )
+
+    def test_purchase_request_reject_endpoint(
+        self,
+    ):
+        purchase_request = self._create_request()
+
+        submit_purchase_request(
+            purchase_request=purchase_request,
+            user=self.user,
+        )
+
+        response = self.client.post(
+            (
+                "/api/company/purchases/requests/"
+                f"{purchase_request.id}/reject/"
+            ),
+            data={
+                "reason": "Rejected through API",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        purchase_request.refresh_from_db()
+
+        self.assertEqual(
+            purchase_request.status,
+            PurchaseRequestStatus.REJECTED,
+        )
+        self.assertEqual(
+            purchase_request.rejection_reason,
+            "Rejected through API",
+        )
+
+    def test_purchase_request_cancel_endpoint(
+        self,
+    ):
+        purchase_request = self._create_request()
+
+        response = self.client.post(
+            (
+                "/api/company/purchases/requests/"
+                f"{purchase_request.id}/cancel/"
+            ),
+            data={
+                "reason": "Cancelled through API",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        purchase_request.refresh_from_db()
+
+        self.assertEqual(
+            purchase_request.status,
+            PurchaseRequestStatus.CANCELLED,
+        )
+        self.assertEqual(
+            purchase_request.cancellation_reason,
+            "Cancelled through API",
+        )
+
+    def test_purchase_request_convert_order_endpoint(
+        self,
+    ):
+        purchase_request = self._create_request(
+            quantity="4.0000",
+        )
+
+        purchase_request = submit_purchase_request(
+            purchase_request=purchase_request,
+            user=self.user,
+        )
+        purchase_request = approve_purchase_request(
+            purchase_request=purchase_request,
+            user=self.user,
+        )
+
+        request_item = purchase_request.items.get()
+
+        response = self.client.post(
+            (
+                "/api/company/purchases/requests/"
+                f"{purchase_request.id}/convert-order/"
+            ),
+            data={
+                "supplier_id": self.supplier.id,
+                "items": [
+                    {
+                        "purchase_request_item_id": (
+                            request_item.id
+                        ),
+                        "quantity": "2.0000",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+        )
+
+        payload = response.json()
+
+        self.assertTrue(
+            payload["success"],
+        )
+        self.assertEqual(
+            payload["purchase_order"][
+                "purchase_request"
+            ]["id"],
+            purchase_request.id,
+        )
+        self.assertEqual(
+            payload["purchase_order"]["items"][0][
+                "purchase_request_item_id"
+            ],
+            request_item.id,
+        )
+        self.assertEqual(
+            payload["purchase_request"]["status"],
+            PurchaseRequestStatus.PARTIALLY_CONVERTED,
+        )
+        self.assertEqual(
+            payload["purchase_request"][
+                "remaining_quantity"
+            ],
+            "2.0000",
+        )
+
+    def test_purchase_request_convert_order_rejects_over_conversion(
+        self,
+    ):
+        purchase_request = self._create_request(
+            quantity="2.0000",
+        )
+
+        purchase_request = submit_purchase_request(
+            purchase_request=purchase_request,
+            user=self.user,
+        )
+        purchase_request = approve_purchase_request(
+            purchase_request=purchase_request,
+            user=self.user,
+        )
+
+        response = self.client.post(
+            (
+                "/api/company/purchases/requests/"
+                f"{purchase_request.id}/convert-order/"
+            ),
+            data={
+                "supplier_id": self.supplier.id,
+                "items": [
+                    {
+                        "purchase_request_item_id": (
+                            purchase_request.items.get().id
+                        ),
+                        "quantity": "3.0000",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+        )
+        self.assertFalse(
+            response.json()["success"],
+        )
+
+    def test_viewer_can_view_but_cannot_create_request(
+        self,
+    ):
+        purchase_request = self._create_request()
+
+        self.client.force_login(
+            self.viewer_user,
+        )
+
+        list_response = self.client.get(
+            "/api/company/purchases/requests/"
+        )
+
+        self.assertEqual(
+            list_response.status_code,
+            200,
+        )
+
+        detail_response = self.client.get(
+            (
+                "/api/company/purchases/requests/"
+                f"{purchase_request.id}/"
+            )
+        )
+
+        self.assertEqual(
+            detail_response.status_code,
+            200,
+        )
+
+        create_response = self.client.post(
+            "/api/company/purchases/requests/create/",
+            data={
+                "items": [
+                    {
+                        "item_id": self.item.id,
+                        "quantity": "1.0000",
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            create_response.status_code,
+            403,
+        )
 

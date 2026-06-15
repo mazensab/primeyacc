@@ -76,6 +76,9 @@ from purchases.models import (
     PurchaseOrder,
     PurchaseOrderItem,
     PurchaseOrderStatus,
+    PurchaseRequest,
+    PurchaseRequestItem,
+    PurchaseRequestStatus,
     PurchaseReceipt,
     PurchaseReceiptItem,
     PurchaseReceiptStatus,
@@ -878,6 +881,1215 @@ def cancel_purchase_bill(
 
 
 # ============================================================
+# Purchase Requests Services Foundation
+# ============================================================
+
+
+def get_company_purchase_request_prefix(
+    company: Company,
+) -> str:
+    """
+    Resolve purchase request number prefix.
+    """
+    settings_obj = getattr(
+        company,
+        "operational_settings",
+        None,
+    )
+
+    configured_prefix = (
+        getattr(
+            settings_obj,
+            "purchase_request_prefix",
+            "",
+        )
+        if settings_obj
+        else ""
+    )
+
+    return normalize_text(
+        configured_prefix
+    ) or "PR"
+
+
+def generate_purchase_request_number(
+    company: Company,
+) -> str:
+    """
+    Generate a company-scoped purchase request number.
+
+    Format:
+    PR-YYYYMMDD-000001
+    """
+    today = timezone.localdate()
+    prefix = get_company_purchase_request_prefix(
+        company
+    )
+    date_part = today.strftime("%Y%m%d")
+    starts_with = f"{prefix}-{date_part}-"
+
+    last_request = (
+        PurchaseRequest.objects
+        .filter(
+            company=company,
+            request_number__startswith=starts_with,
+        )
+        .order_by("-request_number")
+        .first()
+    )
+
+    next_number = 1
+
+    if last_request:
+        try:
+            next_number = (
+                int(
+                    last_request.request_number
+                    .split("-")[-1]
+                )
+                + 1
+            )
+        except (TypeError, ValueError):
+            next_number = 1
+
+    return (
+        f"{starts_with}"
+        f"{next_number:06d}"
+    )
+
+
+def normalize_purchase_request_priority(
+    value: Any,
+) -> str:
+    """
+    Normalize and validate purchase request priority.
+    """
+    priority = normalize_text(
+        value or "NORMAL"
+    ).upper()
+
+    valid_priorities = {
+        "LOW",
+        "NORMAL",
+        "HIGH",
+        "URGENT",
+    }
+
+    if priority not in valid_priorities:
+        raise ValidationError(
+            {
+                "priority":
+                    "Invalid purchase request priority."
+            }
+        )
+
+    return priority
+
+
+def get_purchase_request_for_company(
+    *,
+    company: Company,
+    request_id: int | str,
+) -> PurchaseRequest:
+    """
+    Return one company-scoped purchase request.
+    """
+    purchase_request = (
+        PurchaseRequest.objects
+        .select_related(
+            "company",
+            "branch",
+            "created_by",
+            "updated_by",
+            "submitted_by",
+            "approved_by",
+            "rejected_by",
+            "cancelled_by",
+        )
+        .filter(
+            id=request_id,
+            company=company,
+        )
+        .first()
+    )
+
+    if not purchase_request:
+        raise ValidationError(
+            {
+                "purchase_request":
+                    "Purchase request was not found "
+                    "for this company."
+            }
+        )
+
+    return purchase_request
+
+
+def get_convertible_purchase_request_for_company(
+    *,
+    company: Company,
+    request_id: int | str,
+) -> PurchaseRequest:
+    """
+    Return an approved request eligible for conversion.
+    """
+    purchase_request = (
+        get_purchase_request_for_company(
+            company=company,
+            request_id=request_id,
+        )
+    )
+
+    if not purchase_request.can_be_converted:
+        raise ValidationError(
+            {
+                "purchase_request":
+                    "Purchase request must be approved "
+                    "before order conversion."
+            }
+        )
+
+    if (
+        purchase_request.remaining_quantity
+        <= Decimal("0.0000")
+    ):
+        raise ValidationError(
+            {
+                "purchase_request":
+                    "Purchase request has no remaining "
+                    "quantity available for conversion."
+            }
+        )
+
+    return purchase_request
+
+
+def get_purchase_request_item_for_company(
+    *,
+    company: Company,
+    purchase_request: PurchaseRequest,
+    request_item_id: int | str,
+) -> PurchaseRequestItem:
+    """
+    Return one request item belonging to the request and company.
+    """
+    request_item = (
+        PurchaseRequestItem.objects
+        .select_related(
+            "request",
+            "company",
+            "item",
+            "item__unit",
+        )
+        .filter(
+            id=request_item_id,
+            company=company,
+            request=purchase_request,
+        )
+        .first()
+    )
+
+    if not request_item:
+        raise ValidationError(
+            {
+                "purchase_request_item":
+                    "Purchase request item was not found "
+                    "for this request and company."
+            }
+        )
+
+    return request_item
+
+
+def build_purchase_request_item(
+    *,
+    purchase_request: PurchaseRequest,
+    company: Company,
+    payload: dict[str, Any],
+    line_number: int,
+) -> PurchaseRequestItem:
+    """
+    Build and save one draft purchase request item.
+    """
+    if not purchase_request.can_be_edited:
+        raise ValidationError(
+            "Only draft purchase requests can be edited."
+        )
+
+    item_id = (
+        payload.get("item_id")
+        or payload.get("item")
+    )
+
+    if not item_id:
+        raise ValidationError(
+            {
+                "item":
+                    "Catalog item is required."
+            }
+        )
+
+    item = get_purchase_item_for_company(
+        company,
+        item_id,
+    )
+
+    default_price = get_item_purchase_price(
+        item
+    )
+
+    request_item = PurchaseRequestItem(
+        request=purchase_request,
+        company=company,
+        item=item,
+        line_number=int(
+            payload.get("line_number")
+            or line_number
+        ),
+        quantity=quantize_quantity(
+            normalize_decimal(
+                payload.get(
+                    "quantity",
+                    Decimal("1.0000"),
+                ),
+                field_name="quantity",
+                default=Decimal("1.0000"),
+            )
+        ),
+        suggested_unit_price=quantize_money(
+            normalize_decimal(
+                payload.get(
+                    "suggested_unit_price",
+                    payload.get(
+                        "unit_price",
+                        default_price,
+                    ),
+                ),
+                field_name="suggested_unit_price",
+                default=default_price,
+            )
+        ),
+        notes=normalize_text(
+            payload.get("notes")
+        ),
+        extra_data=(
+            payload.get("extra_data")
+            if isinstance(
+                payload.get("extra_data"),
+                dict,
+            )
+            else {}
+        ),
+    )
+    request_item.save()
+
+    return request_item
+
+
+@transaction.atomic
+def create_purchase_request(
+    *,
+    company: Company,
+    payload: dict[str, Any],
+    user=None,
+) -> PurchaseRequest:
+    """
+    Create a draft internal purchase request with items.
+    """
+    if not company:
+        raise ValidationError(
+            "Company is required."
+        )
+
+    items_payload = payload.get("items") or []
+
+    if (
+        not isinstance(items_payload, list)
+        or not items_payload
+    ):
+        raise ValidationError(
+            {
+                "items":
+                    "At least one purchase request "
+                    "item is required."
+            }
+        )
+
+    branch = get_branch_for_company(
+        company,
+        payload.get("branch_id")
+        or payload.get("branch"),
+    )
+
+    request_date = normalize_date(
+        payload.get("request_date")
+        or timezone.localdate(),
+        field_name="request_date",
+    )
+    required_date = normalize_date(
+        payload.get("required_date"),
+        field_name="required_date",
+    )
+
+    purchase_request = PurchaseRequest(
+        company=company,
+        branch=branch,
+        request_number=(
+            normalize_text(
+                payload.get("request_number")
+            )
+            or generate_purchase_request_number(
+                company
+            )
+        ),
+        request_date=(
+            request_date
+            or timezone.localdate()
+        ),
+        required_date=required_date,
+        status=PurchaseRequestStatus.DRAFT,
+        priority=normalize_purchase_request_priority(
+            payload.get("priority")
+        ),
+        purpose=normalize_text(
+            payload.get("purpose")
+        ),
+        notes=normalize_text(
+            payload.get("notes")
+        ),
+        extra_data=(
+            payload.get("extra_data")
+            if isinstance(
+                payload.get("extra_data"),
+                dict,
+            )
+            else {}
+        ),
+        created_by=user,
+        updated_by=user,
+    )
+    purchase_request.full_clean()
+    purchase_request.save()
+
+    for index, item_payload in enumerate(
+        items_payload,
+        start=1,
+    ):
+        if not isinstance(item_payload, dict):
+            raise ValidationError(
+                {
+                    "items":
+                        "Each purchase request item "
+                        "must be an object."
+                }
+            )
+
+        build_purchase_request_item(
+            purchase_request=purchase_request,
+            company=company,
+            payload=item_payload,
+            line_number=index,
+        )
+
+    purchase_request.refresh_from_db()
+
+    return purchase_request
+
+
+@transaction.atomic
+def update_purchase_request(
+    *,
+    purchase_request: PurchaseRequest,
+    payload: dict[str, Any],
+    user=None,
+) -> PurchaseRequest:
+    """
+    Update a draft purchase request.
+
+    When items are supplied, existing request lines are replaced.
+    """
+    locked_request = (
+        PurchaseRequest.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "branch",
+        )
+        .get(pk=purchase_request.pk)
+    )
+
+    if not locked_request.can_be_edited:
+        raise ValidationError(
+            "Only draft purchase requests can be updated."
+        )
+
+    company = locked_request.company
+
+    if "branch_id" in payload or "branch" in payload:
+        locked_request.branch = (
+            get_branch_for_company(
+                company,
+                payload.get("branch_id")
+                or payload.get("branch"),
+            )
+        )
+
+    if "request_number" in payload:
+        locked_request.request_number = (
+            normalize_text(
+                payload.get("request_number")
+            )
+        )
+
+    if "request_date" in payload:
+        locked_request.request_date = (
+            normalize_date(
+                payload.get("request_date"),
+                field_name="request_date",
+            )
+            or locked_request.request_date
+        )
+
+    if "required_date" in payload:
+        locked_request.required_date = (
+            normalize_date(
+                payload.get("required_date"),
+                field_name="required_date",
+            )
+        )
+
+    if "priority" in payload:
+        locked_request.priority = (
+            normalize_purchase_request_priority(
+                payload.get("priority")
+            )
+        )
+
+    if "purpose" in payload:
+        locked_request.purpose = normalize_text(
+            payload.get("purpose")
+        )
+
+    if "notes" in payload:
+        locked_request.notes = normalize_text(
+            payload.get("notes")
+        )
+
+    if isinstance(
+        payload.get("extra_data"),
+        dict,
+    ):
+        locked_request.extra_data = (
+            payload["extra_data"]
+        )
+
+    locked_request.updated_by = user
+    locked_request.full_clean()
+    locked_request.save()
+
+    if "items" in payload:
+        items_payload = payload.get("items") or []
+
+        if (
+            not isinstance(items_payload, list)
+            or not items_payload
+        ):
+            raise ValidationError(
+                {
+                    "items":
+                        "At least one purchase request "
+                        "item is required."
+                }
+            )
+
+        locked_request.items.all().delete()
+
+        for index, item_payload in enumerate(
+            items_payload,
+            start=1,
+        ):
+            if not isinstance(item_payload, dict):
+                raise ValidationError(
+                    {
+                        "items":
+                            "Each purchase request item "
+                            "must be an object."
+                    }
+                )
+
+            build_purchase_request_item(
+                purchase_request=locked_request,
+                company=company,
+                payload=item_payload,
+                line_number=index,
+            )
+
+    locked_request.refresh_from_db()
+
+    return locked_request
+
+
+@transaction.atomic
+def submit_purchase_request(
+    *,
+    purchase_request: PurchaseRequest,
+    user=None,
+) -> PurchaseRequest:
+    """
+    Submit a draft purchase request for approval.
+    """
+    locked_request = (
+        PurchaseRequest.objects
+        .select_for_update()
+        .get(pk=purchase_request.pk)
+    )
+
+    locked_request.submit(user=user)
+    locked_request.refresh_from_db()
+
+    return locked_request
+
+
+@transaction.atomic
+def approve_purchase_request(
+    *,
+    purchase_request: PurchaseRequest,
+    user=None,
+) -> PurchaseRequest:
+    """
+    Approve a submitted purchase request.
+    """
+    locked_request = (
+        PurchaseRequest.objects
+        .select_for_update()
+        .get(pk=purchase_request.pk)
+    )
+
+    locked_request.approve(user=user)
+    locked_request.refresh_from_db()
+
+    return locked_request
+
+
+@transaction.atomic
+def reject_purchase_request(
+    *,
+    purchase_request: PurchaseRequest,
+    reason: str,
+    user=None,
+) -> PurchaseRequest:
+    """
+    Reject a submitted purchase request.
+    """
+    locked_request = (
+        PurchaseRequest.objects
+        .select_for_update()
+        .get(pk=purchase_request.pk)
+    )
+
+    locked_request.reject(
+        reason=normalize_text(reason),
+        user=user,
+    )
+    locked_request.refresh_from_db()
+
+    return locked_request
+
+
+@transaction.atomic
+def cancel_purchase_request(
+    *,
+    purchase_request: PurchaseRequest,
+    reason: str = "",
+    user=None,
+) -> PurchaseRequest:
+    """
+    Cancel an eligible purchase request.
+    """
+    locked_request = (
+        PurchaseRequest.objects
+        .select_for_update()
+        .get(pk=purchase_request.pk)
+    )
+
+    locked_request.cancel(
+        reason=normalize_text(reason),
+        user=user,
+    )
+    locked_request.refresh_from_db()
+
+    return locked_request
+
+
+def validate_purchase_request_conversion_quantity(
+    *,
+    request_item: PurchaseRequestItem,
+    quantity: Decimal,
+) -> None:
+    """
+    Prevent conversion above the remaining request quantity.
+    """
+    quantity = quantize_quantity(quantity)
+
+    if quantity <= Decimal("0.0000"):
+        raise ValidationError(
+            {
+                "quantity":
+                    "Order quantity must be greater than zero."
+            }
+        )
+
+    if quantity > request_item.remaining_quantity:
+        raise ValidationError(
+            {
+                "quantity":
+                    "Order quantity cannot exceed "
+                    "the remaining purchase request quantity."
+            }
+        )
+
+
+def build_purchase_order_item_from_request(
+    *,
+    order: PurchaseOrder,
+    request_item: PurchaseRequestItem,
+    quantity: Decimal,
+    line_number: int,
+    payload: dict[str, Any] | None = None,
+) -> PurchaseOrderItem:
+    """
+    Create one purchase order item from a request item.
+    """
+    payload = payload or {}
+
+    validate_purchase_request_conversion_quantity(
+        request_item=request_item,
+        quantity=quantity,
+    )
+
+    unit_price = quantize_money(
+        normalize_decimal(
+            payload.get(
+                "unit_price",
+                request_item.suggested_unit_price,
+            ),
+            field_name="unit_price",
+            default=request_item.suggested_unit_price,
+        )
+    )
+
+    discount_amount = quantize_money(
+        normalize_decimal(
+            payload.get(
+                "discount_amount",
+                MONEY_ZERO,
+            ),
+            field_name="discount_amount",
+            default=MONEY_ZERO,
+        )
+    )
+
+    order_item = PurchaseOrderItem(
+        order=order,
+        company=order.company,
+        item=request_item.item,
+        purchase_request_item=request_item,
+        line_number=int(
+            payload.get("line_number")
+            or line_number
+        ),
+        quantity=quantity,
+        unit_price=unit_price,
+        discount_amount=discount_amount,
+        notes=normalize_text(
+            payload.get("notes")
+            or request_item.notes
+        ),
+        extra_data={
+            **(request_item.extra_data or {}),
+            **(
+                payload.get("extra_data")
+                if isinstance(
+                    payload.get("extra_data"),
+                    dict,
+                )
+                else {}
+            ),
+            "source": "purchase_request",
+            "purchase_request_id": (
+                request_item.request_id
+            ),
+            "purchase_request_item_id": (
+                request_item.id
+            ),
+        },
+    )
+    order_item.save()
+
+    return order_item
+
+
+@transaction.atomic
+def convert_purchase_request_to_order(
+    *,
+    company: Company,
+    purchase_request: PurchaseRequest,
+    payload: dict[str, Any],
+    user=None,
+) -> PurchaseOrder:
+    """
+    Convert all or selected remaining request quantities
+    into one draft purchase order.
+
+    Required:
+    - supplier_id
+
+    Optional items:
+    [
+        {
+            "purchase_request_item_id": 1,
+            "quantity": "2.0000",
+            "unit_price": "15.00",
+            "discount_amount": "0.00"
+        }
+    ]
+
+    When items are omitted, all remaining request quantities
+    are converted.
+    """
+    if not company:
+        raise ValidationError(
+            "Company is required."
+        )
+
+    locked_request = (
+        PurchaseRequest.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "branch",
+        )
+        .filter(
+            pk=purchase_request.pk,
+            company=company,
+        )
+        .first()
+    )
+
+    if not locked_request:
+        raise ValidationError(
+            {
+                "purchase_request":
+                    "Purchase request was not found "
+                    "for the current company."
+            }
+        )
+
+    if not locked_request.can_be_converted:
+        raise ValidationError(
+            {
+                "purchase_request":
+                    "Purchase request must be approved "
+                    "before order conversion."
+            }
+        )
+
+    supplier_id = (
+        payload.get("supplier_id")
+        or payload.get("supplier")
+    )
+
+    if not supplier_id:
+        raise ValidationError(
+            {
+                "supplier":
+                    "Supplier is required."
+            }
+        )
+
+    supplier = get_supplier_for_company(
+        company,
+        supplier_id,
+    )
+
+    branch = locked_request.branch
+
+    if "branch_id" in payload or "branch" in payload:
+        branch = get_branch_for_company(
+            company,
+            payload.get("branch_id")
+            or payload.get("branch"),
+        )
+
+    order_date = normalize_date(
+        payload.get("order_date")
+        or timezone.localdate(),
+        field_name="order_date",
+    )
+    expected_date = normalize_date(
+        payload.get("expected_date")
+        or locked_request.required_date,
+        field_name="expected_date",
+    )
+
+    order = PurchaseOrder(
+        company=company,
+        branch=branch,
+        supplier=supplier,
+        purchase_request=locked_request,
+        order_number=(
+            normalize_text(
+                payload.get("order_number")
+            )
+            or generate_purchase_order_number(
+                company
+            )
+        ),
+        supplier_reference=normalize_text(
+            payload.get("supplier_reference")
+        ),
+        order_date=(
+            order_date
+            or timezone.localdate()
+        ),
+        expected_date=expected_date,
+        status=PurchaseOrderStatus.DRAFT,
+        currency_code=normalize_text(
+            payload.get("currency_code")
+            or company.currency_code
+            or "SAR"
+        ).upper(),
+        notes=normalize_text(
+            payload.get("notes")
+            or locked_request.notes
+        ),
+        extra_data={
+            **(
+                payload.get("extra_data")
+                if isinstance(
+                    payload.get("extra_data"),
+                    dict,
+                )
+                else {}
+            ),
+            "source": "purchase_request",
+            "purchase_request_id": locked_request.id,
+        },
+        created_by=user,
+        updated_by=user,
+    )
+    order.full_clean()
+    order.save()
+
+    requested_items = payload.get("items")
+    source_items: list[dict[str, Any]] = []
+    used_request_item_ids: set[int] = set()
+
+    if requested_items in [None, []]:
+        for request_item in (
+            locked_request.items
+            .select_for_update()
+            .select_related(
+                "item",
+                "item__unit",
+            )
+            .order_by(
+                "line_number",
+                "id",
+            )
+        ):
+            remaining = request_item.remaining_quantity
+
+            if remaining > Decimal("0.0000"):
+                source_items.append(
+                    {
+                        "request_item": request_item,
+                        "quantity": remaining,
+                        "payload": {},
+                    }
+                )
+    else:
+        if not isinstance(requested_items, list):
+            raise ValidationError(
+                {
+                    "items":
+                        "Purchase order items must be a list."
+                }
+            )
+
+        for item_payload in requested_items:
+            if not isinstance(item_payload, dict):
+                raise ValidationError(
+                    {
+                        "items":
+                            "Each purchase order item "
+                            "must be an object."
+                    }
+                )
+
+            request_item_id = (
+                item_payload.get(
+                    "purchase_request_item_id"
+                )
+                or item_payload.get(
+                    "request_item_id"
+                )
+                or item_payload.get(
+                    "purchase_request_item"
+                )
+            )
+
+            if not request_item_id:
+                raise ValidationError(
+                    {
+                        "purchase_request_item":
+                            "Purchase request item is required."
+                    }
+                )
+
+            request_item = (
+                get_purchase_request_item_for_company(
+                    company=company,
+                    purchase_request=locked_request,
+                    request_item_id=request_item_id,
+                )
+            )
+
+            if request_item.id in used_request_item_ids:
+                raise ValidationError(
+                    {
+                        "items":
+                            "A purchase request item cannot "
+                            "appear more than once in the "
+                            "same conversion."
+                    }
+                )
+
+            used_request_item_ids.add(
+                request_item.id
+            )
+
+            quantity = quantize_quantity(
+                normalize_decimal(
+                    item_payload.get("quantity"),
+                    field_name="quantity",
+                    default=(
+                        request_item.remaining_quantity
+                    ),
+                )
+            )
+
+            source_items.append(
+                {
+                    "request_item": request_item,
+                    "quantity": quantity,
+                    "payload": item_payload,
+                }
+            )
+
+    if not source_items:
+        raise ValidationError(
+            {
+                "items":
+                    "Purchase request has no remaining "
+                    "quantity available for conversion."
+            }
+        )
+
+    for source in source_items:
+        validate_purchase_request_conversion_quantity(
+            request_item=source["request_item"],
+            quantity=source["quantity"],
+        )
+
+    for index, source in enumerate(
+        source_items,
+        start=1,
+    ):
+        build_purchase_order_item_from_request(
+            order=order,
+            request_item=source["request_item"],
+            quantity=source["quantity"],
+            line_number=index,
+            payload=source["payload"],
+        )
+
+    order.recalculate_totals(save=True)
+    locked_request.refresh_conversion_status(
+        save=True
+    )
+
+    order.refresh_from_db()
+    locked_request.refresh_from_db()
+
+    return order
+
+
+def serialize_purchase_request_item(
+    item: PurchaseRequestItem,
+) -> dict[str, Any]:
+    """
+    Serialize one purchase request item.
+    """
+    return {
+        "id": item.id,
+        "line_number": item.line_number,
+        "catalog_item_id": item.item_id,
+        "item_code": item.item_code_snapshot,
+        "item_name": item.item_name_snapshot,
+        "item_name_ar": (
+            item.item_name_ar_snapshot
+        ),
+        "item_name_en": (
+            item.item_name_en_snapshot
+        ),
+        "unit_name": item.unit_name_snapshot,
+        "quantity": str(item.quantity),
+        "converted_quantity": str(
+            item.converted_quantity
+        ),
+        "remaining_quantity": str(
+            item.remaining_quantity
+        ),
+        "suggested_unit_price": str(
+            item.suggested_unit_price
+        ),
+        "notes": item.notes,
+        "extra_data": item.extra_data or {},
+        "created_at": (
+            item.created_at.isoformat()
+            if item.created_at
+            else None
+        ),
+        "updated_at": (
+            item.updated_at.isoformat()
+            if item.updated_at
+            else None
+        ),
+    }
+
+
+def serialize_purchase_request(
+    purchase_request: PurchaseRequest,
+    *,
+    include_items: bool = True,
+) -> dict[str, Any]:
+    """
+    Serialize a purchase request for company APIs.
+    """
+    result = {
+        "id": purchase_request.id,
+        "request_number": (
+            purchase_request.request_number
+        ),
+        "request_date": (
+            purchase_request.request_date.isoformat()
+            if purchase_request.request_date
+            else None
+        ),
+        "required_date": (
+            purchase_request.required_date.isoformat()
+            if purchase_request.required_date
+            else None
+        ),
+        "status": purchase_request.status,
+        "priority": purchase_request.priority,
+        "purpose": purchase_request.purpose,
+        "company": {
+            "id": purchase_request.company_id,
+            "name": purchase_request.company.name,
+        },
+        "branch": (
+            {
+                "id": purchase_request.branch_id,
+                "name": purchase_request.branch.name,
+            }
+            if purchase_request.branch_id
+            else None
+        ),
+        "requested_quantity": str(
+            purchase_request.requested_quantity
+        ),
+        "converted_quantity": str(
+            purchase_request.converted_quantity
+        ),
+        "remaining_quantity": str(
+            purchase_request.remaining_quantity
+        ),
+        "notes": purchase_request.notes,
+        "extra_data": (
+            purchase_request.extra_data or {}
+        ),
+        "submitted_at": (
+            purchase_request.submitted_at.isoformat()
+            if purchase_request.submitted_at
+            else None
+        ),
+        "approved_at": (
+            purchase_request.approved_at.isoformat()
+            if purchase_request.approved_at
+            else None
+        ),
+        "rejected_at": (
+            purchase_request.rejected_at.isoformat()
+            if purchase_request.rejected_at
+            else None
+        ),
+        "rejection_reason": (
+            purchase_request.rejection_reason
+        ),
+        "cancelled_at": (
+            purchase_request.cancelled_at.isoformat()
+            if purchase_request.cancelled_at
+            else None
+        ),
+        "cancellation_reason": (
+            purchase_request.cancellation_reason
+        ),
+        "allowed_actions": {
+            "update": purchase_request.can_be_edited,
+            "submit": purchase_request.can_be_submitted,
+            "approve": purchase_request.can_be_approved,
+            "reject": purchase_request.can_be_rejected,
+            "cancel": purchase_request.can_be_cancelled,
+            "convert_to_order": (
+                purchase_request.can_be_converted
+                and purchase_request.remaining_quantity
+                > Decimal("0.0000")
+            ),
+        },
+        "created_at": (
+            purchase_request.created_at.isoformat()
+            if purchase_request.created_at
+            else None
+        ),
+        "updated_at": (
+            purchase_request.updated_at.isoformat()
+            if purchase_request.updated_at
+            else None
+        ),
+    }
+
+    if include_items:
+        result["items"] = [
+            serialize_purchase_request_item(item)
+            for item in (
+                purchase_request.items
+                .select_related(
+                    "item",
+                    "item__unit",
+                )
+                .order_by(
+                    "line_number",
+                    "id",
+                )
+            )
+        ]
+
+    return result
+
+
+# ============================================================
 # Purchase Orders Services Foundation
 # ============================================================
 
@@ -1450,11 +2662,31 @@ def cancel_purchase_order(
         .get(pk=order.pk)
     )
 
+    source_request_id = (
+        locked_order.purchase_request_id
+    )
+
     locked_order.cancel(
         reason=normalize_text(reason),
         user=user,
     )
     locked_order.refresh_from_db()
+
+    if source_request_id:
+        source_request = (
+            PurchaseRequest.objects
+            .select_for_update()
+            .filter(
+                pk=source_request_id,
+                company=locked_order.company,
+            )
+            .first()
+        )
+
+        if source_request:
+            source_request.refresh_conversion_status(
+                save=True
+            )
 
     return locked_order
 
@@ -1775,6 +3007,9 @@ def serialize_purchase_order_item(
         "id": item.id,
         "line_number": item.line_number,
         "catalog_item_id": item.item_id,
+        "purchase_request_item_id": (
+            item.purchase_request_item_id
+        ),
         "item_code": item.item_code_snapshot,
         "item_name": item.item_name_snapshot,
         "item_name_ar": (
@@ -1872,6 +3107,19 @@ def serialize_purchase_order(
                 order.supplier.display_name
             ),
         },
+        "purchase_request": (
+            {
+                "id": order.purchase_request_id,
+                "request_number": (
+                    order.purchase_request.request_number
+                ),
+                "status": (
+                    order.purchase_request.status
+                ),
+            }
+            if order.purchase_request_id
+            else None
+        ),
         "ordered_quantity": str(
             order.ordered_quantity
         ),

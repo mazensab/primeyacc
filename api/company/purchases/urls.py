@@ -14,6 +14,12 @@ from django.urls import include, path
 
 urlpatterns = [
     path(
+        "requests/",
+        include(
+            "api.company.purchases.requests.urls"
+        ),
+    ),
+    path(
         "orders/",
         include(
             "api.company.purchases.orders.urls"

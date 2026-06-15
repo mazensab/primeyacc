@@ -71,6 +71,790 @@ def quantize_quantity(value: Decimal | int | float | str | None) -> Decimal:
 
 
 # ============================================================
+# Purchase Requests Foundation
+# ============================================================
+
+
+class PurchaseRequestStatus(models.TextChoices):
+    """
+    Internal purchase request lifecycle.
+    """
+
+    DRAFT = "DRAFT", "Draft"
+    SUBMITTED = "SUBMITTED", "Submitted"
+    APPROVED = "APPROVED", "Approved"
+    REJECTED = "REJECTED", "Rejected"
+    PARTIALLY_CONVERTED = (
+        "PARTIALLY_CONVERTED",
+        "Partially converted",
+    )
+    CONVERTED = "CONVERTED", "Converted"
+    CANCELLED = "CANCELLED", "Cancelled"
+
+
+class PurchaseRequest(models.Model):
+    """
+    Company-scoped internal purchase request.
+
+    Request approval and conversion to purchase orders are
+    handled in the purchases service layer.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="purchase_requests",
+        db_index=True,
+        verbose_name="Company",
+    )
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        related_name="purchase_requests",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Branch",
+    )
+
+    request_number = models.CharField(
+        max_length=80,
+        db_index=True,
+        verbose_name="Request number",
+    )
+    request_date = models.DateField(
+        default=timezone.localdate,
+        db_index=True,
+        verbose_name="Request date",
+    )
+    required_date = models.DateField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Required date",
+    )
+    status = models.CharField(
+        max_length=30,
+        choices=PurchaseRequestStatus.choices,
+        default=PurchaseRequestStatus.DRAFT,
+        db_index=True,
+        verbose_name="Status",
+    )
+    priority = models.CharField(
+        max_length=20,
+        choices=[
+            ("LOW", "Low"),
+            ("NORMAL", "Normal"),
+            ("HIGH", "High"),
+            ("URGENT", "Urgent"),
+        ],
+        default="NORMAL",
+        db_index=True,
+        verbose_name="Priority",
+    )
+    purpose = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="Purpose",
+    )
+
+    submitted_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Submitted at",
+    )
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="submitted_purchase_requests",
+        blank=True,
+        null=True,
+        verbose_name="Submitted by",
+    )
+    approved_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Approved at",
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="approved_purchase_requests",
+        blank=True,
+        null=True,
+        verbose_name="Approved by",
+    )
+    rejected_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Rejected at",
+    )
+    rejected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="rejected_purchase_requests",
+        blank=True,
+        null=True,
+        verbose_name="Rejected by",
+    )
+    rejection_reason = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Rejection reason",
+    )
+    cancelled_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Cancelled at",
+    )
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="cancelled_purchase_requests",
+        blank=True,
+        null=True,
+        verbose_name="Cancelled by",
+    )
+    cancellation_reason = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Cancellation reason",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_purchase_requests",
+        blank=True,
+        null=True,
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="updated_purchase_requests",
+        blank=True,
+        null=True,
+        verbose_name="Updated by",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Purchase request"
+        verbose_name_plural = "Purchase requests"
+        ordering = [
+            "-request_date",
+            "-created_at",
+            "-id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "request_number"],
+                name=(
+                    "unique_purchase_request_number_"
+                    "per_company"
+                ),
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["company", "status"],
+            ),
+            models.Index(
+                fields=["company", "request_date"],
+            ),
+            models.Index(
+                fields=["company", "required_date"],
+            ),
+            models.Index(
+                fields=["company", "branch"],
+            ),
+            models.Index(
+                fields=["company", "priority"],
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.request_number
+
+    @property
+    def is_draft(self) -> bool:
+        return self.status == PurchaseRequestStatus.DRAFT
+
+    @property
+    def is_submitted(self) -> bool:
+        return self.status == PurchaseRequestStatus.SUBMITTED
+
+    @property
+    def is_approved(self) -> bool:
+        return self.status in [
+            PurchaseRequestStatus.APPROVED,
+            PurchaseRequestStatus.PARTIALLY_CONVERTED,
+        ]
+
+    @property
+    def can_be_edited(self) -> bool:
+        return self.is_draft
+
+    @property
+    def can_be_submitted(self) -> bool:
+        return self.is_draft
+
+    @property
+    def can_be_approved(self) -> bool:
+        return self.is_submitted
+
+    @property
+    def can_be_rejected(self) -> bool:
+        return self.is_submitted
+
+    @property
+    def can_be_converted(self) -> bool:
+        return self.status in [
+            PurchaseRequestStatus.APPROVED,
+            PurchaseRequestStatus.PARTIALLY_CONVERTED,
+        ]
+
+    @property
+    def can_be_cancelled(self) -> bool:
+        return self.status in [
+            PurchaseRequestStatus.DRAFT,
+            PurchaseRequestStatus.SUBMITTED,
+            PurchaseRequestStatus.APPROVED,
+        ]
+
+    @property
+    def requested_quantity(self) -> Decimal:
+        result = (
+            self.items
+            .aggregate(total=Sum("quantity"))
+            .get("total")
+        )
+
+        return quantize_quantity(
+            result or QUANTITY_ZERO
+        )
+
+    @property
+    def converted_quantity(self) -> Decimal:
+        total = QUANTITY_ZERO
+
+        for item in self.items.all():
+            total += item.converted_quantity
+
+        return quantize_quantity(total)
+
+    @property
+    def remaining_quantity(self) -> Decimal:
+        remaining = quantize_quantity(
+            self.requested_quantity
+            - self.converted_quantity
+        )
+
+        return max(
+            remaining,
+            QUANTITY_ZERO,
+        )
+
+    def clean(self) -> None:
+        super().clean()
+
+        self.request_number = (
+            self.request_number or ""
+        ).strip()
+        self.purpose = (
+            self.purpose or ""
+        ).strip()
+        self.rejection_reason = (
+            self.rejection_reason or ""
+        ).strip()
+        self.cancellation_reason = (
+            self.cancellation_reason or ""
+        ).strip()
+        self.notes = (
+            self.notes or ""
+        ).strip()
+
+        if not self.request_number:
+            raise ValidationError(
+                {
+                    "request_number":
+                        "Purchase request number is required."
+                }
+            )
+
+        if self.branch_id and self.company_id:
+            if self.branch.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "branch":
+                            "Branch does not belong "
+                            "to this company."
+                    }
+                )
+
+        if (
+            self.required_date
+            and self.request_date
+            and self.required_date < self.request_date
+        ):
+            raise ValidationError(
+                {
+                    "required_date":
+                        "Required date cannot be before "
+                        "request date."
+                }
+            )
+
+    def submit(self, user=None) -> None:
+        if not self.can_be_submitted:
+            raise ValidationError(
+                "Only draft purchase requests can be submitted."
+            )
+
+        if not self.items.exists():
+            raise ValidationError(
+                "Cannot submit a purchase request without items."
+            )
+
+        self.status = PurchaseRequestStatus.SUBMITTED
+        self.submitted_at = timezone.now()
+
+        if user:
+            self.submitted_by = user
+            self.updated_by = user
+
+        self.full_clean()
+        self.save(
+            update_fields=[
+                "status",
+                "submitted_at",
+                "submitted_by",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+    def approve(self, user=None) -> None:
+        if not self.can_be_approved:
+            raise ValidationError(
+                "Only submitted purchase requests can be approved."
+            )
+
+        self.status = PurchaseRequestStatus.APPROVED
+        self.approved_at = timezone.now()
+
+        if user:
+            self.approved_by = user
+            self.updated_by = user
+
+        self.full_clean()
+        self.save(
+            update_fields=[
+                "status",
+                "approved_at",
+                "approved_by",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+    def reject(
+        self,
+        reason: str = "",
+        user=None,
+    ) -> None:
+        if not self.can_be_rejected:
+            raise ValidationError(
+                "Only submitted purchase requests can be rejected."
+            )
+
+        reason = (reason or "").strip()
+
+        if not reason:
+            raise ValidationError(
+                {
+                    "rejection_reason":
+                        "Rejection reason is required."
+                }
+            )
+
+        self.status = PurchaseRequestStatus.REJECTED
+        self.rejected_at = timezone.now()
+        self.rejection_reason = reason
+
+        if user:
+            self.rejected_by = user
+            self.updated_by = user
+
+        self.full_clean()
+        self.save(
+            update_fields=[
+                "status",
+                "rejected_at",
+                "rejected_by",
+                "rejection_reason",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+    def refresh_conversion_status(
+        self,
+        *,
+        save: bool = True,
+    ) -> None:
+        if self.status in [
+            PurchaseRequestStatus.DRAFT,
+            PurchaseRequestStatus.SUBMITTED,
+            PurchaseRequestStatus.REJECTED,
+            PurchaseRequestStatus.CANCELLED,
+        ]:
+            return
+
+        requested = self.requested_quantity
+        converted = self.converted_quantity
+
+        if (
+            requested > QUANTITY_ZERO
+            and converted >= requested
+        ):
+            new_status = PurchaseRequestStatus.CONVERTED
+        elif converted > QUANTITY_ZERO:
+            new_status = (
+                PurchaseRequestStatus.PARTIALLY_CONVERTED
+            )
+        else:
+            new_status = PurchaseRequestStatus.APPROVED
+
+        self.status = new_status
+
+        if save:
+            self.save(
+                update_fields=[
+                    "status",
+                    "updated_at",
+                ]
+            )
+
+    def cancel(
+        self,
+        reason: str = "",
+        user=None,
+    ) -> None:
+        if not self.can_be_cancelled:
+            raise ValidationError(
+                "This purchase request cannot be cancelled."
+            )
+
+        if self.converted_quantity > QUANTITY_ZERO:
+            raise ValidationError(
+                "Converted purchase requests cannot be "
+                "cancelled directly."
+            )
+
+        self.status = PurchaseRequestStatus.CANCELLED
+        self.cancelled_at = timezone.now()
+        self.cancellation_reason = (
+            reason or ""
+        ).strip()
+
+        if user:
+            self.cancelled_by = user
+            self.updated_by = user
+
+        self.full_clean()
+        self.save(
+            update_fields=[
+                "status",
+                "cancelled_at",
+                "cancelled_by",
+                "cancellation_reason",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+
+class PurchaseRequestItem(models.Model):
+    """
+    Purchase request line with catalog snapshot.
+    """
+
+    request = models.ForeignKey(
+        PurchaseRequest,
+        on_delete=models.CASCADE,
+        related_name="items",
+        db_index=True,
+        verbose_name="Purchase request",
+    )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="purchase_request_items",
+        db_index=True,
+        verbose_name="Company",
+    )
+    item = models.ForeignKey(
+        CatalogItem,
+        on_delete=models.PROTECT,
+        related_name="purchase_request_items",
+        db_index=True,
+        verbose_name="Catalog item",
+    )
+
+    line_number = models.PositiveIntegerField(
+        default=1,
+        db_index=True,
+        verbose_name="Line number",
+    )
+    item_code_snapshot = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+    )
+    item_name_snapshot = models.CharField(
+        max_length=255,
+    )
+    item_name_ar_snapshot = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+    item_name_en_snapshot = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+    unit_name_snapshot = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+    )
+
+    quantity = models.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        default=Decimal("1.0000"),
+        validators=[
+            MinValueValidator(Decimal("0.0001"))
+        ],
+        verbose_name="Quantity",
+    )
+    suggested_unit_price = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Suggested unit price",
+    )
+    notes = models.TextField(
+        blank=True,
+        default="",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = [
+            "request_id",
+            "line_number",
+            "id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["request", "line_number"],
+                name=(
+                    "unique_purchase_request_item_line"
+                ),
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["company", "item"],
+            ),
+            models.Index(
+                fields=["request", "line_number"],
+            ),
+            models.Index(
+                fields=["company", "created_at"],
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.request.request_number} - "
+            f"{self.item_name_snapshot}"
+        )
+
+    @property
+    def converted_quantity(self) -> Decimal:
+        result = (
+            self.purchase_order_items
+            .exclude(
+                order__status=PurchaseOrderStatus.CANCELLED,
+            )
+            .aggregate(total=Sum("quantity"))
+            .get("total")
+        )
+
+        return quantize_quantity(
+            result or QUANTITY_ZERO
+        )
+
+    @property
+    def remaining_quantity(self) -> Decimal:
+        remaining = quantize_quantity(
+            self.quantity - self.converted_quantity
+        )
+
+        return max(
+            remaining,
+            QUANTITY_ZERO,
+        )
+
+    def apply_item_snapshot(self) -> None:
+        if not self.item_id:
+            return
+
+        self.item_code_snapshot = (
+            self.item.code
+            or self.item.sku
+            or self.item.barcode
+            or ""
+        )
+        self.item_name_snapshot = self.item.name
+        self.item_name_ar_snapshot = (
+            self.item.name_ar or ""
+        )
+        self.item_name_en_snapshot = (
+            self.item.name_en or ""
+        )
+        self.unit_name_snapshot = (
+            self.item.unit.name
+            if self.item.unit_id
+            else ""
+        )
+
+        if (
+            not self.suggested_unit_price
+            or self.suggested_unit_price == MONEY_ZERO
+        ):
+            self.suggested_unit_price = (
+                self.item.purchase_price
+                or self.item.cost_price
+                or MONEY_ZERO
+            )
+
+    def clean(self) -> None:
+        super().clean()
+
+        if self.request_id and self.company_id:
+            if self.request.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "company":
+                            "Item company must match "
+                            "purchase request company."
+                    }
+                )
+
+        if self.request_id and not self.request.can_be_edited:
+            raise ValidationError(
+                "Cannot edit items for a submitted, approved, "
+                "rejected, converted, or cancelled request."
+            )
+
+        if self.item_id and self.company_id:
+            if self.item.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "item":
+                            "Catalog item does not belong "
+                            "to this company."
+                    }
+                )
+
+            if not self.item.is_purchasable:
+                raise ValidationError(
+                    {
+                        "item":
+                            "Catalog item is not purchasable."
+                    }
+                )
+
+        self.quantity = quantize_quantity(
+            self.quantity
+        )
+        self.suggested_unit_price = quantize_money(
+            self.suggested_unit_price
+        )
+        self.notes = (
+            self.notes or ""
+        ).strip()
+
+        if self.quantity <= QUANTITY_ZERO:
+            raise ValidationError(
+                {
+                    "quantity":
+                        "Quantity must be greater than zero."
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        if self.request_id and not self.company_id:
+            self.company = self.request.company
+
+        if self.item_id:
+            self.apply_item_snapshot()
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if not self.request.can_be_edited:
+            raise ValidationError(
+                "Cannot delete items from a non-draft "
+                "purchase request."
+            )
+
+        return super().delete(*args, **kwargs)
+
+
+# ============================================================
 # Purchase Orders Foundation
 # ============================================================
 
@@ -121,6 +905,15 @@ class PurchaseOrder(models.Model):
         related_name="purchase_orders",
         db_index=True,
         verbose_name="Supplier",
+    )
+    purchase_request = models.ForeignKey(
+        PurchaseRequest,
+        on_delete=models.PROTECT,
+        related_name="purchase_orders",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Purchase request",
     )
 
     order_number = models.CharField(
@@ -421,6 +1214,28 @@ class PurchaseOrder(models.Model):
                     }
                 )
 
+        if self.purchase_request_id:
+            if (
+                self.purchase_request.company_id
+                != self.company_id
+            ):
+                raise ValidationError(
+                    {
+                        "purchase_request":
+                            "Purchase request does not belong "
+                            "to this company."
+                    }
+                )
+
+            if not self.purchase_request.can_be_converted:
+                raise ValidationError(
+                    {
+                        "purchase_request":
+                            "Purchase request is not eligible "
+                            "for order conversion."
+                    }
+                )
+
         if self.supplier_id and self.company_id:
             if self.supplier.company_id != self.company_id:
                 raise ValidationError(
@@ -632,6 +1447,15 @@ class PurchaseOrderItem(models.Model):
         related_name="purchase_order_items",
         db_index=True,
         verbose_name="Catalog item",
+    )
+    purchase_request_item = models.ForeignKey(
+        PurchaseRequestItem,
+        on_delete=models.PROTECT,
+        related_name="purchase_order_items",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Purchase request item",
     )
 
     line_number = models.PositiveIntegerField(
@@ -923,6 +1747,83 @@ class PurchaseOrderItem(models.Model):
                 "Cannot edit items for an approved "
                 "or cancelled purchase order."
             )
+
+        if self.purchase_request_item_id:
+            source = self.purchase_request_item
+
+            if source.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "purchase_request_item":
+                            "Purchase request item does not "
+                            "belong to this company."
+                    }
+                )
+
+            if (
+                self.order_id
+                and not self.order.purchase_request_id
+            ):
+                raise ValidationError(
+                    {
+                        "purchase_request_item":
+                            "Purchase order must reference "
+                            "the source purchase request."
+                    }
+                )
+
+            if (
+                self.order_id
+                and self.order.purchase_request_id
+                != source.request_id
+            ):
+                raise ValidationError(
+                    {
+                        "purchase_request_item":
+                            "Purchase request item must belong "
+                            "to the order purchase request."
+                    }
+                )
+
+            if self.item_id != source.item_id:
+                raise ValidationError(
+                    {
+                        "purchase_request_item":
+                            "Purchase order item must match "
+                            "the request catalog item."
+                    }
+                )
+
+            available = source.remaining_quantity
+            existing_quantity = QUANTITY_ZERO
+
+            if self.pk:
+                existing = (
+                    PurchaseOrderItem.objects
+                    .filter(pk=self.pk)
+                    .values_list(
+                        "quantity",
+                        flat=True,
+                    )
+                    .first()
+                )
+                existing_quantity = quantize_quantity(
+                    existing or QUANTITY_ZERO
+                )
+
+            allowed_quantity = quantize_quantity(
+                available + existing_quantity
+            )
+
+            if self.quantity > allowed_quantity:
+                raise ValidationError(
+                    {
+                        "quantity":
+                            "Purchase order quantity cannot "
+                            "exceed the remaining request "
+                            "quantity."
+                    }
+                )
 
         if self.item_id and self.company_id:
             if self.item.company_id != self.company_id:
@@ -5285,3 +6186,4 @@ class SupplierDebitNoteItem(models.Model):
         )
 
         return result
+
