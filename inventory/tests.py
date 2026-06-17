@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 inventory/tests.py
-# 🧠 PrimeyAcc | Company Inventory Tests V2.4
+# 🧠 PrimeyAcc | Company Inventory Tests V2.7
 # ------------------------------------------------------------
 # ✅ Warehouse model/service tests
 # ✅ Stock item balance tests
@@ -19,6 +19,13 @@
 # ✅ Explicit stock location and tenant isolation tests
 # ✅ Source and target location transfer tests
 # ✅ True multi-location independent balance tests
+# ✅ Location-specific issue and insufficiency protection
+# ✅ Same-warehouse location transfer tests
+# ✅ Independent location average cost tests
+# ✅ Warehouse multi-location stock summary tests
+# ✅ Company and item-level stock summary API tests
+# ✅ Weighted average cost and inventory value tests
+# ✅ Stock summary tenant isolation and filters
 # ✅ Stock movement posting tests
 # ✅ Phase 10.3 automatic accounting posting on stock movements
 # ✅ Negative stock prevention
@@ -77,6 +84,9 @@ from api.company.inventory.movements.serializers import (
 )
 from api.company.inventory.stock.serializers import (
     serialize_stock_item,
+)
+from api.company.inventory.warehouses.serializers import (
+    serialize_warehouse,
 )
 from inventory.services import (
     adjust_stock,
@@ -419,6 +429,153 @@ class WarehouseServiceTests(InventoryTestBase):
         self.assertIn(self.warehouse, queryset)
         self.assertNotIn(self.second_warehouse, queryset)
 
+
+
+class WarehouseStockSummaryTests(InventoryTestBase):
+    """
+    Phase 22.1.7 warehouse multi-location stock summary tests.
+    """
+
+    def test_warehouse_summary_aggregates_multi_location_balances(self):
+        first_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "SUMMARY-BIN-01",
+                "name": "Summary Bin 01",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+            },
+            user=self.user,
+        )
+        second_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "SUMMARY-BIN-02",
+                "name": "Summary Bin 02",
+                "location_type": InventoryLocationType.BIN,
+            },
+            user=self.user,
+        )
+
+        receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=first_location,
+            item=self.product,
+            quantity="10",
+            unit_cost="12.00",
+            user=self.user,
+        )
+        receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=second_location,
+            item=self.product,
+            quantity="5",
+            unit_cost="14.00",
+            user=self.user,
+        )
+        receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=first_location,
+            item=self.second_product,
+            quantity="7",
+            unit_cost="20.00",
+            user=self.user,
+        )
+
+        first_product_stock = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=first_location,
+            item=self.product,
+        )
+        second_product_stock = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=first_location,
+            item=self.second_product,
+        )
+
+        first_product_stock.reserved_quantity = Decimal("2.0000")
+        first_product_stock.full_clean()
+        first_product_stock.save(
+            update_fields=[
+                "reserved_quantity",
+                "updated_at",
+            ]
+        )
+
+        second_product_stock.reserved_quantity = Decimal("1.0000")
+        second_product_stock.full_clean()
+        second_product_stock.save(
+            update_fields=[
+                "reserved_quantity",
+                "updated_at",
+            ]
+        )
+
+        payload = serialize_warehouse(
+            self.warehouse,
+            include_summary=True,
+        )
+        summary = payload["summary"]
+
+        self.assertEqual(
+            summary["stock_items_count"],
+            3,
+        )
+        self.assertEqual(
+            summary["location_balances_count"],
+            3,
+        )
+        self.assertEqual(
+            summary["distinct_items_count"],
+            2,
+        )
+        self.assertEqual(
+            summary["locations_count"],
+            2,
+        )
+        self.assertEqual(
+            summary["total_quantity_on_hand"],
+            "22",
+        )
+        self.assertEqual(
+            summary["total_reserved_quantity"],
+            "3",
+        )
+        self.assertEqual(
+            summary["total_available_quantity"],
+            "19",
+        )
+
+    def test_warehouse_summary_returns_zero_values_without_stock(self):
+        payload = serialize_warehouse(
+            self.second_warehouse,
+            include_summary=True,
+        )
+        summary = payload["summary"]
+
+        self.assertEqual(summary["stock_items_count"], 0)
+        self.assertEqual(summary["location_balances_count"], 0)
+        self.assertEqual(summary["distinct_items_count"], 0)
+        self.assertEqual(summary["locations_count"], 0)
+        self.assertEqual(
+            summary["total_quantity_on_hand"],
+            "0.0000",
+        )
+        self.assertEqual(
+            summary["total_reserved_quantity"],
+            "0.0000",
+        )
+        self.assertEqual(
+            summary["total_available_quantity"],
+            "0.0000",
+        )
 
 
 class InventoryLocationModelTests(InventoryTestBase):
@@ -1566,10 +1723,11 @@ class InventoryLocationAPITests(InventoryTestBase):
 
 class LocationAwareStockServicesTests(InventoryTestBase):
     """
-    Phase 22.1.6.4 location-aware stock services bridge tests.
+    Phase 22.1.6.5.4 true multi-location stock services tests.
 
-    Transitional rule:
-    StockItem still has one row per company / warehouse / item.
+    Active rule:
+    StockItem has one independent row per
+    company / warehouse / location / item.
     Explicit locations are supported, but one existing warehouse-level
     balance cannot be reassigned to another location until the location-level
     uniqueness migration is completed.
@@ -1968,6 +2126,288 @@ class LocationAwareStockServicesTests(InventoryTestBase):
 
 
 
+    def test_issue_stock_only_reduces_selected_location_balance(self):
+        first_location = self._create_location(
+            code="ISSUE-FIRST-BIN",
+            name="Issue First Bin",
+        )
+        second_location = self._create_location(
+            code="ISSUE-SECOND-BIN",
+            name="Issue Second Bin",
+        )
+
+        receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=first_location,
+            item=self.product,
+            quantity="8",
+            unit_cost="10.00",
+            user=self.user,
+        )
+        receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=second_location,
+            item=self.product,
+            quantity="6",
+            unit_cost="12.00",
+            user=self.user,
+        )
+
+        movement = issue_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=first_location,
+            item=self.product,
+            quantity="3",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        first_stock = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=first_location,
+            item=self.product,
+        )
+        second_stock = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=second_location,
+            item=self.product,
+        )
+
+        self.assertEqual(movement.location, first_location)
+        self.assertEqual(
+            first_stock.quantity_on_hand,
+            Decimal("5.0000"),
+        )
+        self.assertEqual(
+            second_stock.quantity_on_hand,
+            Decimal("6.0000"),
+        )
+
+    def test_issue_stock_rejects_insufficient_selected_location_balance(self):
+        first_location = self._create_location(
+            code="LIMITED-FIRST-BIN",
+            name="Limited First Bin",
+        )
+        second_location = self._create_location(
+            code="FUNDED-SECOND-BIN",
+            name="Funded Second Bin",
+        )
+
+        receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=first_location,
+            item=self.product,
+            quantity="2",
+            unit_cost="10.00",
+            user=self.user,
+        )
+        receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=second_location,
+            item=self.product,
+            quantity="20",
+            unit_cost="10.00",
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            issue_stock(
+                company=self.company,
+                warehouse=self.warehouse,
+                location=first_location,
+                item=self.product,
+                quantity="3",
+                user=self.user,
+                post_accounting=False,
+            )
+
+        first_stock = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=first_location,
+            item=self.product,
+        )
+        second_stock = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=second_location,
+            item=self.product,
+        )
+
+        self.assertEqual(
+            first_stock.quantity_on_hand,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            second_stock.quantity_on_hand,
+            Decimal("20.0000"),
+        )
+
+    def test_locations_keep_independent_average_costs(self):
+        first_location = self._create_location(
+            code="COST-FIRST-BIN",
+            name="Cost First Bin",
+        )
+        second_location = self._create_location(
+            code="COST-SECOND-BIN",
+            name="Cost Second Bin",
+        )
+
+        receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=first_location,
+            item=self.product,
+            quantity="4",
+            unit_cost="10.00",
+            user=self.user,
+        )
+        receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=second_location,
+            item=self.product,
+            quantity="5",
+            unit_cost="25.00",
+            user=self.user,
+        )
+
+        first_stock = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=first_location,
+            item=self.product,
+        )
+        second_stock = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=second_location,
+            item=self.product,
+        )
+
+        self.assertEqual(
+            first_stock.average_cost,
+            Decimal("10.00"),
+        )
+        self.assertEqual(
+            second_stock.average_cost,
+            Decimal("25.00"),
+        )
+
+    def test_transfer_stock_between_locations_in_same_warehouse(self):
+        source_location = self._create_location(
+            code="INTERNAL-SOURCE-BIN",
+            name="Internal Source Bin",
+        )
+        target_location = self._create_location(
+            code="INTERNAL-TARGET-BIN",
+            name="Internal Target Bin",
+        )
+
+        receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=source_location,
+            item=self.product,
+            quantity="10",
+            unit_cost="14.00",
+            user=self.user,
+        )
+
+        result = transfer_stock(
+            company=self.company,
+            source_warehouse=self.warehouse,
+            target_warehouse=self.warehouse,
+            source_location=source_location,
+            target_location=target_location,
+            item=self.product,
+            quantity="4",
+            reference_number="INTERNAL-TRANSFER-001",
+            user=self.user,
+        )
+
+        source_stock = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=source_location,
+            item=self.product,
+        )
+        target_stock = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=target_location,
+            item=self.product,
+        )
+
+        self.assertEqual(
+            source_stock.quantity_on_hand,
+            Decimal("6.0000"),
+        )
+        self.assertEqual(
+            target_stock.quantity_on_hand,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            result["outgoing"].location,
+            source_location,
+        )
+        self.assertEqual(
+            result["incoming"].location,
+            target_location,
+        )
+        self.assertEqual(
+            result["incoming"].unit_cost,
+            Decimal("14.00"),
+        )
+
+    def test_transfer_stock_rejects_same_source_and_target_location(self):
+        location = self._create_location(
+            code="SAME-TRANSFER-BIN",
+            name="Same Transfer Bin",
+        )
+
+        receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=location,
+            item=self.product,
+            quantity="5",
+            unit_cost="10.00",
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            transfer_stock(
+                company=self.company,
+                source_warehouse=self.warehouse,
+                target_warehouse=self.warehouse,
+                source_location=location,
+                target_location=location,
+                item=self.product,
+                quantity="1",
+                user=self.user,
+            )
+
+        stock_item = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=location,
+            item=self.product,
+        )
+
+        self.assertEqual(
+            stock_item.quantity_on_hand,
+            Decimal("5.0000"),
+        )
+
+
 class LocationAwareStockReadCompatibilityTests(
     InventoryTestBase
 ):
@@ -2253,6 +2693,302 @@ class LocationAwareStockReadCompatibilityTests(
         self.assertEqual(
             serialized["location"]["code"],
             location.code,
+        )
+
+    def _create_stock_summary_dataset(self):
+        first_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "SUMMARY-API-BIN-01",
+                "name": "Summary API Bin 01",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+            },
+            user=self.user,
+        )
+        second_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "SUMMARY-API-BIN-02",
+                "name": "Summary API Bin 02",
+                "location_type": InventoryLocationType.BIN,
+            },
+            user=self.user,
+        )
+        third_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.second_warehouse,
+            data={
+                "code": "SUMMARY-API-BIN-03",
+                "name": "Summary API Bin 03",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+            },
+            user=self.user,
+        )
+
+        first_movement = receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=first_location,
+            item=self.product,
+            quantity="10.0000",
+            unit_cost="10.00",
+            user=self.user,
+        )
+        second_movement = receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=second_location,
+            item=self.product,
+            quantity="5.0000",
+            unit_cost="20.00",
+            user=self.user,
+        )
+        third_movement = receive_stock(
+            company=self.company,
+            warehouse=self.second_warehouse,
+            location=third_location,
+            item=self.second_product,
+            quantity="4.0000",
+            unit_cost="30.00",
+            user=self.user,
+        )
+
+        first_stock = first_movement.stock_item
+        third_stock = third_movement.stock_item
+
+        first_stock.reserved_quantity = Decimal("2.0000")
+        first_stock.full_clean()
+        first_stock.save(
+            update_fields=[
+                "reserved_quantity",
+                "updated_at",
+            ]
+        )
+
+        third_stock.reserved_quantity = Decimal("1.0000")
+        third_stock.full_clean()
+        third_stock.save(
+            update_fields=[
+                "reserved_quantity",
+                "updated_at",
+            ]
+        )
+
+        other_location = create_inventory_location(
+            company=self.other_company,
+            warehouse=self.other_warehouse,
+            data={
+                "code": "OTHER-SUMMARY-BIN",
+                "name": "Other Summary Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+            },
+            user=self.user,
+        )
+
+        receive_stock(
+            company=self.other_company,
+            warehouse=self.other_warehouse,
+            location=other_location,
+            item=self.other_product,
+            quantity="99.0000",
+            unit_cost="99.00",
+            user=self.user,
+        )
+
+        return {
+            "first_location": first_location,
+            "second_location": second_location,
+            "third_location": third_location,
+            "first_stock": first_movement.stock_item,
+            "second_stock": second_movement.stock_item,
+            "third_stock": third_movement.stock_item,
+        }
+
+    def test_stock_summary_api_aggregates_company_inventory(self):
+        self._create_stock_summary_dataset()
+
+        response = self.client.get(
+            "/api/company/inventory/stock/summary/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        summary = payload["summary"]
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["count"], 2)
+        self.assertEqual(
+            summary["location_balances_count"],
+            3,
+        )
+        self.assertEqual(
+            summary["distinct_items_count"],
+            2,
+        )
+        self.assertEqual(
+            summary["warehouses_count"],
+            2,
+        )
+        self.assertEqual(
+            summary["locations_count"],
+            3,
+        )
+        self.assertEqual(
+            summary["total_quantity_on_hand"],
+            "19.0000",
+        )
+        self.assertEqual(
+            summary["total_reserved_quantity"],
+            "3.0000",
+        )
+        self.assertEqual(
+            summary["total_available_quantity"],
+            "16.0000",
+        )
+        self.assertEqual(
+            summary["total_inventory_value"],
+            "320.00",
+        )
+
+        items_by_id = {
+            item["item_id"]: item
+            for item in payload["results"]
+        }
+
+        product_summary = items_by_id[self.product.id]
+        second_product_summary = items_by_id[
+            self.second_product.id
+        ]
+
+        self.assertEqual(
+            product_summary["location_balances_count"],
+            2,
+        )
+        self.assertEqual(
+            product_summary["warehouses_count"],
+            1,
+        )
+        self.assertEqual(
+            product_summary["locations_count"],
+            2,
+        )
+        self.assertEqual(
+            product_summary["quantity_on_hand"],
+            "15.0000",
+        )
+        self.assertEqual(
+            product_summary["reserved_quantity"],
+            "2.0000",
+        )
+        self.assertEqual(
+            product_summary["available_quantity"],
+            "13.0000",
+        )
+        self.assertEqual(
+            product_summary["weighted_average_cost"],
+            "13.33",
+        )
+        self.assertEqual(
+            product_summary["inventory_value"],
+            "200.00",
+        )
+
+        self.assertEqual(
+            second_product_summary["quantity_on_hand"],
+            "4.0000",
+        )
+        self.assertEqual(
+            second_product_summary["weighted_average_cost"],
+            "30.00",
+        )
+        self.assertEqual(
+            second_product_summary["inventory_value"],
+            "120.00",
+        )
+
+    def test_stock_summary_api_filters_by_warehouse(self):
+        self._create_stock_summary_dataset()
+
+        response = self.client.get(
+            "/api/company/inventory/stock/summary/",
+            {
+                "warehouse_id": self.warehouse.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        summary = payload["summary"]
+
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(
+            payload["filters"]["warehouse_id"],
+            str(self.warehouse.id),
+        )
+        self.assertEqual(
+            summary["location_balances_count"],
+            2,
+        )
+        self.assertEqual(
+            summary["distinct_items_count"],
+            1,
+        )
+        self.assertEqual(
+            summary["warehouses_count"],
+            1,
+        )
+        self.assertEqual(
+            summary["locations_count"],
+            2,
+        )
+        self.assertEqual(
+            summary["total_quantity_on_hand"],
+            "15.0000",
+        )
+        self.assertEqual(
+            summary["total_inventory_value"],
+            "200.00",
+        )
+        self.assertEqual(
+            payload["results"][0]["item_id"],
+            self.product.id,
+        )
+
+    def test_stock_summary_api_excludes_other_company_stock(self):
+        self._create_stock_summary_dataset()
+
+        response = self.client.get(
+            "/api/company/inventory/stock/summary/",
+            {
+                "search": "Other Company Product",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["count"], 0)
+        self.assertEqual(payload["results"], [])
+        self.assertEqual(
+            payload["summary"]["location_balances_count"],
+            0,
+        )
+        self.assertEqual(
+            payload["summary"]["total_quantity_on_hand"],
+            "0.0000",
+        )
+        self.assertEqual(
+            payload["summary"]["total_inventory_value"],
+            "0.00",
         )
 
 

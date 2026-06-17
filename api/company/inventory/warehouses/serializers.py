@@ -17,7 +17,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db.models import Count, Sum
+from django.db.models import (
+    Count,
+    DecimalField,
+    ExpressionWrapper,
+    F,
+    Sum,
+)
 
 from inventory.models import Warehouse
 
@@ -89,19 +95,63 @@ def serialize_warehouse(
     }
 
     if include_summary:
+        available_quantity_expression = ExpressionWrapper(
+            F("quantity_on_hand") - F("reserved_quantity"),
+            output_field=DecimalField(
+                max_digits=16,
+                decimal_places=4,
+            ),
+        )
+
         stock_summary = warehouse.stock_items.aggregate(
-            stock_items_count=Count("id"),
-            total_quantity_on_hand=Sum("quantity_on_hand"),
-            total_reserved_quantity=Sum("reserved_quantity"),
+            location_balances_count=Count("id"),
+            distinct_items_count=Count(
+                "item_id",
+                distinct=True,
+            ),
+            locations_count=Count(
+                "location_id",
+                distinct=True,
+            ),
+            total_quantity_on_hand=Sum(
+                "quantity_on_hand"
+            ),
+            total_reserved_quantity=Sum(
+                "reserved_quantity"
+            ),
+            total_available_quantity=Sum(
+                available_quantity_expression
+            ),
+        )
+
+        location_balances_count = (
+            stock_summary.get("location_balances_count")
+            or 0
         )
 
         data["summary"] = {
-            "stock_items_count": stock_summary.get("stock_items_count") or 0,
+            # Backward-compatible alias:
+            # one StockItem row is one location balance.
+            "stock_items_count": location_balances_count,
+            "location_balances_count": (
+                location_balances_count
+            ),
+            "distinct_items_count": (
+                stock_summary.get("distinct_items_count")
+                or 0
+            ),
+            "locations_count": (
+                stock_summary.get("locations_count")
+                or 0
+            ),
             "total_quantity_on_hand": decimal_to_string(
                 stock_summary.get("total_quantity_on_hand")
             ),
             "total_reserved_quantity": decimal_to_string(
                 stock_summary.get("total_reserved_quantity")
+            ),
+            "total_available_quantity": decimal_to_string(
+                stock_summary.get("total_available_quantity")
             ),
         }
 

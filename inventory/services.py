@@ -1221,9 +1221,10 @@ def resolve_stock_location(
     3. Active STOCK location for the warehouse.
     4. Create a safe default STOCK location.
 
-    Transitional rule:
-    StockItem still has one balance row per company/warehouse/item.
-    Multiple location balances will be enabled in the next schema step.
+    Active multi-location rule:
+    Each StockItem row represents one independent balance for
+    company / warehouse / location / item. When the caller omits
+    a location, the warehouse default operational location is used.
     """
     validate_warehouse_for_company(
         company=company,
@@ -1506,11 +1507,24 @@ def create_stock_movement(
 
     resolved_location = stock_item.location
 
-    cost = quantize_money(
-        unit_cost
-        if unit_cost is not None
-        else item.cost_price or item.purchase_price or stock_item.average_cost or MONEY_ZERO
-    )
+    if unit_cost is not None:
+        cost_source = unit_cost
+    elif resolved_direction == StockMovementDirection.DECREASE:
+        cost_source = (
+            stock_item.average_cost
+            or item.cost_price
+            or item.purchase_price
+            or MONEY_ZERO
+        )
+    else:
+        cost_source = (
+            item.cost_price
+            or item.purchase_price
+            or stock_item.average_cost
+            or MONEY_ZERO
+        )
+
+    cost = quantize_money(cost_source)
 
     movement = StockMovement(
         company=company,
