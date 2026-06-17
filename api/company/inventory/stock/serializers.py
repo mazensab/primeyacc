@@ -1,9 +1,10 @@
 # ============================================================
 # 📂 api/company/inventory/stock/serializers.py
-# 🧠 PrimeyAcc | Company Inventory Stock API Serializers V1.0
+# 🧠 PrimeyAcc | Company Inventory Stock API Serializers V1.1
 # ------------------------------------------------------------
 # ✅ Serialize stock balances for /company APIs
 # ✅ Warehouse / item / unit snapshots for UI
+# ✅ Inventory location payload for each balance
 # ✅ Safe decimal/date serialization
 # ✅ No frontend company_id trust
 # ------------------------------------------------------------
@@ -37,6 +38,7 @@ def serialize_stock_item(stock_item: StockItem) -> dict[str, Any]:
     """
     item = stock_item.item
     warehouse = stock_item.warehouse
+    location = stock_item.location
     branch = warehouse.branch if warehouse and warehouse.branch_id else None
     unit = item.unit if item and item.unit_id else None
     category = item.category if item and item.category_id else None
@@ -53,6 +55,22 @@ def serialize_stock_item(stock_item: StockItem) -> dict[str, Any]:
             "warehouse_type": warehouse.warehouse_type,
             "is_active": warehouse.is_active,
         },
+        "location_id": stock_item.location_id,
+        "location": {
+            "id": location.id,
+            "code": location.code,
+            "name": location.display_name,
+            "name_ar": location.name_ar,
+            "name_en": location.name_en,
+            "location_type": location.location_type,
+            "status": location.status,
+            "is_active": location.is_active,
+            "is_default": location.is_default,
+            "is_pickable": location.is_pickable,
+            "full_path": location.full_path,
+        }
+        if location
+        else None,
         "branch": {
             "id": branch.id,
             "name": branch.display_name,

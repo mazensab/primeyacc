@@ -5734,10 +5734,17 @@ def post_purchase_return_item_to_inventory(
     stock_item = (
         StockItem.objects
         .select_for_update()
+        .select_related("location")
         .filter(
             company=return_item.company,
             warehouse=warehouse,
             item=item,
+            quantity_on_hand__gte=return_item.quantity,
+        )
+        .order_by(
+            "-location__is_default",
+            "-quantity_on_hand",
+            "id",
         )
         .first()
     )
@@ -5763,6 +5770,7 @@ def post_purchase_return_item_to_inventory(
     movement = issue_stock(
         company=return_item.company,
         warehouse=warehouse,
+        location=stock_item.location,
         item=item,
         quantity=return_item.quantity,
         unit_cost=calculate_return_unit_cost(

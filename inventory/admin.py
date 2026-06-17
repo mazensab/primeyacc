@@ -1,8 +1,11 @@
 # ============================================================
 # 📂 inventory/admin.py
-# 🧠 PrimeyAcc | Company Inventory Admin V1.0
+# 🧠 PrimeyAcc | Company Inventory Admin V2.0
 # ------------------------------------------------------------
 # ✅ Warehouse admin
+# ✅ Inventory locations and bins admin
+# ✅ Location hierarchy and operational purpose management
+# ✅ Safe location lifecycle actions
 # ✅ Stock item admin
 # ✅ Stock movement admin
 # ✅ Company-scoped visibility helpers
@@ -22,6 +25,9 @@ from django.db.models import QuerySet
 from django.http import HttpRequest
 
 from .models import (
+    InventoryLocation,
+    InventoryLocationStatus,
+    InventoryLocationType,
     StockItem,
     StockMovement,
     StockMovementDirection,
@@ -186,6 +192,296 @@ class WarehouseAdmin(admin.ModelAdmin):
     ) -> None:
         for warehouse in queryset:
             warehouse.archive(user=request.user)
+
+
+
+@admin.register(InventoryLocation)
+class InventoryLocationAdmin(admin.ModelAdmin):
+    """
+    Admin configuration for internal warehouse locations and bins.
+
+    Inventory locations are operational master data. Tenant isolation remains
+    enforced by models, services, and company APIs rather than Django Admin
+    alone.
+    """
+
+    list_display = [
+        "code",
+        "name",
+        "company",
+        "warehouse",
+        "parent",
+        "location_type",
+        "status",
+        "is_default",
+        "is_receiving",
+        "is_shipping",
+        "is_adjustment",
+        "is_pickable",
+        "is_active",
+        "sequence",
+        "created_at",
+    ]
+    list_filter = [
+        "status",
+        "location_type",
+        "is_default",
+        "is_receiving",
+        "is_shipping",
+        "is_adjustment",
+        "is_pickable",
+        "is_active",
+        "company",
+        "warehouse",
+        "created_at",
+    ]
+    search_fields = [
+        "code",
+        "name",
+        "name_ar",
+        "name_en",
+        "barcode",
+        "company__name",
+        "company__name_ar",
+        "company__name_en",
+        "warehouse__code",
+        "warehouse__name",
+        "warehouse__name_ar",
+        "warehouse__name_en",
+        "parent__code",
+        "parent__name",
+        "parent__name_ar",
+        "parent__name_en",
+        "notes",
+    ]
+    readonly_fields = [
+        "full_path",
+        "is_active_location",
+        "created_at",
+        "updated_at",
+    ]
+    autocomplete_fields = [
+        "company",
+        "warehouse",
+        "parent",
+        "created_by",
+        "updated_by",
+    ]
+    ordering = [
+        "company",
+        "warehouse",
+        "sequence",
+        "code",
+    ]
+    date_hierarchy = "created_at"
+    list_select_related = [
+        "company",
+        "warehouse",
+        "warehouse__branch",
+        "parent",
+        "created_by",
+        "updated_by",
+    ]
+    list_per_page = 50
+    save_on_top = True
+
+    fieldsets = (
+        (
+            "Location identity",
+            {
+                "fields": (
+                    "company",
+                    "warehouse",
+                    "parent",
+                    "location_type",
+                    "status",
+                    "code",
+                    "name",
+                    "name_ar",
+                    "name_en",
+                    "barcode",
+                    "sequence",
+                )
+            },
+        ),
+        (
+            "Operational purposes",
+            {
+                "fields": (
+                    "is_default",
+                    "is_receiving",
+                    "is_shipping",
+                    "is_adjustment",
+                    "is_pickable",
+                    "is_active",
+                )
+            },
+        ),
+        (
+            "Calculated information",
+            {
+                "fields": (
+                    "full_path",
+                    "is_active_location",
+                )
+            },
+        ),
+        (
+            "Notes and extra data",
+            {
+                "fields": (
+                    "notes",
+                    "extra_data",
+                )
+            },
+        ),
+        (
+            "Audit",
+            {
+                "fields": (
+                    "created_by",
+                    "updated_by",
+                    "created_at",
+                    "updated_at",
+                )
+            },
+        ),
+    )
+
+    actions = [
+        "activate_locations",
+        "deactivate_locations",
+        "archive_locations",
+    ]
+
+    def get_queryset(self, request: HttpRequest) -> QuerySet[InventoryLocation]:
+        """
+        Load related master data efficiently for the admin list.
+        """
+        return (
+            super()
+            .get_queryset(request)
+            .select_related(
+                "company",
+                "warehouse",
+                "warehouse__branch",
+                "parent",
+                "created_by",
+                "updated_by",
+            )
+        )
+
+    @admin.action(description="Activate selected inventory locations")
+    def activate_locations(
+        self,
+        request: HttpRequest,
+        queryset: QuerySet[InventoryLocation],
+    ) -> None:
+        updated_count = 0
+
+        for location in queryset:
+            location.activate(user=request.user)
+            updated_count += 1
+
+        self.message_user(
+            request,
+            f"{updated_count} inventory location(s) activated.",
+        )
+
+    @admin.action(description="Deactivate selected inventory locations")
+    def deactivate_locations(
+        self,
+        request: HttpRequest,
+        queryset: QuerySet[InventoryLocation],
+    ) -> None:
+        updated_count = 0
+
+        for location in queryset:
+            location.deactivate(user=request.user)
+            updated_count += 1
+
+        self.message_user(
+            request,
+            f"{updated_count} inventory location(s) deactivated.",
+        )
+
+    @admin.action(description="Archive selected inventory locations")
+    def archive_locations(
+        self,
+        request: HttpRequest,
+        queryset: QuerySet[InventoryLocation],
+    ) -> None:
+        updated_count = 0
+
+        for location in queryset:
+            location.archive(user=request.user)
+            updated_count += 1
+
+        self.message_user(
+            request,
+            f"{updated_count} inventory location(s) archived.",
+        )
+
+    def has_delete_permission(
+        self,
+        request: HttpRequest,
+        obj: InventoryLocation | None = None,
+    ) -> bool:
+        """
+        Prevent deleting locations that already participate in a hierarchy.
+
+        Locations will later be referenced by stock balances and movements, so
+        lifecycle status should be used instead of physical deletion.
+        """
+        if obj is not None:
+            if obj.status == InventoryLocationStatus.ARCHIVED:
+                return False
+
+            if obj.children.exists():
+                return False
+
+        return super().has_delete_permission(request, obj)
+
+    def get_readonly_fields(
+        self,
+        request: HttpRequest,
+        obj: InventoryLocation | None = None,
+    ) -> list[str] | tuple[str, ...]:
+        """
+        Freeze operational identity after archiving.
+        """
+        readonly_fields = list(
+            super().get_readonly_fields(request, obj)
+        )
+
+        if obj and obj.status == InventoryLocationStatus.ARCHIVED:
+            readonly_fields.extend(
+                [
+                    "company",
+                    "warehouse",
+                    "parent",
+                    "location_type",
+                    "status",
+                    "code",
+                    "name",
+                    "name_ar",
+                    "name_en",
+                    "barcode",
+                    "is_default",
+                    "is_receiving",
+                    "is_shipping",
+                    "is_adjustment",
+                    "is_pickable",
+                    "is_active",
+                    "sequence",
+                    "notes",
+                    "extra_data",
+                    "created_by",
+                    "updated_by",
+                ]
+            )
+
+        return tuple(sorted(set(readonly_fields)))
 
 
 @admin.register(StockItem)

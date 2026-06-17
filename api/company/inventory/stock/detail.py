@@ -1,8 +1,9 @@
 # ============================================================
 # 📂 api/company/inventory/stock/detail.py
-# 🧠 PrimeyAcc | Company Stock Item Detail API V1.0
+# 🧠 PrimeyAcc | Company Stock Item Detail API V1.1
 # ------------------------------------------------------------
 # ✅ Retrieve one stock balance for current company only
+# ✅ Include inventory location details
 # ✅ Tenant isolation through request.company
 # ✅ Protected by HasAnyCompanyPermission
 # ✅ Safe 404 for cross-company access
@@ -59,6 +60,7 @@ def stock_item_detail(request: Request, stock_item_id) -> Response:
                     "company",
                     "warehouse",
                     "warehouse__branch",
+                    "location",
                     "item",
                     "item__unit",
                     "item__category",

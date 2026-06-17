@@ -1,9 +1,10 @@
 # ============================================================
 # 📂 api/company/inventory/movements/serializers.py
-# 🧠 PrimeyAcc | Company Inventory Movements API Serializers V1.0
+# 🧠 PrimeyAcc | Company Inventory Movements API Serializers V1.1
 # ------------------------------------------------------------
 # ✅ Serialize stock movements for /company APIs
 # ✅ Warehouse / item / reference snapshots
+# ✅ Inventory location payload for each movement
 # ✅ Safe decimal/date serialization
 # ✅ No frontend company_id trust
 # ------------------------------------------------------------
@@ -36,6 +37,7 @@ def serialize_stock_movement(movement: StockMovement) -> dict[str, Any]:
     Serialize one stock movement.
     """
     warehouse = movement.warehouse
+    location = movement.location
     branch = warehouse.branch if warehouse and warehouse.branch_id else None
 
     return {
@@ -49,6 +51,21 @@ def serialize_stock_movement(movement: StockMovement) -> dict[str, Any]:
             "status": warehouse.status,
             "warehouse_type": warehouse.warehouse_type,
         },
+        "location_id": movement.location_id,
+        "location": {
+            "id": location.id,
+            "code": location.code,
+            "name": location.display_name,
+            "name_ar": location.name_ar,
+            "name_en": location.name_en,
+            "location_type": location.location_type,
+            "status": location.status,
+            "is_active": location.is_active,
+            "is_default": location.is_default,
+            "full_path": location.full_path,
+        }
+        if location
+        else None,
         "branch": {
             "id": branch.id,
             "name": branch.display_name,

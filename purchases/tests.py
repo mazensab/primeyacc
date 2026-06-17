@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 purchases/tests.py
-# 🧠 PrimeyAcc | Purchases Tests V1.2
+# 🧠 PrimeyAcc | Purchases Tests V1.4
 # ------------------------------------------------------------
 # ✅ Purchase bill model tests
 # ✅ Purchase bill services tests
@@ -11,6 +11,9 @@
 # ✅ Totals calculation
 # ✅ Post / cancel lifecycle
 # ✅ Phase 10.2 automatic accounting posting on post
+# ✅ Purchase return inventory location selection tests
+# ✅ Required location balance integration fixtures
+# ✅ Purchase return insufficient location balance protection
 # ✅ Company permissions through CompanyMembership
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
@@ -39,11 +42,16 @@ from accounts.models import CompanyMembership, CompanyRole, MembershipStatus
 from catalog.models import CatalogItem, CatalogItemStatus, CatalogItemType, CatalogUnit
 from companies.models import Branch, Company, CompanySettings
 from inventory.models import (
+    InventoryLocation,
+    InventoryLocationType,
     StockItem,
     StockMovement,
     StockMovementStatus,
 )
-from inventory.services import create_warehouse
+from inventory.services import (
+    create_inventory_location,
+    create_warehouse,
+)
 from parties.models import BusinessParty, BusinessPartyStatus, BusinessPartyType
 from purchases.models import (
     PurchaseBill,
@@ -3126,9 +3134,22 @@ class SupplierDebitNotePostingIntegrationTests(
             },
         )
 
+        location = create_inventory_location(
+            company=self.company,
+            warehouse=warehouse,
+            data={
+                "code": "PUR-RETURNS-BIN",
+                "name": "Purchase Returns Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+            },
+            user=self.user,
+        )
+
         stock_item = StockItem.objects.create(
             company=self.company,
             warehouse=warehouse,
+            location=location,
             item=self.item,
             quantity_on_hand=Decimal("10.0000"),
             reserved_quantity=Decimal("0.0000"),
@@ -3428,6 +3449,167 @@ class SupplierDebitNotePostingIntegrationTests(
                 is_auto_posted=True,
             ).count(),
             1,
+        )
+
+
+
+    def test_purchase_return_uses_selected_stock_location(
+        self,
+    ):
+        self.item.track_inventory = True
+        self.item.save(
+            update_fields=[
+                "track_inventory",
+                "updated_at",
+            ]
+        )
+
+        warehouse = create_warehouse(
+            company=self.company,
+            user=self.user,
+            data={
+                "code": "WH-PUR-LOC-001",
+                "name": "Purchase Return Location Warehouse",
+                "branch_id": self.branch.id,
+                "is_default": True,
+            },
+        )
+
+        location = create_inventory_location(
+            company=self.company,
+            warehouse=warehouse,
+            data={
+                "code": "PUR-RETURN-BIN",
+                "name": "Purchase Return Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+                "is_pickable": True,
+            },
+            user=self.user,
+        )
+
+        stock_item = StockItem.objects.create(
+            company=self.company,
+            warehouse=warehouse,
+            location=location,
+            item=self.item,
+            quantity_on_hand=Decimal("10.0000"),
+            reserved_quantity=Decimal("0.0000"),
+            average_cost=Decimal("100.00"),
+        )
+
+        _bill, purchase_return, debit_note = (
+            self._create_issued_debit_note(
+                return_quantity="2.0000",
+            )
+        )
+
+        posted_note = post_supplier_debit_note(
+            debit_note=debit_note,
+            user=self.user,
+        )
+
+        self.assertEqual(
+            posted_note.status,
+            SupplierDebitNoteStatus.POSTED,
+        )
+
+        stock_item.refresh_from_db()
+
+        return_item = purchase_return.items.get()
+        return_item.refresh_from_db()
+
+        movement = return_item.stock_movement
+
+        self.assertIsNotNone(movement)
+        self.assertEqual(
+            movement.location_id,
+            location.id,
+        )
+        self.assertEqual(
+            movement.stock_item_id,
+            stock_item.id,
+        )
+        self.assertEqual(
+            stock_item.quantity_on_hand,
+            Decimal("8.0000"),
+        )
+
+    def test_purchase_return_rejects_insufficient_location_balance(
+        self,
+    ):
+        self.item.track_inventory = True
+        self.item.save(
+            update_fields=[
+                "track_inventory",
+                "updated_at",
+            ]
+        )
+
+        warehouse = create_warehouse(
+            company=self.company,
+            user=self.user,
+            data={
+                "code": "WH-PUR-LOC-002",
+                "name": "Insufficient Return Warehouse",
+                "branch_id": self.branch.id,
+                "is_default": True,
+            },
+        )
+
+        location = create_inventory_location(
+            company=self.company,
+            warehouse=warehouse,
+            data={
+                "code": "LOW-STOCK-BIN",
+                "name": "Low Stock Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+                "is_pickable": True,
+            },
+            user=self.user,
+        )
+
+        stock_item = StockItem.objects.create(
+            company=self.company,
+            warehouse=warehouse,
+            location=location,
+            item=self.item,
+            quantity_on_hand=Decimal("1.0000"),
+            reserved_quantity=Decimal("0.0000"),
+            average_cost=Decimal("100.00"),
+        )
+
+        _bill, purchase_return, debit_note = (
+            self._create_issued_debit_note(
+                return_quantity="2.0000",
+            )
+        )
+
+        with self.assertRaises(ValidationError):
+            post_supplier_debit_note(
+                debit_note=debit_note,
+                user=self.user,
+            )
+
+        stock_item.refresh_from_db()
+
+        return_item = purchase_return.items.get()
+        return_item.refresh_from_db()
+
+        self.assertEqual(
+            stock_item.quantity_on_hand,
+            Decimal("1.0000"),
+        )
+        self.assertIsNone(
+            return_item.stock_movement_id
+        )
+        self.assertFalse(
+            StockMovement.objects.filter(
+                company=self.company,
+                reference_type="purchase_return_item",
+                reference_id=return_item.id,
+            ).exists()
         )
 
 

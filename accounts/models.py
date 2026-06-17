@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 accounts/models.py
-# 🧠 PrimeyAcc | Accounts Models V3.1
+# 🧠 PrimeyAcc | Accounts Models V3.2
 # ------------------------------------------------------------
 # ✅ User Profile
 # ✅ Workspace Type Foundation
@@ -17,6 +17,7 @@
 # ✅ Company Sales Invoices Permissions
 # ✅ Company Purchases Bills Permissions
 # ✅ Company Inventory & Warehouses Permissions
+# ✅ Company Inventory Locations & Bins Permissions
 # ✅ Company Accounting Permissions
 # ✅ Company Treasury & Payments Permissions
 # ✅ Company Customer Payments Permissions
@@ -43,6 +44,7 @@
 # - فواتير المبيعات لها صلاحيات دقيقة داخل company.sales.invoices.*
 # - فواتير الموردين لها صلاحيات دقيقة داخل company.purchases.bills.*
 # - المخزون والمستودعات لهما صلاحيات دقيقة داخل company.inventory.*
+# - مواقع وخانات التخزين لها صلاحيات دقيقة داخل company.inventory.locations.*
 # - المحاسبة لها صلاحيات دقيقة داخل company.accounting.*
 # - الخزينة والمدفوعات لها صلاحيات دقيقة داخل company.treasury.*
 # - طرق وبوابات وأجهزة الدفع لها صلاحيات دقيقة داخل company.payments.*
@@ -246,6 +248,10 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.inventory.stock.view",
         "company.inventory.movements.view",
         "company.inventory.movements.create",
+        "company.inventory.locations.view",
+        "company.inventory.locations.create",
+        "company.inventory.locations.update",
+        "company.inventory.locations.status",
         "company.accounting.view",
         "company.accounting.create",
         "company.accounting.update",
@@ -477,6 +483,7 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.inventory.warehouses.view",
         "company.inventory.stock.view",
         "company.inventory.movements.view",
+        "company.inventory.locations.view",
         "company.accounting.view",
         "company.accounting.accounts.view",
         "company.accounting.journals.view",
@@ -870,6 +877,10 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.inventory.warehouses.status",
         "company.inventory.stock.view",
         "company.inventory.movements.view",
+        "company.inventory.locations.view",
+        "company.inventory.locations.create",
+        "company.inventory.locations.update",
+        "company.inventory.locations.status",
         "company.notifications.view",
         "company.notifications.read",
         "company.reports.view",
@@ -1002,6 +1013,7 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "company.inventory.warehouses.view",
         "company.inventory.stock.view",
         "company.inventory.movements.view",
+        "company.inventory.locations.view",
         "company.accounting.view",
         "company.accounting.accounts.view",
         "company.accounting.journals.view",

@@ -1,9 +1,24 @@
 # ============================================================
 # 📂 inventory/tests.py
-# 🧠 PrimeyAcc | Company Inventory Tests V1.1
+# 🧠 PrimeyAcc | Company Inventory Tests V2.4
 # ------------------------------------------------------------
 # ✅ Warehouse model/service tests
 # ✅ Stock item balance tests
+# ✅ Inventory locations and bins model tests
+# ✅ Inventory location services tests
+# ✅ Location hierarchy and tenant isolation tests
+# ✅ Default operational location tests
+# ✅ Inventory locations list/detail API tests
+# ✅ Inventory locations create/update/status API tests
+# ✅ API tenant isolation and frontend company_id rejection
+# ✅ Location-aware stock services bridge tests
+# ✅ Stock and movement location serializer tests
+# ✅ Stock list location filter and search tests
+# ✅ Stock detail location payload tests
+# ✅ Automatic default stock location resolution tests
+# ✅ Explicit stock location and tenant isolation tests
+# ✅ Source and target location transfer tests
+# ✅ True multi-location independent balance tests
 # ✅ Stock movement posting tests
 # ✅ Phase 10.3 automatic accounting posting on stock movements
 # ✅ Negative stock prevention
@@ -29,12 +44,23 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.urls import reverse
 
+from accounts.models import (
+    CompanyMembership,
+    CompanyRole,
+    MembershipStatus,
+    UserProfile,
+)
 from accounting.models import JournalEntry, JournalEntryStatus
+from rest_framework.test import APIClient
 from catalog.models import CatalogItem, CatalogItemType, CatalogUnit
 from companies.models import Branch, Company
 from inventory.models import (
     QUANTITY_ZERO,
+    InventoryLocation,
+    InventoryLocationStatus,
+    InventoryLocationType,
     StockItem,
     StockMovement,
     StockMovementDirection,
@@ -46,8 +72,22 @@ from inventory.models import (
     quantize_money,
     quantize_quantity,
 )
+from api.company.inventory.movements.serializers import (
+    serialize_stock_movement,
+)
+from api.company.inventory.stock.serializers import (
+    serialize_stock_item,
+)
 from inventory.services import (
     adjust_stock,
+    build_inventory_location_payload,
+    create_inventory_location,
+    ensure_default_inventory_locations,
+    get_active_warehouse_inventory_locations,
+    get_company_inventory_locations,
+    get_default_inventory_location,
+    get_inventory_location_by_purpose,
+    get_warehouse_inventory_locations,
     create_stock_movement,
     create_warehouse,
     get_active_company_warehouses,
@@ -58,9 +98,12 @@ from inventory.services import (
     issue_stock,
     post_stock_movement_to_accounting,
     receive_stock,
+    set_inventory_location_status,
     set_warehouse_status,
     transfer_stock,
+    update_inventory_location,
     update_warehouse,
+    validate_inventory_location_for_company,
     validate_item_for_inventory,
     validate_warehouse_for_company,
 )
@@ -377,6 +420,1842 @@ class WarehouseServiceTests(InventoryTestBase):
         self.assertNotIn(self.second_warehouse, queryset)
 
 
+
+class InventoryLocationModelTests(InventoryTestBase):
+    """
+    Inventory location model validation tests.
+    """
+
+    def test_inventory_location_created_successfully(self):
+        location = InventoryLocation.objects.create(
+            company=self.company,
+            warehouse=self.warehouse,
+            code="zone-a",
+            name="Zone A",
+            location_type=InventoryLocationType.ZONE,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.assertEqual(location.company, self.company)
+        self.assertEqual(location.warehouse, self.warehouse)
+        self.assertEqual(location.code, "ZONE-A")
+        self.assertEqual(location.status, InventoryLocationStatus.ACTIVE)
+        self.assertTrue(location.is_active_location)
+
+    def test_inventory_location_display_name_priority(self):
+        location = InventoryLocation.objects.create(
+            company=self.company,
+            warehouse=self.warehouse,
+            code="LOC-NAME",
+            name="Base Name",
+            name_ar="الموقع العربي",
+            name_en="English Location",
+        )
+
+        self.assertEqual(location.display_name, "الموقع العربي")
+
+    def test_inventory_location_full_path(self):
+        zone = InventoryLocation.objects.create(
+            company=self.company,
+            warehouse=self.warehouse,
+            code="ZONE-A",
+            name="Zone A",
+            location_type=InventoryLocationType.ZONE,
+        )
+        aisle = InventoryLocation.objects.create(
+            company=self.company,
+            warehouse=self.warehouse,
+            parent=zone,
+            code="AISLE-01",
+            name="Aisle 01",
+            location_type=InventoryLocationType.AISLE,
+        )
+        rack = InventoryLocation.objects.create(
+            company=self.company,
+            warehouse=self.warehouse,
+            parent=aisle,
+            code="RACK-01",
+            name="Rack 01",
+            location_type=InventoryLocationType.RACK,
+        )
+
+        self.assertEqual(
+            rack.full_path,
+            "Zone A / Aisle 01 / Rack 01",
+        )
+
+    def test_inventory_location_rejects_other_company_warehouse(self):
+        location = InventoryLocation(
+            company=self.company,
+            warehouse=self.other_warehouse,
+            code="BAD-WH",
+            name="Bad Warehouse Location",
+        )
+
+        with self.assertRaises(ValidationError):
+            location.full_clean()
+
+    def test_inventory_location_rejects_parent_from_other_warehouse(self):
+        other_location = InventoryLocation.objects.create(
+            company=self.company,
+            warehouse=self.second_warehouse,
+            code="OTHER-LOC",
+            name="Other Location",
+        )
+
+        location = InventoryLocation(
+            company=self.company,
+            warehouse=self.warehouse,
+            parent=other_location,
+            code="BAD-PARENT",
+            name="Bad Parent Location",
+        )
+
+        with self.assertRaises(ValidationError):
+            location.full_clean()
+
+    def test_inventory_location_rejects_parent_from_other_company(self):
+        other_location = InventoryLocation.objects.create(
+            company=self.other_company,
+            warehouse=self.other_warehouse,
+            code="OTHER-COMPANY-LOC",
+            name="Other Company Location",
+        )
+
+        location = InventoryLocation(
+            company=self.company,
+            warehouse=self.warehouse,
+            parent=other_location,
+            code="BAD-COMPANY-PARENT",
+            name="Bad Company Parent",
+        )
+
+        with self.assertRaises(ValidationError):
+            location.full_clean()
+
+    def test_inventory_location_rejects_self_parent(self):
+        location = InventoryLocation.objects.create(
+            company=self.company,
+            warehouse=self.warehouse,
+            code="SELF-PARENT",
+            name="Self Parent",
+        )
+        location.parent = location
+
+        with self.assertRaises(ValidationError):
+            location.full_clean()
+
+    def test_inventory_location_rejects_hierarchy_cycle(self):
+        first = InventoryLocation.objects.create(
+            company=self.company,
+            warehouse=self.warehouse,
+            code="CYCLE-1",
+            name="Cycle One",
+        )
+        second = InventoryLocation.objects.create(
+            company=self.company,
+            warehouse=self.warehouse,
+            parent=first,
+            code="CYCLE-2",
+            name="Cycle Two",
+        )
+
+        first.parent = second
+
+        with self.assertRaises(ValidationError):
+            first.full_clean()
+
+    def test_special_location_type_sets_purpose_flags(self):
+        receiving = InventoryLocation.objects.create(
+            company=self.company,
+            warehouse=self.warehouse,
+            code="RECEIVE-AREA",
+            name="Receive Area",
+            location_type=InventoryLocationType.RECEIVING,
+            is_pickable=True,
+        )
+
+        self.assertTrue(receiving.is_receiving)
+        self.assertFalse(receiving.is_pickable)
+
+    def test_inventory_location_activate_deactivate_archive(self):
+        location = InventoryLocation.objects.create(
+            company=self.company,
+            warehouse=self.warehouse,
+            code="STATUS-LOC",
+            name="Status Location",
+        )
+
+        location.deactivate(user=self.user)
+        location.refresh_from_db()
+        self.assertEqual(
+            location.status,
+            InventoryLocationStatus.INACTIVE,
+        )
+        self.assertFalse(location.is_active)
+
+        location.activate(user=self.user)
+        location.refresh_from_db()
+        self.assertEqual(
+            location.status,
+            InventoryLocationStatus.ACTIVE,
+        )
+        self.assertTrue(location.is_active)
+
+        location.archive(user=self.user)
+        location.refresh_from_db()
+        self.assertEqual(
+            location.status,
+            InventoryLocationStatus.ARCHIVED,
+        )
+        self.assertFalse(location.is_active)
+
+
+class InventoryLocationServiceTests(InventoryTestBase):
+    """
+    Inventory location service and tenant isolation tests.
+    """
+
+    def test_create_inventory_location_service(self):
+        location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "bin-001",
+                "name": "Bin 001",
+                "location_type": InventoryLocationType.BIN,
+                "barcode": "LOC-BAR-001",
+                "sequence": 10,
+            },
+            user=self.user,
+        )
+
+        self.assertEqual(location.company, self.company)
+        self.assertEqual(location.warehouse, self.warehouse)
+        self.assertEqual(location.code, "BIN-001")
+        self.assertEqual(location.barcode, "LOC-BAR-001")
+        self.assertEqual(location.sequence, 10)
+        self.assertEqual(location.created_by, self.user)
+
+    def test_create_inventory_location_rejects_other_company_warehouse(self):
+        with self.assertRaises(ValidationError):
+            create_inventory_location(
+                company=self.company,
+                warehouse=self.other_warehouse,
+                data={
+                    "code": "BAD-LOCATION",
+                    "name": "Bad Location",
+                },
+                user=self.user,
+            )
+
+    def test_create_inventory_location_with_parent(self):
+        parent = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "ZONE-PARENT",
+                "name": "Parent Zone",
+                "location_type": InventoryLocationType.ZONE,
+            },
+            user=self.user,
+        )
+
+        child = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "parent_id": parent.id,
+                "code": "BIN-CHILD",
+                "name": "Child Bin",
+                "location_type": InventoryLocationType.BIN,
+            },
+            user=self.user,
+        )
+
+        self.assertEqual(child.parent, parent)
+        self.assertEqual(
+            child.full_path,
+            "Parent Zone / Child Bin",
+        )
+
+    def test_create_inventory_location_rejects_parent_from_other_warehouse(self):
+        parent = create_inventory_location(
+            company=self.company,
+            warehouse=self.second_warehouse,
+            data={
+                "code": "OTHER-PARENT",
+                "name": "Other Parent",
+            },
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            create_inventory_location(
+                company=self.company,
+                warehouse=self.warehouse,
+                data={
+                    "parent_id": parent.id,
+                    "code": "INVALID-CHILD",
+                    "name": "Invalid Child",
+                },
+                user=self.user,
+            )
+
+    def test_update_inventory_location_service(self):
+        location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "UPDATE-LOC",
+                "name": "Before Update",
+            },
+            user=self.user,
+        )
+
+        updated = update_inventory_location(
+            company=self.company,
+            location=location,
+            data={
+                "code": "updated-loc",
+                "name": "After Update",
+                "barcode": "UPDATED-BARCODE",
+                "sequence": 25,
+                "is_pickable": False,
+            },
+            user=self.user,
+        )
+
+        self.assertEqual(updated.code, "UPDATED-LOC")
+        self.assertEqual(updated.name, "After Update")
+        self.assertEqual(updated.barcode, "UPDATED-BARCODE")
+        self.assertEqual(updated.sequence, 25)
+        self.assertFalse(updated.is_pickable)
+        self.assertEqual(updated.updated_by, self.user)
+
+    def test_update_inventory_location_rejects_cross_company_location(self):
+        other_location = create_inventory_location(
+            company=self.other_company,
+            warehouse=self.other_warehouse,
+            data={
+                "code": "OTHER-UPDATE",
+                "name": "Other Update",
+            },
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            update_inventory_location(
+                company=self.company,
+                location=other_location,
+                data={"name": "Should Fail"},
+                user=self.user,
+            )
+
+    def test_update_inventory_location_prevents_warehouse_change(self):
+        location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "NO-MOVE",
+                "name": "No Move",
+            },
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            update_inventory_location(
+                company=self.company,
+                location=location,
+                data={
+                    "warehouse_id": self.second_warehouse.id,
+                },
+                user=self.user,
+            )
+
+    def test_set_inventory_location_status_service(self):
+        location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "STATUS-SVC",
+                "name": "Status Service",
+            },
+            user=self.user,
+        )
+
+        updated = set_inventory_location_status(
+            company=self.company,
+            location=location,
+            status=InventoryLocationStatus.INACTIVE,
+            user=self.user,
+        )
+
+        self.assertEqual(
+            updated.status,
+            InventoryLocationStatus.INACTIVE,
+        )
+        self.assertFalse(updated.is_active)
+
+    def test_get_company_inventory_locations_is_tenant_scoped(self):
+        company_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "COMPANY-LOC",
+                "name": "Company Location",
+            },
+            user=self.user,
+        )
+        other_location = create_inventory_location(
+            company=self.other_company,
+            warehouse=self.other_warehouse,
+            data={
+                "code": "OTHER-LOC",
+                "name": "Other Location",
+            },
+            user=self.user,
+        )
+
+        queryset = get_company_inventory_locations(self.company)
+
+        self.assertIn(company_location, queryset)
+        self.assertNotIn(other_location, queryset)
+
+    def test_get_warehouse_inventory_locations_is_warehouse_scoped(self):
+        first_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "FIRST-WH-LOC",
+                "name": "First Warehouse Location",
+            },
+            user=self.user,
+        )
+        second_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.second_warehouse,
+            data={
+                "code": "SECOND-WH-LOC",
+                "name": "Second Warehouse Location",
+            },
+            user=self.user,
+        )
+
+        queryset = get_warehouse_inventory_locations(
+            company=self.company,
+            warehouse=self.warehouse,
+        )
+
+        self.assertIn(first_location, queryset)
+        self.assertNotIn(second_location, queryset)
+
+    def test_get_active_warehouse_inventory_locations(self):
+        active_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "ACTIVE-LOC",
+                "name": "Active Location",
+            },
+            user=self.user,
+        )
+        inactive_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "INACTIVE-LOC",
+                "name": "Inactive Location",
+            },
+            user=self.user,
+        )
+        inactive_location.deactivate(user=self.user)
+
+        queryset = get_active_warehouse_inventory_locations(
+            company=self.company,
+            warehouse=self.warehouse,
+        )
+
+        self.assertIn(active_location, queryset)
+        self.assertNotIn(inactive_location, queryset)
+
+    def test_validate_inventory_location_for_company(self):
+        location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "VALIDATE-LOC",
+                "name": "Validate Location",
+            },
+            user=self.user,
+        )
+
+        validate_inventory_location_for_company(
+            company=self.company,
+            location=location,
+            warehouse=self.warehouse,
+            require_active=True,
+        )
+
+        with self.assertRaises(ValidationError):
+            validate_inventory_location_for_company(
+                company=self.other_company,
+                location=location,
+            )
+
+    def test_build_inventory_location_payload(self):
+        location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "PAYLOAD-LOC",
+                "name": "Payload Location",
+                "name_ar": "موقع البيانات",
+                "location_type": InventoryLocationType.BIN,
+                "sequence": 15,
+            },
+            user=self.user,
+        )
+
+        payload = build_inventory_location_payload(location)
+
+        self.assertEqual(payload["id"], location.id)
+        self.assertEqual(payload["company_id"], self.company.id)
+        self.assertEqual(payload["warehouse_id"], self.warehouse.id)
+        self.assertEqual(payload["code"], "PAYLOAD-LOC")
+        self.assertEqual(payload["display_name"], "موقع البيانات")
+        self.assertEqual(payload["sequence"], 15)
+
+    def test_ensure_default_inventory_locations(self):
+        result = ensure_default_inventory_locations(
+            company=self.company,
+            warehouse=self.warehouse,
+            user=self.user,
+        )
+
+        self.assertEqual(
+            set(result.keys()),
+            {
+                "default",
+                "receiving",
+                "shipping",
+                "adjustment",
+            },
+        )
+        self.assertEqual(
+            InventoryLocation.objects.filter(
+                company=self.company,
+                warehouse=self.warehouse,
+            ).count(),
+            4,
+        )
+
+        self.assertTrue(result["default"].is_default)
+        self.assertTrue(result["default"].is_pickable)
+        self.assertTrue(result["receiving"].is_receiving)
+        self.assertFalse(result["receiving"].is_pickable)
+        self.assertTrue(result["shipping"].is_shipping)
+        self.assertTrue(result["adjustment"].is_adjustment)
+
+    def test_ensure_default_inventory_locations_is_idempotent(self):
+        first = ensure_default_inventory_locations(
+            company=self.company,
+            warehouse=self.warehouse,
+            user=self.user,
+        )
+        second = ensure_default_inventory_locations(
+            company=self.company,
+            warehouse=self.warehouse,
+            user=self.user,
+        )
+
+        self.assertEqual(
+            InventoryLocation.objects.filter(
+                company=self.company,
+                warehouse=self.warehouse,
+            ).count(),
+            4,
+        )
+
+        for key in first:
+            self.assertEqual(first[key].id, second[key].id)
+
+    def test_default_and_purpose_location_resolvers(self):
+        locations = ensure_default_inventory_locations(
+            company=self.company,
+            warehouse=self.warehouse,
+            user=self.user,
+        )
+
+        default_location = get_default_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+        )
+        receiving_location = get_inventory_location_by_purpose(
+            company=self.company,
+            warehouse=self.warehouse,
+            purpose="receiving",
+        )
+        shipping_location = get_inventory_location_by_purpose(
+            company=self.company,
+            warehouse=self.warehouse,
+            purpose="shipping",
+        )
+        adjustment_location = get_inventory_location_by_purpose(
+            company=self.company,
+            warehouse=self.warehouse,
+            purpose="adjustment",
+        )
+
+        self.assertEqual(
+            default_location.id,
+            locations["default"].id,
+        )
+        self.assertEqual(
+            receiving_location.id,
+            locations["receiving"].id,
+        )
+        self.assertEqual(
+            shipping_location.id,
+            locations["shipping"].id,
+        )
+        self.assertEqual(
+            adjustment_location.id,
+            locations["adjustment"].id,
+        )
+
+
+
+class InventoryLocationAPITests(InventoryTestBase):
+    """
+    Inventory locations API, permissions, and tenant-isolation tests.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        self.profile, _created = UserProfile.objects.get_or_create(
+            user=self.user,
+            defaults={
+                "display_name": "Inventory API User",
+                "default_company": self.company,
+                "is_system_user": False,
+            },
+        )
+
+        if self.profile.default_company_id != self.company.id:
+            self.profile.default_company = self.company
+            self.profile.save(
+                update_fields=[
+                    "default_company",
+                    "updated_at",
+                ]
+            )
+
+        self.membership, _created = CompanyMembership.objects.get_or_create(
+            user=self.user,
+            company=self.company,
+            defaults={
+                "role": CompanyRole.ADMIN,
+                "status": MembershipStatus.ACTIVE,
+                "is_primary": True,
+            },
+        )
+
+        membership_changed = False
+
+        if self.membership.role != CompanyRole.ADMIN:
+            self.membership.role = CompanyRole.ADMIN
+            membership_changed = True
+
+        if self.membership.status != MembershipStatus.ACTIVE:
+            self.membership.status = MembershipStatus.ACTIVE
+            membership_changed = True
+
+        if not self.membership.is_primary:
+            self.membership.is_primary = True
+            membership_changed = True
+
+        if membership_changed:
+            self.membership.save()
+
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+        self.list_url = reverse(
+            "company:company_inventory_locations_list"
+        )
+        self.create_url = reverse(
+            "company:company_inventory_location_create"
+        )
+
+    def _create_location(
+        self,
+        *,
+        warehouse=None,
+        company=None,
+        code="API-LOC",
+        name="API Location",
+        parent=None,
+        location_type=InventoryLocationType.BIN,
+        **extra,
+    ):
+        warehouse = warehouse or self.warehouse
+        company = company or warehouse.company
+
+        return InventoryLocation.objects.create(
+            company=company,
+            warehouse=warehouse,
+            parent=parent,
+            code=code,
+            name=name,
+            location_type=location_type,
+            **extra,
+        )
+
+    def test_locations_list_returns_current_company_locations_only(self):
+        current_location = self._create_location(
+            code="CURRENT-LOCATION",
+            name="Current Company Location",
+        )
+        other_location = self._create_location(
+            company=self.other_company,
+            warehouse=self.other_warehouse,
+            code="OTHER-LOCATION",
+            name="Other Company Location",
+        )
+
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+
+        result_ids = {
+            item["id"]
+            for item in response.data["results"]
+        }
+
+        self.assertIn(current_location.id, result_ids)
+        self.assertNotIn(other_location.id, result_ids)
+
+    def test_locations_list_supports_search_and_warehouse_filter(self):
+        matching_location = self._create_location(
+            warehouse=self.warehouse,
+            code="SEARCH-BIN-001",
+            name="Searchable Bin",
+        )
+        self._create_location(
+            warehouse=self.second_warehouse,
+            code="OTHER-BIN-001",
+            name="Other Warehouse Bin",
+        )
+
+        response = self.client.get(
+            self.list_url,
+            {
+                "search": "SEARCH-BIN",
+                "warehouse_id": self.warehouse.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(
+            response.data["results"][0]["id"],
+            matching_location.id,
+        )
+
+    def test_locations_list_returns_children_count(self):
+        parent = self._create_location(
+            code="API-PARENT",
+            name="API Parent",
+            location_type=InventoryLocationType.ZONE,
+        )
+        self._create_location(
+            code="API-CHILD",
+            name="API Child",
+            parent=parent,
+        )
+
+        response = self.client.get(
+            self.list_url,
+            {
+                "search": "API-PARENT",
+                "root_only": "true",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(
+            response.data["results"][0]["children_count"],
+            1,
+        )
+        self.assertTrue(
+            response.data["results"][0]["has_children"]
+        )
+
+    def test_location_detail_returns_location_and_children(self):
+        parent = self._create_location(
+            code="DETAIL-PARENT",
+            name="Detail Parent",
+            location_type=InventoryLocationType.ZONE,
+        )
+        child = self._create_location(
+            code="DETAIL-CHILD",
+            name="Detail Child",
+            parent=parent,
+        )
+
+        detail_url = reverse(
+            "company:company_inventory_location_detail",
+            kwargs={
+                "location_id": parent.id,
+            },
+        )
+
+        response = self.client.get(detail_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        self.assertEqual(
+            response.data["location"]["id"],
+            parent.id,
+        )
+        self.assertEqual(response.data["children_count"], 1)
+        self.assertEqual(
+            response.data["children"][0]["id"],
+            child.id,
+        )
+
+    def test_location_detail_hides_other_company_location(self):
+        other_location = self._create_location(
+            company=self.other_company,
+            warehouse=self.other_warehouse,
+            code="HIDDEN-OTHER-LOCATION",
+            name="Hidden Other Location",
+        )
+
+        detail_url = reverse(
+            "company:company_inventory_location_detail",
+            kwargs={
+                "location_id": other_location.id,
+            },
+        )
+
+        response = self.client.get(detail_url)
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(response.data["ok"])
+
+    def test_location_create_api(self):
+        response = self.client.post(
+            self.create_url,
+            {
+                "warehouse_id": self.warehouse.id,
+                "code": "api-new-bin",
+                "name": "API New Bin",
+                "name_ar": "خانة جديدة",
+                "location_type": InventoryLocationType.BIN,
+                "barcode": "API-NEW-BIN-BARCODE",
+                "sequence": 12,
+                "is_pickable": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["ok"])
+
+        location = InventoryLocation.objects.get(
+            id=response.data["location"]["id"],
+        )
+
+        self.assertEqual(location.company, self.company)
+        self.assertEqual(location.warehouse, self.warehouse)
+        self.assertEqual(location.code, "API-NEW-BIN")
+        self.assertEqual(location.name_ar, "خانة جديدة")
+        self.assertEqual(location.sequence, 12)
+        self.assertEqual(location.created_by, self.user)
+
+    def test_location_create_ignores_frontend_company_id(self):
+        response = self.client.post(
+            self.create_url,
+            {
+                "company_id": self.other_company.id,
+                "warehouse_id": self.warehouse.id,
+                "code": "SAFE-COMPANY-LOCATION",
+                "name": "Safe Company Location",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+
+        location = InventoryLocation.objects.get(
+            id=response.data["location"]["id"],
+        )
+
+        self.assertEqual(location.company, self.company)
+        self.assertNotEqual(location.company, self.other_company)
+
+    def test_location_create_rejects_other_company_warehouse(self):
+        response = self.client.post(
+            self.create_url,
+            {
+                "warehouse_id": self.other_warehouse.id,
+                "code": "BAD-CROSS-WAREHOUSE",
+                "name": "Bad Cross Warehouse",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(response.data["ok"])
+        self.assertFalse(
+            InventoryLocation.objects.filter(
+                company=self.company,
+                code="BAD-CROSS-WAREHOUSE",
+            ).exists()
+        )
+
+    def test_location_create_with_parent(self):
+        parent = self._create_location(
+            code="CREATE-PARENT",
+            name="Create Parent",
+            location_type=InventoryLocationType.ZONE,
+        )
+
+        response = self.client.post(
+            self.create_url,
+            {
+                "warehouse_id": self.warehouse.id,
+                "parent_id": parent.id,
+                "code": "CREATE-CHILD",
+                "name": "Create Child",
+                "location_type": InventoryLocationType.BIN,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(
+            response.data["location"]["parent_id"],
+            parent.id,
+        )
+        self.assertEqual(
+            response.data["location"]["full_path"],
+            "Create Parent / Create Child",
+        )
+
+    def test_location_create_rejects_parent_from_other_warehouse(self):
+        parent = self._create_location(
+            warehouse=self.second_warehouse,
+            code="OTHER-WAREHOUSE-PARENT",
+            name="Other Warehouse Parent",
+        )
+
+        response = self.client.post(
+            self.create_url,
+            {
+                "warehouse_id": self.warehouse.id,
+                "parent_id": parent.id,
+                "code": "INVALID-PARENT-CHILD",
+                "name": "Invalid Parent Child",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.data["ok"])
+
+    def test_location_update_api(self):
+        location = self._create_location(
+            code="BEFORE-UPDATE",
+            name="Before Update",
+        )
+
+        update_url = reverse(
+            "company:company_inventory_location_update",
+            kwargs={
+                "location_id": location.id,
+            },
+        )
+
+        response = self.client.patch(
+            update_url,
+            {
+                "code": "after-update",
+                "name": "After Update",
+                "barcode": "AFTER-UPDATE-BARCODE",
+                "sequence": 44,
+                "is_pickable": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+
+        location.refresh_from_db()
+
+        self.assertEqual(location.code, "AFTER-UPDATE")
+        self.assertEqual(location.name, "After Update")
+        self.assertEqual(
+            location.barcode,
+            "AFTER-UPDATE-BARCODE",
+        )
+        self.assertEqual(location.sequence, 44)
+        self.assertFalse(location.is_pickable)
+        self.assertEqual(location.updated_by, self.user)
+
+    def test_location_update_hides_other_company_location(self):
+        other_location = self._create_location(
+            company=self.other_company,
+            warehouse=self.other_warehouse,
+            code="OTHER-UPDATE-API",
+            name="Other Update API",
+        )
+
+        update_url = reverse(
+            "company:company_inventory_location_update",
+            kwargs={
+                "location_id": other_location.id,
+            },
+        )
+
+        response = self.client.patch(
+            update_url,
+            {
+                "name": "Should Not Update",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+        other_location.refresh_from_db()
+        self.assertEqual(
+            other_location.name,
+            "Other Update API",
+        )
+
+    def test_location_update_prevents_warehouse_change(self):
+        location = self._create_location(
+            code="NO-API-MOVE",
+            name="No API Move",
+        )
+
+        update_url = reverse(
+            "company:company_inventory_location_update",
+            kwargs={
+                "location_id": location.id,
+            },
+        )
+
+        response = self.client.patch(
+            update_url,
+            {
+                "warehouse_id": self.second_warehouse.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+        location.refresh_from_db()
+        self.assertEqual(
+            location.warehouse,
+            self.warehouse,
+        )
+
+    def test_location_status_api_deactivates_location(self):
+        location = self._create_location(
+            code="STATUS-API-LOCATION",
+            name="Status API Location",
+        )
+
+        status_url = reverse(
+            "company:company_inventory_location_status",
+            kwargs={
+                "location_id": location.id,
+            },
+        )
+
+        response = self.client.post(
+            status_url,
+            {
+                "status": InventoryLocationStatus.INACTIVE,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        location.refresh_from_db()
+
+        self.assertEqual(
+            location.status,
+            InventoryLocationStatus.INACTIVE,
+        )
+        self.assertFalse(location.is_active)
+
+    def test_location_status_api_accepts_action_alias(self):
+        location = self._create_location(
+            code="ACTION-STATUS-LOCATION",
+            name="Action Status Location",
+        )
+
+        status_url = reverse(
+            "company:company_inventory_location_status",
+            kwargs={
+                "location_id": location.id,
+            },
+        )
+
+        response = self.client.post(
+            status_url,
+            {
+                "action": "archive",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        location.refresh_from_db()
+
+        self.assertEqual(
+            location.status,
+            InventoryLocationStatus.ARCHIVED,
+        )
+        self.assertFalse(location.is_active)
+
+    def test_location_status_rejects_invalid_status(self):
+        location = self._create_location(
+            code="INVALID-STATUS-LOCATION",
+            name="Invalid Status Location",
+        )
+
+        status_url = reverse(
+            "company:company_inventory_location_status",
+            kwargs={
+                "location_id": location.id,
+            },
+        )
+
+        response = self.client.post(
+            status_url,
+            {
+                "status": "DELETED",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.data["ok"])
+
+        location.refresh_from_db()
+        self.assertEqual(
+            location.status,
+            InventoryLocationStatus.ACTIVE,
+        )
+
+
+
+class LocationAwareStockServicesTests(InventoryTestBase):
+    """
+    Phase 22.1.6.4 location-aware stock services bridge tests.
+
+    Transitional rule:
+    StockItem still has one row per company / warehouse / item.
+    Explicit locations are supported, but one existing warehouse-level
+    balance cannot be reassigned to another location until the location-level
+    uniqueness migration is completed.
+    """
+
+    def _create_location(
+        self,
+        *,
+        warehouse=None,
+        company=None,
+        code,
+        name,
+        is_default=False,
+        is_active=True,
+    ):
+        warehouse = warehouse or self.warehouse
+        company = company or warehouse.company
+
+        location = create_inventory_location(
+            company=company,
+            warehouse=warehouse,
+            data={
+                "code": code,
+                "name": name,
+                "location_type": InventoryLocationType.BIN,
+                "is_default": is_default,
+                "is_pickable": True,
+                "is_active": is_active,
+            },
+            user=self.user,
+        )
+
+        return location
+
+    def test_receive_stock_creates_default_stock_location_automatically(self):
+        self.assertFalse(
+            InventoryLocation.objects.filter(
+                company=self.company,
+                warehouse=self.warehouse,
+            ).exists()
+        )
+
+        movement = receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            item=self.product,
+            quantity="5",
+            unit_cost="10.00",
+            user=self.user,
+        )
+
+        location = InventoryLocation.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            code="STOCK",
+        )
+
+        self.assertEqual(location.status, InventoryLocationStatus.ACTIVE)
+        self.assertTrue(location.is_active)
+        self.assertTrue(location.is_default)
+        self.assertTrue(location.is_pickable)
+        self.assertEqual(movement.location, location)
+        self.assertEqual(movement.stock_item.location, location)
+
+    def test_repeated_stock_movements_reuse_same_default_location(self):
+        first_movement = receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            item=self.product,
+            quantity="5",
+            unit_cost="10.00",
+            user=self.user,
+        )
+
+        second_movement = receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            item=self.product,
+            quantity="2",
+            unit_cost="10.00",
+            user=self.user,
+        )
+
+        locations = InventoryLocation.objects.filter(
+            company=self.company,
+            warehouse=self.warehouse,
+        )
+
+        self.assertEqual(locations.count(), 1)
+        self.assertEqual(
+            first_movement.location_id,
+            second_movement.location_id,
+        )
+        self.assertEqual(
+            first_movement.stock_item_id,
+            second_movement.stock_item_id,
+        )
+
+    def test_stock_service_uses_existing_default_location(self):
+        default_location = self._create_location(
+            code="DEFAULT-BIN",
+            name="Default Bin",
+            is_default=True,
+        )
+
+        movement = receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            item=self.product,
+            quantity="4",
+            unit_cost="10.00",
+            user=self.user,
+        )
+
+        self.assertEqual(movement.location, default_location)
+        self.assertEqual(
+            movement.stock_item.location,
+            default_location,
+        )
+        self.assertFalse(
+            InventoryLocation.objects.filter(
+                company=self.company,
+                warehouse=self.warehouse,
+                code="STOCK",
+            ).exists()
+        )
+
+    def test_stock_movement_and_balance_use_same_explicit_location(self):
+        location = self._create_location(
+            code="EXPLICIT-BIN",
+            name="Explicit Bin",
+        )
+
+        movement = receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=location,
+            item=self.product,
+            quantity="7",
+            unit_cost="11.00",
+            user=self.user,
+        )
+
+        stock_item = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            item=self.product,
+        )
+
+        self.assertEqual(stock_item.location, location)
+        self.assertEqual(movement.location, location)
+        self.assertEqual(movement.stock_item, stock_item)
+        self.assertEqual(
+            stock_item.quantity_on_hand,
+            Decimal("7.0000"),
+        )
+
+    def test_stock_service_accepts_valid_explicit_location(self):
+        location = self._create_location(
+            code="PICK-BIN",
+            name="Pick Bin",
+        )
+
+        stock_item = get_or_create_stock_item(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=location,
+            item=self.second_product,
+            user=self.user,
+        )
+
+        self.assertEqual(stock_item.location, location)
+        self.assertEqual(stock_item.company, self.company)
+        self.assertEqual(stock_item.warehouse, self.warehouse)
+        self.assertEqual(stock_item.item, self.second_product)
+
+    def test_stock_service_rejects_other_company_location(self):
+        other_location = self._create_location(
+            company=self.other_company,
+            warehouse=self.other_warehouse,
+            code="OTHER-COMPANY-BIN",
+            name="Other Company Bin",
+        )
+
+        with self.assertRaises(ValidationError):
+            receive_stock(
+                company=self.company,
+                warehouse=self.warehouse,
+                location=other_location,
+                item=self.product,
+                quantity="1",
+                unit_cost="10.00",
+                user=self.user,
+            )
+
+        self.assertFalse(
+            StockItem.objects.filter(
+                company=self.company,
+                warehouse=self.warehouse,
+                item=self.product,
+            ).exists()
+        )
+
+    def test_stock_service_rejects_location_from_other_warehouse(self):
+        other_warehouse_location = self._create_location(
+            warehouse=self.second_warehouse,
+            code="SECOND-WAREHOUSE-BIN",
+            name="Second Warehouse Bin",
+        )
+
+        with self.assertRaises(ValidationError):
+            receive_stock(
+                company=self.company,
+                warehouse=self.warehouse,
+                location=other_warehouse_location,
+                item=self.product,
+                quantity="1",
+                unit_cost="10.00",
+                user=self.user,
+            )
+
+        self.assertFalse(
+            StockItem.objects.filter(
+                company=self.company,
+                warehouse=self.warehouse,
+                item=self.product,
+            ).exists()
+        )
+
+    def test_stock_service_rejects_inactive_location(self):
+        inactive_location = self._create_location(
+            code="INACTIVE-STOCK-BIN",
+            name="Inactive Stock Bin",
+        )
+        inactive_location.deactivate(user=self.user)
+        inactive_location.refresh_from_db()
+
+        self.assertEqual(
+            inactive_location.status,
+            InventoryLocationStatus.INACTIVE,
+        )
+        self.assertFalse(inactive_location.is_active)
+
+        with self.assertRaises(ValidationError):
+            receive_stock(
+                company=self.company,
+                warehouse=self.warehouse,
+                location=inactive_location,
+                item=self.product,
+                quantity="1",
+                unit_cost="10.00",
+                user=self.user,
+            )
+
+    def test_same_item_can_have_independent_balances_in_two_locations(self):
+        first_location = self._create_location(
+            code="FIRST-STOCK-BIN",
+            name="First Stock Bin",
+        )
+        second_location = self._create_location(
+            code="SECOND-STOCK-BIN",
+            name="Second Stock Bin",
+        )
+
+        first_movement = receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=first_location,
+            item=self.product,
+            quantity="5",
+            unit_cost="10.00",
+            user=self.user,
+        )
+
+        second_movement = receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=second_location,
+            item=self.product,
+            quantity="1",
+            unit_cost="12.00",
+            user=self.user,
+        )
+
+        first_stock_item = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=first_location,
+            item=self.product,
+        )
+        second_stock_item = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=second_location,
+            item=self.product,
+        )
+
+        self.assertNotEqual(
+            first_stock_item.id,
+            second_stock_item.id,
+        )
+        self.assertEqual(
+            first_movement.stock_item_id,
+            first_stock_item.id,
+        )
+        self.assertEqual(
+            second_movement.stock_item_id,
+            second_stock_item.id,
+        )
+        self.assertEqual(
+            first_stock_item.quantity_on_hand,
+            Decimal("5.0000"),
+        )
+        self.assertEqual(
+            second_stock_item.quantity_on_hand,
+            Decimal("1.0000"),
+        )
+        self.assertEqual(
+            StockItem.objects.filter(
+                company=self.company,
+                warehouse=self.warehouse,
+                item=self.product,
+            ).count(),
+            2,
+        )
+
+    def test_transfer_stock_supports_explicit_source_and_target_locations(self):
+        source_location = self._create_location(
+            warehouse=self.warehouse,
+            code="TRANSFER-SOURCE-BIN",
+            name="Transfer Source Bin",
+        )
+        target_location = self._create_location(
+            warehouse=self.second_warehouse,
+            code="TRANSFER-TARGET-BIN",
+            name="Transfer Target Bin",
+        )
+
+        receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=source_location,
+            item=self.product,
+            quantity="10",
+            unit_cost="10.00",
+            user=self.user,
+        )
+
+        result = transfer_stock(
+            company=self.company,
+            source_warehouse=self.warehouse,
+            target_warehouse=self.second_warehouse,
+            source_location=source_location,
+            target_location=target_location,
+            item=self.product,
+            quantity="4",
+            reference_number="LOC-TRANSFER-001",
+            user=self.user,
+        )
+
+        outgoing = result["outgoing"]
+        incoming = result["incoming"]
+
+        self.assertEqual(outgoing.location, source_location)
+        self.assertEqual(incoming.location, target_location)
+        self.assertEqual(
+            outgoing.movement_type,
+            StockMovementType.TRANSFER_OUT,
+        )
+        self.assertEqual(
+            incoming.movement_type,
+            StockMovementType.TRANSFER_IN,
+        )
+
+        source_stock = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            item=self.product,
+        )
+        target_stock = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.second_warehouse,
+            item=self.product,
+        )
+
+        self.assertEqual(source_stock.location, source_location)
+        self.assertEqual(target_stock.location, target_location)
+        self.assertEqual(
+            source_stock.quantity_on_hand,
+            Decimal("6.0000"),
+        )
+        self.assertEqual(
+            target_stock.quantity_on_hand,
+            Decimal("4.0000"),
+        )
+
+
+
+class LocationAwareStockReadCompatibilityTests(
+    InventoryTestBase
+):
+    """
+    Phase 22.1.6.5.2 location-aware read compatibility tests.
+
+    These tests cover serializers and company stock APIs before
+    enabling multiple StockItem rows for the same warehouse/item.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        self.profile, _created = UserProfile.objects.get_or_create(
+            user=self.user,
+            defaults={
+                "display_name": "Stock Read API User",
+                "default_company": self.company,
+                "is_system_user": False,
+            },
+        )
+
+        if self.profile.default_company_id != self.company.id:
+            self.profile.default_company = self.company
+            self.profile.save(
+                update_fields=[
+                    "default_company",
+                    "updated_at",
+                ]
+            )
+
+        self.membership, _created = (
+            CompanyMembership.objects.get_or_create(
+                user=self.user,
+                company=self.company,
+                defaults={
+                    "role": CompanyRole.ADMIN,
+                    "status": MembershipStatus.ACTIVE,
+                    "is_primary": True,
+                },
+            )
+        )
+
+        membership_changed = False
+
+        if self.membership.role != CompanyRole.ADMIN:
+            self.membership.role = CompanyRole.ADMIN
+            membership_changed = True
+
+        if self.membership.status != MembershipStatus.ACTIVE:
+            self.membership.status = MembershipStatus.ACTIVE
+            membership_changed = True
+
+        if not self.membership.is_primary:
+            self.membership.is_primary = True
+            membership_changed = True
+
+        if membership_changed:
+            self.membership.save()
+
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def _create_location_stock(
+        self,
+        *,
+        code="READ-BIN-001",
+        name="Read Compatibility Bin",
+        quantity="6.0000",
+    ):
+        location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": code,
+                "name": name,
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+                "is_pickable": True,
+            },
+            user=self.user,
+        )
+
+        movement = receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=location,
+            item=self.product,
+            quantity=quantity,
+            unit_cost="10.00",
+            reference_number="READ-COMPAT-001",
+            user=self.user,
+        )
+
+        movement.refresh_from_db()
+        stock_item = movement.stock_item
+        stock_item.refresh_from_db()
+
+        return location, stock_item, movement
+
+    def test_serialize_stock_item_includes_location_payload(self):
+        location, stock_item, _movement = (
+            self._create_location_stock()
+        )
+
+        payload = serialize_stock_item(stock_item)
+
+        self.assertEqual(
+            payload["location_id"],
+            location.id,
+        )
+        self.assertEqual(
+            payload["location"]["id"],
+            location.id,
+        )
+        self.assertEqual(
+            payload["location"]["code"],
+            "READ-BIN-001",
+        )
+        self.assertEqual(
+            payload["location"]["name"],
+            location.display_name,
+        )
+        self.assertTrue(
+            payload["location"]["is_default"]
+        )
+
+    def test_serialize_stock_movement_includes_location_payload(self):
+        location, _stock_item, movement = (
+            self._create_location_stock()
+        )
+
+        payload = serialize_stock_movement(movement)
+
+        self.assertEqual(
+            payload["location_id"],
+            location.id,
+        )
+        self.assertEqual(
+            payload["location"]["id"],
+            location.id,
+        )
+        self.assertEqual(
+            payload["location"]["code"],
+            location.code,
+        )
+        self.assertEqual(
+            payload["stock_item_id"],
+            movement.stock_item_id,
+        )
+
+    def test_stock_list_api_includes_location_payload(self):
+        location, stock_item, _movement = (
+            self._create_location_stock()
+        )
+
+        response = self.client.get(
+            "/api/company/inventory/stock/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(
+            payload["results"][0]["id"],
+            stock_item.id,
+        )
+        self.assertEqual(
+            payload["results"][0]["location_id"],
+            location.id,
+        )
+        self.assertEqual(
+            payload["results"][0]["location"]["code"],
+            location.code,
+        )
+
+    def test_stock_list_api_filters_by_location_id(self):
+        location, stock_item, _movement = (
+            self._create_location_stock()
+        )
+
+        other_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.second_warehouse,
+            data={
+                "code": "OTHER-READ-BIN",
+                "name": "Other Read Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+            },
+            user=self.user,
+        )
+
+        receive_stock(
+            company=self.company,
+            warehouse=self.second_warehouse,
+            location=other_location,
+            item=self.second_product,
+            quantity="3.0000",
+            unit_cost="20.00",
+            user=self.user,
+        )
+
+        response = self.client.get(
+            "/api/company/inventory/stock/",
+            {
+                "location_id": location.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(
+            payload["results"][0]["id"],
+            stock_item.id,
+        )
+        self.assertEqual(
+            payload["filters"]["location_id"],
+            str(location.id),
+        )
+
+    def test_stock_list_api_searches_by_location_code(self):
+        location, stock_item, _movement = (
+            self._create_location_stock(
+                code="SEARCH-LOCATION-777",
+                name="Search Location",
+            )
+        )
+
+        response = self.client.get(
+            "/api/company/inventory/stock/",
+            {
+                "search": "LOCATION-777",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(
+            payload["results"][0]["id"],
+            stock_item.id,
+        )
+        self.assertEqual(
+            payload["results"][0]["location"]["id"],
+            location.id,
+        )
+
+    def test_stock_detail_api_includes_location_payload(self):
+        location, stock_item, _movement = (
+            self._create_location_stock()
+        )
+
+        response = self.client.get(
+            (
+                "/api/company/inventory/stock/"
+                f"{stock_item.id}/"
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        serialized = payload["stock_item"]
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(
+            serialized["id"],
+            stock_item.id,
+        )
+        self.assertEqual(
+            serialized["location_id"],
+            location.id,
+        )
+        self.assertEqual(
+            serialized["location"]["code"],
+            location.code,
+        )
+
+
 class StockItemTests(InventoryTestBase):
     def test_get_or_create_stock_item(self):
         stock_item = get_or_create_stock_item(
@@ -430,40 +2309,92 @@ class StockItemTests(InventoryTestBase):
             )
 
     def test_stock_item_available_quantity(self):
+        location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "AVAILABLE-QTY-BIN",
+                "name": "Available Quantity Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+            },
+            user=self.user,
+        )
+
         stock_item = StockItem.objects.create(
             company=self.company,
             warehouse=self.warehouse,
+            location=location,
             item=self.product,
             quantity_on_hand=Decimal("10.0000"),
             reserved_quantity=Decimal("2.0000"),
         )
 
-        self.assertEqual(stock_item.available_quantity, Decimal("8.0000"))
+        self.assertEqual(
+            stock_item.available_quantity,
+            Decimal("8.0000"),
+        )
 
     def test_stock_item_reserved_quantity_cannot_exceed_on_hand(self):
+        location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "RESERVED-QTY-BIN",
+                "name": "Reserved Quantity Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+            },
+            user=self.user,
+        )
+
         stock_item = StockItem(
             company=self.company,
             warehouse=self.warehouse,
+            location=location,
             item=self.product,
             quantity_on_hand=Decimal("1.0000"),
             reserved_quantity=Decimal("2.0000"),
         )
 
-        with self.assertRaises(ValidationError):
+        with self.assertRaises(ValidationError) as context:
             stock_item.full_clean()
 
+        self.assertIn(
+            "reserved_quantity",
+            context.exception.message_dict,
+        )
+
     def test_stock_item_minimum_and_maximum_validation(self):
+        location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "MIN-MAX-BIN",
+                "name": "Minimum Maximum Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+            },
+            user=self.user,
+        )
+
         stock_item = StockItem(
             company=self.company,
             warehouse=self.warehouse,
+            location=location,
             item=self.product,
             quantity_on_hand=Decimal("1.0000"),
             minimum_quantity=Decimal("10.0000"),
             maximum_quantity=Decimal("5.0000"),
         )
 
-        with self.assertRaises(ValidationError):
+        with self.assertRaises(ValidationError) as context:
             stock_item.full_clean()
+
+        self.assertIn(
+            "maximum_quantity",
+            context.exception.message_dict,
+        )
 
 
 class StockMovementTests(InventoryTestBase):

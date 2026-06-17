@@ -1,10 +1,11 @@
 # ============================================================
 # 📂 api/company/inventory/stock/list.py
-# 🧠 PrimeyAcc | Company Stock Items List API V1.0
+# 🧠 PrimeyAcc | Company Stock Items List API V1.1
 # ------------------------------------------------------------
 # ✅ List stock balances for current company only
 # ✅ Tenant isolation through request.company
-# ✅ Search, warehouse, item, category, below-minimum filters
+# ✅ Search, warehouse, location, item, category, below-minimum filters
+# ✅ Location-aware ordering and response filters
 # ✅ Sorting and pagination
 # ✅ Protected by HasAnyCompanyPermission
 # ✅ No frontend company_id trust
@@ -95,6 +96,7 @@ def _apply_stock_item_filters(queryset, request: Request):
         or ""
     )
     warehouse_id = _clean_text(request.query_params.get("warehouse_id") or "")
+    location_id = _clean_text(request.query_params.get("location_id") or "")
     item_id = _clean_text(request.query_params.get("item_id") or "")
     category_id = _clean_text(request.query_params.get("category_id") or "")
     branch_id = _clean_text(request.query_params.get("branch_id") or "")
@@ -115,11 +117,19 @@ def _apply_stock_item_filters(queryset, request: Request):
             | Q(warehouse__name_en__icontains=search)
             | Q(warehouse__branch__name__icontains=search)
             | Q(warehouse__branch__branch_code__icontains=search)
+            | Q(location__code__icontains=search)
+            | Q(location__name__icontains=search)
+            | Q(location__name_ar__icontains=search)
+            | Q(location__name_en__icontains=search)
+            | Q(location__barcode__icontains=search)
             | Q(notes__icontains=search)
         )
 
     if warehouse_id:
         queryset = queryset.filter(warehouse_id=warehouse_id)
+
+    if location_id:
+        queryset = queryset.filter(location_id=location_id)
 
     if item_id:
         queryset = queryset.filter(item_id=item_id)
@@ -154,6 +164,8 @@ def _apply_stock_item_ordering(queryset, ordering: str):
         "-item": "-item__name",
         "warehouse": "warehouse__name",
         "-warehouse": "-warehouse__name",
+        "location": "location__name",
+        "-location": "-location__name",
         "quantity_on_hand": "quantity_on_hand",
         "-quantity_on_hand": "-quantity_on_hand",
         "available_quantity": "quantity_on_hand",
@@ -169,7 +181,12 @@ def _apply_stock_item_ordering(queryset, ordering: str):
     selected_ordering = allowed_ordering.get(ordering, "item__name")
 
     if selected_ordering == "item__name":
-        return queryset.order_by("item__name", "warehouse__name", "id")
+        return queryset.order_by(
+            "item__name",
+            "warehouse__name",
+            "location__name",
+            "id",
+        )
 
     return queryset.order_by(selected_ordering, "-id")
 
@@ -184,6 +201,8 @@ def serialize_stock_choices() -> dict[str, Any]:
             {"value": "-item", "label": "Item Z-A"},
             {"value": "warehouse", "label": "Warehouse A-Z"},
             {"value": "-warehouse", "label": "Warehouse Z-A"},
+            {"value": "location", "label": "Location A-Z"},
+            {"value": "-location", "label": "Location Z-A"},
             {"value": "-quantity_on_hand", "label": "Highest quantity"},
             {"value": "quantity_on_hand", "label": "Lowest quantity"},
             {"value": "-average_cost", "label": "Highest average cost"},
@@ -225,6 +244,7 @@ def stock_items_list(request: Request) -> Response:
                 "company",
                 "warehouse",
                 "warehouse__branch",
+                "location",
                 "item",
                 "item__unit",
                 "item__category",
@@ -263,6 +283,7 @@ def stock_items_list(request: Request) -> Response:
                     or request.query_params.get("q")
                     or "",
                     "warehouse_id": request.query_params.get("warehouse_id") or "",
+                    "location_id": request.query_params.get("location_id") or "",
                     "item_id": request.query_params.get("item_id") or "",
                     "category_id": request.query_params.get("category_id") or "",
                     "branch_id": request.query_params.get("branch_id") or "",

@@ -1,9 +1,17 @@
 ﻿# ============================================================
 # 📂 inventory/services.py
-# 🧠 PrimeyAcc | Company Inventory Services V1.1
+# 🧠 PrimeyAcc | Company Inventory Services V2.0
 # ------------------------------------------------------------
 # ✅ Company-scoped warehouse services
 # ✅ Company-scoped stock balance services
+# ✅ Phase 22.1.6.5.1 location-aware read compatibility
+# ✅ Stock balance location eager loading
+# ✅ Location-aware stock services compatibility bridge
+# ✅ Automatic default stock location resolution
+# ✅ Stock balance and movement location consistency
+# ✅ Inventory locations and bins services
+# ✅ Location hierarchy and tenant validation
+# ✅ Default operational warehouse locations
 # ✅ Stock movement posting engine
 # ✅ Tenant isolation validation
 # ✅ No frontend company_id trust
@@ -56,6 +64,9 @@ from companies.models import Branch, Company
 from .models import (
     MONEY_ZERO,
     QUANTITY_ZERO,
+    InventoryLocation,
+    InventoryLocationStatus,
+    InventoryLocationType,
     StockItem,
     StockMovement,
     StockMovementDirection,
@@ -175,6 +186,675 @@ def get_active_company_warehouses(company: Company) -> QuerySet[Warehouse]:
     )
 
 
+
+def get_company_inventory_locations(
+    company: Company,
+) -> QuerySet[InventoryLocation]:
+    """
+    Return all inventory locations owned by one company.
+    """
+    return (
+        InventoryLocation.objects.filter(company=company)
+        .select_related(
+            "company",
+            "warehouse",
+            "warehouse__branch",
+            "parent",
+            "created_by",
+            "updated_by",
+        )
+        .order_by(
+            "warehouse_id",
+            "sequence",
+            "code",
+            "id",
+        )
+    )
+
+
+def get_warehouse_inventory_locations(
+    *,
+    company: Company,
+    warehouse: Warehouse,
+) -> QuerySet[InventoryLocation]:
+    """
+    Return locations for one warehouse after tenant validation.
+    """
+    validate_warehouse_for_company(
+        company=company,
+        warehouse=warehouse,
+    )
+
+    return get_company_inventory_locations(company).filter(
+        warehouse=warehouse,
+    )
+
+
+def get_active_warehouse_inventory_locations(
+    *,
+    company: Company,
+    warehouse: Warehouse,
+) -> QuerySet[InventoryLocation]:
+    """
+    Return active locations for one active company warehouse.
+    """
+    validate_warehouse_for_company(
+        company=company,
+        warehouse=warehouse,
+        require_active=True,
+    )
+
+    return get_warehouse_inventory_locations(
+        company=company,
+        warehouse=warehouse,
+    ).filter(
+        status=InventoryLocationStatus.ACTIVE,
+        is_active=True,
+    )
+
+
+def validate_inventory_location_for_company(
+    *,
+    company: Company,
+    location: InventoryLocation,
+    warehouse: Warehouse | None = None,
+    require_active: bool = False,
+) -> None:
+    """
+    Validate that an inventory location belongs to the current company.
+
+    When warehouse is provided, the location must belong to that warehouse.
+    """
+    if location.company_id != company.id:
+        raise ValidationError(
+            "Selected inventory location does not belong to this company."
+        )
+
+    if location.warehouse.company_id != company.id:
+        raise ValidationError(
+            "Inventory location warehouse does not belong to this company."
+        )
+
+    if warehouse is not None:
+        validate_warehouse_for_company(
+            company=company,
+            warehouse=warehouse,
+        )
+
+        if location.warehouse_id != warehouse.id:
+            raise ValidationError(
+                "Selected inventory location does not belong to this warehouse."
+            )
+
+    if require_active and not location.is_active_location:
+        raise ValidationError(
+            "Selected inventory location is not active."
+        )
+
+
+def validate_parent_inventory_location(
+    *,
+    company: Company,
+    warehouse: Warehouse,
+    parent: InventoryLocation | None,
+    location: InventoryLocation | None = None,
+) -> None:
+    """
+    Validate an optional parent location.
+
+    Model validation remains the final protection against hierarchy cycles.
+    """
+    if parent is None:
+        return
+
+    validate_inventory_location_for_company(
+        company=company,
+        location=parent,
+        warehouse=warehouse,
+    )
+
+    if location and location.pk and parent.pk == location.pk:
+        raise ValidationError(
+            "Inventory location cannot be its own parent."
+        )
+
+
+def build_inventory_location_payload(
+    location: InventoryLocation,
+) -> dict[str, Any]:
+    """
+    Serialize an inventory location for service consumers.
+    """
+    parent = location.parent
+    warehouse = location.warehouse
+
+    return {
+        "id": location.id,
+        "company_id": location.company_id,
+        "warehouse_id": location.warehouse_id,
+        "warehouse_code": warehouse.code,
+        "warehouse_name": warehouse.display_name,
+        "parent_id": location.parent_id,
+        "parent_code": parent.code if parent else "",
+        "parent_name": parent.display_name if parent else "",
+        "status": location.status,
+        "location_type": location.location_type,
+        "code": location.code,
+        "name": location.name,
+        "name_ar": location.name_ar,
+        "name_en": location.name_en,
+        "display_name": location.display_name,
+        "full_path": location.full_path,
+        "barcode": location.barcode,
+        "is_default": location.is_default,
+        "is_receiving": location.is_receiving,
+        "is_shipping": location.is_shipping,
+        "is_adjustment": location.is_adjustment,
+        "is_pickable": location.is_pickable,
+        "is_active": location.is_active,
+        "is_active_location": location.is_active_location,
+        "sequence": location.sequence,
+        "notes": location.notes,
+        "extra_data": location.extra_data or {},
+        "created_by_id": location.created_by_id,
+        "updated_by_id": location.updated_by_id,
+        "created_at": (
+            location.created_at.isoformat()
+            if location.created_at
+            else None
+        ),
+        "updated_at": (
+            location.updated_at.isoformat()
+            if location.updated_at
+            else None
+        ),
+    }
+
+
+def _resolve_inventory_location_parent(
+    *,
+    company: Company,
+    warehouse: Warehouse,
+    data: dict[str, Any],
+    location: InventoryLocation | None = None,
+) -> InventoryLocation | None:
+    """
+    Resolve parent location from company-scoped input.
+    """
+    if "parent_id" not in data and "parent" not in data:
+        return location.parent if location else None
+
+    parent_id = data.get("parent_id") or data.get("parent")
+
+    if not parent_id:
+        return None
+
+    parent = InventoryLocation.objects.filter(
+        id=parent_id,
+        company=company,
+        warehouse=warehouse,
+    ).first()
+
+    if not parent:
+        raise ValidationError(
+            "Parent inventory location was not found for this warehouse."
+        )
+
+    validate_parent_inventory_location(
+        company=company,
+        warehouse=warehouse,
+        parent=parent,
+        location=location,
+    )
+
+    return parent
+
+
+@transaction.atomic
+def create_inventory_location(
+    *,
+    company: Company,
+    warehouse: Warehouse,
+    data: dict[str, Any],
+    user=None,
+) -> InventoryLocation:
+    """
+    Create an internal warehouse location.
+
+    company and warehouse must come from trusted company context.
+    """
+    validate_warehouse_for_company(
+        company=company,
+        warehouse=warehouse,
+        require_active=True,
+    )
+
+    parent = _resolve_inventory_location_parent(
+        company=company,
+        warehouse=warehouse,
+        data=data,
+    )
+
+    code = normalize_code(data.get("code"))
+    name = normalize_text(data.get("name"))
+    name_ar = normalize_text(data.get("name_ar"))
+    name_en = normalize_text(data.get("name_en"))
+
+    if not code:
+        raise ValidationError(
+            "Inventory location code is required."
+        )
+
+    if not name:
+        name = name_ar or name_en
+
+    if not name:
+        raise ValidationError(
+            "Inventory location name is required."
+        )
+
+    try:
+        sequence = int(data.get("sequence") or 0)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError(
+            "Inventory location sequence must be a valid integer."
+        ) from exc
+
+    if sequence < 0:
+        raise ValidationError(
+            "Inventory location sequence cannot be negative."
+        )
+
+    location = InventoryLocation(
+        company=company,
+        warehouse=warehouse,
+        parent=parent,
+        status=(
+            normalize_code(data.get("status"))
+            or InventoryLocationStatus.ACTIVE
+        ),
+        location_type=(
+            normalize_code(data.get("location_type"))
+            or InventoryLocationType.BIN
+        ),
+        code=code,
+        name=name,
+        name_ar=name_ar,
+        name_en=name_en,
+        barcode=normalize_text(data.get("barcode")),
+        is_default=normalize_bool(
+            data.get("is_default"),
+            default=False,
+        ),
+        is_receiving=normalize_bool(
+            data.get("is_receiving"),
+            default=False,
+        ),
+        is_shipping=normalize_bool(
+            data.get("is_shipping"),
+            default=False,
+        ),
+        is_adjustment=normalize_bool(
+            data.get("is_adjustment"),
+            default=False,
+        ),
+        is_pickable=normalize_bool(
+            data.get("is_pickable"),
+            default=True,
+        ),
+        is_active=True,
+        sequence=sequence,
+        notes=normalize_text(data.get("notes")),
+        extra_data=(
+            data.get("extra_data")
+            if isinstance(data.get("extra_data"), dict)
+            else {}
+        ),
+        created_by=(
+            user
+            if getattr(user, "is_authenticated", False)
+            else None
+        ),
+        updated_by=(
+            user
+            if getattr(user, "is_authenticated", False)
+            else None
+        ),
+    )
+    location.full_clean()
+    location.save()
+
+    return location
+
+
+@transaction.atomic
+def update_inventory_location(
+    *,
+    company: Company,
+    location: InventoryLocation,
+    data: dict[str, Any],
+    user=None,
+) -> InventoryLocation:
+    """
+    Update one company-scoped inventory location.
+    """
+    validate_inventory_location_for_company(
+        company=company,
+        location=location,
+    )
+
+    warehouse = location.warehouse
+
+    if "warehouse_id" in data or "warehouse" in data:
+        requested_warehouse_id = (
+            data.get("warehouse_id")
+            or data.get("warehouse")
+        )
+
+        if str(requested_warehouse_id or "") != str(warehouse.id):
+            raise ValidationError(
+                "Moving an existing inventory location to another warehouse "
+                "is not supported."
+            )
+
+    location.parent = _resolve_inventory_location_parent(
+        company=company,
+        warehouse=warehouse,
+        data=data,
+        location=location,
+    )
+
+    text_fields = {
+        "code": "code",
+        "name": "name",
+        "name_ar": "name_ar",
+        "name_en": "name_en",
+        "barcode": "barcode",
+        "notes": "notes",
+    }
+
+    for source_key, model_field in text_fields.items():
+        if source_key not in data:
+            continue
+
+        value = data.get(source_key)
+
+        if source_key == "code":
+            value = normalize_code(value)
+        else:
+            value = normalize_text(value)
+
+        setattr(location, model_field, value)
+
+    choice_fields = {
+        "status": "status",
+        "location_type": "location_type",
+    }
+
+    for source_key, model_field in choice_fields.items():
+        if source_key in data:
+            setattr(
+                location,
+                model_field,
+                normalize_code(data.get(source_key)),
+            )
+
+    boolean_fields = {
+        "is_default": "is_default",
+        "is_receiving": "is_receiving",
+        "is_shipping": "is_shipping",
+        "is_adjustment": "is_adjustment",
+        "is_pickable": "is_pickable",
+    }
+
+    for source_key, model_field in boolean_fields.items():
+        if source_key in data:
+            setattr(
+                location,
+                model_field,
+                normalize_bool(
+                    data.get(source_key),
+                    default=getattr(location, model_field),
+                ),
+            )
+
+    if "sequence" in data:
+        try:
+            sequence = int(data.get("sequence") or 0)
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(
+                "Inventory location sequence must be a valid integer."
+            ) from exc
+
+        if sequence < 0:
+            raise ValidationError(
+                "Inventory location sequence cannot be negative."
+            )
+
+        location.sequence = sequence
+
+    if (
+        "extra_data" in data
+        and isinstance(data.get("extra_data"), dict)
+    ):
+        location.extra_data = data.get("extra_data") or {}
+
+    if user and getattr(user, "is_authenticated", False):
+        location.updated_by = user
+
+    location.full_clean()
+    location.save()
+
+    return location
+
+
+@transaction.atomic
+def set_inventory_location_status(
+    *,
+    company: Company,
+    location: InventoryLocation,
+    status: str,
+    user=None,
+) -> InventoryLocation:
+    """
+    Change inventory location lifecycle status.
+    """
+    validate_inventory_location_for_company(
+        company=company,
+        location=location,
+    )
+
+    normalized_status = normalize_code(status)
+
+    if normalized_status == InventoryLocationStatus.ACTIVE:
+        location.activate(user=user)
+        return location
+
+    if normalized_status == InventoryLocationStatus.INACTIVE:
+        location.deactivate(user=user)
+        return location
+
+    if normalized_status == InventoryLocationStatus.ARCHIVED:
+        location.archive(user=user)
+        return location
+
+    raise ValidationError(
+        "Unsupported inventory location status."
+    )
+
+
+def get_default_inventory_location(
+    *,
+    company: Company,
+    warehouse: Warehouse,
+    require_active: bool = True,
+) -> InventoryLocation | None:
+    """
+    Return the warehouse default location when configured.
+    """
+    queryset = get_warehouse_inventory_locations(
+        company=company,
+        warehouse=warehouse,
+    ).filter(is_default=True)
+
+    if require_active:
+        queryset = queryset.filter(
+            status=InventoryLocationStatus.ACTIVE,
+            is_active=True,
+        )
+
+    return queryset.first()
+
+
+def get_inventory_location_by_purpose(
+    *,
+    company: Company,
+    warehouse: Warehouse,
+    purpose: str,
+    require_active: bool = True,
+) -> InventoryLocation | None:
+    """
+    Resolve a special warehouse location by operational purpose.
+    """
+    field_map = {
+        "default": "is_default",
+        "receiving": "is_receiving",
+        "shipping": "is_shipping",
+        "adjustment": "is_adjustment",
+    }
+
+    field_name = field_map.get(
+        normalize_text(purpose).lower()
+    )
+
+    if not field_name:
+        raise ValidationError(
+            "Unsupported inventory location purpose."
+        )
+
+    queryset = get_warehouse_inventory_locations(
+        company=company,
+        warehouse=warehouse,
+    ).filter(**{field_name: True})
+
+    if require_active:
+        queryset = queryset.filter(
+            status=InventoryLocationStatus.ACTIVE,
+            is_active=True,
+        )
+
+    return queryset.first()
+
+
+@transaction.atomic
+def ensure_default_inventory_locations(
+    *,
+    company: Company,
+    warehouse: Warehouse,
+    user=None,
+) -> dict[str, InventoryLocation]:
+    """
+    Ensure standard operational locations exist for a warehouse.
+
+    This function is idempotent and does not delete or replace existing
+    locations. Existing purpose locations are reused.
+    """
+    validate_warehouse_for_company(
+        company=company,
+        warehouse=warehouse,
+        require_active=True,
+    )
+
+    definitions = [
+        {
+            "key": "default",
+            "purpose_field": "is_default",
+            "code": "STOCK",
+            "name": "Main Stock",
+            "name_ar": "المخزون الرئيسي",
+            "location_type": InventoryLocationType.BIN,
+            "is_default": True,
+            "is_pickable": True,
+            "sequence": 10,
+        },
+        {
+            "key": "receiving",
+            "purpose_field": "is_receiving",
+            "code": "RECEIVING",
+            "name": "Receiving",
+            "name_ar": "الاستلام",
+            "location_type": InventoryLocationType.RECEIVING,
+            "is_receiving": True,
+            "is_pickable": False,
+            "sequence": 20,
+        },
+        {
+            "key": "shipping",
+            "purpose_field": "is_shipping",
+            "code": "SHIPPING",
+            "name": "Shipping",
+            "name_ar": "الشحن والصرف",
+            "location_type": InventoryLocationType.SHIPPING,
+            "is_shipping": True,
+            "is_pickable": False,
+            "sequence": 30,
+        },
+        {
+            "key": "adjustment",
+            "purpose_field": "is_adjustment",
+            "code": "ADJUSTMENT",
+            "name": "Adjustment",
+            "name_ar": "التسويات",
+            "location_type": InventoryLocationType.ADJUSTMENT,
+            "is_adjustment": True,
+            "is_pickable": False,
+            "sequence": 40,
+        },
+    ]
+
+    result: dict[str, InventoryLocation] = {}
+
+    for definition in definitions:
+        purpose_filter = {
+            definition["purpose_field"]: True,
+        }
+
+        location = (
+            InventoryLocation.objects.filter(
+                company=company,
+                warehouse=warehouse,
+                **purpose_filter,
+            )
+            .order_by("id")
+            .first()
+        )
+
+        if location is None:
+            location = InventoryLocation.objects.filter(
+                company=company,
+                warehouse=warehouse,
+                code=definition["code"],
+            ).first()
+
+        if location is None:
+            payload = {
+                key: value
+                for key, value in definition.items()
+                if key not in ["key", "purpose_field"]
+            }
+
+            location = create_inventory_location(
+                company=company,
+                warehouse=warehouse,
+                data=payload,
+                user=user,
+            )
+
+        result[definition["key"]] = location
+
+    return result
+
+
 def get_company_stock_items(company: Company) -> QuerySet[StockItem]:
     """
     Return stock balances for one company.
@@ -182,6 +862,7 @@ def get_company_stock_items(company: Company) -> QuerySet[StockItem]:
     return StockItem.objects.filter(company=company).select_related(
         "company",
         "warehouse",
+        "location",
         "item",
         "item__unit",
         "item__category",
@@ -524,32 +1205,197 @@ def set_warehouse_status(
     raise ValidationError("Unsupported warehouse status.")
 
 
-def get_or_create_stock_item(
+def resolve_stock_location(
     *,
     company: Company,
     warehouse: Warehouse,
-    item: CatalogItem,
-) -> StockItem:
+    location: InventoryLocation | None = None,
+    user=None,
+) -> InventoryLocation:
     """
-    Get or create current stock balance row.
+    Resolve the inventory location used by stock services.
+
+    Priority:
+    1. Explicit location supplied by the caller.
+    2. Active default location for the warehouse.
+    3. Active STOCK location for the warehouse.
+    4. Create a safe default STOCK location.
+
+    Transitional rule:
+    StockItem still has one balance row per company/warehouse/item.
+    Multiple location balances will be enabled in the next schema step.
     """
     validate_warehouse_for_company(
         company=company,
         warehouse=warehouse,
         require_active=True,
     )
-    validate_item_for_inventory(company=company, item=item)
+
+    if location is not None:
+        if location.company_id != company.id:
+            raise ValidationError(
+                "Selected inventory location does not belong to this company."
+            )
+
+        if location.warehouse_id != warehouse.id:
+            raise ValidationError(
+                "Selected inventory location does not belong to this warehouse."
+            )
+
+        if (
+            getattr(location, "status", "") != "ACTIVE"
+            or not getattr(location, "is_active", False)
+        ):
+            raise ValidationError(
+                "Selected inventory location is not active."
+            )
+
+        return location
+
+    resolved_location = (
+        InventoryLocation.objects.filter(
+            company=company,
+            warehouse=warehouse,
+            status="ACTIVE",
+            is_active=True,
+            is_default=True,
+        )
+        .order_by("sequence", "id")
+        .first()
+    )
+
+    if resolved_location is not None:
+        return resolved_location
+
+    resolved_location = (
+        InventoryLocation.objects.filter(
+            company=company,
+            warehouse=warehouse,
+            code="STOCK",
+        )
+        .order_by("id")
+        .first()
+    )
+
+    if resolved_location is not None:
+        update_fields = []
+
+        if resolved_location.status != "ACTIVE":
+            resolved_location.status = "ACTIVE"
+            update_fields.append("status")
+
+        if not resolved_location.is_active:
+            resolved_location.is_active = True
+            update_fields.append("is_active")
+
+        if not resolved_location.is_default:
+            resolved_location.is_default = True
+            update_fields.append("is_default")
+
+        if not resolved_location.is_pickable:
+            resolved_location.is_pickable = True
+            update_fields.append("is_pickable")
+
+        if user and getattr(user, "is_authenticated", False):
+            resolved_location.updated_by = user
+            update_fields.append("updated_by")
+
+        if update_fields:
+            update_fields.append("updated_at")
+            resolved_location.save(update_fields=update_fields)
+
+        return resolved_location
+
+    resolved_location = InventoryLocation(
+        company=company,
+        warehouse=warehouse,
+        parent=None,
+        status="ACTIVE",
+        location_type="BIN",
+        code="STOCK",
+        name="Main Stock",
+        name_ar="المخزون الرئيسي",
+        name_en="Main Stock",
+        barcode="",
+        is_default=True,
+        is_receiving=False,
+        is_shipping=False,
+        is_adjustment=False,
+        is_pickable=True,
+        is_active=True,
+        sequence=10,
+        notes=(
+            "Automatically created by the location-aware "
+            "stock services bridge."
+        ),
+        extra_data={
+            "created_by_phase": "22.1.6.3",
+            "purpose": "default_stock_location",
+        },
+        created_by=(
+            user
+            if user and getattr(user, "is_authenticated", False)
+            else None
+        ),
+        updated_by=(
+            user
+            if user and getattr(user, "is_authenticated", False)
+            else None
+        ),
+    )
+    resolved_location.full_clean()
+    resolved_location.save()
+
+    return resolved_location
+
+
+def get_or_create_stock_item(
+    *,
+    company: Company,
+    warehouse: Warehouse,
+    item: CatalogItem,
+    location: InventoryLocation | None = None,
+    user=None,
+) -> StockItem:
+    """
+    Get or create one location-level stock balance row.
+
+    The same catalog item may have independent balances in multiple
+    active locations inside the same warehouse. When location is omitted,
+    the warehouse default stock location is resolved automatically.
+    """
+    validate_warehouse_for_company(
+        company=company,
+        warehouse=warehouse,
+        require_active=True,
+    )
+    validate_item_for_inventory(
+        company=company,
+        item=item,
+    )
+
+    resolved_location = resolve_stock_location(
+        company=company,
+        warehouse=warehouse,
+        location=location,
+        user=user,
+    )
 
     stock_item, _created = StockItem.objects.get_or_create(
         company=company,
         warehouse=warehouse,
+        location=resolved_location,
         item=item,
         defaults={
             "quantity_on_hand": QUANTITY_ZERO,
             "reserved_quantity": QUANTITY_ZERO,
             "minimum_quantity": QUANTITY_ZERO,
             "maximum_quantity": QUANTITY_ZERO,
-            "average_cost": quantize_money(item.cost_price or item.purchase_price or MONEY_ZERO),
+            "average_cost": quantize_money(
+                item.cost_price
+                or item.purchase_price
+                or MONEY_ZERO
+            ),
         },
     )
 
@@ -610,6 +1456,7 @@ def create_stock_movement(
     warehouse: Warehouse,
     item: CatalogItem,
     movement_type: str,
+    location: InventoryLocation | None = None,
     quantity: Decimal | int | float | str,
     direction: str | None = None,
     unit_cost: Decimal | int | float | str | None = None,
@@ -653,7 +1500,11 @@ def create_stock_movement(
         company=company,
         warehouse=warehouse,
         item=item,
+        location=location,
+        user=user,
     )
+
+    resolved_location = stock_item.location
 
     cost = quantize_money(
         unit_cost
@@ -664,6 +1515,7 @@ def create_stock_movement(
     movement = StockMovement(
         company=company,
         warehouse=warehouse,
+        location=resolved_location,
         stock_item=stock_item,
         item=item,
         movement_type=movement_type,
@@ -1123,11 +1975,31 @@ def post_stock_movement(
     )
     validate_item_for_inventory(company=company, item=movement.item)
 
-    stock_item = StockItem.objects.select_for_update().get(
-        company=company,
-        warehouse=movement.warehouse,
-        item=movement.item,
+    if not movement.stock_item_id:
+        raise ValidationError(
+            "Stock movement must be linked to a stock balance before posting."
+        )
+
+    stock_item = (
+        StockItem.objects.select_for_update()
+        .select_related("location")
+        .get(
+            id=movement.stock_item_id,
+            company=company,
+            warehouse=movement.warehouse,
+            item=movement.item,
+        )
     )
+
+    if movement.location_id != stock_item.location_id:
+        raise ValidationError(
+            {
+                "location": (
+                    "Stock movement location must match its stock balance "
+                    "location."
+                )
+            }
+        )
 
     quantity_before = quantize_quantity(stock_item.quantity_on_hand)
     quantity = quantize_quantity(movement.quantity)
@@ -1257,6 +2129,7 @@ def receive_stock(
     warehouse: Warehouse,
     item: CatalogItem,
     quantity: Decimal | int | float | str,
+    location: InventoryLocation | None = None,
     unit_cost: Decimal | int | float | str | None = None,
     reference_type: str = "",
     reference_id: int | None = None,
@@ -1272,6 +2145,7 @@ def receive_stock(
         warehouse=warehouse,
         item=item,
         movement_type=StockMovementType.IN,
+        location=location,
         quantity=quantity,
         unit_cost=unit_cost,
         reference_type=reference_type,
@@ -1289,6 +2163,7 @@ def issue_stock(
     warehouse: Warehouse,
     item: CatalogItem,
     quantity: Decimal | int | float | str,
+    location: InventoryLocation | None = None,
     unit_cost: Decimal | int | float | str | None = None,
     reference_type: str = "",
     reference_id: int | None = None,
@@ -1306,6 +2181,7 @@ def issue_stock(
         warehouse=warehouse,
         item=item,
         movement_type=StockMovementType.OUT,
+        location=location,
         quantity=quantity,
         unit_cost=unit_cost,
         reference_type=reference_type,
@@ -1326,6 +2202,7 @@ def adjust_stock(
     item: CatalogItem,
     quantity: Decimal | int | float | str,
     direction: str,
+    location: InventoryLocation | None = None,
     unit_cost: Decimal | int | float | str | None = None,
     reference_number: str = "",
     notes: str = "",
@@ -1339,6 +2216,7 @@ def adjust_stock(
         warehouse=warehouse,
         item=item,
         movement_type=StockMovementType.ADJUSTMENT,
+        location=location,
         direction=direction,
         quantity=quantity,
         unit_cost=unit_cost,
@@ -1358,20 +2236,24 @@ def transfer_stock(
     target_warehouse: Warehouse,
     item: CatalogItem,
     quantity: Decimal | int | float | str,
+    source_location: InventoryLocation | None = None,
+    target_location: InventoryLocation | None = None,
     reference_number: str = "",
     notes: str = "",
     user=None,
 ) -> dict[str, StockMovement]:
     """
-    Transfer stock between two warehouses in the same company.
+    Transfer stock between two inventory locations in the same company.
 
-    This foundation creates two posted ledger records:
-    - TRANSFER_OUT from source warehouse
-    - TRANSFER_IN into target warehouse
+    Supported routes:
+    - between different locations inside the same warehouse;
+    - between locations in different warehouses.
 
-    Same-company transfer is inventory ledger movement only here.
-    It does not create GL journal entries because ownership and total inventory
-    value remain inside the same company.
+    Two posted ledger movements are created:
+    - TRANSFER_OUT from the source location;
+    - TRANSFER_IN into the target location.
+
+    Same-company transfers do not create accounting journal entries.
     """
     validate_warehouse_for_company(
         company=company,
@@ -1383,23 +2265,47 @@ def transfer_stock(
         warehouse=target_warehouse,
         require_active=True,
     )
+    validate_item_for_inventory(
+        company=company,
+        item=item,
+    )
 
-    if source_warehouse.id == target_warehouse.id:
-        raise ValidationError("Source and target warehouses cannot be the same.")
+    resolved_source_location = resolve_stock_location(
+        company=company,
+        warehouse=source_warehouse,
+        location=source_location,
+        user=user,
+    )
+    resolved_target_location = resolve_stock_location(
+        company=company,
+        warehouse=target_warehouse,
+        location=target_location,
+        user=user,
+    )
 
-    validate_item_for_inventory(company=company, item=item)
+    if (
+        source_warehouse.id == target_warehouse.id
+        and resolved_source_location.id == resolved_target_location.id
+    ):
+        raise ValidationError(
+            "Source and target inventory locations cannot be the same."
+        )
 
     quantity_value = quantize_quantity(quantity)
+
     if quantity_value <= QUANTITY_ZERO:
-        raise ValidationError("Quantity must be greater than zero.")
+        raise ValidationError(
+            "Quantity must be greater than zero."
+        )
 
     outgoing = create_stock_movement(
         company=company,
         warehouse=source_warehouse,
         item=item,
         movement_type=StockMovementType.TRANSFER_OUT,
+        location=resolved_source_location,
         quantity=quantity_value,
-        reference_type="warehouse_transfer",
+        reference_type="inventory_location_transfer",
         reference_number=reference_number,
         notes=notes,
         user=user,
@@ -1411,9 +2317,10 @@ def transfer_stock(
         warehouse=target_warehouse,
         item=item,
         movement_type=StockMovementType.TRANSFER_IN,
+        location=resolved_target_location,
         quantity=quantity_value,
         unit_cost=outgoing.unit_cost,
-        reference_type="warehouse_transfer",
+        reference_type="inventory_location_transfer",
         reference_number=reference_number,
         notes=notes,
         user=user,

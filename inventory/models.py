@@ -1,11 +1,17 @@
 # ============================================================
 # 📂 inventory/models.py
-# 🧠 PrimeyAcc | Company Inventory & Stock Models V1.0
+# 🧠 PrimeyAcc | Company Inventory & Stock Models V2.1
 # ------------------------------------------------------------
 # ✅ Company-scoped inventory foundation
 # ✅ Warehouses under company and optional branch
 # ✅ Stock balances per company / warehouse / catalog item
+# ✅ Transitional stock balance location bridge
+# ✅ Transitional stock movement location bridge
+# ✅ Location/company/warehouse ownership validation
 # ✅ Stock movement ledger
+# ✅ Advanced inventory locations and bins foundation
+# ✅ Hierarchical warehouse locations
+# ✅ Receiving / shipping / adjustment locations
 # ✅ Tenant isolation through company FK
 # ✅ No frontend company_id trust
 # ✅ Catalog item ownership validation
@@ -445,15 +451,489 @@ class Warehouse(models.Model):
         )
 
 
+
+
+class InventoryLocationStatus(models.TextChoices):
+    """
+    Inventory location lifecycle status.
+    """
+
+    ACTIVE = "ACTIVE", "Active"
+    INACTIVE = "INACTIVE", "Inactive"
+    ARCHIVED = "ARCHIVED", "Archived"
+
+
+class InventoryLocationType(models.TextChoices):
+    """
+    Internal warehouse location type.
+
+    ZONE:
+        Large warehouse zone or section.
+
+    AISLE:
+        Warehouse aisle.
+
+    RACK:
+        Storage rack.
+
+    BIN:
+        Physical storage bin.
+
+    RECEIVING:
+        Dedicated receiving location.
+
+    SHIPPING:
+        Dedicated picking or shipping location.
+
+    ADJUSTMENT:
+        Dedicated inventory adjustment location.
+
+    VIRTUAL:
+        Logical location without a physical position.
+    """
+
+    ZONE = "ZONE", "Zone"
+    AISLE = "AISLE", "Aisle"
+    RACK = "RACK", "Rack"
+    BIN = "BIN", "Bin"
+    RECEIVING = "RECEIVING", "Receiving"
+    SHIPPING = "SHIPPING", "Shipping"
+    ADJUSTMENT = "ADJUSTMENT", "Adjustment"
+    VIRTUAL = "VIRTUAL", "Virtual"
+
+
+class InventoryLocation(models.Model):
+    """
+    Company-scoped internal warehouse location.
+
+    A location always belongs to exactly one company and one warehouse.
+    Locations may form a hierarchy through the optional parent field.
+
+    Examples:
+        Main warehouse
+        └── Zone A
+            └── Aisle 01
+                └── Rack 01
+                    └── Bin 01
+
+    Tenant isolation:
+    - APIs must assign company from request.company.
+    - Frontend company_id must never be trusted.
+    - Warehouse and parent must belong to the same company.
+    - Parent must belong to the same warehouse.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="inventory_locations",
+        db_index=True,
+        verbose_name="Company",
+    )
+    warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.CASCADE,
+        related_name="locations",
+        db_index=True,
+        verbose_name="Warehouse",
+    )
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        related_name="children",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Parent location",
+        help_text="Optional parent location inside the same warehouse.",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=InventoryLocationStatus.choices,
+        default=InventoryLocationStatus.ACTIVE,
+        db_index=True,
+        verbose_name="Status",
+    )
+    location_type = models.CharField(
+        max_length=20,
+        choices=InventoryLocationType.choices,
+        default=InventoryLocationType.BIN,
+        db_index=True,
+        verbose_name="Location type",
+    )
+
+    code = models.CharField(
+        max_length=80,
+        db_index=True,
+        verbose_name="Location code",
+        help_text="Unique location code inside the same warehouse.",
+    )
+    name = models.CharField(
+        max_length=255,
+        db_index=True,
+        verbose_name="Location name",
+    )
+    name_ar = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="Arabic name",
+    )
+    name_en = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="English name",
+    )
+    barcode = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name="Barcode",
+        help_text="Optional unique barcode inside the same warehouse.",
+    )
+
+    is_default = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="Default location",
+    )
+    is_receiving = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="Receiving location",
+    )
+    is_shipping = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="Shipping location",
+    )
+    is_adjustment = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="Adjustment location",
+    )
+    is_pickable = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name="Pickable",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name="Active",
+    )
+
+    sequence = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+        verbose_name="Sequence",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Internal notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_inventory_locations",
+        blank=True,
+        null=True,
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="updated_inventory_locations",
+        blank=True,
+        null=True,
+        verbose_name="Updated by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Inventory location"
+        verbose_name_plural = "Inventory locations"
+        ordering = [
+            "company_id",
+            "warehouse_id",
+            "sequence",
+            "code",
+            "id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["warehouse", "code"],
+                name="unique_inventory_location_code_per_warehouse",
+            ),
+            models.UniqueConstraint(
+                fields=["warehouse", "barcode"],
+                condition=~Q(barcode=""),
+                name="unique_inventory_location_barcode_per_warehouse",
+            ),
+            models.UniqueConstraint(
+                fields=["warehouse"],
+                condition=Q(is_default=True),
+                name="unique_default_inventory_location_per_warehouse",
+            ),
+            models.UniqueConstraint(
+                fields=["warehouse"],
+                condition=Q(is_receiving=True),
+                name="unique_receiving_inventory_location_per_warehouse",
+            ),
+            models.UniqueConstraint(
+                fields=["warehouse"],
+                condition=Q(is_shipping=True),
+                name="unique_shipping_inventory_location_per_warehouse",
+            ),
+            models.UniqueConstraint(
+                fields=["warehouse"],
+                condition=Q(is_adjustment=True),
+                name="unique_adjustment_inventory_location_per_warehouse",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "warehouse"]),
+            models.Index(fields=["company", "status"]),
+            models.Index(fields=["company", "location_type"]),
+            models.Index(fields=["warehouse", "parent"]),
+            models.Index(fields=["warehouse", "status"]),
+            models.Index(fields=["warehouse", "location_type"]),
+            models.Index(fields=["warehouse", "is_default"]),
+            models.Index(fields=["warehouse", "is_receiving"]),
+            models.Index(fields=["warehouse", "is_shipping"]),
+            models.Index(fields=["warehouse", "is_adjustment"]),
+            models.Index(fields=["warehouse", "is_pickable"]),
+            models.Index(fields=["warehouse", "is_active"]),
+            models.Index(fields=["barcode"]),
+            models.Index(fields=["created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.full_path} - {self.warehouse.display_name}"
+
+    @property
+    def display_name(self) -> str:
+        return self.name_ar or self.name_en or self.name
+
+    @property
+    def is_active_location(self) -> bool:
+        return (
+            self.status == InventoryLocationStatus.ACTIVE
+            and self.is_active
+            and self.warehouse.is_active_warehouse
+        )
+
+    @property
+    def full_path(self) -> str:
+        """
+        Return a readable path without performing unbounded traversal.
+        """
+        names = [self.display_name]
+        current = self.parent
+        visited: set[int] = set()
+
+        while current is not None:
+            if current.pk and current.pk in visited:
+                names.append("[cycle]")
+                break
+
+            if current.pk:
+                visited.add(current.pk)
+
+            names.append(current.display_name)
+            current = current.parent
+
+        return " / ".join(reversed(names))
+
+    def clean(self) -> None:
+        super().clean()
+
+        self.code = (self.code or "").strip().upper()
+        self.name = (self.name or "").strip()
+        self.name_ar = (self.name_ar or "").strip()
+        self.name_en = (self.name_en or "").strip()
+        self.barcode = (self.barcode or "").strip()
+
+        if not self.code:
+            raise ValidationError(
+                {"code": "Inventory location code is required."}
+            )
+
+        if not self.name:
+            self.name = self.name_ar or self.name_en
+
+        if not self.name:
+            raise ValidationError(
+                {"name": "Inventory location name is required."}
+            )
+
+        if self.warehouse_id and self.company_id:
+            if self.warehouse.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "warehouse": (
+                            "Selected warehouse does not belong to this company."
+                        )
+                    }
+                )
+
+        if self.parent_id:
+            if self.pk and self.parent_id == self.pk:
+                raise ValidationError(
+                    {"parent": "Inventory location cannot be its own parent."}
+                )
+
+            if self.company_id and self.parent.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "parent": (
+                            "Parent location does not belong to this company."
+                        )
+                    }
+                )
+
+            if self.warehouse_id and self.parent.warehouse_id != self.warehouse_id:
+                raise ValidationError(
+                    {
+                        "parent": (
+                            "Parent location must belong to the same warehouse."
+                        )
+                    }
+                )
+
+            current = self.parent
+            visited: set[int] = set()
+
+            while current is not None:
+                if self.pk and current.pk == self.pk:
+                    raise ValidationError(
+                        {
+                            "parent": (
+                                "Inventory location hierarchy cannot contain a cycle."
+                            )
+                        }
+                    )
+
+                if current.pk and current.pk in visited:
+                    raise ValidationError(
+                        {
+                            "parent": (
+                                "Inventory location hierarchy contains a cycle."
+                            )
+                        }
+                    )
+
+                if current.pk:
+                    visited.add(current.pk)
+
+                current = current.parent
+
+        if self.status in [
+            InventoryLocationStatus.INACTIVE,
+            InventoryLocationStatus.ARCHIVED,
+        ]:
+            self.is_active = False
+
+        if self.status == InventoryLocationStatus.ACTIVE:
+            self.is_active = True
+
+        if self.location_type == InventoryLocationType.RECEIVING:
+            self.is_receiving = True
+
+        if self.location_type == InventoryLocationType.SHIPPING:
+            self.is_shipping = True
+
+        if self.location_type == InventoryLocationType.ADJUSTMENT:
+            self.is_adjustment = True
+
+        if self.is_receiving or self.is_shipping or self.is_adjustment:
+            self.is_pickable = False
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def activate(self, user=None) -> None:
+        self.status = InventoryLocationStatus.ACTIVE
+        self.is_active = True
+
+        if user:
+            self.updated_by = user
+
+        self.save(
+            update_fields=[
+                "status",
+                "is_active",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+    def deactivate(self, user=None) -> None:
+        self.status = InventoryLocationStatus.INACTIVE
+        self.is_active = False
+
+        if user:
+            self.updated_by = user
+
+        self.save(
+            update_fields=[
+                "status",
+                "is_active",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+    def archive(self, user=None) -> None:
+        self.status = InventoryLocationStatus.ARCHIVED
+        self.is_active = False
+
+        if user:
+            self.updated_by = user
+
+        self.save(
+            update_fields=[
+                "status",
+                "is_active",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+
 class StockItem(models.Model):
     """
-    Current stock balance for one catalog item inside one warehouse.
+    Current stock balance for one catalog item inside one location.
 
     One row represents:
-    company + warehouse + catalog item
+    company + warehouse + inventory location + catalog item
+
+    The same item may have multiple independent balances inside
+    different locations of the same warehouse.
 
     StockMovement is the ledger.
-    StockItem is the current balance.
+    StockItem is the current location-level balance.
     """
 
     company = models.ForeignKey(
@@ -469,6 +949,16 @@ class StockItem(models.Model):
         related_name="stock_items",
         db_index=True,
         verbose_name="Warehouse",
+    )
+    location = models.ForeignKey(
+        InventoryLocation,
+        on_delete=models.PROTECT,
+        related_name="location_stock_items",
+        db_index=True,
+        verbose_name="Inventory location",
+        help_text=(
+            "Required location that owns this independent stock balance."
+        ),
     )
     item = models.ForeignKey(
         CatalogItem,
@@ -545,15 +1035,31 @@ class StockItem(models.Model):
     class Meta:
         verbose_name = "Stock item"
         verbose_name_plural = "Stock items"
-        ordering = ["company_id", "warehouse_id", "item__name", "id"]
+        ordering = [
+            "company_id",
+            "warehouse_id",
+            "location_id",
+            "item__name",
+            "id",
+        ]
         constraints = [
             models.UniqueConstraint(
-                fields=["company", "warehouse", "item"],
-                name="unique_stock_item_per_company_warehouse_item",
+                fields=[
+                    "company",
+                    "warehouse",
+                    "location",
+                    "item",
+                ],
+                name=(
+                    "unique_stock_item_per_company_"
+                    "warehouse_location_item"
+                ),
             ),
         ]
         indexes = [
             models.Index(fields=["company", "warehouse"]),
+            models.Index(fields=["company", "warehouse", "location"]),
+            models.Index(fields=["company", "location", "item"]),
             models.Index(fields=["company", "item"]),
             models.Index(fields=["company", "quantity_on_hand"]),
             models.Index(fields=["warehouse", "item"]),
@@ -562,7 +1068,12 @@ class StockItem(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.item.name} - {self.warehouse.display_name} - {self.quantity_on_hand}"
+        return (
+            f"{self.item.name} - "
+            f"{self.warehouse.display_name} - "
+            f"{self.location.display_name} - "
+            f"{self.quantity_on_hand}"
+        )
 
     @property
     def available_quantity(self) -> Decimal:
@@ -591,6 +1102,36 @@ class StockItem(models.Model):
                 raise ValidationError(
                     {"warehouse": "Selected warehouse does not belong to this company."}
                 )
+
+        if not self.location_id:
+            raise ValidationError(
+                {
+                    "location": (
+                        "Inventory location is required for every "
+                        "stock balance."
+                    )
+                }
+            )
+
+        if self.location.company_id != self.company_id:
+            raise ValidationError(
+                {
+                    "location": (
+                        "Selected inventory location does not belong "
+                        "to this company."
+                    )
+                }
+            )
+
+        if self.location.warehouse_id != self.warehouse_id:
+            raise ValidationError(
+                {
+                    "location": (
+                        "Selected inventory location does not belong "
+                        "to this warehouse."
+                    )
+                }
+            )
 
         if self.item_id and self.company_id:
             if self.item.company_id != self.company_id:
@@ -661,6 +1202,19 @@ class StockMovement(models.Model):
         related_name="stock_movements",
         db_index=True,
         verbose_name="Warehouse",
+    )
+    location = models.ForeignKey(
+        InventoryLocation,
+        on_delete=models.PROTECT,
+        related_name="location_stock_movements",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Inventory location",
+        help_text=(
+            "Transitional nullable location. Existing movements will be "
+            "linked to their warehouse default location."
+        ),
     )
     stock_item = models.ForeignKey(
         StockItem,
@@ -885,6 +1439,8 @@ class StockMovement(models.Model):
             models.Index(fields=["company", "direction"]),
             models.Index(fields=["company", "movement_date"]),
             models.Index(fields=["company", "warehouse"]),
+            models.Index(fields=["company", "warehouse", "location"]),
+            models.Index(fields=["company", "location", "item"]),
             models.Index(fields=["company", "item"]),
             models.Index(fields=["company", "reference_type", "reference_id"]),
             models.Index(fields=["warehouse", "item"]),
@@ -945,6 +1501,27 @@ class StockMovement(models.Model):
                     {"warehouse": "Selected warehouse does not belong to this company."}
                 )
 
+        if self.location_id:
+            if self.location.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "location": (
+                            "Selected inventory location does not belong "
+                            "to this company."
+                        )
+                    }
+                )
+
+            if self.location.warehouse_id != self.warehouse_id:
+                raise ValidationError(
+                    {
+                        "location": (
+                            "Selected inventory location does not belong "
+                            "to this warehouse."
+                        )
+                    }
+                )
+
         if self.item_id and self.company_id:
             if self.item.company_id != self.company_id:
                 raise ValidationError(
@@ -970,6 +1547,15 @@ class StockMovement(models.Model):
             if self.stock_item.item_id != self.item_id:
                 raise ValidationError(
                     {"stock_item": "Stock item catalog item must match movement item."}
+                )
+
+            if self.stock_item.location_id != self.location_id:
+                raise ValidationError(
+                    {
+                        "stock_item": (
+                            "Stock item location must match movement location."
+                        )
+                    }
                 )
 
         if self.movement_type in [
