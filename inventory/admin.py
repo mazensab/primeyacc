@@ -40,6 +40,10 @@ from .models import (
     StockMovementDirection,
     StockMovementStatus,
     StockMovementType,
+    StockReservation,
+    StockReservationAllocation,
+    StockReservationAllocationStatus,
+    StockReservationStatus,
     Warehouse,
     WarehouseStatus,
     WarehouseType,
@@ -1423,3 +1427,233 @@ class InventoryTrackingEntryAdmin(admin.ModelAdmin):
         obj: InventoryTrackingEntry | None = None,
     ) -> bool:
         return False
+
+# ============================================================
+# Phase 22.3.4 - Stock Reservation Admin
+# ============================================================
+
+
+class StockReservationAllocationInline(admin.TabularInline):
+    """
+    Read-only allocation visibility under reservation admin.
+    """
+
+    model = StockReservationAllocation
+    extra = 0
+    can_delete = False
+    show_change_link = True
+    fields = [
+        "status",
+        "sales_order_item",
+        "warehouse",
+        "location",
+        "item",
+        "batch",
+        "serial_number",
+        "reserved_quantity",
+        "fulfilled_quantity",
+        "released_quantity",
+        "remaining_reserved_quantity",
+        "reserved_at",
+        "released_at",
+    ]
+    readonly_fields = fields
+
+    def has_add_permission(
+        self,
+        request: HttpRequest,
+        obj=None,
+    ) -> bool:
+        return False
+
+
+@admin.register(StockReservation)
+class StockReservationAdmin(admin.ModelAdmin):
+    """
+    Internal administration for reservation headers.
+    """
+
+    list_display = [
+        "reservation_number",
+        "company",
+        "sales_order",
+        "status",
+        "source",
+        "requested_quantity",
+        "reserved_quantity",
+        "fulfilled_quantity",
+        "released_quantity",
+        "remaining_reserved_quantity",
+        "expires_at",
+        "created_at",
+    ]
+    list_filter = [
+        "status",
+        "source",
+        "company",
+        "expires_at",
+        "allocated_at",
+        "cancelled_at",
+        "created_at",
+    ]
+    search_fields = [
+        "reservation_number",
+        "sales_order__order_number",
+        "company__name",
+        "notes",
+    ]
+    readonly_fields = [
+        "requested_quantity",
+        "reserved_quantity",
+        "fulfilled_quantity",
+        "released_quantity",
+        "remaining_reserved_quantity",
+        "unallocated_quantity",
+        "is_active",
+        "is_terminal",
+        "is_expired_now",
+        "allocated_at",
+        "allocated_by",
+        "cancelled_at",
+        "cancelled_by",
+        "created_at",
+        "updated_at",
+    ]
+    autocomplete_fields = [
+        "company",
+        "sales_order",
+        "created_by",
+        "updated_by",
+    ]
+    ordering = [
+        "-created_at",
+        "-id",
+    ]
+    list_select_related = [
+        "company",
+        "sales_order",
+        "allocated_by",
+        "cancelled_by",
+        "created_by",
+        "updated_by",
+    ]
+    inlines = [
+        StockReservationAllocationInline,
+    ]
+
+    def has_delete_permission(
+        self,
+        request: HttpRequest,
+        obj: StockReservation | None = None,
+    ) -> bool:
+        return False
+
+
+@admin.register(StockReservationAllocation)
+class StockReservationAllocationAdmin(admin.ModelAdmin):
+    """
+    Read-only operational allocation administration.
+    """
+
+    list_display = [
+        "id",
+        "reservation",
+        "status",
+        "company",
+        "sales_order_item",
+        "warehouse",
+        "location",
+        "item",
+        "batch",
+        "serial_number",
+        "reserved_quantity",
+        "fulfilled_quantity",
+        "released_quantity",
+        "remaining_reserved_quantity",
+        "reserved_at",
+    ]
+    list_filter = [
+        "status",
+        "company",
+        "warehouse",
+        "location",
+        "item",
+        "reserved_at",
+        "released_at",
+        "created_at",
+    ]
+    search_fields = [
+        "reservation__reservation_number",
+        "reservation__sales_order__order_number",
+        "batch__batch_number",
+        "serial_number__serial_number",
+        "item__code",
+        "item__name",
+        "warehouse__code",
+        "location__code",
+    ]
+    readonly_fields = [
+        "company",
+        "reservation",
+        "sales_order_item",
+        "warehouse",
+        "location",
+        "stock_item",
+        "item",
+        "batch",
+        "serial_number",
+        "status",
+        "reserved_quantity",
+        "fulfilled_quantity",
+        "released_quantity",
+        "remaining_reserved_quantity",
+        "reserved_at",
+        "fulfilled_at",
+        "released_at",
+        "release_reason",
+        "notes",
+        "extra_data",
+        "created_by",
+        "updated_by",
+        "created_at",
+        "updated_at",
+    ]
+    ordering = [
+        "-created_at",
+        "-id",
+    ]
+    list_select_related = [
+        "company",
+        "reservation",
+        "sales_order_item",
+        "warehouse",
+        "location",
+        "stock_item",
+        "item",
+        "batch",
+        "serial_number",
+    ]
+
+    def has_add_permission(
+        self,
+        request: HttpRequest,
+    ) -> bool:
+        return False
+
+    def has_change_permission(
+        self,
+        request: HttpRequest,
+        obj: StockReservationAllocation | None = None,
+    ) -> bool:
+        return False
+
+    def has_delete_permission(
+        self,
+        request: HttpRequest,
+        obj: StockReservationAllocation | None = None,
+    ) -> bool:
+        return False
+
+
+# End Phase 22.3.4 - Stock Reservation Admin
+# ============================================================

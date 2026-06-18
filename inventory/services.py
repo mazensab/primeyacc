@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 inventory/services.py
-# 🧠 PrimeyAcc | Company Inventory Services V2.0
+# 🧠 PrimeyAcc | Company Inventory Services V2.3
 # ------------------------------------------------------------
 # ✅ Company-scoped warehouse services
 # ✅ Company-scoped stock balance services
@@ -65,6 +65,12 @@ from catalog.models import (
 )
 from companies.models import Branch, Company
 
+from sales.models import (
+    SalesOrder,
+    SalesOrderItem,
+    SalesOrderStatus,
+)
+
 from .models import (
     MONEY_ZERO,
     QUANTITY_ZERO,
@@ -83,6 +89,11 @@ from .models import (
     StockMovementDirection,
     StockMovementStatus,
     StockMovementType,
+    StockReservation,
+    StockReservationAllocation,
+    StockReservationAllocationStatus,
+    StockReservationSource,
+    StockReservationStatus,
     Warehouse,
     WarehouseStatus,
     WarehouseType,
@@ -4798,3 +4809,2551 @@ def transfer_serial_stock(
         "outgoing": outgoing,
         "incoming": incoming,
     }
+
+# ============================================================
+# Phase 22.3.2.1 - Stock Reservation Service Foundation
+# ============================================================
+
+
+def generate_stock_reservation_number(
+    company: Company,
+) -> str:
+    """
+    Generate the next company-scoped reservation number.
+    """
+    if company is None:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    last_id = (
+        StockReservation.objects
+        .filter(company=company)
+        .aggregate(max_id=Max("id"))
+        .get("max_id")
+        or 0
+    )
+
+    return f"RSV-{last_id + 1:06d}"
+
+
+def get_company_stock_reservations(
+    company: Company,
+) -> QuerySet[StockReservation]:
+    """
+    Return reservations belonging to one company.
+    """
+    if company is None:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    return (
+        StockReservation.objects
+        .filter(company=company)
+        .select_related(
+            "company",
+            "sales_order",
+            "sales_order__branch",
+            "sales_order__customer",
+            "created_by",
+            "updated_by",
+            "allocated_by",
+            "released_by",
+            "cancelled_by",
+        )
+        .prefetch_related("allocations")
+        .order_by("-created_at", "-id")
+    )
+
+
+def get_company_stock_reservation_allocations(
+    company: Company,
+) -> QuerySet[StockReservationAllocation]:
+    """
+    Return allocations belonging to one company.
+    """
+    if company is None:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    return (
+        StockReservationAllocation.objects
+        .filter(company=company)
+        .select_related(
+            "company",
+            "reservation",
+            "reservation__sales_order",
+            "sales_order_item",
+            "sales_order_item__order",
+            "warehouse",
+            "location",
+            "stock_item",
+            "item",
+            "item__unit",
+            "batch",
+            "serial_number",
+            "created_by",
+            "updated_by",
+            "released_by",
+        )
+        .order_by(
+            "reservation_id",
+            "sales_order_item_id",
+            "warehouse_id",
+            "location_id",
+            "id",
+        )
+    )
+
+
+def validate_sales_order_for_stock_reservation(
+    *,
+    company: Company,
+    sales_order: SalesOrder,
+    require_reservable_status: bool = True,
+) -> None:
+    """
+    Validate sales order ownership and lifecycle.
+    """
+    if company is None:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    if sales_order is None:
+        raise ValidationError(
+            {"sales_order": "Sales order is required."}
+        )
+
+    if sales_order.company_id != company.id:
+        raise ValidationError(
+            {
+                "sales_order": (
+                    "Sales order does not belong "
+                    "to this company."
+                )
+            }
+        )
+
+    if not require_reservable_status:
+        return
+
+    allowed_statuses = {
+        SalesOrderStatus.CONFIRMED,
+        SalesOrderStatus.PROCESSING,
+    }
+
+    if sales_order.status not in allowed_statuses:
+        raise ValidationError(
+            {
+                "sales_order": (
+                    "Only confirmed or processing sales "
+                    "orders can reserve stock."
+                )
+            }
+        )
+
+
+def validate_sales_order_item_for_stock_reservation(
+    *,
+    company: Company,
+    sales_order: SalesOrder,
+    sales_order_item: SalesOrderItem,
+) -> None:
+    """
+    Validate one sales order item for reservation.
+    """
+    validate_sales_order_for_stock_reservation(
+        company=company,
+        sales_order=sales_order,
+    )
+
+    if sales_order_item is None:
+        raise ValidationError(
+            {
+                "sales_order_item": (
+                    "Sales order item is required."
+                )
+            }
+        )
+
+    if sales_order_item.company_id != company.id:
+        raise ValidationError(
+            {
+                "sales_order_item": (
+                    "Sales order item does not belong "
+                    "to this company."
+                )
+            }
+        )
+
+    if sales_order_item.order_id != sales_order.id:
+        raise ValidationError(
+            {
+                "sales_order_item": (
+                    "Sales order item does not belong "
+                    "to this sales order."
+                )
+            }
+        )
+
+    if not sales_order_item.catalog_item_id:
+        raise ValidationError(
+            {
+                "sales_order_item": (
+                    "Sales order item must reference "
+                    "a catalog item."
+                )
+            }
+        )
+
+    item = sales_order_item.catalog_item
+
+    validate_item_for_inventory(
+        company=company,
+        item=item,
+    )
+
+    if not item.track_inventory:
+        raise ValidationError(
+            {
+                "sales_order_item": (
+                    "Catalog item must have inventory "
+                    "tracking enabled."
+                )
+            }
+        )
+
+    if (
+        quantize_quantity(sales_order_item.quantity)
+        <= QUANTITY_ZERO
+    ):
+        raise ValidationError(
+            {
+                "sales_order_item": (
+                    "Sales order item quantity must be "
+                    "greater than zero."
+                )
+            }
+        )
+
+
+def build_stock_reservation_allocation_payload(
+    allocation: StockReservationAllocation,
+) -> dict[str, Any]:
+    """
+    Serialize one reservation allocation.
+    """
+    return {
+        "id": allocation.id,
+        "company_id": allocation.company_id,
+        "reservation_id": allocation.reservation_id,
+        "sales_order_id": (
+            allocation.reservation.sales_order_id
+        ),
+        "sales_order_item_id": (
+            allocation.sales_order_item_id
+        ),
+        "warehouse_id": allocation.warehouse_id,
+        "warehouse_code": allocation.warehouse.code,
+        "warehouse_name": (
+            allocation.warehouse.display_name
+        ),
+        "location_id": allocation.location_id,
+        "location_code": allocation.location.code,
+        "location_name": (
+            allocation.location.display_name
+        ),
+        "location_path": allocation.location.full_path,
+        "stock_item_id": allocation.stock_item_id,
+        "item_id": allocation.item_id,
+        "item_code": allocation.item.code,
+        "item_name": allocation.item.name,
+        "batch_id": allocation.batch_id,
+        "batch_number": (
+            allocation.batch.batch_number
+            if allocation.batch_id
+            else ""
+        ),
+        "serial_number_id": (
+            allocation.serial_number_id
+        ),
+        "serial_number": (
+            allocation.serial_number.serial_number
+            if allocation.serial_number_id
+            else ""
+        ),
+        "status": allocation.status,
+        "reserved_quantity": str(
+            allocation.reserved_quantity
+        ),
+        "fulfilled_quantity": str(
+            allocation.fulfilled_quantity
+        ),
+        "released_quantity": str(
+            allocation.released_quantity
+        ),
+        "remaining_reserved_quantity": str(
+            allocation.remaining_reserved_quantity
+        ),
+        "reserved_at": (
+            allocation.reserved_at.isoformat()
+            if allocation.reserved_at
+            else None
+        ),
+        "fulfilled_at": (
+            allocation.fulfilled_at.isoformat()
+            if allocation.fulfilled_at
+            else None
+        ),
+        "released_at": (
+            allocation.released_at.isoformat()
+            if allocation.released_at
+            else None
+        ),
+        "cancelled_at": (
+            allocation.cancelled_at.isoformat()
+            if allocation.cancelled_at
+            else None
+        ),
+        "release_reason": allocation.release_reason,
+        "cancellation_reason": (
+            allocation.cancellation_reason
+        ),
+        "notes": allocation.notes,
+        "extra_data": allocation.extra_data or {},
+        "created_at": (
+            allocation.created_at.isoformat()
+            if allocation.created_at
+            else None
+        ),
+        "updated_at": (
+            allocation.updated_at.isoformat()
+            if allocation.updated_at
+            else None
+        ),
+    }
+
+
+def build_stock_reservation_payload(
+    reservation: StockReservation,
+    *,
+    include_allocations: bool = False,
+) -> dict[str, Any]:
+    """
+    Serialize one stock reservation.
+    """
+    data = {
+        "id": reservation.id,
+        "company_id": reservation.company_id,
+        "sales_order_id": reservation.sales_order_id,
+        "sales_order_number": (
+            reservation.sales_order.order_number
+        ),
+        "reservation_number": (
+            reservation.reservation_number
+        ),
+        "status": reservation.status,
+        "source": reservation.source,
+        "requested_quantity": str(
+            reservation.requested_quantity
+        ),
+        "reserved_quantity": str(
+            reservation.reserved_quantity
+        ),
+        "fulfilled_quantity": str(
+            reservation.fulfilled_quantity
+        ),
+        "released_quantity": str(
+            reservation.released_quantity
+        ),
+        "remaining_reserved_quantity": str(
+            reservation.remaining_reserved_quantity
+        ),
+        "unallocated_quantity": str(
+            reservation.unallocated_quantity
+        ),
+        "is_active": reservation.is_active,
+        "is_terminal": reservation.is_terminal,
+        "is_expired_now": reservation.is_expired_now,
+        "expires_at": (
+            reservation.expires_at.isoformat()
+            if reservation.expires_at
+            else None
+        ),
+        "allocated_at": (
+            reservation.allocated_at.isoformat()
+            if reservation.allocated_at
+            else None
+        ),
+        "fulfilled_at": (
+            reservation.fulfilled_at.isoformat()
+            if reservation.fulfilled_at
+            else None
+        ),
+        "released_at": (
+            reservation.released_at.isoformat()
+            if reservation.released_at
+            else None
+        ),
+        "cancelled_at": (
+            reservation.cancelled_at.isoformat()
+            if reservation.cancelled_at
+            else None
+        ),
+        "expired_at": (
+            reservation.expired_at.isoformat()
+            if reservation.expired_at
+            else None
+        ),
+        "release_reason": reservation.release_reason,
+        "cancellation_reason": (
+            reservation.cancellation_reason
+        ),
+        "notes": reservation.notes,
+        "extra_data": reservation.extra_data or {},
+        "created_by_id": reservation.created_by_id,
+        "updated_by_id": reservation.updated_by_id,
+        "allocated_by_id": reservation.allocated_by_id,
+        "released_by_id": reservation.released_by_id,
+        "cancelled_by_id": reservation.cancelled_by_id,
+        "created_at": (
+            reservation.created_at.isoformat()
+            if reservation.created_at
+            else None
+        ),
+        "updated_at": (
+            reservation.updated_at.isoformat()
+            if reservation.updated_at
+            else None
+        ),
+    }
+
+    if include_allocations:
+        allocations = (
+            reservation.allocations
+            .select_related(
+                "reservation",
+                "sales_order_item",
+                "warehouse",
+                "location",
+                "stock_item",
+                "item",
+                "batch",
+                "serial_number",
+            )
+            .order_by(
+                "sales_order_item_id",
+                "warehouse_id",
+                "location_id",
+                "id",
+            )
+        )
+
+        data["allocations"] = [
+            build_stock_reservation_allocation_payload(
+                allocation
+            )
+            for allocation in allocations
+        ]
+
+    return data
+
+
+# End Phase 22.3.2.1 - Stock Reservation Service Foundation
+# ============================================================
+
+# ============================================================
+# Phase 22.3.2.2 - Atomic Stock Reservation Allocation
+# ============================================================
+
+
+def _reservation_actor(user):
+    """
+    Return authenticated user or None for audit fields.
+    """
+    if user and getattr(
+        user,
+        "is_authenticated",
+        False,
+    ):
+        return user
+
+    return None
+
+
+def _get_sales_order_requested_quantity(
+    sales_order: SalesOrder,
+) -> Decimal:
+    """
+    Calculate total reservable product quantity for one order.
+    """
+    total = QUANTITY_ZERO
+
+    order_items = (
+        sales_order.items
+        .select_related("catalog_item")
+        .order_by("id")
+    )
+
+    for order_item in order_items:
+        if not order_item.catalog_item_id:
+            continue
+
+        item = order_item.catalog_item
+
+        if not item.track_inventory:
+            continue
+
+        if item.item_type != CatalogItemType.PRODUCT:
+            continue
+
+        total = quantize_quantity(
+            total
+            + quantize_quantity(
+                order_item.quantity
+            )
+        )
+
+    return total
+
+
+@transaction.atomic
+def create_sales_order_stock_reservation(
+    *,
+    company: Company,
+    sales_order: SalesOrder,
+    reservation_number: str | None = None,
+    expires_at=None,
+    notes: str = "",
+    extra_data: dict[str, Any] | None = None,
+    user=None,
+) -> StockReservation:
+    """
+    Create one draft reservation header for a sales order.
+
+    This operation does not update StockItem and does not create
+    any StockMovement. Physical stock is affected only when an
+    allocation is created.
+    """
+    locked_order = (
+        SalesOrder.objects
+        .select_for_update()
+        .prefetch_related("items__catalog_item")
+        .get(
+            id=sales_order.id,
+            company=company,
+        )
+    )
+
+    validate_sales_order_for_stock_reservation(
+        company=company,
+        sales_order=locked_order,
+    )
+
+    requested_quantity = (
+        _get_sales_order_requested_quantity(
+            locked_order
+        )
+    )
+
+    if requested_quantity <= QUANTITY_ZERO:
+        raise ValidationError(
+            {
+                "sales_order": (
+                    "Sales order has no inventory-tracked "
+                    "product quantity to reserve."
+                )
+            }
+        )
+
+    active_statuses = {
+        StockReservationStatus.DRAFT,
+        StockReservationStatus.PARTIALLY_ALLOCATED,
+        StockReservationStatus.ALLOCATED,
+        StockReservationStatus.PARTIALLY_FULFILLED,
+    }
+
+    existing_active = (
+        StockReservation.objects
+        .select_for_update()
+        .filter(
+            company=company,
+            sales_order=locked_order,
+            status__in=active_statuses,
+        )
+        .order_by("id")
+        .first()
+    )
+
+    if existing_active is not None:
+        raise ValidationError(
+            {
+                "sales_order": (
+                    "An active stock reservation already "
+                    "exists for this sales order."
+                )
+            }
+        )
+
+    actor = _reservation_actor(user)
+
+    reservation = StockReservation(
+        company=company,
+        sales_order=locked_order,
+        reservation_number=(
+            normalize_code(reservation_number)
+            or generate_stock_reservation_number(
+                company
+            )
+        ),
+        status=StockReservationStatus.DRAFT,
+        source=StockReservationSource.SALES_ORDER,
+        requested_quantity=requested_quantity,
+        reserved_quantity=QUANTITY_ZERO,
+        fulfilled_quantity=QUANTITY_ZERO,
+        released_quantity=QUANTITY_ZERO,
+        expires_at=expires_at,
+        notes=normalize_text(notes),
+        extra_data=extra_data or {},
+        created_by=actor,
+        updated_by=actor,
+    )
+    reservation.full_clean()
+    reservation.save()
+
+    return reservation
+
+
+@transaction.atomic
+def allocate_stock_reservation(
+    *,
+    company: Company,
+    reservation: StockReservation,
+    sales_order_item: SalesOrderItem,
+    stock_item: StockItem,
+    quantity: Decimal | int | float | str,
+    notes: str = "",
+    extra_data: dict[str, Any] | None = None,
+    user=None,
+) -> StockReservationAllocation:
+    """
+    Reserve physical quantity from one location-level StockItem.
+
+    Atomic effects:
+    - lock reservation;
+    - lock sales order item;
+    - lock StockItem;
+    - increase StockItem.reserved_quantity;
+    - create reservation allocation;
+    - update reservation totals and lifecycle.
+
+    No StockMovement is created and quantity_on_hand is unchanged.
+    """
+    quantity_value = quantize_quantity(
+        quantity
+    )
+
+    if quantity_value <= QUANTITY_ZERO:
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Reservation allocation quantity must "
+                    "be greater than zero."
+                )
+            }
+        )
+
+    locked_reservation = (
+        StockReservation.objects
+        .select_for_update()
+        .select_related("sales_order")
+        .get(
+            id=reservation.id,
+            company=company,
+        )
+    )
+
+    allowed_statuses = {
+        StockReservationStatus.DRAFT,
+        StockReservationStatus.PARTIALLY_ALLOCATED,
+    }
+
+    if locked_reservation.status not in allowed_statuses:
+        raise ValidationError(
+            {
+                "reservation": (
+                    "Only draft or partially allocated "
+                    "reservations can receive allocations."
+                )
+            }
+        )
+
+    if locked_reservation.is_expired_now:
+        raise ValidationError(
+            {
+                "reservation": (
+                    "Expired reservation cannot receive "
+                    "new allocations."
+                )
+            }
+        )
+
+    locked_order_item = (
+        SalesOrderItem.objects
+        .select_for_update()
+        .select_related(
+            "order",
+            "catalog_item",
+        )
+        .get(
+            id=sales_order_item.id,
+            company=company,
+        )
+    )
+
+    validate_sales_order_item_for_stock_reservation(
+        company=company,
+        sales_order=locked_reservation.sales_order,
+        sales_order_item=locked_order_item,
+    )
+
+    locked_stock_item = (
+        StockItem.objects
+        .select_for_update()
+        .select_related(
+            "warehouse",
+            "location",
+            "item",
+        )
+        .get(
+            id=stock_item.id,
+            company=company,
+        )
+    )
+
+    validate_warehouse_for_company(
+        company=company,
+        warehouse=locked_stock_item.warehouse,
+        require_active=True,
+    )
+    validate_inventory_location_for_company(
+        company=company,
+        location=locked_stock_item.location,
+        warehouse=locked_stock_item.warehouse,
+        require_active=True,
+    )
+
+    if not locked_stock_item.location.is_pickable:
+        raise ValidationError(
+            {
+                "location": (
+                    "Stock reservation requires a pickable "
+                    "inventory location."
+                )
+            }
+        )
+
+    if (
+        locked_stock_item.item_id
+        != locked_order_item.catalog_item_id
+    ):
+        raise ValidationError(
+            {
+                "stock_item": (
+                    "Stock balance item does not match "
+                    "the sales order item."
+                )
+            }
+        )
+
+    if quantity_value > locked_stock_item.available_quantity:
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Available stock quantity is insufficient "
+                    "for this reservation allocation."
+                )
+            }
+        )
+
+    if quantity_value > (
+        locked_reservation.unallocated_quantity
+    ):
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Allocation quantity exceeds the "
+                    "reservation unallocated quantity."
+                )
+            }
+        )
+
+    existing_line_quantity = QUANTITY_ZERO
+
+    existing_allocations = (
+        StockReservationAllocation.objects
+        .select_for_update()
+        .filter(
+            company=company,
+            reservation=locked_reservation,
+            sales_order_item=locked_order_item,
+        )
+        .exclude(
+            status__in=[
+                StockReservationAllocationStatus.RELEASED,
+                StockReservationAllocationStatus.CANCELLED,
+            ]
+        )
+    )
+
+    for existing_allocation in existing_allocations:
+        existing_line_quantity = quantize_quantity(
+            existing_line_quantity
+            + existing_allocation.reserved_quantity
+        )
+
+    order_line_quantity = quantize_quantity(
+        locked_order_item.quantity
+    )
+
+    if (
+        existing_line_quantity + quantity_value
+        > order_line_quantity
+    ):
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Allocation quantity exceeds the sales "
+                    "order item quantity."
+                )
+            }
+        )
+
+    actor = _reservation_actor(user)
+    now = timezone.now()
+
+    allocation = StockReservationAllocation(
+        company=company,
+        reservation=locked_reservation,
+        sales_order_item=locked_order_item,
+        warehouse=locked_stock_item.warehouse,
+        location=locked_stock_item.location,
+        stock_item=locked_stock_item,
+        item=locked_stock_item.item,
+        status=(
+            StockReservationAllocationStatus.RESERVED
+        ),
+        reserved_quantity=quantity_value,
+        fulfilled_quantity=QUANTITY_ZERO,
+        released_quantity=QUANTITY_ZERO,
+        reserved_at=now,
+        notes=normalize_text(notes),
+        extra_data=extra_data or {},
+        created_by=actor,
+        updated_by=actor,
+    )
+    allocation.full_clean()
+
+    locked_stock_item.reserved_quantity = (
+        quantize_quantity(
+            locked_stock_item.reserved_quantity
+            + quantity_value
+        )
+    )
+    locked_stock_item.full_clean()
+    locked_stock_item.save(
+        update_fields=[
+            "reserved_quantity",
+            "updated_at",
+        ]
+    )
+
+    allocation.save()
+
+    locked_reservation.reserved_quantity = (
+        quantize_quantity(
+            locked_reservation.reserved_quantity
+            + quantity_value
+        )
+    )
+
+    if (
+        locked_reservation.reserved_quantity
+        == locked_reservation.requested_quantity
+    ):
+        locked_reservation.status = (
+            StockReservationStatus.ALLOCATED
+        )
+    else:
+        locked_reservation.status = (
+            StockReservationStatus
+            .PARTIALLY_ALLOCATED
+        )
+
+    if locked_reservation.allocated_at is None:
+        locked_reservation.allocated_at = now
+
+    if actor is not None:
+        locked_reservation.allocated_by = actor
+        locked_reservation.updated_by = actor
+
+    locked_reservation.full_clean()
+    locked_reservation.save(
+        update_fields=[
+            "reserved_quantity",
+            "status",
+            "allocated_at",
+            "allocated_by",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+
+    return allocation
+
+
+# End Phase 22.3.2.2 - Atomic Stock Reservation Allocation
+# ============================================================
+
+# ============================================================
+# Phase 22.3.2.3 - Reservation Release Cancellation Expiry
+# ============================================================
+
+
+def _resolve_reservation_active_status(
+    reservation: StockReservation,
+) -> str:
+    """
+    Resolve a non-terminal reservation status from its totals.
+    """
+    remaining_quantity = quantize_quantity(
+        reservation.remaining_reserved_quantity
+    )
+
+    if remaining_quantity <= QUANTITY_ZERO:
+        if (
+            reservation.fulfilled_quantity
+            >= reservation.reserved_quantity
+            and reservation.reserved_quantity
+            > QUANTITY_ZERO
+        ):
+            return StockReservationStatus.FULFILLED
+
+        if (
+            reservation.released_quantity
+            >= reservation.reserved_quantity
+            and reservation.fulfilled_quantity
+            == QUANTITY_ZERO
+        ):
+            return StockReservationStatus.RELEASED
+
+    if reservation.fulfilled_quantity > QUANTITY_ZERO:
+        return (
+            StockReservationStatus
+            .PARTIALLY_FULFILLED
+        )
+
+    if (
+        reservation.reserved_quantity
+        >= reservation.requested_quantity
+    ):
+        return StockReservationStatus.ALLOCATED
+
+    if reservation.reserved_quantity > QUANTITY_ZERO:
+        return (
+            StockReservationStatus
+            .PARTIALLY_ALLOCATED
+        )
+
+    return StockReservationStatus.DRAFT
+
+
+def _release_locked_stock_quantity(
+    *,
+    company: Company,
+    stock_item: StockItem,
+    quantity: Decimal,
+) -> StockItem:
+    """
+    Decrease one locked StockItem reserved quantity safely.
+    """
+    quantity_value = quantize_quantity(quantity)
+
+    if quantity_value <= QUANTITY_ZERO:
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Released quantity must be greater "
+                    "than zero."
+                )
+            }
+        )
+
+    locked_stock_item = (
+        StockItem.objects
+        .select_for_update()
+        .get(
+            id=stock_item.id,
+            company=company,
+        )
+    )
+
+    current_reserved = quantize_quantity(
+        locked_stock_item.reserved_quantity
+    )
+
+    if quantity_value > current_reserved:
+        raise ValidationError(
+            {
+                "reserved_quantity": (
+                    "Stock reserved quantity is lower than "
+                    "the requested release quantity."
+                )
+            }
+        )
+
+    locked_stock_item.reserved_quantity = (
+        quantize_quantity(
+            current_reserved - quantity_value
+        )
+    )
+
+    locked_stock_item.full_clean()
+    locked_stock_item.save(
+        update_fields=[
+            "reserved_quantity",
+            "updated_at",
+        ]
+    )
+
+    return locked_stock_item
+
+
+
+def _release_locked_tracked_allocation_quantity(
+    *,
+    company: Company,
+    allocation: StockReservationAllocation,
+    quantity: Decimal,
+    user=None,
+) -> None:
+    """
+    Release batch or serial reservation effects.
+
+    Batch allocation:
+    - decrease InventoryBatchBalance.reserved_quantity.
+
+    Serial allocation:
+    - release the complete serial allocation;
+    - change serial status from RESERVED to AVAILABLE.
+
+    StockItem is released separately by the caller.
+    No StockMovement or InventoryTrackingEntry is created.
+    """
+    quantity_value = quantize_quantity(quantity)
+
+    if quantity_value <= QUANTITY_ZERO:
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Tracked release quantity must be "
+                    "greater than zero."
+                )
+            }
+        )
+
+    if allocation.batch_id:
+        locked_batch_balance = (
+            InventoryBatchBalance.objects
+            .select_for_update()
+            .filter(
+                company=company,
+                warehouse_id=allocation.warehouse_id,
+                location_id=allocation.location_id,
+                stock_item_id=allocation.stock_item_id,
+                item_id=allocation.item_id,
+                batch_id=allocation.batch_id,
+            )
+            .first()
+        )
+
+        if locked_batch_balance is None:
+            raise ValidationError(
+                {
+                    "batch": (
+                        "Batch balance for this reservation "
+                        "allocation was not found."
+                    )
+                }
+            )
+
+        current_reserved = quantize_quantity(
+            locked_batch_balance.reserved_quantity
+        )
+
+        if quantity_value > current_reserved:
+            raise ValidationError(
+                {
+                    "reserved_quantity": (
+                        "Batch reserved quantity is lower than "
+                        "the requested release quantity."
+                    )
+                }
+            )
+
+        locked_batch_balance.reserved_quantity = (
+            quantize_quantity(
+                current_reserved - quantity_value
+            )
+        )
+        locked_batch_balance.full_clean()
+        locked_batch_balance.save(
+            update_fields=[
+                "reserved_quantity",
+                "updated_at",
+            ]
+        )
+
+    if allocation.serial_number_id:
+        remaining_quantity = quantize_quantity(
+            allocation.remaining_reserved_quantity
+        )
+
+        if quantity_value != remaining_quantity:
+            raise ValidationError(
+                {
+                    "quantity": (
+                        "A serial number reservation must be "
+                        "released completely."
+                    )
+                }
+            )
+
+        locked_serial = (
+            InventorySerialNumber.objects
+            .select_for_update()
+            .filter(
+                id=allocation.serial_number_id,
+                company=company,
+            )
+            .first()
+        )
+
+        if locked_serial is None:
+            raise ValidationError(
+                {
+                    "serial_number": (
+                        "Serial number for this reservation "
+                        "allocation was not found."
+                    )
+                }
+            )
+
+        if locked_serial.status != InventorySerialStatus.RESERVED:
+            raise ValidationError(
+                {
+                    "serial_number": (
+                        "Only a reserved serial number can "
+                        "be released."
+                    )
+                }
+            )
+
+        locked_serial.status = InventorySerialStatus.AVAILABLE
+
+        actor = _reservation_actor(user)
+
+        if actor is not None:
+            locked_serial.updated_by = actor
+
+        locked_serial.full_clean()
+        locked_serial.save(
+            update_fields=[
+                "status",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+
+@transaction.atomic
+def release_stock_reservation_allocation(
+    *,
+    company: Company,
+    allocation: StockReservationAllocation,
+    quantity: Decimal | int | float | str | None = None,
+    reason: str = "",
+    user=None,
+) -> StockReservationAllocation:
+    """
+    Release part or all of one reservation allocation.
+
+    The operation:
+    - locks the allocation, reservation, and StockItem;
+    - decreases StockItem.reserved_quantity;
+    - increases allocation and reservation released totals;
+    - does not change quantity_on_hand;
+    - does not create StockMovement.
+    """
+    locked_allocation = (
+        StockReservationAllocation.objects
+        .select_for_update()
+        .select_related(
+            "reservation",
+            "stock_item",
+            "warehouse",
+            "location",
+            "item",
+            "batch",
+            "serial_number",
+        )
+        .filter(
+            id=allocation.id,
+            company=company,
+        )
+        .first()
+    )
+
+    if locked_allocation is None:
+        raise ValidationError(
+            {
+                "allocation": (
+                    "Reservation allocation does not belong "
+                    "to this company."
+                )
+            }
+        )
+
+    if locked_allocation.status not in {
+        StockReservationAllocationStatus.RESERVED,
+        (
+            StockReservationAllocationStatus
+            .PARTIALLY_FULFILLED
+        ),
+    }:
+        raise ValidationError(
+            {
+                "allocation": (
+                    "Only active reservation allocations "
+                    "can be released."
+                )
+            }
+        )
+
+    available_to_release = quantize_quantity(
+        locked_allocation.remaining_reserved_quantity
+    )
+
+    if available_to_release <= QUANTITY_ZERO:
+        raise ValidationError(
+            {
+                "allocation": (
+                    "Reservation allocation has no remaining "
+                    "quantity to release."
+                )
+            }
+        )
+
+    quantity_value = quantize_quantity(
+        available_to_release
+        if quantity is None
+        else quantity
+    )
+
+    if quantity_value <= QUANTITY_ZERO:
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Released quantity must be greater "
+                    "than zero."
+                )
+            }
+        )
+
+    if quantity_value > available_to_release:
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Released quantity exceeds the allocation "
+                    "remaining reserved quantity."
+                )
+            }
+        )
+
+    locked_reservation = (
+        StockReservation.objects
+        .select_for_update()
+        .get(
+            id=locked_allocation.reservation_id,
+            company=company,
+        )
+    )
+
+    if locked_reservation.is_terminal:
+        raise ValidationError(
+            {
+                "reservation": (
+                    "Terminal reservations cannot release "
+                    "additional quantities."
+                )
+            }
+        )
+
+    actor = _reservation_actor(user)
+    now = timezone.now()
+    normalized_reason = normalize_text(reason)
+
+    _release_locked_stock_quantity(
+        company=company,
+        stock_item=locked_allocation.stock_item,
+        quantity=quantity_value,
+    )
+
+    _release_locked_tracked_allocation_quantity(
+        company=company,
+        allocation=locked_allocation,
+        quantity=quantity_value,
+        user=user,
+    )
+
+    locked_allocation.released_quantity = (
+        quantize_quantity(
+            locked_allocation.released_quantity
+            + quantity_value
+        )
+    )
+    locked_allocation.released_at = now
+    locked_allocation.release_reason = (
+        normalized_reason
+        or locked_allocation.release_reason
+    )
+
+    remaining_after_release = quantize_quantity(
+        locked_allocation.remaining_reserved_quantity
+    )
+
+    if remaining_after_release <= QUANTITY_ZERO:
+        if (
+            locked_allocation.fulfilled_quantity
+            == QUANTITY_ZERO
+        ):
+            locked_allocation.status = (
+                StockReservationAllocationStatus.RELEASED
+            )
+        else:
+            locked_allocation.status = (
+                StockReservationAllocationStatus
+                .PARTIALLY_FULFILLED
+            )
+    elif (
+        locked_allocation.fulfilled_quantity
+        > QUANTITY_ZERO
+    ):
+        locked_allocation.status = (
+            StockReservationAllocationStatus
+            .PARTIALLY_FULFILLED
+        )
+    else:
+        locked_allocation.status = (
+            StockReservationAllocationStatus.RESERVED
+        )
+
+    if actor is not None:
+        locked_allocation.released_by = actor
+        locked_allocation.updated_by = actor
+
+    locked_allocation.full_clean()
+    locked_allocation.save(
+        update_fields=[
+            "released_quantity",
+            "status",
+            "released_at",
+            "release_reason",
+            "released_by",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+
+    locked_reservation.released_quantity = (
+        quantize_quantity(
+            locked_reservation.released_quantity
+            + quantity_value
+        )
+    )
+    locked_reservation.release_reason = (
+        normalized_reason
+        or locked_reservation.release_reason
+    )
+
+    resolved_status = (
+        _resolve_reservation_active_status(
+            locked_reservation
+        )
+    )
+    locked_reservation.status = resolved_status
+
+    if resolved_status == StockReservationStatus.RELEASED:
+        locked_reservation.released_at = now
+
+    if actor is not None:
+        locked_reservation.released_by = actor
+        locked_reservation.updated_by = actor
+
+    locked_reservation.full_clean()
+    locked_reservation.save(
+        update_fields=[
+            "released_quantity",
+            "status",
+            "released_at",
+            "release_reason",
+            "released_by",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+
+    locked_allocation.refresh_from_db()
+
+    return locked_allocation
+
+
+def _release_all_locked_reservation_allocations(
+    *,
+    company: Company,
+    reservation: StockReservation,
+    final_allocation_status: str,
+    reason: str,
+    user=None,
+) -> Decimal:
+    """
+    Release every remaining physical quantity for one reservation.
+
+    The caller must run inside transaction.atomic and hold the
+    reservation row lock.
+    """
+    actor = _reservation_actor(user)
+    now = timezone.now()
+    normalized_reason = normalize_text(reason)
+    total_released = QUANTITY_ZERO
+
+    allocations = list(
+        StockReservationAllocation.objects
+        .select_for_update()
+        .select_related(
+            "stock_item",
+            "warehouse",
+            "location",
+            "item",
+            "batch",
+            "serial_number",
+        )
+        .filter(
+            company=company,
+            reservation=reservation,
+        )
+        .order_by("id")
+    )
+
+    for allocation in allocations:
+        remaining_quantity = quantize_quantity(
+            allocation.remaining_reserved_quantity
+        )
+
+        if remaining_quantity > QUANTITY_ZERO:
+            _release_locked_stock_quantity(
+                company=company,
+                stock_item=allocation.stock_item,
+                quantity=remaining_quantity,
+            )
+
+            _release_locked_tracked_allocation_quantity(
+                company=company,
+                allocation=allocation,
+                quantity=remaining_quantity,
+                user=user,
+            )
+
+            allocation.released_quantity = (
+                quantize_quantity(
+                    allocation.released_quantity
+                    + remaining_quantity
+                )
+            )
+            allocation.released_at = now
+            allocation.release_reason = (
+                normalized_reason
+                or allocation.release_reason
+            )
+
+            total_released = quantize_quantity(
+                total_released + remaining_quantity
+            )
+
+        allocation.status = final_allocation_status
+
+        if (
+            final_allocation_status
+            == StockReservationAllocationStatus.CANCELLED
+        ):
+            allocation.cancelled_at = now
+            allocation.cancellation_reason = (
+                normalized_reason
+                or "Reservation cancelled."
+            )
+
+        if actor is not None:
+            allocation.released_by = actor
+            allocation.updated_by = actor
+
+        allocation.full_clean()
+        allocation.save(
+            update_fields=[
+                "released_quantity",
+                "status",
+                "released_at",
+                "cancelled_at",
+                "release_reason",
+                "cancellation_reason",
+                "released_by",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+    return total_released
+
+
+@transaction.atomic
+def cancel_stock_reservation(
+    *,
+    company: Company,
+    reservation: StockReservation,
+    reason: str = "",
+    user=None,
+) -> StockReservation:
+    """
+    Cancel a reservation and release all remaining allocations.
+    """
+    locked_reservation = (
+        StockReservation.objects
+        .select_for_update()
+        .filter(
+            id=reservation.id,
+            company=company,
+        )
+        .first()
+    )
+
+    if locked_reservation is None:
+        raise ValidationError(
+            {
+                "reservation": (
+                    "Stock reservation does not belong "
+                    "to this company."
+                )
+            }
+        )
+
+    if locked_reservation.is_terminal:
+        raise ValidationError(
+            {
+                "reservation": (
+                    "Terminal stock reservation cannot "
+                    "be cancelled again."
+                )
+            }
+        )
+
+    actor = _reservation_actor(user)
+    now = timezone.now()
+    normalized_reason = (
+        normalize_text(reason)
+        or "Reservation cancelled."
+    )
+
+    released_quantity = (
+        _release_all_locked_reservation_allocations(
+            company=company,
+            reservation=locked_reservation,
+            final_allocation_status=(
+                StockReservationAllocationStatus.CANCELLED
+            ),
+            reason=normalized_reason,
+            user=user,
+        )
+    )
+
+    locked_reservation.released_quantity = (
+        quantize_quantity(
+            locked_reservation.released_quantity
+            + released_quantity
+        )
+    )
+    locked_reservation.status = (
+        StockReservationStatus.CANCELLED
+    )
+    locked_reservation.cancelled_at = now
+    locked_reservation.cancellation_reason = (
+        normalized_reason
+    )
+
+    if released_quantity > QUANTITY_ZERO:
+        locked_reservation.released_at = now
+        locked_reservation.release_reason = (
+            normalized_reason
+        )
+
+    if actor is not None:
+        locked_reservation.cancelled_by = actor
+        locked_reservation.released_by = actor
+        locked_reservation.updated_by = actor
+
+    locked_reservation.full_clean()
+    locked_reservation.save(
+        update_fields=[
+            "released_quantity",
+            "status",
+            "released_at",
+            "cancelled_at",
+            "release_reason",
+            "cancellation_reason",
+            "released_by",
+            "cancelled_by",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+
+    locked_reservation.refresh_from_db()
+
+    return locked_reservation
+
+
+@transaction.atomic
+def expire_stock_reservation(
+    *,
+    company: Company,
+    reservation: StockReservation,
+    reason: str = "",
+    user=None,
+    force: bool = False,
+) -> StockReservation:
+    """
+    Expire one reservation and release all remaining allocations.
+
+    By default, expires_at must already be reached. force=True is
+    reserved for controlled administrative workflows and tests.
+    """
+    locked_reservation = (
+        StockReservation.objects
+        .select_for_update()
+        .filter(
+            id=reservation.id,
+            company=company,
+        )
+        .first()
+    )
+
+    if locked_reservation is None:
+        raise ValidationError(
+            {
+                "reservation": (
+                    "Stock reservation does not belong "
+                    "to this company."
+                )
+            }
+        )
+
+    if locked_reservation.is_terminal:
+        raise ValidationError(
+            {
+                "reservation": (
+                    "Terminal stock reservation cannot "
+                    "be expired again."
+                )
+            }
+        )
+
+    now = timezone.now()
+
+    if not force:
+        if locked_reservation.expires_at is None:
+            raise ValidationError(
+                {
+                    "expires_at": (
+                        "Reservation does not have an "
+                        "expiry date."
+                    )
+                }
+            )
+
+        if locked_reservation.expires_at > now:
+            raise ValidationError(
+                {
+                    "expires_at": (
+                        "Reservation expiry date has not "
+                        "been reached."
+                    )
+                }
+            )
+
+    actor = _reservation_actor(user)
+    normalized_reason = (
+        normalize_text(reason)
+        or "Reservation expired."
+    )
+
+    released_quantity = (
+        _release_all_locked_reservation_allocations(
+            company=company,
+            reservation=locked_reservation,
+            final_allocation_status=(
+                StockReservationAllocationStatus.RELEASED
+            ),
+            reason=normalized_reason,
+            user=user,
+        )
+    )
+
+    locked_reservation.released_quantity = (
+        quantize_quantity(
+            locked_reservation.released_quantity
+            + released_quantity
+        )
+    )
+    locked_reservation.status = (
+        StockReservationStatus.EXPIRED
+    )
+    locked_reservation.expired_at = now
+
+    if released_quantity > QUANTITY_ZERO:
+        locked_reservation.released_at = now
+        locked_reservation.release_reason = (
+            normalized_reason
+        )
+
+    if actor is not None:
+        locked_reservation.released_by = actor
+        locked_reservation.updated_by = actor
+
+    locked_reservation.full_clean()
+    locked_reservation.save(
+        update_fields=[
+            "released_quantity",
+            "status",
+            "released_at",
+            "expired_at",
+            "release_reason",
+            "released_by",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+
+    locked_reservation.refresh_from_db()
+
+    return locked_reservation
+
+
+# End Phase 22.3.2.3 - Reservation Release Cancellation Expiry
+# ============================================================
+
+# ============================================================
+# Phase 22.3.3.1 - Batch and Serial Reservation Allocation
+# ============================================================
+
+
+def _lock_reservation_for_tracked_allocation(
+    *,
+    company: Company,
+    reservation: StockReservation,
+) -> StockReservation:
+    """
+    Lock and validate a reservation before tracked allocation.
+    """
+    locked_reservation = (
+        StockReservation.objects
+        .select_for_update()
+        .select_related("sales_order")
+        .filter(
+            id=reservation.id,
+            company=company,
+        )
+        .first()
+    )
+
+    if locked_reservation is None:
+        raise ValidationError(
+            {
+                "reservation": (
+                    "Stock reservation does not belong "
+                    "to this company."
+                )
+            }
+        )
+
+    if locked_reservation.status not in {
+        StockReservationStatus.DRAFT,
+        StockReservationStatus.PARTIALLY_ALLOCATED,
+    }:
+        raise ValidationError(
+            {
+                "reservation": (
+                    "Only draft or partially allocated "
+                    "reservations can receive allocations."
+                )
+            }
+        )
+
+    if locked_reservation.is_expired_now:
+        raise ValidationError(
+            {
+                "reservation": (
+                    "Expired reservation cannot receive "
+                    "new allocations."
+                )
+            }
+        )
+
+    validate_sales_order_for_stock_reservation(
+        company=company,
+        sales_order=locked_reservation.sales_order,
+    )
+
+    return locked_reservation
+
+
+def _lock_sales_order_item_for_tracked_allocation(
+    *,
+    company: Company,
+    reservation: StockReservation,
+    sales_order_item: SalesOrderItem,
+) -> SalesOrderItem:
+    """
+    Lock and validate one reservation sales order line.
+    """
+    locked_order_item = (
+        SalesOrderItem.objects
+        .select_for_update()
+        .select_related(
+            "order",
+            "catalog_item",
+        )
+        .filter(
+            id=sales_order_item.id,
+            company=company,
+        )
+        .first()
+    )
+
+    if locked_order_item is None:
+        raise ValidationError(
+            {
+                "sales_order_item": (
+                    "Sales order item does not belong "
+                    "to this company."
+                )
+            }
+        )
+
+    validate_sales_order_item_for_stock_reservation(
+        company=company,
+        sales_order=reservation.sales_order,
+        sales_order_item=locked_order_item,
+    )
+
+    return locked_order_item
+
+
+def _get_active_order_line_allocation_quantity(
+    *,
+    company: Company,
+    reservation: StockReservation,
+    sales_order_item: SalesOrderItem,
+) -> Decimal:
+    """
+    Return historical reserved quantity on active line allocations.
+    """
+    total = QUANTITY_ZERO
+
+    allocations = (
+        StockReservationAllocation.objects
+        .select_for_update()
+        .filter(
+            company=company,
+            reservation=reservation,
+            sales_order_item=sales_order_item,
+        )
+        .exclude(
+            status__in=[
+                StockReservationAllocationStatus.RELEASED,
+                StockReservationAllocationStatus.CANCELLED,
+            ]
+        )
+        .order_by("id")
+    )
+
+    for allocation in allocations:
+        total = quantize_quantity(
+            total + allocation.reserved_quantity
+        )
+
+    return total
+
+
+def _validate_tracked_allocation_limits(
+    *,
+    company: Company,
+    reservation: StockReservation,
+    sales_order_item: SalesOrderItem,
+    quantity: Decimal,
+) -> None:
+    """
+    Validate reservation-header and sales-order-line quantity limits.
+    """
+    quantity_value = quantize_quantity(quantity)
+
+    if quantity_value <= QUANTITY_ZERO:
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Reservation allocation quantity must "
+                    "be greater than zero."
+                )
+            }
+        )
+
+    if quantity_value > reservation.unallocated_quantity:
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Allocation quantity exceeds the "
+                    "reservation unallocated quantity."
+                )
+            }
+        )
+
+    existing_line_quantity = (
+        _get_active_order_line_allocation_quantity(
+            company=company,
+            reservation=reservation,
+            sales_order_item=sales_order_item,
+        )
+    )
+
+    order_line_quantity = quantize_quantity(
+        sales_order_item.quantity
+    )
+
+    if (
+        existing_line_quantity + quantity_value
+        > order_line_quantity
+    ):
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Allocation quantity exceeds the sales "
+                    "order item quantity."
+                )
+            }
+        )
+
+
+def _finalize_tracked_reservation_allocation(
+    *,
+    reservation: StockReservation,
+    quantity: Decimal,
+    user=None,
+) -> StockReservation:
+    """
+    Update reservation totals after one tracked allocation.
+    """
+    quantity_value = quantize_quantity(quantity)
+    actor = _reservation_actor(user)
+    now = timezone.now()
+
+    reservation.reserved_quantity = quantize_quantity(
+        reservation.reserved_quantity + quantity_value
+    )
+
+    if (
+        reservation.reserved_quantity
+        == reservation.requested_quantity
+    ):
+        reservation.status = (
+            StockReservationStatus.ALLOCATED
+        )
+    else:
+        reservation.status = (
+            StockReservationStatus.PARTIALLY_ALLOCATED
+        )
+
+    if reservation.allocated_at is None:
+        reservation.allocated_at = now
+
+    if actor is not None:
+        reservation.allocated_by = actor
+        reservation.updated_by = actor
+
+    reservation.full_clean()
+    reservation.save(
+        update_fields=[
+            "reserved_quantity",
+            "status",
+            "allocated_at",
+            "allocated_by",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+
+    return reservation
+
+
+@transaction.atomic
+def allocate_batch_stock_reservation(
+    *,
+    company: Company,
+    reservation: StockReservation,
+    sales_order_item: SalesOrderItem,
+    batch_balance: InventoryBatchBalance,
+    quantity: Decimal | int | float | str,
+    notes: str = "",
+    extra_data: dict[str, Any] | None = None,
+    user=None,
+) -> StockReservationAllocation:
+    """
+    Reserve quantity from one location-level batch balance.
+
+    Atomic effects:
+    - lock reservation and sales order line;
+    - lock batch master, batch balance, and StockItem;
+    - increase StockItem.reserved_quantity;
+    - increase InventoryBatchBalance.reserved_quantity;
+    - create one batch-linked reservation allocation;
+    - update reservation totals and lifecycle.
+
+    No quantity_on_hand change and no StockMovement is created.
+    """
+    quantity_value = quantize_quantity(quantity)
+
+    if quantity_value <= QUANTITY_ZERO:
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Batch reservation quantity must be "
+                    "greater than zero."
+                )
+            }
+        )
+
+    locked_reservation = (
+        _lock_reservation_for_tracked_allocation(
+            company=company,
+            reservation=reservation,
+        )
+    )
+
+    locked_order_item = (
+        _lock_sales_order_item_for_tracked_allocation(
+            company=company,
+            reservation=locked_reservation,
+            sales_order_item=sales_order_item,
+        )
+    )
+
+    locked_batch_balance = (
+        InventoryBatchBalance.objects
+        .select_for_update()
+        .select_related(
+            "warehouse",
+            "location",
+            "stock_item",
+            "item",
+            "batch",
+        )
+        .filter(
+            id=batch_balance.id,
+            company=company,
+        )
+        .first()
+    )
+
+    if locked_batch_balance is None:
+        raise ValidationError(
+            {
+                "batch_balance": (
+                    "Inventory batch balance does not belong "
+                    "to this company."
+                )
+            }
+        )
+
+    locked_batch = (
+        InventoryBatch.objects
+        .select_for_update()
+        .filter(
+            id=locked_batch_balance.batch_id,
+            company=company,
+        )
+        .first()
+    )
+
+    if locked_batch is None:
+        raise ValidationError(
+            {
+                "batch": (
+                    "Inventory batch does not belong "
+                    "to this company."
+                )
+            }
+        )
+
+    locked_stock_item = (
+        StockItem.objects
+        .select_for_update()
+        .select_related(
+            "warehouse",
+            "location",
+            "item",
+        )
+        .filter(
+            id=locked_batch_balance.stock_item_id,
+            company=company,
+        )
+        .first()
+    )
+
+    if locked_stock_item is None:
+        raise ValidationError(
+            {
+                "stock_item": (
+                    "Batch stock balance does not belong "
+                    "to this company."
+                )
+            }
+        )
+
+    validate_warehouse_for_company(
+        company=company,
+        warehouse=locked_batch_balance.warehouse,
+        require_active=True,
+    )
+    validate_inventory_location_for_company(
+        company=company,
+        location=locked_batch_balance.location,
+        warehouse=locked_batch_balance.warehouse,
+        require_active=True,
+    )
+    validate_inventory_tracking_item(
+        company=company,
+        item=locked_batch_balance.item,
+        expected_method=CatalogItemTrackingMethod.BATCH,
+    )
+    validate_inventory_batch_for_company(
+        company=company,
+        batch=locked_batch,
+        item=locked_batch_balance.item,
+        require_available=True,
+    )
+
+    if not locked_batch_balance.location.is_pickable:
+        raise ValidationError(
+            {
+                "location": (
+                    "Batch reservation requires a pickable "
+                    "inventory location."
+                )
+            }
+        )
+
+    if (
+        locked_batch_balance.item_id
+        != locked_order_item.catalog_item_id
+    ):
+        raise ValidationError(
+            {
+                "batch_balance": (
+                    "Batch balance item does not match "
+                    "the sales order item."
+                )
+            }
+        )
+
+    if (
+        locked_batch_balance.stock_item_id
+        != locked_stock_item.id
+        or locked_stock_item.warehouse_id
+        != locked_batch_balance.warehouse_id
+        or locked_stock_item.location_id
+        != locked_batch_balance.location_id
+        or locked_stock_item.item_id
+        != locked_batch_balance.item_id
+    ):
+        raise ValidationError(
+            {
+                "batch_balance": (
+                    "Batch balance stock source is inconsistent."
+                )
+            }
+        )
+
+    if quantity_value > locked_batch_balance.available_quantity:
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Batch available quantity is insufficient "
+                    "for this reservation."
+                )
+            }
+        )
+
+    if quantity_value > locked_stock_item.available_quantity:
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Stock available quantity is insufficient "
+                    "for this batch reservation."
+                )
+            }
+        )
+
+    _validate_tracked_allocation_limits(
+        company=company,
+        reservation=locked_reservation,
+        sales_order_item=locked_order_item,
+        quantity=quantity_value,
+    )
+
+    actor = _reservation_actor(user)
+    now = timezone.now()
+
+    allocation = StockReservationAllocation(
+        company=company,
+        reservation=locked_reservation,
+        sales_order_item=locked_order_item,
+        warehouse=locked_batch_balance.warehouse,
+        location=locked_batch_balance.location,
+        stock_item=locked_stock_item,
+        item=locked_batch_balance.item,
+        batch=locked_batch,
+        serial_number=None,
+        status=StockReservationAllocationStatus.RESERVED,
+        reserved_quantity=quantity_value,
+        fulfilled_quantity=QUANTITY_ZERO,
+        released_quantity=QUANTITY_ZERO,
+        reserved_at=now,
+        notes=normalize_text(notes),
+        extra_data=extra_data or {},
+        created_by=actor,
+        updated_by=actor,
+    )
+    allocation.full_clean()
+
+    locked_stock_item.reserved_quantity = (
+        quantize_quantity(
+            locked_stock_item.reserved_quantity
+            + quantity_value
+        )
+    )
+    locked_stock_item.full_clean()
+
+    locked_batch_balance.reserved_quantity = (
+        quantize_quantity(
+            locked_batch_balance.reserved_quantity
+            + quantity_value
+        )
+    )
+    locked_batch_balance.full_clean()
+
+    locked_stock_item.save(
+        update_fields=[
+            "reserved_quantity",
+            "updated_at",
+        ]
+    )
+    locked_batch_balance.save(
+        update_fields=[
+            "reserved_quantity",
+            "updated_at",
+        ]
+    )
+    allocation.save()
+
+    _finalize_tracked_reservation_allocation(
+        reservation=locked_reservation,
+        quantity=quantity_value,
+        user=user,
+    )
+
+    return allocation
+
+
+@transaction.atomic
+def allocate_serial_stock_reservation(
+    *,
+    company: Company,
+    reservation: StockReservation,
+    sales_order_item: SalesOrderItem,
+    serial_number: InventorySerialNumber,
+    notes: str = "",
+    extra_data: dict[str, Any] | None = None,
+    user=None,
+) -> StockReservationAllocation:
+    """
+    Reserve one serial-number-tracked physical unit.
+
+    Atomic effects:
+    - lock reservation and sales order line;
+    - lock serial number and its StockItem;
+    - require serial status AVAILABLE;
+    - increase StockItem.reserved_quantity by one;
+    - change serial status to RESERVED;
+    - create one serial-linked allocation;
+    - update reservation totals and lifecycle.
+
+    No quantity_on_hand change and no StockMovement is created.
+    """
+    quantity_value = Decimal("1.0000")
+
+    locked_reservation = (
+        _lock_reservation_for_tracked_allocation(
+            company=company,
+            reservation=reservation,
+        )
+    )
+
+    locked_order_item = (
+        _lock_sales_order_item_for_tracked_allocation(
+            company=company,
+            reservation=locked_reservation,
+            sales_order_item=sales_order_item,
+        )
+    )
+
+    locked_serial = (
+        InventorySerialNumber.objects
+        .select_for_update()
+        .select_related(
+            "warehouse",
+            "location",
+            "stock_item",
+            "item",
+        )
+        .filter(
+            id=serial_number.id,
+            company=company,
+        )
+        .first()
+    )
+
+    if locked_serial is None:
+        raise ValidationError(
+            {
+                "serial_number": (
+                    "Inventory serial number does not belong "
+                    "to this company."
+                )
+            }
+        )
+
+    if locked_serial.status != InventorySerialStatus.AVAILABLE:
+        raise ValidationError(
+            {
+                "serial_number": (
+                    "Only an available serial number can "
+                    "be reserved."
+                )
+            }
+        )
+
+    if (
+        not locked_serial.warehouse_id
+        or not locked_serial.location_id
+        or not locked_serial.stock_item_id
+    ):
+        raise ValidationError(
+            {
+                "serial_number": (
+                    "Serial number must have a current "
+                    "warehouse, location, and stock balance."
+                )
+            }
+        )
+
+    locked_stock_item = (
+        StockItem.objects
+        .select_for_update()
+        .select_related(
+            "warehouse",
+            "location",
+            "item",
+        )
+        .filter(
+            id=locked_serial.stock_item_id,
+            company=company,
+        )
+        .first()
+    )
+
+    if locked_stock_item is None:
+        raise ValidationError(
+            {
+                "stock_item": (
+                    "Serial number stock balance does not "
+                    "belong to this company."
+                )
+            }
+        )
+
+    validate_warehouse_for_company(
+        company=company,
+        warehouse=locked_serial.warehouse,
+        require_active=True,
+    )
+    validate_inventory_location_for_company(
+        company=company,
+        location=locked_serial.location,
+        warehouse=locked_serial.warehouse,
+        require_active=True,
+    )
+    validate_inventory_tracking_item(
+        company=company,
+        item=locked_serial.item,
+        expected_method=CatalogItemTrackingMethod.SERIAL,
+    )
+    validate_inventory_serial_for_company(
+        company=company,
+        serial_number=locked_serial,
+        item=locked_serial.item,
+        warehouse=locked_serial.warehouse,
+        location=locked_serial.location,
+        require_available=True,
+    )
+
+    if not locked_serial.location.is_pickable:
+        raise ValidationError(
+            {
+                "location": (
+                    "Serial reservation requires a pickable "
+                    "inventory location."
+                )
+            }
+        )
+
+    if (
+        locked_serial.item_id
+        != locked_order_item.catalog_item_id
+    ):
+        raise ValidationError(
+            {
+                "serial_number": (
+                    "Serial number item does not match "
+                    "the sales order item."
+                )
+            }
+        )
+
+    if (
+        locked_stock_item.warehouse_id
+        != locked_serial.warehouse_id
+        or locked_stock_item.location_id
+        != locked_serial.location_id
+        or locked_stock_item.item_id
+        != locked_serial.item_id
+    ):
+        raise ValidationError(
+            {
+                "serial_number": (
+                    "Serial number stock position is inconsistent."
+                )
+            }
+        )
+
+    if locked_stock_item.available_quantity < quantity_value:
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Stock available quantity is insufficient "
+                    "for this serial reservation."
+                )
+            }
+        )
+
+    _validate_tracked_allocation_limits(
+        company=company,
+        reservation=locked_reservation,
+        sales_order_item=locked_order_item,
+        quantity=quantity_value,
+    )
+
+    actor = _reservation_actor(user)
+    now = timezone.now()
+
+    allocation = StockReservationAllocation(
+        company=company,
+        reservation=locked_reservation,
+        sales_order_item=locked_order_item,
+        warehouse=locked_serial.warehouse,
+        location=locked_serial.location,
+        stock_item=locked_stock_item,
+        item=locked_serial.item,
+        batch=None,
+        serial_number=locked_serial,
+        status=StockReservationAllocationStatus.RESERVED,
+        reserved_quantity=quantity_value,
+        fulfilled_quantity=QUANTITY_ZERO,
+        released_quantity=QUANTITY_ZERO,
+        reserved_at=now,
+        notes=normalize_text(notes),
+        extra_data=extra_data or {},
+        created_by=actor,
+        updated_by=actor,
+    )
+    allocation.full_clean()
+
+    locked_stock_item.reserved_quantity = (
+        quantize_quantity(
+            locked_stock_item.reserved_quantity
+            + quantity_value
+        )
+    )
+    locked_stock_item.full_clean()
+
+    locked_serial.status = InventorySerialStatus.RESERVED
+
+    if actor is not None:
+        locked_serial.updated_by = actor
+
+    locked_serial.full_clean()
+
+    locked_stock_item.save(
+        update_fields=[
+            "reserved_quantity",
+            "updated_at",
+        ]
+    )
+    locked_serial.save(
+        update_fields=[
+            "status",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+    allocation.save()
+
+    _finalize_tracked_reservation_allocation(
+        reservation=locked_reservation,
+        quantity=quantity_value,
+        user=user,
+    )
+
+    return allocation
+
+
+# End Phase 22.3.3.1 - Batch and Serial Reservation Allocation
+# ============================================================

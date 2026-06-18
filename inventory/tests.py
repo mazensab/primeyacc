@@ -93,6 +93,11 @@ from inventory.models import (
     StockMovementDirection,
     StockMovementStatus,
     StockMovementType,
+    StockReservation,
+    StockReservationAllocation,
+    StockReservationAllocationStatus,
+    StockReservationSource,
+    StockReservationStatus,
     Warehouse,
     WarehouseStatus,
     WarehouseType,
@@ -154,6 +159,27 @@ from inventory.services import (
     validate_inventory_location_for_company,
     validate_item_for_inventory,
     validate_warehouse_for_company,
+    build_stock_reservation_allocation_payload,
+    build_stock_reservation_payload,
+    generate_stock_reservation_number,
+    get_company_stock_reservation_allocations,
+    get_company_stock_reservations,
+    validate_sales_order_for_stock_reservation,
+    validate_sales_order_item_for_stock_reservation,
+)
+
+
+from sales.services import create_sales_order
+
+
+from inventory.services import (
+    allocate_stock_reservation,
+    allocate_serial_stock_reservation,
+    allocate_batch_stock_reservation,
+    cancel_stock_reservation,
+    create_sales_order_stock_reservation,
+    expire_stock_reservation,
+    release_stock_reservation_allocation,
 )
 
 
@@ -5946,3 +5972,2541 @@ class InventoryTrackedTransferIntegrationTests(
                 ],
             ).exists()
         )
+
+# ============================================================
+# Phase 22.3.1 Stock Reservation Models Foundation Tests
+# ============================================================
+
+
+class StockReservationModelTests(InventoryTestBase):
+    """
+    Phase 22.3.1 stock reservation model foundation tests.
+
+    These tests validate ownership, allocation consistency,
+    quantities, and the rule that models do not mutate stock
+    balances directly.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        self.location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "RESERVATION-BIN-001",
+                "name": "Reservation Bin 001",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+                "is_pickable": True,
+            },
+            user=self.user,
+        )
+
+        self.stock_item = get_or_create_stock_item(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.product,
+            user=self.user,
+        )
+
+        self.order = create_sales_order(
+            company=self.company,
+            user=self.user,
+            branch_id=self.branch.id,
+            items=[
+                {
+                    "catalog_item_id": self.product.id,
+                    "quantity": "5.0000",
+                }
+            ],
+        )
+
+        self.order_item = self.order.items.get()
+
+    def _create_reservation(
+        self,
+        *,
+        company=None,
+        sales_order=None,
+        reservation_number="RSV-2026-000001",
+        requested_quantity="5.0000",
+        reserved_quantity="0.0000",
+        fulfilled_quantity="0.0000",
+        released_quantity="0.0000",
+        status=StockReservationStatus.DRAFT,
+    ):
+        return StockReservation.objects.create(
+            company=company or self.company,
+            sales_order=sales_order or self.order,
+            reservation_number=reservation_number,
+            status=status,
+            source=StockReservationSource.SALES_ORDER,
+            requested_quantity=Decimal(
+                requested_quantity
+            ),
+            reserved_quantity=Decimal(
+                reserved_quantity
+            ),
+            fulfilled_quantity=Decimal(
+                fulfilled_quantity
+            ),
+            released_quantity=Decimal(
+                released_quantity
+            ),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+    def test_create_stock_reservation_header(self):
+        reservation = self._create_reservation()
+
+        self.assertEqual(
+            reservation.company,
+            self.company,
+        )
+        self.assertEqual(
+            reservation.sales_order,
+            self.order,
+        )
+        self.assertEqual(
+            reservation.status,
+            StockReservationStatus.DRAFT,
+        )
+        self.assertEqual(
+            reservation.source,
+            StockReservationSource.SALES_ORDER,
+        )
+        self.assertEqual(
+            reservation.requested_quantity,
+            Decimal("5.0000"),
+        )
+        self.assertEqual(
+            reservation.unallocated_quantity,
+            Decimal("5.0000"),
+        )
+        self.assertEqual(
+            reservation.remaining_reserved_quantity,
+            Decimal("0.0000"),
+        )
+
+    def test_reservation_rejects_other_company_order(self):
+        other_order = create_sales_order(
+            company=self.other_company,
+            user=self.user,
+            branch_id=self.other_branch.id,
+            items=[
+                {
+                    "catalog_item_id": self.other_product.id,
+                    "quantity": "1.0000",
+                }
+            ],
+        )
+
+        reservation = StockReservation(
+            company=self.company,
+            sales_order=other_order,
+            reservation_number="RSV-CROSS-COMPANY",
+            requested_quantity=Decimal("1.0000"),
+        )
+
+        with self.assertRaises(ValidationError):
+            reservation.full_clean()
+
+    def test_reservation_rejects_reserved_above_requested(self):
+        reservation = StockReservation(
+            company=self.company,
+            sales_order=self.order,
+            reservation_number="RSV-OVER-REQUESTED",
+            requested_quantity=Decimal("2.0000"),
+            reserved_quantity=Decimal("3.0000"),
+        )
+
+        with self.assertRaises(ValidationError):
+            reservation.full_clean()
+
+    def test_reservation_quantity_properties(self):
+        reservation = self._create_reservation(
+            requested_quantity="5.0000",
+            reserved_quantity="4.0000",
+            fulfilled_quantity="1.0000",
+            released_quantity="1.0000",
+            status=(
+                StockReservationStatus
+                .PARTIALLY_FULFILLED
+            ),
+        )
+
+        self.assertEqual(
+            reservation.remaining_reserved_quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            reservation.unallocated_quantity,
+            Decimal("1.0000"),
+        )
+        self.assertTrue(
+            reservation.is_active,
+        )
+        self.assertFalse(
+            reservation.is_terminal,
+        )
+
+    def test_create_location_stock_allocation(self):
+        reservation = self._create_reservation(
+            reserved_quantity="2.0000",
+            status=(
+                StockReservationStatus
+                .PARTIALLY_ALLOCATED
+            ),
+        )
+
+        allocation = (
+            StockReservationAllocation.objects.create(
+                company=self.company,
+                reservation=reservation,
+                sales_order_item=self.order_item,
+                warehouse=self.warehouse,
+                location=self.location,
+                stock_item=self.stock_item,
+                item=self.product,
+                status=(
+                    StockReservationAllocationStatus
+                    .RESERVED
+                ),
+                reserved_quantity=Decimal("2.0000"),
+                created_by=self.user,
+                updated_by=self.user,
+            )
+        )
+
+        self.assertEqual(
+            allocation.reservation,
+            reservation,
+        )
+        self.assertEqual(
+            allocation.sales_order_item,
+            self.order_item,
+        )
+        self.assertEqual(
+            allocation.stock_item,
+            self.stock_item,
+        )
+        self.assertEqual(
+            allocation.warehouse,
+            self.warehouse,
+        )
+        self.assertEqual(
+            allocation.location,
+            self.location,
+        )
+        self.assertEqual(
+            allocation.remaining_reserved_quantity,
+            Decimal("2.0000"),
+        )
+        self.assertIsNotNone(
+            allocation.reserved_at,
+        )
+
+    def test_allocation_rejects_other_order_item(self):
+        second_order = create_sales_order(
+            company=self.company,
+            user=self.user,
+            branch_id=self.branch.id,
+            items=[
+                {
+                    "catalog_item_id": self.product.id,
+                    "quantity": "1.0000",
+                }
+            ],
+        )
+
+        reservation = self._create_reservation(
+            reserved_quantity="1.0000",
+            status=StockReservationStatus.ALLOCATED,
+        )
+
+        allocation = StockReservationAllocation(
+            company=self.company,
+            reservation=reservation,
+            sales_order_item=second_order.items.get(),
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.stock_item,
+            item=self.product,
+            reserved_quantity=Decimal("1.0000"),
+        )
+
+        with self.assertRaises(ValidationError):
+            allocation.full_clean()
+
+    def test_allocation_rejects_stock_location_mismatch(self):
+        second_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "RESERVATION-BIN-002",
+                "name": "Reservation Bin 002",
+                "location_type": InventoryLocationType.BIN,
+                "is_pickable": True,
+            },
+            user=self.user,
+        )
+
+        reservation = self._create_reservation(
+            reserved_quantity="1.0000",
+            status=StockReservationStatus.ALLOCATED,
+        )
+
+        allocation = StockReservationAllocation(
+            company=self.company,
+            reservation=reservation,
+            sales_order_item=self.order_item,
+            warehouse=self.warehouse,
+            location=second_location,
+            stock_item=self.stock_item,
+            item=self.product,
+            reserved_quantity=Decimal("1.0000"),
+        )
+
+        with self.assertRaises(ValidationError):
+            allocation.full_clean()
+
+    def test_allocation_rejects_non_pickable_location(self):
+        shipping_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "RESERVATION-SHIPPING",
+                "name": "Reservation Shipping",
+                "location_type": (
+                    InventoryLocationType.SHIPPING
+                ),
+                "is_shipping": True,
+                "is_pickable": False,
+            },
+            user=self.user,
+        )
+
+        shipping_stock = get_or_create_stock_item(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=shipping_location,
+            item=self.product,
+            user=self.user,
+        )
+
+        reservation = self._create_reservation(
+            reserved_quantity="1.0000",
+            status=StockReservationStatus.ALLOCATED,
+        )
+
+        allocation = StockReservationAllocation(
+            company=self.company,
+            reservation=reservation,
+            sales_order_item=self.order_item,
+            warehouse=self.warehouse,
+            location=shipping_location,
+            stock_item=shipping_stock,
+            item=self.product,
+            reserved_quantity=Decimal("1.0000"),
+        )
+
+        with self.assertRaises(ValidationError):
+            allocation.full_clean()
+
+    def test_allocation_rejects_consumed_above_reserved(self):
+        reservation = self._create_reservation(
+            reserved_quantity="2.0000",
+            status=StockReservationStatus.ALLOCATED,
+        )
+
+        allocation = StockReservationAllocation(
+            company=self.company,
+            reservation=reservation,
+            sales_order_item=self.order_item,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.stock_item,
+            item=self.product,
+            reserved_quantity=Decimal("2.0000"),
+            fulfilled_quantity=Decimal("1.5000"),
+            released_quantity=Decimal("1.0000"),
+        )
+
+        with self.assertRaises(ValidationError):
+            allocation.full_clean()
+
+    def test_models_do_not_mutate_stock_balances(self):
+        self.stock_item.quantity_on_hand = Decimal(
+            "10.0000"
+        )
+        self.stock_item.reserved_quantity = Decimal(
+            "0.0000"
+        )
+        self.stock_item.save(
+            update_fields=[
+                "quantity_on_hand",
+                "reserved_quantity",
+                "updated_at",
+            ]
+        )
+
+        reservation = self._create_reservation(
+            reserved_quantity="3.0000",
+            status=(
+                StockReservationStatus
+                .PARTIALLY_ALLOCATED
+            ),
+        )
+
+        StockReservationAllocation.objects.create(
+            company=self.company,
+            reservation=reservation,
+            sales_order_item=self.order_item,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.stock_item,
+            item=self.product,
+            status=(
+                StockReservationAllocationStatus
+                .RESERVED
+            ),
+            reserved_quantity=Decimal("3.0000"),
+        )
+
+        self.stock_item.refresh_from_db()
+
+        self.assertEqual(
+            self.stock_item.quantity_on_hand,
+            Decimal("10.0000"),
+        )
+        self.assertEqual(
+            self.stock_item.reserved_quantity,
+            Decimal("0.0000"),
+        )
+
+
+# End Phase 22.3.1 Stock Reservation Models Foundation Tests
+# ============================================================
+
+# ============================================================
+# Phase 22.3.2.1 Stock Reservation Service Foundation Tests
+# ============================================================
+
+
+class StockReservationServiceFoundationTests(
+    InventoryTestBase
+):
+    """
+    Service tests for reservation numbering, company queries,
+    sales order validation, and payload builders.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        self.product.track_inventory = True
+        self.product.save(
+            update_fields=[
+                "track_inventory",
+                "updated_at",
+            ]
+        )
+
+        self.location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "SERVICE-RES-BIN",
+                "name": "Service Reservation Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+                "is_pickable": True,
+            },
+            user=self.user,
+        )
+
+        self.stock_item = get_or_create_stock_item(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.product,
+            user=self.user,
+        )
+
+        self.order = create_sales_order(
+            company=self.company,
+            user=self.user,
+            branch_id=self.branch.id,
+            items=[
+                {
+                    "catalog_item_id": self.product.id,
+                    "quantity": "4.0000",
+                }
+            ],
+        )
+
+        self.order_item = self.order.items.get()
+
+    def _confirm_order(self):
+        self.order.status = "CONFIRMED"
+        self.order.save(
+            update_fields=[
+                "status",
+                "updated_at",
+            ]
+        )
+        self.order.refresh_from_db()
+
+    def _create_reservation(
+        self,
+        *,
+        number="RSV-SERVICE-001",
+        requested="4.0000",
+        reserved="0.0000",
+        status=StockReservationStatus.DRAFT,
+    ):
+        return StockReservation.objects.create(
+            company=self.company,
+            sales_order=self.order,
+            reservation_number=number,
+            source=StockReservationSource.SALES_ORDER,
+            status=status,
+            requested_quantity=Decimal(requested),
+            reserved_quantity=Decimal(reserved),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+    def test_generate_stock_reservation_number(self):
+        self.assertEqual(
+            generate_stock_reservation_number(
+                self.company
+            ),
+            "RSV-000001",
+        )
+
+        self._create_reservation()
+
+        self.assertEqual(
+            generate_stock_reservation_number(
+                self.company
+            ),
+            "RSV-000002",
+        )
+
+    def test_reservation_queries_are_company_scoped(self):
+        reservation = self._create_reservation()
+
+        own_ids = set(
+            get_company_stock_reservations(
+                self.company
+            ).values_list(
+                "id",
+                flat=True,
+            )
+        )
+
+        other_ids = set(
+            get_company_stock_reservations(
+                self.other_company
+            ).values_list(
+                "id",
+                flat=True,
+            )
+        )
+
+        self.assertIn(
+            reservation.id,
+            own_ids,
+        )
+        self.assertNotIn(
+            reservation.id,
+            other_ids,
+        )
+
+    def test_draft_sales_order_is_not_reservable(self):
+        with self.assertRaises(ValidationError):
+            validate_sales_order_for_stock_reservation(
+                company=self.company,
+                sales_order=self.order,
+            )
+
+    def test_confirmed_sales_order_is_reservable(self):
+        self._confirm_order()
+
+        validate_sales_order_for_stock_reservation(
+            company=self.company,
+            sales_order=self.order,
+        )
+
+    def test_sales_order_validation_rejects_other_company(self):
+        with self.assertRaises(ValidationError):
+            validate_sales_order_for_stock_reservation(
+                company=self.other_company,
+                sales_order=self.order,
+                require_reservable_status=False,
+            )
+
+    def test_sales_order_item_validation_accepts_stock_item(
+        self,
+    ):
+        self._confirm_order()
+
+        validate_sales_order_item_for_stock_reservation(
+            company=self.company,
+            sales_order=self.order,
+            sales_order_item=self.order_item,
+        )
+
+    def test_reservation_payload_without_allocations(self):
+        reservation = self._create_reservation()
+
+        payload = build_stock_reservation_payload(
+            reservation,
+        )
+
+        self.assertEqual(
+            payload["id"],
+            reservation.id,
+        )
+        self.assertEqual(
+            payload["company_id"],
+            self.company.id,
+        )
+        self.assertEqual(
+            payload["sales_order_id"],
+            self.order.id,
+        )
+        self.assertEqual(
+            payload["reservation_number"],
+            "RSV-SERVICE-001",
+        )
+        self.assertEqual(
+            payload["requested_quantity"],
+            "4.0000",
+        )
+        self.assertNotIn(
+            "allocations",
+            payload,
+        )
+
+    def test_allocation_query_and_payload(self):
+        reservation = self._create_reservation(
+            reserved="2.0000",
+            status=(
+                StockReservationStatus
+                .PARTIALLY_ALLOCATED
+            ),
+        )
+
+        allocation = (
+            StockReservationAllocation.objects.create(
+                company=self.company,
+                reservation=reservation,
+                sales_order_item=self.order_item,
+                warehouse=self.warehouse,
+                location=self.location,
+                stock_item=self.stock_item,
+                item=self.product,
+                status=(
+                    StockReservationAllocationStatus
+                    .RESERVED
+                ),
+                reserved_quantity=Decimal("2.0000"),
+                created_by=self.user,
+                updated_by=self.user,
+            )
+        )
+
+        allocation_ids = set(
+            get_company_stock_reservation_allocations(
+                self.company
+            ).values_list(
+                "id",
+                flat=True,
+            )
+        )
+
+        self.assertIn(
+            allocation.id,
+            allocation_ids,
+        )
+
+        allocation_payload = (
+            build_stock_reservation_allocation_payload(
+                allocation
+            )
+        )
+
+        self.assertEqual(
+            allocation_payload["id"],
+            allocation.id,
+        )
+        self.assertEqual(
+            allocation_payload["location_id"],
+            self.location.id,
+        )
+        self.assertEqual(
+            allocation_payload["reserved_quantity"],
+            "2.0000",
+        )
+
+        reservation_payload = (
+            build_stock_reservation_payload(
+                reservation,
+                include_allocations=True,
+            )
+        )
+
+        self.assertEqual(
+            len(reservation_payload["allocations"]),
+            1,
+        )
+        self.assertEqual(
+            reservation_payload[
+                "allocations"
+            ][0]["id"],
+            allocation.id,
+        )
+
+
+# End Phase 22.3.2.1 Stock Reservation Service Foundation Tests
+# ============================================================
+
+# ============================================================
+# Phase 22.3.2.2 Atomic Stock Reservation Allocation Tests
+# ============================================================
+
+
+class AtomicStockReservationAllocationTests(
+    InventoryTestBase
+):
+    """
+    Verify atomic reservation creation and location-level stock
+    allocation without creating StockMovement rows.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        self.product.track_inventory = True
+        self.product.save(
+            update_fields=[
+                "track_inventory",
+                "updated_at",
+            ]
+        )
+
+        self.location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "ATOMIC-RES-BIN",
+                "name": "Atomic Reservation Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+                "is_pickable": True,
+            },
+            user=self.user,
+        )
+
+        self.stock_item = get_or_create_stock_item(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.product,
+            user=self.user,
+        )
+
+        self.stock_item.quantity_on_hand = Decimal(
+            "10.0000"
+        )
+        self.stock_item.reserved_quantity = Decimal(
+            "0.0000"
+        )
+        self.stock_item.save(
+            update_fields=[
+                "quantity_on_hand",
+                "reserved_quantity",
+                "updated_at",
+            ]
+        )
+
+        self.order = create_sales_order(
+            company=self.company,
+            user=self.user,
+            branch_id=self.branch.id,
+            items=[
+                {
+                    "catalog_item_id": self.product.id,
+                    "quantity": "4.0000",
+                }
+            ],
+        )
+
+        self.order.status = "CONFIRMED"
+        self.order.save(
+            update_fields=[
+                "status",
+                "updated_at",
+            ]
+        )
+        self.order.refresh_from_db()
+
+        self.order_item = self.order.items.get()
+
+    def _create_reservation(self):
+        return create_sales_order_stock_reservation(
+            company=self.company,
+            sales_order=self.order,
+            notes="Atomic reservation test",
+            user=self.user,
+        )
+
+    def test_create_reservation_header_from_sales_order(self):
+        movement_count = StockMovement.objects.count()
+
+        reservation = self._create_reservation()
+
+        self.assertEqual(
+            reservation.company,
+            self.company,
+        )
+        self.assertEqual(
+            reservation.sales_order,
+            self.order,
+        )
+        self.assertEqual(
+            reservation.status,
+            StockReservationStatus.DRAFT,
+        )
+        self.assertEqual(
+            reservation.requested_quantity,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            reservation.reserved_quantity,
+            Decimal("0.0000"),
+        )
+
+        self.stock_item.refresh_from_db()
+
+        self.assertEqual(
+            self.stock_item.reserved_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            StockMovement.objects.count(),
+            movement_count,
+        )
+
+    def test_duplicate_active_reservation_is_rejected(self):
+        self._create_reservation()
+
+        with self.assertRaises(ValidationError):
+            self._create_reservation()
+
+        self.assertEqual(
+            StockReservation.objects.filter(
+                company=self.company,
+                sales_order=self.order,
+            ).count(),
+            1,
+        )
+
+    def test_partial_allocation_updates_reserved_quantity(self):
+        reservation = self._create_reservation()
+        movement_count = StockMovement.objects.count()
+
+        allocation = allocate_stock_reservation(
+            company=self.company,
+            reservation=reservation,
+            sales_order_item=self.order_item,
+            stock_item=self.stock_item,
+            quantity="2.0000",
+            user=self.user,
+        )
+
+        self.stock_item.refresh_from_db()
+        reservation.refresh_from_db()
+
+        self.assertEqual(
+            allocation.status,
+            StockReservationAllocationStatus.RESERVED,
+        )
+        self.assertEqual(
+            allocation.reserved_quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            self.stock_item.quantity_on_hand,
+            Decimal("10.0000"),
+        )
+        self.assertEqual(
+            self.stock_item.reserved_quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            self.stock_item.available_quantity,
+            Decimal("8.0000"),
+        )
+        self.assertEqual(
+            reservation.reserved_quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            reservation.status,
+            StockReservationStatus.PARTIALLY_ALLOCATED,
+        )
+        self.assertIsNotNone(
+            reservation.allocated_at,
+        )
+        self.assertEqual(
+            StockMovement.objects.count(),
+            movement_count,
+        )
+
+    def test_full_allocation_marks_reservation_allocated(self):
+        reservation = self._create_reservation()
+
+        allocation = allocate_stock_reservation(
+            company=self.company,
+            reservation=reservation,
+            sales_order_item=self.order_item,
+            stock_item=self.stock_item,
+            quantity="4.0000",
+            user=self.user,
+        )
+
+        self.stock_item.refresh_from_db()
+        reservation.refresh_from_db()
+
+        self.assertEqual(
+            allocation.reserved_quantity,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            self.stock_item.reserved_quantity,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            reservation.reserved_quantity,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            reservation.status,
+            StockReservationStatus.ALLOCATED,
+        )
+        self.assertEqual(
+            reservation.unallocated_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            reservation.allocated_by,
+            self.user,
+        )
+
+    def test_insufficient_available_stock_rolls_back(self):
+        self.stock_item.quantity_on_hand = Decimal(
+            "2.0000"
+        )
+        self.stock_item.save(
+            update_fields=[
+                "quantity_on_hand",
+                "updated_at",
+            ]
+        )
+
+        reservation = self._create_reservation()
+
+        with self.assertRaises(ValidationError):
+            allocate_stock_reservation(
+                company=self.company,
+                reservation=reservation,
+                sales_order_item=self.order_item,
+                stock_item=self.stock_item,
+                quantity="3.0000",
+                user=self.user,
+            )
+
+        self.stock_item.refresh_from_db()
+        reservation.refresh_from_db()
+
+        self.assertEqual(
+            self.stock_item.reserved_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            reservation.reserved_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            reservation.status,
+            StockReservationStatus.DRAFT,
+        )
+        self.assertFalse(
+            StockReservationAllocation.objects.filter(
+                reservation=reservation,
+            ).exists()
+        )
+
+    def test_allocation_cannot_exceed_order_line_quantity(self):
+        reservation = self._create_reservation()
+
+        allocate_stock_reservation(
+            company=self.company,
+            reservation=reservation,
+            sales_order_item=self.order_item,
+            stock_item=self.stock_item,
+            quantity="3.0000",
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            allocate_stock_reservation(
+                company=self.company,
+                reservation=reservation,
+                sales_order_item=self.order_item,
+                stock_item=self.stock_item,
+                quantity="2.0000",
+                user=self.user,
+            )
+
+        self.stock_item.refresh_from_db()
+        reservation.refresh_from_db()
+
+        self.assertEqual(
+            self.stock_item.reserved_quantity,
+            Decimal("3.0000"),
+        )
+        self.assertEqual(
+            reservation.reserved_quantity,
+            Decimal("3.0000"),
+        )
+        self.assertEqual(
+            reservation.allocations.count(),
+            1,
+        )
+
+    def test_allocation_rejects_stock_item_for_other_item(self):
+        other_item = CatalogItem.objects.get(
+            id=self.product.id,
+        )
+        other_item.pk = None
+        other_item.id = None
+        other_item.company = self.company
+        other_item.code = "ATOMIC-OTHER-PRODUCT"
+        other_item.sku = "ATOMIC-OTHER-SKU"
+        other_item.barcode = ""
+        other_item.name = "Atomic Other Product"
+        other_item.name_ar = "??? ??? ???"
+        other_item.name_en = "Atomic Other Product"
+        other_item.track_inventory = True
+        other_item.save()
+
+        other_stock_item = get_or_create_stock_item(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=other_item,
+            user=self.user,
+        )
+        other_stock_item.quantity_on_hand = Decimal(
+            "10.0000"
+        )
+        other_stock_item.save(
+            update_fields=[
+                "quantity_on_hand",
+                "updated_at",
+            ]
+        )
+
+        reservation = self._create_reservation()
+
+        with self.assertRaises(ValidationError):
+            allocate_stock_reservation(
+                company=self.company,
+                reservation=reservation,
+                sales_order_item=self.order_item,
+                stock_item=other_stock_item,
+                quantity="1.0000",
+                user=self.user,
+            )
+
+        other_stock_item.refresh_from_db()
+        reservation.refresh_from_db()
+
+        self.assertEqual(
+            other_stock_item.reserved_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            reservation.reserved_quantity,
+            Decimal("0.0000"),
+        )
+
+    def test_allocated_reservation_rejects_more_allocations(self):
+        reservation = self._create_reservation()
+
+        allocate_stock_reservation(
+            company=self.company,
+            reservation=reservation,
+            sales_order_item=self.order_item,
+            stock_item=self.stock_item,
+            quantity="4.0000",
+            user=self.user,
+        )
+
+        reservation.refresh_from_db()
+
+        with self.assertRaises(ValidationError):
+            allocate_stock_reservation(
+                company=self.company,
+                reservation=reservation,
+                sales_order_item=self.order_item,
+                stock_item=self.stock_item,
+                quantity="1.0000",
+                user=self.user,
+            )
+
+        self.stock_item.refresh_from_db()
+
+        self.assertEqual(
+            self.stock_item.reserved_quantity,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            reservation.allocations.count(),
+            1,
+        )
+
+
+# End Phase 22.3.2.2 Atomic Stock Reservation Allocation Tests
+# ============================================================
+
+# ============================================================
+# Phase 22.3.2.3 Reservation Release Lifecycle Tests
+# ============================================================
+
+
+class StockReservationReleaseLifecycleTests(
+    InventoryTestBase
+):
+    """
+    Verify reservation release, cancellation, and expiry.
+
+    These operations must return reserved stock availability
+    without changing quantity_on_hand or creating StockMovement.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        self.location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "RELEASE-RES-BIN",
+                "name": "Release Reservation Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+                "is_pickable": True,
+            },
+            user=self.user,
+        )
+
+        self.stock_item = get_or_create_stock_item(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.product,
+            user=self.user,
+        )
+
+        self.stock_item.quantity_on_hand = Decimal(
+            "10.0000"
+        )
+        self.stock_item.reserved_quantity = Decimal(
+            "0.0000"
+        )
+        self.stock_item.save(
+            update_fields=[
+                "quantity_on_hand",
+                "reserved_quantity",
+                "updated_at",
+            ]
+        )
+
+        self.order = create_sales_order(
+            company=self.company,
+            user=self.user,
+            branch_id=self.branch.id,
+            items=[
+                {
+                    "catalog_item_id": self.product.id,
+                    "quantity": "4.0000",
+                }
+            ],
+        )
+
+        self.order.status = "CONFIRMED"
+        self.order.save(
+            update_fields=[
+                "status",
+                "updated_at",
+            ]
+        )
+        self.order.refresh_from_db()
+
+        self.order_item = self.order.items.get()
+
+    def _create_reservation(
+        self,
+        *,
+        expires_at=None,
+    ):
+        return create_sales_order_stock_reservation(
+            company=self.company,
+            sales_order=self.order,
+            expires_at=expires_at,
+            notes="Release lifecycle test",
+            user=self.user,
+        )
+
+    def _allocate(
+        self,
+        *,
+        quantity="4.0000",
+        expires_at=None,
+    ):
+        reservation = self._create_reservation(
+            expires_at=expires_at,
+        )
+
+        allocation = allocate_stock_reservation(
+            company=self.company,
+            reservation=reservation,
+            sales_order_item=self.order_item,
+            stock_item=self.stock_item,
+            quantity=quantity,
+            user=self.user,
+        )
+
+        return reservation, allocation
+
+    def test_partial_allocation_release_returns_stock_availability(
+        self,
+    ):
+        reservation, allocation = self._allocate()
+        movement_count = StockMovement.objects.count()
+
+        released = release_stock_reservation_allocation(
+            company=self.company,
+            allocation=allocation,
+            quantity="1.5000",
+            reason="Partial customer adjustment",
+            user=self.user,
+        )
+
+        self.stock_item.refresh_from_db()
+        reservation.refresh_from_db()
+
+        self.assertEqual(
+            released.released_quantity,
+            Decimal("1.5000"),
+        )
+        self.assertEqual(
+            released.remaining_reserved_quantity,
+            Decimal("2.5000"),
+        )
+        self.assertEqual(
+            released.status,
+            StockReservationAllocationStatus.RESERVED,
+        )
+        self.assertEqual(
+            self.stock_item.quantity_on_hand,
+            Decimal("10.0000"),
+        )
+        self.assertEqual(
+            self.stock_item.reserved_quantity,
+            Decimal("2.5000"),
+        )
+        self.assertEqual(
+            self.stock_item.available_quantity,
+            Decimal("7.5000"),
+        )
+        self.assertEqual(
+            reservation.released_quantity,
+            Decimal("1.5000"),
+        )
+        self.assertEqual(
+            reservation.remaining_reserved_quantity,
+            Decimal("2.5000"),
+        )
+        self.assertEqual(
+            StockMovement.objects.count(),
+            movement_count,
+        )
+
+    def test_full_allocation_release_marks_records_released(
+        self,
+    ):
+        reservation, allocation = self._allocate()
+
+        released = release_stock_reservation_allocation(
+            company=self.company,
+            allocation=allocation,
+            reason="Full release",
+            user=self.user,
+        )
+
+        self.stock_item.refresh_from_db()
+        reservation.refresh_from_db()
+
+        self.assertEqual(
+            released.status,
+            StockReservationAllocationStatus.RELEASED,
+        )
+        self.assertEqual(
+            released.released_quantity,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            released.remaining_reserved_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            reservation.status,
+            StockReservationStatus.RELEASED,
+        )
+        self.assertEqual(
+            reservation.released_quantity,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            reservation.remaining_reserved_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            self.stock_item.reserved_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            self.stock_item.quantity_on_hand,
+            Decimal("10.0000"),
+        )
+        self.assertIsNotNone(
+            reservation.released_at,
+        )
+
+    def test_release_rejects_quantity_above_remaining(
+        self,
+    ):
+        reservation, allocation = self._allocate(
+            quantity="2.0000",
+        )
+
+        with self.assertRaises(ValidationError):
+            release_stock_reservation_allocation(
+                company=self.company,
+                allocation=allocation,
+                quantity="3.0000",
+                user=self.user,
+            )
+
+        self.stock_item.refresh_from_db()
+        reservation.refresh_from_db()
+        allocation.refresh_from_db()
+
+        self.assertEqual(
+            self.stock_item.reserved_quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            reservation.released_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            allocation.released_quantity,
+            Decimal("0.0000"),
+        )
+
+    def test_fully_released_allocation_cannot_release_again(
+        self,
+    ):
+        _reservation, allocation = self._allocate(
+            quantity="2.0000",
+        )
+
+        release_stock_reservation_allocation(
+            company=self.company,
+            allocation=allocation,
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            release_stock_reservation_allocation(
+                company=self.company,
+                allocation=allocation,
+                quantity="1.0000",
+                user=self.user,
+            )
+
+        self.stock_item.refresh_from_db()
+
+        self.assertEqual(
+            self.stock_item.reserved_quantity,
+            Decimal("0.0000"),
+        )
+
+    def test_cancel_reservation_releases_all_stock(
+        self,
+    ):
+        reservation, allocation = self._allocate()
+        movement_count = StockMovement.objects.count()
+
+        cancelled = cancel_stock_reservation(
+            company=self.company,
+            reservation=reservation,
+            reason="Sales order cancelled",
+            user=self.user,
+        )
+
+        self.stock_item.refresh_from_db()
+        allocation.refresh_from_db()
+
+        self.assertEqual(
+            cancelled.status,
+            StockReservationStatus.CANCELLED,
+        )
+        self.assertEqual(
+            cancelled.released_quantity,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            allocation.status,
+            StockReservationAllocationStatus.CANCELLED,
+        )
+        self.assertEqual(
+            allocation.released_quantity,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            self.stock_item.reserved_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            self.stock_item.quantity_on_hand,
+            Decimal("10.0000"),
+        )
+        self.assertIsNotNone(
+            cancelled.cancelled_at,
+        )
+        self.assertEqual(
+            cancelled.cancelled_by,
+            self.user,
+        )
+        self.assertEqual(
+            StockMovement.objects.count(),
+            movement_count,
+        )
+
+    def test_cancelled_reservation_cannot_be_cancelled_again(
+        self,
+    ):
+        reservation, _allocation = self._allocate()
+
+        cancel_stock_reservation(
+            company=self.company,
+            reservation=reservation,
+            reason="First cancellation",
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            cancel_stock_reservation(
+                company=self.company,
+                reservation=reservation,
+                reason="Second cancellation",
+                user=self.user,
+            )
+
+        self.stock_item.refresh_from_db()
+
+        self.assertEqual(
+            self.stock_item.reserved_quantity,
+            Decimal("0.0000"),
+        )
+
+    def test_expire_reservation_releases_all_stock(
+        self,
+    ):
+        reservation, allocation = self._allocate(
+            expires_at=(
+                timezone.now()
+                + timedelta(hours=1)
+            ),
+        )
+
+        simulated_created_at = (
+            timezone.now()
+            - timedelta(hours=2)
+        )
+        simulated_expires_at = (
+            timezone.now()
+            - timedelta(minutes=5)
+        )
+
+        StockReservation.objects.filter(
+            id=reservation.id,
+            company=self.company,
+        ).update(
+            created_at=simulated_created_at,
+            expires_at=simulated_expires_at,
+        )
+        reservation.refresh_from_db()
+
+        movement_count = StockMovement.objects.count()
+
+        expired = expire_stock_reservation(
+            company=self.company,
+            reservation=reservation,
+            reason="Reservation timeout",
+            user=self.user,
+        )
+
+        self.stock_item.refresh_from_db()
+        allocation.refresh_from_db()
+
+        self.assertEqual(
+            expired.status,
+            StockReservationStatus.EXPIRED,
+        )
+        self.assertEqual(
+            expired.released_quantity,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            allocation.status,
+            StockReservationAllocationStatus.RELEASED,
+        )
+        self.assertEqual(
+            allocation.released_quantity,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            self.stock_item.reserved_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            self.stock_item.quantity_on_hand,
+            Decimal("10.0000"),
+        )
+        self.assertIsNotNone(
+            expired.expired_at,
+        )
+        self.assertEqual(
+            StockMovement.objects.count(),
+            movement_count,
+        )
+
+    def test_future_reservation_cannot_expire_early(
+        self,
+    ):
+        reservation, allocation = self._allocate(
+            expires_at=(
+                timezone.now()
+                + timedelta(hours=2)
+            ),
+        )
+
+        with self.assertRaises(ValidationError):
+            expire_stock_reservation(
+                company=self.company,
+                reservation=reservation,
+                user=self.user,
+            )
+
+        self.stock_item.refresh_from_db()
+        reservation.refresh_from_db()
+        allocation.refresh_from_db()
+
+        self.assertEqual(
+            reservation.status,
+            StockReservationStatus.ALLOCATED,
+        )
+        self.assertEqual(
+            allocation.status,
+            StockReservationAllocationStatus.RESERVED,
+        )
+        self.assertEqual(
+            reservation.released_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            allocation.released_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            self.stock_item.reserved_quantity,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            self.stock_item.quantity_on_hand,
+            Decimal("10.0000"),
+        )
+
+
+# End Phase 22.3.2.3 Reservation Release Lifecycle Tests
+# ============================================================
+
+# ============================================================
+# Phase 22.3.3 - Batch Serial Allocation and Release Tests
+# ============================================================
+
+
+class TrackedStockReservationLifecycleTests(
+    InventoryTestBase
+):
+    """
+    Verify batch and serial reservation allocation, release,
+    cancellation, expiry, tenant isolation, and ledger safety.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        self.location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "TRACKED-RESERVATION-BIN",
+                "name": "Tracked Reservation Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+                "is_pickable": True,
+            },
+            user=self.user,
+        )
+
+        self.batch_product = CatalogItem.objects.create(
+            company=self.company,
+            unit=self.unit,
+            item_type=CatalogItemType.PRODUCT,
+            code="RES-BATCH-ITEM",
+            sku="RES-BATCH-SKU",
+            barcode="RES-BATCH-BAR",
+            name="Reservation Batch Product",
+            purchase_price=Decimal("15.00"),
+            cost_price=Decimal("15.00"),
+            sale_price=Decimal("25.00"),
+            track_inventory=True,
+            inventory_tracking_method=(
+                CatalogItemTrackingMethod.BATCH
+            ),
+            track_expiry_dates=True,
+            is_purchasable=True,
+            is_sellable=True,
+        )
+
+        self.serial_product = CatalogItem.objects.create(
+            company=self.company,
+            unit=self.unit,
+            item_type=CatalogItemType.PRODUCT,
+            code="RES-SERIAL-ITEM",
+            sku="RES-SERIAL-SKU",
+            barcode="RES-SERIAL-BAR",
+            name="Reservation Serial Product",
+            purchase_price=Decimal("50.00"),
+            cost_price=Decimal("50.00"),
+            sale_price=Decimal("75.00"),
+            track_inventory=True,
+            inventory_tracking_method=(
+                CatalogItemTrackingMethod.SERIAL
+            ),
+            track_expiry_dates=False,
+            is_purchasable=True,
+            is_sellable=True,
+        )
+
+        self.batch_stock_item = get_or_create_stock_item(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.batch_product,
+            user=self.user,
+        )
+        self.batch_stock_item.quantity_on_hand = Decimal(
+            "10.0000"
+        )
+        self.batch_stock_item.save(
+            update_fields=[
+                "quantity_on_hand",
+                "updated_at",
+            ]
+        )
+
+        self.batch = create_inventory_batch(
+            company=self.company,
+            item=self.batch_product,
+            batch_number="RES-BATCH-001",
+            manufactured_at=timezone.localdate(),
+            expiry_date=(
+                timezone.localdate()
+                + timedelta(days=365)
+            ),
+            user=self.user,
+        )
+
+        self.batch_balance = (
+            InventoryBatchBalance.objects.create(
+                company=self.company,
+                warehouse=self.warehouse,
+                location=self.location,
+                stock_item=self.batch_stock_item,
+                item=self.batch_product,
+                batch=self.batch,
+                quantity_on_hand=Decimal("10.0000"),
+                reserved_quantity=Decimal("0.0000"),
+                average_cost=Decimal("15.00"),
+            )
+        )
+
+        self.serial_stock_item = get_or_create_stock_item(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.serial_product,
+            user=self.user,
+        )
+        self.serial_stock_item.quantity_on_hand = Decimal(
+            "2.0000"
+        )
+        self.serial_stock_item.save(
+            update_fields=[
+                "quantity_on_hand",
+                "updated_at",
+            ]
+        )
+
+        self.serial_one = register_inventory_serial_number(
+            company=self.company,
+            item=self.serial_product,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.serial_stock_item,
+            serial_number="RES-SERIAL-001",
+            unit_cost="50.00",
+            user=self.user,
+        )
+        self.serial_two = register_inventory_serial_number(
+            company=self.company,
+            item=self.serial_product,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.serial_stock_item,
+            serial_number="RES-SERIAL-002",
+            unit_cost="50.00",
+            user=self.user,
+        )
+
+    def _create_order_reservation(
+        self,
+        *,
+        item,
+        quantity,
+        expires_at=None,
+    ):
+        order = create_sales_order(
+            company=self.company,
+            user=self.user,
+            branch_id=self.branch.id,
+            items=[
+                {
+                    "catalog_item_id": item.id,
+                    "quantity": str(quantity),
+                }
+            ],
+        )
+        order.status = "CONFIRMED"
+        order.save(
+            update_fields=[
+                "status",
+                "updated_at",
+            ]
+        )
+        order.refresh_from_db()
+
+        reservation = create_sales_order_stock_reservation(
+            company=self.company,
+            sales_order=order,
+            expires_at=expires_at,
+            user=self.user,
+        )
+
+        return order, order.items.get(), reservation
+
+    def _allocate_batch(
+        self,
+        *,
+        quantity="4.0000",
+        expires_at=None,
+    ):
+        _order, order_item, reservation = (
+            self._create_order_reservation(
+                item=self.batch_product,
+                quantity=quantity,
+                expires_at=expires_at,
+            )
+        )
+
+        allocation = allocate_batch_stock_reservation(
+            company=self.company,
+            reservation=reservation,
+            sales_order_item=order_item,
+            batch_balance=self.batch_balance,
+            quantity=quantity,
+            user=self.user,
+        )
+
+        return reservation, allocation
+
+    def _allocate_serial(
+        self,
+        *,
+        serial=None,
+        expires_at=None,
+    ):
+        serial = serial or self.serial_one
+
+        _order, order_item, reservation = (
+            self._create_order_reservation(
+                item=self.serial_product,
+                quantity="1.0000",
+                expires_at=expires_at,
+            )
+        )
+
+        allocation = allocate_serial_stock_reservation(
+            company=self.company,
+            reservation=reservation,
+            sales_order_item=order_item,
+            serial_number=serial,
+            user=self.user,
+        )
+
+        return reservation, allocation
+
+    def test_batch_allocation_updates_both_reserved_balances(self):
+        movement_count = StockMovement.objects.count()
+
+        reservation, allocation = self._allocate_batch()
+
+        self.batch_stock_item.refresh_from_db()
+        self.batch_balance.refresh_from_db()
+        reservation.refresh_from_db()
+
+        self.assertEqual(
+            allocation.batch,
+            self.batch,
+        )
+        self.assertIsNone(allocation.serial_number)
+        self.assertEqual(
+            self.batch_stock_item.reserved_quantity,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            self.batch_balance.reserved_quantity,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            self.batch_stock_item.quantity_on_hand,
+            Decimal("10.0000"),
+        )
+        self.assertEqual(
+            self.batch_balance.quantity_on_hand,
+            Decimal("10.0000"),
+        )
+        self.assertEqual(
+            reservation.status,
+            StockReservationStatus.ALLOCATED,
+        )
+        self.assertEqual(
+            StockMovement.objects.count(),
+            movement_count,
+        )
+
+    def test_expired_batch_allocation_is_rejected_atomically(self):
+        expired_batch = InventoryBatch.objects.create(
+            company=self.company,
+            item=self.batch_product,
+            batch_number="RES-BATCH-EXPIRED",
+            manufactured_at=(
+                timezone.localdate()
+                - timedelta(days=30)
+            ),
+            expiry_date=(
+                timezone.localdate()
+                - timedelta(days=1)
+            ),
+        )
+
+        expired_balance = InventoryBatchBalance.objects.create(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.batch_stock_item,
+            item=self.batch_product,
+            batch=expired_batch,
+            quantity_on_hand=Decimal("5.0000"),
+            reserved_quantity=Decimal("0.0000"),
+        )
+
+        _order, order_item, reservation = (
+            self._create_order_reservation(
+                item=self.batch_product,
+                quantity="2.0000",
+            )
+        )
+
+        with self.assertRaises(ValidationError):
+            allocate_batch_stock_reservation(
+                company=self.company,
+                reservation=reservation,
+                sales_order_item=order_item,
+                batch_balance=expired_balance,
+                quantity="2.0000",
+                user=self.user,
+            )
+
+        self.batch_stock_item.refresh_from_db()
+        expired_balance.refresh_from_db()
+        reservation.refresh_from_db()
+
+        self.assertEqual(
+            self.batch_stock_item.reserved_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            expired_balance.reserved_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            reservation.reserved_quantity,
+            Decimal("0.0000"),
+        )
+
+    def test_batch_partial_release_updates_both_balances(self):
+        reservation, allocation = self._allocate_batch()
+
+        released = release_stock_reservation_allocation(
+            company=self.company,
+            allocation=allocation,
+            quantity="1.5000",
+            reason="Partial tracked release",
+            user=self.user,
+        )
+
+        self.batch_stock_item.refresh_from_db()
+        self.batch_balance.refresh_from_db()
+        reservation.refresh_from_db()
+
+        self.assertEqual(
+            released.released_quantity,
+            Decimal("1.5000"),
+        )
+        self.assertEqual(
+            self.batch_stock_item.reserved_quantity,
+            Decimal("2.5000"),
+        )
+        self.assertEqual(
+            self.batch_balance.reserved_quantity,
+            Decimal("2.5000"),
+        )
+        self.assertEqual(
+            self.batch_stock_item.quantity_on_hand,
+            Decimal("10.0000"),
+        )
+
+    def test_batch_cancellation_releases_all_balances(self):
+        reservation, allocation = self._allocate_batch()
+        movement_count = StockMovement.objects.count()
+
+        cancelled = cancel_stock_reservation(
+            company=self.company,
+            reservation=reservation,
+            reason="Cancel tracked batch reservation",
+            user=self.user,
+        )
+
+        self.batch_stock_item.refresh_from_db()
+        self.batch_balance.refresh_from_db()
+        allocation.refresh_from_db()
+
+        self.assertEqual(
+            cancelled.status,
+            StockReservationStatus.CANCELLED,
+        )
+        self.assertEqual(
+            allocation.status,
+            StockReservationAllocationStatus.CANCELLED,
+        )
+        self.assertEqual(
+            self.batch_stock_item.reserved_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            self.batch_balance.reserved_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            StockMovement.objects.count(),
+            movement_count,
+        )
+
+    def test_serial_allocation_reserves_serial_and_stock(self):
+        movement_count = StockMovement.objects.count()
+
+        reservation, allocation = self._allocate_serial()
+
+        self.serial_one.refresh_from_db()
+        self.serial_stock_item.refresh_from_db()
+        reservation.refresh_from_db()
+
+        self.assertEqual(
+            allocation.serial_number,
+            self.serial_one,
+        )
+        self.assertIsNone(allocation.batch)
+        self.assertEqual(
+            allocation.reserved_quantity,
+            Decimal("1.0000"),
+        )
+        self.assertEqual(
+            self.serial_one.status,
+            InventorySerialStatus.RESERVED,
+        )
+        self.assertEqual(
+            self.serial_stock_item.reserved_quantity,
+            Decimal("1.0000"),
+        )
+        self.assertEqual(
+            self.serial_stock_item.quantity_on_hand,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            reservation.status,
+            StockReservationStatus.ALLOCATED,
+        )
+        self.assertEqual(
+            StockMovement.objects.count(),
+            movement_count,
+        )
+
+    def test_reserved_serial_cannot_be_allocated_again(self):
+        self._allocate_serial(
+            serial=self.serial_one,
+        )
+
+        _order, order_item, reservation = (
+            self._create_order_reservation(
+                item=self.serial_product,
+                quantity="1.0000",
+            )
+        )
+
+        with self.assertRaises(ValidationError):
+            allocate_serial_stock_reservation(
+                company=self.company,
+                reservation=reservation,
+                sales_order_item=order_item,
+                serial_number=self.serial_one,
+                user=self.user,
+            )
+
+        self.serial_one.refresh_from_db()
+        self.serial_stock_item.refresh_from_db()
+        reservation.refresh_from_db()
+
+        self.assertEqual(
+            self.serial_one.status,
+            InventorySerialStatus.RESERVED,
+        )
+        self.assertEqual(
+            self.serial_stock_item.reserved_quantity,
+            Decimal("1.0000"),
+        )
+        self.assertEqual(
+            reservation.reserved_quantity,
+            Decimal("0.0000"),
+        )
+
+    def test_serial_release_returns_serial_to_available(self):
+        reservation, allocation = self._allocate_serial()
+
+        released = release_stock_reservation_allocation(
+            company=self.company,
+            allocation=allocation,
+            reason="Release serial reservation",
+            user=self.user,
+        )
+
+        self.serial_one.refresh_from_db()
+        self.serial_stock_item.refresh_from_db()
+        reservation.refresh_from_db()
+
+        self.assertEqual(
+            released.status,
+            StockReservationAllocationStatus.RELEASED,
+        )
+        self.assertEqual(
+            self.serial_one.status,
+            InventorySerialStatus.AVAILABLE,
+        )
+        self.assertEqual(
+            self.serial_stock_item.reserved_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            reservation.status,
+            StockReservationStatus.RELEASED,
+        )
+
+    def test_serial_partial_release_is_rejected_atomically(self):
+        reservation, allocation = self._allocate_serial()
+
+        with self.assertRaises(ValidationError):
+            release_stock_reservation_allocation(
+                company=self.company,
+                allocation=allocation,
+                quantity="0.5000",
+                user=self.user,
+            )
+
+        self.serial_one.refresh_from_db()
+        self.serial_stock_item.refresh_from_db()
+        allocation.refresh_from_db()
+        reservation.refresh_from_db()
+
+        self.assertEqual(
+            self.serial_one.status,
+            InventorySerialStatus.RESERVED,
+        )
+        self.assertEqual(
+            self.serial_stock_item.reserved_quantity,
+            Decimal("1.0000"),
+        )
+        self.assertEqual(
+            allocation.released_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            reservation.released_quantity,
+            Decimal("0.0000"),
+        )
+
+    def test_serial_expiry_releases_serial_without_movement(self):
+        reservation, allocation = self._allocate_serial(
+            expires_at=(
+                timezone.now()
+                + timedelta(hours=1)
+            ),
+        )
+        movement_count = StockMovement.objects.count()
+
+        expired = expire_stock_reservation(
+            company=self.company,
+            reservation=reservation,
+            reason="Expire serial reservation",
+            user=self.user,
+            force=True,
+        )
+
+        self.serial_one.refresh_from_db()
+        self.serial_stock_item.refresh_from_db()
+        allocation.refresh_from_db()
+
+        self.assertEqual(
+            expired.status,
+            StockReservationStatus.EXPIRED,
+        )
+        self.assertEqual(
+            allocation.status,
+            StockReservationAllocationStatus.RELEASED,
+        )
+        self.assertEqual(
+            self.serial_one.status,
+            InventorySerialStatus.AVAILABLE,
+        )
+        self.assertEqual(
+            self.serial_stock_item.reserved_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            StockMovement.objects.count(),
+            movement_count,
+        )
+
+    def test_tracked_allocation_rejects_cross_company_context(self):
+        reservation, allocation = self._allocate_batch()
+
+        with self.assertRaises(ValidationError):
+            release_stock_reservation_allocation(
+                company=self.other_company,
+                allocation=allocation,
+                user=self.user,
+            )
+
+        self.batch_stock_item.refresh_from_db()
+        self.batch_balance.refresh_from_db()
+        reservation.refresh_from_db()
+
+        self.assertEqual(
+            self.batch_stock_item.reserved_quantity,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            self.batch_balance.reserved_quantity,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            reservation.released_quantity,
+            Decimal("0.0000"),
+        )
+
+
+# End Phase 22.3.3 Batch Serial Allocation and Release Tests
+# ============================================================
+
+# ============================================================
+# Phase 22.3.4 - Stock Reservation API Tests
+# ============================================================
+
+
+class StockReservationAPITests(InventoryTestBase):
+    """
+    Company reservation API, permissions, lifecycle, and
+    tenant-isolation coverage.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        self.profile, _created = (
+            UserProfile.objects.get_or_create(
+                user=self.user,
+                defaults={
+                    "display_name": "Reservation API User",
+                    "default_company": self.company,
+                },
+            )
+        )
+        self.profile.default_company = self.company
+        self.profile.save(
+            update_fields=[
+                "default_company",
+                "updated_at",
+            ]
+        )
+
+        self.membership, _created = (
+            CompanyMembership.objects.get_or_create(
+                user=self.user,
+                company=self.company,
+                defaults={
+                    "role": CompanyRole.ADMIN,
+                    "status": MembershipStatus.ACTIVE,
+                    "is_primary": True,
+                },
+            )
+        )
+        self.membership.role = CompanyRole.ADMIN
+        self.membership.status = MembershipStatus.ACTIVE
+        self.membership.is_primary = True
+        self.membership.save()
+
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+        self.location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "RES-API-BIN",
+                "name": "Reservation API Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+                "is_pickable": True,
+            },
+            user=self.user,
+        )
+
+        self.stock_item = get_or_create_stock_item(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.product,
+            user=self.user,
+        )
+        self.stock_item.quantity_on_hand = Decimal("10.0000")
+        self.stock_item.save(
+            update_fields=[
+                "quantity_on_hand",
+                "updated_at",
+            ]
+        )
+
+        self.order = create_sales_order(
+            company=self.company,
+            user=self.user,
+            branch_id=self.branch.id,
+            items=[
+                {
+                    "catalog_item_id": self.product.id,
+                    "quantity": "4.0000",
+                }
+            ],
+        )
+        self.order.status = "CONFIRMED"
+        self.order.save(
+            update_fields=[
+                "status",
+                "updated_at",
+            ]
+        )
+        self.order_item = self.order.items.get()
+
+    def _create_reservation_api(self):
+        return self.client.post(
+            reverse(
+                "company:company_inventory_reservation_create"
+            ),
+            {
+                "sales_order_id": self.order.id,
+                "company_id": self.other_company.id,
+                "notes": "API reservation",
+            },
+            format="json",
+        )
+
+    def test_create_reservation_uses_current_company(self):
+        response = self._create_reservation_api()
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["success"])
+
+        reservation = StockReservation.objects.get(
+            id=response.data["reservation"]["id"],
+        )
+
+        self.assertEqual(reservation.company, self.company)
+        self.assertEqual(reservation.sales_order, self.order)
+        self.assertEqual(
+            reservation.requested_quantity,
+            Decimal("4.0000"),
+        )
+
+    def test_reservation_list_and_detail(self):
+        create_response = self._create_reservation_api()
+        reservation_id = create_response.data[
+            "reservation"
+        ]["id"]
+
+        list_response = self.client.get(
+            reverse(
+                "company:company_inventory_reservations_list"
+            )
+        )
+        detail_response = self.client.get(
+            reverse(
+                "company:company_inventory_reservation_detail",
+                kwargs={
+                    "reservation_id": reservation_id,
+                },
+            )
+        )
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.data["count"], 1)
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(
+            detail_response.data["reservation"]["id"],
+            reservation_id,
+        )
+
+    def test_standard_allocation_and_release_api(self):
+        create_response = self._create_reservation_api()
+        reservation_id = create_response.data[
+            "reservation"
+        ]["id"]
+
+        allocate_response = self.client.post(
+            reverse(
+                "company:company_inventory_reservation_allocate",
+                kwargs={
+                    "reservation_id": reservation_id,
+                },
+            ),
+            {
+                "allocation_type": "STANDARD",
+                "sales_order_item_id": self.order_item.id,
+                "stock_item_id": self.stock_item.id,
+                "quantity": "2.0000",
+            },
+            format="json",
+        )
+
+        self.assertEqual(allocate_response.status_code, 201)
+
+        allocation = StockReservationAllocation.objects.get(
+            reservation_id=reservation_id,
+        )
+
+        self.stock_item.refresh_from_db()
+        self.assertEqual(
+            self.stock_item.reserved_quantity,
+            Decimal("2.0000"),
+        )
+
+        release_response = self.client.post(
+            reverse(
+                (
+                    "company:"
+                    "company_inventory_reservation_"
+                    "allocation_release"
+                ),
+                kwargs={
+                    "reservation_id": reservation_id,
+                    "allocation_id": allocation.id,
+                },
+            ),
+            {
+                "quantity": "1.0000",
+                "reason": "API partial release",
+            },
+            format="json",
+        )
+
+        self.assertEqual(release_response.status_code, 200)
+
+        self.stock_item.refresh_from_db()
+        self.assertEqual(
+            self.stock_item.reserved_quantity,
+            Decimal("1.0000"),
+        )
+
+    def test_cancel_api_releases_remaining_stock(self):
+        create_response = self._create_reservation_api()
+        reservation_id = create_response.data[
+            "reservation"
+        ]["id"]
+
+        self.client.post(
+            reverse(
+                "company:company_inventory_reservation_allocate",
+                kwargs={
+                    "reservation_id": reservation_id,
+                },
+            ),
+            {
+                "allocation_type": "STANDARD",
+                "sales_order_item_id": self.order_item.id,
+                "stock_item_id": self.stock_item.id,
+                "quantity": "2.0000",
+            },
+            format="json",
+        )
+
+        response = self.client.post(
+            reverse(
+                "company:company_inventory_reservation_cancel",
+                kwargs={
+                    "reservation_id": reservation_id,
+                },
+            ),
+            {
+                "reason": "API cancellation",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        reservation = StockReservation.objects.get(
+            id=reservation_id,
+        )
+        self.stock_item.refresh_from_db()
+
+        self.assertEqual(
+            reservation.status,
+            StockReservationStatus.CANCELLED,
+        )
+        self.assertEqual(
+            self.stock_item.reserved_quantity,
+            Decimal("0.0000"),
+        )
+
+    def test_cross_company_reservation_detail_returns_404(self):
+        other_order = create_sales_order(
+            company=self.other_company,
+            user=self.user,
+            branch_id=self.other_branch.id,
+            items=[
+                {
+                    "catalog_item_id": self.other_product.id,
+                    "quantity": "1.0000",
+                }
+            ],
+        )
+        other_order.status = "CONFIRMED"
+        other_order.save(
+            update_fields=[
+                "status",
+                "updated_at",
+            ]
+        )
+
+        other_reservation = (
+            create_sales_order_stock_reservation(
+                company=self.other_company,
+                sales_order=other_order,
+                user=self.user,
+            )
+        )
+
+        response = self.client.get(
+            reverse(
+                "company:company_inventory_reservation_detail",
+                kwargs={
+                    "reservation_id": other_reservation.id,
+                },
+            )
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_viewer_cannot_create_reservation(self):
+        self.membership.role = CompanyRole.VIEWER
+        self.membership.save(
+            update_fields=[
+                "role",
+                "updated_at",
+            ]
+        )
+
+        response = self._create_reservation_api()
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(
+            StockReservation.objects.filter(
+                company=self.company,
+                sales_order=self.order,
+            ).exists()
+        )
+
+
+# End Phase 22.3.4 - Stock Reservation API Tests
+# ============================================================

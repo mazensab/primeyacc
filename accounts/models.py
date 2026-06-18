@@ -1055,6 +1055,55 @@ COMPANY_ROLE_PERMISSIONS: dict[str, list[str]] = {
 }
 
 
+# ============================================================
+# Phase 22.3.4 - Stock Reservation Permissions
+# ============================================================
+
+STOCK_RESERVATION_MANAGE_PERMISSIONS = [
+    "company.inventory.reservations.view",
+    "company.inventory.reservations.create",
+    "company.inventory.reservations.allocate",
+    "company.inventory.reservations.release",
+    "company.inventory.reservations.cancel",
+    "company.inventory.reservations.expire",
+]
+
+for _role in [
+    CompanyRole.ADMIN,
+    CompanyRole.MANAGER,
+    CompanyRole.INVENTORY,
+]:
+    COMPANY_ROLE_PERMISSIONS.setdefault(
+        _role,
+        [],
+    ).extend(
+        STOCK_RESERVATION_MANAGE_PERMISSIONS
+    )
+
+COMPANY_ROLE_PERMISSIONS.setdefault(
+    CompanyRole.SALES,
+    [],
+).extend(
+    [
+        "company.inventory.reservations.view",
+        "company.inventory.reservations.create",
+        "company.inventory.reservations.allocate",
+        "company.inventory.reservations.release",
+        "company.inventory.reservations.cancel",
+    ]
+)
+
+COMPANY_ROLE_PERMISSIONS.setdefault(
+    CompanyRole.VIEWER,
+    [],
+).append(
+    "company.inventory.reservations.view"
+)
+
+# End Phase 22.3.4 - Stock Reservation Permissions
+# ============================================================
+
+
 def _normalize_permissions(permissions: list[str]) -> list[str]:
     """
     Return a sorted unique permissions list.

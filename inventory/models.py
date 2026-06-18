@@ -1,6 +1,6 @@
-﻿# ============================================================
+# ============================================================
 # 📂 inventory/models.py
-# 🧠 PrimeyAcc | Company Inventory & Stock Models V2.2
+# 🧠 PrimeyAcc | Company Inventory & Stock Models V2.3
 # ------------------------------------------------------------
 # ✅ Company-scoped inventory foundation
 # ✅ Warehouses under company and optional branch
@@ -26,6 +26,12 @@
 # ✅ Manufacturing and expiry date validation
 # ✅ Detailed inventory tracking ledger
 # ✅ Batch and serial tenant isolation
+# ✅ Stock reservation header foundation
+# ✅ Sales order stock allocation foundation
+# ✅ Location-aware reservation allocations
+# ✅ Batch and serial reservation references
+# ✅ Reservation quantity lifecycle validation
+# ✅ Sales order and inventory tenant consistency
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - كل بيانات المخزون مرتبطة بشركة واحدة فقط
@@ -3065,6 +3071,1086 @@ class InventoryTrackingEntry(models.Model):
 
         if self.entry_type in decrease_types:
             self.direction = StockMovementDirection.DECREASE
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+# ============================================================
+# Phase 22.3.1 — Stock Reservations & Sales Order Allocation
+# ============================================================
+
+
+class StockReservationStatus(models.TextChoices):
+    """
+    Stock reservation lifecycle status.
+    """
+
+    DRAFT = "DRAFT", "Draft"
+    PARTIALLY_ALLOCATED = "PARTIALLY_ALLOCATED", "Partially allocated"
+    ALLOCATED = "ALLOCATED", "Allocated"
+    PARTIALLY_FULFILLED = "PARTIALLY_FULFILLED", "Partially fulfilled"
+    FULFILLED = "FULFILLED", "Fulfilled"
+    RELEASED = "RELEASED", "Released"
+    CANCELLED = "CANCELLED", "Cancelled"
+    EXPIRED = "EXPIRED", "Expired"
+
+
+class StockReservationSource(models.TextChoices):
+    """
+    Source that created the stock reservation.
+    """
+
+    SALES_ORDER = "SALES_ORDER", "Sales order"
+    MANUAL = "MANUAL", "Manual"
+    API = "API", "API"
+    IMPORT = "IMPORT", "Import"
+
+
+class StockReservationAllocationStatus(models.TextChoices):
+    """
+    Lifecycle status for one location-level reservation allocation.
+    """
+
+    DRAFT = "DRAFT", "Draft"
+    RESERVED = "RESERVED", "Reserved"
+    PARTIALLY_FULFILLED = "PARTIALLY_FULFILLED", "Partially fulfilled"
+    FULFILLED = "FULFILLED", "Fulfilled"
+    RELEASED = "RELEASED", "Released"
+    CANCELLED = "CANCELLED", "Cancelled"
+
+
+class StockReservation(models.Model):
+    """
+    Company-scoped stock reservation header for one sales order.
+
+    The reservation header records demand and lifecycle totals.
+    Exact warehouse, location, batch, and serial allocation is stored in
+    StockReservationAllocation.
+
+    Saving this model does not mutate StockItem.reserved_quantity.
+    All stock reservation effects must be applied atomically through
+    inventory.services.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="stock_reservations",
+        db_index=True,
+        verbose_name="Company",
+    )
+    sales_order = models.ForeignKey(
+        "sales.SalesOrder",
+        on_delete=models.PROTECT,
+        related_name="stock_reservations",
+        db_index=True,
+        verbose_name="Sales order",
+    )
+
+    reservation_number = models.CharField(
+        max_length=80,
+        db_index=True,
+        verbose_name="Reservation number",
+        help_text="Unique reservation number inside the same company.",
+    )
+    status = models.CharField(
+        max_length=30,
+        choices=StockReservationStatus.choices,
+        default=StockReservationStatus.DRAFT,
+        db_index=True,
+        verbose_name="Status",
+    )
+    source = models.CharField(
+        max_length=20,
+        choices=StockReservationSource.choices,
+        default=StockReservationSource.SALES_ORDER,
+        db_index=True,
+        verbose_name="Source",
+    )
+
+    requested_quantity = models.DecimalField(
+        max_digits=16,
+        decimal_places=4,
+        default=QUANTITY_ZERO,
+        validators=[MinValueValidator(QUANTITY_ZERO)],
+        verbose_name="Requested quantity",
+    )
+    reserved_quantity = models.DecimalField(
+        max_digits=16,
+        decimal_places=4,
+        default=QUANTITY_ZERO,
+        validators=[MinValueValidator(QUANTITY_ZERO)],
+        verbose_name="Reserved quantity",
+    )
+    fulfilled_quantity = models.DecimalField(
+        max_digits=16,
+        decimal_places=4,
+        default=QUANTITY_ZERO,
+        validators=[MinValueValidator(QUANTITY_ZERO)],
+        verbose_name="Fulfilled quantity",
+    )
+    released_quantity = models.DecimalField(
+        max_digits=16,
+        decimal_places=4,
+        default=QUANTITY_ZERO,
+        validators=[MinValueValidator(QUANTITY_ZERO)],
+        verbose_name="Released quantity",
+    )
+
+    expires_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Expires at",
+    )
+    allocated_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Allocated at",
+    )
+    fulfilled_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Fulfilled at",
+    )
+    released_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Released at",
+    )
+    cancelled_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Cancelled at",
+    )
+    expired_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Expired at",
+    )
+
+    release_reason = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Release reason",
+    )
+    cancellation_reason = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Cancellation reason",
+    )
+    notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_stock_reservations",
+        blank=True,
+        null=True,
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="updated_stock_reservations",
+        blank=True,
+        null=True,
+        verbose_name="Updated by",
+    )
+    allocated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="allocated_stock_reservations",
+        blank=True,
+        null=True,
+        verbose_name="Allocated by",
+    )
+    released_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="released_stock_reservations",
+        blank=True,
+        null=True,
+        verbose_name="Released by",
+    )
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="cancelled_stock_reservations",
+        blank=True,
+        null=True,
+        verbose_name="Cancelled by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Stock reservation"
+        verbose_name_plural = "Stock reservations"
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "reservation_number"],
+                name="unique_stock_reservation_number_per_company",
+            ),
+            models.CheckConstraint(
+                condition=Q(requested_quantity__gte=QUANTITY_ZERO),
+                name="stock_reservation_requested_nonnegative",
+            ),
+            models.CheckConstraint(
+                condition=Q(reserved_quantity__gte=QUANTITY_ZERO),
+                name="stock_reservation_reserved_nonnegative",
+            ),
+            models.CheckConstraint(
+                condition=Q(fulfilled_quantity__gte=QUANTITY_ZERO),
+                name="stock_reservation_fulfilled_nonnegative",
+            ),
+            models.CheckConstraint(
+                condition=Q(released_quantity__gte=QUANTITY_ZERO),
+                name="stock_reservation_released_nonnegative",
+            ),
+            models.CheckConstraint(
+                condition=Q(
+                    reserved_quantity__lte=F("requested_quantity")
+                ),
+                name="stock_reservation_reserved_not_above_requested",
+            ),
+            models.CheckConstraint(
+                condition=Q(
+                    fulfilled_quantity__lte=F("reserved_quantity")
+                ),
+                name="stock_reservation_fulfilled_not_above_reserved",
+            ),
+            models.CheckConstraint(
+                condition=Q(
+                    released_quantity__lte=F("reserved_quantity")
+                ),
+                name="stock_reservation_released_not_above_reserved",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "status"]),
+            models.Index(fields=["company", "source"]),
+            models.Index(fields=["company", "sales_order"]),
+            models.Index(fields=["company", "expires_at"]),
+            models.Index(fields=["sales_order", "status"]),
+            models.Index(fields=["reservation_number"]),
+            models.Index(fields=["allocated_at"]),
+            models.Index(fields=["fulfilled_at"]),
+            models.Index(fields=["released_at"]),
+            models.Index(fields=["cancelled_at"]),
+            models.Index(fields=["created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.reservation_number} - "
+            f"{self.sales_order.order_number} - "
+            f"{self.status}"
+        )
+
+    @property
+    def is_draft(self) -> bool:
+        return self.status == StockReservationStatus.DRAFT
+
+    @property
+    def is_active(self) -> bool:
+        return self.status in {
+            StockReservationStatus.PARTIALLY_ALLOCATED,
+            StockReservationStatus.ALLOCATED,
+            StockReservationStatus.PARTIALLY_FULFILLED,
+        }
+
+    @property
+    def is_terminal(self) -> bool:
+        return self.status in {
+            StockReservationStatus.FULFILLED,
+            StockReservationStatus.RELEASED,
+            StockReservationStatus.CANCELLED,
+            StockReservationStatus.EXPIRED,
+        }
+
+    @property
+    def remaining_reserved_quantity(self) -> Decimal:
+        remaining = quantize_quantity(
+            self.reserved_quantity
+            - self.fulfilled_quantity
+            - self.released_quantity
+        )
+        return max(remaining, QUANTITY_ZERO)
+
+    @property
+    def unallocated_quantity(self) -> Decimal:
+        remaining = quantize_quantity(
+            self.requested_quantity - self.reserved_quantity
+        )
+        return max(remaining, QUANTITY_ZERO)
+
+    @property
+    def is_expired_now(self) -> bool:
+        return bool(
+            self.expires_at
+            and self.expires_at <= timezone.now()
+            and not self.is_terminal
+        )
+
+    def clean(self) -> None:
+        """
+        Validate tenant ownership, quantities, and lifecycle state.
+        """
+        super().clean()
+
+        self.reservation_number = (
+            self.reservation_number or ""
+        ).strip().upper()
+        self.release_reason = (self.release_reason or "").strip()
+        self.cancellation_reason = (
+            self.cancellation_reason or ""
+        ).strip()
+        self.notes = (self.notes or "").strip()
+
+        self.requested_quantity = quantize_quantity(
+            self.requested_quantity
+        )
+        self.reserved_quantity = quantize_quantity(
+            self.reserved_quantity
+        )
+        self.fulfilled_quantity = quantize_quantity(
+            self.fulfilled_quantity
+        )
+        self.released_quantity = quantize_quantity(
+            self.released_quantity
+        )
+
+        errors = {}
+
+        if not self.reservation_number:
+            errors["reservation_number"] = (
+                "Reservation number is required."
+            )
+
+        if self.sales_order_id and self.company_id:
+            if self.sales_order.company_id != self.company_id:
+                errors["sales_order"] = (
+                    "Sales order does not belong to this company."
+                )
+
+            if self.sales_order.status == "CANCELLED":
+                errors["sales_order"] = (
+                    "A cancelled sales order cannot own an active "
+                    "stock reservation."
+                )
+
+        for field_name in [
+            "requested_quantity",
+            "reserved_quantity",
+            "fulfilled_quantity",
+            "released_quantity",
+        ]:
+            if getattr(self, field_name) < QUANTITY_ZERO:
+                errors[field_name] = (
+                    "Reservation quantity cannot be negative."
+                )
+
+        if self.reserved_quantity > self.requested_quantity:
+            errors["reserved_quantity"] = (
+                "Reserved quantity cannot exceed requested quantity."
+            )
+
+        if self.fulfilled_quantity > self.reserved_quantity:
+            errors["fulfilled_quantity"] = (
+                "Fulfilled quantity cannot exceed reserved quantity."
+            )
+
+        if self.released_quantity > self.reserved_quantity:
+            errors["released_quantity"] = (
+                "Released quantity cannot exceed reserved quantity."
+            )
+
+        if (
+            self.fulfilled_quantity + self.released_quantity
+            > self.reserved_quantity
+        ):
+            errors["released_quantity"] = (
+                "Fulfilled and released quantities together cannot exceed "
+                "reserved quantity."
+            )
+
+        if (
+            self.expires_at
+            and self.pk
+            and self.created_at
+            and self.expires_at <= self.created_at
+        ):
+            errors["expires_at"] = (
+                "Reservation expiry must be later than creation time."
+            )
+
+        if self.status == StockReservationStatus.FULFILLED:
+            if self.remaining_reserved_quantity != QUANTITY_ZERO:
+                errors["status"] = (
+                    "A fulfilled reservation cannot have a remaining "
+                    "reserved quantity."
+                )
+
+            if not self.fulfilled_at:
+                self.fulfilled_at = timezone.now()
+
+        if self.status == StockReservationStatus.RELEASED:
+            if self.remaining_reserved_quantity != QUANTITY_ZERO:
+                errors["status"] = (
+                    "A released reservation cannot have a remaining "
+                    "reserved quantity."
+                )
+
+            if not self.released_at:
+                self.released_at = timezone.now()
+
+        if self.status == StockReservationStatus.CANCELLED:
+            if self.remaining_reserved_quantity != QUANTITY_ZERO:
+                errors["status"] = (
+                    "Release all remaining reserved quantity before "
+                    "cancelling the reservation."
+                )
+
+            if not self.cancelled_at:
+                self.cancelled_at = timezone.now()
+
+        if self.status == StockReservationStatus.EXPIRED:
+            if self.remaining_reserved_quantity != QUANTITY_ZERO:
+                errors["status"] = (
+                    "Release all remaining reserved quantity before "
+                    "expiring the reservation."
+                )
+
+            if not self.expired_at:
+                self.expired_at = timezone.now()
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+class StockReservationAllocation(models.Model):
+    """
+    Exact physical stock allocation for one sales order line.
+
+    A sales order item may be distributed across multiple warehouses,
+    locations, batches, or serial numbers.
+
+    Saving this model does not mutate StockItem, InventoryBatchBalance,
+    InventorySerialNumber, or StockMovement. Reservation services are the
+    only source of stock reservation effects.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="stock_reservation_allocations",
+        db_index=True,
+        verbose_name="Company",
+    )
+    reservation = models.ForeignKey(
+        StockReservation,
+        on_delete=models.PROTECT,
+        related_name="allocations",
+        db_index=True,
+        verbose_name="Stock reservation",
+    )
+    sales_order_item = models.ForeignKey(
+        "sales.SalesOrderItem",
+        on_delete=models.PROTECT,
+        related_name="stock_reservation_allocations",
+        db_index=True,
+        verbose_name="Sales order item",
+    )
+
+    warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.PROTECT,
+        related_name="reservation_allocations",
+        db_index=True,
+        verbose_name="Warehouse",
+    )
+    location = models.ForeignKey(
+        InventoryLocation,
+        on_delete=models.PROTECT,
+        related_name="reservation_allocations",
+        db_index=True,
+        verbose_name="Inventory location",
+    )
+    stock_item = models.ForeignKey(
+        StockItem,
+        on_delete=models.PROTECT,
+        related_name="reservation_allocations",
+        db_index=True,
+        verbose_name="Stock item",
+    )
+    item = models.ForeignKey(
+        CatalogItem,
+        on_delete=models.PROTECT,
+        related_name="stock_reservation_allocations",
+        db_index=True,
+        verbose_name="Catalog item",
+    )
+    batch = models.ForeignKey(
+        InventoryBatch,
+        on_delete=models.PROTECT,
+        related_name="reservation_allocations",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Inventory batch",
+    )
+    serial_number = models.ForeignKey(
+        InventorySerialNumber,
+        on_delete=models.PROTECT,
+        related_name="reservation_allocations",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Inventory serial number",
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=StockReservationAllocationStatus.choices,
+        default=StockReservationAllocationStatus.DRAFT,
+        db_index=True,
+        verbose_name="Status",
+    )
+
+    reserved_quantity = models.DecimalField(
+        max_digits=16,
+        decimal_places=4,
+        validators=[MinValueValidator(Decimal("0.0001"))],
+        verbose_name="Reserved quantity",
+    )
+    fulfilled_quantity = models.DecimalField(
+        max_digits=16,
+        decimal_places=4,
+        default=QUANTITY_ZERO,
+        validators=[MinValueValidator(QUANTITY_ZERO)],
+        verbose_name="Fulfilled quantity",
+    )
+    released_quantity = models.DecimalField(
+        max_digits=16,
+        decimal_places=4,
+        default=QUANTITY_ZERO,
+        validators=[MinValueValidator(QUANTITY_ZERO)],
+        verbose_name="Released quantity",
+    )
+
+    reserved_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Reserved at",
+    )
+    fulfilled_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Fulfilled at",
+    )
+    released_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Released at",
+    )
+    cancelled_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Cancelled at",
+    )
+
+    release_reason = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Release reason",
+    )
+    cancellation_reason = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Cancellation reason",
+    )
+    notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_stock_reservation_allocations",
+        blank=True,
+        null=True,
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="updated_stock_reservation_allocations",
+        blank=True,
+        null=True,
+        verbose_name="Updated by",
+    )
+    released_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="released_stock_reservation_allocations",
+        blank=True,
+        null=True,
+        verbose_name="Released by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Stock reservation allocation"
+        verbose_name_plural = "Stock reservation allocations"
+        ordering = [
+            "reservation_id",
+            "sales_order_item_id",
+            "warehouse_id",
+            "location_id",
+            "id",
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(reserved_quantity__gt=QUANTITY_ZERO),
+                name="stock_reservation_allocation_reserved_positive",
+            ),
+            models.CheckConstraint(
+                condition=Q(fulfilled_quantity__gte=QUANTITY_ZERO),
+                name="stock_reservation_allocation_fulfilled_nonnegative",
+            ),
+            models.CheckConstraint(
+                condition=Q(released_quantity__gte=QUANTITY_ZERO),
+                name="stock_reservation_allocation_released_nonnegative",
+            ),
+            models.CheckConstraint(
+                condition=Q(
+                    fulfilled_quantity__lte=F("reserved_quantity")
+                ),
+                name="stock_reservation_allocation_fulfilled_not_above_reserved",
+            ),
+            models.CheckConstraint(
+                condition=Q(
+                    released_quantity__lte=F("reserved_quantity")
+                ),
+                name="stock_reservation_allocation_released_not_above_reserved",
+            ),
+            models.CheckConstraint(
+                condition=~(
+                    Q(batch__isnull=False)
+                    & Q(serial_number__isnull=False)
+                ),
+                name="stock_reservation_batch_and_serial_not_together",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "status"]),
+            models.Index(fields=["company", "reservation"]),
+            models.Index(fields=["company", "sales_order_item"]),
+            models.Index(fields=["company", "warehouse", "location"]),
+            models.Index(fields=["company", "location", "item"]),
+            models.Index(fields=["company", "item", "batch"]),
+            models.Index(fields=["company", "serial_number"]),
+            models.Index(fields=["reservation", "status"]),
+            models.Index(fields=["sales_order_item", "status"]),
+            models.Index(fields=["stock_item", "status"]),
+            models.Index(fields=["reserved_at"]),
+            models.Index(fields=["fulfilled_at"]),
+            models.Index(fields=["released_at"]),
+            models.Index(fields=["created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        tracked_value = ""
+
+        if self.batch_id:
+            tracked_value = f" / {self.batch.batch_number}"
+        elif self.serial_number_id:
+            tracked_value = (
+                f" / {self.serial_number.serial_number}"
+            )
+
+        return (
+            f"{self.reservation.reservation_number} - "
+            f"{self.item.name} - "
+            f"{self.location.display_name}"
+            f"{tracked_value} - "
+            f"{self.reserved_quantity}"
+        )
+
+    @property
+    def remaining_reserved_quantity(self) -> Decimal:
+        remaining = quantize_quantity(
+            self.reserved_quantity
+            - self.fulfilled_quantity
+            - self.released_quantity
+        )
+        return max(remaining, QUANTITY_ZERO)
+
+    @property
+    def is_active(self) -> bool:
+        return self.status in {
+            StockReservationAllocationStatus.RESERVED,
+            StockReservationAllocationStatus.PARTIALLY_FULFILLED,
+        }
+
+    @property
+    def is_terminal(self) -> bool:
+        return self.status in {
+            StockReservationAllocationStatus.FULFILLED,
+            StockReservationAllocationStatus.RELEASED,
+            StockReservationAllocationStatus.CANCELLED,
+        }
+
+    def clean(self) -> None:
+        """
+        Validate tenant, order, stock source, tracking, and quantities.
+        """
+        super().clean()
+
+        self.release_reason = (self.release_reason or "").strip()
+        self.cancellation_reason = (
+            self.cancellation_reason or ""
+        ).strip()
+        self.notes = (self.notes or "").strip()
+
+        self.reserved_quantity = quantize_quantity(
+            self.reserved_quantity
+        )
+        self.fulfilled_quantity = quantize_quantity(
+            self.fulfilled_quantity
+        )
+        self.released_quantity = quantize_quantity(
+            self.released_quantity
+        )
+
+        errors = {}
+
+        if self.reservation_id:
+            if self.reservation.company_id != self.company_id:
+                errors["reservation"] = (
+                    "Reservation does not belong to this company."
+                )
+
+        if self.sales_order_item_id:
+            if self.sales_order_item.company_id != self.company_id:
+                errors["sales_order_item"] = (
+                    "Sales order item does not belong to this company."
+                )
+            elif (
+                self.reservation_id
+                and self.sales_order_item.order_id
+                != self.reservation.sales_order_id
+            ):
+                errors["sales_order_item"] = (
+                    "Sales order item does not belong to the reservation "
+                    "sales order."
+                )
+
+        if self.warehouse_id:
+            if self.warehouse.company_id != self.company_id:
+                errors["warehouse"] = (
+                    "Warehouse does not belong to this company."
+                )
+
+        if self.location_id:
+            if self.location.company_id != self.company_id:
+                errors["location"] = (
+                    "Inventory location does not belong to this company."
+                )
+            elif self.location.warehouse_id != self.warehouse_id:
+                errors["location"] = (
+                    "Inventory location does not belong to this warehouse."
+                )
+            elif not self.location.is_active_location:
+                errors["location"] = (
+                    "Stock reservation requires an active location."
+                )
+            elif not self.location.is_pickable:
+                errors["location"] = (
+                    "Stock reservation requires a pickable location."
+                )
+
+        if self.item_id:
+            if self.item.company_id != self.company_id:
+                errors["item"] = (
+                    "Catalog item does not belong to this company."
+                )
+            elif self.item.item_type != CatalogItemType.PRODUCT:
+                errors["item"] = (
+                    "Only product catalog items can be reserved."
+                )
+            elif not self.item.track_inventory:
+                errors["item"] = (
+                    "Catalog item must have inventory tracking enabled."
+                )
+
+        if self.sales_order_item_id and self.item_id:
+            if not self.sales_order_item.catalog_item_id:
+                errors["sales_order_item"] = (
+                    "Sales order item must reference a catalog item."
+                )
+            elif (
+                self.sales_order_item.catalog_item_id
+                != self.item_id
+            ):
+                errors["item"] = (
+                    "Allocation item must match the sales order item."
+                )
+
+        if self.stock_item_id:
+            if self.stock_item.company_id != self.company_id:
+                errors["stock_item"] = (
+                    "Stock item does not belong to this company."
+                )
+            elif self.stock_item.warehouse_id != self.warehouse_id:
+                errors["stock_item"] = (
+                    "Stock item warehouse must match allocation warehouse."
+                )
+            elif self.stock_item.location_id != self.location_id:
+                errors["stock_item"] = (
+                    "Stock item location must match allocation location."
+                )
+            elif self.stock_item.item_id != self.item_id:
+                errors["stock_item"] = (
+                    "Stock item catalog item must match allocation item."
+                )
+
+        tracking_method = (
+            self.item.inventory_tracking_method
+            if self.item_id
+            else None
+        )
+
+        if self.batch_id and self.serial_number_id:
+            errors["batch"] = (
+                "Batch and serial number cannot be selected together."
+            )
+            errors["serial_number"] = (
+                "Batch and serial number cannot be selected together."
+            )
+
+        if tracking_method == CatalogItemTrackingMethod.BATCH:
+            if not self.batch_id:
+                errors["batch"] = (
+                    "A batch-tracked item requires an inventory batch."
+                )
+            elif self.batch.company_id != self.company_id:
+                errors["batch"] = (
+                    "Inventory batch does not belong to this company."
+                )
+            elif self.batch.item_id != self.item_id:
+                errors["batch"] = (
+                    "Inventory batch must belong to the allocation item."
+                )
+            elif not self.batch.is_available_for_issue:
+                errors["batch"] = (
+                    "Inventory batch is not available for reservation."
+                )
+
+            if self.serial_number_id:
+                errors["serial_number"] = (
+                    "Batch-tracked items cannot use a serial number."
+                )
+
+        elif tracking_method == CatalogItemTrackingMethod.SERIAL:
+            if not self.serial_number_id:
+                errors["serial_number"] = (
+                    "A serial-tracked item requires a serial number."
+                )
+            else:
+                if self.serial_number.company_id != self.company_id:
+                    errors["serial_number"] = (
+                        "Serial number does not belong to this company."
+                    )
+                elif self.serial_number.item_id != self.item_id:
+                    errors["serial_number"] = (
+                        "Serial number must belong to the allocation item."
+                    )
+                elif (
+                    self.serial_number.warehouse_id
+                    != self.warehouse_id
+                ):
+                    errors["serial_number"] = (
+                        "Serial number warehouse must match allocation "
+                        "warehouse."
+                    )
+                elif (
+                    self.serial_number.location_id
+                    != self.location_id
+                ):
+                    errors["serial_number"] = (
+                        "Serial number location must match allocation "
+                        "location."
+                    )
+                elif (
+                    self.serial_number.stock_item_id
+                    != self.stock_item_id
+                ):
+                    errors["serial_number"] = (
+                        "Serial number stock item must match allocation "
+                        "stock item."
+                    )
+                elif self.serial_number.status not in {
+                    InventorySerialStatus.AVAILABLE,
+                    InventorySerialStatus.RESERVED,
+                }:
+                    errors["serial_number"] = (
+                        "Serial number is not available for reservation."
+                    )
+
+            if self.batch_id:
+                errors["batch"] = (
+                    "Serial-tracked items cannot use an inventory batch."
+                )
+
+            if self.reserved_quantity != Decimal("1.0000"):
+                errors["reserved_quantity"] = (
+                    "A serial number allocation must reserve quantity 1."
+                )
+
+        else:
+            if self.batch_id:
+                errors["batch"] = (
+                    "Non-batch-tracked items cannot use an inventory batch."
+                )
+
+            if self.serial_number_id:
+                errors["serial_number"] = (
+                    "Non-serial-tracked items cannot use a serial number."
+                )
+
+        if self.reserved_quantity <= QUANTITY_ZERO:
+            errors["reserved_quantity"] = (
+                "Reserved quantity must be greater than zero."
+            )
+
+        if self.fulfilled_quantity < QUANTITY_ZERO:
+            errors["fulfilled_quantity"] = (
+                "Fulfilled quantity cannot be negative."
+            )
+
+        if self.released_quantity < QUANTITY_ZERO:
+            errors["released_quantity"] = (
+                "Released quantity cannot be negative."
+            )
+
+        if self.fulfilled_quantity > self.reserved_quantity:
+            errors["fulfilled_quantity"] = (
+                "Fulfilled quantity cannot exceed reserved quantity."
+            )
+
+        if self.released_quantity > self.reserved_quantity:
+            errors["released_quantity"] = (
+                "Released quantity cannot exceed reserved quantity."
+            )
+
+        if (
+            self.fulfilled_quantity + self.released_quantity
+            > self.reserved_quantity
+        ):
+            errors["released_quantity"] = (
+                "Fulfilled and released quantities together cannot exceed "
+                "reserved quantity."
+            )
+
+        if self.status == StockReservationAllocationStatus.RESERVED:
+            if not self.reserved_at:
+                self.reserved_at = timezone.now()
+
+        if (
+            self.status
+            == StockReservationAllocationStatus.PARTIALLY_FULFILLED
+        ):
+            if (
+                self.fulfilled_quantity <= QUANTITY_ZERO
+                or self.remaining_reserved_quantity <= QUANTITY_ZERO
+            ):
+                errors["status"] = (
+                    "Partially fulfilled allocation requires fulfilled and "
+                    "remaining reserved quantities."
+                )
+
+        if self.status == StockReservationAllocationStatus.FULFILLED:
+            if self.remaining_reserved_quantity != QUANTITY_ZERO:
+                errors["status"] = (
+                    "A fulfilled allocation cannot have a remaining "
+                    "reserved quantity."
+                )
+
+            if not self.fulfilled_at:
+                self.fulfilled_at = timezone.now()
+
+        if self.status == StockReservationAllocationStatus.RELEASED:
+            if self.remaining_reserved_quantity != QUANTITY_ZERO:
+                errors["status"] = (
+                    "A released allocation cannot have a remaining "
+                    "reserved quantity."
+                )
+
+            if not self.released_at:
+                self.released_at = timezone.now()
+
+        if self.status == StockReservationAllocationStatus.CANCELLED:
+            if self.remaining_reserved_quantity != QUANTITY_ZERO:
+                errors["status"] = (
+                    "Release all remaining reserved quantity before "
+                    "cancelling the allocation."
+                )
+
+            if not self.cancelled_at:
+                self.cancelled_at = timezone.now()
+
+        if errors:
+            raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
         self.full_clean()
