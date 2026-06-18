@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # 📂 inventory/admin.py
 # 🧠 PrimeyAcc | Company Inventory Admin V2.0
 # ------------------------------------------------------------
@@ -25,6 +25,13 @@ from django.db.models import QuerySet
 from django.http import HttpRequest
 
 from .models import (
+    InventoryBatch,
+    InventoryBatchBalance,
+    InventoryBatchStatus,
+    InventorySerialNumber,
+    InventorySerialStatus,
+    InventoryTrackingEntry,
+    InventoryTrackingEntryType,
     InventoryLocation,
     InventoryLocationStatus,
     InventoryLocationType,
@@ -808,3 +815,611 @@ class StockMovementAdmin(admin.ModelAdmin):
             )
 
         return tuple(sorted(set(readonly_fields)))
+
+
+@admin.register(InventoryBatch)
+class InventoryBatchAdmin(admin.ModelAdmin):
+    """
+    Admin configuration for batch and lot master records.
+    """
+
+    list_display = [
+        "batch_number",
+        "item",
+        "company",
+        "status",
+        "manufactured_at",
+        "expiry_date",
+        "is_expired",
+        "received_at",
+        "created_at",
+    ]
+    list_filter = [
+        "status",
+        "company",
+        "item",
+        "manufactured_at",
+        "expiry_date",
+        "received_at",
+        "created_at",
+    ]
+    search_fields = [
+        "batch_number",
+        "supplier_batch_number",
+        "item__code",
+        "item__sku",
+        "item__barcode",
+        "item__name",
+        "item__name_ar",
+        "item__name_en",
+        "company__name",
+        "company__name_ar",
+        "company__name_en",
+        "notes",
+    ]
+    readonly_fields = [
+        "is_expired",
+        "is_available_for_issue",
+        "created_at",
+        "updated_at",
+    ]
+    autocomplete_fields = [
+        "company",
+        "item",
+        "created_by",
+        "updated_by",
+    ]
+    ordering = [
+        "company",
+        "item",
+        "expiry_date",
+        "batch_number",
+    ]
+    date_hierarchy = "created_at"
+    list_select_related = [
+        "company",
+        "item",
+        "created_by",
+        "updated_by",
+    ]
+    list_per_page = 50
+    save_on_top = True
+
+    fieldsets = (
+        (
+            "Batch identity",
+            {
+                "fields": (
+                    "company",
+                    "item",
+                    "status",
+                    "batch_number",
+                    "supplier_batch_number",
+                )
+            },
+        ),
+        (
+            "Manufacturing and expiry",
+            {
+                "fields": (
+                    "manufactured_at",
+                    "expiry_date",
+                    "is_expired",
+                    "is_available_for_issue",
+                    "received_at",
+                )
+            },
+        ),
+        (
+            "Notes and extra data",
+            {
+                "fields": (
+                    "notes",
+                    "extra_data",
+                )
+            },
+        ),
+        (
+            "Audit",
+            {
+                "fields": (
+                    "created_by",
+                    "updated_by",
+                    "created_at",
+                    "updated_at",
+                )
+            },
+        ),
+    )
+
+    def get_queryset(
+        self,
+        request: HttpRequest,
+    ) -> QuerySet[InventoryBatch]:
+        return (
+            super()
+            .get_queryset(request)
+            .select_related(
+                "company",
+                "item",
+                "created_by",
+                "updated_by",
+            )
+        )
+
+    def has_delete_permission(
+        self,
+        request: HttpRequest,
+        obj: InventoryBatch | None = None,
+    ) -> bool:
+        if obj and obj.balances.exists():
+            return False
+
+        if obj and obj.tracking_entries.exists():
+            return False
+
+        return super().has_delete_permission(
+            request,
+            obj,
+        )
+
+
+@admin.register(InventoryBatchBalance)
+class InventoryBatchBalanceAdmin(admin.ModelAdmin):
+    """
+    Admin configuration for location-level batch balances.
+    """
+
+    list_display = [
+        "batch",
+        "item",
+        "company",
+        "warehouse",
+        "location",
+        "quantity_on_hand",
+        "reserved_quantity",
+        "available_quantity",
+        "average_cost",
+        "last_movement_at",
+        "created_at",
+    ]
+    list_filter = [
+        "company",
+        "warehouse",
+        "location",
+        "item",
+        "batch__status",
+        "batch__expiry_date",
+        "last_movement_at",
+        "created_at",
+    ]
+    search_fields = [
+        "batch__batch_number",
+        "batch__supplier_batch_number",
+        "item__code",
+        "item__sku",
+        "item__barcode",
+        "item__name",
+        "warehouse__code",
+        "warehouse__name",
+        "location__code",
+        "location__name",
+        "company__name",
+        "notes",
+    ]
+    readonly_fields = [
+        "available_quantity",
+        "is_available_for_issue",
+        "last_movement_at",
+        "created_at",
+        "updated_at",
+    ]
+    autocomplete_fields = [
+        "company",
+        "warehouse",
+        "location",
+        "stock_item",
+        "item",
+        "batch",
+    ]
+    ordering = [
+        "company",
+        "warehouse",
+        "location",
+        "item",
+        "batch",
+    ]
+    list_select_related = [
+        "company",
+        "warehouse",
+        "location",
+        "stock_item",
+        "item",
+        "batch",
+    ]
+    list_per_page = 50
+
+    fieldsets = (
+        (
+            "Batch balance identity",
+            {
+                "fields": (
+                    "company",
+                    "warehouse",
+                    "location",
+                    "stock_item",
+                    "item",
+                    "batch",
+                )
+            },
+        ),
+        (
+            "Quantities and cost",
+            {
+                "fields": (
+                    "quantity_on_hand",
+                    "reserved_quantity",
+                    "available_quantity",
+                    "average_cost",
+                    "is_available_for_issue",
+                )
+            },
+        ),
+        (
+            "Notes and extra data",
+            {
+                "fields": (
+                    "notes",
+                    "extra_data",
+                )
+            },
+        ),
+        (
+            "Audit",
+            {
+                "fields": (
+                    "last_movement_at",
+                    "created_at",
+                    "updated_at",
+                )
+            },
+        ),
+    )
+
+    def get_queryset(
+        self,
+        request: HttpRequest,
+    ) -> QuerySet[InventoryBatchBalance]:
+        return (
+            super()
+            .get_queryset(request)
+            .select_related(
+                "company",
+                "warehouse",
+                "location",
+                "stock_item",
+                "item",
+                "batch",
+            )
+        )
+
+    def has_delete_permission(
+        self,
+        request: HttpRequest,
+        obj: InventoryBatchBalance | None = None,
+    ) -> bool:
+        if obj and obj.quantity_on_hand > 0:
+            return False
+
+        if obj and obj.reserved_quantity > 0:
+            return False
+
+        return super().has_delete_permission(
+            request,
+            obj,
+        )
+
+
+@admin.register(InventorySerialNumber)
+class InventorySerialNumberAdmin(admin.ModelAdmin):
+    """
+    Admin configuration for inventory serial numbers.
+    """
+
+    list_display = [
+        "serial_number",
+        "item",
+        "company",
+        "status",
+        "warehouse",
+        "location",
+        "unit_cost",
+        "received_at",
+        "issued_at",
+        "is_in_stock",
+        "created_at",
+    ]
+    list_filter = [
+        "status",
+        "company",
+        "warehouse",
+        "location",
+        "item",
+        "received_at",
+        "issued_at",
+        "created_at",
+    ]
+    search_fields = [
+        "serial_number",
+        "manufacturer_serial_number",
+        "item__code",
+        "item__sku",
+        "item__barcode",
+        "item__name",
+        "warehouse__code",
+        "warehouse__name",
+        "location__code",
+        "location__name",
+        "company__name",
+        "notes",
+    ]
+    readonly_fields = [
+        "is_available",
+        "is_in_stock",
+        "created_at",
+        "updated_at",
+    ]
+    autocomplete_fields = [
+        "company",
+        "item",
+        "warehouse",
+        "location",
+        "stock_item",
+        "created_by",
+        "updated_by",
+    ]
+    ordering = [
+        "company",
+        "item",
+        "serial_number",
+    ]
+    date_hierarchy = "created_at"
+    list_select_related = [
+        "company",
+        "item",
+        "warehouse",
+        "location",
+        "stock_item",
+        "created_by",
+        "updated_by",
+    ]
+    list_per_page = 50
+    save_on_top = True
+
+    fieldsets = (
+        (
+            "Serial identity",
+            {
+                "fields": (
+                    "company",
+                    "item",
+                    "status",
+                    "serial_number",
+                    "manufacturer_serial_number",
+                )
+            },
+        ),
+        (
+            "Current stock position",
+            {
+                "fields": (
+                    "warehouse",
+                    "location",
+                    "stock_item",
+                    "is_available",
+                    "is_in_stock",
+                )
+            },
+        ),
+        (
+            "Cost and lifecycle",
+            {
+                "fields": (
+                    "unit_cost",
+                    "received_at",
+                    "issued_at",
+                )
+            },
+        ),
+        (
+            "Notes and extra data",
+            {
+                "fields": (
+                    "notes",
+                    "extra_data",
+                )
+            },
+        ),
+        (
+            "Audit",
+            {
+                "fields": (
+                    "created_by",
+                    "updated_by",
+                    "created_at",
+                    "updated_at",
+                )
+            },
+        ),
+    )
+
+    def get_queryset(
+        self,
+        request: HttpRequest,
+    ) -> QuerySet[InventorySerialNumber]:
+        return (
+            super()
+            .get_queryset(request)
+            .select_related(
+                "company",
+                "item",
+                "warehouse",
+                "location",
+                "stock_item",
+                "created_by",
+                "updated_by",
+            )
+        )
+
+    def has_delete_permission(
+        self,
+        request: HttpRequest,
+        obj: InventorySerialNumber | None = None,
+    ) -> bool:
+        if obj and obj.tracking_entries.exists():
+            return False
+
+        if obj and obj.status in {
+            InventorySerialStatus.ISSUED,
+            InventorySerialStatus.ARCHIVED,
+        }:
+            return False
+
+        return super().has_delete_permission(
+            request,
+            obj,
+        )
+
+
+@admin.register(InventoryTrackingEntry)
+class InventoryTrackingEntryAdmin(admin.ModelAdmin):
+    """
+    Read-only admin configuration for tracking ledger entries.
+    """
+
+    list_display = [
+        "entry_type",
+        "occurred_at",
+        "company",
+        "item",
+        "warehouse",
+        "location",
+        "batch",
+        "serial_number",
+        "direction",
+        "quantity",
+        "quantity_before",
+        "quantity_after",
+        "reference_type",
+        "reference_number",
+        "created_at",
+    ]
+    list_filter = [
+        "entry_type",
+        "direction",
+        "company",
+        "warehouse",
+        "location",
+        "item",
+        "occurred_at",
+        "created_at",
+    ]
+    search_fields = [
+        "batch__batch_number",
+        "serial_number__serial_number",
+        "item__code",
+        "item__sku",
+        "item__barcode",
+        "item__name",
+        "warehouse__code",
+        "warehouse__name",
+        "location__code",
+        "location__name",
+        "stock_movement__movement_number",
+        "reference_type",
+        "reference_number",
+        "company__name",
+        "notes",
+    ]
+    readonly_fields = [
+        "company",
+        "item",
+        "warehouse",
+        "location",
+        "stock_item",
+        "stock_movement",
+        "batch",
+        "serial_number",
+        "entry_type",
+        "direction",
+        "quantity",
+        "quantity_before",
+        "quantity_after",
+        "unit_cost",
+        "reference_type",
+        "reference_id",
+        "reference_number",
+        "occurred_at",
+        "notes",
+        "extra_data",
+        "created_by",
+        "created_at",
+    ]
+    ordering = [
+        "-occurred_at",
+        "-created_at",
+        "-id",
+    ]
+    date_hierarchy = "occurred_at"
+    list_select_related = [
+        "company",
+        "item",
+        "warehouse",
+        "location",
+        "stock_item",
+        "stock_movement",
+        "batch",
+        "serial_number",
+        "created_by",
+    ]
+    list_per_page = 100
+
+    def get_queryset(
+        self,
+        request: HttpRequest,
+    ) -> QuerySet[InventoryTrackingEntry]:
+        return (
+            super()
+            .get_queryset(request)
+            .select_related(
+                "company",
+                "item",
+                "warehouse",
+                "location",
+                "stock_item",
+                "stock_movement",
+                "batch",
+                "serial_number",
+                "created_by",
+            )
+        )
+
+    def has_add_permission(
+        self,
+        request: HttpRequest,
+    ) -> bool:
+        return False
+
+    def has_change_permission(
+        self,
+        request: HttpRequest,
+        obj: InventoryTrackingEntry | None = None,
+    ) -> bool:
+        return False
+
+    def has_delete_permission(
+        self,
+        request: HttpRequest,
+        obj: InventoryTrackingEntry | None = None,
+    ) -> bool:
+        return False

@@ -1,6 +1,6 @@
-# ============================================================
+﻿# ============================================================
 # 📂 inventory/tests.py
-# 🧠 PrimeyAcc | Company Inventory Tests V2.7
+# 🧠 PrimeyAcc | Company Inventory Tests V2.8
 # ------------------------------------------------------------
 # ✅ Warehouse model/service tests
 # ✅ Stock item balance tests
@@ -33,6 +33,12 @@
 # ✅ Tenant isolation validation
 # ✅ Service-layer source of truth
 # ✅ No frontend company_id trust
+# ✅ Batch and lot model validation tests
+# ✅ Batch expiry and manufacturing date tests
+# ✅ Batch location balance tests
+# ✅ Serial number lifecycle tests
+# ✅ Detailed tracking ledger model tests
+# ✅ Batch and serial tenant isolation tests
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - كل بيانات المخزون مرتبطة بشركة واحدة فقط
@@ -46,12 +52,14 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import (
     CompanyMembership,
@@ -61,10 +69,22 @@ from accounts.models import (
 )
 from accounting.models import JournalEntry, JournalEntryStatus
 from rest_framework.test import APIClient
-from catalog.models import CatalogItem, CatalogItemType, CatalogUnit
+from catalog.models import (
+    CatalogItem,
+    CatalogItemTrackingMethod,
+    CatalogItemType,
+    CatalogUnit,
+)
 from companies.models import Branch, Company
 from inventory.models import (
     QUANTITY_ZERO,
+    InventoryBatch,
+    InventoryBatchBalance,
+    InventoryBatchStatus,
+    InventorySerialNumber,
+    InventorySerialStatus,
+    InventoryTrackingEntry,
+    InventoryTrackingEntryType,
     InventoryLocation,
     InventoryLocationStatus,
     InventoryLocationType,
@@ -90,6 +110,18 @@ from api.company.inventory.warehouses.serializers import (
 )
 from inventory.services import (
     adjust_stock,
+    create_inventory_batch,
+    create_inventory_tracking_entry,
+    get_company_inventory_batch_balances,
+    get_company_inventory_batches,
+    get_company_inventory_serial_numbers,
+    get_company_inventory_tracking_entries,
+    get_or_create_inventory_batch_balance,
+    register_inventory_serial_number,
+    resolve_tracking_entry_direction,
+    validate_inventory_batch_for_company,
+    validate_inventory_serial_for_company,
+    validate_inventory_tracking_item,
     build_inventory_location_payload,
     create_inventory_location,
     ensure_default_inventory_locations,
@@ -106,11 +138,17 @@ from inventory.services import (
     get_company_warehouses,
     get_or_create_stock_item,
     issue_stock,
+    issue_batch_stock,
+    issue_serial_stock,
+    receive_batch_stock,
+    receive_serial_stock,
     post_stock_movement_to_accounting,
     receive_stock,
     set_inventory_location_status,
     set_warehouse_status,
     transfer_stock,
+    transfer_batch_stock,
+    transfer_serial_stock,
     update_inventory_location,
     update_warehouse,
     validate_inventory_location_for_company,
@@ -3623,3 +3661,2288 @@ class InventoryValidationHelperTests(InventoryTestBase):
                 company=self.company,
                 item=self.service_item,
             )
+
+class InventoryTrackingModelTests(InventoryTestBase):
+    """
+    Phase 22.2.1 batch, serial, expiry, and tracking model tests.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        self.location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "TRACKING-BIN-001",
+                "name": "Tracking Bin 001",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+                "is_pickable": True,
+            },
+            user=self.user,
+        )
+
+        self.batch_product = CatalogItem.objects.create(
+            company=self.company,
+            unit=self.unit,
+            item_type=CatalogItemType.PRODUCT,
+            code="BATCH-ITEM-001",
+            sku="BATCH-SKU-001",
+            barcode="BATCH-BAR-001",
+            name="Batch Tracked Product",
+            purchase_price=Decimal("15.00"),
+            cost_price=Decimal("15.00"),
+            sale_price=Decimal("25.00"),
+            track_inventory=True,
+            inventory_tracking_method=CatalogItemTrackingMethod.BATCH,
+            track_expiry_dates=True,
+            is_purchasable=True,
+            is_sellable=True,
+        )
+
+        self.serial_product = CatalogItem.objects.create(
+            company=self.company,
+            unit=self.unit,
+            item_type=CatalogItemType.PRODUCT,
+            code="SERIAL-ITEM-001",
+            sku="SERIAL-SKU-001",
+            barcode="SERIAL-BAR-001",
+            name="Serial Tracked Product",
+            purchase_price=Decimal("50.00"),
+            cost_price=Decimal("50.00"),
+            sale_price=Decimal("75.00"),
+            track_inventory=True,
+            inventory_tracking_method=CatalogItemTrackingMethod.SERIAL,
+            track_expiry_dates=False,
+            is_purchasable=True,
+            is_sellable=True,
+        )
+
+        self.batch_stock_item = get_or_create_stock_item(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.batch_product,
+            user=self.user,
+        )
+        self.serial_stock_item = get_or_create_stock_item(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.serial_product,
+            user=self.user,
+        )
+
+    def test_inventory_batch_created_successfully(self):
+        batch = InventoryBatch.objects.create(
+            company=self.company,
+            item=self.batch_product,
+            batch_number="batch-001",
+            supplier_batch_number="supplier-001",
+            manufactured_at=timezone.localdate(),
+            expiry_date=timezone.localdate() + timedelta(days=365),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.assertEqual(batch.company, self.company)
+        self.assertEqual(batch.item, self.batch_product)
+        self.assertEqual(batch.batch_number, "BATCH-001")
+        self.assertEqual(
+            batch.supplier_batch_number,
+            "SUPPLIER-001",
+        )
+        self.assertEqual(batch.status, InventoryBatchStatus.ACTIVE)
+        self.assertFalse(batch.is_expired)
+        self.assertTrue(batch.is_available_for_issue)
+
+    def test_inventory_batch_requires_batch_tracked_product(self):
+        batch = InventoryBatch(
+            company=self.company,
+            item=self.product,
+            batch_number="INVALID-BATCH-PRODUCT",
+            expiry_date=timezone.localdate() + timedelta(days=30),
+        )
+
+        with self.assertRaises(ValidationError) as context:
+            batch.full_clean()
+
+        self.assertIn("item", context.exception.message_dict)
+
+    def test_inventory_batch_requires_expiry_for_configured_product(self):
+        batch = InventoryBatch(
+            company=self.company,
+            item=self.batch_product,
+            batch_number="MISSING-EXPIRY",
+        )
+
+        with self.assertRaises(ValidationError) as context:
+            batch.full_clean()
+
+        self.assertIn(
+            "expiry_date",
+            context.exception.message_dict,
+        )
+
+    def test_inventory_batch_rejects_expiry_before_manufacturing(self):
+        today = timezone.localdate()
+
+        batch = InventoryBatch(
+            company=self.company,
+            item=self.batch_product,
+            batch_number="BAD-DATES",
+            manufactured_at=today,
+            expiry_date=today - timedelta(days=1),
+        )
+
+        with self.assertRaises(ValidationError) as context:
+            batch.full_clean()
+
+        self.assertIn(
+            "expiry_date",
+            context.exception.message_dict,
+        )
+
+    def test_expired_inventory_batch_changes_status(self):
+        batch = InventoryBatch.objects.create(
+            company=self.company,
+            item=self.batch_product,
+            batch_number="EXPIRED-BATCH",
+            manufactured_at=timezone.localdate() - timedelta(days=60),
+            expiry_date=timezone.localdate() - timedelta(days=1),
+        )
+
+        self.assertEqual(
+            batch.status,
+            InventoryBatchStatus.EXPIRED,
+        )
+        self.assertTrue(batch.is_expired)
+        self.assertFalse(batch.is_available_for_issue)
+
+    def test_inventory_batch_balance_created_successfully(self):
+        batch = InventoryBatch.objects.create(
+            company=self.company,
+            item=self.batch_product,
+            batch_number="BALANCE-BATCH-001",
+            expiry_date=timezone.localdate() + timedelta(days=180),
+        )
+
+        balance = InventoryBatchBalance.objects.create(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.batch_stock_item,
+            item=self.batch_product,
+            batch=batch,
+            quantity_on_hand=Decimal("10.0000"),
+            reserved_quantity=Decimal("2.0000"),
+            average_cost=Decimal("15.00"),
+        )
+
+        self.assertEqual(
+            balance.available_quantity,
+            Decimal("8.0000"),
+        )
+        self.assertTrue(balance.is_available_for_issue)
+
+    def test_inventory_batch_balance_rejects_reserved_above_on_hand(self):
+        batch = InventoryBatch.objects.create(
+            company=self.company,
+            item=self.batch_product,
+            batch_number="RESERVED-BATCH-001",
+            expiry_date=timezone.localdate() + timedelta(days=180),
+        )
+
+        balance = InventoryBatchBalance(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.batch_stock_item,
+            item=self.batch_product,
+            batch=batch,
+            quantity_on_hand=Decimal("2.0000"),
+            reserved_quantity=Decimal("3.0000"),
+        )
+
+        with self.assertRaises(ValidationError) as context:
+            balance.full_clean()
+
+        self.assertIn(
+            "reserved_quantity",
+            context.exception.message_dict,
+        )
+
+    def test_inventory_serial_number_created_successfully(self):
+        serial = InventorySerialNumber.objects.create(
+            company=self.company,
+            item=self.serial_product,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.serial_stock_item,
+            serial_number="serial-0001",
+            manufacturer_serial_number="manufacturer-0001",
+            unit_cost=Decimal("50.00"),
+            received_at=timezone.now(),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.assertEqual(serial.serial_number, "SERIAL-0001")
+        self.assertEqual(
+            serial.manufacturer_serial_number,
+            "MANUFACTURER-0001",
+        )
+        self.assertEqual(
+            serial.status,
+            InventorySerialStatus.AVAILABLE,
+        )
+        self.assertTrue(serial.is_available)
+        self.assertTrue(serial.is_in_stock)
+
+    def test_inventory_serial_requires_serial_tracked_product(self):
+        serial = InventorySerialNumber(
+            company=self.company,
+            item=self.product,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=get_or_create_stock_item(
+                company=self.company,
+                warehouse=self.warehouse,
+                location=self.location,
+                item=self.product,
+                user=self.user,
+            ),
+            serial_number="INVALID-SERIAL-PRODUCT",
+        )
+
+        with self.assertRaises(ValidationError) as context:
+            serial.full_clean()
+
+        self.assertIn("item", context.exception.message_dict)
+
+    def test_available_serial_requires_current_location(self):
+        serial = InventorySerialNumber(
+            company=self.company,
+            item=self.serial_product,
+            serial_number="MISSING-LOCATION",
+            status=InventorySerialStatus.AVAILABLE,
+        )
+
+        with self.assertRaises(ValidationError) as context:
+            serial.full_clean()
+
+        self.assertIn(
+            "warehouse",
+            context.exception.message_dict,
+        )
+        self.assertIn(
+            "location",
+            context.exception.message_dict,
+        )
+        self.assertIn(
+            "stock_item",
+            context.exception.message_dict,
+        )
+
+    def test_issued_serial_sets_issued_at(self):
+        serial = InventorySerialNumber.objects.create(
+            company=self.company,
+            item=self.serial_product,
+            serial_number="ISSUED-SERIAL-001",
+            status=InventorySerialStatus.ISSUED,
+            unit_cost=Decimal("50.00"),
+        )
+
+        self.assertIsNotNone(serial.issued_at)
+        self.assertFalse(serial.is_available)
+        self.assertFalse(serial.is_in_stock)
+
+    def test_serial_number_is_unique_per_company(self):
+        InventorySerialNumber.objects.create(
+            company=self.company,
+            item=self.serial_product,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.serial_stock_item,
+            serial_number="UNIQUE-SERIAL-001",
+        )
+
+        duplicate = InventorySerialNumber(
+            company=self.company,
+            item=self.serial_product,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.serial_stock_item,
+            serial_number="UNIQUE-SERIAL-001",
+        )
+
+        with self.assertRaises(ValidationError):
+            duplicate.full_clean()
+
+    def test_batch_tracking_entry_created_successfully(self):
+        batch = InventoryBatch.objects.create(
+            company=self.company,
+            item=self.batch_product,
+            batch_number="ENTRY-BATCH-001",
+            expiry_date=timezone.localdate() + timedelta(days=365),
+        )
+
+        entry = InventoryTrackingEntry.objects.create(
+            company=self.company,
+            item=self.batch_product,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.batch_stock_item,
+            batch=batch,
+            entry_type=InventoryTrackingEntryType.RECEIPT,
+            direction=StockMovementDirection.DECREASE,
+            quantity=Decimal("5.0000"),
+            quantity_before=Decimal("0.0000"),
+            quantity_after=Decimal("5.0000"),
+            unit_cost=Decimal("15.00"),
+            created_by=self.user,
+        )
+
+        self.assertEqual(
+            entry.direction,
+            StockMovementDirection.INCREASE,
+        )
+        self.assertEqual(entry.batch, batch)
+        self.assertIsNone(entry.serial_number)
+
+    def test_tracking_entry_requires_exactly_one_tracking_target(self):
+        entry = InventoryTrackingEntry(
+            company=self.company,
+            item=self.batch_product,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.batch_stock_item,
+            entry_type=InventoryTrackingEntryType.RECEIPT,
+            direction=StockMovementDirection.INCREASE,
+            quantity=Decimal("1.0000"),
+        )
+
+        with self.assertRaises(ValidationError) as context:
+            entry.full_clean()
+
+        self.assertIn("batch", context.exception.message_dict)
+        self.assertIn(
+            "serial_number",
+            context.exception.message_dict,
+        )
+
+    def test_serial_tracking_entry_requires_quantity_one(self):
+        serial = InventorySerialNumber.objects.create(
+            company=self.company,
+            item=self.serial_product,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.serial_stock_item,
+            serial_number="ENTRY-SERIAL-001",
+        )
+
+        entry = InventoryTrackingEntry(
+            company=self.company,
+            item=self.serial_product,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.serial_stock_item,
+            serial_number=serial,
+            entry_type=InventoryTrackingEntryType.RECEIPT,
+            direction=StockMovementDirection.INCREASE,
+            quantity=Decimal("2.0000"),
+        )
+
+        with self.assertRaises(ValidationError) as context:
+            entry.full_clean()
+
+        self.assertIn(
+            "quantity",
+            context.exception.message_dict,
+        )
+
+    def test_batch_rejects_other_company_item(self):
+        batch = InventoryBatch(
+            company=self.company,
+            item=self.other_product,
+            batch_number="CROSS-COMPANY-BATCH",
+            expiry_date=timezone.localdate() + timedelta(days=30),
+        )
+
+        with self.assertRaises(ValidationError) as context:
+            batch.full_clean()
+
+        self.assertIn("item", context.exception.message_dict)
+
+
+class InventoryTrackingServiceTests(InventoryTestBase):
+    """
+    Phase 22.2.2.1 inventory tracking core service tests.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        self.location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "TRACK-SVC-BIN",
+                "name": "Tracking Service Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+                "is_pickable": True,
+            },
+            user=self.user,
+        )
+
+        self.batch_product = CatalogItem.objects.create(
+            company=self.company,
+            unit=self.unit,
+            item_type=CatalogItemType.PRODUCT,
+            code="BATCH-SVC-ITEM",
+            sku="BATCH-SVC-SKU",
+            barcode="BATCH-SVC-BAR",
+            name="Batch Service Product",
+            purchase_price=Decimal("12.00"),
+            cost_price=Decimal("12.00"),
+            sale_price=Decimal("20.00"),
+            track_inventory=True,
+            inventory_tracking_method=(
+                CatalogItemTrackingMethod.BATCH
+            ),
+            track_expiry_dates=True,
+            is_purchasable=True,
+            is_sellable=True,
+        )
+
+        self.serial_product = CatalogItem.objects.create(
+            company=self.company,
+            unit=self.unit,
+            item_type=CatalogItemType.PRODUCT,
+            code="SERIAL-SVC-ITEM",
+            sku="SERIAL-SVC-SKU",
+            barcode="SERIAL-SVC-BAR",
+            name="Serial Service Product",
+            purchase_price=Decimal("55.00"),
+            cost_price=Decimal("55.00"),
+            sale_price=Decimal("80.00"),
+            track_inventory=True,
+            inventory_tracking_method=(
+                CatalogItemTrackingMethod.SERIAL
+            ),
+            track_expiry_dates=False,
+            is_purchasable=True,
+            is_sellable=True,
+        )
+
+        self.batch_stock_item = (
+            get_or_create_stock_item(
+                company=self.company,
+                warehouse=self.warehouse,
+                location=self.location,
+                item=self.batch_product,
+                user=self.user,
+            )
+        )
+
+        self.serial_stock_item = (
+            get_or_create_stock_item(
+                company=self.company,
+                warehouse=self.warehouse,
+                location=self.location,
+                item=self.serial_product,
+                user=self.user,
+            )
+        )
+
+    def test_validate_inventory_tracking_item_accepts_batch(self):
+        validate_inventory_tracking_item(
+            company=self.company,
+            item=self.batch_product,
+            expected_method=(
+                CatalogItemTrackingMethod.BATCH
+            ),
+        )
+
+    def test_validate_inventory_tracking_item_rejects_none(self):
+        with self.assertRaises(ValidationError) as context:
+            validate_inventory_tracking_item(
+                company=self.company,
+                item=self.product,
+            )
+
+        self.assertIn(
+            "item",
+            context.exception.message_dict,
+        )
+
+    def test_create_inventory_batch_service(self):
+        today = timezone.localdate()
+
+        batch = create_inventory_batch(
+            company=self.company,
+            item=self.batch_product,
+            batch_number="svc-batch-001",
+            supplier_batch_number="supplier-svc-001",
+            manufactured_at=today,
+            expiry_date=today + timedelta(days=365),
+            received_at=timezone.now(),
+            notes="Service-created batch.",
+            user=self.user,
+        )
+
+        self.assertEqual(
+            batch.batch_number,
+            "SVC-BATCH-001",
+        )
+        self.assertEqual(
+            batch.supplier_batch_number,
+            "SUPPLIER-SVC-001",
+        )
+        self.assertEqual(batch.company, self.company)
+        self.assertEqual(batch.item, self.batch_product)
+        self.assertEqual(batch.created_by, self.user)
+
+    def test_create_inventory_batch_rejects_serial_product(self):
+        with self.assertRaises(ValidationError):
+            create_inventory_batch(
+                company=self.company,
+                item=self.serial_product,
+                batch_number="INVALID-SERIAL-BATCH",
+                expiry_date=(
+                    timezone.localdate()
+                    + timedelta(days=30)
+                ),
+                user=self.user,
+            )
+
+    def test_get_or_create_batch_balance_is_idempotent(self):
+        batch = create_inventory_batch(
+            company=self.company,
+            item=self.batch_product,
+            batch_number="BALANCE-SVC-001",
+            expiry_date=(
+                timezone.localdate()
+                + timedelta(days=180)
+            ),
+            user=self.user,
+        )
+
+        first = get_or_create_inventory_batch_balance(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.batch_product,
+            batch=batch,
+            stock_item=self.batch_stock_item,
+            user=self.user,
+        )
+
+        second = get_or_create_inventory_batch_balance(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.batch_product,
+            batch=batch,
+            stock_item=self.batch_stock_item,
+            user=self.user,
+        )
+
+        self.assertEqual(first.id, second.id)
+        self.assertEqual(
+            InventoryBatchBalance.objects.filter(
+                company=self.company,
+                warehouse=self.warehouse,
+                location=self.location,
+                item=self.batch_product,
+                batch=batch,
+            ).count(),
+            1,
+        )
+
+    def test_validate_batch_rejects_other_company(self):
+        other_batch_product = CatalogItem.objects.create(
+            company=self.other_company,
+            unit=self.other_unit,
+            item_type=CatalogItemType.PRODUCT,
+            code="OTHER-BATCH-SVC",
+            sku="OTHER-BATCH-SVC-SKU",
+            barcode="OTHER-BATCH-SVC-BAR",
+            name="Other Batch Service Product",
+            purchase_price=Decimal("10.00"),
+            cost_price=Decimal("10.00"),
+            sale_price=Decimal("15.00"),
+            track_inventory=True,
+            inventory_tracking_method=(
+                CatalogItemTrackingMethod.BATCH
+            ),
+            track_expiry_dates=True,
+            is_purchasable=True,
+            is_sellable=True,
+        )
+
+        other_batch = create_inventory_batch(
+            company=self.other_company,
+            item=other_batch_product,
+            batch_number="OTHER-BATCH-001",
+            expiry_date=(
+                timezone.localdate()
+                + timedelta(days=90)
+            ),
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError) as context:
+            validate_inventory_batch_for_company(
+                company=self.company,
+                batch=other_batch,
+            )
+
+        self.assertIn(
+            "batch",
+            context.exception.message_dict,
+        )
+
+    def test_register_inventory_serial_number_service(self):
+        serial = register_inventory_serial_number(
+            company=self.company,
+            item=self.serial_product,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.serial_stock_item,
+            serial_number="svc-serial-0001",
+            manufacturer_serial_number="mfg-svc-0001",
+            unit_cost=Decimal("55.00"),
+            user=self.user,
+        )
+
+        self.assertEqual(
+            serial.serial_number,
+            "SVC-SERIAL-0001",
+        )
+        self.assertEqual(
+            serial.manufacturer_serial_number,
+            "MFG-SVC-0001",
+        )
+        self.assertEqual(
+            serial.status,
+            InventorySerialStatus.AVAILABLE,
+        )
+        self.assertEqual(serial.warehouse, self.warehouse)
+        self.assertEqual(serial.location, self.location)
+        self.assertEqual(
+            serial.stock_item,
+            self.serial_stock_item,
+        )
+
+    def test_register_serial_rejects_batch_product(self):
+        with self.assertRaises(ValidationError):
+            register_inventory_serial_number(
+                company=self.company,
+                item=self.batch_product,
+                warehouse=self.warehouse,
+                location=self.location,
+                serial_number="INVALID-BATCH-SERIAL",
+                user=self.user,
+            )
+
+    def test_validate_serial_checks_current_location(self):
+        serial = register_inventory_serial_number(
+            company=self.company,
+            item=self.serial_product,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.serial_stock_item,
+            serial_number="LOCATION-SERIAL-001",
+            user=self.user,
+        )
+
+        other_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "OTHER-TRACK-SVC-BIN",
+                "name": "Other Tracking Service Bin",
+                "location_type": InventoryLocationType.BIN,
+            },
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError) as context:
+            validate_inventory_serial_for_company(
+                company=self.company,
+                serial_number=serial,
+                item=self.serial_product,
+                warehouse=self.warehouse,
+                location=other_location,
+                require_available=True,
+            )
+
+        self.assertIn(
+            "serial_number",
+            context.exception.message_dict,
+        )
+
+    def test_resolve_tracking_entry_direction(self):
+        self.assertEqual(
+            resolve_tracking_entry_direction(
+                InventoryTrackingEntryType.RECEIPT
+            ),
+            StockMovementDirection.INCREASE,
+        )
+        self.assertEqual(
+            resolve_tracking_entry_direction(
+                InventoryTrackingEntryType.ISSUE
+            ),
+            StockMovementDirection.DECREASE,
+        )
+
+    def test_create_batch_tracking_entry_service(self):
+        batch = create_inventory_batch(
+            company=self.company,
+            item=self.batch_product,
+            batch_number="ENTRY-SVC-BATCH",
+            expiry_date=(
+                timezone.localdate()
+                + timedelta(days=365)
+            ),
+            user=self.user,
+        )
+
+        entry = create_inventory_tracking_entry(
+            company=self.company,
+            item=self.batch_product,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.batch_stock_item,
+            batch=batch,
+            entry_type=(
+                InventoryTrackingEntryType.RECEIPT
+            ),
+            quantity=Decimal("5.0000"),
+            quantity_before=Decimal("0.0000"),
+            quantity_after=Decimal("5.0000"),
+            unit_cost=Decimal("12.00"),
+            reference_type="service_test",
+            reference_id=101,
+            reference_number="TRACK-SVC-001",
+            user=self.user,
+        )
+
+        self.assertEqual(entry.batch, batch)
+        self.assertIsNone(entry.serial_number)
+        self.assertEqual(
+            entry.direction,
+            StockMovementDirection.INCREASE,
+        )
+        self.assertEqual(
+            entry.quantity,
+            Decimal("5.0000"),
+        )
+
+    def test_create_serial_tracking_entry_service(self):
+        serial = register_inventory_serial_number(
+            company=self.company,
+            item=self.serial_product,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.serial_stock_item,
+            serial_number="ENTRY-SVC-SERIAL",
+            user=self.user,
+        )
+
+        entry = create_inventory_tracking_entry(
+            company=self.company,
+            item=self.serial_product,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.serial_stock_item,
+            serial_number=serial,
+            entry_type=(
+                InventoryTrackingEntryType.RECEIPT
+            ),
+            quantity=Decimal("1.0000"),
+            quantity_before=Decimal("0.0000"),
+            quantity_after=Decimal("1.0000"),
+            unit_cost=Decimal("55.00"),
+            user=self.user,
+        )
+
+        self.assertEqual(
+            entry.serial_number,
+            serial,
+        )
+        self.assertIsNone(entry.batch)
+        self.assertEqual(
+            entry.quantity,
+            Decimal("1.0000"),
+        )
+
+    def test_tracking_entry_rejects_batch_and_serial_together(self):
+        batch = create_inventory_batch(
+            company=self.company,
+            item=self.batch_product,
+            batch_number="DOUBLE-TARGET-BATCH",
+            expiry_date=(
+                timezone.localdate()
+                + timedelta(days=365)
+            ),
+            user=self.user,
+        )
+
+        serial = register_inventory_serial_number(
+            company=self.company,
+            item=self.serial_product,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.serial_stock_item,
+            serial_number="DOUBLE-TARGET-SERIAL",
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError) as context:
+            create_inventory_tracking_entry(
+                company=self.company,
+                item=self.batch_product,
+                warehouse=self.warehouse,
+                location=self.location,
+                stock_item=self.batch_stock_item,
+                batch=batch,
+                serial_number=serial,
+                entry_type=(
+                    InventoryTrackingEntryType.RECEIPT
+                ),
+                quantity=Decimal("1.0000"),
+                user=self.user,
+            )
+
+        self.assertIn(
+            "tracking",
+            context.exception.message_dict,
+        )
+
+    def test_tracking_querysets_are_company_scoped(self):
+        batch = create_inventory_batch(
+            company=self.company,
+            item=self.batch_product,
+            batch_number="QUERYSET-BATCH",
+            expiry_date=(
+                timezone.localdate()
+                + timedelta(days=365)
+            ),
+            user=self.user,
+        )
+
+        balance = get_or_create_inventory_batch_balance(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.batch_product,
+            batch=batch,
+            stock_item=self.batch_stock_item,
+            user=self.user,
+        )
+
+        serial = register_inventory_serial_number(
+            company=self.company,
+            item=self.serial_product,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.serial_stock_item,
+            serial_number="QUERYSET-SERIAL",
+            user=self.user,
+        )
+
+        entry = create_inventory_tracking_entry(
+            company=self.company,
+            item=self.serial_product,
+            warehouse=self.warehouse,
+            location=self.location,
+            stock_item=self.serial_stock_item,
+            serial_number=serial,
+            entry_type=(
+                InventoryTrackingEntryType.RECEIPT
+            ),
+            quantity=Decimal("1.0000"),
+            user=self.user,
+        )
+
+        self.assertIn(
+            batch,
+            get_company_inventory_batches(
+                self.company
+            ),
+        )
+        self.assertIn(
+            balance,
+            get_company_inventory_batch_balances(
+                self.company
+            ),
+        )
+        self.assertIn(
+            serial,
+            get_company_inventory_serial_numbers(
+                self.company
+            ),
+        )
+        self.assertIn(
+            entry,
+            get_company_inventory_tracking_entries(
+                self.company
+            ),
+        )
+
+        self.assertNotIn(
+            batch,
+            get_company_inventory_batches(
+                self.other_company
+            ),
+        )
+        self.assertNotIn(
+            serial,
+            get_company_inventory_serial_numbers(
+                self.other_company
+            ),
+        )
+        self.assertNotIn(
+            entry,
+            get_company_inventory_tracking_entries(
+                self.other_company
+            ),
+        )
+
+
+class InventoryTrackedStockMovementIntegrationTests(
+    InventoryTestBase
+):
+    """
+    Phase 22.2.2.2 batch and serial stock movement integration tests.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        self.location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "TRACKED-MOVEMENT-BIN",
+                "name": "Tracked Movement Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+                "is_pickable": True,
+            },
+            user=self.user,
+        )
+
+        self.batch_product = CatalogItem.objects.create(
+            company=self.company,
+            unit=self.unit,
+            item_type=CatalogItemType.PRODUCT,
+            code="TRACKED-BATCH-ITEM",
+            sku="TRACKED-BATCH-SKU",
+            barcode="TRACKED-BATCH-BAR",
+            name="Tracked Batch Product",
+            purchase_price=Decimal("14.00"),
+            cost_price=Decimal("14.00"),
+            sale_price=Decimal("24.00"),
+            track_inventory=True,
+            inventory_tracking_method=(
+                CatalogItemTrackingMethod.BATCH
+            ),
+            track_expiry_dates=True,
+            is_purchasable=True,
+            is_sellable=True,
+        )
+
+        self.serial_product = CatalogItem.objects.create(
+            company=self.company,
+            unit=self.unit,
+            item_type=CatalogItemType.PRODUCT,
+            code="TRACKED-SERIAL-ITEM",
+            sku="TRACKED-SERIAL-SKU",
+            barcode="TRACKED-SERIAL-BAR",
+            name="Tracked Serial Product",
+            purchase_price=Decimal("65.00"),
+            cost_price=Decimal("65.00"),
+            sale_price=Decimal("90.00"),
+            track_inventory=True,
+            inventory_tracking_method=(
+                CatalogItemTrackingMethod.SERIAL
+            ),
+            track_expiry_dates=False,
+            is_purchasable=True,
+            is_sellable=True,
+        )
+
+    def _create_batch(
+        self,
+        *,
+        batch_number="TRACKED-BATCH-001",
+        expiry_days=365,
+    ):
+        return create_inventory_batch(
+            company=self.company,
+            item=self.batch_product,
+            batch_number=batch_number,
+            manufactured_at=timezone.localdate(),
+            expiry_date=(
+                timezone.localdate()
+                + timedelta(days=expiry_days)
+            ),
+            user=self.user,
+        )
+
+    def test_receive_batch_stock_updates_general_and_batch_balance(self):
+        batch = self._create_batch()
+
+        movement = receive_batch_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.batch_product,
+            batch=batch,
+            quantity=Decimal("10.0000"),
+            unit_cost=Decimal("14.00"),
+            reference_type="test_receipt",
+            reference_id=501,
+            reference_number="BATCH-REC-001",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        stock_item = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.batch_product,
+        )
+        batch_balance = InventoryBatchBalance.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.batch_product,
+            batch=batch,
+        )
+
+        self.assertEqual(
+            movement.status,
+            StockMovementStatus.POSTED,
+        )
+        self.assertEqual(
+            movement.movement_type,
+            StockMovementType.IN,
+        )
+        self.assertEqual(
+            stock_item.quantity_on_hand,
+            Decimal("10.0000"),
+        )
+        self.assertEqual(
+            batch_balance.quantity_on_hand,
+            Decimal("10.0000"),
+        )
+        self.assertEqual(
+            batch_balance.average_cost,
+            Decimal("14.00"),
+        )
+
+    def test_receive_batch_stock_creates_tracking_entry(self):
+        batch = self._create_batch(
+            batch_number="TRACKED-BATCH-ENTRY",
+        )
+
+        movement = receive_batch_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.batch_product,
+            batch=batch,
+            quantity="6",
+            unit_cost="14.00",
+            reference_number="BATCH-ENTRY-REC",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        entry = InventoryTrackingEntry.objects.get(
+            company=self.company,
+            stock_movement=movement,
+            batch=batch,
+        )
+
+        self.assertEqual(
+            entry.entry_type,
+            InventoryTrackingEntryType.RECEIPT,
+        )
+        self.assertEqual(
+            entry.direction,
+            StockMovementDirection.INCREASE,
+        )
+        self.assertEqual(
+            entry.quantity,
+            Decimal("6.0000"),
+        )
+        self.assertEqual(
+            entry.quantity_before,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            entry.quantity_after,
+            Decimal("6.0000"),
+        )
+
+    def test_issue_batch_stock_updates_both_balances(self):
+        batch = self._create_batch(
+            batch_number="TRACKED-BATCH-ISSUE",
+        )
+
+        receive_batch_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.batch_product,
+            batch=batch,
+            quantity="10",
+            unit_cost="14.00",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        movement = issue_batch_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.batch_product,
+            batch=batch,
+            quantity="4",
+            reference_number="BATCH-ISSUE-001",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        stock_item = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.batch_product,
+        )
+        batch_balance = InventoryBatchBalance.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.batch_product,
+            batch=batch,
+        )
+        entry = InventoryTrackingEntry.objects.get(
+            stock_movement=movement,
+            batch=batch,
+        )
+
+        self.assertEqual(
+            stock_item.quantity_on_hand,
+            Decimal("6.0000"),
+        )
+        self.assertEqual(
+            batch_balance.quantity_on_hand,
+            Decimal("6.0000"),
+        )
+        self.assertEqual(
+            entry.entry_type,
+            InventoryTrackingEntryType.ISSUE,
+        )
+        self.assertEqual(
+            entry.quantity_before,
+            Decimal("10.0000"),
+        )
+        self.assertEqual(
+            entry.quantity_after,
+            Decimal("6.0000"),
+        )
+
+    def test_issue_batch_stock_rejects_insufficient_batch_balance(self):
+        batch = self._create_batch(
+            batch_number="TRACKED-BATCH-LIMIT",
+        )
+
+        receive_batch_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.batch_product,
+            batch=batch,
+            quantity="2",
+            unit_cost="14.00",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        movement_count_before = StockMovement.objects.count()
+        tracking_count_before = (
+            InventoryTrackingEntry.objects.count()
+        )
+
+        with self.assertRaises(ValidationError):
+            issue_batch_stock(
+                company=self.company,
+                warehouse=self.warehouse,
+                location=self.location,
+                item=self.batch_product,
+                batch=batch,
+                quantity="3",
+                user=self.user,
+                post_accounting=False,
+            )
+
+        stock_item = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.batch_product,
+        )
+        batch_balance = InventoryBatchBalance.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.batch_product,
+            batch=batch,
+        )
+
+        self.assertEqual(
+            stock_item.quantity_on_hand,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            batch_balance.quantity_on_hand,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            StockMovement.objects.count(),
+            movement_count_before,
+        )
+        self.assertEqual(
+            InventoryTrackingEntry.objects.count(),
+            tracking_count_before,
+        )
+
+    def test_issue_batch_stock_rejects_expired_batch(self):
+        batch = create_inventory_batch(
+            company=self.company,
+            item=self.batch_product,
+            batch_number="TRACKED-EXPIRED-BATCH",
+            manufactured_at=(
+                timezone.localdate()
+                - timedelta(days=30)
+            ),
+            expiry_date=(
+                timezone.localdate()
+                - timedelta(days=1)
+            ),
+            user=self.user,
+        )
+
+        self.assertEqual(
+            batch.status,
+            InventoryBatchStatus.EXPIRED,
+        )
+
+        with self.assertRaises(ValidationError):
+            issue_batch_stock(
+                company=self.company,
+                warehouse=self.warehouse,
+                location=self.location,
+                item=self.batch_product,
+                batch=batch,
+                quantity="1",
+                user=self.user,
+                post_accounting=False,
+            )
+
+        self.assertFalse(
+            StockMovement.objects.filter(
+                company=self.company,
+                item=self.batch_product,
+                movement_type=StockMovementType.OUT,
+            ).exists()
+        )
+
+    def test_full_batch_issue_marks_batch_depleted(self):
+        batch = self._create_batch(
+            batch_number="TRACKED-BATCH-DEPLETE",
+        )
+
+        receive_batch_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.batch_product,
+            batch=batch,
+            quantity="5",
+            unit_cost="14.00",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        issue_batch_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.batch_product,
+            batch=batch,
+            quantity="5",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        batch.refresh_from_db()
+
+        batch_balance = InventoryBatchBalance.objects.get(
+            company=self.company,
+            batch=batch,
+            location=self.location,
+        )
+
+        self.assertEqual(
+            batch_balance.quantity_on_hand,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            batch.status,
+            InventoryBatchStatus.DEPLETED,
+        )
+
+    def test_receive_serial_stock_creates_one_record_per_unit(self):
+        movement = receive_serial_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.serial_product,
+            serial_numbers=[
+                "tracked-serial-001",
+                "tracked-serial-002",
+                "tracked-serial-003",
+            ],
+            unit_cost="65.00",
+            reference_number="SERIAL-REC-001",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        stock_item = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.serial_product,
+        )
+        serials = InventorySerialNumber.objects.filter(
+            company=self.company,
+            item=self.serial_product,
+        )
+        entries = InventoryTrackingEntry.objects.filter(
+            company=self.company,
+            stock_movement=movement,
+            entry_type=(
+                InventoryTrackingEntryType.RECEIPT
+            ),
+        )
+
+        self.assertEqual(
+            movement.quantity,
+            Decimal("3.0000"),
+        )
+        self.assertEqual(
+            stock_item.quantity_on_hand,
+            Decimal("3.0000"),
+        )
+        self.assertEqual(serials.count(), 3)
+        self.assertEqual(entries.count(), 3)
+
+        self.assertTrue(
+            serials.filter(
+                serial_number="TRACKED-SERIAL-001",
+                status=InventorySerialStatus.AVAILABLE,
+                warehouse=self.warehouse,
+                location=self.location,
+                stock_item=stock_item,
+            ).exists()
+        )
+
+    def test_receive_serial_stock_rejects_duplicate_input_atomically(self):
+        movement_count_before = StockMovement.objects.count()
+        stock_count_before = StockItem.objects.filter(
+            company=self.company,
+            item=self.serial_product,
+        ).count()
+
+        with self.assertRaises(ValidationError):
+            receive_serial_stock(
+                company=self.company,
+                warehouse=self.warehouse,
+                location=self.location,
+                item=self.serial_product,
+                serial_numbers=[
+                    "duplicate-serial",
+                    "DUPLICATE-SERIAL",
+                ],
+                unit_cost="65.00",
+                user=self.user,
+                post_accounting=False,
+            )
+
+        self.assertEqual(
+            StockMovement.objects.count(),
+            movement_count_before,
+        )
+        self.assertEqual(
+            InventorySerialNumber.objects.filter(
+                company=self.company,
+                item=self.serial_product,
+            ).count(),
+            0,
+        )
+        self.assertEqual(
+            StockItem.objects.filter(
+                company=self.company,
+                item=self.serial_product,
+            ).count(),
+            stock_count_before,
+        )
+
+    def test_receive_serial_stock_rejects_existing_company_serial(self):
+        receive_serial_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.serial_product,
+            serial_numbers=["EXISTING-SERIAL-001"],
+            unit_cost="65.00",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        movement_count_before = StockMovement.objects.count()
+
+        with self.assertRaises(ValidationError):
+            receive_serial_stock(
+                company=self.company,
+                warehouse=self.warehouse,
+                location=self.location,
+                item=self.serial_product,
+                serial_numbers=[
+                    "EXISTING-SERIAL-001",
+                    "NEW-SERIAL-002",
+                ],
+                unit_cost="65.00",
+                user=self.user,
+                post_accounting=False,
+            )
+
+        self.assertEqual(
+            StockMovement.objects.count(),
+            movement_count_before,
+        )
+        self.assertFalse(
+            InventorySerialNumber.objects.filter(
+                company=self.company,
+                serial_number="NEW-SERIAL-002",
+            ).exists()
+        )
+
+    def test_issue_serial_stock_updates_status_and_general_balance(self):
+        receive_movement = receive_serial_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.serial_product,
+            serial_numbers=[
+                "ISSUE-SERIAL-001",
+                "ISSUE-SERIAL-002",
+                "ISSUE-SERIAL-003",
+            ],
+            unit_cost="65.00",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        serials = list(
+            InventorySerialNumber.objects.filter(
+                company=self.company,
+                serial_number__in=[
+                    "ISSUE-SERIAL-001",
+                    "ISSUE-SERIAL-002",
+                ],
+            ).order_by("serial_number")
+        )
+
+        movement = issue_serial_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.serial_product,
+            serial_numbers=serials,
+            reference_number="SERIAL-ISSUE-001",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        stock_item = receive_movement.stock_item
+        stock_item.refresh_from_db()
+
+        self.assertEqual(
+            movement.quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            stock_item.quantity_on_hand,
+            Decimal("1.0000"),
+        )
+
+        for serial in serials:
+            serial.refresh_from_db()
+
+            self.assertEqual(
+                serial.status,
+                InventorySerialStatus.ISSUED,
+            )
+            self.assertIsNone(serial.warehouse)
+            self.assertIsNone(serial.location)
+            self.assertIsNone(serial.stock_item)
+            self.assertIsNotNone(serial.issued_at)
+
+        self.assertEqual(
+            InventoryTrackingEntry.objects.filter(
+                stock_movement=movement,
+                entry_type=(
+                    InventoryTrackingEntryType.ISSUE
+                ),
+            ).count(),
+            2,
+        )
+
+    def test_issue_serial_stock_rejects_serial_from_other_location(self):
+        second_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "TRACKED-SECOND-BIN",
+                "name": "Tracked Second Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_pickable": True,
+            },
+            user=self.user,
+        )
+
+        receive_serial_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=second_location,
+            item=self.serial_product,
+            serial_numbers=[
+                "OTHER-LOCATION-SERIAL",
+            ],
+            unit_cost="65.00",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        serial = InventorySerialNumber.objects.get(
+            company=self.company,
+            serial_number="OTHER-LOCATION-SERIAL",
+        )
+
+        movement_count_before = StockMovement.objects.count()
+
+        with self.assertRaises(ValidationError):
+            issue_serial_stock(
+                company=self.company,
+                warehouse=self.warehouse,
+                location=self.location,
+                item=self.serial_product,
+                serial_numbers=[serial],
+                user=self.user,
+                post_accounting=False,
+            )
+
+        serial.refresh_from_db()
+
+        self.assertEqual(
+            serial.status,
+            InventorySerialStatus.AVAILABLE,
+        )
+        self.assertEqual(
+            serial.location,
+            second_location,
+        )
+        self.assertEqual(
+            StockMovement.objects.count(),
+            movement_count_before,
+        )
+
+    def test_issue_serial_stock_rejects_duplicate_serial_instances(self):
+        receive_serial_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.serial_product,
+            serial_numbers=["DUPLICATE-INSTANCE-SERIAL"],
+            unit_cost="65.00",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        serial = InventorySerialNumber.objects.get(
+            company=self.company,
+            serial_number="DUPLICATE-INSTANCE-SERIAL",
+        )
+
+        movement_count_before = StockMovement.objects.count()
+
+        with self.assertRaises(ValidationError):
+            issue_serial_stock(
+                company=self.company,
+                warehouse=self.warehouse,
+                location=self.location,
+                item=self.serial_product,
+                serial_numbers=[serial, serial],
+                user=self.user,
+                post_accounting=False,
+            )
+
+        serial.refresh_from_db()
+
+        self.assertEqual(
+            serial.status,
+            InventorySerialStatus.AVAILABLE,
+        )
+        self.assertEqual(
+            StockMovement.objects.count(),
+            movement_count_before,
+        )
+
+
+class InventoryTrackedTransferIntegrationTests(
+    InventoryTestBase
+):
+    """
+    Phase 22.2.2.3 tracked batch and serial transfer tests.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        self.source_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "TRACK-TRANSFER-SOURCE",
+                "name": "Tracked Transfer Source",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+                "is_pickable": True,
+            },
+            user=self.user,
+        )
+
+        self.same_warehouse_target = (
+            create_inventory_location(
+                company=self.company,
+                warehouse=self.warehouse,
+                data={
+                    "code": "TRACK-TRANSFER-INTERNAL",
+                    "name": "Tracked Internal Target",
+                    "location_type": (
+                        InventoryLocationType.BIN
+                    ),
+                    "is_pickable": True,
+                },
+                user=self.user,
+            )
+        )
+
+        self.target_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.second_warehouse,
+            data={
+                "code": "TRACK-TRANSFER-TARGET",
+                "name": "Tracked Transfer Target",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+                "is_pickable": True,
+            },
+            user=self.user,
+        )
+
+        self.batch_product = CatalogItem.objects.create(
+            company=self.company,
+            unit=self.unit,
+            item_type=CatalogItemType.PRODUCT,
+            code="TRANSFER-BATCH-ITEM",
+            sku="TRANSFER-BATCH-SKU",
+            barcode="TRANSFER-BATCH-BAR",
+            name="Transfer Batch Product",
+            purchase_price=Decimal("18.00"),
+            cost_price=Decimal("18.00"),
+            sale_price=Decimal("28.00"),
+            track_inventory=True,
+            inventory_tracking_method=(
+                CatalogItemTrackingMethod.BATCH
+            ),
+            track_expiry_dates=True,
+            is_purchasable=True,
+            is_sellable=True,
+        )
+
+        self.serial_product = CatalogItem.objects.create(
+            company=self.company,
+            unit=self.unit,
+            item_type=CatalogItemType.PRODUCT,
+            code="TRANSFER-SERIAL-ITEM",
+            sku="TRANSFER-SERIAL-SKU",
+            barcode="TRANSFER-SERIAL-BAR",
+            name="Transfer Serial Product",
+            purchase_price=Decimal("70.00"),
+            cost_price=Decimal("70.00"),
+            sale_price=Decimal("100.00"),
+            track_inventory=True,
+            inventory_tracking_method=(
+                CatalogItemTrackingMethod.SERIAL
+            ),
+            track_expiry_dates=False,
+            is_purchasable=True,
+            is_sellable=True,
+        )
+
+    def _create_batch(
+        self,
+        batch_number="TRANSFER-BATCH-001",
+    ):
+        return create_inventory_batch(
+            company=self.company,
+            item=self.batch_product,
+            batch_number=batch_number,
+            manufactured_at=timezone.localdate(),
+            expiry_date=(
+                timezone.localdate()
+                + timedelta(days=365)
+            ),
+            user=self.user,
+        )
+
+    def test_transfer_batch_between_warehouses_updates_balances(self):
+        batch = self._create_batch()
+
+        receive_batch_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.source_location,
+            item=self.batch_product,
+            batch=batch,
+            quantity="10",
+            unit_cost="18.00",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        result = transfer_batch_stock(
+            company=self.company,
+            source_warehouse=self.warehouse,
+            target_warehouse=self.second_warehouse,
+            source_location=self.source_location,
+            target_location=self.target_location,
+            item=self.batch_product,
+            batch=batch,
+            quantity="4",
+            reference_number="BATCH-TRANSFER-001",
+            user=self.user,
+        )
+
+        source_stock = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.source_location,
+            item=self.batch_product,
+        )
+        target_stock = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.second_warehouse,
+            location=self.target_location,
+            item=self.batch_product,
+        )
+        source_batch = InventoryBatchBalance.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.source_location,
+            batch=batch,
+        )
+        target_batch = InventoryBatchBalance.objects.get(
+            company=self.company,
+            warehouse=self.second_warehouse,
+            location=self.target_location,
+            batch=batch,
+        )
+
+        self.assertEqual(
+            source_stock.quantity_on_hand,
+            Decimal("6.0000"),
+        )
+        self.assertEqual(
+            target_stock.quantity_on_hand,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            source_batch.quantity_on_hand,
+            Decimal("6.0000"),
+        )
+        self.assertEqual(
+            target_batch.quantity_on_hand,
+            Decimal("4.0000"),
+        )
+        self.assertEqual(
+            result["outgoing"].movement_type,
+            StockMovementType.TRANSFER_OUT,
+        )
+        self.assertEqual(
+            result["incoming"].movement_type,
+            StockMovementType.TRANSFER_IN,
+        )
+
+    def test_transfer_batch_creates_tracking_entries(self):
+        batch = self._create_batch(
+            "TRANSFER-BATCH-TRACKING"
+        )
+
+        receive_batch_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.source_location,
+            item=self.batch_product,
+            batch=batch,
+            quantity="8",
+            unit_cost="18.00",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        result = transfer_batch_stock(
+            company=self.company,
+            source_warehouse=self.warehouse,
+            target_warehouse=self.second_warehouse,
+            source_location=self.source_location,
+            target_location=self.target_location,
+            item=self.batch_product,
+            batch=batch,
+            quantity="3",
+            reference_number="BATCH-TRACK-001",
+            user=self.user,
+        )
+
+        outgoing_entry = InventoryTrackingEntry.objects.get(
+            stock_movement=result["outgoing"],
+            batch=batch,
+        )
+        incoming_entry = InventoryTrackingEntry.objects.get(
+            stock_movement=result["incoming"],
+            batch=batch,
+        )
+
+        self.assertEqual(
+            outgoing_entry.entry_type,
+            InventoryTrackingEntryType.TRANSFER_OUT,
+        )
+        self.assertEqual(
+            outgoing_entry.quantity_before,
+            Decimal("8.0000"),
+        )
+        self.assertEqual(
+            outgoing_entry.quantity_after,
+            Decimal("5.0000"),
+        )
+        self.assertEqual(
+            incoming_entry.entry_type,
+            InventoryTrackingEntryType.TRANSFER_IN,
+        )
+        self.assertEqual(
+            incoming_entry.quantity_before,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            incoming_entry.quantity_after,
+            Decimal("3.0000"),
+        )
+
+    def test_transfer_batch_inside_same_warehouse(self):
+        batch = self._create_batch(
+            "TRANSFER-BATCH-INTERNAL"
+        )
+
+        receive_batch_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.source_location,
+            item=self.batch_product,
+            batch=batch,
+            quantity="7",
+            unit_cost="18.00",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        transfer_batch_stock(
+            company=self.company,
+            source_warehouse=self.warehouse,
+            target_warehouse=self.warehouse,
+            source_location=self.source_location,
+            target_location=self.same_warehouse_target,
+            item=self.batch_product,
+            batch=batch,
+            quantity="2",
+            user=self.user,
+        )
+
+        source_balance = InventoryBatchBalance.objects.get(
+            company=self.company,
+            location=self.source_location,
+            batch=batch,
+        )
+        target_balance = InventoryBatchBalance.objects.get(
+            company=self.company,
+            location=self.same_warehouse_target,
+            batch=batch,
+        )
+
+        self.assertEqual(
+            source_balance.quantity_on_hand,
+            Decimal("5.0000"),
+        )
+        self.assertEqual(
+            target_balance.quantity_on_hand,
+            Decimal("2.0000"),
+        )
+
+    def test_transfer_batch_rejects_insufficient_quantity_atomically(self):
+        batch = self._create_batch(
+            "TRANSFER-BATCH-LIMIT"
+        )
+
+        receive_batch_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.source_location,
+            item=self.batch_product,
+            batch=batch,
+            quantity="2",
+            unit_cost="18.00",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        movement_count = StockMovement.objects.count()
+        entry_count = InventoryTrackingEntry.objects.count()
+
+        with self.assertRaises(ValidationError):
+            transfer_batch_stock(
+                company=self.company,
+                source_warehouse=self.warehouse,
+                target_warehouse=self.second_warehouse,
+                source_location=self.source_location,
+                target_location=self.target_location,
+                item=self.batch_product,
+                batch=batch,
+                quantity="3",
+                user=self.user,
+            )
+
+        source_balance = InventoryBatchBalance.objects.get(
+            company=self.company,
+            location=self.source_location,
+            batch=batch,
+        )
+
+        self.assertEqual(
+            source_balance.quantity_on_hand,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            StockMovement.objects.count(),
+            movement_count,
+        )
+        self.assertEqual(
+            InventoryTrackingEntry.objects.count(),
+            entry_count,
+        )
+        self.assertFalse(
+            InventoryBatchBalance.objects.filter(
+                company=self.company,
+                location=self.target_location,
+                batch=batch,
+            ).exists()
+        )
+
+    def test_transfer_batch_rejects_same_location(self):
+        batch = self._create_batch(
+            "TRANSFER-BATCH-SAME"
+        )
+
+        receive_batch_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.source_location,
+            item=self.batch_product,
+            batch=batch,
+            quantity="2",
+            unit_cost="18.00",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        with self.assertRaises(ValidationError):
+            transfer_batch_stock(
+                company=self.company,
+                source_warehouse=self.warehouse,
+                target_warehouse=self.warehouse,
+                source_location=self.source_location,
+                target_location=self.source_location,
+                item=self.batch_product,
+                batch=batch,
+                quantity="1",
+                user=self.user,
+            )
+
+    def test_transfer_serial_updates_current_position(self):
+        receive_serial_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.source_location,
+            item=self.serial_product,
+            serial_numbers=[
+                "TRANSFER-SERIAL-001",
+                "TRANSFER-SERIAL-002",
+            ],
+            unit_cost="70.00",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        serials = list(
+            InventorySerialNumber.objects.filter(
+                company=self.company,
+                serial_number__in=[
+                    "TRANSFER-SERIAL-001",
+                    "TRANSFER-SERIAL-002",
+                ],
+            ).order_by("id")
+        )
+
+        result = transfer_serial_stock(
+            company=self.company,
+            source_warehouse=self.warehouse,
+            target_warehouse=self.second_warehouse,
+            source_location=self.source_location,
+            target_location=self.target_location,
+            item=self.serial_product,
+            serial_numbers=serials,
+            reference_number="SERIAL-TRANSFER-001",
+            user=self.user,
+        )
+
+        source_stock = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.source_location,
+            item=self.serial_product,
+        )
+        target_stock = StockItem.objects.get(
+            company=self.company,
+            warehouse=self.second_warehouse,
+            location=self.target_location,
+            item=self.serial_product,
+        )
+
+        self.assertEqual(
+            source_stock.quantity_on_hand,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            target_stock.quantity_on_hand,
+            Decimal("2.0000"),
+        )
+
+        for serial in serials:
+            serial.refresh_from_db()
+
+            self.assertEqual(
+                serial.status,
+                InventorySerialStatus.AVAILABLE,
+            )
+            self.assertEqual(
+                serial.warehouse,
+                self.second_warehouse,
+            )
+            self.assertEqual(
+                serial.location,
+                self.target_location,
+            )
+            self.assertEqual(
+                serial.stock_item,
+                target_stock,
+            )
+
+        self.assertEqual(
+            result["outgoing"].movement_type,
+            StockMovementType.TRANSFER_OUT,
+        )
+        self.assertEqual(
+            result["incoming"].movement_type,
+            StockMovementType.TRANSFER_IN,
+        )
+
+    def test_transfer_serial_creates_two_entries_per_serial(self):
+        receive_serial_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.source_location,
+            item=self.serial_product,
+            serial_numbers=[
+                "TRANSFER-ENTRY-SERIAL-001",
+                "TRANSFER-ENTRY-SERIAL-002",
+            ],
+            unit_cost="70.00",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        serials = list(
+            InventorySerialNumber.objects.filter(
+                company=self.company,
+                item=self.serial_product,
+            ).order_by("id")
+        )
+
+        result = transfer_serial_stock(
+            company=self.company,
+            source_warehouse=self.warehouse,
+            target_warehouse=self.second_warehouse,
+            source_location=self.source_location,
+            target_location=self.target_location,
+            item=self.serial_product,
+            serial_numbers=serials,
+            user=self.user,
+        )
+
+        outgoing_entries = InventoryTrackingEntry.objects.filter(
+            stock_movement=result["outgoing"],
+            entry_type=(
+                InventoryTrackingEntryType.TRANSFER_OUT
+            ),
+        )
+        incoming_entries = InventoryTrackingEntry.objects.filter(
+            stock_movement=result["incoming"],
+            entry_type=(
+                InventoryTrackingEntryType.TRANSFER_IN
+            ),
+        )
+
+        self.assertEqual(outgoing_entries.count(), 2)
+        self.assertEqual(incoming_entries.count(), 2)
+
+    def test_transfer_serial_rejects_wrong_source_location(self):
+        receive_serial_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.source_location,
+            item=self.serial_product,
+            serial_numbers=["WRONG-SOURCE-SERIAL"],
+            unit_cost="70.00",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        serial = InventorySerialNumber.objects.get(
+            company=self.company,
+            serial_number="WRONG-SOURCE-SERIAL",
+        )
+
+        movement_count = StockMovement.objects.count()
+
+        with self.assertRaises(ValidationError):
+            transfer_serial_stock(
+                company=self.company,
+                source_warehouse=self.warehouse,
+                target_warehouse=self.second_warehouse,
+                source_location=self.same_warehouse_target,
+                target_location=self.target_location,
+                item=self.serial_product,
+                serial_numbers=[serial],
+                user=self.user,
+            )
+
+        serial.refresh_from_db()
+
+        self.assertEqual(
+            serial.location,
+            self.source_location,
+        )
+        self.assertEqual(
+            serial.status,
+            InventorySerialStatus.AVAILABLE,
+        )
+        self.assertEqual(
+            StockMovement.objects.count(),
+            movement_count,
+        )
+
+    def test_tracked_transfers_do_not_create_gl_entries(self):
+        batch = self._create_batch(
+            "TRANSFER-NO-GL-BATCH"
+        )
+
+        receive_batch_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.source_location,
+            item=self.batch_product,
+            batch=batch,
+            quantity="3",
+            unit_cost="18.00",
+            user=self.user,
+            post_accounting=False,
+        )
+
+        result = transfer_batch_stock(
+            company=self.company,
+            source_warehouse=self.warehouse,
+            target_warehouse=self.second_warehouse,
+            source_location=self.source_location,
+            target_location=self.target_location,
+            item=self.batch_product,
+            batch=batch,
+            quantity="1",
+            user=self.user,
+        )
+
+        self.assertIsNone(
+            post_stock_movement_to_accounting(
+                result["outgoing"],
+                actor=self.user,
+                auto_post=True,
+            )
+        )
+        self.assertIsNone(
+            post_stock_movement_to_accounting(
+                result["incoming"],
+                actor=self.user,
+                auto_post=True,
+            )
+        )
+
+        self.assertFalse(
+            JournalEntry.objects.filter(
+                company=self.company,
+                source_type="stock_movement",
+                source_id__in=[
+                    str(result["outgoing"].id),
+                    str(result["incoming"].id),
+                ],
+            ).exists()
+        )

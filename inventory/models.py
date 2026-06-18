@@ -1,6 +1,6 @@
-# ============================================================
+﻿# ============================================================
 # 📂 inventory/models.py
-# 🧠 PrimeyAcc | Company Inventory & Stock Models V2.1
+# 🧠 PrimeyAcc | Company Inventory & Stock Models V2.2
 # ------------------------------------------------------------
 # ✅ Company-scoped inventory foundation
 # ✅ Warehouses under company and optional branch
@@ -20,6 +20,12 @@
 # ✅ Prevent negative stock at model/service layer
 # ✅ Snapshot catalog item data at movement time
 # ✅ Ready for purchases receiving integration later
+# ✅ Batch and lot master records
+# ✅ Batch balances per warehouse location
+# ✅ Serial number lifecycle tracking
+# ✅ Manufacturing and expiry date validation
+# ✅ Detailed inventory tracking ledger
+# ✅ Batch and serial tenant isolation
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - كل بيانات المخزون مرتبطة بشركة واحدة فقط
@@ -41,10 +47,14 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
 from django.utils import timezone
 
-from catalog.models import CatalogItem, CatalogItemType
+from catalog.models import (
+    CatalogItem,
+    CatalogItemTrackingMethod,
+    CatalogItemType,
+)
 from companies.models import Branch, Company
 
 
@@ -1603,5 +1613,1459 @@ class StockMovement(models.Model):
         if self.item_id:
             self.apply_item_snapshot()
 
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+class InventoryBatchStatus(models.TextChoices):
+    """
+    Inventory batch lifecycle status.
+    """
+
+    ACTIVE = "ACTIVE", "Active"
+    DEPLETED = "DEPLETED", "Depleted"
+    EXPIRED = "EXPIRED", "Expired"
+    BLOCKED = "BLOCKED", "Blocked"
+    ARCHIVED = "ARCHIVED", "Archived"
+
+
+class InventorySerialStatus(models.TextChoices):
+    """
+    Inventory serial number lifecycle status.
+    """
+
+    AVAILABLE = "AVAILABLE", "Available"
+    RESERVED = "RESERVED", "Reserved"
+    ISSUED = "ISSUED", "Issued"
+    BLOCKED = "BLOCKED", "Blocked"
+    ARCHIVED = "ARCHIVED", "Archived"
+
+
+class InventoryTrackingEntryType(models.TextChoices):
+    """
+    Detailed batch or serial tracking event type.
+    """
+
+    RECEIPT = "RECEIPT", "Receipt"
+    ISSUE = "ISSUE", "Issue"
+    TRANSFER_IN = "TRANSFER_IN", "Transfer in"
+    TRANSFER_OUT = "TRANSFER_OUT", "Transfer out"
+    ADJUSTMENT_IN = "ADJUSTMENT_IN", "Adjustment in"
+    ADJUSTMENT_OUT = "ADJUSTMENT_OUT", "Adjustment out"
+    RESERVATION = "RESERVATION", "Reservation"
+    RELEASE = "RELEASE", "Reservation release"
+    BLOCK = "BLOCK", "Block"
+    UNBLOCK = "UNBLOCK", "Unblock"
+
+
+class InventoryBatch(models.Model):
+    """
+    Company-scoped batch or lot master record.
+
+    The batch identifies one lot of one catalog product. Physical quantities
+    are stored separately in InventoryBatchBalance so the same batch may exist
+    in multiple warehouse locations without duplicating the batch identity.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="inventory_batches",
+        db_index=True,
+        verbose_name="Company",
+    )
+    item = models.ForeignKey(
+        CatalogItem,
+        on_delete=models.PROTECT,
+        related_name="inventory_batches",
+        db_index=True,
+        verbose_name="Catalog item",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=InventoryBatchStatus.choices,
+        default=InventoryBatchStatus.ACTIVE,
+        db_index=True,
+        verbose_name="Status",
+    )
+
+    batch_number = models.CharField(
+        max_length=120,
+        db_index=True,
+        verbose_name="Batch / lot number",
+        help_text="Unique batch number for this catalog item inside the company.",
+    )
+    supplier_batch_number = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name="Supplier batch number",
+    )
+
+    manufactured_at = models.DateField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Manufacturing date",
+    )
+    expiry_date = models.DateField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Expiry date",
+    )
+
+    received_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="First received at",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_inventory_batches",
+        blank=True,
+        null=True,
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="updated_inventory_batches",
+        blank=True,
+        null=True,
+        verbose_name="Updated by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Inventory batch"
+        verbose_name_plural = "Inventory batches"
+        ordering = [
+            "company_id",
+            "item_id",
+            "expiry_date",
+            "batch_number",
+            "id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "item", "batch_number"],
+                name="unique_inventory_batch_per_company_item",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(manufactured_at__isnull=True)
+                    | Q(expiry_date__isnull=True)
+                    | Q(expiry_date__gte=F("manufactured_at"))
+                ),
+                name="inventory_batch_expiry_after_manufacture",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "status"]),
+            models.Index(fields=["company", "item"]),
+            models.Index(fields=["company", "batch_number"]),
+            models.Index(fields=["company", "expiry_date"]),
+            models.Index(fields=["company", "item", "expiry_date"]),
+            models.Index(fields=["status", "expiry_date"]),
+            models.Index(fields=["created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.batch_number} - {self.item.name}"
+
+    @property
+    def is_expired(self) -> bool:
+        return bool(
+            self.expiry_date
+            and self.expiry_date < timezone.localdate()
+        )
+
+    @property
+    def is_available_for_issue(self) -> bool:
+        return (
+            self.status == InventoryBatchStatus.ACTIVE
+            and not self.is_expired
+        )
+
+    def clean(self) -> None:
+        super().clean()
+
+        self.batch_number = (self.batch_number or "").strip().upper()
+        self.supplier_batch_number = (
+            self.supplier_batch_number or ""
+        ).strip().upper()
+
+        if not self.batch_number:
+            raise ValidationError(
+                {"batch_number": "Batch number is required."}
+            )
+
+        if self.item_id and self.company_id:
+            if self.item.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "item": (
+                            "Selected catalog item does not belong "
+                            "to this company."
+                        )
+                    }
+                )
+
+            if self.item.item_type != CatalogItemType.PRODUCT:
+                raise ValidationError(
+                    {
+                        "item": (
+                            "Only product catalog items can have "
+                            "inventory batches."
+                        )
+                    }
+                )
+
+            if not self.item.track_inventory:
+                raise ValidationError(
+                    {
+                        "item": (
+                            "Catalog item must have inventory tracking enabled."
+                        )
+                    }
+                )
+
+            if (
+                self.item.inventory_tracking_method
+                != CatalogItemTrackingMethod.BATCH
+            ):
+                raise ValidationError(
+                    {
+                        "item": (
+                            "Catalog item must use batch tracking."
+                        )
+                    }
+                )
+
+            if self.item.track_expiry_dates and not self.expiry_date:
+                raise ValidationError(
+                    {
+                        "expiry_date": (
+                            "Expiry date is required for this catalog item."
+                        )
+                    }
+                )
+
+        if (
+            self.manufactured_at
+            and self.expiry_date
+            and self.expiry_date < self.manufactured_at
+        ):
+            raise ValidationError(
+                {
+                    "expiry_date": (
+                        "Expiry date cannot be earlier than "
+                        "manufacturing date."
+                    )
+                }
+            )
+
+        if self.is_expired and self.status == InventoryBatchStatus.ACTIVE:
+            self.status = InventoryBatchStatus.EXPIRED
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+class InventoryBatchBalance(models.Model):
+    """
+    Current quantity for one batch in one warehouse location.
+
+    One row represents:
+    company + warehouse + location + catalog item + batch
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="inventory_batch_balances",
+        db_index=True,
+        verbose_name="Company",
+    )
+    warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.CASCADE,
+        related_name="batch_balances",
+        db_index=True,
+        verbose_name="Warehouse",
+    )
+    location = models.ForeignKey(
+        InventoryLocation,
+        on_delete=models.PROTECT,
+        related_name="batch_balances",
+        db_index=True,
+        verbose_name="Inventory location",
+    )
+    stock_item = models.ForeignKey(
+        StockItem,
+        on_delete=models.PROTECT,
+        related_name="batch_balances",
+        db_index=True,
+        verbose_name="Stock item",
+    )
+    item = models.ForeignKey(
+        CatalogItem,
+        on_delete=models.PROTECT,
+        related_name="inventory_batch_balances",
+        db_index=True,
+        verbose_name="Catalog item",
+    )
+    batch = models.ForeignKey(
+        InventoryBatch,
+        on_delete=models.PROTECT,
+        related_name="balances",
+        db_index=True,
+        verbose_name="Inventory batch",
+    )
+
+    quantity_on_hand = models.DecimalField(
+        max_digits=16,
+        decimal_places=4,
+        default=QUANTITY_ZERO,
+        validators=[MinValueValidator(QUANTITY_ZERO)],
+        verbose_name="Quantity on hand",
+    )
+    reserved_quantity = models.DecimalField(
+        max_digits=16,
+        decimal_places=4,
+        default=QUANTITY_ZERO,
+        validators=[MinValueValidator(QUANTITY_ZERO)],
+        verbose_name="Reserved quantity",
+    )
+    average_cost = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Average cost",
+    )
+
+    last_movement_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Last movement at",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Inventory batch balance"
+        verbose_name_plural = "Inventory batch balances"
+        ordering = [
+            "company_id",
+            "warehouse_id",
+            "location_id",
+            "item_id",
+            "batch_id",
+            "id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "company",
+                    "warehouse",
+                    "location",
+                    "item",
+                    "batch",
+                ],
+                name="unique_inventory_batch_balance_location",
+            ),
+            models.CheckConstraint(
+                condition=Q(quantity_on_hand__gte=QUANTITY_ZERO),
+                name="inventory_batch_balance_quantity_nonnegative",
+            ),
+            models.CheckConstraint(
+                condition=Q(reserved_quantity__gte=QUANTITY_ZERO),
+                name="inventory_batch_reserved_nonnegative",
+            ),
+            models.CheckConstraint(
+                condition=Q(reserved_quantity__lte=F("quantity_on_hand")),
+                name="inventory_batch_reserved_not_above_on_hand",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "warehouse"]),
+            models.Index(fields=["company", "warehouse", "location"]),
+            models.Index(fields=["company", "location", "item"]),
+            models.Index(fields=["company", "item", "batch"]),
+            models.Index(fields=["company", "batch"]),
+            models.Index(fields=["batch", "quantity_on_hand"]),
+            models.Index(fields=["last_movement_at"]),
+            models.Index(fields=["created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.batch.batch_number} - "
+            f"{self.location.display_name} - "
+            f"{self.quantity_on_hand}"
+        )
+
+    @property
+    def available_quantity(self) -> Decimal:
+        available = quantize_quantity(
+            self.quantity_on_hand - self.reserved_quantity
+        )
+        if available < QUANTITY_ZERO:
+            return QUANTITY_ZERO
+        return available
+
+    @property
+    def is_available_for_issue(self) -> bool:
+        return (
+            self.available_quantity > QUANTITY_ZERO
+            and self.batch.is_available_for_issue
+        )
+
+    def clean(self) -> None:
+        super().clean()
+
+        self.quantity_on_hand = quantize_quantity(self.quantity_on_hand)
+        self.reserved_quantity = quantize_quantity(self.reserved_quantity)
+        self.average_cost = quantize_money(self.average_cost)
+
+        if self.warehouse_id and self.company_id:
+            if self.warehouse.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "warehouse": (
+                            "Selected warehouse does not belong "
+                            "to this company."
+                        )
+                    }
+                )
+
+        if self.location_id:
+            if self.location.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "location": (
+                            "Selected inventory location does not belong "
+                            "to this company."
+                        )
+                    }
+                )
+
+            if self.location.warehouse_id != self.warehouse_id:
+                raise ValidationError(
+                    {
+                        "location": (
+                            "Selected inventory location does not belong "
+                            "to this warehouse."
+                        )
+                    }
+                )
+
+        if self.item_id:
+            if self.item.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "item": (
+                            "Selected catalog item does not belong "
+                            "to this company."
+                        )
+                    }
+                )
+
+            if (
+                self.item.inventory_tracking_method
+                != CatalogItemTrackingMethod.BATCH
+            ):
+                raise ValidationError(
+                    {"item": "Catalog item must use batch tracking."}
+                )
+
+        if self.batch_id:
+            if self.batch.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "batch": (
+                            "Selected batch does not belong to this company."
+                        )
+                    }
+                )
+
+            if self.batch.item_id != self.item_id:
+                raise ValidationError(
+                    {
+                        "batch": (
+                            "Selected batch must belong to the same "
+                            "catalog item."
+                        )
+                    }
+                )
+
+        if self.stock_item_id:
+            if self.stock_item.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "stock_item": (
+                            "Selected stock item does not belong "
+                            "to this company."
+                        )
+                    }
+                )
+
+            if self.stock_item.warehouse_id != self.warehouse_id:
+                raise ValidationError(
+                    {
+                        "stock_item": (
+                            "Stock item warehouse must match "
+                            "batch balance warehouse."
+                        )
+                    }
+                )
+
+            if self.stock_item.location_id != self.location_id:
+                raise ValidationError(
+                    {
+                        "stock_item": (
+                            "Stock item location must match "
+                            "batch balance location."
+                        )
+                    }
+                )
+
+            if self.stock_item.item_id != self.item_id:
+                raise ValidationError(
+                    {
+                        "stock_item": (
+                            "Stock item catalog item must match "
+                            "batch balance item."
+                        )
+                    }
+                )
+
+        if self.quantity_on_hand < QUANTITY_ZERO:
+            raise ValidationError(
+                {
+                    "quantity_on_hand": (
+                        "Quantity on hand cannot be negative."
+                    )
+                }
+            )
+
+        if self.reserved_quantity < QUANTITY_ZERO:
+            raise ValidationError(
+                {
+                    "reserved_quantity": (
+                        "Reserved quantity cannot be negative."
+                    )
+                }
+            )
+
+        if self.reserved_quantity > self.quantity_on_hand:
+            raise ValidationError(
+                {
+                    "reserved_quantity": (
+                        "Reserved quantity cannot exceed quantity on hand."
+                    )
+                }
+            )
+
+        if self.average_cost < MONEY_ZERO:
+            raise ValidationError(
+                {"average_cost": "Average cost cannot be negative."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+class InventorySerialNumber(models.Model):
+    """
+    Company-scoped serial number representing one physical inventory unit.
+
+    A serial number may be present in only one current location at a time.
+    Issued or archived serial numbers may retain their latest location as
+    historical context while their lifecycle status prevents reuse.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="inventory_serial_numbers",
+        db_index=True,
+        verbose_name="Company",
+    )
+    item = models.ForeignKey(
+        CatalogItem,
+        on_delete=models.PROTECT,
+        related_name="inventory_serial_numbers",
+        db_index=True,
+        verbose_name="Catalog item",
+    )
+    warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.PROTECT,
+        related_name="serial_numbers",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Current warehouse",
+    )
+    location = models.ForeignKey(
+        InventoryLocation,
+        on_delete=models.PROTECT,
+        related_name="serial_numbers",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Current inventory location",
+    )
+    stock_item = models.ForeignKey(
+        StockItem,
+        on_delete=models.PROTECT,
+        related_name="serial_numbers",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Current stock item",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=InventorySerialStatus.choices,
+        default=InventorySerialStatus.AVAILABLE,
+        db_index=True,
+        verbose_name="Status",
+    )
+
+    serial_number = models.CharField(
+        max_length=180,
+        db_index=True,
+        verbose_name="Serial number",
+        help_text="Unique serial number inside the company.",
+    )
+    manufacturer_serial_number = models.CharField(
+        max_length=180,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name="Manufacturer serial number",
+    )
+
+    unit_cost = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Unit cost",
+    )
+
+    received_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Received at",
+    )
+    issued_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Issued at",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_inventory_serial_numbers",
+        blank=True,
+        null=True,
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="updated_inventory_serial_numbers",
+        blank=True,
+        null=True,
+        verbose_name="Updated by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Inventory serial number"
+        verbose_name_plural = "Inventory serial numbers"
+        ordering = [
+            "company_id",
+            "item_id",
+            "serial_number",
+            "id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "serial_number"],
+                name="unique_inventory_serial_number_per_company",
+            ),
+            models.UniqueConstraint(
+                fields=["company", "manufacturer_serial_number"],
+                condition=~Q(manufacturer_serial_number=""),
+                name="unique_manufacturer_serial_per_company",
+            ),
+            models.CheckConstraint(
+                condition=Q(unit_cost__gte=MONEY_ZERO),
+                name="inventory_serial_unit_cost_nonnegative",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "status"]),
+            models.Index(fields=["company", "item"]),
+            models.Index(fields=["company", "warehouse"]),
+            models.Index(fields=["company", "warehouse", "location"]),
+            models.Index(fields=["company", "location", "item"]),
+            models.Index(fields=["company", "serial_number"]),
+            models.Index(fields=["item", "status"]),
+            models.Index(fields=["received_at"]),
+            models.Index(fields=["issued_at"]),
+            models.Index(fields=["created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.serial_number} - {self.item.name}"
+
+    @property
+    def is_available(self) -> bool:
+        return self.status == InventorySerialStatus.AVAILABLE
+
+    @property
+    def is_in_stock(self) -> bool:
+        return (
+            self.status
+            in {
+                InventorySerialStatus.AVAILABLE,
+                InventorySerialStatus.RESERVED,
+                InventorySerialStatus.BLOCKED,
+            }
+            and self.warehouse_id is not None
+            and self.location_id is not None
+            and self.stock_item_id is not None
+        )
+
+    def clean(self) -> None:
+        super().clean()
+
+        self.serial_number = (self.serial_number or "").strip().upper()
+        self.manufacturer_serial_number = (
+            self.manufacturer_serial_number or ""
+        ).strip().upper()
+        self.unit_cost = quantize_money(self.unit_cost)
+
+        if not self.serial_number:
+            raise ValidationError(
+                {"serial_number": "Serial number is required."}
+            )
+
+        if self.item_id and self.company_id:
+            if self.item.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "item": (
+                            "Selected catalog item does not belong "
+                            "to this company."
+                        )
+                    }
+                )
+
+            if self.item.item_type != CatalogItemType.PRODUCT:
+                raise ValidationError(
+                    {
+                        "item": (
+                            "Only product catalog items can have "
+                            "serial numbers."
+                        )
+                    }
+                )
+
+            if not self.item.track_inventory:
+                raise ValidationError(
+                    {
+                        "item": (
+                            "Catalog item must have inventory tracking enabled."
+                        )
+                    }
+                )
+
+            if (
+                self.item.inventory_tracking_method
+                != CatalogItemTrackingMethod.SERIAL
+            ):
+                raise ValidationError(
+                    {
+                        "item": (
+                            "Catalog item must use serial number tracking."
+                        )
+                    }
+                )
+
+        location_required_statuses = {
+            InventorySerialStatus.AVAILABLE,
+            InventorySerialStatus.RESERVED,
+            InventorySerialStatus.BLOCKED,
+        }
+
+        if self.status in location_required_statuses:
+            location_errors = {}
+
+            if not self.warehouse_id:
+                location_errors["warehouse"] = (
+                    "Current warehouse is required for an "
+                    "in-stock serial number."
+                )
+
+            if not self.location_id:
+                location_errors["location"] = (
+                    "Current location is required for an "
+                    "in-stock serial number."
+                )
+
+            if not self.stock_item_id:
+                location_errors["stock_item"] = (
+                    "Current stock item is required for an "
+                    "in-stock serial number."
+                )
+
+            if location_errors:
+                raise ValidationError(location_errors)
+
+        if self.warehouse_id:
+            if self.warehouse.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "warehouse": (
+                            "Selected warehouse does not belong "
+                            "to this company."
+                        )
+                    }
+                )
+
+        if self.location_id:
+            if not self.warehouse_id:
+                raise ValidationError(
+                    {
+                        "warehouse": (
+                            "Warehouse is required when a location is selected."
+                        )
+                    }
+                )
+
+            if self.location.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "location": (
+                            "Selected inventory location does not belong "
+                            "to this company."
+                        )
+                    }
+                )
+
+            if self.location.warehouse_id != self.warehouse_id:
+                raise ValidationError(
+                    {
+                        "location": (
+                            "Selected inventory location does not belong "
+                            "to this warehouse."
+                        )
+                    }
+                )
+
+        if self.stock_item_id:
+            if self.stock_item.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "stock_item": (
+                            "Selected stock item does not belong "
+                            "to this company."
+                        )
+                    }
+                )
+
+            if self.stock_item.item_id != self.item_id:
+                raise ValidationError(
+                    {
+                        "stock_item": (
+                            "Stock item catalog item must match "
+                            "serial number item."
+                        )
+                    }
+                )
+
+            if self.stock_item.warehouse_id != self.warehouse_id:
+                raise ValidationError(
+                    {
+                        "stock_item": (
+                            "Stock item warehouse must match "
+                            "serial number warehouse."
+                        )
+                    }
+                )
+
+            if self.stock_item.location_id != self.location_id:
+                raise ValidationError(
+                    {
+                        "stock_item": (
+                            "Stock item location must match "
+                            "serial number location."
+                        )
+                    }
+                )
+
+        if self.unit_cost < MONEY_ZERO:
+            raise ValidationError(
+                {"unit_cost": "Unit cost cannot be negative."}
+            )
+
+        if self.status == InventorySerialStatus.ISSUED and not self.issued_at:
+            self.issued_at = timezone.now()
+
+        if self.status != InventorySerialStatus.ISSUED:
+            self.issued_at = None
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+class InventoryTrackingEntry(models.Model):
+    """
+    Immutable-style detailed ledger entry for one batch or serial number.
+
+    The entry records batch/serial movement history. Stock mutation remains
+    the responsibility of inventory.services so model saves cannot silently
+    change StockItem or InventoryBatchBalance quantities.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="inventory_tracking_entries",
+        db_index=True,
+        verbose_name="Company",
+    )
+    item = models.ForeignKey(
+        CatalogItem,
+        on_delete=models.PROTECT,
+        related_name="inventory_tracking_entries",
+        db_index=True,
+        verbose_name="Catalog item",
+    )
+    warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.PROTECT,
+        related_name="tracking_entries",
+        db_index=True,
+        verbose_name="Warehouse",
+    )
+    location = models.ForeignKey(
+        InventoryLocation,
+        on_delete=models.PROTECT,
+        related_name="tracking_entries",
+        db_index=True,
+        verbose_name="Inventory location",
+    )
+    stock_item = models.ForeignKey(
+        StockItem,
+        on_delete=models.PROTECT,
+        related_name="tracking_entries",
+        db_index=True,
+        verbose_name="Stock item",
+    )
+    stock_movement = models.ForeignKey(
+        StockMovement,
+        on_delete=models.PROTECT,
+        related_name="tracking_entries",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Stock movement",
+    )
+
+    batch = models.ForeignKey(
+        InventoryBatch,
+        on_delete=models.PROTECT,
+        related_name="tracking_entries",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Inventory batch",
+    )
+    serial_number = models.ForeignKey(
+        InventorySerialNumber,
+        on_delete=models.PROTECT,
+        related_name="tracking_entries",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Serial number",
+    )
+
+    entry_type = models.CharField(
+        max_length=30,
+        choices=InventoryTrackingEntryType.choices,
+        db_index=True,
+        verbose_name="Tracking entry type",
+    )
+    direction = models.CharField(
+        max_length=20,
+        choices=StockMovementDirection.choices,
+        db_index=True,
+        verbose_name="Direction",
+    )
+
+    quantity = models.DecimalField(
+        max_digits=16,
+        decimal_places=4,
+        validators=[MinValueValidator(Decimal("0.0001"))],
+        verbose_name="Quantity",
+    )
+    quantity_before = models.DecimalField(
+        max_digits=16,
+        decimal_places=4,
+        default=QUANTITY_ZERO,
+        verbose_name="Quantity before",
+    )
+    quantity_after = models.DecimalField(
+        max_digits=16,
+        decimal_places=4,
+        default=QUANTITY_ZERO,
+        verbose_name="Quantity after",
+    )
+    unit_cost = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Unit cost",
+    )
+
+    reference_type = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name="Reference type",
+    )
+    reference_id = models.PositiveBigIntegerField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Reference ID",
+    )
+    reference_number = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name="Reference number",
+    )
+
+    occurred_at = models.DateTimeField(
+        default=timezone.now,
+        db_index=True,
+        verbose_name="Occurred at",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_inventory_tracking_entries",
+        blank=True,
+        null=True,
+        verbose_name="Created by",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+
+    class Meta:
+        verbose_name = "Inventory tracking entry"
+        verbose_name_plural = "Inventory tracking entries"
+        ordering = ["-occurred_at", "-created_at", "-id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    (
+                        Q(batch__isnull=False)
+                        & Q(serial_number__isnull=True)
+                    )
+                    | (
+                        Q(batch__isnull=True)
+                        & Q(serial_number__isnull=False)
+                    )
+                ),
+                name="inventory_tracking_batch_or_serial_only",
+            ),
+            models.CheckConstraint(
+                condition=Q(quantity__gt=QUANTITY_ZERO),
+                name="inventory_tracking_quantity_positive",
+            ),
+            models.CheckConstraint(
+                condition=Q(unit_cost__gte=MONEY_ZERO),
+                name="inventory_tracking_unit_cost_nonnegative",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "entry_type"]),
+            models.Index(fields=["company", "occurred_at"]),
+            models.Index(fields=["company", "item"]),
+            models.Index(fields=["company", "warehouse", "location"]),
+            models.Index(fields=["company", "batch"]),
+            models.Index(fields=["company", "serial_number"]),
+            models.Index(fields=["company", "reference_type", "reference_id"]),
+            models.Index(fields=["stock_movement", "entry_type"]),
+            models.Index(fields=["occurred_at"]),
+            models.Index(fields=["created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        tracked_value = (
+            self.batch.batch_number
+            if self.batch_id
+            else self.serial_number.serial_number
+        )
+        return f"{self.entry_type} - {tracked_value} - {self.quantity}"
+
+    def clean(self) -> None:
+        super().clean()
+
+        self.reference_type = (self.reference_type or "").strip()
+        self.reference_number = (self.reference_number or "").strip()
+        self.quantity = quantize_quantity(self.quantity)
+        self.quantity_before = quantize_quantity(self.quantity_before)
+        self.quantity_after = quantize_quantity(self.quantity_after)
+        self.unit_cost = quantize_money(self.unit_cost)
+
+        if bool(self.batch_id) == bool(self.serial_number_id):
+            raise ValidationError(
+                {
+                    "batch": (
+                        "Select exactly one tracking target: "
+                        "batch or serial number."
+                    ),
+                    "serial_number": (
+                        "Select exactly one tracking target: "
+                        "batch or serial number."
+                    ),
+                }
+            )
+
+        if self.quantity <= QUANTITY_ZERO:
+            raise ValidationError(
+                {"quantity": "Tracking quantity must be greater than zero."}
+            )
+
+        if self.unit_cost < MONEY_ZERO:
+            raise ValidationError(
+                {"unit_cost": "Unit cost cannot be negative."}
+            )
+
+        if self.warehouse_id:
+            if self.warehouse.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "warehouse": (
+                            "Selected warehouse does not belong "
+                            "to this company."
+                        )
+                    }
+                )
+
+        if self.location_id:
+            if self.location.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "location": (
+                            "Selected inventory location does not belong "
+                            "to this company."
+                        )
+                    }
+                )
+
+            if self.location.warehouse_id != self.warehouse_id:
+                raise ValidationError(
+                    {
+                        "location": (
+                            "Selected inventory location does not belong "
+                            "to this warehouse."
+                        )
+                    }
+                )
+
+        if self.item_id:
+            if self.item.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "item": (
+                            "Selected catalog item does not belong "
+                            "to this company."
+                        )
+                    }
+                )
+
+        if self.stock_item_id:
+            if self.stock_item.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "stock_item": (
+                            "Selected stock item does not belong "
+                            "to this company."
+                        )
+                    }
+                )
+
+            if self.stock_item.warehouse_id != self.warehouse_id:
+                raise ValidationError(
+                    {
+                        "stock_item": (
+                            "Stock item warehouse must match "
+                            "tracking entry warehouse."
+                        )
+                    }
+                )
+
+            if self.stock_item.location_id != self.location_id:
+                raise ValidationError(
+                    {
+                        "stock_item": (
+                            "Stock item location must match "
+                            "tracking entry location."
+                        )
+                    }
+                )
+
+            if self.stock_item.item_id != self.item_id:
+                raise ValidationError(
+                    {
+                        "stock_item": (
+                            "Stock item catalog item must match "
+                            "tracking entry item."
+                        )
+                    }
+                )
+
+        if self.stock_movement_id:
+            if self.stock_movement.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "stock_movement": (
+                            "Selected stock movement does not belong "
+                            "to this company."
+                        )
+                    }
+                )
+
+            if self.stock_movement.warehouse_id != self.warehouse_id:
+                raise ValidationError(
+                    {
+                        "stock_movement": (
+                            "Stock movement warehouse must match "
+                            "tracking entry warehouse."
+                        )
+                    }
+                )
+
+            if self.stock_movement.location_id != self.location_id:
+                raise ValidationError(
+                    {
+                        "stock_movement": (
+                            "Stock movement location must match "
+                            "tracking entry location."
+                        )
+                    }
+                )
+
+            if self.stock_movement.item_id != self.item_id:
+                raise ValidationError(
+                    {
+                        "stock_movement": (
+                            "Stock movement item must match "
+                            "tracking entry item."
+                        )
+                    }
+                )
+
+        if self.batch_id:
+            if self.batch.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "batch": (
+                            "Selected batch does not belong to this company."
+                        )
+                    }
+                )
+
+            if self.batch.item_id != self.item_id:
+                raise ValidationError(
+                    {
+                        "batch": (
+                            "Selected batch must belong to the same item."
+                        )
+                    }
+                )
+
+            if (
+                self.item.inventory_tracking_method
+                != CatalogItemTrackingMethod.BATCH
+            ):
+                raise ValidationError(
+                    {
+                        "item": (
+                            "Batch tracking entry requires a "
+                            "batch-tracked catalog item."
+                        )
+                    }
+                )
+
+        if self.serial_number_id:
+            if self.serial_number.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "serial_number": (
+                            "Selected serial number does not belong "
+                            "to this company."
+                        )
+                    }
+                )
+
+            if self.serial_number.item_id != self.item_id:
+                raise ValidationError(
+                    {
+                        "serial_number": (
+                            "Selected serial number must belong "
+                            "to the same item."
+                        )
+                    }
+                )
+
+            if (
+                self.item.inventory_tracking_method
+                != CatalogItemTrackingMethod.SERIAL
+            ):
+                raise ValidationError(
+                    {
+                        "item": (
+                            "Serial tracking entry requires a "
+                            "serial-tracked catalog item."
+                        )
+                    }
+                )
+
+            if self.quantity != Decimal("1.0000"):
+                raise ValidationError(
+                    {
+                        "quantity": (
+                            "A serial number tracking entry must "
+                            "have quantity 1."
+                        )
+                    }
+                )
+
+        increase_types = {
+            InventoryTrackingEntryType.RECEIPT,
+            InventoryTrackingEntryType.TRANSFER_IN,
+            InventoryTrackingEntryType.ADJUSTMENT_IN,
+            InventoryTrackingEntryType.RELEASE,
+            InventoryTrackingEntryType.UNBLOCK,
+        }
+        decrease_types = {
+            InventoryTrackingEntryType.ISSUE,
+            InventoryTrackingEntryType.TRANSFER_OUT,
+            InventoryTrackingEntryType.ADJUSTMENT_OUT,
+            InventoryTrackingEntryType.RESERVATION,
+            InventoryTrackingEntryType.BLOCK,
+        }
+
+        if self.entry_type in increase_types:
+            self.direction = StockMovementDirection.INCREASE
+
+        if self.entry_type in decrease_types:
+            self.direction = StockMovementDirection.DECREASE
+
+    def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)

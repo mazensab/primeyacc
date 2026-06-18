@@ -1,6 +1,6 @@
-# ============================================================
+﻿# ============================================================
 # 📂 catalog/models.py
-# 🧠 PrimeyAcc | Company Catalog Models V1.0
+# 🧠 PrimeyAcc | Company Catalog Models V1.1
 # ------------------------------------------------------------
 # ✅ Company-scoped catalog foundation
 # ✅ Categories, units, products, and services
@@ -9,14 +9,19 @@
 # ✅ Product/service unified as CatalogItem
 # ✅ Safe uniqueness per company
 # ✅ Category/unit ownership validation
-# ✅ Ready for invoices, sales, purchases, and inventory later
+# ✅ Inventory tracking policy per product
+# ✅ Batch and serial number tracking configuration
+# ✅ Expiry date tracking configuration
+# ✅ Service items blocked from inventory tracking
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - كل بيانات الكتالوج مرتبطة بشركة واحدة فقط
 # - الشركة تؤخذ من request.company في APIs وليس من company_id القادم من الفرونت
-# - المنتج/الخدمة لا يرتبط مباشرة بفرع في هذه المرحلة
 # - التصنيف والوحدة يجب أن يكونا تابعين لنفس شركة المنتج
-# - المخزون والأسعار حسب الفروع ستكون في مراحل لاحقة بجداول مستقلة
+# - الخدمات لا تقبل تتبع المخزون أو الدفعات أو الأرقام التسلسلية
+# - المنتج غير المتتبع مخزنيا لا يقبل سياسة دفعات أو أرقام تسلسلية
+# - تتبع تاريخ الانتهاء متاح فقط للمنتجات المتتبعة بالدفعات
+# - تفاصيل أرصدة الدفعات والأرقام التسلسلية تحفظ في تطبيق inventory
 # ============================================================
 
 from __future__ import annotations
@@ -75,6 +80,25 @@ class CatalogItemStatus(models.TextChoices):
     ACTIVE = "ACTIVE", "Active"
     INACTIVE = "INACTIVE", "Inactive"
     ARCHIVED = "ARCHIVED", "Archived"
+
+
+class CatalogItemTrackingMethod(models.TextChoices):
+    """
+    Inventory tracking method for a catalog product.
+
+    NONE:
+        Quantity is tracked without batch or serial details.
+
+    BATCH:
+        Quantity is tracked by batch or lot number.
+
+    SERIAL:
+        Every individual unit is tracked using a unique serial number.
+    """
+
+    NONE = "NONE", "No batch or serial tracking"
+    BATCH = "BATCH", "Batch / Lot tracking"
+    SERIAL = "SERIAL", "Serial number tracking"
 
 
 class CatalogCategory(models.Model):
@@ -387,7 +411,8 @@ class CatalogItem(models.Model):
     - Sales invoice items
     - Purchase invoice items
     - Service billing
-    - Inventory tracking later
+    - Inventory balances
+    - Batch, serial, and expiry tracking configuration
     """
 
     company = models.ForeignKey(
@@ -507,7 +532,27 @@ class CatalogItem(models.Model):
     track_inventory = models.BooleanField(
         default=False,
         db_index=True,
-        help_text="Inventory tracking will be handled in later phases.",
+        help_text="Enable stock quantity tracking for this product.",
+    )
+
+    inventory_tracking_method = models.CharField(
+        max_length=20,
+        choices=CatalogItemTrackingMethod.choices,
+        default=CatalogItemTrackingMethod.NONE,
+        db_index=True,
+        help_text=(
+            "Defines whether inventory is tracked without details, "
+            "by batch/lot, or by individual serial number."
+        ),
+    )
+
+    track_expiry_dates = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text=(
+            "Enable manufacturing and expiry date tracking. "
+            "Available only for batch-tracked products."
+        ),
     )
 
     taxable = models.BooleanField(
@@ -581,6 +626,15 @@ class CatalogItem(models.Model):
             models.Index(fields=["company", "is_sellable"]),
             models.Index(fields=["company", "is_purchasable"]),
             models.Index(fields=["company", "track_inventory"]),
+            models.Index(fields=["company", "inventory_tracking_method"]),
+            models.Index(fields=["company", "track_expiry_dates"]),
+            models.Index(
+                fields=[
+                    "company",
+                    "track_inventory",
+                    "inventory_tracking_method",
+                ]
+            ),
             models.Index(fields=["company", "taxable"]),
             models.Index(fields=["company", "name"]),
             models.Index(fields=["company", "created_at"]),
@@ -605,6 +659,46 @@ class CatalogItem(models.Model):
                 fields=["company", "name"],
                 name="unique_catalog_item_name_per_company",
             ),
+            models.CheckConstraint(
+                condition=(
+                    Q(item_type=CatalogItemType.PRODUCT)
+                    | (
+                        Q(track_inventory=False)
+                        & Q(
+                            inventory_tracking_method=(
+                                CatalogItemTrackingMethod.NONE
+                            )
+                        )
+                        & Q(track_expiry_dates=False)
+                    )
+                ),
+                name="catalog_service_inventory_tracking_disabled",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(track_inventory=True)
+                    | (
+                        Q(
+                            inventory_tracking_method=(
+                                CatalogItemTrackingMethod.NONE
+                            )
+                        )
+                        & Q(track_expiry_dates=False)
+                    )
+                ),
+                name="catalog_tracking_requires_inventory",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(track_expiry_dates=False)
+                    | Q(
+                        inventory_tracking_method=(
+                            CatalogItemTrackingMethod.BATCH
+                        )
+                    )
+                ),
+                name="catalog_expiry_requires_batch_tracking",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -621,6 +715,29 @@ class CatalogItem(models.Model):
     @property
     def is_active_item(self) -> bool:
         return self.status == CatalogItemStatus.ACTIVE
+
+    @property
+    def uses_batch_tracking(self) -> bool:
+        return (
+            self.track_inventory
+            and self.inventory_tracking_method
+            == CatalogItemTrackingMethod.BATCH
+        )
+
+    @property
+    def uses_serial_tracking(self) -> bool:
+        return (
+            self.track_inventory
+            and self.inventory_tracking_method
+            == CatalogItemTrackingMethod.SERIAL
+        )
+
+    @property
+    def uses_detailed_inventory_tracking(self) -> bool:
+        return self.inventory_tracking_method in {
+            CatalogItemTrackingMethod.BATCH,
+            CatalogItemTrackingMethod.SERIAL,
+        }
 
     def clean(self) -> None:
         super().clean()
@@ -650,6 +767,32 @@ class CatalogItem(models.Model):
 
         if self.item_type == CatalogItemType.SERVICE:
             self.track_inventory = False
+            self.inventory_tracking_method = CatalogItemTrackingMethod.NONE
+            self.track_expiry_dates = False
+
+        if not self.track_inventory:
+            self.inventory_tracking_method = CatalogItemTrackingMethod.NONE
+            self.track_expiry_dates = False
+
+        if (
+            self.inventory_tracking_method
+            == CatalogItemTrackingMethod.SERIAL
+        ):
+            self.track_expiry_dates = False
+
+        if (
+            self.track_expiry_dates
+            and self.inventory_tracking_method
+            != CatalogItemTrackingMethod.BATCH
+        ):
+            raise ValidationError(
+                {
+                    "track_expiry_dates": (
+                        "Expiry date tracking is available only for "
+                        "batch-tracked products."
+                    )
+                }
+            )
 
         if self.tax_rate < Decimal("0.00"):
             raise ValidationError({"tax_rate": "Tax rate cannot be negative."})

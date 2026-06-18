@@ -58,12 +58,23 @@ from accounting.services import (
     replace_journal_entry_lines,
     seed_company_chart_of_accounts,
 )
-from catalog.models import CatalogItem, CatalogItemType
+from catalog.models import (
+    CatalogItem,
+    CatalogItemTrackingMethod,
+    CatalogItemType,
+)
 from companies.models import Branch, Company
 
 from .models import (
     MONEY_ZERO,
     QUANTITY_ZERO,
+    InventoryBatch,
+    InventoryBatchBalance,
+    InventoryBatchStatus,
+    InventorySerialNumber,
+    InventorySerialStatus,
+    InventoryTrackingEntry,
+    InventoryTrackingEntryType,
     InventoryLocation,
     InventoryLocationStatus,
     InventoryLocationType,
@@ -2340,6 +2351,2448 @@ def transfer_stock(
         user=user,
         post_immediately=True,
     )
+
+    return {
+        "outgoing": outgoing,
+        "incoming": incoming,
+    }
+
+
+def validate_inventory_tracking_item(
+    *,
+    company: Company,
+    item: CatalogItem,
+    expected_method: str | None = None,
+) -> None:
+    """
+    Validate that a catalog item can use detailed inventory tracking.
+
+    company is always taken from trusted request/company context.
+    """
+    validate_item_for_inventory(
+        company=company,
+        item=item,
+    )
+
+    tracking_method = getattr(
+        item,
+        "inventory_tracking_method",
+        CatalogItemTrackingMethod.NONE,
+    )
+
+    if tracking_method not in {
+        CatalogItemTrackingMethod.BATCH,
+        CatalogItemTrackingMethod.SERIAL,
+    }:
+        raise ValidationError(
+            {
+                "item": (
+                    "Selected catalog item does not use "
+                    "batch or serial inventory tracking."
+                )
+            }
+        )
+
+    if (
+        expected_method is not None
+        and tracking_method != expected_method
+    ):
+        raise ValidationError(
+            {
+                "item": (
+                    "Selected catalog item does not use the "
+                    "required inventory tracking method."
+                )
+            }
+        )
+
+
+def get_company_inventory_batches(
+    company: Company,
+) -> QuerySet[InventoryBatch]:
+    """
+    Return batch master records for one company only.
+    """
+    return (
+        InventoryBatch.objects.filter(company=company)
+        .select_related(
+            "company",
+            "item",
+            "item__unit",
+            "created_by",
+            "updated_by",
+        )
+        .order_by(
+            "item_id",
+            "expiry_date",
+            "batch_number",
+            "id",
+        )
+    )
+
+
+def get_company_inventory_batch_balances(
+    company: Company,
+) -> QuerySet[InventoryBatchBalance]:
+    """
+    Return location-level batch balances for one company only.
+    """
+    return (
+        InventoryBatchBalance.objects.filter(company=company)
+        .select_related(
+            "company",
+            "warehouse",
+            "location",
+            "stock_item",
+            "item",
+            "item__unit",
+            "batch",
+        )
+        .order_by(
+            "warehouse_id",
+            "location_id",
+            "item_id",
+            "batch_id",
+            "id",
+        )
+    )
+
+
+def get_company_inventory_serial_numbers(
+    company: Company,
+) -> QuerySet[InventorySerialNumber]:
+    """
+    Return serial number records for one company only.
+    """
+    return (
+        InventorySerialNumber.objects.filter(company=company)
+        .select_related(
+            "company",
+            "item",
+            "item__unit",
+            "warehouse",
+            "location",
+            "stock_item",
+            "created_by",
+            "updated_by",
+        )
+        .order_by(
+            "item_id",
+            "serial_number",
+            "id",
+        )
+    )
+
+
+def get_company_inventory_tracking_entries(
+    company: Company,
+) -> QuerySet[InventoryTrackingEntry]:
+    """
+    Return immutable detailed tracking ledger entries for one company.
+    """
+    return (
+        InventoryTrackingEntry.objects.filter(company=company)
+        .select_related(
+            "company",
+            "item",
+            "warehouse",
+            "location",
+            "stock_item",
+            "stock_movement",
+            "batch",
+            "serial_number",
+            "created_by",
+        )
+        .order_by(
+            "-occurred_at",
+            "-created_at",
+            "-id",
+        )
+    )
+
+
+def validate_inventory_batch_for_company(
+    *,
+    company: Company,
+    batch: InventoryBatch,
+    item: CatalogItem | None = None,
+    require_available: bool = False,
+) -> None:
+    """
+    Validate batch ownership, item relation, and lifecycle availability.
+    """
+    if batch.company_id != company.id:
+        raise ValidationError(
+            {
+                "batch": (
+                    "Selected inventory batch does not "
+                    "belong to this company."
+                )
+            }
+        )
+
+    if batch.item.company_id != company.id:
+        raise ValidationError(
+            {
+                "batch": (
+                    "Selected inventory batch item does not "
+                    "belong to this company."
+                )
+            }
+        )
+
+    if item is not None and batch.item_id != item.id:
+        raise ValidationError(
+            {
+                "batch": (
+                    "Selected inventory batch does not "
+                    "belong to this catalog item."
+                )
+            }
+        )
+
+    validate_inventory_tracking_item(
+        company=company,
+        item=batch.item,
+        expected_method=CatalogItemTrackingMethod.BATCH,
+    )
+
+    if require_available and not batch.is_available_for_issue:
+        raise ValidationError(
+            {
+                "batch": (
+                    "Selected inventory batch is not "
+                    "available for issue."
+                )
+            }
+        )
+
+
+def validate_inventory_serial_for_company(
+    *,
+    company: Company,
+    serial_number: InventorySerialNumber,
+    item: CatalogItem | None = None,
+    warehouse: Warehouse | None = None,
+    location: InventoryLocation | None = None,
+    require_available: bool = False,
+) -> None:
+    """
+    Validate serial ownership and current stock position.
+    """
+    if serial_number.company_id != company.id:
+        raise ValidationError(
+            {
+                "serial_number": (
+                    "Selected serial number does not "
+                    "belong to this company."
+                )
+            }
+        )
+
+    if serial_number.item.company_id != company.id:
+        raise ValidationError(
+            {
+                "serial_number": (
+                    "Selected serial number item does not "
+                    "belong to this company."
+                )
+            }
+        )
+
+    if item is not None and serial_number.item_id != item.id:
+        raise ValidationError(
+            {
+                "serial_number": (
+                    "Selected serial number does not "
+                    "belong to this catalog item."
+                )
+            }
+        )
+
+    if (
+        warehouse is not None
+        and serial_number.warehouse_id != warehouse.id
+    ):
+        raise ValidationError(
+            {
+                "serial_number": (
+                    "Selected serial number is not stored "
+                    "in this warehouse."
+                )
+            }
+        )
+
+    if (
+        location is not None
+        and serial_number.location_id != location.id
+    ):
+        raise ValidationError(
+            {
+                "serial_number": (
+                    "Selected serial number is not stored "
+                    "in this inventory location."
+                )
+            }
+        )
+
+    validate_inventory_tracking_item(
+        company=company,
+        item=serial_number.item,
+        expected_method=CatalogItemTrackingMethod.SERIAL,
+    )
+
+    if require_available and not serial_number.is_available:
+        raise ValidationError(
+            {
+                "serial_number": (
+                    "Selected serial number is not "
+                    "available for issue."
+                )
+            }
+        )
+
+
+@transaction.atomic
+def create_inventory_batch(
+    *,
+    company: Company,
+    item: CatalogItem,
+    batch_number: str,
+    supplier_batch_number: str = "",
+    manufactured_at=None,
+    expiry_date=None,
+    received_at=None,
+    notes: str = "",
+    extra_data: dict[str, Any] | None = None,
+    user=None,
+) -> InventoryBatch:
+    """
+    Create one company-scoped batch or lot master record.
+    """
+    validate_inventory_tracking_item(
+        company=company,
+        item=item,
+        expected_method=CatalogItemTrackingMethod.BATCH,
+    )
+
+    normalized_batch_number = normalize_code(
+        batch_number
+    )
+
+    if not normalized_batch_number:
+        raise ValidationError(
+            {
+                "batch_number": (
+                    "Inventory batch number is required."
+                )
+            }
+        )
+
+    batch = InventoryBatch(
+        company=company,
+        item=item,
+        status=InventoryBatchStatus.ACTIVE,
+        batch_number=normalized_batch_number,
+        supplier_batch_number=normalize_code(
+            supplier_batch_number
+        ),
+        manufactured_at=manufactured_at,
+        expiry_date=expiry_date,
+        received_at=received_at,
+        notes=normalize_text(notes),
+        extra_data=extra_data or {},
+        created_by=(
+            user
+            if getattr(user, "is_authenticated", False)
+            else None
+        ),
+        updated_by=(
+            user
+            if getattr(user, "is_authenticated", False)
+            else None
+        ),
+    )
+    batch.full_clean()
+    batch.save()
+
+    return batch
+
+
+@transaction.atomic
+def get_or_create_inventory_batch_balance(
+    *,
+    company: Company,
+    warehouse: Warehouse,
+    location: InventoryLocation,
+    item: CatalogItem,
+    batch: InventoryBatch,
+    stock_item: StockItem | None = None,
+    user=None,
+) -> InventoryBatchBalance:
+    """
+    Get or create one batch balance per warehouse location.
+    """
+    validate_warehouse_for_company(
+        company=company,
+        warehouse=warehouse,
+        require_active=True,
+    )
+    validate_inventory_location_for_company(
+        company=company,
+        location=location,
+        warehouse=warehouse,
+        require_active=True,
+    )
+    validate_inventory_tracking_item(
+        company=company,
+        item=item,
+        expected_method=CatalogItemTrackingMethod.BATCH,
+    )
+    validate_inventory_batch_for_company(
+        company=company,
+        batch=batch,
+        item=item,
+    )
+
+    resolved_stock_item = stock_item
+
+    if resolved_stock_item is None:
+        resolved_stock_item = get_or_create_stock_item(
+            company=company,
+            warehouse=warehouse,
+            location=location,
+            item=item,
+            user=user,
+        )
+
+    if resolved_stock_item.company_id != company.id:
+        raise ValidationError(
+            {
+                "stock_item": (
+                    "Selected stock balance does not "
+                    "belong to this company."
+                )
+            }
+        )
+
+    if resolved_stock_item.warehouse_id != warehouse.id:
+        raise ValidationError(
+            {
+                "stock_item": (
+                    "Selected stock balance does not "
+                    "belong to this warehouse."
+                )
+            }
+        )
+
+    if resolved_stock_item.location_id != location.id:
+        raise ValidationError(
+            {
+                "stock_item": (
+                    "Selected stock balance does not "
+                    "belong to this inventory location."
+                )
+            }
+        )
+
+    if resolved_stock_item.item_id != item.id:
+        raise ValidationError(
+            {
+                "stock_item": (
+                    "Selected stock balance does not "
+                    "belong to this catalog item."
+                )
+            }
+        )
+
+    balance, created = (
+        InventoryBatchBalance.objects.get_or_create(
+            company=company,
+            warehouse=warehouse,
+            location=location,
+            item=item,
+            batch=batch,
+            defaults={
+                "stock_item": resolved_stock_item,
+                "quantity_on_hand": QUANTITY_ZERO,
+                "reserved_quantity": QUANTITY_ZERO,
+                "average_cost": quantize_money(
+                    resolved_stock_item.average_cost
+                ),
+            },
+        )
+    )
+
+    if (
+        not created
+        and balance.stock_item_id
+        != resolved_stock_item.id
+    ):
+        raise ValidationError(
+            {
+                "stock_item": (
+                    "Existing batch balance is linked to "
+                    "a different stock balance."
+                )
+            }
+        )
+
+    return balance
+
+
+@transaction.atomic
+def register_inventory_serial_number(
+    *,
+    company: Company,
+    item: CatalogItem,
+    serial_number: str,
+    warehouse: Warehouse | None = None,
+    location: InventoryLocation | None = None,
+    stock_item: StockItem | None = None,
+    manufacturer_serial_number: str = "",
+    unit_cost: Decimal | int | float | str | None = None,
+    received_at=None,
+    status: str = InventorySerialStatus.AVAILABLE,
+    notes: str = "",
+    extra_data: dict[str, Any] | None = None,
+    user=None,
+) -> InventorySerialNumber:
+    """
+    Register one serial number inside a company.
+
+    Available or reserved serials must have a valid warehouse,
+    location, and stock balance.
+    """
+    validate_inventory_tracking_item(
+        company=company,
+        item=item,
+        expected_method=CatalogItemTrackingMethod.SERIAL,
+    )
+
+    normalized_serial = normalize_code(
+        serial_number
+    )
+
+    if not normalized_serial:
+        raise ValidationError(
+            {
+                "serial_number": (
+                    "Inventory serial number is required."
+                )
+            }
+        )
+
+    normalized_status = (
+        normalize_code(status)
+        or InventorySerialStatus.AVAILABLE
+    )
+
+    in_stock_statuses = {
+        InventorySerialStatus.AVAILABLE,
+        InventorySerialStatus.RESERVED,
+        InventorySerialStatus.BLOCKED,
+    }
+
+    resolved_stock_item = stock_item
+    resolved_location = location
+    resolved_warehouse = warehouse
+
+    if normalized_status in in_stock_statuses:
+        if resolved_warehouse is None:
+            raise ValidationError(
+                {
+                    "warehouse": (
+                        "Warehouse is required for an "
+                        "in-stock serial number."
+                    )
+                }
+            )
+
+        validate_warehouse_for_company(
+            company=company,
+            warehouse=resolved_warehouse,
+            require_active=True,
+        )
+
+        resolved_location = resolve_stock_location(
+            company=company,
+            warehouse=resolved_warehouse,
+            location=resolved_location,
+            user=user,
+        )
+
+        if resolved_stock_item is None:
+            resolved_stock_item = get_or_create_stock_item(
+                company=company,
+                warehouse=resolved_warehouse,
+                location=resolved_location,
+                item=item,
+                user=user,
+            )
+
+        if resolved_stock_item.company_id != company.id:
+            raise ValidationError(
+                {
+                    "stock_item": (
+                        "Selected stock balance does not "
+                        "belong to this company."
+                    )
+                }
+            )
+
+        if (
+            resolved_stock_item.warehouse_id
+            != resolved_warehouse.id
+        ):
+            raise ValidationError(
+                {
+                    "stock_item": (
+                        "Selected stock balance does not "
+                        "belong to this warehouse."
+                    )
+                }
+            )
+
+        if (
+            resolved_stock_item.location_id
+            != resolved_location.id
+        ):
+            raise ValidationError(
+                {
+                    "stock_item": (
+                        "Selected stock balance does not "
+                        "belong to this inventory location."
+                    )
+                }
+            )
+
+        if resolved_stock_item.item_id != item.id:
+            raise ValidationError(
+                {
+                    "stock_item": (
+                        "Selected stock balance does not "
+                        "belong to this catalog item."
+                    )
+                }
+            )
+
+    serial = InventorySerialNumber(
+        company=company,
+        item=item,
+        warehouse=resolved_warehouse,
+        location=resolved_location,
+        stock_item=resolved_stock_item,
+        status=normalized_status,
+        serial_number=normalized_serial,
+        manufacturer_serial_number=normalize_code(
+            manufacturer_serial_number
+        ),
+        unit_cost=quantize_money(
+            unit_cost
+            if unit_cost is not None
+            else (
+                item.cost_price
+                or item.purchase_price
+                or MONEY_ZERO
+            )
+        ),
+        received_at=(
+            received_at
+            if received_at is not None
+            else (
+                timezone.now()
+                if normalized_status in in_stock_statuses
+                else None
+            )
+        ),
+        notes=normalize_text(notes),
+        extra_data=extra_data or {},
+        created_by=(
+            user
+            if getattr(user, "is_authenticated", False)
+            else None
+        ),
+        updated_by=(
+            user
+            if getattr(user, "is_authenticated", False)
+            else None
+        ),
+    )
+    serial.full_clean()
+    serial.save()
+
+    return serial
+
+
+def resolve_tracking_entry_direction(
+    entry_type: str,
+) -> str:
+    """
+    Resolve quantity direction for a tracking ledger entry.
+    """
+    increase_types = {
+        InventoryTrackingEntryType.RECEIPT,
+        InventoryTrackingEntryType.TRANSFER_IN,
+        InventoryTrackingEntryType.ADJUSTMENT_IN,
+        InventoryTrackingEntryType.RELEASE,
+        InventoryTrackingEntryType.UNBLOCK,
+    }
+
+    decrease_types = {
+        InventoryTrackingEntryType.ISSUE,
+        InventoryTrackingEntryType.TRANSFER_OUT,
+        InventoryTrackingEntryType.ADJUSTMENT_OUT,
+        InventoryTrackingEntryType.RESERVATION,
+        InventoryTrackingEntryType.BLOCK,
+    }
+
+    if entry_type in increase_types:
+        return StockMovementDirection.INCREASE
+
+    if entry_type in decrease_types:
+        return StockMovementDirection.DECREASE
+
+    raise ValidationError(
+        {
+            "entry_type": (
+                "Unsupported inventory tracking "
+                "entry type."
+            )
+        }
+    )
+
+
+@transaction.atomic
+def create_inventory_tracking_entry(
+    *,
+    company: Company,
+    item: CatalogItem,
+    warehouse: Warehouse,
+    location: InventoryLocation,
+    stock_item: StockItem,
+    entry_type: str,
+    quantity: Decimal | int | float | str,
+    batch: InventoryBatch | None = None,
+    serial_number: InventorySerialNumber | None = None,
+    stock_movement: StockMovement | None = None,
+    quantity_before: Decimal | int | float | str = QUANTITY_ZERO,
+    quantity_after: Decimal | int | float | str = QUANTITY_ZERO,
+    unit_cost: Decimal | int | float | str | None = None,
+    reference_type: str = "",
+    reference_id: int | None = None,
+    reference_number: str = "",
+    occurred_at=None,
+    notes: str = "",
+    extra_data: dict[str, Any] | None = None,
+    user=None,
+) -> InventoryTrackingEntry:
+    """
+    Create one immutable detailed inventory tracking ledger entry.
+    """
+    validate_warehouse_for_company(
+        company=company,
+        warehouse=warehouse,
+    )
+    validate_inventory_location_for_company(
+        company=company,
+        location=location,
+        warehouse=warehouse,
+    )
+    validate_item_for_inventory(
+        company=company,
+        item=item,
+    )
+
+    if stock_item.company_id != company.id:
+        raise ValidationError(
+            {
+                "stock_item": (
+                    "Selected stock balance does not "
+                    "belong to this company."
+                )
+            }
+        )
+
+    if stock_item.warehouse_id != warehouse.id:
+        raise ValidationError(
+            {
+                "stock_item": (
+                    "Selected stock balance does not "
+                    "belong to this warehouse."
+                )
+            }
+        )
+
+    if stock_item.location_id != location.id:
+        raise ValidationError(
+            {
+                "stock_item": (
+                    "Selected stock balance does not "
+                    "belong to this inventory location."
+                )
+            }
+        )
+
+    if stock_item.item_id != item.id:
+        raise ValidationError(
+            {
+                "stock_item": (
+                    "Selected stock balance does not "
+                    "belong to this catalog item."
+                )
+            }
+        )
+
+    if (batch is None) == (serial_number is None):
+        raise ValidationError(
+            {
+                "tracking": (
+                    "Exactly one batch or serial number "
+                    "must be supplied."
+                )
+            }
+        )
+
+    if batch is not None:
+        validate_inventory_batch_for_company(
+            company=company,
+            batch=batch,
+            item=item,
+        )
+
+    if serial_number is not None:
+        validate_inventory_serial_for_company(
+            company=company,
+            serial_number=serial_number,
+            item=item,
+        )
+
+    if stock_movement is not None:
+        if stock_movement.company_id != company.id:
+            raise ValidationError(
+                {
+                    "stock_movement": (
+                        "Selected stock movement does not "
+                        "belong to this company."
+                    )
+                }
+            )
+
+        if stock_movement.item_id != item.id:
+            raise ValidationError(
+                {
+                    "stock_movement": (
+                        "Selected stock movement does not "
+                        "belong to this catalog item."
+                    )
+                }
+            )
+
+        if stock_movement.warehouse_id != warehouse.id:
+            raise ValidationError(
+                {
+                    "stock_movement": (
+                        "Selected stock movement does not "
+                        "belong to this warehouse."
+                    )
+                }
+            )
+
+        if stock_movement.location_id != location.id:
+            raise ValidationError(
+                {
+                    "stock_movement": (
+                        "Selected stock movement does not "
+                        "belong to this inventory location."
+                    )
+                }
+            )
+
+    normalized_entry_type = normalize_code(
+        entry_type
+    )
+    direction = resolve_tracking_entry_direction(
+        normalized_entry_type
+    )
+
+    quantity_value = quantize_quantity(
+        quantity
+    )
+
+    if quantity_value <= QUANTITY_ZERO:
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Tracking quantity must be greater "
+                    "than zero."
+                )
+            }
+        )
+
+    if (
+        serial_number is not None
+        and quantity_value != Decimal("1.0000")
+    ):
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Serial tracking entries must have "
+                    "quantity equal to one."
+                )
+            }
+        )
+
+    entry = InventoryTrackingEntry(
+        company=company,
+        item=item,
+        warehouse=warehouse,
+        location=location,
+        stock_item=stock_item,
+        stock_movement=stock_movement,
+        batch=batch,
+        serial_number=serial_number,
+        entry_type=normalized_entry_type,
+        direction=direction,
+        quantity=quantity_value,
+        quantity_before=quantize_quantity(
+            quantity_before
+        ),
+        quantity_after=quantize_quantity(
+            quantity_after
+        ),
+        unit_cost=quantize_money(
+            unit_cost
+            if unit_cost is not None
+            else stock_item.average_cost
+        ),
+        reference_type=normalize_text(
+            reference_type
+        ),
+        reference_id=reference_id,
+        reference_number=normalize_text(
+            reference_number
+        ),
+        occurred_at=occurred_at or timezone.now(),
+        notes=normalize_text(notes),
+        extra_data=extra_data or {},
+        created_by=(
+            user
+            if getattr(user, "is_authenticated", False)
+            else None
+        ),
+    )
+    entry.full_clean()
+    entry.save()
+
+    return entry
+
+
+def _normalize_serial_input(
+    serial_values: list[Any] | tuple[Any, ...],
+) -> list[Any]:
+    """
+    Normalize and validate a serial input collection.
+    """
+    values = list(serial_values or [])
+
+    if not values:
+        raise ValidationError(
+            {
+                "serial_numbers": (
+                    "At least one serial number is required."
+                )
+            }
+        )
+
+    return values
+
+
+def _validate_unique_serial_text_values(
+    serial_values: list[str],
+) -> list[str]:
+    """
+    Normalize serial text values and reject duplicates.
+    """
+    normalized_values = [
+        normalize_code(value)
+        for value in serial_values
+    ]
+
+    if any(not value for value in normalized_values):
+        raise ValidationError(
+            {
+                "serial_numbers": (
+                    "Serial numbers cannot be empty."
+                )
+            }
+        )
+
+    if len(normalized_values) != len(
+        set(normalized_values)
+    ):
+        raise ValidationError(
+            {
+                "serial_numbers": (
+                    "Duplicate serial numbers are not allowed "
+                    "inside one stock receipt."
+                )
+            }
+        )
+
+    return normalized_values
+
+
+@transaction.atomic
+def receive_batch_stock(
+    *,
+    company: Company,
+    warehouse: Warehouse,
+    item: CatalogItem,
+    batch: InventoryBatch,
+    quantity: Decimal | int | float | str,
+    location: InventoryLocation | None = None,
+    unit_cost: Decimal | int | float | str | None = None,
+    reference_type: str = "",
+    reference_id: int | None = None,
+    reference_number: str = "",
+    notes: str = "",
+    extra_data: dict[str, Any] | None = None,
+    user=None,
+    post_accounting: bool = True,
+) -> StockMovement:
+    """
+    Receive stock for one tracked inventory batch.
+
+    The general StockItem balance, batch location balance,
+    stock movement, and tracking ledger are updated atomically.
+    """
+    validate_inventory_tracking_item(
+        company=company,
+        item=item,
+        expected_method=CatalogItemTrackingMethod.BATCH,
+    )
+    validate_inventory_batch_for_company(
+        company=company,
+        batch=batch,
+        item=item,
+    )
+
+    quantity_value = quantize_quantity(quantity)
+
+    if quantity_value <= QUANTITY_ZERO:
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Batch receipt quantity must be "
+                    "greater than zero."
+                )
+            }
+        )
+
+    movement = create_stock_movement(
+        company=company,
+        warehouse=warehouse,
+        item=item,
+        movement_type=StockMovementType.IN,
+        location=location,
+        quantity=quantity_value,
+        unit_cost=unit_cost,
+        reference_type=reference_type,
+        reference_id=reference_id,
+        reference_number=reference_number,
+        notes=notes,
+        extra_data={
+            **(extra_data or {}),
+            "inventory_tracking_method": (
+                CatalogItemTrackingMethod.BATCH
+            ),
+            "batch_id": batch.id,
+            "batch_number": batch.batch_number,
+        },
+        user=user,
+        post_immediately=True,
+        post_accounting=post_accounting,
+    )
+
+    stock_item = movement.stock_item
+    resolved_location = movement.location
+
+    batch_balance = get_or_create_inventory_batch_balance(
+        company=company,
+        warehouse=warehouse,
+        location=resolved_location,
+        item=item,
+        batch=batch,
+        stock_item=stock_item,
+        user=user,
+    )
+
+    batch_balance = (
+        InventoryBatchBalance.objects.select_for_update()
+        .get(
+            id=batch_balance.id,
+            company=company,
+        )
+    )
+
+    quantity_before = quantize_quantity(
+        batch_balance.quantity_on_hand
+    )
+    quantity_after = quantize_quantity(
+        quantity_before + quantity_value
+    )
+
+    cost = quantize_money(
+        movement.unit_cost
+    )
+
+    if cost > MONEY_ZERO:
+        old_total_cost = quantize_money(
+            quantity_before
+            * batch_balance.average_cost
+        )
+        received_total_cost = quantize_money(
+            quantity_value
+            * cost
+        )
+
+        if quantity_after > QUANTITY_ZERO:
+            batch_balance.average_cost = quantize_money(
+                (
+                    old_total_cost
+                    + received_total_cost
+                )
+                / quantity_after
+            )
+
+    batch_balance.quantity_on_hand = quantity_after
+    batch_balance.last_movement_at = (
+        movement.posted_at
+        or timezone.now()
+    )
+    batch_balance.full_clean()
+    batch_balance.save(
+        update_fields=[
+            "quantity_on_hand",
+            "average_cost",
+            "last_movement_at",
+            "updated_at",
+        ]
+    )
+
+    batch_update_fields = []
+
+    if batch.status in {
+        InventoryBatchStatus.DEPLETED,
+        InventoryBatchStatus.EXPIRED,
+    } and not batch.is_expired:
+        batch.status = InventoryBatchStatus.ACTIVE
+        batch_update_fields.append("status")
+
+    if batch.received_at is None:
+        batch.received_at = (
+            movement.posted_at
+            or timezone.now()
+        )
+        batch_update_fields.append("received_at")
+
+    if user and getattr(
+        user,
+        "is_authenticated",
+        False,
+    ):
+        batch.updated_by = user
+        batch_update_fields.append("updated_by")
+
+    if batch_update_fields:
+        batch.full_clean()
+        batch_update_fields.append("updated_at")
+        batch.save(
+            update_fields=list(
+                dict.fromkeys(batch_update_fields)
+            )
+        )
+
+    create_inventory_tracking_entry(
+        company=company,
+        item=item,
+        warehouse=warehouse,
+        location=resolved_location,
+        stock_item=stock_item,
+        stock_movement=movement,
+        batch=batch,
+        entry_type=InventoryTrackingEntryType.RECEIPT,
+        quantity=quantity_value,
+        quantity_before=quantity_before,
+        quantity_after=quantity_after,
+        unit_cost=movement.unit_cost,
+        reference_type=reference_type,
+        reference_id=reference_id,
+        reference_number=reference_number,
+        occurred_at=movement.posted_at,
+        notes=notes,
+        extra_data=extra_data,
+        user=user,
+    )
+
+    return movement
+
+
+@transaction.atomic
+def issue_batch_stock(
+    *,
+    company: Company,
+    warehouse: Warehouse,
+    item: CatalogItem,
+    batch: InventoryBatch,
+    quantity: Decimal | int | float | str,
+    location: InventoryLocation | None = None,
+    unit_cost: Decimal | int | float | str | None = None,
+    reference_type: str = "",
+    reference_id: int | None = None,
+    reference_number: str = "",
+    notes: str = "",
+    extra_data: dict[str, Any] | None = None,
+    user=None,
+    post_accounting: bool = True,
+) -> StockMovement:
+    """
+    Issue stock from one tracked inventory batch.
+    """
+    validate_inventory_tracking_item(
+        company=company,
+        item=item,
+        expected_method=CatalogItemTrackingMethod.BATCH,
+    )
+    validate_inventory_batch_for_company(
+        company=company,
+        batch=batch,
+        item=item,
+        require_available=True,
+    )
+
+    quantity_value = quantize_quantity(quantity)
+
+    if quantity_value <= QUANTITY_ZERO:
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Batch issue quantity must be "
+                    "greater than zero."
+                )
+            }
+        )
+
+    resolved_location = resolve_stock_location(
+        company=company,
+        warehouse=warehouse,
+        location=location,
+        user=user,
+    )
+
+    stock_item = get_or_create_stock_item(
+        company=company,
+        warehouse=warehouse,
+        location=resolved_location,
+        item=item,
+        user=user,
+    )
+
+    batch_balance = (
+        InventoryBatchBalance.objects.select_for_update()
+        .filter(
+            company=company,
+            warehouse=warehouse,
+            location=resolved_location,
+            stock_item=stock_item,
+            item=item,
+            batch=batch,
+        )
+        .first()
+    )
+
+    if batch_balance is None:
+        raise ValidationError(
+            {
+                "batch": (
+                    "No batch balance exists in the "
+                    "selected inventory location."
+                )
+            }
+        )
+
+    quantity_before = quantize_quantity(
+        batch_balance.quantity_on_hand
+    )
+    available_quantity = quantize_quantity(
+        batch_balance.available_quantity
+    )
+
+    if quantity_value > available_quantity:
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Batch available quantity is insufficient "
+                    "for this issue."
+                )
+            }
+        )
+
+    quantity_after = quantize_quantity(
+        quantity_before - quantity_value
+    )
+
+    movement = create_stock_movement(
+        company=company,
+        warehouse=warehouse,
+        item=item,
+        movement_type=StockMovementType.OUT,
+        location=resolved_location,
+        quantity=quantity_value,
+        unit_cost=(
+            unit_cost
+            if unit_cost is not None
+            else batch_balance.average_cost
+        ),
+        reference_type=reference_type,
+        reference_id=reference_id,
+        reference_number=reference_number,
+        notes=notes,
+        extra_data={
+            **(extra_data or {}),
+            "inventory_tracking_method": (
+                CatalogItemTrackingMethod.BATCH
+            ),
+            "batch_id": batch.id,
+            "batch_number": batch.batch_number,
+        },
+        user=user,
+        post_immediately=True,
+        post_accounting=post_accounting,
+    )
+
+    batch_balance.quantity_on_hand = quantity_after
+    batch_balance.last_movement_at = (
+        movement.posted_at
+        or timezone.now()
+    )
+    batch_balance.full_clean()
+    batch_balance.save(
+        update_fields=[
+            "quantity_on_hand",
+            "last_movement_at",
+            "updated_at",
+        ]
+    )
+
+    other_positive_balance_exists = (
+        InventoryBatchBalance.objects.filter(
+            company=company,
+            batch=batch,
+            quantity_on_hand__gt=QUANTITY_ZERO,
+        )
+        .exclude(id=batch_balance.id)
+        .exists()
+    )
+
+    if (
+        quantity_after == QUANTITY_ZERO
+        and not other_positive_balance_exists
+        and batch.status == InventoryBatchStatus.ACTIVE
+    ):
+        batch.status = InventoryBatchStatus.DEPLETED
+
+        if user and getattr(
+            user,
+            "is_authenticated",
+            False,
+        ):
+            batch.updated_by = user
+
+        batch.full_clean()
+        batch.save(
+            update_fields=[
+                "status",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+    create_inventory_tracking_entry(
+        company=company,
+        item=item,
+        warehouse=warehouse,
+        location=resolved_location,
+        stock_item=stock_item,
+        stock_movement=movement,
+        batch=batch,
+        entry_type=InventoryTrackingEntryType.ISSUE,
+        quantity=quantity_value,
+        quantity_before=quantity_before,
+        quantity_after=quantity_after,
+        unit_cost=movement.unit_cost,
+        reference_type=reference_type,
+        reference_id=reference_id,
+        reference_number=reference_number,
+        occurred_at=movement.posted_at,
+        notes=notes,
+        extra_data=extra_data,
+        user=user,
+    )
+
+    return movement
+
+
+@transaction.atomic
+def receive_serial_stock(
+    *,
+    company: Company,
+    warehouse: Warehouse,
+    item: CatalogItem,
+    serial_numbers: list[str] | tuple[str, ...],
+    location: InventoryLocation | None = None,
+    unit_cost: Decimal | int | float | str | None = None,
+    manufacturer_serial_numbers: (
+        dict[str, str] | None
+    ) = None,
+    reference_type: str = "",
+    reference_id: int | None = None,
+    reference_number: str = "",
+    notes: str = "",
+    extra_data: dict[str, Any] | None = None,
+    user=None,
+    post_accounting: bool = True,
+) -> StockMovement:
+    """
+    Receive serial-tracked stock.
+
+    One serial record and one tracking ledger entry are
+    created for each received unit.
+    """
+    validate_inventory_tracking_item(
+        company=company,
+        item=item,
+        expected_method=CatalogItemTrackingMethod.SERIAL,
+    )
+
+    raw_serial_values = _normalize_serial_input(
+        serial_numbers
+    )
+    normalized_serials = (
+        _validate_unique_serial_text_values(
+            [
+                str(value)
+                for value in raw_serial_values
+            ]
+        )
+    )
+
+    duplicate_exists = (
+        InventorySerialNumber.objects.filter(
+            company=company,
+            serial_number__in=normalized_serials,
+        )
+        .exists()
+    )
+
+    if duplicate_exists:
+        raise ValidationError(
+            {
+                "serial_numbers": (
+                    "One or more serial numbers already "
+                    "exist in this company."
+                )
+            }
+        )
+
+    resolved_location = resolve_stock_location(
+        company=company,
+        warehouse=warehouse,
+        location=location,
+        user=user,
+    )
+
+    quantity_value = quantize_quantity(
+        len(normalized_serials)
+    )
+
+    movement = create_stock_movement(
+        company=company,
+        warehouse=warehouse,
+        item=item,
+        movement_type=StockMovementType.IN,
+        location=resolved_location,
+        quantity=quantity_value,
+        unit_cost=unit_cost,
+        reference_type=reference_type,
+        reference_id=reference_id,
+        reference_number=reference_number,
+        notes=notes,
+        extra_data={
+            **(extra_data or {}),
+            "inventory_tracking_method": (
+                CatalogItemTrackingMethod.SERIAL
+            ),
+            "serial_numbers": normalized_serials,
+        },
+        user=user,
+        post_immediately=True,
+        post_accounting=post_accounting,
+    )
+
+    manufacturer_map = {
+        normalize_code(key): normalize_code(value)
+        for key, value in (
+            manufacturer_serial_numbers or {}
+        ).items()
+    }
+
+    for normalized_serial in normalized_serials:
+        serial = register_inventory_serial_number(
+            company=company,
+            item=item,
+            warehouse=warehouse,
+            location=resolved_location,
+            stock_item=movement.stock_item,
+            serial_number=normalized_serial,
+            manufacturer_serial_number=(
+                manufacturer_map.get(
+                    normalized_serial,
+                    "",
+                )
+            ),
+            unit_cost=movement.unit_cost,
+            received_at=(
+                movement.posted_at
+                or timezone.now()
+            ),
+            status=InventorySerialStatus.AVAILABLE,
+            notes=notes,
+            extra_data={
+                **(extra_data or {}),
+                "received_by_movement_id": movement.id,
+                "received_by_movement_number": (
+                    movement.movement_number
+                ),
+            },
+            user=user,
+        )
+
+        create_inventory_tracking_entry(
+            company=company,
+            item=item,
+            warehouse=warehouse,
+            location=resolved_location,
+            stock_item=movement.stock_item,
+            stock_movement=movement,
+            serial_number=serial,
+            entry_type=(
+                InventoryTrackingEntryType.RECEIPT
+            ),
+            quantity=Decimal("1.0000"),
+            quantity_before=QUANTITY_ZERO,
+            quantity_after=Decimal("1.0000"),
+            unit_cost=movement.unit_cost,
+            reference_type=reference_type,
+            reference_id=reference_id,
+            reference_number=reference_number,
+            occurred_at=movement.posted_at,
+            notes=notes,
+            extra_data=extra_data,
+            user=user,
+        )
+
+    return movement
+
+
+@transaction.atomic
+def issue_serial_stock(
+    *,
+    company: Company,
+    warehouse: Warehouse,
+    item: CatalogItem,
+    serial_numbers: (
+        list[InventorySerialNumber]
+        | tuple[InventorySerialNumber, ...]
+    ),
+    location: InventoryLocation | None = None,
+    unit_cost: Decimal | int | float | str | None = None,
+    reference_type: str = "",
+    reference_id: int | None = None,
+    reference_number: str = "",
+    notes: str = "",
+    extra_data: dict[str, Any] | None = None,
+    user=None,
+    post_accounting: bool = True,
+) -> StockMovement:
+    """
+    Issue selected serial numbers from one inventory location.
+    """
+    validate_inventory_tracking_item(
+        company=company,
+        item=item,
+        expected_method=CatalogItemTrackingMethod.SERIAL,
+    )
+
+    serial_values = _normalize_serial_input(
+        serial_numbers
+    )
+
+    serial_ids = [
+        serial.id
+        for serial in serial_values
+        if isinstance(
+            serial,
+            InventorySerialNumber,
+        )
+        and serial.id is not None
+    ]
+
+    if len(serial_ids) != len(serial_values):
+        raise ValidationError(
+            {
+                "serial_numbers": (
+                    "Every serial value must be a saved "
+                    "InventorySerialNumber instance."
+                )
+            }
+        )
+
+    if len(serial_ids) != len(set(serial_ids)):
+        raise ValidationError(
+            {
+                "serial_numbers": (
+                    "Duplicate serial records are not allowed "
+                    "inside one stock issue."
+                )
+            }
+        )
+
+    resolved_location = resolve_stock_location(
+        company=company,
+        warehouse=warehouse,
+        location=location,
+        user=user,
+    )
+
+    locked_serials = list(
+        InventorySerialNumber.objects.select_for_update()
+        .select_related(
+            "item",
+            "warehouse",
+            "location",
+            "stock_item",
+        )
+        .filter(
+            company=company,
+            id__in=serial_ids,
+        )
+        .order_by("id")
+    )
+
+    if len(locked_serials) != len(serial_ids):
+        raise ValidationError(
+            {
+                "serial_numbers": (
+                    "One or more serial numbers were not "
+                    "found for this company."
+                )
+            }
+        )
+
+    for serial in locked_serials:
+        validate_inventory_serial_for_company(
+            company=company,
+            serial_number=serial,
+            item=item,
+            warehouse=warehouse,
+            location=resolved_location,
+            require_available=True,
+        )
+
+    stock_item_ids = {
+        serial.stock_item_id
+        for serial in locked_serials
+    }
+
+    if len(stock_item_ids) != 1:
+        raise ValidationError(
+            {
+                "serial_numbers": (
+                    "All issued serial numbers must belong "
+                    "to the same stock balance."
+                )
+            }
+        )
+
+    stock_item = locked_serials[0].stock_item
+
+    quantity_value = quantize_quantity(
+        len(locked_serials)
+    )
+
+    movement = create_stock_movement(
+        company=company,
+        warehouse=warehouse,
+        item=item,
+        movement_type=StockMovementType.OUT,
+        location=resolved_location,
+        quantity=quantity_value,
+        unit_cost=(
+            unit_cost
+            if unit_cost is not None
+            else stock_item.average_cost
+        ),
+        reference_type=reference_type,
+        reference_id=reference_id,
+        reference_number=reference_number,
+        notes=notes,
+        extra_data={
+            **(extra_data or {}),
+            "inventory_tracking_method": (
+                CatalogItemTrackingMethod.SERIAL
+            ),
+            "serial_ids": serial_ids,
+            "serial_numbers": [
+                serial.serial_number
+                for serial in locked_serials
+            ],
+        },
+        user=user,
+        post_immediately=True,
+        post_accounting=post_accounting,
+    )
+
+    for serial in locked_serials:
+        create_inventory_tracking_entry(
+            company=company,
+            item=item,
+            warehouse=warehouse,
+            location=resolved_location,
+            stock_item=stock_item,
+            stock_movement=movement,
+            serial_number=serial,
+            entry_type=InventoryTrackingEntryType.ISSUE,
+            quantity=Decimal("1.0000"),
+            quantity_before=Decimal("1.0000"),
+            quantity_after=QUANTITY_ZERO,
+            unit_cost=serial.unit_cost,
+            reference_type=reference_type,
+            reference_id=reference_id,
+            reference_number=reference_number,
+            occurred_at=movement.posted_at,
+            notes=notes,
+            extra_data=extra_data,
+            user=user,
+        )
+
+        serial.status = InventorySerialStatus.ISSUED
+        serial.warehouse = None
+        serial.location = None
+        serial.stock_item = None
+        serial.issued_at = (
+            movement.posted_at
+            or timezone.now()
+        )
+
+        if user and getattr(
+            user,
+            "is_authenticated",
+            False,
+        ):
+            serial.updated_by = user
+
+        serial.full_clean()
+        serial.save(
+            update_fields=[
+                "status",
+                "warehouse",
+                "location",
+                "stock_item",
+                "issued_at",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+    return movement
+
+
+@transaction.atomic
+def transfer_batch_stock(
+    *,
+    company: Company,
+    source_warehouse: Warehouse,
+    target_warehouse: Warehouse,
+    item: CatalogItem,
+    batch: InventoryBatch,
+    quantity: Decimal | int | float | str,
+    source_location: InventoryLocation | None = None,
+    target_location: InventoryLocation | None = None,
+    reference_number: str = "",
+    notes: str = "",
+    extra_data: dict[str, Any] | None = None,
+    user=None,
+) -> dict[str, StockMovement]:
+    """
+    Transfer one tracked batch between inventory locations.
+
+    The operation creates two posted stock movements and two
+    tracking ledger entries while preserving the company-wide
+    batch lifecycle.
+    """
+    validate_warehouse_for_company(
+        company=company,
+        warehouse=source_warehouse,
+        require_active=True,
+    )
+    validate_warehouse_for_company(
+        company=company,
+        warehouse=target_warehouse,
+        require_active=True,
+    )
+    validate_inventory_tracking_item(
+        company=company,
+        item=item,
+        expected_method=CatalogItemTrackingMethod.BATCH,
+    )
+    validate_inventory_batch_for_company(
+        company=company,
+        batch=batch,
+        item=item,
+        require_available=True,
+    )
+
+    resolved_source_location = resolve_stock_location(
+        company=company,
+        warehouse=source_warehouse,
+        location=source_location,
+        user=user,
+    )
+    resolved_target_location = resolve_stock_location(
+        company=company,
+        warehouse=target_warehouse,
+        location=target_location,
+        user=user,
+    )
+
+    if (
+        source_warehouse.id == target_warehouse.id
+        and resolved_source_location.id
+        == resolved_target_location.id
+    ):
+        raise ValidationError(
+            {
+                "target_location": (
+                    "Source and target inventory locations "
+                    "cannot be the same."
+                )
+            }
+        )
+
+    quantity_value = quantize_quantity(quantity)
+
+    if quantity_value <= QUANTITY_ZERO:
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Batch transfer quantity must be "
+                    "greater than zero."
+                )
+            }
+        )
+
+    source_stock_item = get_or_create_stock_item(
+        company=company,
+        warehouse=source_warehouse,
+        location=resolved_source_location,
+        item=item,
+        user=user,
+    )
+
+    source_batch_balance = (
+        InventoryBatchBalance.objects.select_for_update()
+        .filter(
+            company=company,
+            warehouse=source_warehouse,
+            location=resolved_source_location,
+            stock_item=source_stock_item,
+            item=item,
+            batch=batch,
+        )
+        .first()
+    )
+
+    if source_batch_balance is None:
+        raise ValidationError(
+            {
+                "batch": (
+                    "No batch balance exists in the "
+                    "source inventory location."
+                )
+            }
+        )
+
+    source_quantity_before = quantize_quantity(
+        source_batch_balance.quantity_on_hand
+    )
+    source_available_quantity = quantize_quantity(
+        source_batch_balance.available_quantity
+    )
+
+    if quantity_value > source_available_quantity:
+        raise ValidationError(
+            {
+                "quantity": (
+                    "Source batch available quantity is "
+                    "insufficient for this transfer."
+                )
+            }
+        )
+
+    target_stock_item = get_or_create_stock_item(
+        company=company,
+        warehouse=target_warehouse,
+        location=resolved_target_location,
+        item=item,
+        user=user,
+    )
+
+    target_batch_balance = (
+        get_or_create_inventory_batch_balance(
+            company=company,
+            warehouse=target_warehouse,
+            location=resolved_target_location,
+            item=item,
+            batch=batch,
+            stock_item=target_stock_item,
+            user=user,
+        )
+    )
+
+    target_batch_balance = (
+        InventoryBatchBalance.objects.select_for_update()
+        .get(
+            id=target_batch_balance.id,
+            company=company,
+        )
+    )
+
+    source_quantity_after = quantize_quantity(
+        source_quantity_before - quantity_value
+    )
+    target_quantity_before = quantize_quantity(
+        target_batch_balance.quantity_on_hand
+    )
+    target_quantity_after = quantize_quantity(
+        target_quantity_before + quantity_value
+    )
+
+    transfer_reference = (
+        normalize_text(reference_number)
+        or f"BATCH-TRANSFER-{batch.id}"
+    )
+
+    outgoing = create_stock_movement(
+        company=company,
+        warehouse=source_warehouse,
+        item=item,
+        movement_type=StockMovementType.TRANSFER_OUT,
+        location=resolved_source_location,
+        quantity=quantity_value,
+        unit_cost=source_batch_balance.average_cost,
+        reference_type="inventory_batch_transfer",
+        reference_number=transfer_reference,
+        notes=notes,
+        extra_data={
+            **(extra_data or {}),
+            "inventory_tracking_method": (
+                CatalogItemTrackingMethod.BATCH
+            ),
+            "batch_id": batch.id,
+            "batch_number": batch.batch_number,
+            "target_warehouse_id": target_warehouse.id,
+            "target_location_id": (
+                resolved_target_location.id
+            ),
+        },
+        user=user,
+        post_immediately=True,
+        post_accounting=False,
+    )
+
+    incoming = create_stock_movement(
+        company=company,
+        warehouse=target_warehouse,
+        item=item,
+        movement_type=StockMovementType.TRANSFER_IN,
+        location=resolved_target_location,
+        quantity=quantity_value,
+        unit_cost=outgoing.unit_cost,
+        reference_type="inventory_batch_transfer",
+        reference_number=transfer_reference,
+        notes=notes,
+        extra_data={
+            **(extra_data or {}),
+            "inventory_tracking_method": (
+                CatalogItemTrackingMethod.BATCH
+            ),
+            "batch_id": batch.id,
+            "batch_number": batch.batch_number,
+            "source_warehouse_id": source_warehouse.id,
+            "source_location_id": (
+                resolved_source_location.id
+            ),
+            "outgoing_movement_id": outgoing.id,
+        },
+        user=user,
+        post_immediately=True,
+        post_accounting=False,
+    )
+
+    source_batch_balance.quantity_on_hand = (
+        source_quantity_after
+    )
+    source_batch_balance.last_movement_at = (
+        outgoing.posted_at
+        or timezone.now()
+    )
+    source_batch_balance.full_clean()
+    source_batch_balance.save(
+        update_fields=[
+            "quantity_on_hand",
+            "last_movement_at",
+            "updated_at",
+        ]
+    )
+
+    if outgoing.unit_cost > MONEY_ZERO:
+        old_target_total = quantize_money(
+            target_quantity_before
+            * target_batch_balance.average_cost
+        )
+        transferred_total = quantize_money(
+            quantity_value
+            * outgoing.unit_cost
+        )
+
+        if target_quantity_after > QUANTITY_ZERO:
+            target_batch_balance.average_cost = (
+                quantize_money(
+                    (
+                        old_target_total
+                        + transferred_total
+                    )
+                    / target_quantity_after
+                )
+            )
+
+    target_batch_balance.quantity_on_hand = (
+        target_quantity_after
+    )
+    target_batch_balance.last_movement_at = (
+        incoming.posted_at
+        or timezone.now()
+    )
+    target_batch_balance.full_clean()
+    target_batch_balance.save(
+        update_fields=[
+            "quantity_on_hand",
+            "average_cost",
+            "last_movement_at",
+            "updated_at",
+        ]
+    )
+
+    create_inventory_tracking_entry(
+        company=company,
+        item=item,
+        warehouse=source_warehouse,
+        location=resolved_source_location,
+        stock_item=source_stock_item,
+        stock_movement=outgoing,
+        batch=batch,
+        entry_type=(
+            InventoryTrackingEntryType.TRANSFER_OUT
+        ),
+        quantity=quantity_value,
+        quantity_before=source_quantity_before,
+        quantity_after=source_quantity_after,
+        unit_cost=outgoing.unit_cost,
+        reference_type="inventory_batch_transfer",
+        reference_number=transfer_reference,
+        occurred_at=outgoing.posted_at,
+        notes=notes,
+        extra_data={
+            **(extra_data or {}),
+            "target_warehouse_id": target_warehouse.id,
+            "target_location_id": (
+                resolved_target_location.id
+            ),
+            "incoming_movement_id": incoming.id,
+        },
+        user=user,
+    )
+
+    create_inventory_tracking_entry(
+        company=company,
+        item=item,
+        warehouse=target_warehouse,
+        location=resolved_target_location,
+        stock_item=target_stock_item,
+        stock_movement=incoming,
+        batch=batch,
+        entry_type=(
+            InventoryTrackingEntryType.TRANSFER_IN
+        ),
+        quantity=quantity_value,
+        quantity_before=target_quantity_before,
+        quantity_after=target_quantity_after,
+        unit_cost=incoming.unit_cost,
+        reference_type="inventory_batch_transfer",
+        reference_number=transfer_reference,
+        occurred_at=incoming.posted_at,
+        notes=notes,
+        extra_data={
+            **(extra_data or {}),
+            "source_warehouse_id": source_warehouse.id,
+            "source_location_id": (
+                resolved_source_location.id
+            ),
+            "outgoing_movement_id": outgoing.id,
+        },
+        user=user,
+    )
+
+    return {
+        "outgoing": outgoing,
+        "incoming": incoming,
+    }
+
+
+@transaction.atomic
+def transfer_serial_stock(
+    *,
+    company: Company,
+    source_warehouse: Warehouse,
+    target_warehouse: Warehouse,
+    item: CatalogItem,
+    serial_numbers: (
+        list[InventorySerialNumber]
+        | tuple[InventorySerialNumber, ...]
+    ),
+    source_location: InventoryLocation | None = None,
+    target_location: InventoryLocation | None = None,
+    reference_number: str = "",
+    notes: str = "",
+    extra_data: dict[str, Any] | None = None,
+    user=None,
+) -> dict[str, StockMovement]:
+    """
+    Transfer selected serial numbers between inventory locations.
+
+    Serial status remains unchanged and each serial is moved to the
+    target warehouse, location, and stock balance.
+    """
+    validate_warehouse_for_company(
+        company=company,
+        warehouse=source_warehouse,
+        require_active=True,
+    )
+    validate_warehouse_for_company(
+        company=company,
+        warehouse=target_warehouse,
+        require_active=True,
+    )
+    validate_inventory_tracking_item(
+        company=company,
+        item=item,
+        expected_method=CatalogItemTrackingMethod.SERIAL,
+    )
+
+    serial_values = _normalize_serial_input(
+        serial_numbers
+    )
+
+    serial_ids = [
+        serial.id
+        for serial in serial_values
+        if isinstance(
+            serial,
+            InventorySerialNumber,
+        )
+        and serial.id is not None
+    ]
+
+    if len(serial_ids) != len(serial_values):
+        raise ValidationError(
+            {
+                "serial_numbers": (
+                    "Every serial value must be a saved "
+                    "InventorySerialNumber instance."
+                )
+            }
+        )
+
+    if len(serial_ids) != len(set(serial_ids)):
+        raise ValidationError(
+            {
+                "serial_numbers": (
+                    "Duplicate serial records are not allowed "
+                    "inside one stock transfer."
+                )
+            }
+        )
+
+    resolved_source_location = resolve_stock_location(
+        company=company,
+        warehouse=source_warehouse,
+        location=source_location,
+        user=user,
+    )
+    resolved_target_location = resolve_stock_location(
+        company=company,
+        warehouse=target_warehouse,
+        location=target_location,
+        user=user,
+    )
+
+    if (
+        source_warehouse.id == target_warehouse.id
+        and resolved_source_location.id
+        == resolved_target_location.id
+    ):
+        raise ValidationError(
+            {
+                "target_location": (
+                    "Source and target inventory locations "
+                    "cannot be the same."
+                )
+            }
+        )
+
+    locked_serials = list(
+        InventorySerialNumber.objects.select_for_update()
+        .select_related(
+            "item",
+            "warehouse",
+            "location",
+            "stock_item",
+        )
+        .filter(
+            company=company,
+            id__in=serial_ids,
+        )
+        .order_by("id")
+    )
+
+    if len(locked_serials) != len(serial_ids):
+        raise ValidationError(
+            {
+                "serial_numbers": (
+                    "One or more serial numbers were not "
+                    "found for this company."
+                )
+            }
+        )
+
+    for serial in locked_serials:
+        validate_inventory_serial_for_company(
+            company=company,
+            serial_number=serial,
+            item=item,
+            warehouse=source_warehouse,
+            location=resolved_source_location,
+            require_available=True,
+        )
+
+    source_stock_item_ids = {
+        serial.stock_item_id
+        for serial in locked_serials
+    }
+
+    if len(source_stock_item_ids) != 1:
+        raise ValidationError(
+            {
+                "serial_numbers": (
+                    "All transferred serial numbers must "
+                    "belong to the same source stock balance."
+                )
+            }
+        )
+
+    source_stock_item = locked_serials[0].stock_item
+
+    target_stock_item = get_or_create_stock_item(
+        company=company,
+        warehouse=target_warehouse,
+        location=resolved_target_location,
+        item=item,
+        user=user,
+    )
+
+    quantity_value = quantize_quantity(
+        len(locked_serials)
+    )
+
+    transfer_reference = (
+        normalize_text(reference_number)
+        or "SERIAL-TRANSFER-"
+        + "-".join(
+            str(serial.id)
+            for serial in locked_serials
+        )
+    )
+
+    serial_id_list = [
+        serial.id
+        for serial in locked_serials
+    ]
+    serial_number_list = [
+        serial.serial_number
+        for serial in locked_serials
+    ]
+
+    outgoing = create_stock_movement(
+        company=company,
+        warehouse=source_warehouse,
+        item=item,
+        movement_type=StockMovementType.TRANSFER_OUT,
+        location=resolved_source_location,
+        quantity=quantity_value,
+        unit_cost=source_stock_item.average_cost,
+        reference_type="inventory_serial_transfer",
+        reference_number=transfer_reference,
+        notes=notes,
+        extra_data={
+            **(extra_data or {}),
+            "inventory_tracking_method": (
+                CatalogItemTrackingMethod.SERIAL
+            ),
+            "serial_ids": serial_id_list,
+            "serial_numbers": serial_number_list,
+            "target_warehouse_id": target_warehouse.id,
+            "target_location_id": (
+                resolved_target_location.id
+            ),
+        },
+        user=user,
+        post_immediately=True,
+        post_accounting=False,
+    )
+
+    incoming = create_stock_movement(
+        company=company,
+        warehouse=target_warehouse,
+        item=item,
+        movement_type=StockMovementType.TRANSFER_IN,
+        location=resolved_target_location,
+        quantity=quantity_value,
+        unit_cost=outgoing.unit_cost,
+        reference_type="inventory_serial_transfer",
+        reference_number=transfer_reference,
+        notes=notes,
+        extra_data={
+            **(extra_data or {}),
+            "inventory_tracking_method": (
+                CatalogItemTrackingMethod.SERIAL
+            ),
+            "serial_ids": serial_id_list,
+            "serial_numbers": serial_number_list,
+            "source_warehouse_id": source_warehouse.id,
+            "source_location_id": (
+                resolved_source_location.id
+            ),
+            "outgoing_movement_id": outgoing.id,
+        },
+        user=user,
+        post_immediately=True,
+        post_accounting=False,
+    )
+
+    for serial in locked_serials:
+        create_inventory_tracking_entry(
+            company=company,
+            item=item,
+            warehouse=source_warehouse,
+            location=resolved_source_location,
+            stock_item=source_stock_item,
+            stock_movement=outgoing,
+            serial_number=serial,
+            entry_type=(
+                InventoryTrackingEntryType.TRANSFER_OUT
+            ),
+            quantity=Decimal("1.0000"),
+            quantity_before=Decimal("1.0000"),
+            quantity_after=QUANTITY_ZERO,
+            unit_cost=serial.unit_cost,
+            reference_type="inventory_serial_transfer",
+            reference_number=transfer_reference,
+            occurred_at=outgoing.posted_at,
+            notes=notes,
+            extra_data={
+                **(extra_data or {}),
+                "target_warehouse_id": target_warehouse.id,
+                "target_location_id": (
+                    resolved_target_location.id
+                ),
+                "incoming_movement_id": incoming.id,
+            },
+            user=user,
+        )
+
+        serial.warehouse = target_warehouse
+        serial.location = resolved_target_location
+        serial.stock_item = target_stock_item
+
+        if user and getattr(
+            user,
+            "is_authenticated",
+            False,
+        ):
+            serial.updated_by = user
+
+        serial.full_clean()
+        serial.save(
+            update_fields=[
+                "warehouse",
+                "location",
+                "stock_item",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+        create_inventory_tracking_entry(
+            company=company,
+            item=item,
+            warehouse=target_warehouse,
+            location=resolved_target_location,
+            stock_item=target_stock_item,
+            stock_movement=incoming,
+            serial_number=serial,
+            entry_type=(
+                InventoryTrackingEntryType.TRANSFER_IN
+            ),
+            quantity=Decimal("1.0000"),
+            quantity_before=QUANTITY_ZERO,
+            quantity_after=Decimal("1.0000"),
+            unit_cost=serial.unit_cost,
+            reference_type="inventory_serial_transfer",
+            reference_number=transfer_reference,
+            occurred_at=incoming.posted_at,
+            notes=notes,
+            extra_data={
+                **(extra_data or {}),
+                "source_warehouse_id": source_warehouse.id,
+                "source_location_id": (
+                    resolved_source_location.id
+                ),
+                "outgoing_movement_id": outgoing.id,
+            },
+            user=user,
+        )
 
     return {
         "outgoing": outgoing,
