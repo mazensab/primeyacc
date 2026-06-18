@@ -4950,3 +4950,677 @@ class GoodsIssueItem(models.Model):
 
         self.full_clean()
         super().save(*args, **kwargs)
+
+# ============================================================
+# Phase 22.5 - Physical Inventory and Cycle Count Models
+# ============================================================
+
+
+class PhysicalInventoryCountStatus(models.TextChoices):
+    """
+    Physical inventory count lifecycle status.
+    """
+
+    DRAFT = "DRAFT", "Draft"
+    IN_PROGRESS = "IN_PROGRESS", "In progress"
+    COUNTED = "COUNTED", "Counted"
+    POSTED = "POSTED", "Posted"
+    CANCELLED = "CANCELLED", "Cancelled"
+
+
+class PhysicalInventoryCountScope(models.TextChoices):
+    """
+    Physical inventory count operational scope.
+    """
+
+    FULL_WAREHOUSE = "FULL_WAREHOUSE", "Full warehouse"
+    LOCATION = "LOCATION", "Location"
+    CYCLE_COUNT = "CYCLE_COUNT", "Cycle count"
+
+
+class PhysicalInventoryCount(models.Model):
+    """
+    Company-scoped physical inventory or cycle count header.
+
+    The count captures system quantities at count time and posts only
+    inventory adjustment movements for detected variances. Posted counts are
+    immutable from the service/API perspective.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="physical_inventory_counts",
+        db_index=True,
+        verbose_name="Company",
+    )
+    warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.PROTECT,
+        related_name="physical_inventory_counts",
+        db_index=True,
+        verbose_name="Warehouse",
+    )
+    location = models.ForeignKey(
+        InventoryLocation,
+        on_delete=models.PROTECT,
+        related_name="physical_inventory_counts",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Inventory location",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=PhysicalInventoryCountStatus.choices,
+        default=PhysicalInventoryCountStatus.DRAFT,
+        db_index=True,
+        verbose_name="Status",
+    )
+    scope = models.CharField(
+        max_length=30,
+        choices=PhysicalInventoryCountScope.choices,
+        default=PhysicalInventoryCountScope.CYCLE_COUNT,
+        db_index=True,
+        verbose_name="Scope",
+    )
+
+    count_number = models.CharField(
+        max_length=80,
+        db_index=True,
+        verbose_name="Count number",
+    )
+    count_date = models.DateField(
+        default=timezone.localdate,
+        db_index=True,
+        verbose_name="Count date",
+    )
+
+    total_system_quantity = models.DecimalField(
+        max_digits=16,
+        decimal_places=4,
+        default=QUANTITY_ZERO,
+        verbose_name="Total system quantity",
+    )
+    total_counted_quantity = models.DecimalField(
+        max_digits=16,
+        decimal_places=4,
+        default=QUANTITY_ZERO,
+        verbose_name="Total counted quantity",
+    )
+    total_variance_quantity = models.DecimalField(
+        max_digits=16,
+        decimal_places=4,
+        default=QUANTITY_ZERO,
+        verbose_name="Total variance quantity",
+    )
+    total_variance_value = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        verbose_name="Total variance value",
+    )
+
+    started_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Started at",
+    )
+    started_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="started_physical_inventory_counts",
+        blank=True,
+        null=True,
+        verbose_name="Started by",
+    )
+    posted_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Posted at",
+    )
+    posted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="posted_physical_inventory_counts",
+        blank=True,
+        null=True,
+        verbose_name="Posted by",
+    )
+    cancelled_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Cancelled at",
+    )
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="cancelled_physical_inventory_counts",
+        blank=True,
+        null=True,
+        verbose_name="Cancelled by",
+    )
+    cancellation_reason = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Cancellation reason",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_physical_inventory_counts",
+        blank=True,
+        null=True,
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="updated_physical_inventory_counts",
+        blank=True,
+        null=True,
+        verbose_name="Updated by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Physical inventory count"
+        verbose_name_plural = "Physical inventory counts"
+        ordering = [
+            "-count_date",
+            "-created_at",
+            "-id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "count_number"],
+                name="unique_physical_inventory_count_number_per_company",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "status"]),
+            models.Index(fields=["company", "scope"]),
+            models.Index(fields=["company", "warehouse"]),
+            models.Index(fields=["company", "warehouse", "location"]),
+            models.Index(fields=["company", "count_date"]),
+            models.Index(fields=["posted_at"]),
+            models.Index(fields=["cancelled_at"]),
+            models.Index(fields=["created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.count_number} - {self.warehouse.display_name}"
+
+    @property
+    def is_draft(self) -> bool:
+        return self.status == PhysicalInventoryCountStatus.DRAFT
+
+    @property
+    def is_posted(self) -> bool:
+        return self.status == PhysicalInventoryCountStatus.POSTED
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self.status == PhysicalInventoryCountStatus.CANCELLED
+
+    @property
+    def can_be_started(self) -> bool:
+        return self.status == PhysicalInventoryCountStatus.DRAFT
+
+    @property
+    def can_be_posted(self) -> bool:
+        return self.status in {
+            PhysicalInventoryCountStatus.IN_PROGRESS,
+            PhysicalInventoryCountStatus.COUNTED,
+        }
+
+    @property
+    def can_be_cancelled(self) -> bool:
+        return self.status in {
+            PhysicalInventoryCountStatus.DRAFT,
+            PhysicalInventoryCountStatus.IN_PROGRESS,
+            PhysicalInventoryCountStatus.COUNTED,
+        }
+
+    def clean(self) -> None:
+        super().clean()
+
+        self.count_number = (self.count_number or "").strip().upper()
+        self.notes = (self.notes or "").strip()
+
+        if not self.count_number:
+            raise ValidationError(
+                {"count_number": "Physical inventory count number is required."}
+            )
+
+        if self.warehouse_id and self.company_id:
+            if self.warehouse.company_id != self.company_id:
+                raise ValidationError(
+                    {"warehouse": "Selected warehouse does not belong to this company."}
+                )
+
+        if self.location_id:
+            if self.location.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "location": (
+                            "Selected inventory location does not belong "
+                            "to this company."
+                        )
+                    }
+                )
+
+            if self.location.warehouse_id != self.warehouse_id:
+                raise ValidationError(
+                    {
+                        "location": (
+                            "Selected inventory location does not belong "
+                            "to this warehouse."
+                        )
+                    }
+                )
+
+            if self.scope == PhysicalInventoryCountScope.FULL_WAREHOUSE:
+                raise ValidationError(
+                    {
+                        "scope": (
+                            "Full warehouse counts cannot be restricted "
+                            "to one location."
+                        )
+                    }
+                )
+
+        if (
+            self.scope == PhysicalInventoryCountScope.LOCATION
+            and not self.location_id
+        ):
+            raise ValidationError(
+                {
+                    "location": (
+                        "Location scope requires an inventory location."
+                    )
+                }
+            )
+
+        self.total_system_quantity = quantize_quantity(
+            self.total_system_quantity
+        )
+        self.total_counted_quantity = quantize_quantity(
+            self.total_counted_quantity
+        )
+        self.total_variance_quantity = quantize_quantity(
+            self.total_variance_quantity
+        )
+        self.total_variance_value = quantize_money(
+            self.total_variance_value
+        )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+class PhysicalInventoryCountItem(models.Model):
+    """
+    Physical inventory count line.
+
+    system_quantity and system_unit_cost are frozen when the line is created
+    so the count can be reviewed and posted safely even if other reads occur
+    later.
+    """
+
+    count = models.ForeignKey(
+        PhysicalInventoryCount,
+        on_delete=models.CASCADE,
+        related_name="items",
+        db_index=True,
+        verbose_name="Physical inventory count",
+    )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="physical_inventory_count_items",
+        db_index=True,
+        verbose_name="Company",
+    )
+    warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.PROTECT,
+        related_name="physical_inventory_count_items",
+        db_index=True,
+        verbose_name="Warehouse",
+    )
+    location = models.ForeignKey(
+        InventoryLocation,
+        on_delete=models.PROTECT,
+        related_name="physical_inventory_count_items",
+        db_index=True,
+        verbose_name="Inventory location",
+    )
+    stock_item = models.ForeignKey(
+        StockItem,
+        on_delete=models.PROTECT,
+        related_name="physical_inventory_count_items",
+        db_index=True,
+        verbose_name="Stock item",
+    )
+    item = models.ForeignKey(
+        CatalogItem,
+        on_delete=models.PROTECT,
+        related_name="physical_inventory_count_items",
+        db_index=True,
+        verbose_name="Catalog item",
+    )
+
+    line_number = models.PositiveIntegerField(
+        default=1,
+        db_index=True,
+        verbose_name="Line number",
+    )
+    system_quantity = models.DecimalField(
+        max_digits=16,
+        decimal_places=4,
+        default=QUANTITY_ZERO,
+        verbose_name="System quantity",
+    )
+    counted_quantity = models.DecimalField(
+        max_digits=16,
+        decimal_places=4,
+        default=QUANTITY_ZERO,
+        validators=[MinValueValidator(QUANTITY_ZERO)],
+        verbose_name="Counted quantity",
+    )
+    variance_quantity = models.DecimalField(
+        max_digits=16,
+        decimal_places=4,
+        default=QUANTITY_ZERO,
+        verbose_name="Variance quantity",
+    )
+    system_unit_cost = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        verbose_name="System unit cost",
+    )
+    variance_value = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        verbose_name="Variance value",
+    )
+
+    stock_movement = models.ForeignKey(
+        StockMovement,
+        on_delete=models.SET_NULL,
+        related_name="physical_inventory_count_items",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Stock movement",
+    )
+
+    item_code_snapshot = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+        verbose_name="Item code snapshot",
+    )
+    item_name_snapshot = models.CharField(
+        max_length=255,
+        verbose_name="Item name snapshot",
+    )
+    item_name_ar_snapshot = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="Item Arabic name snapshot",
+    )
+    item_name_en_snapshot = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="Item English name snapshot",
+    )
+    unit_name_snapshot = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        verbose_name="Unit name snapshot",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Physical inventory count item"
+        verbose_name_plural = "Physical inventory count items"
+        ordering = [
+            "count_id",
+            "line_number",
+            "id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["count", "stock_item"],
+                name="unique_physical_count_line_per_stock_item",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "warehouse"]),
+            models.Index(fields=["company", "warehouse", "location"]),
+            models.Index(fields=["company", "item"]),
+            models.Index(fields=["stock_item", "count"]),
+            models.Index(fields=["stock_movement"]),
+            models.Index(fields=["created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.count.count_number} - {self.item_name_snapshot}"
+
+    @property
+    def has_variance(self) -> bool:
+        return self.variance_quantity != QUANTITY_ZERO
+
+    def apply_item_snapshot(self) -> None:
+        """
+        Copy catalog item data into the count line snapshot.
+        """
+        if not self.item_id:
+            return
+
+        self.item_code_snapshot = (
+            self.item.code
+            or self.item.sku
+            or self.item.barcode
+            or ""
+        )
+        self.item_name_snapshot = self.item.name
+        self.item_name_ar_snapshot = self.item.name_ar or ""
+        self.item_name_en_snapshot = self.item.name_en or ""
+        self.unit_name_snapshot = (
+            self.item.unit.name
+            if self.item.unit_id
+            else ""
+        )
+
+    def recalculate(self) -> None:
+        """
+        Recalculate variance fields from system and counted quantities.
+        """
+        self.system_quantity = quantize_quantity(
+            self.system_quantity
+        )
+        self.counted_quantity = quantize_quantity(
+            self.counted_quantity
+        )
+        self.system_unit_cost = quantize_money(
+            self.system_unit_cost
+        )
+        self.variance_quantity = quantize_quantity(
+            self.counted_quantity - self.system_quantity
+        )
+        self.variance_value = quantize_money(
+            self.variance_quantity * self.system_unit_cost
+        )
+
+    def clean(self) -> None:
+        super().clean()
+
+        if self.count_id and not self.company_id:
+            self.company = self.count.company
+
+        if self.count_id:
+            if self.company_id != self.count.company_id:
+                raise ValidationError(
+                    {
+                        "company": (
+                            "Count item company must match count company."
+                        )
+                    }
+                )
+
+            if self.warehouse_id != self.count.warehouse_id:
+                raise ValidationError(
+                    {
+                        "warehouse": (
+                            "Count item warehouse must match count warehouse."
+                        )
+                    }
+                )
+
+            if (
+                self.count.location_id
+                and self.location_id != self.count.location_id
+            ):
+                raise ValidationError(
+                    {
+                        "location": (
+                            "Count item location must match count location."
+                        )
+                    }
+                )
+
+        if self.stock_item_id:
+            if self.stock_item.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "stock_item": (
+                            "Selected stock item does not belong "
+                            "to this company."
+                        )
+                    }
+                )
+
+            if self.stock_item.warehouse_id != self.warehouse_id:
+                raise ValidationError(
+                    {
+                        "stock_item": (
+                            "Stock item warehouse must match count item "
+                            "warehouse."
+                        )
+                    }
+                )
+
+            if self.stock_item.location_id != self.location_id:
+                raise ValidationError(
+                    {
+                        "stock_item": (
+                            "Stock item location must match count item "
+                            "location."
+                        )
+                    }
+                )
+
+            if self.stock_item.item_id != self.item_id:
+                raise ValidationError(
+                    {
+                        "stock_item": (
+                            "Stock item catalog item must match count item."
+                        )
+                    }
+                )
+
+        if self.item_id and self.company_id:
+            if self.item.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "item": (
+                            "Selected catalog item does not belong "
+                            "to this company."
+                        )
+                    }
+                )
+
+            if self.item.item_type != CatalogItemType.PRODUCT:
+                raise ValidationError(
+                    {
+                        "item": (
+                            "Only product catalog items can be counted."
+                        )
+                    }
+                )
+
+        self.recalculate()
+
+        if self.counted_quantity < QUANTITY_ZERO:
+            raise ValidationError(
+                {
+                    "counted_quantity": (
+                        "Counted quantity cannot be negative."
+                    )
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        if self.item_id:
+            self.apply_item_snapshot()
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+# End Phase 22.5 - Physical Inventory and Cycle Count Models
+# ============================================================

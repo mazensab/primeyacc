@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📂 inventory/tests.py
 # 🧠 PrimeyAcc | Company Inventory Tests V2.8
 # ------------------------------------------------------------
@@ -106,6 +106,10 @@ from inventory.models import (
     GoodsIssue,
     GoodsIssueItem,
     GoodsIssueStatus,
+    PhysicalInventoryCount,
+    PhysicalInventoryCountItem,
+    PhysicalInventoryCountScope,
+    PhysicalInventoryCountStatus,
     Warehouse,
     WarehouseStatus,
     WarehouseType,
@@ -174,6 +178,20 @@ from inventory.services import (
     get_company_stock_reservations,
     validate_sales_order_for_stock_reservation,
     validate_sales_order_item_for_stock_reservation,
+    add_physical_inventory_count_item,
+    build_physical_inventory_count_payload,
+    build_physical_inventory_count_item_payload,
+    cancel_physical_inventory_count,
+    create_physical_inventory_count,
+    generate_physical_inventory_count_number,
+    get_company_physical_inventory_counts,
+    get_company_physical_inventory_count_items,
+    mark_physical_inventory_count_counted,
+    post_physical_inventory_count,
+    recalculate_physical_inventory_count_totals,
+    set_physical_inventory_count_item_quantity,
+    start_physical_inventory_count,
+    validate_physical_inventory_count_for_company,
 )
 
 
@@ -8868,4 +8886,589 @@ class GoodsIssueLifecycleTests(InventoryTestBase):
 
 
 # End Phase 22.4 - Goods Issues Tests
+# ============================================================
+
+# ============================================================
+# Phase 22.5 - Physical Inventory and Cycle Count Tests
+# ============================================================
+
+
+class PhysicalInventoryCountTests(InventoryTestBase):
+    """
+    Physical inventory count models, services, variance posting,
+    and tenant-isolation coverage.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        self.location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "PIC-BIN-001",
+                "name": "Physical Count Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+                "is_pickable": True,
+            },
+            user=self.user,
+        )
+
+        self.stock_item = get_or_create_stock_item(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.product,
+            user=self.user,
+        )
+        self.stock_item.quantity_on_hand = Decimal("10.0000")
+        self.stock_item.reserved_quantity = Decimal("0.0000")
+        self.stock_item.average_cost = Decimal("12.00")
+        self.stock_item.full_clean()
+        self.stock_item.save(
+            update_fields=[
+                "quantity_on_hand",
+                "reserved_quantity",
+                "average_cost",
+                "updated_at",
+            ]
+        )
+
+    def _create_count(self):
+        return create_physical_inventory_count(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            data={
+                "scope": PhysicalInventoryCountScope.LOCATION,
+                "notes": "Cycle count test",
+                "include_current_stock": True,
+            },
+            user=self.user,
+        )
+
+    def test_create_physical_inventory_count_snapshots_stock(self):
+        count = self._create_count()
+
+        self.assertEqual(count.company, self.company)
+        self.assertEqual(count.warehouse, self.warehouse)
+        self.assertEqual(count.location, self.location)
+        self.assertEqual(
+            count.status,
+            PhysicalInventoryCountStatus.DRAFT,
+        )
+        self.assertEqual(count.items.count(), 1)
+
+        count_item = count.items.get()
+
+        self.assertEqual(count_item.stock_item, self.stock_item)
+        self.assertEqual(
+            count_item.system_quantity,
+            Decimal("10.0000"),
+        )
+        self.assertEqual(
+            count_item.counted_quantity,
+            Decimal("10.0000"),
+        )
+        self.assertEqual(
+            count_item.variance_quantity,
+            Decimal("0.0000"),
+        )
+        self.assertEqual(
+            count.total_system_quantity,
+            Decimal("10.0000"),
+        )
+
+    def test_post_physical_inventory_negative_variance(self):
+        count = self._create_count()
+        count_item = count.items.get()
+
+        set_physical_inventory_count_item_quantity(
+            company=self.company,
+            count_item=count_item,
+            counted_quantity="7.0000",
+            notes="Actual shelf count",
+        )
+
+        mark_physical_inventory_count_counted(
+            company=self.company,
+            count=count,
+            user=self.user,
+        )
+
+        posted = post_physical_inventory_count(
+            company=self.company,
+            count=count,
+            user=self.user,
+            post_accounting=False,
+        )
+
+        self.stock_item.refresh_from_db()
+        count_item.refresh_from_db()
+
+        self.assertEqual(
+            posted.status,
+            PhysicalInventoryCountStatus.POSTED,
+        )
+        self.assertEqual(
+            self.stock_item.quantity_on_hand,
+            Decimal("7.0000"),
+        )
+        self.assertIsNotNone(count_item.stock_movement_id)
+        self.assertEqual(
+            count_item.stock_movement.movement_type,
+            StockMovementType.ADJUSTMENT,
+        )
+        self.assertEqual(
+            count_item.stock_movement.direction,
+            StockMovementDirection.DECREASE,
+        )
+        self.assertEqual(
+            count_item.stock_movement.quantity,
+            Decimal("3.0000"),
+        )
+
+    def test_post_physical_inventory_positive_variance(self):
+        count = self._create_count()
+        count_item = count.items.get()
+
+        set_physical_inventory_count_item_quantity(
+            company=self.company,
+            count_item=count_item,
+            counted_quantity="13.0000",
+        )
+        mark_physical_inventory_count_counted(
+            company=self.company,
+            count=count,
+            user=self.user,
+        )
+
+        post_physical_inventory_count(
+            company=self.company,
+            count=count,
+            user=self.user,
+            post_accounting=False,
+        )
+
+        self.stock_item.refresh_from_db()
+        count_item.refresh_from_db()
+
+        self.assertEqual(
+            self.stock_item.quantity_on_hand,
+            Decimal("13.0000"),
+        )
+        self.assertEqual(
+            count_item.stock_movement.direction,
+            StockMovementDirection.INCREASE,
+        )
+        self.assertEqual(
+            count_item.stock_movement.quantity,
+            Decimal("3.0000"),
+        )
+
+    def test_post_physical_inventory_zero_variance_creates_no_movement(self):
+        count = self._create_count()
+
+        mark_physical_inventory_count_counted(
+            company=self.company,
+            count=count,
+            user=self.user,
+        )
+
+        movement_count = StockMovement.objects.count()
+
+        post_physical_inventory_count(
+            company=self.company,
+            count=count,
+            user=self.user,
+            post_accounting=False,
+        )
+
+        count_item = count.items.get()
+        self.stock_item.refresh_from_db()
+
+        self.assertEqual(
+            self.stock_item.quantity_on_hand,
+            Decimal("10.0000"),
+        )
+        self.assertIsNone(count_item.stock_movement_id)
+        self.assertEqual(
+            StockMovement.objects.count(),
+            movement_count,
+        )
+
+    def test_post_physical_inventory_is_idempotent(self):
+        count = self._create_count()
+        count_item = count.items.get()
+
+        set_physical_inventory_count_item_quantity(
+            company=self.company,
+            count_item=count_item,
+            counted_quantity="8.0000",
+        )
+        mark_physical_inventory_count_counted(
+            company=self.company,
+            count=count,
+            user=self.user,
+        )
+
+        first = post_physical_inventory_count(
+            company=self.company,
+            count=count,
+            user=self.user,
+            post_accounting=False,
+        )
+        movement_count = StockMovement.objects.count()
+
+        second = post_physical_inventory_count(
+            company=self.company,
+            count=first,
+            user=self.user,
+            post_accounting=False,
+        )
+
+        self.stock_item.refresh_from_db()
+
+        self.assertEqual(
+            second.status,
+            PhysicalInventoryCountStatus.POSTED,
+        )
+        self.assertEqual(
+            StockMovement.objects.count(),
+            movement_count,
+        )
+        self.assertEqual(
+            self.stock_item.quantity_on_hand,
+            Decimal("8.0000"),
+        )
+
+    def test_cancel_unposted_physical_inventory_count(self):
+        count = self._create_count()
+
+        cancelled = cancel_physical_inventory_count(
+            company=self.company,
+            count=count,
+            reason="Count postponed",
+            user=self.user,
+        )
+
+        self.assertEqual(
+            cancelled.status,
+            PhysicalInventoryCountStatus.CANCELLED,
+        )
+        self.assertEqual(
+            cancelled.cancellation_reason,
+            "Count postponed",
+        )
+
+    def test_physical_inventory_count_rejects_cross_company_context(self):
+        count = self._create_count()
+
+        with self.assertRaises(ValidationError):
+            validate_physical_inventory_count_for_company(
+                company=self.other_company,
+                count=count,
+            )
+
+    def test_build_physical_inventory_count_payload(self):
+        count = self._create_count()
+
+        payload = build_physical_inventory_count_payload(
+            count,
+            include_items=True,
+        )
+
+        self.assertEqual(payload["id"], count.id)
+        self.assertEqual(payload["status"], PhysicalInventoryCountStatus.DRAFT)
+        self.assertEqual(payload["scope"], PhysicalInventoryCountScope.LOCATION)
+        self.assertEqual(len(payload["items"]), 1)
+        self.assertTrue(payload["allowed_actions"]["start"])
+
+
+# End Phase 22.5 - Physical Inventory and Cycle Count Tests
+# ============================================================
+
+# ============================================================
+# Phase 22.5.1 - Physical Inventory Count API Tests
+# ============================================================
+
+
+class PhysicalInventoryCountAPITests(InventoryTestBase):
+    """
+    Company physical inventory count API, permissions, lifecycle,
+    and tenant-isolation coverage.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        self.profile, _created = UserProfile.objects.get_or_create(
+            user=self.user,
+            defaults={
+                "display_name": "Physical Count API User",
+                "default_company": self.company,
+                "is_system_user": False,
+            },
+        )
+        self.profile.default_company = self.company
+        self.profile.save(
+            update_fields=[
+                "default_company",
+                "updated_at",
+            ]
+        )
+
+        self.membership, _created = CompanyMembership.objects.get_or_create(
+            user=self.user,
+            company=self.company,
+            defaults={
+                "role": CompanyRole.ADMIN,
+                "status": MembershipStatus.ACTIVE,
+                "is_primary": True,
+            },
+        )
+        self.membership.role = CompanyRole.ADMIN
+        self.membership.status = MembershipStatus.ACTIVE
+        self.membership.is_primary = True
+        self.membership.save()
+
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+        self.location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "PIC-API-BIN",
+                "name": "Physical Count API Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+                "is_pickable": True,
+            },
+            user=self.user,
+        )
+
+        self.stock_item = get_or_create_stock_item(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.product,
+            user=self.user,
+        )
+        self.stock_item.quantity_on_hand = Decimal("9.0000")
+        self.stock_item.reserved_quantity = Decimal("0.0000")
+        self.stock_item.average_cost = Decimal("11.00")
+        self.stock_item.full_clean()
+        self.stock_item.save(
+            update_fields=[
+                "quantity_on_hand",
+                "reserved_quantity",
+                "average_cost",
+                "updated_at",
+            ]
+        )
+
+    def _create_count_api(self):
+        return self.client.post(
+            "/api/company/inventory/physical-counts/create/",
+            {
+                "company_id": self.other_company.id,
+                "warehouse_id": self.warehouse.id,
+                "location_id": self.location.id,
+                "scope": PhysicalInventoryCountScope.LOCATION,
+                "include_current_stock": True,
+                "notes": "API physical count",
+            },
+            format="json",
+        )
+
+    def test_create_physical_count_uses_current_company(self):
+        response = self._create_count_api()
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["success"])
+
+        count = PhysicalInventoryCount.objects.get(
+            id=response.data["physical_count"]["id"],
+        )
+
+        self.assertEqual(count.company, self.company)
+        self.assertEqual(count.warehouse, self.warehouse)
+        self.assertEqual(count.location, self.location)
+        self.assertEqual(count.items.count(), 1)
+
+    def test_physical_count_list_and_detail(self):
+        create_response = self._create_count_api()
+        count_id = create_response.data["physical_count"]["id"]
+
+        list_response = self.client.get(
+            "/api/company/inventory/physical-counts/"
+        )
+        detail_response = self.client.get(
+            f"/api/company/inventory/physical-counts/{count_id}/"
+        )
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.data["count"], 1)
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(
+            detail_response.data["physical_count"]["id"],
+            count_id,
+        )
+        self.assertEqual(
+            detail_response.data["physical_count"]["items_count"],
+            1,
+        )
+
+    def test_update_mark_counted_and_post_physical_count(self):
+        create_response = self._create_count_api()
+        count_id = create_response.data["physical_count"]["id"]
+        item_id = create_response.data["physical_count"]["items"][0]["id"]
+
+        update_response = self.client.patch(
+            (
+                "/api/company/inventory/physical-counts/"
+                f"{count_id}/items/{item_id}/"
+            ),
+            {
+                "counted_quantity": "6.0000",
+                "notes": "API counted quantity",
+            },
+            format="json",
+        )
+
+        self.assertEqual(update_response.status_code, 200)
+        self.assertEqual(
+            update_response.data["count_item"]["variance_quantity"],
+            "-3.0000",
+        )
+
+        counted_response = self.client.post(
+            (
+                "/api/company/inventory/physical-counts/"
+                f"{count_id}/mark-counted/"
+            ),
+            {},
+            format="json",
+        )
+
+        self.assertEqual(counted_response.status_code, 200)
+        self.assertEqual(
+            counted_response.data["physical_count"]["status"],
+            PhysicalInventoryCountStatus.COUNTED,
+        )
+
+        post_response = self.client.post(
+            f"/api/company/inventory/physical-counts/{count_id}/post/",
+            {
+                "post_accounting": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(post_response.status_code, 200)
+        self.assertEqual(
+            post_response.data["physical_count"]["status"],
+            PhysicalInventoryCountStatus.POSTED,
+        )
+
+        self.stock_item.refresh_from_db()
+
+        self.assertEqual(
+            self.stock_item.quantity_on_hand,
+            Decimal("6.0000"),
+        )
+
+        count_item = PhysicalInventoryCountItem.objects.get(id=item_id)
+        self.assertIsNotNone(count_item.stock_movement_id)
+
+    def test_cancel_physical_count_api(self):
+        create_response = self._create_count_api()
+        count_id = create_response.data["physical_count"]["id"]
+
+        response = self.client.post(
+            f"/api/company/inventory/physical-counts/{count_id}/cancel/",
+            {
+                "reason": "API postponed",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data["physical_count"]["status"],
+            PhysicalInventoryCountStatus.CANCELLED,
+        )
+        self.assertEqual(
+            response.data["physical_count"]["cancellation_reason"],
+            "API postponed",
+        )
+
+    def test_physical_count_hides_other_company_detail(self):
+        other_location = create_inventory_location(
+            company=self.other_company,
+            warehouse=self.other_warehouse,
+            data={
+                "code": "OTHER-PIC-API-BIN",
+                "name": "Other Physical Count API Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+            },
+            user=self.user,
+        )
+
+        other_stock_item = get_or_create_stock_item(
+            company=self.other_company,
+            warehouse=self.other_warehouse,
+            location=other_location,
+            item=self.other_product,
+            user=self.user,
+        )
+        other_stock_item.quantity_on_hand = Decimal("4.0000")
+        other_stock_item.full_clean()
+        other_stock_item.save(
+            update_fields=[
+                "quantity_on_hand",
+                "updated_at",
+            ]
+        )
+
+        other_count = create_physical_inventory_count(
+            company=self.other_company,
+            warehouse=self.other_warehouse,
+            location=other_location,
+            data={
+                "scope": PhysicalInventoryCountScope.LOCATION,
+                "include_current_stock": True,
+            },
+            user=self.user,
+        )
+
+        response = self.client.get(
+            f"/api/company/inventory/physical-counts/{other_count.id}/"
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_viewer_cannot_create_physical_count(self):
+        self.membership.role = CompanyRole.VIEWER
+        self.membership.save(
+            update_fields=[
+                "role",
+                "updated_at",
+            ]
+        )
+
+        response = self._create_count_api()
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(
+            PhysicalInventoryCount.objects.filter(
+                company=self.company,
+            ).exists()
+        )
+
+
+# End Phase 22.5.1 - Physical Inventory Count API Tests
 # ============================================================

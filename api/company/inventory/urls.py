@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📂 api/company/inventory/urls.py
 # 🧠 PrimeyAcc | Company Inventory URLs V2.0
 # ------------------------------------------------------------
@@ -22,4 +22,5 @@ urlpatterns = [
     path("movements/", include("api.company.inventory.movements.urls")),
     path("reservations/", include("api.company.inventory.reservations.urls")),
     path("goods-issues/", include("api.company.inventory.goods_issues.urls")),
+    path("physical-counts/", include("api.company.inventory.physical_counts.urls")),
 ]

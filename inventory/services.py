@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📂 inventory/services.py
 # 🧠 PrimeyAcc | Company Inventory Services V2.3
 # ------------------------------------------------------------
@@ -38,7 +38,7 @@ from typing import Any
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Max, QuerySet
+from django.db.models import Max, QuerySet, Sum
 from django.utils import timezone
 
 from accounting.models import (
@@ -97,6 +97,10 @@ from .models import (
     GoodsIssue,
     GoodsIssueItem,
     GoodsIssueStatus,
+    PhysicalInventoryCount,
+    PhysicalInventoryCountItem,
+    PhysicalInventoryCountScope,
+    PhysicalInventoryCountStatus,
     Warehouse,
     WarehouseStatus,
     WarehouseType,
@@ -8662,3 +8666,897 @@ def serialize_goods_issue(
         ]
 
     return data
+
+# ============================================================
+# Phase 22.5 - Physical Inventory and Cycle Count Services
+# ============================================================
+
+
+def generate_physical_inventory_count_number(company: Company) -> str:
+    """
+    Generate physical inventory count number per company.
+
+    Format:
+        PIC-000001
+    """
+    last_id = (
+        PhysicalInventoryCount.objects.filter(company=company)
+        .aggregate(max_id=Max("id"))["max_id"]
+        or 0
+    )
+    return f"PIC-{last_id + 1:06d}"
+
+
+def validate_physical_inventory_count_for_company(
+    *,
+    company: Company,
+    count: PhysicalInventoryCount,
+) -> None:
+    """
+    Validate physical inventory count tenant ownership.
+    """
+    if count.company_id != company.id:
+        raise ValidationError(
+            "Selected physical inventory count does not belong to this company."
+        )
+
+    validate_warehouse_for_company(
+        company=company,
+        warehouse=count.warehouse,
+    )
+
+    if count.location_id:
+        validate_inventory_location_for_company(
+            company=company,
+            location=count.location,
+            warehouse=count.warehouse,
+        )
+
+
+def get_company_physical_inventory_counts(
+    company: Company,
+) -> QuerySet[PhysicalInventoryCount]:
+    """
+    Return physical inventory counts for one company only.
+    """
+    return (
+        PhysicalInventoryCount.objects.filter(company=company)
+        .select_related(
+            "company",
+            "warehouse",
+            "location",
+            "started_by",
+            "posted_by",
+            "cancelled_by",
+            "created_by",
+            "updated_by",
+        )
+        .order_by(
+            "-count_date",
+            "-created_at",
+            "-id",
+        )
+    )
+
+
+def get_company_physical_inventory_count_items(
+    company: Company,
+) -> QuerySet[PhysicalInventoryCountItem]:
+    """
+    Return physical inventory count lines for one company only.
+    """
+    return (
+        PhysicalInventoryCountItem.objects.filter(company=company)
+        .select_related(
+            "count",
+            "company",
+            "warehouse",
+            "location",
+            "stock_item",
+            "item",
+            "item__unit",
+            "stock_movement",
+        )
+        .order_by(
+            "count_id",
+            "line_number",
+            "id",
+        )
+    )
+
+
+def build_physical_inventory_count_item_payload(
+    item: PhysicalInventoryCountItem,
+) -> dict[str, Any]:
+    """
+    Serialize a physical inventory count line for APIs/services.
+    """
+    return {
+        "id": item.id,
+        "count_id": item.count_id,
+        "company_id": item.company_id,
+        "warehouse_id": item.warehouse_id,
+        "location_id": item.location_id,
+        "stock_item_id": item.stock_item_id,
+        "item_id": item.item_id,
+        "line_number": item.line_number,
+        "system_quantity": str(item.system_quantity),
+        "counted_quantity": str(item.counted_quantity),
+        "variance_quantity": str(item.variance_quantity),
+        "system_unit_cost": str(item.system_unit_cost),
+        "variance_value": str(item.variance_value),
+        "has_variance": item.has_variance,
+        "stock_movement_id": item.stock_movement_id,
+        "item_code_snapshot": item.item_code_snapshot,
+        "item_name_snapshot": item.item_name_snapshot,
+        "item_name_ar_snapshot": item.item_name_ar_snapshot,
+        "item_name_en_snapshot": item.item_name_en_snapshot,
+        "unit_name_snapshot": item.unit_name_snapshot,
+        "notes": item.notes,
+        "extra_data": item.extra_data or {},
+        "created_at": (
+            item.created_at.isoformat()
+            if item.created_at
+            else None
+        ),
+        "updated_at": (
+            item.updated_at.isoformat()
+            if item.updated_at
+            else None
+        ),
+    }
+
+
+def build_physical_inventory_count_payload(
+    count: PhysicalInventoryCount,
+    *,
+    include_items: bool = False,
+) -> dict[str, Any]:
+    """
+    Serialize physical inventory count header.
+    """
+    data = {
+        "id": count.id,
+        "company_id": count.company_id,
+        "warehouse_id": count.warehouse_id,
+        "warehouse_code": count.warehouse.code,
+        "warehouse_name": count.warehouse.display_name,
+        "location_id": count.location_id,
+        "location_code": count.location.code if count.location_id else "",
+        "location_name": (
+            count.location.display_name
+            if count.location_id
+            else ""
+        ),
+        "status": count.status,
+        "scope": count.scope,
+        "count_number": count.count_number,
+        "count_date": (
+            count.count_date.isoformat()
+            if count.count_date
+            else None
+        ),
+        "total_system_quantity": str(count.total_system_quantity),
+        "total_counted_quantity": str(count.total_counted_quantity),
+        "total_variance_quantity": str(count.total_variance_quantity),
+        "total_variance_value": str(count.total_variance_value),
+        "started_at": (
+            count.started_at.isoformat()
+            if count.started_at
+            else None
+        ),
+        "posted_at": (
+            count.posted_at.isoformat()
+            if count.posted_at
+            else None
+        ),
+        "cancelled_at": (
+            count.cancelled_at.isoformat()
+            if count.cancelled_at
+            else None
+        ),
+        "cancellation_reason": count.cancellation_reason,
+        "notes": count.notes,
+        "extra_data": count.extra_data or {},
+        "allowed_actions": {
+            "start": count.can_be_started,
+            "post": count.can_be_posted,
+            "cancel": count.can_be_cancelled,
+        },
+        "created_at": (
+            count.created_at.isoformat()
+            if count.created_at
+            else None
+        ),
+        "updated_at": (
+            count.updated_at.isoformat()
+            if count.updated_at
+            else None
+        ),
+    }
+
+    if include_items:
+        data["items"] = [
+            build_physical_inventory_count_item_payload(item)
+            for item in (
+                count.items.select_related(
+                    "warehouse",
+                    "location",
+                    "stock_item",
+                    "item",
+                    "item__unit",
+                    "stock_movement",
+                )
+                .order_by(
+                    "line_number",
+                    "id",
+                )
+            )
+        ]
+
+    return data
+
+
+def recalculate_physical_inventory_count_totals(
+    count: PhysicalInventoryCount,
+) -> PhysicalInventoryCount:
+    """
+    Recalculate physical inventory count totals from lines.
+    """
+    totals = count.items.aggregate(
+        total_system_quantity=Sum("system_quantity"),
+        total_counted_quantity=Sum("counted_quantity"),
+        total_variance_quantity=Sum("variance_quantity"),
+        total_variance_value=Sum("variance_value"),
+    )
+
+    count.total_system_quantity = quantize_quantity(
+        totals.get("total_system_quantity") or QUANTITY_ZERO
+    )
+    count.total_counted_quantity = quantize_quantity(
+        totals.get("total_counted_quantity") or QUANTITY_ZERO
+    )
+    count.total_variance_quantity = quantize_quantity(
+        totals.get("total_variance_quantity") or QUANTITY_ZERO
+    )
+    count.total_variance_value = quantize_money(
+        totals.get("total_variance_value") or MONEY_ZERO
+    )
+    count.save(
+        update_fields=[
+            "total_system_quantity",
+            "total_counted_quantity",
+            "total_variance_quantity",
+            "total_variance_value",
+            "updated_at",
+        ]
+    )
+
+    return count
+
+
+def resolve_physical_inventory_scope(
+    *,
+    warehouse: Warehouse,
+    location: InventoryLocation | None,
+    raw_scope: str | None,
+) -> str:
+    """
+    Resolve and validate count scope.
+    """
+    scope = normalize_code(raw_scope)
+
+    if not scope:
+        scope = (
+            PhysicalInventoryCountScope.LOCATION
+            if location is not None
+            else PhysicalInventoryCountScope.CYCLE_COUNT
+        )
+
+    if scope not in {
+        PhysicalInventoryCountScope.FULL_WAREHOUSE,
+        PhysicalInventoryCountScope.LOCATION,
+        PhysicalInventoryCountScope.CYCLE_COUNT,
+    }:
+        raise ValidationError(
+            "Unsupported physical inventory count scope."
+        )
+
+    if scope == PhysicalInventoryCountScope.LOCATION and location is None:
+        raise ValidationError(
+            "Location scope requires an inventory location."
+        )
+
+    if scope == PhysicalInventoryCountScope.FULL_WAREHOUSE and location is not None:
+        raise ValidationError(
+            "Full warehouse counts cannot be restricted to one location."
+        )
+
+    return scope
+
+
+def resolve_physical_inventory_stock_items(
+    *,
+    company: Company,
+    warehouse: Warehouse,
+    location: InventoryLocation | None = None,
+    stock_item_ids: list[int] | None = None,
+) -> QuerySet[StockItem]:
+    """
+    Resolve countable stock balances for a physical inventory count.
+    """
+    queryset = (
+        StockItem.objects.filter(
+            company=company,
+            warehouse=warehouse,
+        )
+        .select_related(
+            "company",
+            "warehouse",
+            "location",
+            "item",
+            "item__unit",
+        )
+        .order_by(
+            "location_id",
+            "item__name",
+            "id",
+        )
+    )
+
+    if location is not None:
+        validate_inventory_location_for_company(
+            company=company,
+            location=location,
+            warehouse=warehouse,
+            require_active=True,
+        )
+        queryset = queryset.filter(location=location)
+
+    if stock_item_ids:
+        queryset = queryset.filter(id__in=stock_item_ids)
+
+    return queryset
+
+
+@transaction.atomic
+def create_physical_inventory_count(
+    *,
+    company: Company,
+    warehouse: Warehouse,
+    location: InventoryLocation | None = None,
+    data: dict[str, Any] | None = None,
+    user=None,
+) -> PhysicalInventoryCount:
+    """
+    Create physical inventory count and optional initial lines.
+
+    Supported data keys:
+    - count_number
+    - count_date
+    - scope
+    - notes
+    - extra_data
+    - stock_item_ids
+    - items: [{stock_item_id, counted_quantity, notes}]
+    - include_current_stock: True to snapshot all matching stock balances
+    """
+    payload = data or {}
+
+    validate_warehouse_for_company(
+        company=company,
+        warehouse=warehouse,
+        require_active=True,
+    )
+
+    if location is not None:
+        validate_inventory_location_for_company(
+            company=company,
+            location=location,
+            warehouse=warehouse,
+            require_active=True,
+        )
+
+    scope = resolve_physical_inventory_scope(
+        warehouse=warehouse,
+        location=location,
+        raw_scope=payload.get("scope"),
+    )
+
+    count = PhysicalInventoryCount(
+        company=company,
+        warehouse=warehouse,
+        location=location,
+        status=PhysicalInventoryCountStatus.DRAFT,
+        scope=scope,
+        count_number=(
+            normalize_code(payload.get("count_number"))
+            or generate_physical_inventory_count_number(company)
+        ),
+        count_date=payload.get("count_date") or timezone.localdate(),
+        notes=normalize_text(payload.get("notes")),
+        extra_data=(
+            payload.get("extra_data")
+            if isinstance(payload.get("extra_data"), dict)
+            else {}
+        ),
+        created_by=(
+            user
+            if getattr(user, "is_authenticated", False)
+            else None
+        ),
+        updated_by=(
+            user
+            if getattr(user, "is_authenticated", False)
+            else None
+        ),
+    )
+    count.full_clean()
+    count.save()
+
+    explicit_items = payload.get("items")
+    include_current_stock = normalize_bool(
+        payload.get("include_current_stock"),
+        default=False,
+    )
+
+    if isinstance(explicit_items, list):
+        for item_payload in explicit_items:
+            stock_item_id = item_payload.get("stock_item_id")
+            if not stock_item_id:
+                raise ValidationError(
+                    "Each physical inventory item requires stock_item_id."
+                )
+
+            stock_item = StockItem.objects.select_related(
+                "warehouse",
+                "location",
+                "item",
+                "item__unit",
+            ).filter(
+                id=stock_item_id,
+                company=company,
+                warehouse=warehouse,
+            ).first()
+
+            if not stock_item:
+                raise ValidationError(
+                    "Selected stock item was not found for this warehouse."
+                )
+
+            add_physical_inventory_count_item(
+                company=company,
+                count=count,
+                stock_item=stock_item,
+                counted_quantity=item_payload.get("counted_quantity"),
+                notes=normalize_text(item_payload.get("notes")),
+                extra_data=(
+                    item_payload.get("extra_data")
+                    if isinstance(item_payload.get("extra_data"), dict)
+                    else {}
+                ),
+            )
+    elif include_current_stock:
+        stock_item_ids = payload.get("stock_item_ids")
+        if stock_item_ids is not None and not isinstance(stock_item_ids, list):
+            raise ValidationError(
+                "stock_item_ids must be a list when provided."
+            )
+
+        for stock_item in resolve_physical_inventory_stock_items(
+            company=company,
+            warehouse=warehouse,
+            location=location,
+            stock_item_ids=stock_item_ids,
+        ):
+            add_physical_inventory_count_item(
+                company=company,
+                count=count,
+                stock_item=stock_item,
+                counted_quantity=stock_item.quantity_on_hand,
+            )
+
+    recalculate_physical_inventory_count_totals(count)
+
+    return count
+
+
+@transaction.atomic
+def start_physical_inventory_count(
+    *,
+    company: Company,
+    count: PhysicalInventoryCount,
+    user=None,
+) -> PhysicalInventoryCount:
+    """
+    Start a draft physical inventory count.
+    """
+    validate_physical_inventory_count_for_company(
+        company=company,
+        count=count,
+    )
+
+    if not count.can_be_started:
+        raise ValidationError(
+            "Only draft physical inventory counts can be started."
+        )
+
+    count.status = PhysicalInventoryCountStatus.IN_PROGRESS
+    count.started_at = timezone.now()
+
+    if user and getattr(user, "is_authenticated", False):
+        count.started_by = user
+        count.updated_by = user
+
+    count.full_clean()
+    count.save(
+        update_fields=[
+            "status",
+            "started_at",
+            "started_by",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+
+    return count
+
+
+@transaction.atomic
+def add_physical_inventory_count_item(
+    *,
+    company: Company,
+    count: PhysicalInventoryCount,
+    stock_item: StockItem,
+    counted_quantity: Decimal | int | float | str | None = None,
+    notes: str = "",
+    extra_data: dict[str, Any] | None = None,
+) -> PhysicalInventoryCountItem:
+    """
+    Add or update a physical inventory count line.
+
+    The line freezes the stock balance quantity and average cost at the time
+    the line is added.
+    """
+    validate_physical_inventory_count_for_company(
+        company=company,
+        count=count,
+    )
+
+    if count.status not in {
+        PhysicalInventoryCountStatus.DRAFT,
+        PhysicalInventoryCountStatus.IN_PROGRESS,
+    }:
+        raise ValidationError(
+            "Physical inventory count lines can only be edited before posting."
+        )
+
+    if stock_item.company_id != company.id:
+        raise ValidationError(
+            "Selected stock item does not belong to this company."
+        )
+
+    if stock_item.warehouse_id != count.warehouse_id:
+        raise ValidationError(
+            "Selected stock item does not belong to count warehouse."
+        )
+
+    if (
+        count.location_id
+        and stock_item.location_id != count.location_id
+    ):
+        raise ValidationError(
+            "Selected stock item does not belong to count location."
+        )
+
+    system_quantity = quantize_quantity(stock_item.quantity_on_hand)
+
+    if counted_quantity is None:
+        counted_quantity = system_quantity
+
+    counted_value = quantize_quantity(counted_quantity)
+
+    if counted_value < QUANTITY_ZERO:
+        raise ValidationError(
+            "Counted quantity cannot be negative."
+        )
+
+    line_number = (
+        count.items.aggregate(max_line=Max("line_number"))["max_line"]
+        or 0
+    ) + 1
+
+    count_item, _created = PhysicalInventoryCountItem.objects.update_or_create(
+        count=count,
+        stock_item=stock_item,
+        defaults={
+            "company": company,
+            "warehouse": stock_item.warehouse,
+            "location": stock_item.location,
+            "item": stock_item.item,
+            "line_number": line_number,
+            "system_quantity": system_quantity,
+            "counted_quantity": counted_value,
+            "system_unit_cost": quantize_money(stock_item.average_cost),
+            "notes": normalize_text(notes),
+            "extra_data": extra_data or {},
+        },
+    )
+
+    count_item.full_clean()
+    count_item.save()
+
+    recalculate_physical_inventory_count_totals(count)
+
+    return count_item
+
+
+@transaction.atomic
+def set_physical_inventory_count_item_quantity(
+    *,
+    company: Company,
+    count_item: PhysicalInventoryCountItem,
+    counted_quantity: Decimal | int | float | str,
+    notes: str | None = None,
+) -> PhysicalInventoryCountItem:
+    """
+    Update counted quantity for one count line.
+    """
+    count = count_item.count
+
+    validate_physical_inventory_count_for_company(
+        company=company,
+        count=count,
+    )
+
+    if count.status not in {
+        PhysicalInventoryCountStatus.DRAFT,
+        PhysicalInventoryCountStatus.IN_PROGRESS,
+    }:
+        raise ValidationError(
+            "Physical inventory count lines can only be updated before posting."
+        )
+
+    count_item.counted_quantity = quantize_quantity(counted_quantity)
+
+    if notes is not None:
+        count_item.notes = normalize_text(notes)
+
+    count_item.full_clean()
+    count_item.save(
+        update_fields=[
+            "counted_quantity",
+            "variance_quantity",
+            "variance_value",
+            "notes",
+            "updated_at",
+        ]
+    )
+
+    recalculate_physical_inventory_count_totals(count)
+
+    return count_item
+
+
+@transaction.atomic
+def mark_physical_inventory_count_counted(
+    *,
+    company: Company,
+    count: PhysicalInventoryCount,
+    user=None,
+) -> PhysicalInventoryCount:
+    """
+    Mark a physical inventory count as counted and ready for posting.
+    """
+    validate_physical_inventory_count_for_company(
+        company=company,
+        count=count,
+    )
+
+    if count.status not in {
+        PhysicalInventoryCountStatus.DRAFT,
+        PhysicalInventoryCountStatus.IN_PROGRESS,
+    }:
+        raise ValidationError(
+            "Only draft or in-progress physical inventory counts can be marked counted."
+        )
+
+    if not count.items.exists():
+        raise ValidationError(
+            "Physical inventory count must have at least one line."
+        )
+
+    recalculate_physical_inventory_count_totals(count)
+    count.refresh_from_db()
+
+    count.status = PhysicalInventoryCountStatus.COUNTED
+
+    if user and getattr(user, "is_authenticated", False):
+        count.updated_by = user
+
+    count.full_clean()
+    count.save(
+        update_fields=[
+            "status",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+
+    return count
+
+
+@transaction.atomic
+def post_physical_inventory_count(
+    *,
+    company: Company,
+    count: PhysicalInventoryCount,
+    user=None,
+    post_accounting: bool = True,
+) -> PhysicalInventoryCount:
+    """
+    Post physical inventory count variances to stock movements.
+
+    Positive variance creates ADJUSTMENT/INCREASE.
+    Negative variance creates ADJUSTMENT/DECREASE.
+    Zero variance creates no stock movement.
+    """
+    validate_physical_inventory_count_for_company(
+        company=company,
+        count=count,
+    )
+
+    if count.status == PhysicalInventoryCountStatus.POSTED:
+        return count
+
+    if not count.can_be_posted:
+        raise ValidationError(
+            "Only in-progress or counted physical inventory counts can be posted."
+        )
+
+    count_items = (
+        count.items.select_for_update()
+        .select_related(
+            "stock_item",
+            "warehouse",
+            "location",
+            "item",
+        )
+        .order_by(
+            "line_number",
+            "id",
+        )
+    )
+
+    if not count_items.exists():
+        raise ValidationError(
+            "Physical inventory count must have at least one line."
+        )
+
+    for count_item in count_items:
+        if count_item.stock_movement_id:
+            continue
+
+        variance = quantize_quantity(count_item.variance_quantity)
+
+        if variance == QUANTITY_ZERO:
+            continue
+
+        direction = (
+            StockMovementDirection.INCREASE
+            if variance > QUANTITY_ZERO
+            else StockMovementDirection.DECREASE
+        )
+        quantity = abs(variance)
+
+        movement = create_stock_movement(
+            company=company,
+            warehouse=count_item.warehouse,
+            location=count_item.location,
+            item=count_item.item,
+            movement_type=StockMovementType.ADJUSTMENT,
+            direction=direction,
+            quantity=quantity,
+            unit_cost=count_item.system_unit_cost,
+            reference_type="physical_inventory_count",
+            reference_id=count.id,
+            reference_number=count.count_number,
+            notes=(
+                normalize_text(count.notes)
+                or f"Physical inventory count {count.count_number}"
+            ),
+            extra_data={
+                "physical_inventory_count_id": count.id,
+                "physical_inventory_count_item_id": count_item.id,
+                "system_quantity": str(count_item.system_quantity),
+                "counted_quantity": str(count_item.counted_quantity),
+                "variance_quantity": str(count_item.variance_quantity),
+            },
+            user=user,
+            post_immediately=True,
+            post_accounting=post_accounting,
+        )
+
+        count_item.stock_movement = movement
+        count_item.save(
+            update_fields=[
+                "stock_movement",
+                "updated_at",
+            ]
+        )
+
+    recalculate_physical_inventory_count_totals(count)
+    count.refresh_from_db()
+
+    count.status = PhysicalInventoryCountStatus.POSTED
+    count.posted_at = timezone.now()
+
+    if user and getattr(user, "is_authenticated", False):
+        count.posted_by = user
+        count.updated_by = user
+
+    count.full_clean()
+    count.save(
+        update_fields=[
+            "status",
+            "posted_at",
+            "posted_by",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+
+    return count
+
+
+@transaction.atomic
+def cancel_physical_inventory_count(
+    *,
+    company: Company,
+    count: PhysicalInventoryCount,
+    reason: str = "",
+    user=None,
+) -> PhysicalInventoryCount:
+    """
+    Cancel an unposted physical inventory count.
+    """
+    validate_physical_inventory_count_for_company(
+        company=company,
+        count=count,
+    )
+
+    if not count.can_be_cancelled:
+        raise ValidationError(
+            "Only unposted physical inventory counts can be cancelled."
+        )
+
+    if count.items.filter(stock_movement__isnull=False).exists():
+        raise ValidationError(
+            "Physical inventory count with posted movements cannot be cancelled."
+        )
+
+    count.status = PhysicalInventoryCountStatus.CANCELLED
+    count.cancelled_at = timezone.now()
+    count.cancellation_reason = normalize_text(reason)
+
+    if user and getattr(user, "is_authenticated", False):
+        count.cancelled_by = user
+        count.updated_by = user
+
+    count.full_clean()
+    count.save(
+        update_fields=[
+            "status",
+            "cancelled_at",
+            "cancelled_by",
+            "cancellation_reason",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+
+    return count
+
+
+# End Phase 22.5 - Physical Inventory and Cycle Count Services
+# ============================================================

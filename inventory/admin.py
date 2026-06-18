@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📂 inventory/admin.py
 # 🧠 PrimeyAcc | Company Inventory Admin V2.0
 # ------------------------------------------------------------
@@ -35,6 +35,9 @@ from .models import (
     GoodsIssue,
     GoodsIssueItem,
     GoodsIssueStatus,
+    PhysicalInventoryCount,
+    PhysicalInventoryCountItem,
+    PhysicalInventoryCountStatus,
     InventoryLocation,
     InventoryLocationStatus,
     InventoryLocationType,
@@ -1871,4 +1874,284 @@ class GoodsIssueItemAdmin(admin.ModelAdmin):
 
 
 # End Phase 22.4 - Goods Issues Admin
+# ============================================================
+
+# ============================================================
+# Phase 22.5 - Physical Inventory Admin
+# ============================================================
+
+
+class PhysicalInventoryCountItemInline(admin.TabularInline):
+    """
+    Physical inventory count items inline.
+    """
+
+    model = PhysicalInventoryCountItem
+    extra = 0
+    can_delete = False
+    show_change_link = True
+
+    fields = [
+        "line_number",
+        "stock_item",
+        "warehouse",
+        "location",
+        "item",
+        "system_quantity",
+        "counted_quantity",
+        "variance_quantity",
+        "system_unit_cost",
+        "variance_value",
+        "stock_movement",
+        "notes",
+    ]
+
+    readonly_fields = [
+        "warehouse",
+        "location",
+        "item",
+        "system_quantity",
+        "variance_quantity",
+        "system_unit_cost",
+        "variance_value",
+        "stock_movement",
+    ]
+
+    autocomplete_fields = [
+        "stock_item",
+    ]
+
+    def has_add_permission(
+        self,
+        request: HttpRequest,
+        obj=None,
+    ) -> bool:
+        return False
+
+
+@admin.register(PhysicalInventoryCount)
+class PhysicalInventoryCountAdmin(admin.ModelAdmin):
+    """
+    Internal administration for physical inventory counts.
+    """
+
+    list_display = [
+        "count_number",
+        "company",
+        "warehouse",
+        "location",
+        "scope",
+        "status",
+        "count_date",
+        "total_system_quantity",
+        "total_counted_quantity",
+        "total_variance_quantity",
+        "total_variance_value",
+        "posted_at",
+        "cancelled_at",
+        "created_at",
+    ]
+
+    list_filter = [
+        "status",
+        "scope",
+        "company",
+        "warehouse",
+        "location",
+        "count_date",
+        "posted_at",
+        "cancelled_at",
+        "created_at",
+    ]
+
+    search_fields = [
+        "count_number",
+        "warehouse__code",
+        "warehouse__name",
+        "location__code",
+        "location__name",
+        "company__name",
+        "notes",
+    ]
+
+    readonly_fields = [
+        "total_system_quantity",
+        "total_counted_quantity",
+        "total_variance_quantity",
+        "total_variance_value",
+        "started_at",
+        "started_by",
+        "posted_at",
+        "posted_by",
+        "cancelled_at",
+        "cancelled_by",
+        "created_at",
+        "updated_at",
+    ]
+
+    autocomplete_fields = [
+        "company",
+        "warehouse",
+        "location",
+        "started_by",
+        "posted_by",
+        "cancelled_by",
+        "created_by",
+        "updated_by",
+    ]
+
+    inlines = [
+        PhysicalInventoryCountItemInline,
+    ]
+
+    ordering = [
+        "-count_date",
+        "-created_at",
+        "-id",
+    ]
+
+    list_select_related = [
+        "company",
+        "warehouse",
+        "location",
+        "started_by",
+        "posted_by",
+        "cancelled_by",
+        "created_by",
+        "updated_by",
+    ]
+
+    def has_delete_permission(
+        self,
+        request: HttpRequest,
+        obj: PhysicalInventoryCount | None = None,
+    ) -> bool:
+        return False
+
+    def get_readonly_fields(
+        self,
+        request: HttpRequest,
+        obj: PhysicalInventoryCount | None = None,
+    ) -> list[str] | tuple[str, ...]:
+        readonly_fields = list(
+            super().get_readonly_fields(request, obj)
+        )
+
+        if obj and obj.status == PhysicalInventoryCountStatus.POSTED:
+            readonly_fields.extend(
+                [
+                    "company",
+                    "warehouse",
+                    "location",
+                    "status",
+                    "scope",
+                    "count_number",
+                    "count_date",
+                    "notes",
+                    "extra_data",
+                    "created_by",
+                    "updated_by",
+                ]
+            )
+
+        return tuple(sorted(set(readonly_fields)))
+
+
+@admin.register(PhysicalInventoryCountItem)
+class PhysicalInventoryCountItemAdmin(admin.ModelAdmin):
+    """
+    Internal administration for physical inventory count items.
+    """
+
+    list_display = [
+        "count",
+        "company",
+        "line_number",
+        "warehouse",
+        "location",
+        "item",
+        "system_quantity",
+        "counted_quantity",
+        "variance_quantity",
+        "system_unit_cost",
+        "variance_value",
+        "stock_movement",
+        "created_at",
+    ]
+
+    list_filter = [
+        "company",
+        "warehouse",
+        "location",
+        "item",
+        "created_at",
+    ]
+
+    search_fields = [
+        "count__count_number",
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "item_name_ar_snapshot",
+        "item_name_en_snapshot",
+        "warehouse__code",
+        "location__code",
+    ]
+
+    readonly_fields = [
+        "company",
+        "count",
+        "warehouse",
+        "location",
+        "stock_item",
+        "item",
+        "system_quantity",
+        "variance_quantity",
+        "system_unit_cost",
+        "variance_value",
+        "stock_movement",
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "item_name_ar_snapshot",
+        "item_name_en_snapshot",
+        "unit_name_snapshot",
+        "created_at",
+        "updated_at",
+    ]
+
+    autocomplete_fields = [
+        "count",
+        "stock_item",
+        "stock_movement",
+    ]
+
+    ordering = [
+        "-created_at",
+        "-id",
+    ]
+
+    list_select_related = [
+        "count",
+        "company",
+        "warehouse",
+        "location",
+        "stock_item",
+        "item",
+        "stock_movement",
+    ]
+
+    def has_add_permission(
+        self,
+        request: HttpRequest,
+    ) -> bool:
+        return False
+
+    def has_delete_permission(
+        self,
+        request: HttpRequest,
+        obj: PhysicalInventoryCountItem | None = None,
+    ) -> bool:
+        return False
+
+
+# End Phase 22.5 - Physical Inventory Admin
 # ============================================================
