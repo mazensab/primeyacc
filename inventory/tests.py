@@ -9472,3 +9472,404 @@ class PhysicalInventoryCountAPITests(InventoryTestBase):
 
 # End Phase 22.5.1 - Physical Inventory Count API Tests
 # ============================================================
+
+# ============================================================
+# Phase 22.5 Final - Advanced Inventory Valuation Tests
+# ============================================================
+
+
+class InventoryValuationServiceTests(InventoryTestBase):
+    """
+    Advanced inventory valuation service tests.
+
+    Current valuation is based on StockItem location-level balances and
+    weighted average cost.
+    """
+
+    def _prepare_valuation_dataset(self):
+        first_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "VAL-BIN-01",
+                "name": "Valuation Bin 01",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+            },
+            user=self.user,
+        )
+        second_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "VAL-BIN-02",
+                "name": "Valuation Bin 02",
+                "location_type": InventoryLocationType.BIN,
+            },
+            user=self.user,
+        )
+        third_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.second_warehouse,
+            data={
+                "code": "VAL-BIN-03",
+                "name": "Valuation Bin 03",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+            },
+            user=self.user,
+        )
+
+        first_movement = receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=first_location,
+            item=self.product,
+            quantity="10.0000",
+            unit_cost="12.00",
+            user=self.user,
+        )
+        second_movement = receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=second_location,
+            item=self.product,
+            quantity="5.0000",
+            unit_cost="20.00",
+            user=self.user,
+        )
+        third_movement = receive_stock(
+            company=self.company,
+            warehouse=self.second_warehouse,
+            location=third_location,
+            item=self.second_product,
+            quantity="2.0000",
+            unit_cost="30.00",
+            user=self.user,
+        )
+
+        first_stock = first_movement.stock_item
+        second_stock = second_movement.stock_item
+
+        first_stock.reserved_quantity = Decimal("2.0000")
+        first_stock.full_clean()
+        first_stock.save(
+            update_fields=[
+                "reserved_quantity",
+                "updated_at",
+            ]
+        )
+
+        second_stock.reserved_quantity = Decimal("1.0000")
+        second_stock.full_clean()
+        second_stock.save(
+            update_fields=[
+                "reserved_quantity",
+                "updated_at",
+            ]
+        )
+
+        other_location = create_inventory_location(
+            company=self.other_company,
+            warehouse=self.other_warehouse,
+            data={
+                "code": "OTHER-VAL-BIN",
+                "name": "Other Valuation Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+            },
+            user=self.user,
+        )
+
+        receive_stock(
+            company=self.other_company,
+            warehouse=self.other_warehouse,
+            location=other_location,
+            item=self.other_product,
+            quantity="99.0000",
+            unit_cost="99.00",
+            user=self.user,
+        )
+
+        return {
+            "first_location": first_location,
+            "second_location": second_location,
+            "third_location": third_location,
+        }
+
+    def test_inventory_valuation_summary_aggregates_current_stock_value(self):
+        self._prepare_valuation_dataset()
+
+        from inventory.services import build_inventory_valuation_summary
+
+        payload = build_inventory_valuation_summary(
+            company=self.company,
+            include_rows=True,
+            include_groups=True,
+        )
+        summary = payload["summary"]
+
+        self.assertEqual(summary["location_balances_count"], 3)
+        self.assertEqual(summary["distinct_items_count"], 2)
+        self.assertEqual(summary["warehouses_count"], 2)
+        self.assertEqual(summary["locations_count"], 3)
+        self.assertEqual(
+            summary["total_quantity_on_hand"],
+            "17.0000",
+        )
+        self.assertEqual(
+            summary["total_reserved_quantity"],
+            "3.0000",
+        )
+        self.assertEqual(
+            summary["total_available_quantity"],
+            "14.0000",
+        )
+        self.assertEqual(
+            summary["total_inventory_value"],
+            "280.00",
+        )
+        self.assertEqual(
+            summary["total_reserved_value"],
+            "44.00",
+        )
+        self.assertEqual(
+            summary["total_available_value"],
+            "236.00",
+        )
+        self.assertEqual(
+            summary["weighted_average_cost"],
+            "16.47",
+        )
+        self.assertEqual(payload["rows_count"], 3)
+        self.assertEqual(payload["items_count"], 2)
+        self.assertEqual(payload["warehouses_count"], 2)
+        self.assertEqual(payload["locations_count"], 3)
+
+    def test_inventory_valuation_item_group_uses_weighted_average_cost(self):
+        self._prepare_valuation_dataset()
+
+        from inventory.services import build_inventory_valuation_summary
+
+        payload = build_inventory_valuation_summary(
+            company=self.company,
+            item_id=self.product.id,
+            include_rows=False,
+            include_groups=True,
+        )
+
+        summary = payload["summary"]
+        item_row = payload["items"][0]
+
+        self.assertEqual(
+            summary["total_quantity_on_hand"],
+            "15.0000",
+        )
+        self.assertEqual(
+            summary["total_inventory_value"],
+            "220.00",
+        )
+        self.assertEqual(
+            item_row["weighted_average_cost"],
+            "14.67",
+        )
+        self.assertEqual(
+            item_row["warehouses_count"],
+            1,
+        )
+        self.assertEqual(
+            item_row["locations_count"],
+            2,
+        )
+
+    def test_inventory_valuation_filters_and_tenant_isolation(self):
+        dataset = self._prepare_valuation_dataset()
+
+        from inventory.services import build_inventory_valuation_summary
+
+        payload = build_inventory_valuation_summary(
+            company=self.company,
+            location_id=dataset["third_location"].id,
+            include_rows=True,
+            include_groups=True,
+        )
+
+        summary = payload["summary"]
+
+        self.assertEqual(summary["location_balances_count"], 1)
+        self.assertEqual(summary["distinct_items_count"], 1)
+        self.assertEqual(summary["total_quantity_on_hand"], "2.0000")
+        self.assertEqual(summary["total_inventory_value"], "60.00")
+        self.assertEqual(payload["rows_count"], 1)
+
+
+class InventoryValuationAPITests(InventoryTestBase):
+    """
+    Inventory valuation company API tests.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        self.profile, _created = UserProfile.objects.get_or_create(
+            user=self.user,
+            defaults={
+                "display_name": "Inventory Valuation API User",
+                "default_company": self.company,
+                "is_system_user": False,
+            },
+        )
+        self.profile.default_company = self.company
+        self.profile.save(
+            update_fields=[
+                "default_company",
+                "updated_at",
+            ]
+        )
+
+        self.membership, _created = CompanyMembership.objects.get_or_create(
+            user=self.user,
+            company=self.company,
+            defaults={
+                "role": CompanyRole.ADMIN,
+                "status": MembershipStatus.ACTIVE,
+                "is_primary": True,
+            },
+        )
+        self.membership.role = CompanyRole.ADMIN
+        self.membership.status = MembershipStatus.ACTIVE
+        self.membership.is_primary = True
+        self.membership.save()
+
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+        self.location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "VAL-API-BIN",
+                "name": "Valuation API Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+            },
+            user=self.user,
+        )
+        self.second_location = create_inventory_location(
+            company=self.company,
+            warehouse=self.second_warehouse,
+            data={
+                "code": "VAL-API-BIN-02",
+                "name": "Valuation API Bin 02",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+            },
+            user=self.user,
+        )
+
+        first_movement = receive_stock(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.product,
+            quantity="4.0000",
+            unit_cost="10.00",
+            user=self.user,
+        )
+        second_movement = receive_stock(
+            company=self.company,
+            warehouse=self.second_warehouse,
+            location=self.second_location,
+            item=self.second_product,
+            quantity="3.0000",
+            unit_cost="25.00",
+            user=self.user,
+        )
+
+        first_stock = first_movement.stock_item
+        first_stock.reserved_quantity = Decimal("1.0000")
+        first_stock.full_clean()
+        first_stock.save(
+            update_fields=[
+                "reserved_quantity",
+                "updated_at",
+            ]
+        )
+
+    def test_inventory_valuation_summary_api(self):
+        response = self.client.get(
+            "/api/company/inventory/valuation/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+
+        summary = response.data["summary"]
+
+        self.assertEqual(summary["location_balances_count"], 2)
+        self.assertEqual(summary["distinct_items_count"], 2)
+        self.assertEqual(summary["total_quantity_on_hand"], "7.0000")
+        self.assertEqual(summary["total_inventory_value"], "115.00")
+        self.assertEqual(summary["total_reserved_value"], "10.00")
+        self.assertEqual(summary["total_available_value"], "105.00")
+
+    def test_inventory_valuation_stock_items_api(self):
+        response = self.client.get(
+            "/api/company/inventory/valuation/stock-items/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 2)
+
+        values_by_item_id = {
+            row["item_id"]: row
+            for row in response.data["results"]
+        }
+
+        self.assertEqual(
+            values_by_item_id[self.product.id]["inventory_value"],
+            "40.00",
+        )
+        self.assertEqual(
+            values_by_item_id[self.second_product.id]["inventory_value"],
+            "75.00",
+        )
+
+    def test_inventory_valuation_grouped_apis(self):
+        item_response = self.client.get(
+            "/api/company/inventory/valuation/items/"
+        )
+        warehouse_response = self.client.get(
+            "/api/company/inventory/valuation/warehouses/"
+        )
+        location_response = self.client.get(
+            "/api/company/inventory/valuation/locations/"
+        )
+
+        self.assertEqual(item_response.status_code, 200)
+        self.assertEqual(warehouse_response.status_code, 200)
+        self.assertEqual(location_response.status_code, 200)
+
+        self.assertEqual(item_response.data["count"], 2)
+        self.assertEqual(warehouse_response.data["count"], 2)
+        self.assertEqual(location_response.data["count"], 2)
+
+    def test_inventory_valuation_api_filters_by_warehouse(self):
+        response = self.client.get(
+            "/api/company/inventory/valuation/",
+            {
+                "warehouse_id": self.warehouse.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        summary = response.data["summary"]
+
+        self.assertEqual(summary["location_balances_count"], 1)
+        self.assertEqual(summary["total_quantity_on_hand"], "4.0000")
+        self.assertEqual(summary["total_inventory_value"], "40.00")
+
+
+# End Phase 22.5 Final - Advanced Inventory Valuation Tests
+# ============================================================

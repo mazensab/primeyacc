@@ -38,7 +38,7 @@ from typing import Any
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Max, QuerySet, Sum
+from django.db.models import Max, Q, QuerySet, Sum
 from django.utils import timezone
 
 from accounting.models import (
@@ -9559,4 +9559,514 @@ def cancel_physical_inventory_count(
 
 
 # End Phase 22.5 - Physical Inventory and Cycle Count Services
+# ============================================================
+
+# ============================================================
+# Phase 22.5 Final - Advanced Inventory Valuation Services
+# ============================================================
+
+
+def get_company_inventory_valuation_stock_items(
+    company: Company,
+) -> QuerySet[StockItem]:
+    """
+    Return stock balances used by inventory valuation.
+
+    Valuation source of truth:
+    - StockItem.quantity_on_hand
+    - StockItem.reserved_quantity
+    - StockItem.average_cost
+
+    The valuation is current-state valuation, not historical costing layers.
+    Historical layers can be added later without changing this public summary
+    contract.
+    """
+    return (
+        StockItem.objects.filter(company=company)
+        .select_related(
+            "company",
+            "warehouse",
+            "warehouse__branch",
+            "location",
+            "item",
+            "item__unit",
+            "item__category",
+        )
+        .order_by(
+            "warehouse__name",
+            "location__name",
+            "item__name",
+            "id",
+        )
+    )
+
+
+def _apply_inventory_valuation_filters(
+    queryset: QuerySet[StockItem],
+    *,
+    warehouse_id: Any = None,
+    location_id: Any = None,
+    item_id: Any = None,
+    category_id: Any = None,
+    branch_id: Any = None,
+    search: str = "",
+    include_zero_quantity: bool = True,
+) -> QuerySet[StockItem]:
+    """
+    Apply common valuation filters.
+
+    company filtering must already be applied by the caller.
+    """
+    normalized_search = normalize_text(search)
+
+    if warehouse_id not in [None, ""]:
+        queryset = queryset.filter(warehouse_id=warehouse_id)
+
+    if location_id not in [None, ""]:
+        queryset = queryset.filter(location_id=location_id)
+
+    if item_id not in [None, ""]:
+        queryset = queryset.filter(item_id=item_id)
+
+    if category_id not in [None, ""]:
+        queryset = queryset.filter(item__category_id=category_id)
+
+    if branch_id not in [None, ""]:
+        queryset = queryset.filter(warehouse__branch_id=branch_id)
+
+    if normalized_search:
+        queryset = queryset.filter(
+            Q(item__code__icontains=normalized_search)
+            | Q(item__sku__icontains=normalized_search)
+            | Q(item__barcode__icontains=normalized_search)
+            | Q(item__name__icontains=normalized_search)
+            | Q(item__name_ar__icontains=normalized_search)
+            | Q(item__name_en__icontains=normalized_search)
+            | Q(warehouse__code__icontains=normalized_search)
+            | Q(warehouse__name__icontains=normalized_search)
+            | Q(warehouse__name_ar__icontains=normalized_search)
+            | Q(warehouse__name_en__icontains=normalized_search)
+            | Q(location__code__icontains=normalized_search)
+            | Q(location__name__icontains=normalized_search)
+            | Q(location__name_ar__icontains=normalized_search)
+            | Q(location__name_en__icontains=normalized_search)
+        )
+
+    if not include_zero_quantity:
+        queryset = queryset.filter(quantity_on_hand__gt=QUANTITY_ZERO)
+
+    return queryset
+
+
+def _inventory_weighted_average_cost(
+    *,
+    quantity: Decimal,
+    value: Decimal,
+) -> Decimal:
+    """
+    Calculate weighted average cost safely.
+    """
+    quantity = quantize_quantity(quantity)
+    value = quantize_money(value)
+
+    if quantity <= QUANTITY_ZERO:
+        return MONEY_ZERO
+
+    return quantize_money(value / quantity)
+
+
+def _empty_inventory_valuation_summary() -> dict[str, Any]:
+    """
+    Return empty valuation summary with stable keys.
+    """
+    return {
+        "location_balances_count": 0,
+        "distinct_items_count": 0,
+        "warehouses_count": 0,
+        "locations_count": 0,
+        "total_quantity_on_hand": str(QUANTITY_ZERO),
+        "total_reserved_quantity": str(QUANTITY_ZERO),
+        "total_available_quantity": str(QUANTITY_ZERO),
+        "total_inventory_value": str(MONEY_ZERO),
+        "total_reserved_value": str(MONEY_ZERO),
+        "total_available_value": str(MONEY_ZERO),
+        "weighted_average_cost": str(MONEY_ZERO),
+    }
+
+
+def build_stock_item_valuation_payload(
+    stock_item: StockItem,
+) -> dict[str, Any]:
+    """
+    Serialize valuation for one stock balance row.
+    """
+    item = stock_item.item
+    warehouse = stock_item.warehouse
+    location = stock_item.location
+    branch = warehouse.branch if warehouse.branch_id else None
+
+    quantity_on_hand = quantize_quantity(stock_item.quantity_on_hand)
+    reserved_quantity = quantize_quantity(stock_item.reserved_quantity)
+    available_quantity = quantize_quantity(stock_item.available_quantity)
+    average_cost = quantize_money(stock_item.average_cost)
+
+    inventory_value = quantize_money(quantity_on_hand * average_cost)
+    reserved_value = quantize_money(reserved_quantity * average_cost)
+    available_value = quantize_money(available_quantity * average_cost)
+
+    return {
+        "stock_item_id": stock_item.id,
+        "company_id": stock_item.company_id,
+        "warehouse_id": stock_item.warehouse_id,
+        "warehouse": {
+            "id": warehouse.id,
+            "code": warehouse.code,
+            "name": warehouse.display_name,
+            "warehouse_type": warehouse.warehouse_type,
+            "status": warehouse.status,
+        },
+        "branch": {
+            "id": branch.id,
+            "name": branch.display_name,
+            "branch_code": branch.branch_code,
+        }
+        if branch
+        else None,
+        "location_id": stock_item.location_id,
+        "location": {
+            "id": location.id,
+            "code": location.code,
+            "name": location.display_name,
+            "full_path": location.full_path,
+            "location_type": location.location_type,
+            "status": location.status,
+        }
+        if location
+        else None,
+        "item_id": stock_item.item_id,
+        "item": {
+            "id": item.id,
+            "code": item.code,
+            "sku": item.sku,
+            "barcode": item.barcode,
+            "name": item.name,
+            "name_ar": item.name_ar,
+            "name_en": item.name_en,
+            "category_id": item.category_id,
+            "unit_id": item.unit_id,
+        },
+        "quantity_on_hand": str(quantity_on_hand),
+        "reserved_quantity": str(reserved_quantity),
+        "available_quantity": str(available_quantity),
+        "average_cost": str(average_cost),
+        "inventory_value": str(inventory_value),
+        "reserved_value": str(reserved_value),
+        "available_value": str(available_value),
+        "last_movement_at": (
+            stock_item.last_movement_at.isoformat()
+            if stock_item.last_movement_at
+            else None
+        ),
+    }
+
+
+def _accumulate_inventory_valuation_group(
+    groups: dict[Any, dict[str, Any]],
+    *,
+    key: Any,
+    identity: dict[str, Any],
+    stock_item: StockItem,
+) -> None:
+    """
+    Accumulate valuation totals for one grouping bucket.
+    """
+    if key not in groups:
+        groups[key] = {
+            **identity,
+            "location_balances_count": 0,
+            "_item_ids": set(),
+            "_warehouse_ids": set(),
+            "_location_ids": set(),
+            "_quantity_on_hand": QUANTITY_ZERO,
+            "_reserved_quantity": QUANTITY_ZERO,
+            "_available_quantity": QUANTITY_ZERO,
+            "_inventory_value": MONEY_ZERO,
+            "_reserved_value": MONEY_ZERO,
+            "_available_value": MONEY_ZERO,
+        }
+
+    quantity_on_hand = quantize_quantity(stock_item.quantity_on_hand)
+    reserved_quantity = quantize_quantity(stock_item.reserved_quantity)
+    available_quantity = quantize_quantity(stock_item.available_quantity)
+    average_cost = quantize_money(stock_item.average_cost)
+
+    inventory_value = quantize_money(quantity_on_hand * average_cost)
+    reserved_value = quantize_money(reserved_quantity * average_cost)
+    available_value = quantize_money(available_quantity * average_cost)
+
+    group = groups[key]
+    group["location_balances_count"] += 1
+    group["_item_ids"].add(stock_item.item_id)
+    group["_warehouse_ids"].add(stock_item.warehouse_id)
+    group["_location_ids"].add(stock_item.location_id)
+    group["_quantity_on_hand"] = quantize_quantity(
+        group["_quantity_on_hand"] + quantity_on_hand
+    )
+    group["_reserved_quantity"] = quantize_quantity(
+        group["_reserved_quantity"] + reserved_quantity
+    )
+    group["_available_quantity"] = quantize_quantity(
+        group["_available_quantity"] + available_quantity
+    )
+    group["_inventory_value"] = quantize_money(
+        group["_inventory_value"] + inventory_value
+    )
+    group["_reserved_value"] = quantize_money(
+        group["_reserved_value"] + reserved_value
+    )
+    group["_available_value"] = quantize_money(
+        group["_available_value"] + available_value
+    )
+
+
+def _finalize_inventory_valuation_group(
+    group: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Convert internal group accumulators to public payload.
+    """
+    quantity_on_hand = quantize_quantity(group.pop("_quantity_on_hand"))
+    reserved_quantity = quantize_quantity(group.pop("_reserved_quantity"))
+    available_quantity = quantize_quantity(group.pop("_available_quantity"))
+    inventory_value = quantize_money(group.pop("_inventory_value"))
+    reserved_value = quantize_money(group.pop("_reserved_value"))
+    available_value = quantize_money(group.pop("_available_value"))
+
+    item_ids = group.pop("_item_ids")
+    warehouse_ids = group.pop("_warehouse_ids")
+    location_ids = group.pop("_location_ids")
+
+    group.update(
+        {
+            "distinct_items_count": len(item_ids),
+            "warehouses_count": len(warehouse_ids),
+            "locations_count": len(location_ids),
+            "quantity_on_hand": str(quantity_on_hand),
+            "reserved_quantity": str(reserved_quantity),
+            "available_quantity": str(available_quantity),
+            "inventory_value": str(inventory_value),
+            "reserved_value": str(reserved_value),
+            "available_value": str(available_value),
+            "weighted_average_cost": str(
+                _inventory_weighted_average_cost(
+                    quantity=quantity_on_hand,
+                    value=inventory_value,
+                )
+            ),
+        }
+    )
+
+    return group
+
+
+def build_inventory_valuation_summary(
+    *,
+    company: Company,
+    warehouse_id: Any = None,
+    location_id: Any = None,
+    item_id: Any = None,
+    category_id: Any = None,
+    branch_id: Any = None,
+    search: str = "",
+    include_zero_quantity: bool = True,
+    include_rows: bool = False,
+    include_groups: bool = True,
+) -> dict[str, Any]:
+    """
+    Build current inventory valuation summary for one company.
+
+    This does not trust frontend company_id and must always receive company
+    from the request/company context.
+    """
+    queryset = get_company_inventory_valuation_stock_items(company)
+    queryset = _apply_inventory_valuation_filters(
+        queryset,
+        warehouse_id=warehouse_id,
+        location_id=location_id,
+        item_id=item_id,
+        category_id=category_id,
+        branch_id=branch_id,
+        search=search,
+        include_zero_quantity=include_zero_quantity,
+    )
+
+    stock_items = list(queryset)
+
+    summary = _empty_inventory_valuation_summary()
+
+    item_ids: set[int] = set()
+    warehouse_ids: set[int] = set()
+    location_ids: set[int] = set()
+
+    total_quantity_on_hand = QUANTITY_ZERO
+    total_reserved_quantity = QUANTITY_ZERO
+    total_available_quantity = QUANTITY_ZERO
+    total_inventory_value = MONEY_ZERO
+    total_reserved_value = MONEY_ZERO
+    total_available_value = MONEY_ZERO
+
+    item_groups: dict[Any, dict[str, Any]] = {}
+    warehouse_groups: dict[Any, dict[str, Any]] = {}
+    location_groups: dict[Any, dict[str, Any]] = {}
+    rows: list[dict[str, Any]] = []
+
+    for stock_item in stock_items:
+        quantity_on_hand = quantize_quantity(stock_item.quantity_on_hand)
+        reserved_quantity = quantize_quantity(stock_item.reserved_quantity)
+        available_quantity = quantize_quantity(stock_item.available_quantity)
+        average_cost = quantize_money(stock_item.average_cost)
+
+        inventory_value = quantize_money(quantity_on_hand * average_cost)
+        reserved_value = quantize_money(reserved_quantity * average_cost)
+        available_value = quantize_money(available_quantity * average_cost)
+
+        item_ids.add(stock_item.item_id)
+        warehouse_ids.add(stock_item.warehouse_id)
+        location_ids.add(stock_item.location_id)
+
+        total_quantity_on_hand = quantize_quantity(
+            total_quantity_on_hand + quantity_on_hand
+        )
+        total_reserved_quantity = quantize_quantity(
+            total_reserved_quantity + reserved_quantity
+        )
+        total_available_quantity = quantize_quantity(
+            total_available_quantity + available_quantity
+        )
+        total_inventory_value = quantize_money(
+            total_inventory_value + inventory_value
+        )
+        total_reserved_value = quantize_money(
+            total_reserved_value + reserved_value
+        )
+        total_available_value = quantize_money(
+            total_available_value + available_value
+        )
+
+        if include_rows:
+            rows.append(build_stock_item_valuation_payload(stock_item))
+
+        if include_groups:
+            item = stock_item.item
+            warehouse = stock_item.warehouse
+            location = stock_item.location
+            branch = warehouse.branch if warehouse.branch_id else None
+
+            _accumulate_inventory_valuation_group(
+                item_groups,
+                key=stock_item.item_id,
+                identity={
+                    "item_id": item.id,
+                    "code": item.code,
+                    "sku": item.sku,
+                    "barcode": item.barcode,
+                    "name": item.name,
+                    "name_ar": item.name_ar,
+                    "name_en": item.name_en,
+                    "category_id": item.category_id,
+                    "unit_id": item.unit_id,
+                },
+                stock_item=stock_item,
+            )
+
+            _accumulate_inventory_valuation_group(
+                warehouse_groups,
+                key=stock_item.warehouse_id,
+                identity={
+                    "warehouse_id": warehouse.id,
+                    "code": warehouse.code,
+                    "name": warehouse.display_name,
+                    "warehouse_type": warehouse.warehouse_type,
+                    "status": warehouse.status,
+                    "branch_id": warehouse.branch_id,
+                    "branch_name": branch.display_name if branch else "",
+                },
+                stock_item=stock_item,
+            )
+
+            _accumulate_inventory_valuation_group(
+                location_groups,
+                key=stock_item.location_id,
+                identity={
+                    "location_id": location.id if location else None,
+                    "warehouse_id": warehouse.id,
+                    "code": location.code if location else "",
+                    "name": location.display_name if location else "",
+                    "full_path": location.full_path if location else "",
+                    "location_type": location.location_type if location else "",
+                    "status": location.status if location else "",
+                },
+                stock_item=stock_item,
+            )
+
+    summary.update(
+        {
+            "location_balances_count": len(stock_items),
+            "distinct_items_count": len(item_ids),
+            "warehouses_count": len(warehouse_ids),
+            "locations_count": len(location_ids),
+            "total_quantity_on_hand": str(total_quantity_on_hand),
+            "total_reserved_quantity": str(total_reserved_quantity),
+            "total_available_quantity": str(total_available_quantity),
+            "total_inventory_value": str(total_inventory_value),
+            "total_reserved_value": str(total_reserved_value),
+            "total_available_value": str(total_available_value),
+            "weighted_average_cost": str(
+                _inventory_weighted_average_cost(
+                    quantity=total_quantity_on_hand,
+                    value=total_inventory_value,
+                )
+            ),
+        }
+    )
+
+    payload = {
+        "summary": summary,
+        "filters": {
+            "warehouse_id": str(warehouse_id or ""),
+            "location_id": str(location_id or ""),
+            "item_id": str(item_id or ""),
+            "category_id": str(category_id or ""),
+            "branch_id": str(branch_id or ""),
+            "search": normalize_text(search),
+            "include_zero_quantity": include_zero_quantity,
+        },
+    }
+
+    if include_rows:
+        payload["rows"] = rows
+        payload["rows_count"] = len(rows)
+
+    if include_groups:
+        payload["items"] = [
+            _finalize_inventory_valuation_group(group)
+            for group in item_groups.values()
+        ]
+        payload["warehouses"] = [
+            _finalize_inventory_valuation_group(group)
+            for group in warehouse_groups.values()
+        ]
+        payload["locations"] = [
+            _finalize_inventory_valuation_group(group)
+            for group in location_groups.values()
+        ]
+
+        payload["items_count"] = len(payload["items"])
+        payload["warehouses_count"] = len(payload["warehouses"])
+        payload["locations_count"] = len(payload["locations"])
+
+    return payload
+
+
+# End Phase 22.5 Final - Advanced Inventory Valuation Services
 # ============================================================

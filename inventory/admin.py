@@ -517,6 +517,8 @@ class StockItemAdmin(admin.ModelAdmin):
         "minimum_quantity",
         "maximum_quantity",
         "average_cost",
+        "inventory_value",
+        "available_value",
         "last_movement_at",
         "created_at",
     ]
@@ -559,6 +561,21 @@ class StockItemAdmin(admin.ModelAdmin):
         "warehouse",
         "item__name",
     ]
+
+    @admin.display(description="Inventory value")
+    def inventory_value(self, obj: StockItem) -> str:
+        """
+        Current stock value based on quantity_on_hand * average_cost.
+        """
+        return str(obj.quantity_on_hand * obj.average_cost)
+
+    @admin.display(description="Available value")
+    def available_value(self, obj: StockItem) -> str:
+        """
+        Current available value based on available_quantity * average_cost.
+        """
+        return str(obj.available_quantity * obj.average_cost)
+
     fieldsets = (
         (
             "Stock identity",
