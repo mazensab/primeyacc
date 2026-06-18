@@ -94,6 +94,9 @@ from .models import (
     StockReservationAllocationStatus,
     StockReservationSource,
     StockReservationStatus,
+    GoodsIssue,
+    GoodsIssueItem,
+    GoodsIssueStatus,
     Warehouse,
     WarehouseStatus,
     WarehouseType,
@@ -7357,3 +7360,1305 @@ def allocate_serial_stock_reservation(
 
 # End Phase 22.3.3.1 - Batch and Serial Reservation Allocation
 # ============================================================
+
+# ============================================================
+# Phase 22.4 - Goods Issues Services
+# ============================================================
+
+GOODS_ISSUE_STOCK_REFERENCE = "goods_issue_item"
+
+
+def generate_goods_issue_number(
+    company: Company,
+) -> str:
+    """
+    Generate a company-scoped goods issue number.
+
+    Format:
+        GI-000001
+    """
+    if company is None:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    last_number = (
+        GoodsIssue.objects
+        .filter(company=company)
+        .aggregate(value=Max("id"))
+        .get("value")
+        or 0
+    )
+
+    return f"GI-{last_number + 1:06d}"
+
+
+def get_company_goods_issues(
+    company: Company,
+) -> QuerySet[GoodsIssue]:
+    """
+    Return all goods issues for one company.
+    """
+    return (
+        GoodsIssue.objects
+        .filter(company=company)
+        .select_related(
+            "company",
+            "sales_order",
+            "warehouse",
+            "location",
+            "created_by",
+            "updated_by",
+            "posted_by",
+            "cancelled_by",
+        )
+        .order_by(
+            "-issue_date",
+            "-id",
+        )
+    )
+
+
+def get_company_goods_issue_items(
+    company: Company,
+) -> QuerySet[GoodsIssueItem]:
+    """
+    Return all goods issue lines for one company.
+    """
+    return (
+        GoodsIssueItem.objects
+        .filter(company=company)
+        .select_related(
+            "issue",
+            "sales_order_item",
+            "reservation_allocation",
+            "warehouse",
+            "location",
+            "stock_item",
+            "item",
+            "item__unit",
+            "batch",
+            "serial_number",
+            "stock_movement",
+        )
+    )
+
+
+def get_goods_issue_for_company(
+    *,
+    company: Company,
+    goods_issue_id: int | str,
+) -> GoodsIssue:
+    """
+    Resolve one company-scoped goods issue.
+    """
+    issue = (
+        get_company_goods_issues(company)
+        .filter(id=goods_issue_id)
+        .first()
+    )
+
+    if not issue:
+        raise ValidationError(
+            {
+                "goods_issue":
+                    "Goods issue was not found for this company."
+            }
+        )
+
+    return issue
+
+
+def _resolve_goods_issue_sales_order(
+    *,
+    company: Company,
+    sales_order_id: int | str,
+) -> SalesOrder:
+    """
+    Resolve a sales order eligible for goods issue.
+    """
+    if not sales_order_id:
+        raise ValidationError(
+            {
+                "sales_order":
+                    "Sales order is required."
+            }
+        )
+
+    order = (
+        SalesOrder.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "branch",
+            "customer",
+        )
+        .filter(
+            id=sales_order_id,
+            company=company,
+        )
+        .first()
+    )
+
+    if not order:
+        raise ValidationError(
+            {
+                "sales_order":
+                    "Sales order was not found for this company."
+            }
+        )
+
+    if order.status not in [
+        SalesOrderStatus.CONFIRMED,
+        SalesOrderStatus.PROCESSING,
+    ]:
+        raise ValidationError(
+            {
+                "sales_order":
+                    "Sales order must be confirmed or processing "
+                    "before issuing goods."
+            }
+        )
+
+    return order
+
+
+def _resolve_goods_issue_warehouse(
+    *,
+    company: Company,
+    warehouse_id: int | str,
+) -> Warehouse:
+    """
+    Resolve an active company warehouse for goods issue.
+    """
+    if not warehouse_id:
+        raise ValidationError(
+            {
+                "warehouse":
+                    "Warehouse is required."
+            }
+        )
+
+    warehouse = (
+        Warehouse.objects
+        .select_for_update()
+        .filter(
+            id=warehouse_id,
+            company=company,
+        )
+        .first()
+    )
+
+    if not warehouse:
+        raise ValidationError(
+            {
+                "warehouse":
+                    "Warehouse was not found for this company."
+            }
+        )
+
+    validate_warehouse_for_company(
+        company=company,
+        warehouse=warehouse,
+        require_active=True,
+    )
+
+    return warehouse
+
+
+def _resolve_goods_issue_location(
+    *,
+    company: Company,
+    warehouse: Warehouse,
+    location_id: int | str | None = None,
+    user=None,
+) -> InventoryLocation:
+    """
+    Resolve issue location.
+    """
+    if location_id:
+        location = (
+            InventoryLocation.objects
+            .select_for_update()
+            .filter(
+                id=location_id,
+                company=company,
+                warehouse=warehouse,
+            )
+            .first()
+        )
+
+        if not location:
+            raise ValidationError(
+                {
+                    "location":
+                        "Location was not found for this warehouse."
+                }
+            )
+
+        validate_inventory_location_for_company(
+            company=company,
+            location=location,
+            warehouse=warehouse,
+            require_active=True,
+        )
+
+        return location
+
+    shipping_location = get_inventory_location_by_purpose(
+        company=company,
+        warehouse=warehouse,
+        purpose="shipping",
+        require_active=True,
+    )
+
+    if shipping_location:
+        return shipping_location
+
+    return resolve_stock_location(
+        company=company,
+        warehouse=warehouse,
+        location=None,
+        user=user,
+    )
+
+
+def _resolve_goods_issue_allocation(
+    *,
+    company: Company,
+    order: SalesOrder,
+    allocation_id: int | str,
+) -> StockReservationAllocation:
+    """
+    Resolve an active reservation allocation for goods issue.
+    """
+    allocation = (
+        StockReservationAllocation.objects
+        .select_for_update()
+        .select_related(
+            "reservation",
+            "sales_order_item",
+            "warehouse",
+            "location",
+            "stock_item",
+            "item",
+            "batch",
+            "serial_number",
+        )
+        .filter(
+            id=allocation_id,
+            company=company,
+            reservation__sales_order=order,
+        )
+        .first()
+    )
+
+    if not allocation:
+        raise ValidationError(
+            {
+                "reservation_allocation":
+                    "Reservation allocation was not found "
+                    "for this sales order."
+            }
+        )
+
+    if allocation.status not in [
+        StockReservationAllocationStatus.RESERVED,
+        StockReservationAllocationStatus.PARTIALLY_FULFILLED,
+    ]:
+        raise ValidationError(
+            {
+                "reservation_allocation":
+                    "Reservation allocation is not active."
+            }
+        )
+
+    if allocation.remaining_reserved_quantity <= QUANTITY_ZERO:
+        raise ValidationError(
+            {
+                "reservation_allocation":
+                    "Reservation allocation has no remaining "
+                    "quantity to issue."
+            }
+        )
+
+    return allocation
+
+
+def _resolve_goods_issue_order_item(
+    *,
+    company: Company,
+    order: SalesOrder,
+    order_item_id: int | str,
+) -> SalesOrderItem:
+    """
+    Resolve one sales order item inside a sales order.
+    """
+    if not order_item_id:
+        raise ValidationError(
+            {
+                "sales_order_item":
+                    "Sales order item is required."
+            }
+        )
+
+    order_item = (
+        SalesOrderItem.objects
+        .select_for_update()
+        .select_related(
+            "order",
+            "catalog_item",
+            "catalog_item__unit",
+        )
+        .filter(
+            id=order_item_id,
+            company=company,
+            order=order,
+        )
+        .first()
+    )
+
+    if not order_item:
+        raise ValidationError(
+            {
+                "sales_order_item":
+                    "Sales order item was not found "
+                    "inside this order."
+            }
+        )
+
+    if not order_item.catalog_item_id:
+        raise ValidationError(
+            {
+                "sales_order_item":
+                    "Sales order item must reference "
+                    "a catalog item before goods issue."
+            }
+        )
+
+    validate_item_for_inventory(
+        company=company,
+        item=order_item.catalog_item,
+    )
+
+    return order_item
+
+
+def _resolve_goods_issue_stock_item(
+    *,
+    company: Company,
+    warehouse: Warehouse,
+    location: InventoryLocation,
+    item: CatalogItem,
+    stock_item_id: int | str,
+) -> StockItem:
+    """
+    Resolve stock balance for direct goods issue.
+    """
+    if not stock_item_id:
+        raise ValidationError(
+            {
+                "stock_item":
+                    "Stock item is required when no reservation "
+                    "allocation is supplied."
+            }
+        )
+
+    stock_item = (
+        StockItem.objects
+        .select_for_update()
+        .filter(
+            id=stock_item_id,
+            company=company,
+            warehouse=warehouse,
+            location=location,
+            item=item,
+        )
+        .first()
+    )
+
+    if not stock_item:
+        raise ValidationError(
+            {
+                "stock_item":
+                    "Stock item was not found for this location "
+                    "and catalog item."
+            }
+        )
+
+    return stock_item
+
+
+def _consume_reserved_allocation_for_goods_issue(
+    *,
+    company: Company,
+    issue_item: GoodsIssueItem,
+    user=None,
+) -> None:
+    """
+    Consume reservation quantities before issuing stock.
+
+    This reduces reserved quantities and marks allocation/reservation progress.
+    """
+    if not issue_item.reservation_allocation_id:
+        return
+
+    quantity = quantize_quantity(issue_item.quantity)
+
+    allocation = (
+        StockReservationAllocation.objects
+        .select_for_update()
+        .select_related(
+            "reservation",
+            "stock_item",
+            "warehouse",
+            "location",
+            "item",
+            "batch",
+            "serial_number",
+        )
+        .get(
+            id=issue_item.reservation_allocation_id,
+            company=company,
+        )
+    )
+
+    if quantity > allocation.remaining_reserved_quantity:
+        raise ValidationError(
+            {
+                "quantity":
+                    "Goods issue quantity exceeds the remaining "
+                    "reserved allocation quantity."
+            }
+        )
+
+    stock_item = (
+        StockItem.objects
+        .select_for_update()
+        .get(
+            id=allocation.stock_item_id,
+            company=company,
+        )
+    )
+
+    if quantity > stock_item.reserved_quantity:
+        raise ValidationError(
+            {
+                "reserved_quantity":
+                    "Stock reserved quantity is lower than "
+                    "the goods issue quantity."
+            }
+        )
+
+    stock_item.reserved_quantity = quantize_quantity(
+        stock_item.reserved_quantity - quantity
+    )
+    stock_item.full_clean()
+    stock_item.save(
+        update_fields=[
+            "reserved_quantity",
+            "updated_at",
+        ]
+    )
+
+    if allocation.batch_id:
+        batch_balance = (
+            InventoryBatchBalance.objects
+            .select_for_update()
+            .filter(
+                company=company,
+                warehouse=allocation.warehouse,
+                location=allocation.location,
+                stock_item=allocation.stock_item,
+                item=allocation.item,
+                batch=allocation.batch,
+            )
+            .first()
+        )
+
+        if batch_balance is None:
+            raise ValidationError(
+                {
+                    "batch":
+                        "Reserved batch balance was not found."
+                }
+            )
+
+        if quantity > batch_balance.reserved_quantity:
+            raise ValidationError(
+                {
+                    "reserved_quantity":
+                        "Batch reserved quantity is lower than "
+                        "the goods issue quantity."
+                }
+            )
+
+        batch_balance.reserved_quantity = quantize_quantity(
+            batch_balance.reserved_quantity - quantity
+        )
+        batch_balance.full_clean()
+        batch_balance.save(
+            update_fields=[
+                "reserved_quantity",
+                "updated_at",
+            ]
+        )
+
+    if allocation.serial_number_id:
+        if quantity != Decimal("1.0000"):
+            raise ValidationError(
+                {
+                    "quantity":
+                        "Serial allocation must be issued completely."
+                }
+            )
+
+        serial = (
+            InventorySerialNumber.objects
+            .select_for_update()
+            .get(
+                id=allocation.serial_number_id,
+                company=company,
+            )
+        )
+
+        if serial.status != InventorySerialStatus.RESERVED:
+            raise ValidationError(
+                {
+                    "serial_number":
+                        "Only reserved serial numbers can be issued "
+                        "through a reservation allocation."
+                }
+            )
+
+        serial.status = InventorySerialStatus.AVAILABLE
+
+        if user and getattr(user, "is_authenticated", False):
+            serial.updated_by = user
+
+        serial.full_clean()
+        serial.save(
+            update_fields=[
+                "status",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+    allocation.fulfilled_quantity = quantize_quantity(
+        allocation.fulfilled_quantity + quantity
+    )
+    allocation.fulfilled_at = timezone.now()
+
+    if allocation.remaining_reserved_quantity <= QUANTITY_ZERO:
+        allocation.status = StockReservationAllocationStatus.FULFILLED
+    else:
+        allocation.status = (
+            StockReservationAllocationStatus
+            .PARTIALLY_FULFILLED
+        )
+
+    if user and getattr(user, "is_authenticated", False):
+        allocation.updated_by = user
+
+    allocation.full_clean()
+    allocation.save(
+        update_fields=[
+            "status",
+            "fulfilled_quantity",
+            "fulfilled_at",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+
+    reservation = (
+        StockReservation.objects
+        .select_for_update()
+        .get(
+            id=allocation.reservation_id,
+            company=company,
+        )
+    )
+    reservation.fulfilled_quantity = quantize_quantity(
+        reservation.fulfilled_quantity + quantity
+    )
+    reservation.status = _resolve_reservation_active_status(
+        reservation
+    )
+
+    if user and getattr(user, "is_authenticated", False):
+        reservation.updated_by = user
+
+    reservation.full_clean()
+    reservation.save(
+        update_fields=[
+            "status",
+            "fulfilled_quantity",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+
+
+def build_goods_issue_item(
+    *,
+    issue: GoodsIssue,
+    company: Company,
+    payload: dict[str, Any],
+    line_number: int,
+    user=None,
+) -> GoodsIssueItem:
+    """
+    Build one draft goods issue item.
+    """
+    if not issue.is_draft:
+        raise ValidationError(
+            "Only draft goods issues can be edited."
+        )
+
+    allocation_id = (
+        payload.get("reservation_allocation_id")
+        or payload.get("allocation_id")
+    )
+
+    if allocation_id:
+        allocation = _resolve_goods_issue_allocation(
+            company=company,
+            order=issue.sales_order,
+            allocation_id=allocation_id,
+        )
+
+        quantity = quantize_quantity(
+            payload.get("quantity")
+            if payload.get("quantity") not in [None, ""]
+            else allocation.remaining_reserved_quantity
+        )
+
+        if quantity <= QUANTITY_ZERO:
+            raise ValidationError(
+                {
+                    "quantity":
+                        "Goods issue quantity must be greater than zero."
+                }
+            )
+
+        if quantity > allocation.remaining_reserved_quantity:
+            raise ValidationError(
+                {
+                    "quantity":
+                        "Goods issue quantity exceeds reservation allocation."
+                }
+            )
+
+        issue_item = GoodsIssueItem(
+            issue=issue,
+            company=company,
+            sales_order_item=allocation.sales_order_item,
+            reservation_allocation=allocation,
+            warehouse=allocation.warehouse,
+            location=allocation.location,
+            stock_item=allocation.stock_item,
+            item=allocation.item,
+            batch=allocation.batch,
+            serial_number=allocation.serial_number,
+            line_number=int(
+                payload.get("line_number")
+                or line_number
+            ),
+            quantity=quantity,
+            unit_cost=(
+                payload.get("unit_cost")
+                if payload.get("unit_cost") not in [None, ""]
+                else allocation.stock_item.average_cost
+            ),
+            notes=normalize_text(
+                payload.get("notes")
+            ),
+            extra_data=(
+                payload.get("extra_data")
+                if isinstance(payload.get("extra_data"), dict)
+                else {}
+            ),
+        )
+        issue_item.save()
+        return issue_item
+
+    order_item = _resolve_goods_issue_order_item(
+        company=company,
+        order=issue.sales_order,
+        order_item_id=(
+            payload.get("sales_order_item_id")
+            or payload.get("order_item_id")
+        ),
+    )
+
+    warehouse = issue.warehouse
+    location = _resolve_goods_issue_location(
+        company=company,
+        warehouse=warehouse,
+        location_id=(
+            payload.get("location_id")
+            or (
+                issue.location_id
+                if issue.location_id
+                else None
+            )
+        ),
+        user=user,
+    )
+
+    stock_item = _resolve_goods_issue_stock_item(
+        company=company,
+        warehouse=warehouse,
+        location=location,
+        item=order_item.catalog_item,
+        stock_item_id=payload.get("stock_item_id"),
+    )
+
+    batch = None
+    serial_number = None
+
+    batch_id = payload.get("batch_id")
+    serial_id = (
+        payload.get("serial_number_id")
+        or payload.get("serial_id")
+    )
+
+    if batch_id:
+        batch = (
+            InventoryBatch.objects
+            .filter(
+                id=batch_id,
+                company=company,
+                item=order_item.catalog_item,
+            )
+            .first()
+        )
+
+        if not batch:
+            raise ValidationError(
+                {
+                    "batch":
+                        "Batch was not found for this company and item."
+                }
+            )
+
+    if serial_id:
+        serial_number = (
+            InventorySerialNumber.objects
+            .filter(
+                id=serial_id,
+                company=company,
+                item=order_item.catalog_item,
+                warehouse=warehouse,
+                location=location,
+            )
+            .first()
+        )
+
+        if not serial_number:
+            raise ValidationError(
+                {
+                    "serial_number":
+                        "Serial number was not found for this location."
+                }
+            )
+
+    quantity = quantize_quantity(
+        payload.get("quantity")
+    )
+
+    issue_item = GoodsIssueItem(
+        issue=issue,
+        company=company,
+        sales_order_item=order_item,
+        warehouse=warehouse,
+        location=location,
+        stock_item=stock_item,
+        item=order_item.catalog_item,
+        batch=batch,
+        serial_number=serial_number,
+        line_number=int(
+            payload.get("line_number")
+            or line_number
+        ),
+        quantity=quantity,
+        unit_cost=(
+            payload.get("unit_cost")
+            if payload.get("unit_cost") not in [None, ""]
+            else stock_item.average_cost
+        ),
+        notes=normalize_text(
+            payload.get("notes")
+        ),
+        extra_data=(
+            payload.get("extra_data")
+            if isinstance(payload.get("extra_data"), dict)
+            else {}
+        ),
+    )
+    issue_item.save()
+
+    return issue_item
+
+
+@transaction.atomic
+def create_goods_issue(
+    *,
+    company: Company,
+    payload: dict[str, Any],
+    user=None,
+) -> GoodsIssue:
+    """
+    Create a draft goods issue from a sales order.
+    """
+    if not company:
+        raise ValidationError(
+            {"company": "Company context is required."}
+        )
+
+    items_payload = payload.get("items") or []
+
+    if not isinstance(items_payload, list) or not items_payload:
+        raise ValidationError(
+            {
+                "items":
+                    "At least one goods issue item is required."
+            }
+        )
+
+    sales_order = _resolve_goods_issue_sales_order(
+        company=company,
+        sales_order_id=(
+            payload.get("sales_order_id")
+            or payload.get("order_id")
+        ),
+    )
+
+    warehouse = _resolve_goods_issue_warehouse(
+        company=company,
+        warehouse_id=(
+            payload.get("warehouse_id")
+            or payload.get("warehouse")
+        ),
+    )
+
+    location = None
+    if payload.get("location_id") or payload.get("location"):
+        location = _resolve_goods_issue_location(
+            company=company,
+            warehouse=warehouse,
+            location_id=(
+                payload.get("location_id")
+                or payload.get("location")
+            ),
+            user=user,
+        )
+
+    issue_date = payload.get("issue_date")
+    if issue_date in [None, ""]:
+        issue_date = timezone.localdate()
+
+    issue = GoodsIssue(
+        company=company,
+        sales_order=sales_order,
+        warehouse=warehouse,
+        location=location,
+        issue_number=(
+            normalize_text(payload.get("issue_number"))
+            or generate_goods_issue_number(company)
+        ),
+        issue_date=issue_date,
+        status=GoodsIssueStatus.DRAFT,
+        notes=normalize_text(
+            payload.get("notes")
+        ),
+        extra_data=(
+            payload.get("extra_data")
+            if isinstance(payload.get("extra_data"), dict)
+            else {}
+        ),
+        created_by=user,
+        updated_by=user,
+    )
+    issue.full_clean()
+    issue.save()
+
+    for index, item_payload in enumerate(
+        items_payload,
+        start=1,
+    ):
+        if not isinstance(item_payload, dict):
+            raise ValidationError(
+                {
+                    "items":
+                        "Each goods issue item must be an object."
+                }
+            )
+
+        build_goods_issue_item(
+            issue=issue,
+            company=company,
+            payload=item_payload,
+            line_number=index,
+            user=user,
+        )
+
+    issue.refresh_from_db()
+    return issue
+
+
+def get_existing_goods_issue_stock_movement(
+    issue_item: GoodsIssueItem,
+) -> StockMovement | None:
+    """
+    Return existing non-cancelled stock movement for a goods issue item.
+    """
+    if issue_item.stock_movement_id:
+        return issue_item.stock_movement
+
+    return (
+        StockMovement.objects
+        .filter(
+            company=issue_item.company,
+            reference_type=GOODS_ISSUE_STOCK_REFERENCE,
+            reference_id=issue_item.id,
+        )
+        .exclude(
+            status=StockMovementStatus.CANCELLED,
+        )
+        .order_by("id")
+        .first()
+    )
+
+
+def post_goods_issue_item_to_inventory(
+    *,
+    issue_item: GoodsIssueItem,
+    user=None,
+) -> StockMovement:
+    """
+    Create one posted inventory issue movement.
+    """
+    existing = get_existing_goods_issue_stock_movement(
+        issue_item
+    )
+
+    if existing:
+        if existing.status != StockMovementStatus.POSTED:
+            raise ValidationError(
+                {
+                    "inventory":
+                        "Existing goods issue stock movement "
+                        "is not posted."
+                }
+            )
+
+        if not issue_item.stock_movement_id:
+            GoodsIssueItem.objects.filter(
+                pk=issue_item.pk,
+                stock_movement__isnull=True,
+            ).update(
+                stock_movement=existing,
+                updated_at=timezone.now(),
+            )
+            issue_item.stock_movement = existing
+
+        return existing
+
+    _consume_reserved_allocation_for_goods_issue(
+        company=issue_item.company,
+        issue_item=issue_item,
+        user=user,
+    )
+
+    movement_kwargs = {
+        "company": issue_item.company,
+        "warehouse": issue_item.warehouse,
+        "location": issue_item.location,
+        "item": issue_item.item,
+        "unit_cost": issue_item.unit_cost,
+        "reference_type": GOODS_ISSUE_STOCK_REFERENCE,
+        "reference_id": issue_item.id,
+        "reference_number": issue_item.issue.issue_number,
+        "notes": (
+            "Sales order goods issue "
+            f"{issue_item.issue.issue_number}"
+        ),
+        "extra_data": {
+            **(issue_item.extra_data or {}),
+            "source": "goods_issue",
+            "goods_issue_id": issue_item.issue_id,
+            "goods_issue_item_id": issue_item.id,
+            "sales_order_id": issue_item.issue.sales_order_id,
+            "sales_order_item_id": issue_item.sales_order_item_id,
+            "reservation_allocation_id": (
+                issue_item.reservation_allocation_id
+            ),
+        },
+        "user": user,
+        "post_accounting": True,
+    }
+
+    if issue_item.serial_number_id:
+        movement = issue_serial_stock(
+            serial_numbers=[
+                issue_item.serial_number,
+            ],
+            **movement_kwargs,
+        )
+    elif issue_item.batch_id:
+        movement = issue_batch_stock(
+            batch=issue_item.batch,
+            quantity=issue_item.quantity,
+            **movement_kwargs,
+        )
+    else:
+        movement = issue_stock(
+            quantity=issue_item.quantity,
+            **movement_kwargs,
+        )
+
+    GoodsIssueItem.objects.filter(
+        pk=issue_item.pk,
+        stock_movement__isnull=True,
+    ).update(
+        stock_movement=movement,
+        updated_at=timezone.now(),
+    )
+    issue_item.stock_movement = movement
+
+    return movement
+
+
+@transaction.atomic
+def post_goods_issue(
+    *,
+    issue: GoodsIssue,
+    user=None,
+) -> GoodsIssue:
+    """
+    Atomically post a goods issue and decrease inventory.
+    """
+    locked_issue = (
+        GoodsIssue.objects
+        .select_for_update()
+        .select_related(
+            "company",
+            "sales_order",
+            "warehouse",
+            "location",
+        )
+        .get(pk=issue.pk)
+    )
+
+    if locked_issue.status == GoodsIssueStatus.POSTED:
+        return locked_issue
+
+    if not locked_issue.can_be_posted:
+        raise ValidationError(
+            "Only draft goods issues can be posted."
+        )
+
+    locked_items = list(
+        locked_issue.items
+        .select_for_update()
+        .select_related(
+            "issue",
+            "issue__sales_order",
+            "sales_order_item",
+            "reservation_allocation",
+            "reservation_allocation__reservation",
+            "warehouse",
+            "location",
+            "stock_item",
+            "item",
+            "batch",
+            "serial_number",
+            "stock_movement",
+        )
+        .order_by(
+            "line_number",
+            "id",
+        )
+    )
+
+    if not locked_items:
+        raise ValidationError(
+            "Cannot post a goods issue without items."
+        )
+
+    if locked_issue.sales_order.status == SalesOrderStatus.CONFIRMED:
+        locked_issue.sales_order.start_processing(user=user)
+
+    for issue_item in locked_items:
+        post_goods_issue_item_to_inventory(
+            issue_item=issue_item,
+            user=user,
+        )
+
+    locked_issue.mark_posted(user=user)
+    locked_issue.refresh_from_db()
+
+    return locked_issue
+
+
+@transaction.atomic
+def cancel_goods_issue(
+    *,
+    issue: GoodsIssue,
+    reason: str = "",
+    user=None,
+) -> GoodsIssue:
+    """
+    Cancel a draft goods issue.
+    """
+    locked_issue = (
+        GoodsIssue.objects
+        .select_for_update()
+        .get(pk=issue.pk)
+    )
+
+    locked_issue.cancel(
+        reason=normalize_text(reason),
+        user=user,
+    )
+    locked_issue.refresh_from_db()
+
+    return locked_issue
+
+
+def serialize_goods_issue_item(
+    item: GoodsIssueItem,
+) -> dict[str, Any]:
+    """
+    Serialize one goods issue item.
+    """
+    return {
+        "id": item.id,
+        "line_number": item.line_number,
+        "sales_order_item_id": item.sales_order_item_id,
+        "reservation_allocation_id": (
+            item.reservation_allocation_id
+        ),
+        "warehouse_id": item.warehouse_id,
+        "location_id": item.location_id,
+        "stock_item_id": item.stock_item_id,
+        "catalog_item_id": item.item_id,
+        "batch_id": item.batch_id,
+        "serial_number_id": item.serial_number_id,
+        "stock_movement_id": item.stock_movement_id,
+        "item_code": item.item_code_snapshot,
+        "item_name": item.item_name_snapshot,
+        "item_name_ar": item.item_name_ar_snapshot,
+        "item_name_en": item.item_name_en_snapshot,
+        "unit_name": item.unit_name_snapshot,
+        "quantity": str(item.quantity),
+        "unit_cost": str(item.unit_cost),
+        "notes": item.notes,
+        "extra_data": item.extra_data or {},
+        "created_at": (
+            item.created_at.isoformat()
+            if item.created_at
+            else None
+        ),
+        "updated_at": (
+            item.updated_at.isoformat()
+            if item.updated_at
+            else None
+        ),
+    }
+
+
+def serialize_goods_issue(
+    issue: GoodsIssue,
+    *,
+    include_items: bool = True,
+) -> dict[str, Any]:
+    """
+    Serialize a goods issue for APIs.
+    """
+    data = {
+        "id": issue.id,
+        "company_id": issue.company_id,
+        "issue_number": issue.issue_number,
+        "issue_date": (
+            issue.issue_date.isoformat()
+            if issue.issue_date
+            else None
+        ),
+        "status": issue.status,
+        "sales_order": {
+            "id": issue.sales_order_id,
+            "order_number": issue.sales_order.order_number,
+            "status": issue.sales_order.status,
+        },
+        "warehouse": {
+            "id": issue.warehouse_id,
+            "code": issue.warehouse.code,
+            "name": issue.warehouse.display_name,
+        },
+        "location": (
+            {
+                "id": issue.location_id,
+                "code": issue.location.code,
+                "name": issue.location.display_name,
+            }
+            if issue.location_id
+            else None
+        ),
+        "total_quantity": str(issue.total_quantity),
+        "posted_at": (
+            issue.posted_at.isoformat()
+            if issue.posted_at
+            else None
+        ),
+        "cancelled_at": (
+            issue.cancelled_at.isoformat()
+            if issue.cancelled_at
+            else None
+        ),
+        "cancellation_reason": issue.cancellation_reason,
+        "notes": issue.notes,
+        "extra_data": issue.extra_data or {},
+        "allowed_actions": {
+            "post": issue.can_be_posted,
+            "cancel": issue.can_be_cancelled,
+        },
+        "created_at": (
+            issue.created_at.isoformat()
+            if issue.created_at
+            else None
+        ),
+        "updated_at": (
+            issue.updated_at.isoformat()
+            if issue.updated_at
+            else None
+        ),
+    }
+
+    if include_items:
+        data["items"] = [
+            serialize_goods_issue_item(item)
+            for item in (
+                issue.items
+                .select_related(
+                    "sales_order_item",
+                    "reservation_allocation",
+                    "warehouse",
+                    "location",
+                    "stock_item",
+                    "item",
+                    "batch",
+                    "serial_number",
+                    "stock_movement",
+                )
+                .order_by(
+                    "line_number",
+                    "id",
+                )
+            )
+        ]
+
+    return data

@@ -76,6 +76,11 @@ from catalog.models import (
     CatalogUnit,
 )
 from companies.models import Branch, Company
+from parties.models import (
+    BusinessParty,
+    BusinessPartyStatus,
+    BusinessPartyType,
+)
 from inventory.models import (
     QUANTITY_ZERO,
     InventoryBatch,
@@ -98,6 +103,9 @@ from inventory.models import (
     StockReservationAllocationStatus,
     StockReservationSource,
     StockReservationStatus,
+    GoodsIssue,
+    GoodsIssueItem,
+    GoodsIssueStatus,
     Warehouse,
     WarehouseStatus,
     WarehouseType,
@@ -180,6 +188,10 @@ from inventory.services import (
     create_sales_order_stock_reservation,
     expire_stock_reservation,
     release_stock_reservation_allocation,
+    create_goods_issue,
+    post_goods_issue,
+    cancel_goods_issue,
+    serialize_goods_issue,
 )
 
 
@@ -8509,4 +8521,351 @@ class StockReservationAPITests(InventoryTestBase):
 
 
 # End Phase 22.3.4 - Stock Reservation API Tests
+# ============================================================
+
+# ============================================================
+# Phase 22.4 - Goods Issues Tests
+# ============================================================
+
+
+class GoodsIssueLifecycleTests(InventoryTestBase):
+    """
+    Goods issue services, reservation consumption, and tenant isolation.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        self.location = create_inventory_location(
+            company=self.company,
+            warehouse=self.warehouse,
+            data={
+                "code": "GOODS-ISSUE-BIN",
+                "name": "Goods Issue Bin",
+                "location_type": InventoryLocationType.BIN,
+                "is_default": True,
+                "is_pickable": True,
+            },
+            user=self.user,
+        )
+
+        self.stock_item = get_or_create_stock_item(
+            company=self.company,
+            warehouse=self.warehouse,
+            location=self.location,
+            item=self.product,
+            user=self.user,
+        )
+        self.stock_item.quantity_on_hand = Decimal("10.0000")
+        self.stock_item.reserved_quantity = Decimal("0.0000")
+        self.stock_item.average_cost = Decimal("10.00")
+        self.stock_item.save(
+            update_fields=[
+                "quantity_on_hand",
+                "reserved_quantity",
+                "average_cost",
+                "updated_at",
+            ]
+        )
+
+        self.customer = BusinessParty.objects.create(
+            company=self.company,
+            branch=self.branch,
+            party_type=BusinessPartyType.CUSTOMER,
+            status=BusinessPartyStatus.ACTIVE,
+            code="GI-CUST-001",
+            display_name="Goods Issue Customer",
+            created_by=self.user,
+        )
+
+        self.order = create_sales_order(
+            company=self.company,
+            user=self.user,
+            branch_id=self.branch.id,
+            customer_id=self.customer.id,
+            items=[
+                {
+                    "catalog_item_id": self.product.id,
+                    "quantity": "4.0000",
+                }
+            ],
+        )
+        self.order.status = "CONFIRMED"
+        self.order.save(
+            update_fields=[
+                "status",
+                "updated_at",
+            ]
+        )
+        self.order_item = self.order.items.get()
+
+        self.reservation = (
+            create_sales_order_stock_reservation(
+                company=self.company,
+                sales_order=self.order,
+                user=self.user,
+            )
+        )
+        self.allocation = allocate_stock_reservation(
+            company=self.company,
+            reservation=self.reservation,
+            sales_order_item=self.order_item,
+            stock_item=self.stock_item,
+            quantity="4.0000",
+            user=self.user,
+        )
+
+    def test_create_goods_issue_from_reservation_allocation(self):
+        issue = create_goods_issue(
+            company=self.company,
+            user=self.user,
+            payload={
+                "sales_order_id": self.order.id,
+                "warehouse_id": self.warehouse.id,
+                "items": [
+                    {
+                        "reservation_allocation_id": (
+                            self.allocation.id
+                        ),
+                        "quantity": "2.0000",
+                    }
+                ],
+            },
+        )
+
+        self.assertEqual(issue.company, self.company)
+        self.assertEqual(issue.sales_order, self.order)
+        self.assertEqual(issue.status, GoodsIssueStatus.DRAFT)
+        self.assertEqual(issue.items.count(), 1)
+
+        issue_item = issue.items.get()
+
+        self.assertEqual(
+            issue_item.reservation_allocation,
+            self.allocation,
+        )
+        self.assertEqual(
+            issue_item.quantity,
+            Decimal("2.0000"),
+        )
+        self.assertIsNone(issue_item.stock_movement)
+
+    def test_post_goods_issue_consumes_reserved_stock(self):
+        issue = create_goods_issue(
+            company=self.company,
+            user=self.user,
+            payload={
+                "sales_order_id": self.order.id,
+                "warehouse_id": self.warehouse.id,
+                "items": [
+                    {
+                        "reservation_allocation_id": (
+                            self.allocation.id
+                        ),
+                        "quantity": "2.0000",
+                    }
+                ],
+            },
+        )
+
+        issue = post_goods_issue(
+            issue=issue,
+            user=self.user,
+        )
+
+        self.stock_item.refresh_from_db()
+        self.allocation.refresh_from_db()
+        self.reservation.refresh_from_db()
+        issue_item = issue.items.get()
+
+        self.assertEqual(
+            issue.status,
+            GoodsIssueStatus.POSTED,
+        )
+        self.assertEqual(
+            self.stock_item.quantity_on_hand,
+            Decimal("8.0000"),
+        )
+        self.assertEqual(
+            self.stock_item.reserved_quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            self.allocation.fulfilled_quantity,
+            Decimal("2.0000"),
+        )
+        self.assertEqual(
+            self.reservation.fulfilled_quantity,
+            Decimal("2.0000"),
+        )
+        self.assertIsNotNone(
+            issue_item.stock_movement_id,
+        )
+        self.assertEqual(
+            issue_item.stock_movement.status,
+            StockMovementStatus.POSTED,
+        )
+
+    def test_post_goods_issue_is_idempotent(self):
+        issue = create_goods_issue(
+            company=self.company,
+            user=self.user,
+            payload={
+                "sales_order_id": self.order.id,
+                "warehouse_id": self.warehouse.id,
+                "items": [
+                    {
+                        "reservation_allocation_id": (
+                            self.allocation.id
+                        ),
+                        "quantity": "2.0000",
+                    }
+                ],
+            },
+        )
+
+        post_goods_issue(
+            issue=issue,
+            user=self.user,
+        )
+        movement_count = StockMovement.objects.count()
+
+        same_issue = post_goods_issue(
+            issue=issue,
+            user=self.user,
+        )
+
+        self.stock_item.refresh_from_db()
+        self.allocation.refresh_from_db()
+
+        self.assertEqual(
+            same_issue.status,
+            GoodsIssueStatus.POSTED,
+        )
+        self.assertEqual(
+            StockMovement.objects.count(),
+            movement_count,
+        )
+        self.assertEqual(
+            self.stock_item.quantity_on_hand,
+            Decimal("8.0000"),
+        )
+        self.assertEqual(
+            self.allocation.fulfilled_quantity,
+            Decimal("2.0000"),
+        )
+
+    def test_goods_issue_rejects_cross_company_order(self):
+        other_order = create_sales_order(
+            company=self.other_company,
+            user=self.user,
+            branch_id=self.other_branch.id,
+            items=[
+                {
+                    "catalog_item_id": self.other_product.id,
+                    "quantity": "1.0000",
+                }
+            ],
+        )
+        other_order.status = "CONFIRMED"
+        other_order.save(
+            update_fields=[
+                "status",
+                "updated_at",
+            ]
+        )
+
+        with self.assertRaises(ValidationError):
+            create_goods_issue(
+                company=self.company,
+                user=self.user,
+                payload={
+                    "sales_order_id": other_order.id,
+                    "warehouse_id": self.warehouse.id,
+                    "items": [
+                        {
+                            "sales_order_item_id": (
+                                other_order.items.get().id
+                            ),
+                            "stock_item_id": self.stock_item.id,
+                            "quantity": "1.0000",
+                        }
+                    ],
+                },
+            )
+
+    def test_cancel_draft_goods_issue(self):
+        issue = create_goods_issue(
+            company=self.company,
+            user=self.user,
+            payload={
+                "sales_order_id": self.order.id,
+                "warehouse_id": self.warehouse.id,
+                "items": [
+                    {
+                        "reservation_allocation_id": (
+                            self.allocation.id
+                        ),
+                        "quantity": "1.0000",
+                    }
+                ],
+            },
+        )
+
+        cancelled = cancel_goods_issue(
+            issue=issue,
+            reason="Customer delayed shipment",
+            user=self.user,
+        )
+
+        self.stock_item.refresh_from_db()
+        self.allocation.refresh_from_db()
+
+        self.assertEqual(
+            cancelled.status,
+            GoodsIssueStatus.CANCELLED,
+        )
+        self.assertEqual(
+            cancelled.cancellation_reason,
+            "Customer delayed shipment",
+        )
+        self.assertEqual(
+            self.stock_item.quantity_on_hand,
+            Decimal("10.0000"),
+        )
+        self.assertEqual(
+            self.allocation.fulfilled_quantity,
+            Decimal("0.0000"),
+        )
+
+    def test_serialize_goods_issue(self):
+        issue = create_goods_issue(
+            company=self.company,
+            user=self.user,
+            payload={
+                "sales_order_id": self.order.id,
+                "warehouse_id": self.warehouse.id,
+                "items": [
+                    {
+                        "reservation_allocation_id": (
+                            self.allocation.id
+                        ),
+                        "quantity": "1.0000",
+                    }
+                ],
+            },
+        )
+
+        data = serialize_goods_issue(
+            issue,
+            include_items=True,
+        )
+
+        self.assertEqual(data["id"], issue.id)
+        self.assertEqual(data["status"], GoodsIssueStatus.DRAFT)
+        self.assertEqual(len(data["items"]), 1)
+        self.assertTrue(data["allowed_actions"]["post"])
+
+
+# End Phase 22.4 - Goods Issues Tests
 # ============================================================

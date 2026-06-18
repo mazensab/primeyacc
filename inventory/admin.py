@@ -32,6 +32,9 @@ from .models import (
     InventorySerialStatus,
     InventoryTrackingEntry,
     InventoryTrackingEntryType,
+    GoodsIssue,
+    GoodsIssueItem,
+    GoodsIssueStatus,
     InventoryLocation,
     InventoryLocationStatus,
     InventoryLocationType,
@@ -1656,4 +1659,216 @@ class StockReservationAllocationAdmin(admin.ModelAdmin):
 
 
 # End Phase 22.3.4 - Stock Reservation Admin
+# ============================================================
+
+# ============================================================
+# Phase 22.4 - Goods Issues Admin
+# ============================================================
+
+
+class GoodsIssueItemInline(admin.TabularInline):
+    """
+    Goods issue items inline.
+    """
+
+    model = GoodsIssueItem
+    extra = 0
+    can_delete = False
+    show_change_link = True
+
+    fields = [
+        "line_number",
+        "sales_order_item",
+        "reservation_allocation",
+        "warehouse",
+        "location",
+        "item",
+        "batch",
+        "serial_number",
+        "quantity",
+        "unit_cost",
+        "stock_movement",
+        "notes",
+    ]
+
+    readonly_fields = [
+        "item",
+        "stock_movement",
+    ]
+
+    autocomplete_fields = [
+        "sales_order_item",
+        "reservation_allocation",
+        "warehouse",
+        "location",
+        "stock_item",
+        "batch",
+        "serial_number",
+    ]
+
+
+@admin.register(GoodsIssue)
+class GoodsIssueAdmin(admin.ModelAdmin):
+    """
+    Internal administration for goods issues.
+    """
+
+    list_display = [
+        "issue_number",
+        "company",
+        "sales_order",
+        "warehouse",
+        "location",
+        "status",
+        "issue_date",
+        "total_quantity",
+        "posted_at",
+        "cancelled_at",
+        "created_at",
+    ]
+
+    list_filter = [
+        "status",
+        "company",
+        "warehouse",
+        "location",
+        "issue_date",
+        "posted_at",
+        "cancelled_at",
+        "created_at",
+    ]
+
+    search_fields = [
+        "issue_number",
+        "sales_order__order_number",
+        "warehouse__code",
+        "warehouse__name",
+        "location__code",
+        "location__name",
+        "notes",
+    ]
+
+    readonly_fields = [
+        "total_quantity",
+        "posted_at",
+        "posted_by",
+        "cancelled_at",
+        "cancelled_by",
+        "created_at",
+        "updated_at",
+    ]
+
+    autocomplete_fields = [
+        "company",
+        "sales_order",
+        "warehouse",
+        "location",
+        "created_by",
+        "updated_by",
+        "posted_by",
+        "cancelled_by",
+    ]
+
+    inlines = [
+        GoodsIssueItemInline,
+    ]
+
+    ordering = [
+        "-issue_date",
+        "-id",
+    ]
+
+    list_select_related = [
+        "company",
+        "sales_order",
+        "warehouse",
+        "location",
+    ]
+
+
+@admin.register(GoodsIssueItem)
+class GoodsIssueItemAdmin(admin.ModelAdmin):
+    """
+    Internal administration for goods issue items.
+    """
+
+    list_display = [
+        "issue",
+        "company",
+        "line_number",
+        "sales_order_item",
+        "reservation_allocation",
+        "warehouse",
+        "location",
+        "item",
+        "batch",
+        "serial_number",
+        "quantity",
+        "unit_cost",
+        "stock_movement",
+        "created_at",
+    ]
+
+    list_filter = [
+        "company",
+        "warehouse",
+        "location",
+        "item",
+        "created_at",
+    ]
+
+    search_fields = [
+        "issue__issue_number",
+        "issue__sales_order__order_number",
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "batch__batch_number",
+        "serial_number__serial_number",
+    ]
+
+    readonly_fields = [
+        "item_code_snapshot",
+        "item_name_snapshot",
+        "item_name_ar_snapshot",
+        "item_name_en_snapshot",
+        "unit_name_snapshot",
+        "stock_movement",
+        "created_at",
+        "updated_at",
+    ]
+
+    autocomplete_fields = [
+        "issue",
+        "company",
+        "sales_order_item",
+        "reservation_allocation",
+        "warehouse",
+        "location",
+        "stock_item",
+        "item",
+        "batch",
+        "serial_number",
+    ]
+
+    ordering = [
+        "-created_at",
+        "-id",
+    ]
+
+    list_select_related = [
+        "issue",
+        "company",
+        "sales_order_item",
+        "reservation_allocation",
+        "warehouse",
+        "location",
+        "stock_item",
+        "item",
+        "batch",
+        "serial_number",
+        "stock_movement",
+    ]
+
+
+# End Phase 22.4 - Goods Issues Admin
 # ============================================================

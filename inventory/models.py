@@ -53,7 +53,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
-from django.db.models import F, Q
+from django.db.models import F, Q, Sum
 from django.utils import timezone
 
 from catalog.models import (
@@ -4153,5 +4153,800 @@ class StockReservationAllocation(models.Model):
             raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+# ============================================================
+# Phase 22.4 - Goods Issues Foundation
+# ============================================================
+
+
+class GoodsIssueStatus(models.TextChoices):
+    """
+    Goods issue lifecycle.
+    """
+
+    DRAFT = "DRAFT", "Draft"
+    POSTED = "POSTED", "Posted"
+    CANCELLED = "CANCELLED", "Cancelled"
+
+
+class GoodsIssue(models.Model):
+    """
+    Company-scoped goods issue document.
+
+    A goods issue consumes inventory for a sales order. Actual stock effects
+    are applied through inventory.services only.
+    """
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="goods_issues",
+        db_index=True,
+        verbose_name="Company",
+    )
+    sales_order = models.ForeignKey(
+        "sales.SalesOrder",
+        on_delete=models.PROTECT,
+        related_name="goods_issues",
+        db_index=True,
+        verbose_name="Sales order",
+    )
+    warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.PROTECT,
+        related_name="goods_issues",
+        db_index=True,
+        verbose_name="Warehouse",
+    )
+    location = models.ForeignKey(
+        InventoryLocation,
+        on_delete=models.PROTECT,
+        related_name="goods_issues",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Default issue location",
+    )
+
+    issue_number = models.CharField(
+        max_length=80,
+        db_index=True,
+        verbose_name="Issue number",
+    )
+    issue_date = models.DateField(
+        default=timezone.localdate,
+        db_index=True,
+        verbose_name="Issue date",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=GoodsIssueStatus.choices,
+        default=GoodsIssueStatus.DRAFT,
+        db_index=True,
+        verbose_name="Status",
+    )
+
+    posted_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Posted at",
+    )
+    cancelled_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Cancelled at",
+    )
+    cancellation_reason = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Cancellation reason",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Notes",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra data",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_goods_issues",
+        blank=True,
+        null=True,
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="updated_goods_issues",
+        blank=True,
+        null=True,
+        verbose_name="Updated by",
+    )
+    posted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="posted_goods_issues",
+        blank=True,
+        null=True,
+        verbose_name="Posted by",
+    )
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="cancelled_goods_issues",
+        blank=True,
+        null=True,
+        verbose_name="Cancelled by",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Goods issue"
+        verbose_name_plural = "Goods issues"
+        ordering = [
+            "-issue_date",
+            "-id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "company",
+                    "issue_number",
+                ],
+                name="unique_goods_issue_number_per_company",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "status"]),
+            models.Index(fields=["company", "issue_date"]),
+            models.Index(fields=["company", "sales_order"]),
+            models.Index(fields=["company", "warehouse"]),
+            models.Index(fields=["company", "location"]),
+            models.Index(fields=["posted_at"]),
+            models.Index(fields=["cancelled_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.issue_number
+
+    @property
+    def is_draft(self) -> bool:
+        return self.status == GoodsIssueStatus.DRAFT
+
+    @property
+    def is_posted(self) -> bool:
+        return self.status == GoodsIssueStatus.POSTED
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self.status == GoodsIssueStatus.CANCELLED
+
+    @property
+    def can_be_posted(self) -> bool:
+        return self.is_draft
+
+    @property
+    def can_be_cancelled(self) -> bool:
+        return self.is_draft
+
+    @property
+    def total_quantity(self) -> Decimal:
+        result = (
+            self.items
+            .aggregate(total=Sum("quantity"))
+            .get("total")
+        )
+
+        return quantize_quantity(
+            result or QUANTITY_ZERO
+        )
+
+    def clean(self) -> None:
+        super().clean()
+
+        self.issue_number = (
+            self.issue_number or ""
+        ).strip().upper()
+        self.cancellation_reason = (
+            self.cancellation_reason or ""
+        ).strip()
+        self.notes = (
+            self.notes or ""
+        ).strip()
+
+        if not self.issue_number:
+            raise ValidationError(
+                {
+                    "issue_number":
+                        "Goods issue number is required."
+                }
+            )
+
+        if self.sales_order_id and self.company_id:
+            if self.sales_order.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "sales_order":
+                            "Sales order does not belong "
+                            "to this company."
+                    }
+                )
+
+        if self.warehouse_id and self.company_id:
+            if self.warehouse.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "warehouse":
+                            "Warehouse does not belong "
+                            "to this company."
+                    }
+                )
+
+        if self.location_id:
+            if self.location.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "location":
+                            "Location does not belong "
+                            "to this company."
+                    }
+                )
+
+            if self.location.warehouse_id != self.warehouse_id:
+                raise ValidationError(
+                    {
+                        "location":
+                            "Location does not belong "
+                            "to selected warehouse."
+                    }
+                )
+
+    def mark_posted(self, user=None) -> None:
+        if not self.can_be_posted:
+            raise ValidationError(
+                "Only draft goods issues can be posted."
+            )
+
+        self.status = GoodsIssueStatus.POSTED
+        self.posted_at = timezone.now()
+
+        if user:
+            self.posted_by = user
+            self.updated_by = user
+
+        self.full_clean()
+        self.save(
+            update_fields=[
+                "status",
+                "posted_at",
+                "posted_by",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+    def cancel(
+        self,
+        reason: str = "",
+        user=None,
+    ) -> None:
+        if not self.can_be_cancelled:
+            raise ValidationError(
+                "Only draft goods issues can be cancelled."
+            )
+
+        self.status = GoodsIssueStatus.CANCELLED
+        self.cancelled_at = timezone.now()
+        self.cancellation_reason = reason or ""
+
+        if user:
+            self.cancelled_by = user
+            self.updated_by = user
+
+        self.full_clean()
+        self.save(
+            update_fields=[
+                "status",
+                "cancelled_at",
+                "cancelled_by",
+                "cancellation_reason",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+
+class GoodsIssueItem(models.Model):
+    """
+    Goods issue line.
+
+    It may consume a reservation allocation from Phase 22.3 or issue directly
+    from a selected stock item.
+    """
+
+    issue = models.ForeignKey(
+        GoodsIssue,
+        on_delete=models.CASCADE,
+        related_name="items",
+        db_index=True,
+        verbose_name="Goods issue",
+    )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="goods_issue_items",
+        db_index=True,
+        verbose_name="Company",
+    )
+    sales_order_item = models.ForeignKey(
+        "sales.SalesOrderItem",
+        on_delete=models.PROTECT,
+        related_name="goods_issue_items",
+        db_index=True,
+        verbose_name="Sales order item",
+    )
+    reservation_allocation = models.ForeignKey(
+        StockReservationAllocation,
+        on_delete=models.PROTECT,
+        related_name="goods_issue_items",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Reservation allocation",
+    )
+    warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.PROTECT,
+        related_name="goods_issue_items",
+        db_index=True,
+        verbose_name="Warehouse",
+    )
+    location = models.ForeignKey(
+        InventoryLocation,
+        on_delete=models.PROTECT,
+        related_name="goods_issue_items",
+        db_index=True,
+        verbose_name="Inventory location",
+    )
+    stock_item = models.ForeignKey(
+        StockItem,
+        on_delete=models.PROTECT,
+        related_name="goods_issue_items",
+        db_index=True,
+        verbose_name="Stock item",
+    )
+    item = models.ForeignKey(
+        CatalogItem,
+        on_delete=models.PROTECT,
+        related_name="goods_issue_items",
+        db_index=True,
+        verbose_name="Catalog item",
+    )
+    batch = models.ForeignKey(
+        InventoryBatch,
+        on_delete=models.PROTECT,
+        related_name="goods_issue_items",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Batch",
+    )
+    serial_number = models.ForeignKey(
+        InventorySerialNumber,
+        on_delete=models.PROTECT,
+        related_name="goods_issue_items",
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Serial number",
+    )
+    stock_movement = models.OneToOneField(
+        StockMovement,
+        on_delete=models.PROTECT,
+        related_name="goods_issue_item",
+        blank=True,
+        null=True,
+        verbose_name="Stock movement",
+    )
+
+    line_number = models.PositiveIntegerField(
+        default=1,
+        db_index=True,
+        verbose_name="Line number",
+    )
+    quantity = models.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        validators=[
+            MinValueValidator(Decimal("0.0001"))
+        ],
+        verbose_name="Quantity",
+    )
+    unit_cost = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=MONEY_ZERO,
+        validators=[MinValueValidator(MONEY_ZERO)],
+        verbose_name="Unit cost",
+    )
+
+    item_code_snapshot = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+    )
+    item_name_snapshot = models.CharField(
+        max_length=255,
+    )
+    item_name_ar_snapshot = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+    item_name_en_snapshot = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+    unit_name_snapshot = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        default="",
+    )
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        verbose_name = "Goods issue item"
+        verbose_name_plural = "Goods issue items"
+        ordering = [
+            "issue_id",
+            "line_number",
+            "id",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "issue",
+                    "line_number",
+                ],
+                name="unique_goods_issue_item_line",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "issue"]),
+            models.Index(fields=["company", "sales_order_item"]),
+            models.Index(fields=["company", "reservation_allocation"]),
+            models.Index(fields=["company", "warehouse"]),
+            models.Index(fields=["company", "location"]),
+            models.Index(fields=["company", "item"]),
+            models.Index(fields=["company", "batch"]),
+            models.Index(fields=["company", "serial_number"]),
+            models.Index(fields=["company", "created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.issue.issue_number} - "
+            f"{self.item_name_snapshot}"
+        )
+
+    def apply_item_snapshot(self) -> None:
+        if not self.item_id:
+            return
+
+        self.item_code_snapshot = (
+            self.item.code
+            or self.item.sku
+            or self.item.barcode
+            or ""
+        )
+        self.item_name_snapshot = self.item.name
+        self.item_name_ar_snapshot = (
+            self.item.name_ar or ""
+        )
+        self.item_name_en_snapshot = (
+            self.item.name_en or ""
+        )
+        self.unit_name_snapshot = (
+            self.item.unit.name
+            if self.item.unit_id
+            else ""
+        )
+
+    def clean(self) -> None:
+        super().clean()
+
+        self.quantity = quantize_quantity(
+            self.quantity
+        )
+        self.unit_cost = quantize_money(
+            self.unit_cost
+        )
+        self.notes = (
+            self.notes or ""
+        ).strip()
+
+        if self.quantity <= QUANTITY_ZERO:
+            raise ValidationError(
+                {
+                    "quantity":
+                        "Issue quantity must be greater than zero."
+                }
+            )
+
+        if self.issue_id and self.company_id:
+            if self.issue.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "company":
+                            "Issue item company must match issue company."
+                    }
+                )
+
+            if not self.issue.is_draft:
+                raise ValidationError(
+                    "Only draft goods issue items can be edited."
+                )
+
+        if self.sales_order_item_id and self.issue_id:
+            if (
+                self.sales_order_item.order_id
+                != self.issue.sales_order_id
+            ):
+                raise ValidationError(
+                    {
+                        "sales_order_item":
+                            "Sales order item does not belong "
+                            "to the goods issue sales order."
+                    }
+                )
+
+            if self.sales_order_item.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "sales_order_item":
+                            "Sales order item does not belong "
+                            "to this company."
+                    }
+                )
+
+        if self.warehouse_id and self.company_id:
+            if self.warehouse.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "warehouse":
+                            "Warehouse does not belong to this company."
+                    }
+                )
+
+        if self.location_id:
+            if self.location.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "location":
+                            "Location does not belong to this company."
+                    }
+                )
+
+            if self.location.warehouse_id != self.warehouse_id:
+                raise ValidationError(
+                    {
+                        "location":
+                            "Location does not belong to selected warehouse."
+                    }
+                )
+
+        if self.stock_item_id:
+            if self.stock_item.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "stock_item":
+                            "Stock item does not belong to this company."
+                    }
+                )
+
+            if self.stock_item.warehouse_id != self.warehouse_id:
+                raise ValidationError(
+                    {
+                        "stock_item":
+                            "Stock item warehouse must match issue item warehouse."
+                    }
+                )
+
+            if self.stock_item.location_id != self.location_id:
+                raise ValidationError(
+                    {
+                        "stock_item":
+                            "Stock item location must match issue item location."
+                    }
+                )
+
+            if self.stock_item.item_id != self.item_id:
+                raise ValidationError(
+                    {
+                        "stock_item":
+                            "Stock item catalog item must match issue item."
+                    }
+                )
+
+        if self.item_id:
+            if self.item.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "item":
+                            "Catalog item does not belong to this company."
+                    }
+                )
+
+            if self.item.item_type != CatalogItemType.PRODUCT:
+                raise ValidationError(
+                    {
+                        "item":
+                            "Only product catalog items can be issued."
+                    }
+                )
+
+            if not self.item.track_inventory:
+                raise ValidationError(
+                    {
+                        "item":
+                            "Catalog item must track inventory."
+                    }
+                )
+
+        if self.reservation_allocation_id:
+            allocation = self.reservation_allocation
+
+            if allocation.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "reservation_allocation":
+                            "Reservation allocation does not belong "
+                            "to this company."
+                    }
+                )
+
+            if allocation.sales_order_item_id != self.sales_order_item_id:
+                raise ValidationError(
+                    {
+                        "reservation_allocation":
+                            "Reservation allocation must match "
+                            "the sales order item."
+                    }
+                )
+
+            if allocation.warehouse_id != self.warehouse_id:
+                raise ValidationError(
+                    {
+                        "reservation_allocation":
+                            "Reservation allocation warehouse must match."
+                    }
+                )
+
+            if allocation.location_id != self.location_id:
+                raise ValidationError(
+                    {
+                        "reservation_allocation":
+                            "Reservation allocation location must match."
+                    }
+                )
+
+            if allocation.stock_item_id != self.stock_item_id:
+                raise ValidationError(
+                    {
+                        "reservation_allocation":
+                            "Reservation allocation stock item must match."
+                    }
+                )
+
+            if allocation.item_id != self.item_id:
+                raise ValidationError(
+                    {
+                        "reservation_allocation":
+                            "Reservation allocation item must match."
+                    }
+                )
+
+            if allocation.batch_id != self.batch_id:
+                raise ValidationError(
+                    {
+                        "batch":
+                            "Goods issue batch must match reservation allocation."
+                    }
+                )
+
+            if allocation.serial_number_id != self.serial_number_id:
+                raise ValidationError(
+                    {
+                        "serial_number":
+                            "Goods issue serial number must match "
+                            "reservation allocation."
+                    }
+                )
+
+        if self.batch_id:
+            if self.batch.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "batch":
+                            "Batch does not belong to this company."
+                    }
+                )
+
+            if self.batch.item_id != self.item_id:
+                raise ValidationError(
+                    {
+                        "batch":
+                            "Batch item must match issue item."
+                    }
+                )
+
+        if self.serial_number_id:
+            if self.serial_number.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "serial_number":
+                            "Serial number does not belong to this company."
+                    }
+                )
+
+            if self.serial_number.item_id != self.item_id:
+                raise ValidationError(
+                    {
+                        "serial_number":
+                            "Serial number item must match issue item."
+                    }
+                )
+
+            if self.quantity != Decimal("1.0000"):
+                raise ValidationError(
+                    {
+                        "quantity":
+                            "Serial goods issue quantity must be one."
+                    }
+                )
+
+    def save(self, *args, **kwargs):
+        if self.issue_id and not self.company_id:
+            self.company = self.issue.company
+
+        if self.item_id:
+            self.apply_item_snapshot()
+
         self.full_clean()
         super().save(*args, **kwargs)
