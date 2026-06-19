@@ -174,3 +174,88 @@ class BusinessControlsServiceTests(TestCase):
         self.assertEqual(summary["audit_events"]["by_severity"]["warning"], 1)
         self.assertEqual(summary["idempotency"]["total"], 1)
         self.assertEqual(summary["references"]["total_sequences"], 1)
+
+
+from business_controls.integrations import (
+    business_object_snapshot,
+    resolve_object_reference,
+    safe_complete_idempotency_key,
+    safe_log_business_event,
+    safe_register_idempotency_key,
+)
+
+
+class BusinessControlsSafeIntegrationTests(TestCase):
+    def setUp(self):
+        self.company = create_test_company("Phase 26 Safe Integration Company")
+        self.user = get_user_model().objects.create_user(
+            username="phase26-safe-user",
+            email="phase26-safe@example.com",
+            password="SafePass12345!",
+        )
+
+    def test_safe_audit_wrapper_creates_event_with_snapshot(self):
+        class DummyObject:
+            id = 77
+            company = self.company
+            status = "POSTED"
+            invoice_number = "INV-77"
+
+        obj = DummyObject()
+
+        event = safe_log_business_event(
+            obj=obj,
+            actor=self.user,
+            event_type="phase26_safe_audit",
+            action="post",
+            source_app="business_controls",
+            message="Safe audit wrapper test.",
+        )
+
+        self.assertIsNotNone(event)
+        self.assertEqual(event.company, self.company)
+        self.assertEqual(event.object_reference, "INV-77")
+        self.assertEqual(event.metadata["object_snapshot"]["status"], "POSTED")
+        self.assertEqual(resolve_object_reference(obj), "INV-77")
+        self.assertEqual(business_object_snapshot(obj)["invoice_number"], "INV-77")
+
+    def test_safe_idempotency_wrapper_lifecycle(self):
+        record, created = safe_register_idempotency_key(
+            company=self.company,
+            key="phase26-safe-key",
+            scope="phase26",
+            operation="safe_integration",
+        )
+
+        self.assertIsNotNone(record)
+        self.assertTrue(created)
+
+        duplicate, duplicate_created = safe_register_idempotency_key(
+            company=self.company,
+            key="phase26-safe-key",
+            scope="phase26",
+            operation="safe_integration",
+        )
+
+        self.assertEqual(record.id, duplicate.id)
+        self.assertFalse(duplicate_created)
+
+        safe_complete_idempotency_key(
+            record=record,
+            response_snapshot={"ok": True},
+        )
+
+        record.refresh_from_db()
+        self.assertEqual(record.status, BusinessIdempotencyKey.Status.SUCCEEDED)
+        self.assertEqual(record.response_snapshot["ok"], True)
+
+    def test_safe_audit_wrapper_without_company_is_non_breaking(self):
+        event = safe_log_business_event(
+            company=None,
+            obj=None,
+            actor=self.user,
+            event_type="phase26_missing_company",
+            action="test",
+            source_app="business_controls",
+        )
+        self.assertIsNone(event)
