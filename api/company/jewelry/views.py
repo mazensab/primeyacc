@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📂 api/company/jewelry/views.py
 # 🧠 PrimeyAcc | Company Jewelry APIs — Phase 25.1
 # ============================================================
@@ -313,3 +313,270 @@ def summary_view(request):
         return error
     return JsonResponse({"ok": True, "summary": jewelry_summary_payload(company)})
 
+# ============================================================
+# Phase 25.2 — Jewelry Integration API Views
+# ============================================================
+
+def _phase252_get_jewelry_item(company, item_id):
+    return (
+        JewelryItem.objects.filter(
+            company=company,
+            id=item_id,
+        )
+        .select_related("metal", "karat", "last_gold_rate")
+        .first()
+    )
+
+
+@require_http_methods(["GET"])
+def item_integration_view(request, item_id):
+    company, error = _require_company(request)
+    if error:
+        return error
+
+    item = _phase252_get_jewelry_item(company, item_id)
+    if item is None:
+        return _json_error("Jewelry item not found.", status=404)
+
+    from jewelry.services import jewelry_integration_payload
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "item": jewelry_integration_payload(item),
+        }
+    )
+
+
+@require_http_methods(["POST"])
+def sync_catalog_view(request, item_id):
+    company, error = _require_company(request)
+    if error:
+        return error
+
+    item = _phase252_get_jewelry_item(company, item_id)
+    if item is None:
+        return _json_error("Jewelry item not found.", status=404)
+
+    data = _request_data(request)
+
+    try:
+        from jewelry.services import (
+            jewelry_integration_payload,
+            sync_jewelry_item_to_catalog,
+        )
+
+        result = sync_jewelry_item_to_catalog(
+            item,
+            unit_id=data.get("unit_id"),
+            category_id=data.get("category_id"),
+            update_existing=bool(data.get("update_existing", True)),
+            force_reprice=bool(data.get("force_reprice", True)),
+            user=getattr(request, "user", None),
+        )
+        item.refresh_from_db()
+    except Exception as exc:
+        return _json_error("Unable to sync jewelry item to catalog.", details=str(exc))
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "created": result["created"],
+            "item": jewelry_integration_payload(item),
+        }
+    )
+
+
+@require_http_methods(["POST"])
+def receive_stock_view(request, item_id):
+    company, error = _require_company(request)
+    if error:
+        return error
+
+    item = _phase252_get_jewelry_item(company, item_id)
+    if item is None:
+        return _json_error("Jewelry item not found.", status=404)
+
+    data = _request_data(request)
+
+    try:
+        from inventory.services import build_stock_movement_payload
+        from jewelry.services import (
+            jewelry_integration_payload,
+            receive_jewelry_item_stock,
+        )
+
+        movement = receive_jewelry_item_stock(
+            company=company,
+            item=item,
+            warehouse_id=data.get("warehouse_id"),
+            location_id=data.get("location_id"),
+            quantity=data.get("quantity", "1"),
+            unit_cost=data.get("unit_cost") or None,
+            reference_number=data.get("reference_number", "") or "",
+            user=getattr(request, "user", None),
+        )
+        item.refresh_from_db()
+    except Exception as exc:
+        return _json_error("Unable to receive jewelry stock.", details=str(exc))
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "movement": build_stock_movement_payload(movement),
+            "item": jewelry_integration_payload(item),
+        },
+        status=201,
+    )
+
+
+@require_http_methods(["POST"])
+def sales_line_view(request, item_id):
+    company, error = _require_company(request)
+    if error:
+        return error
+
+    item = _phase252_get_jewelry_item(company, item_id)
+    if item is None:
+        return _json_error("Jewelry item not found.", status=404)
+
+    data = _request_data(request)
+
+    try:
+        from jewelry.services import (
+            build_jewelry_sales_line_payload,
+            sync_jewelry_item_to_catalog,
+        )
+
+        sync_jewelry_item_to_catalog(
+            item,
+            user=getattr(request, "user", None),
+        )
+        item.refresh_from_db()
+
+        line = build_jewelry_sales_line_payload(
+            item,
+            quantity=data.get("quantity", "1"),
+            force_reprice=bool(data.get("force_reprice", False)),
+        )
+    except Exception as exc:
+        return _json_error("Unable to build jewelry sales line.", details=str(exc))
+
+    return JsonResponse({"ok": True, "line": line})
+
+
+@require_http_methods(["POST"])
+def purchase_line_view(request, item_id):
+    company, error = _require_company(request)
+    if error:
+        return error
+
+    item = _phase252_get_jewelry_item(company, item_id)
+    if item is None:
+        return _json_error("Jewelry item not found.", status=404)
+
+    data = _request_data(request)
+
+    try:
+        from jewelry.services import (
+            build_jewelry_purchase_line_payload,
+            sync_jewelry_item_to_catalog,
+        )
+
+        sync_jewelry_item_to_catalog(
+            item,
+            user=getattr(request, "user", None),
+        )
+        item.refresh_from_db()
+
+        line = build_jewelry_purchase_line_payload(
+            item,
+            quantity=data.get("quantity", "1"),
+            unit_price=data.get("unit_price") or None,
+            force_reprice=bool(data.get("force_reprice", False)),
+        )
+    except Exception as exc:
+        return _json_error("Unable to build jewelry purchase line.", details=str(exc))
+
+    return JsonResponse({"ok": True, "line": line})
+
+
+@require_http_methods(["POST"])
+def create_sales_invoice_view(request, item_id):
+    company, error = _require_company(request)
+    if error:
+        return error
+
+    item = _phase252_get_jewelry_item(company, item_id)
+    if item is None:
+        return _json_error("Jewelry item not found.", status=404)
+
+    data = _request_data(request)
+
+    try:
+        from jewelry.services import create_jewelry_sales_invoice
+        from sales.services import serialize_sales_invoice
+
+        invoice = create_jewelry_sales_invoice(
+            company=company,
+            item=item,
+            customer_id=data.get("customer_id"),
+            branch_id=data.get("branch_id"),
+            quantity=data.get("quantity", "1"),
+            user=getattr(request, "user", None),
+        )
+    except Exception as exc:
+        return _json_error("Unable to create jewelry sales invoice.", details=str(exc))
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "invoice": serialize_sales_invoice(invoice, include_items=True),
+        },
+        status=201,
+    )
+
+
+@require_http_methods(["POST"])
+def create_purchase_bill_view(request, item_id):
+    company, error = _require_company(request)
+    if error:
+        return error
+
+    item = _phase252_get_jewelry_item(company, item_id)
+    if item is None:
+        return _json_error("Jewelry item not found.", status=404)
+
+    data = _request_data(request)
+
+    try:
+        from jewelry.services import create_jewelry_purchase_bill
+
+        bill = create_jewelry_purchase_bill(
+            company=company,
+            item=item,
+            supplier_id=data.get("supplier_id"),
+            branch_id=data.get("branch_id"),
+            quantity=data.get("quantity", "1"),
+            unit_price=data.get("unit_price") or None,
+            user=getattr(request, "user", None),
+        )
+    except Exception as exc:
+        return _json_error("Unable to create jewelry purchase bill.", details=str(exc))
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "bill": {
+                "id": bill.id,
+                "bill_number": bill.bill_number,
+                "status": bill.status,
+                "supplier_id": bill.supplier_id,
+                "total_amount": str(bill.total_amount),
+                "tax_amount": str(bill.tax_amount),
+                "balance_due": str(bill.balance_due),
+                "currency_code": bill.currency_code,
+            },
+        },
+        status=201,
+    )

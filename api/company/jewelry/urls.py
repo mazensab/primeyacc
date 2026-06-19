@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📂 api/company/jewelry/urls.py
 # 🧠 PrimeyAcc | Company Jewelry API Routes — Phase 25.1
 # ============================================================
@@ -20,5 +20,11 @@ urlpatterns = [
     path("items/<int:item_id>/", views.item_detail_view, name="item-detail"),
     path("items/<int:item_id>/price/", views.price_item_view, name="item-price"),
     path("pricing/estimate/", views.estimate_view, name="pricing-estimate"),
+    path("items/<int:item_id>/integration/", views.item_integration_view, name="item-integration"),
+    path("items/<int:item_id>/sync-catalog/", views.sync_catalog_view, name="item-sync-catalog"),
+    path("items/<int:item_id>/receive-stock/", views.receive_stock_view, name="item-receive-stock"),
+    path("items/<int:item_id>/sales-line/", views.sales_line_view, name="item-sales-line"),
+    path("items/<int:item_id>/purchase-line/", views.purchase_line_view, name="item-purchase-line"),
+    path("items/<int:item_id>/sales-invoice/", views.create_sales_invoice_view, name="item-sales-invoice"),
+    path("items/<int:item_id>/purchase-bill/", views.create_purchase_bill_view, name="item-purchase-bill"),
 ]
-
