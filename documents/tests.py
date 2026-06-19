@@ -744,3 +744,208 @@ class CompanyDocumentTemplatesAPITests(TestCase):
         template.refresh_from_db()
         self.assertTrue(template.is_active)
 
+
+# ============================================================
+# Phase 24 - PDF, Web Print & Thermal Documents Foundation
+# ============================================================
+
+from documents.rendering import (
+    build_document_response_payload,
+    normalize_document_render_request,
+    render_document_html,
+    render_minimal_pdf_bytes,
+    supported_document_rendering_options,
+)
+
+
+class DocumentRenderingServicesTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="documents_render_owner",
+            email="documents_render_owner@example.com",
+            password="StrongPass123!",
+        )
+        self.company = create_test_company(
+            name="Render Documents Company",
+            code="DOC-RENDER-001",
+            email="render-documents@example.com",
+            phone="0520000000",
+        )
+
+    def test_preview_render_payload_builds_without_template(self):
+        request_data = normalize_document_render_request(
+            {
+                "document_type": DocumentType.SALES_INVOICE,
+                "source_type": "preview",
+            }
+        )
+
+        result = build_document_response_payload(
+            company=self.company,
+            request_data=request_data,
+        )
+
+        self.assertEqual(result["render"]["document"]["document_type"], DocumentType.SALES_INVOICE)
+        self.assertEqual(result["render"]["company"]["id"], self.company.id)
+        self.assertEqual(result["render"]["totals"]["total_amount"], "115.00")
+
+    def test_web_print_html_contains_document_data(self):
+        request_data = normalize_document_render_request(
+            {
+                "document_type": DocumentType.SALES_INVOICE,
+                "source_type": "preview",
+            }
+        )
+        result = build_document_response_payload(
+            company=self.company,
+            request_data=request_data,
+        )
+
+        html_output = render_document_html(result["render"])
+
+        self.assertIn("<!doctype html>", html_output)
+        self.assertIn("Preview Customer", html_output)
+        self.assertIn("115.00", html_output)
+
+    def test_thermal_html_uses_thermal_width(self):
+        request_data = normalize_document_render_request(
+            {
+                "document_type": DocumentType.POS_RECEIPT,
+                "source_type": "preview",
+                "thermal_width": "58MM",
+            }
+        )
+        result = build_document_response_payload(
+            company=self.company,
+            request_data=request_data,
+        )
+
+        html_output = render_document_html(result["render"], thermal=True)
+
+        self.assertIn("58mm", html_output)
+
+    def test_minimal_pdf_bytes_are_valid_pdf(self):
+        request_data = normalize_document_render_request(
+            {
+                "document_type": DocumentType.SALES_INVOICE,
+                "source_type": "preview",
+            }
+        )
+        result = build_document_response_payload(
+            company=self.company,
+            request_data=request_data,
+        )
+
+        pdf_bytes = render_minimal_pdf_bytes(result["render"])
+
+        self.assertTrue(pdf_bytes.startswith(b"%PDF-1.4"))
+        self.assertIn(b"%%EOF", pdf_bytes)
+
+    def test_supported_document_rendering_options(self):
+        options = supported_document_rendering_options()
+
+        self.assertIn("PDF", options["output_formats"])
+        self.assertIn("WEB_PRINT", options["output_formats"])
+        self.assertIn("THERMAL", options["output_formats"])
+        self.assertIn("80MM", options["thermal_widths"])
+
+
+class CompanyDocumentRenderingAPITests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+        self.owner = User.objects.create_user(
+            username="api_documents_render_owner",
+            email="api_documents_render_owner@example.com",
+            password="StrongPass123!",
+        )
+        self.company = create_test_company(
+            name="API Render Documents Company",
+            code="API-DOC-RENDER-001",
+            email="api-render-documents@example.com",
+            phone="0530000000",
+        )
+
+        CompanyMembership.objects.create(
+            user=self.owner,
+            company=self.company,
+            role=CompanyRole.OWNER,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+        )
+
+        self.client.force_login(self.owner)
+
+    def company_headers(self) -> dict:
+        return {"HTTP_X_COMPANY_ID": str(self.company.id)}
+
+    def test_render_endpoint_returns_payload(self):
+        response = self.client.post(
+            "/api/company/documents/render/",
+            data={
+                "document_type": DocumentType.SALES_INVOICE,
+                "source_type": "preview",
+            },
+            format="json",
+            **self.company_headers(),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["render"]["document"]["document_type"], DocumentType.SALES_INVOICE)
+
+    def test_web_print_endpoint_can_return_json_html(self):
+        response = self.client.post(
+            "/api/company/documents/web-print/",
+            data={
+                "document_type": DocumentType.SALES_INVOICE,
+                "source_type": "preview",
+                "as_json": True,
+            },
+            format="json",
+            **self.company_headers(),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("<!doctype html>", response.data["html"])
+
+    def test_thermal_endpoint_can_return_json_html(self):
+        response = self.client.post(
+            "/api/company/documents/thermal/",
+            data={
+                "document_type": DocumentType.POS_RECEIPT,
+                "source_type": "preview",
+                "thermal_width": "80MM",
+                "as_json": True,
+            },
+            format="json",
+            **self.company_headers(),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("80mm", response.data["html"])
+
+    def test_pdf_endpoint_can_return_json_base64(self):
+        response = self.client.post(
+            "/api/company/documents/pdf/",
+            data={
+                "document_type": DocumentType.SALES_INVOICE,
+                "source_type": "preview",
+                "as_json": True,
+            },
+            format="json",
+            **self.company_headers(),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["pdf_base64"])
+
+    def test_print_jobs_endpoint_returns_options(self):
+        response = self.client.get(
+            "/api/company/documents/print-jobs/",
+            **self.company_headers(),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["success"])
+        self.assertIn("output_formats", response.data["options"])
