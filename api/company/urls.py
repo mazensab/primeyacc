@@ -54,6 +54,7 @@ app_name = "company"
 
 
 urlpatterns = [
+    path('jewelry/', include('api.company.jewelry.urls')),
     path("me/", company_me, name="me"),
     path("profile/", company_profile, name="profile"),
     path("setup/", include("api.company.setup.urls")),

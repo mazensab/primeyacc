@@ -1,36 +1,36 @@
 # ============================================================
-# 📂 config/settings.py
-# 🧠 PrimeyAcc | Django Project Settings V1.5
+# ًں“‚ config/settings.py
+# ًں§  PrimeyAcc | Django Project Settings V1.5
 # ------------------------------------------------------------
-# ✅ Django REST Framework configuration
-# ✅ CORS / CSRF configuration for Next.js frontend
-# ✅ dotenv environment loading
-# ✅ SQLite development database with MySQL readiness
-# ✅ PrimeyAcc core apps registration
-# ✅ Phase 4 parties app registration
-# ✅ Phase 5 catalog app registration
-# ✅ Phase 6 sales app registration
-# ✅ Phase 7 purchases app registration
-# ✅ Phase 8 inventory app registration
-# ✅ Phase 9 accounting app registration
-# ✅ Phase 11 treasury app registration
-# ✅ Phase 12 company payments app registration
-# ✅ Saudi Arabia timezone and Arabic language defaults
+# âœ… Django REST Framework configuration
+# âœ… CORS / CSRF configuration for Next.js frontend
+# âœ… dotenv environment loading
+# âœ… SQLite development database with MySQL readiness
+# âœ… PrimeyAcc core apps registration
+# âœ… Phase 4 parties app registration
+# âœ… Phase 5 catalog app registration
+# âœ… Phase 6 sales app registration
+# âœ… Phase 7 purchases app registration
+# âœ… Phase 8 inventory app registration
+# âœ… Phase 9 accounting app registration
+# âœ… Phase 11 treasury app registration
+# âœ… Phase 12 company payments app registration
+# âœ… Saudi Arabia timezone and Arabic language defaults
 # ------------------------------------------------------------
-# القاعدة المعتمدة:
-# - هذا الملف يجهز إعدادات المشروع العامة فقط
-# - لا نضع منطق business داخل settings.py
-# - كل تطبيق PrimeyAcc يضاف داخل PRIMEYACC_APPS
-# - /company يعتمد على CompanyMembership وليس company_id من الفرونت
-# - المرحلة 4 تضيف parties كأساس للعملاء والموردين والأطراف التجارية
-# - المرحلة 5 تضيف catalog كأساس للمنتجات والخدمات والتصنيفات والوحدات
-# - المرحلة 6 تضيف sales كأساس للمبيعات والفواتير داخل /company
-# - المرحلة 7 تضيف purchases كأساس للمشتريات وفواتير الموردين داخل /company
-# - المرحلة 8 تضيف inventory كأساس للمخزون والمستودعات وحركات المخزون داخل /company
-# - المرحلة 9 تضيف accounting كأساس للمحاسبة والقيود اليومية داخل /company
-# - المرحلة 11 تضيف treasury كأساس للخزينة والمدفوعات داخل /company
-# - المرحلة 12 تضيف payments كأساس لطرق الدفع وبوابات الدفع وأجهزة الدفع داخل /company
-# - دفع اشتراكات PrimeyAcc للمنصة منفصل عن طرق دفع الشركات لعملائها
+# ط§ظ„ظ‚ط§ط¹ط¯ط© ط§ظ„ظ…ط¹طھظ…ط¯ط©:
+# - ظ‡ط°ط§ ط§ظ„ظ…ظ„ظپ ظٹط¬ظ‡ط² ط¥ط¹ط¯ط§ط¯ط§طھ ط§ظ„ظ…ط´ط±ظˆط¹ ط§ظ„ط¹ط§ظ…ط© ظپظ‚ط·
+# - ظ„ط§ ظ†ط¶ط¹ ظ…ظ†ط·ظ‚ business ط¯ط§ط®ظ„ settings.py
+# - ظƒظ„ طھط·ط¨ظٹظ‚ PrimeyAcc ظٹط¶ط§ظپ ط¯ط§ط®ظ„ PRIMEYACC_APPS
+# - /company ظٹط¹طھظ…ط¯ ط¹ظ„ظ‰ CompanyMembership ظˆظ„ظٹط³ company_id ظ…ظ† ط§ظ„ظپط±ظˆظ†طھ
+# - ط§ظ„ظ…ط±ط­ظ„ط© 4 طھط¶ظٹظپ parties ظƒط£ط³ط§ط³ ظ„ظ„ط¹ظ…ظ„ط§ط، ظˆط§ظ„ظ…ظˆط±ط¯ظٹظ† ظˆط§ظ„ط£ط·ط±ط§ظپ ط§ظ„طھط¬ط§ط±ظٹط©
+# - ط§ظ„ظ…ط±ط­ظ„ط© 5 طھط¶ظٹظپ catalog ظƒط£ط³ط§ط³ ظ„ظ„ظ…ظ†طھط¬ط§طھ ظˆط§ظ„ط®ط¯ظ…ط§طھ ظˆط§ظ„طھطµظ†ظٹظپط§طھ ظˆط§ظ„ظˆط­ط¯ط§طھ
+# - ط§ظ„ظ…ط±ط­ظ„ط© 6 طھط¶ظٹظپ sales ظƒط£ط³ط§ط³ ظ„ظ„ظ…ط¨ظٹط¹ط§طھ ظˆط§ظ„ظپظˆط§طھظٹط± ط¯ط§ط®ظ„ /company
+# - ط§ظ„ظ…ط±ط­ظ„ط© 7 طھط¶ظٹظپ purchases ظƒط£ط³ط§ط³ ظ„ظ„ظ…ط´طھط±ظٹط§طھ ظˆظپظˆط§طھظٹط± ط§ظ„ظ…ظˆط±ط¯ظٹظ† ط¯ط§ط®ظ„ /company
+# - ط§ظ„ظ…ط±ط­ظ„ط© 8 طھط¶ظٹظپ inventory ظƒط£ط³ط§ط³ ظ„ظ„ظ…ط®ط²ظˆظ† ظˆط§ظ„ظ…ط³طھظˆط¯ط¹ط§طھ ظˆط­ط±ظƒط§طھ ط§ظ„ظ…ط®ط²ظˆظ† ط¯ط§ط®ظ„ /company
+# - ط§ظ„ظ…ط±ط­ظ„ط© 9 طھط¶ظٹظپ accounting ظƒط£ط³ط§ط³ ظ„ظ„ظ…ط­ط§ط³ط¨ط© ظˆط§ظ„ظ‚ظٹظˆط¯ ط§ظ„ظٹظˆظ…ظٹط© ط¯ط§ط®ظ„ /company
+# - ط§ظ„ظ…ط±ط­ظ„ط© 11 طھط¶ظٹظپ treasury ظƒط£ط³ط§ط³ ظ„ظ„ط®ط²ظٹظ†ط© ظˆط§ظ„ظ…ط¯ظپظˆط¹ط§طھ ط¯ط§ط®ظ„ /company
+# - ط§ظ„ظ…ط±ط­ظ„ط© 12 طھط¶ظٹظپ payments ظƒط£ط³ط§ط³ ظ„ط·ط±ظ‚ ط§ظ„ط¯ظپط¹ ظˆط¨ظˆط§ط¨ط§طھ ط§ظ„ط¯ظپط¹ ظˆط£ط¬ظ‡ط²ط© ط§ظ„ط¯ظپط¹ ط¯ط§ط®ظ„ /company
+# - ط¯ظپط¹ ط§ط´طھط±ط§ظƒط§طھ PrimeyAcc ظ„ظ„ظ…ظ†طµط© ظ…ظ†ظپطµظ„ ط¹ظ† ط·ط±ظ‚ ط¯ظپط¹ ط§ظ„ط´ط±ظƒط§طھ ظ„ط¹ظ…ظ„ط§ط¦ظ‡ط§
 # ============================================================
 
 from __future__ import annotations
@@ -103,6 +103,7 @@ PRIMEYACC_APPS = [
     "sales",
     "purchases",
     "inventory",
+    "jewelry",
     "accounting",
     "treasury",
     "payments",
