@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # ًں“‚ api/company/urls.py
 # ًں§  PrimeyAcc | Company Workspace API URLs V2.8
 # ------------------------------------------------------------
@@ -55,6 +55,7 @@ app_name = "company"
 
 urlpatterns = [
     path('jewelry/', include('api.company.jewelry.urls')),
+    path("activity-backends/", include("api.company.activity_backends.urls")),
     path("me/", company_me, name="me"),
     path("profile/", company_profile, name="profile"),
     path("setup/", include("api.company.setup.urls")),
@@ -82,4 +83,3 @@ urlpatterns = [
     path("reports/", include("api.company.reports.urls")),
     path("documents/", include("api.company.documents.urls")),
 ]
-
