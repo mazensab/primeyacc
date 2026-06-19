@@ -85,7 +85,8 @@ DJANGO_APPS = [
 ]
 
 THIRD_PARTY_APPS = [
-    "rest_framework",
+
+    "release_readiness","rest_framework",
     "corsheaders",
 ]
 

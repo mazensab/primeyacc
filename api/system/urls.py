@@ -21,13 +21,15 @@
 
 from __future__ import annotations
 
-from django.urls import include, path
+from django.urls import include, include, path
 
 
 app_name = "system"
 
 
 urlpatterns = [
+    path("release-readiness/", include("api.system.release_readiness.urls")),
+
     path(
         "companies/",
         include("api.system.companies.urls"),
