@@ -1,45 +1,45 @@
 # ============================================================
-# ًں“‚ api/company/urls.py
-# ًں§  PrimeyAcc | Company Workspace API URLs V2.8
+# ظ‹ع؛â€œâ€ڑ api/company/urls.py
+# ظ‹ع؛آ§آ  PrimeyAcc | Company Workspace API URLs V2.8
 # ------------------------------------------------------------
-# âœ… Central routes for company workspace APIs
-# âœ… Current company endpoint /api/company/me/
-# âœ… Company profile endpoint /api/company/profile/
-# âœ… Company setup endpoint /api/company/setup/
-# âœ… Company permissions endpoint /api/company/permissions/
-# âœ… Company settings endpoint /api/company/settings/
-# âœ… Company branches endpoint /api/company/branches/
-# âœ… Company users endpoint /api/company/users/
-# âœ… Business parties endpoint /api/company/parties/
-# âœ… Customers alias endpoint /api/company/customers/
-# âœ… Suppliers alias endpoint /api/company/suppliers/
-# âœ… Catalog categories endpoint /api/company/categories/
-# âœ… Catalog units endpoint /api/company/units/
-# âœ… Catalog products/services endpoint /api/company/products/
-# âœ… Sales module endpoint /api/company/sales/
-# âœ… Sales invoices endpoint /api/company/sales/invoices/
-# âœ… Purchases module endpoint /api/company/purchases/
-# âœ… Purchase bills endpoint /api/company/purchases/bills/
-# âœ… Inventory module endpoint /api/company/inventory/
-# âœ… Accounting module endpoint /api/company/accounting/
-# âœ… Treasury module endpoint /api/company/treasury/
-# âœ… Company payments endpoint /api/company/payments/
-# âœ… Company context comes from active CompanyMembership
-# âœ… Views protected by central api/permissions.py guards
+# أ¢إ“â€¦ Central routes for company workspace APIs
+# أ¢إ“â€¦ Current company endpoint /api/company/me/
+# أ¢إ“â€¦ Company profile endpoint /api/company/profile/
+# أ¢إ“â€¦ Company setup endpoint /api/company/setup/
+# أ¢إ“â€¦ Company permissions endpoint /api/company/permissions/
+# أ¢إ“â€¦ Company settings endpoint /api/company/settings/
+# أ¢إ“â€¦ Company branches endpoint /api/company/branches/
+# أ¢إ“â€¦ Company users endpoint /api/company/users/
+# أ¢إ“â€¦ Business parties endpoint /api/company/parties/
+# أ¢إ“â€¦ Customers alias endpoint /api/company/customers/
+# أ¢إ“â€¦ Suppliers alias endpoint /api/company/suppliers/
+# أ¢إ“â€¦ Catalog categories endpoint /api/company/categories/
+# أ¢إ“â€¦ Catalog units endpoint /api/company/units/
+# أ¢إ“â€¦ Catalog products/services endpoint /api/company/products/
+# أ¢إ“â€¦ Sales module endpoint /api/company/sales/
+# أ¢إ“â€¦ Sales invoices endpoint /api/company/sales/invoices/
+# أ¢إ“â€¦ Purchases module endpoint /api/company/purchases/
+# أ¢إ“â€¦ Purchase bills endpoint /api/company/purchases/bills/
+# أ¢إ“â€¦ Inventory module endpoint /api/company/inventory/
+# أ¢إ“â€¦ Accounting module endpoint /api/company/accounting/
+# أ¢إ“â€¦ Treasury module endpoint /api/company/treasury/
+# أ¢إ“â€¦ Company payments endpoint /api/company/payments/
+# أ¢إ“â€¦ Company context comes from active CompanyMembership
+# أ¢إ“â€¦ Views protected by central api/permissions.py guards
 # ------------------------------------------------------------
-# ط§ظ„ظ‚ط§ط¹ط¯ط© ط§ظ„ظ…ط¹طھظ…ط¯ط©:
-# - ظ‡ط°ط§ ط§ظ„ظ…ظ„ظپ ظ‡ظˆ ظ†ظ‚ط·ط© طھط¬ظ…ظٹط¹ APIs ط§ظ„ط®ط§طµط© ط¨ظ…ط³ط§ط­ط© ط§ظ„ط´ط±ظƒط©
-# - ظ„ط§ ظ†ط¶ط¹ ظ…ظ†ط·ظ‚ business ط¯ط§ط®ظ„ urls.py
-# - ظƒظ„ ظˆط­ط¯ط© ط¯ط§ط®ظ„ /api/company/ ظٹظƒظˆظ† ظ„ظ‡ط§ urls.py ظ…ط³طھظ‚ظ„ ط¹ظ†ط¯ ط¥ظ†ط´ط§ط¦ظ‡ط§
-# - ط¬ظ…ظٹط¹ Views ط¯ط§ط®ظ„ /api/company/ ظٹط¬ط¨ ط£ظ† طھط³طھط®ط¯ظ… api/permissions.py
-# - ط§ظ„ط´ط±ظƒط© ط§ظ„ط­ط§ظ„ظٹط© ظ„ط§ طھط¤ط®ط° ظ…ظ† ط§ظ„ظپط±ظˆظ†طھ ظƒظ…طµط¯ط± ط«ظ‚ط©
-# - CompanyMembership ظ‡ظˆ ط­ط¯ ط§ظ„ط¹ط²ظ„ ط§ظ„ط±ط³ظ…ظٹ ظ„ظ„ط´ط±ظƒط§طھ
-# - ظƒطھط§ظ„ظˆط¬ ط§ظ„ط´ط±ظƒط© ط¯ط§ط®ظ„ /company ظ…ط¹ط²ظˆظ„ ط­ط³ط¨ ط§ظ„ط´ط±ظƒط© ط§ظ„ط­ط§ظ„ظٹط© ظپظ‚ط·
-# - CatalogItem ظ‡ظˆ ط§ظ„ط£ط³ط§ط³ ط§ظ„ظ…ظˆط­ط¯ ظ„ظ„ظ…ظ†طھط¬ط§طھ ظˆط§ظ„ط®ط¯ظ…ط§طھ
-# - ظ…ط¨ظٹط¹ط§طھ ط§ظ„ط´ط±ظƒط© ط¯ط§ط®ظ„ /company/sales ظˆطھط¹طھظ…ط¯ ط¹ظ„ظ‰ SalesInvoice/SalesInvoiceItem
-# - ظ…ط´طھط±ظٹط§طھ ط§ظ„ط´ط±ظƒط© ط¯ط§ط®ظ„ /company/purchases ظˆطھط¹طھظ…ط¯ ط¹ظ„ظ‰ PurchaseBill/PurchaseBillItem
-# - ط·ط±ظ‚ ط§ظ„ط¯ظپط¹ ط¯ط§ط®ظ„ /company/payments ظˆطھط¹طھظ…ط¯ ط¹ظ„ظ‰ CompanyPaymentMethod/Gateway/Terminal
-# - ط¯ظپط¹ ط§ط´طھط±ط§ظƒط§طھ PrimeyAcc ظ„ظ„ظ…ظ†طµط© ظ…ظ†ظپطµظ„ ط¹ظ† ط·ط±ظ‚ ط¯ظپط¹ ط§ظ„ط´ط±ظƒط§طھ ظ„ط¹ظ…ظ„ط§ط¦ظ‡ط§
+# ط·آ§ط¸â€‍ط¸â€ڑط·آ§ط·آ¹ط·آ¯ط·آ© ط·آ§ط¸â€‍ط¸â€¦ط·آ¹ط·ع¾ط¸â€¦ط·آ¯ط·آ©:
+# - ط¸â€،ط·آ°ط·آ§ ط·آ§ط¸â€‍ط¸â€¦ط¸â€‍ط¸ظ¾ ط¸â€،ط¸ث† ط¸â€ ط¸â€ڑط·آ·ط·آ© ط·ع¾ط·آ¬ط¸â€¦ط¸ظ¹ط·آ¹ APIs ط·آ§ط¸â€‍ط·آ®ط·آ§ط·آµط·آ© ط·آ¨ط¸â€¦ط·آ³ط·آ§ط·آ­ط·آ© ط·آ§ط¸â€‍ط·آ´ط·آ±ط¸ئ’ط·آ©
+# - ط¸â€‍ط·آ§ ط¸â€ ط·آ¶ط·آ¹ ط¸â€¦ط¸â€ ط·آ·ط¸â€ڑ business ط·آ¯ط·آ§ط·آ®ط¸â€‍ urls.py
+# - ط¸ئ’ط¸â€‍ ط¸ث†ط·آ­ط·آ¯ط·آ© ط·آ¯ط·آ§ط·آ®ط¸â€‍ /api/company/ ط¸ظ¹ط¸ئ’ط¸ث†ط¸â€  ط¸â€‍ط¸â€،ط·آ§ urls.py ط¸â€¦ط·آ³ط·ع¾ط¸â€ڑط¸â€‍ ط·آ¹ط¸â€ ط·آ¯ ط·آ¥ط¸â€ ط·آ´ط·آ§ط·آ¦ط¸â€،ط·آ§
+# - ط·آ¬ط¸â€¦ط¸ظ¹ط·آ¹ Views ط·آ¯ط·آ§ط·آ®ط¸â€‍ /api/company/ ط¸ظ¹ط·آ¬ط·آ¨ ط·آ£ط¸â€  ط·ع¾ط·آ³ط·ع¾ط·آ®ط·آ¯ط¸â€¦ api/permissions.py
+# - ط·آ§ط¸â€‍ط·آ´ط·آ±ط¸ئ’ط·آ© ط·آ§ط¸â€‍ط·آ­ط·آ§ط¸â€‍ط¸ظ¹ط·آ© ط¸â€‍ط·آ§ ط·ع¾ط·آ¤ط·آ®ط·آ° ط¸â€¦ط¸â€  ط·آ§ط¸â€‍ط¸ظ¾ط·آ±ط¸ث†ط¸â€ ط·ع¾ ط¸ئ’ط¸â€¦ط·آµط·آ¯ط·آ± ط·آ«ط¸â€ڑط·آ©
+# - CompanyMembership ط¸â€،ط¸ث† ط·آ­ط·آ¯ ط·آ§ط¸â€‍ط·آ¹ط·آ²ط¸â€‍ ط·آ§ط¸â€‍ط·آ±ط·آ³ط¸â€¦ط¸ظ¹ ط¸â€‍ط¸â€‍ط·آ´ط·آ±ط¸ئ’ط·آ§ط·ع¾
+# - ط¸ئ’ط·ع¾ط·آ§ط¸â€‍ط¸ث†ط·آ¬ ط·آ§ط¸â€‍ط·آ´ط·آ±ط¸ئ’ط·آ© ط·آ¯ط·آ§ط·آ®ط¸â€‍ /company ط¸â€¦ط·آ¹ط·آ²ط¸ث†ط¸â€‍ ط·آ­ط·آ³ط·آ¨ ط·آ§ط¸â€‍ط·آ´ط·آ±ط¸ئ’ط·آ© ط·آ§ط¸â€‍ط·آ­ط·آ§ط¸â€‍ط¸ظ¹ط·آ© ط¸ظ¾ط¸â€ڑط·آ·
+# - CatalogItem ط¸â€،ط¸ث† ط·آ§ط¸â€‍ط·آ£ط·آ³ط·آ§ط·آ³ ط·آ§ط¸â€‍ط¸â€¦ط¸ث†ط·آ­ط·آ¯ ط¸â€‍ط¸â€‍ط¸â€¦ط¸â€ ط·ع¾ط·آ¬ط·آ§ط·ع¾ ط¸ث†ط·آ§ط¸â€‍ط·آ®ط·آ¯ط¸â€¦ط·آ§ط·ع¾
+# - ط¸â€¦ط·آ¨ط¸ظ¹ط·آ¹ط·آ§ط·ع¾ ط·آ§ط¸â€‍ط·آ´ط·آ±ط¸ئ’ط·آ© ط·آ¯ط·آ§ط·آ®ط¸â€‍ /company/sales ط¸ث†ط·ع¾ط·آ¹ط·ع¾ط¸â€¦ط·آ¯ ط·آ¹ط¸â€‍ط¸â€° SalesInvoice/SalesInvoiceItem
+# - ط¸â€¦ط·آ´ط·ع¾ط·آ±ط¸ظ¹ط·آ§ط·ع¾ ط·آ§ط¸â€‍ط·آ´ط·آ±ط¸ئ’ط·آ© ط·آ¯ط·آ§ط·آ®ط¸â€‍ /company/purchases ط¸ث†ط·ع¾ط·آ¹ط·ع¾ط¸â€¦ط·آ¯ ط·آ¹ط¸â€‍ط¸â€° PurchaseBill/PurchaseBillItem
+# - ط·آ·ط·آ±ط¸â€ڑ ط·آ§ط¸â€‍ط·آ¯ط¸ظ¾ط·آ¹ ط·آ¯ط·آ§ط·آ®ط¸â€‍ /company/payments ط¸ث†ط·ع¾ط·آ¹ط·ع¾ط¸â€¦ط·آ¯ ط·آ¹ط¸â€‍ط¸â€° CompanyPaymentMethod/Gateway/Terminal
+# - ط·آ¯ط¸ظ¾ط·آ¹ ط·آ§ط·آ´ط·ع¾ط·آ±ط·آ§ط¸ئ’ط·آ§ط·ع¾ PrimeyAcc ط¸â€‍ط¸â€‍ط¸â€¦ط¸â€ ط·آµط·آ© ط¸â€¦ط¸â€ ط¸ظ¾ط·آµط¸â€‍ ط·آ¹ط¸â€  ط·آ·ط·آ±ط¸â€ڑ ط·آ¯ط¸ظ¾ط·آ¹ ط·آ§ط¸â€‍ط·آ´ط·آ±ط¸ئ’ط·آ§ط·ع¾ ط¸â€‍ط·آ¹ط¸â€¦ط¸â€‍ط·آ§ط·آ¦ط¸â€،ط·آ§
 # ============================================================
 
 from __future__ import annotations
@@ -49,11 +49,11 @@ from django.urls import include, path
 from .me import company_me
 from .profile import company_profile
 
-
 app_name = "company"
 
-
 urlpatterns = [
+
+    path("business-controls/", include("api.company.business_controls.urls")),
     path('jewelry/', include('api.company.jewelry.urls')),
     path("activity-backends/", include("api.company.activity_backends.urls")),
     path("me/", company_me, name="me"),
