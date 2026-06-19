@@ -927,3 +927,331 @@ class CompanyPaymentsAPITests(CompanyPaymentsAPITestFactoryMixin, TestCase):
         self.assertEqual(terminal.provider_name, "Mada")
         self.assertEqual(terminal.status, CompanyPaymentTerminal.TerminalStatus.MAINTENANCE)
         self.assertFalse(terminal.is_active)
+
+
+# ============================================================
+# Phase 23 Real Payment Integrations & Settlements Tests
+# ============================================================
+
+from payments.models import (
+    PaymentCheckoutSession,
+    PaymentWebhookEvent,
+    PaymentSettlementBatch,
+    PaymentSettlementItem,
+)
+from payments.services import (
+    add_settlement_item,
+    calculate_payment_gateway_fee,
+    complete_checkout_session,
+    create_checkout_session,
+    create_settlement_batch,
+    finalize_settlement_batch,
+    process_payment_webhook_event,
+    record_payment_webhook_event,
+)
+
+
+class CompanyPaymentsPhase23FoundationTests(CompanyPaymentsAPITestFactoryMixin, TestCase):
+    """
+    Service and API tests for Phase 23 real payment integrations and settlements.
+    """
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        cls.company = cls.create_company(
+            name="PrimeyAcc Phase 23 Company",
+            code="PAY-PH23-A",
+            city="Jeddah",
+        )
+        cls.other_company = cls.create_company(
+            name="PrimeyAcc Phase 23 Other",
+            code="PAY-PH23-B",
+            city="Riyadh",
+        )
+        cls.user = cls.create_user_with_company_membership(
+            username="phase23_owner",
+            email="phase23-owner@example.com",
+            company=cls.company,
+            role=CompanyRole.OWNER,
+        )
+        cls.gateway = cls.create_gateway(
+            company=cls.company,
+            name="Phase 23 Gateway",
+            code="phase-23-gateway",
+        )
+        cls.method = create_payment_method(
+            company=cls.company,
+            payload={
+                "gateway": cls.gateway,
+                "name": "Phase 23 Online Card",
+                "code": "phase-23-online-card",
+                "method_type": CompanyPaymentMethod.MethodType.ONLINE_GATEWAY,
+                "settlement_behavior": CompanyPaymentMethod.SettlementBehavior.NEEDS_SETTLEMENT,
+                "fee_percentage": "2.5000",
+                "fixed_fee": "1.00",
+                "allow_customer_checkout": True,
+                "allow_pos": False,
+                "is_active": True,
+            },
+        )
+
+    def setUp(self) -> None:
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def test_phase23_models_have_required_fields(self):
+        checkout_fields = {field.name for field in PaymentCheckoutSession._meta.fields}
+        webhook_fields = {field.name for field in PaymentWebhookEvent._meta.fields}
+        batch_fields = {field.name for field in PaymentSettlementBatch._meta.fields}
+        item_fields = {field.name for field in PaymentSettlementItem._meta.fields}
+
+        self.assertIn("external_checkout_id", checkout_fields)
+        self.assertIn("external_payment_id", checkout_fields)
+        self.assertIn("idempotency_key", checkout_fields)
+        self.assertIn("gateway_fee_amount", checkout_fields)
+        self.assertIn("net_amount", checkout_fields)
+
+        self.assertIn("external_event_id", webhook_fields)
+        self.assertIn("payload", webhook_fields)
+        self.assertIn("signature", webhook_fields)
+        self.assertIn("processed_at", webhook_fields)
+
+        self.assertIn("settlement_reference", batch_fields)
+        self.assertIn("gross_amount", batch_fields)
+        self.assertIn("fee_amount", batch_fields)
+        self.assertIn("net_amount", batch_fields)
+
+        self.assertIn("checkout_session", item_fields)
+        self.assertIn("webhook_event", item_fields)
+        self.assertIn("external_payment_id", item_fields)
+
+    def test_gateway_fee_calculation(self):
+        fee = calculate_payment_gateway_fee(
+            amount="100.00",
+            fee_percentage="2.5000",
+            fixed_fee="1.00",
+        )
+
+        self.assertEqual(str(fee), "3.50")
+
+    def test_create_checkout_session_calculates_fee_and_net_amount(self):
+        session = create_checkout_session(
+            self.company,
+            {
+                "payment_method": self.method,
+                "gateway": self.gateway,
+                "amount": "100.00",
+                "description": "Phase 23 checkout",
+                "idempotency_key": "checkout-key-001",
+            },
+        )
+
+        self.assertEqual(session.company_id, self.company.id)
+        self.assertEqual(session.status, PaymentCheckoutSession.Status.PENDING)
+        self.assertEqual(str(session.gateway_fee_amount), "3.50")
+        self.assertEqual(str(session.net_amount), "96.50")
+
+    def test_checkout_session_idempotency_returns_existing_session(self):
+        first = create_checkout_session(
+            self.company,
+            {
+                "payment_method": self.method,
+                "gateway": self.gateway,
+                "amount": "100.00",
+                "idempotency_key": "checkout-key-duplicate",
+            },
+        )
+        second = create_checkout_session(
+            self.company,
+            {
+                "payment_method": self.method,
+                "gateway": self.gateway,
+                "amount": "100.00",
+                "idempotency_key": "checkout-key-duplicate",
+            },
+        )
+
+        self.assertEqual(first.id, second.id)
+
+    def test_webhook_can_complete_checkout_session(self):
+        session = create_checkout_session(
+            self.company,
+            {
+                "payment_method": self.method,
+                "gateway": self.gateway,
+                "amount": "250.00",
+                "idempotency_key": "checkout-webhook-paid",
+            },
+        )
+
+        event = record_payment_webhook_event(
+            self.company,
+            {
+                "gateway": self.gateway,
+                "checkout_session": session,
+                "event_type": "payment.paid",
+                "external_event_id": "evt-paid-001",
+                "external_payment_id": "pay-001",
+                "payload": {"status": "paid"},
+            },
+        )
+        process_payment_webhook_event(
+            event,
+            checkout_session=session,
+            payment_status="paid",
+            external_payment_id="pay-001",
+        )
+
+        session.refresh_from_db()
+        event.refresh_from_db()
+
+        self.assertEqual(session.status, PaymentCheckoutSession.Status.PAID)
+        self.assertEqual(session.external_payment_id, "pay-001")
+        self.assertEqual(event.status, PaymentWebhookEvent.Status.PROCESSED)
+
+    def test_settlement_batch_totals_and_finalize(self):
+        session = create_checkout_session(
+            self.company,
+            {
+                "payment_method": self.method,
+                "gateway": self.gateway,
+                "amount": "100.00",
+                "idempotency_key": "settlement-checkout-001",
+            },
+        )
+        complete_checkout_session(session, external_payment_id="pay-settle-001")
+
+        batch = create_settlement_batch(
+            self.company,
+            {
+                "gateway": self.gateway,
+                "payment_method": self.method,
+                "settlement_reference": "SETTLE-001",
+            },
+        )
+
+        add_settlement_item(
+            batch,
+            {
+                "checkout_session": session,
+                "external_payment_id": "pay-settle-001",
+                "gross_amount": session.amount,
+                "fee_amount": session.gateway_fee_amount,
+            },
+        )
+
+        batch.refresh_from_db()
+
+        self.assertEqual(str(batch.gross_amount), "100.00")
+        self.assertEqual(str(batch.fee_amount), "3.50")
+        self.assertEqual(str(batch.net_amount), "96.50")
+
+        finalize_settlement_batch(batch)
+        batch.refresh_from_db()
+
+        self.assertEqual(batch.status, PaymentSettlementBatch.Status.POSTED)
+        self.assertIsNotNone(batch.posted_at)
+
+    def test_checkout_api_create_and_list(self):
+        response = self.client.post(
+            "/api/company/payments/checkout/",
+            data={
+                "payment_method_id": self.method.id,
+                "gateway_id": self.gateway.id,
+                "amount": "150.00",
+                "description": "API checkout",
+                "idempotency_key": "api-checkout-001",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["item"]["status"], PaymentCheckoutSession.Status.PENDING)
+
+        list_response = self.client.get("/api/company/payments/checkout/")
+        self.assertEqual(list_response.status_code, 200)
+        self.assertTrue(list_response.data["success"])
+        self.assertGreaterEqual(list_response.data["count"], 1)
+
+    def test_webhook_api_marks_checkout_paid(self):
+        session = create_checkout_session(
+            self.company,
+            {
+                "payment_method": self.method,
+                "gateway": self.gateway,
+                "amount": "175.00",
+                "idempotency_key": "api-webhook-checkout-001",
+            },
+        )
+
+        response = self.client.post(
+            "/api/company/payments/webhooks/",
+            data={
+                "gateway_id": self.gateway.id,
+                "checkout_session_id": session.id,
+                "event_type": "payment.paid",
+                "external_event_id": "api-evt-paid-001",
+                "external_payment_id": "api-pay-001",
+                "payment_status": "paid",
+                "payload": {"status": "paid"},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["success"])
+
+        session.refresh_from_db()
+        self.assertEqual(session.status, PaymentCheckoutSession.Status.PAID)
+        self.assertEqual(session.external_payment_id, "api-pay-001")
+
+    def test_settlement_api_create_add_item_and_finalize(self):
+        session = create_checkout_session(
+            self.company,
+            {
+                "payment_method": self.method,
+                "gateway": self.gateway,
+                "amount": "210.00",
+                "idempotency_key": "api-settlement-checkout-001",
+            },
+        )
+        complete_checkout_session(session, external_payment_id="api-pay-settle-001")
+
+        create_response = self.client.post(
+            "/api/company/payments/settlements/",
+            data={
+                "gateway_id": self.gateway.id,
+                "payment_method_id": self.method.id,
+                "settlement_reference": "API-SETTLE-001",
+            },
+            format="json",
+        )
+
+        self.assertEqual(create_response.status_code, 201)
+        self.assertTrue(create_response.data["success"])
+
+        batch_id = create_response.data["item"]["id"]
+
+        item_response = self.client.post(
+            f"/api/company/payments/settlements/{batch_id}/items/",
+            data={
+                "checkout_session_id": session.id,
+                "external_payment_id": "api-pay-settle-001",
+            },
+            format="json",
+        )
+
+        self.assertEqual(item_response.status_code, 201)
+        self.assertTrue(item_response.data["success"])
+        self.assertEqual(item_response.data["item"]["gross_amount"], "210.00")
+
+        status_response = self.client.post(
+            f"/api/company/payments/settlements/{batch_id}/status/",
+            data={"status": "POSTED"},
+            format="json",
+        )
+
+        self.assertEqual(status_response.status_code, 200)
+        self.assertTrue(status_response.data["success"])
+        self.assertEqual(status_response.data["item"]["status"], PaymentSettlementBatch.Status.POSTED)

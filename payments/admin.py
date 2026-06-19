@@ -145,3 +145,146 @@ class CompanyPaymentTerminalAdmin(admin.ModelAdmin):
         "branch_id",
         "name",
     )
+
+
+# ============================================================
+# 🧠 PrimeyAcc | Phase 23 Payment Integrations Admin
+# ============================================================
+
+from .models import (
+    PaymentCheckoutSession,
+    PaymentWebhookEvent,
+    PaymentSettlementBatch,
+    PaymentSettlementItem,
+)
+
+
+@admin.register(PaymentCheckoutSession)
+class PaymentCheckoutSessionAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "company",
+        "gateway",
+        "payment_method",
+        "source_type",
+        "source_id",
+        "amount",
+        "currency_code",
+        "gateway_fee_amount",
+        "net_amount",
+        "status",
+        "external_checkout_id",
+        "external_payment_id",
+        "paid_at",
+        "created_at",
+    )
+    list_filter = (
+        "status",
+        "source_type",
+        "currency_code",
+        "gateway",
+        "payment_method",
+        "created_at",
+        "paid_at",
+    )
+    search_fields = (
+        "external_checkout_id",
+        "external_payment_id",
+        "idempotency_key",
+        "description",
+        "customer_email",
+        "customer_phone",
+        "company__name",
+    )
+    readonly_fields = (
+        "gateway_fee_amount",
+        "net_amount",
+        "paid_at",
+        "created_at",
+        "updated_at",
+    )
+    ordering = ("-created_at", "-id")
+
+
+@admin.register(PaymentWebhookEvent)
+class PaymentWebhookEventAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "company",
+        "gateway",
+        "checkout_session",
+        "event_type",
+        "external_event_id",
+        "external_payment_id",
+        "status",
+        "processed_at",
+        "created_at",
+    )
+    list_filter = (
+        "status",
+        "event_type",
+        "gateway",
+        "created_at",
+        "processed_at",
+    )
+    search_fields = (
+        "external_event_id",
+        "external_payment_id",
+        "idempotency_key",
+        "event_type",
+        "company__name",
+    )
+    readonly_fields = (
+        "created_at",
+        "processed_at",
+    )
+    ordering = ("-created_at", "-id")
+
+
+class PaymentSettlementItemInline(admin.TabularInline):
+    model = PaymentSettlementItem
+    extra = 0
+    readonly_fields = (
+        "net_amount",
+        "created_at",
+    )
+
+
+@admin.register(PaymentSettlementBatch)
+class PaymentSettlementBatchAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "company",
+        "gateway",
+        "payment_method",
+        "settlement_reference",
+        "status",
+        "gross_amount",
+        "fee_amount",
+        "net_amount",
+        "settlement_date",
+        "posted_at",
+        "created_at",
+    )
+    list_filter = (
+        "status",
+        "gateway",
+        "payment_method",
+        "settlement_date",
+        "created_at",
+    )
+    search_fields = (
+        "settlement_reference",
+        "company__name",
+        "notes",
+    )
+    readonly_fields = (
+        "gross_amount",
+        "fee_amount",
+        "net_amount",
+        "posted_at",
+        "created_at",
+        "updated_at",
+    )
+    inlines = [PaymentSettlementItemInline]
+    ordering = ("-created_at", "-id")

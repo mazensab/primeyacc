@@ -25,4 +25,7 @@ urlpatterns = [
     path("methods/", include("api.company.payments.methods.urls")),
     path("gateways/", include("api.company.payments.gateways.urls")),
     path("terminals/", include("api.company.payments.terminals.urls")),
+    path("checkout/", include("api.company.payments.checkout.urls")),
+    path("webhooks/", include("api.company.payments.webhooks.urls")),
+    path("settlements/", include("api.company.payments.settlements.urls")),
 ]
