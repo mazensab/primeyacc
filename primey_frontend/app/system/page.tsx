@@ -167,11 +167,11 @@ type CustomerStatusFilter = "all" | "active" | "inactive" | "blocked";
 type SortKey = "newest" | "oldest" | "amount_high" | "amount_low" | "name";
 
 const API_ENDPOINTS = {
-  customers: "/api/customers/",
-  orders: "/api/orders/",
-  invoices: "/api/invoices/",
-  payments: "/api/payments/",
-  products: "/api/products/",
+  customers: "/api/company/customers/",
+  orders: "/api/company/sales/orders/",
+  invoices: "/api/company/sales/invoices/",
+  payments: "/api/company/payments/",
+  products: "/api/company/products/",
   providers: "/api/providers/",
   agents: "/api/agents/",
   notifications: "/api/notifications/inbox/",

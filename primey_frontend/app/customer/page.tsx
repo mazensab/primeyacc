@@ -7,9 +7,9 @@
    ✅ صفحة محتوى فقط داخل customer/layout الموحد
    ✅ الصفحة الرئيسية للعميل تعرض المنتجات والبطاقات والعروض والشبكة الطبية
    ✅ لا تعرض "لوحة العميل" أو "Primey Care — مساحة العميل"
-   ✅ تعتمد على /api/customers/me/ كبيانات عميل اختيارية
-   ✅ تجلب المنتجات الرئيسية من /api/products/landing/
-   ✅ تجلب العروض الحقيقية من /api/products/offers/
+   ✅ تعتمد على /api/company/customers/me/ كبيانات عميل اختيارية
+   ✅ تجلب المنتجات الرئيسية من /api/company/products/landing/
+   ✅ تجلب العروض الحقيقية من /api/company/products/offers/
    ✅ تجلب مقدمي الخدمة المتعاقدين من /api/providers/?has_active_contracts=true
    ✅ معالجة آمنة للصور الخارجية بدون كسر next/image
    ✅ w-full space-y-4
@@ -1098,12 +1098,12 @@ export default function CustomerHomePage() {
 
     const [customerResult, landingResult, offersResult, providersResult] =
       await Promise.all([
-        safeFetch("/api/customers/me/"),
+        safeFetch("/api/company/customers/me/"),
         safeFetch(
-          "/api/products/landing/?page=1&page_size=12&include_children=false&sort=contracted",
+          "/api/company/products/landing/?page=1&page_size=12&include_children=false&sort=contracted",
         ),
         safeFetch(
-          "/api/products/offers/?page=1&page_size=12&include_children=false&sort=highest_discount",
+          "/api/company/products/offers/?page=1&page_size=12&include_children=false&sort=highest_discount",
         ),
         safeFetch(
           "/api/providers/?page=1&page_size=8&is_active=true&has_active_contracts=true&sort=highest_discount",
