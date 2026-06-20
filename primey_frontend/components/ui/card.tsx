@@ -1,0 +1,116 @@
+import * as React from "react";
+
+import { cn } from "@/lib/utils";
+
+/* =====================================================
+   📂 components/ui/card.tsx
+   🧠 Primey Care — Premium Card
+   -----------------------------------------------------
+   ✅ نفس روح العنصر النشط في السايدر
+   ✅ تدرج بنفسجي خفيف وناعم
+   ✅ أبيض موحد بدون رمادي ثقيل
+   ✅ يحافظ على Card API بدون كسر الصفحات
+===================================================== */
+
+function Card({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card"
+      className={cn(
+        [
+          "relative isolate flex flex-col gap-6 overflow-hidden rounded-3xl border py-6",
+          "border-primary/10 bg-gradient-to-br from-white via-primary/[0.025] to-primary/[0.075]",
+          "text-card-foreground shadow-[0_16px_40px_rgba(67,42,88,0.075)]",
+          "backdrop-blur-xl transition-all duration-200",
+          "before:pointer-events-none before:absolute before:inset-0 before:-z-10 before:content-['']",
+          "before:bg-[radial-gradient(circle_at_top_right,rgba(67,42,88,0.08),transparent_36%),linear-gradient(135deg,rgba(255,255,255,0.92),rgba(255,255,255,0.62),rgba(67,42,88,0.035))]",
+          "after:pointer-events-none after:absolute after:inset-0 after:-z-10 after:content-['']",
+          "after:bg-[linear-gradient(180deg,rgba(255,255,255,0.72),rgba(255,255,255,0.18))]",
+          "hover:border-primary/15 hover:shadow-[0_18px_48px_rgba(67,42,88,0.095)]",
+          "dark:border-white/10 dark:bg-gradient-to-br dark:from-white/[0.075] dark:via-primary/[0.10] dark:to-white/[0.025]",
+          "dark:text-card-foreground dark:shadow-[0_18px_48px_rgba(0,0,0,0.30)]",
+          "dark:before:bg-[radial-gradient(circle_at_top_right,rgba(211,216,236,0.12),transparent_38%),linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.035),rgba(211,216,236,0.055))]",
+          "dark:after:bg-[linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.015))]",
+        ].join(" "),
+        className
+      )}
+      {...props}
+    />
+  );
+}
+
+function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-header"
+      className={cn(
+        "@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-2 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6",
+        className
+      )}
+      {...props}
+    />
+  );
+}
+
+function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-title"
+      className={cn("leading-none font-semibold", className)}
+      {...props}
+    />
+  );
+}
+
+function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-description"
+      className={cn("text-sm text-muted-foreground", className)}
+      {...props}
+    />
+  );
+}
+
+function CardAction({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-action"
+      className={cn(
+        "col-start-2 row-span-2 row-start-1 self-start justify-self-end",
+        className
+      )}
+      {...props}
+    />
+  );
+}
+
+function CardContent({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-content"
+      className={cn("px-6", className)}
+      {...props}
+    />
+  );
+}
+
+function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-footer"
+      className={cn("flex items-center px-6 [.border-t]:pt-6", className)}
+      {...props}
+    />
+  );
+}
+
+export {
+  Card,
+  CardHeader,
+  CardFooter,
+  CardTitle,
+  CardAction,
+  CardDescription,
+  CardContent,
+};

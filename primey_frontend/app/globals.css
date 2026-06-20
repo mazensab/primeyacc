@@ -1,0 +1,260 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--bricolage-grotesque);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+  --animate-scroll: scroll var(--animation-duration, 40s)
+    var(--animation-direction, forwards) linear infinite;
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+
+  @keyframes scroll {
+    to {
+      transform: translate(calc(-50% - 0.5rem));
+    }
+  }
+}
+
+:root {
+  --radius: 0.625rem;
+
+  /* ======================================================
+     Primey Care Brand Colors
+     Primary:   #432a58
+     Secondary: #8c9cdc
+
+     Layout direction:
+     - Keep the workspace background visually white and unified.
+     - Keep Primey purple as action/brand color only.
+  ====================================================== */
+
+  --background: #ffffff;
+  --foreground: #18121f;
+
+  --card: #ffffff;
+  --card-foreground: #18121f;
+
+  --popover: #ffffff;
+  --popover-foreground: #18121f;
+
+  --primary: #432a58;
+  --primary-foreground: #ffffff;
+
+  --secondary: #f8fafc;
+  --secondary-foreground: #18121f;
+
+  --muted: #ffffff;
+  --muted-foreground: #6b7280;
+
+  --accent: #ffffff;
+  --accent-foreground: #432a58;
+
+  --destructive: #dc2626;
+
+  --border: #edf0f4;
+  --input: #edf0f4;
+  --ring: #8c9cdc;
+
+  --chart-1: #432a58;
+  --chart-2: #8c9cdc;
+  --chart-3: #6d4c82;
+  --chart-4: #b6c1f3;
+  --chart-5: #d8ddfb;
+
+  --sidebar: #ffffff;
+  --sidebar-foreground: #18121f;
+  --sidebar-primary: #432a58;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ffffff;
+  --sidebar-accent-foreground: #432a58;
+  --sidebar-border: #edf0f4;
+  --sidebar-ring: #8c9cdc;
+}
+
+.dark {
+  --background: #15101b;
+  --foreground: #f8f5fb;
+
+  --card: #1f1728;
+  --card-foreground: #f8f5fb;
+
+  --popover: #1f1728;
+  --popover-foreground: #f8f5fb;
+
+  --primary: #d3d8ec;
+  --primary-foreground: #15101b;
+
+  --secondary: #432a58;
+  --secondary-foreground: #ffffff;
+
+  --muted: #261d31;
+  --muted-foreground: #c8bfd0;
+
+  --accent: #332340;
+  --accent-foreground: #f8f5fb;
+
+  --destructive: #f87171;
+
+  --border: rgb(255 255 255 / 12%);
+  --input: rgb(255 255 255 / 16%);
+  --ring: #8c9cdc;
+
+  --chart-1: #8c9cdc;
+  --chart-2: #b6c1f3;
+  --chart-3: #6d4c82;
+  --chart-4: #d8ddfb;
+  --chart-5: #432a58;
+
+  --sidebar: #1f1728;
+  --sidebar-foreground: #f8f5fb;
+  --sidebar-primary: #8c9cdc;
+  --sidebar-primary-foreground: #15101b;
+  --sidebar-accent: #261d31;
+  --sidebar-accent-foreground: #f8f5fb;
+  --sidebar-border: rgb(255 255 255 / 12%);
+  --sidebar-ring: #8c9cdc;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    direction: rtl;
+    scroll-behavior: smooth;
+    background: var(--background);
+  }
+
+  html[dir="ltr"] {
+    direction: ltr;
+  }
+
+  html[dir="rtl"] {
+    direction: rtl;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    min-height: 100vh;
+    direction: inherit;
+    text-align: start;
+    font-family: var(--font-sans), sans-serif;
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+  }
+
+  input,
+  textarea {
+    text-align: start;
+  }
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-sans);
+}
+
+.btn-bezel {
+  box-shadow:
+    inset 0 2px 0 0 hsla(0, 0%, 100%, 0.25),
+    inset 0 -1px 0 0 rgba(67, 42, 88, 0.2),
+    0 2px 6px 0 rgba(67, 42, 88, 0.12);
+}
+
+@utility container {
+  margin-inline: auto;
+  padding-inline: 1.5rem;
+
+  @media (width >= --theme(--breakpoint-sm)) {
+    max-width: none;
+  }
+
+  @media (width >= 1400px) {
+    max-width: 1400px;
+  }
+}
+
+/* ======================================================
+   RTL / LTR HELPERS
+====================================================== */
+
+[dir="rtl"] .rtl-flip-x {
+  transform: scaleX(-1);
+}
+
+[dir="ltr"] .rtl-flip-x {
+  transform: scaleX(1);
+}
+
+[dir="rtl"] .force-ltr {
+  direction: ltr;
+  text-align: left;
+}
+
+[dir="ltr"] .force-rtl {
+  direction: rtl;
+  text-align: right;
+}
