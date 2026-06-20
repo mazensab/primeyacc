@@ -1,20 +1,20 @@
-"use client";
+﻿"use client";
 
 // ======================================================
-// 🔐 Primey Care — Auth Provider
-// 🚀 الإصدار: Auth Provider V2.2
+// ًں”گ PrimeyAcc â€” Auth Provider
+// ًںڑ€ ط§ظ„ط¥طµط¯ط§ط±: Auth Provider V2.2
 // ------------------------------------------------------
-// ✅ Session-based auth
-// ✅ يدعم Primey Care workspaces
-// ✅ يدعم role / workspace / user_type من whoami
-// ✅ يدعم permission_codes
-// ✅ يدعم permissions.codes
-// ✅ يدعم profile_permissions.codes
-// ✅ متوافق مع lib/permissions.ts
-// ✅ متوافق مع Sidebar / Pages / Actions Guards
-// ✅ provider هو الرسمي مع دعم company/center كتوافق خلفي
-// ✅ تحديث اللغة من profile.preferred_language عند توفرها
-// ✅ إصلاح TypeScript: inferWorkspaceFromRole لا يستقبل undefined
+// âœ… Session-based auth
+// âœ… ظٹط¯ط¹ظ… PrimeyAcc workspaces
+// âœ… ظٹط¯ط¹ظ… role / workspace / user_type ظ…ظ† whoami
+// âœ… ظٹط¯ط¹ظ… permission_codes
+// âœ… ظٹط¯ط¹ظ… permissions.codes
+// âœ… ظٹط¯ط¹ظ… profile_permissions.codes
+// âœ… ظ…طھظˆط§ظپظ‚ ظ…ط¹ lib/permissions.ts
+// âœ… ظ…طھظˆط§ظپظ‚ ظ…ط¹ Sidebar / Pages / Actions Guards
+// âœ… provider ظ‡ظˆ ط§ظ„ط±ط³ظ…ظٹ ظ…ط¹ ط¯ط¹ظ… company/center ظƒطھظˆط§ظپظ‚ ط®ظ„ظپظٹ
+// âœ… طھط­ط¯ظٹط« ط§ظ„ظ„ط؛ط© ظ…ظ† profile.preferred_language ط¹ظ†ط¯ طھظˆظپط±ظ‡ط§
+// âœ… ط¥طµظ„ط§ط­ TypeScript: inferWorkspaceFromRole ظ„ط§ ظٹط³طھظ‚ط¨ظ„ undefined
 // ======================================================
 
 import React, {
@@ -31,7 +31,7 @@ import { usePathname, useRouter } from "next/navigation";
 // TYPES
 // ======================================================
 
-export type AppWorkspace = "system" | "provider" | "customer" | "agent";
+export type AppWorkspace = "system" | "company" | "customer" | "agent";
 
 export type AppRole =
   | "system_admin"
@@ -259,7 +259,7 @@ const ROLE_WORKSPACE_MAP: Record<AppRole, AppWorkspace> = {
   accountant: "system",
   support: "system",
   viewer: "system",
-  provider_admin: "provider",
+  provider_admin: "company",
   customer_user: "customer",
   agent_user: "agent",
 };
@@ -304,13 +304,11 @@ function normalizeWorkspace(value: unknown): AppWorkspace | string | null {
 
   if (!workspace) return null;
 
-  if (workspace === "company" || workspace === "center") {
-    return "provider";
-  }
+  if (workspace === "company" || workspace === "center") { return "company"; }
 
   if (
     workspace === "system" ||
-    workspace === "provider" ||
+    workspace === "company" ||
     workspace === "customer" ||
     workspace === "agent"
   ) {
@@ -405,8 +403,8 @@ function resolveDashboardPath(
 
   if (explicit) return explicit;
 
-  if (workspace === "provider") return "/provider";
-  if (workspace === "customer") return "/customer";
+  if (workspace === "company") return "/provider";
+  if (workspace === "customer") return "/company";
   if (workspace === "agent") return "/agent";
   if (workspace === "system") return "/system";
 
