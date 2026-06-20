@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import { createElement, useEffect, useMemo, useState } from "react";
@@ -117,11 +117,11 @@ export {
 /* ============================================================
    Primey Care Dashboard Compatibility Components
    ------------------------------------------------------------
-   ✅ app/system/page.tsx يبقى كما هو
-   ✅ التصميم يبقى CRM / LTR
-   ✅ البيانات من APIs الفعلية
-   ✅ النصوص تدعم عربي/إنجليزي بنصوص قصيرة
-   ✅ التصنيفات ثابتة حتى لا ينهار الشكل عند قلة البيانات
+   âœ… app/system/page.tsx ظٹط¨ظ‚ظ‰ ظƒظ…ط§ ظ‡ظˆ
+   âœ… ط§ظ„طھطµظ…ظٹظ… ظٹط¨ظ‚ظ‰ CRM / LTR
+   âœ… ط§ظ„ط¨ظٹط§ظ†ط§طھ ظ…ظ† APIs ط§ظ„ظپط¹ظ„ظٹط©
+   âœ… ط§ظ„ظ†طµظˆطµ طھط¯ط¹ظ… ط¹ط±ط¨ظٹ/ط¥ظ†ط¬ظ„ظٹط²ظٹ ط¨ظ†طµظˆطµ ظ‚طµظٹط±ط©
+   âœ… ط§ظ„طھطµظ†ظٹظپط§طھ ط«ط§ط¨طھط© ط­طھظ‰ ظ„ط§ ظٹظ†ظ‡ط§ط± ط§ظ„ط´ظƒظ„ ط¹ظ†ط¯ ظ‚ظ„ط© ط§ظ„ط¨ظٹط§ظ†ط§طھ
 ============================================================ */
 
 type AppLocale = "ar" | "en";
@@ -300,84 +300,84 @@ function labels(locale: AppLocale) {
   const ar = locale === "ar";
 
   return {
-    totalCustomers: ar ? "العملاء" : "Total Customers",
-    totalOrders: ar ? "الطلبات" : "Total Deals",
-    totalRevenue: ar ? "الإيرادات" : "Total Revenue",
+    totalCustomers: ar ? "ط§ظ„ط¹ظ…ظ„ط§ط،" : "Total Customers",
+    totalOrders: ar ? "ط§ظ„ط·ظ„ط¨ط§طھ" : "Total Deals",
+    totalRevenue: ar ? "ط§ظ„ط¥ظٹط±ط§ط¯ط§طھ" : "Total Revenue",
 
-    fromCustomers: ar ? "من بيانات العملاء" : "from customer data",
-    fromOrders: ar ? "من بيانات الطلبات" : "from order data",
-    fromPayments: ar ? "من المدفوعات المؤكدة" : "from confirmed payments",
+    fromCustomers: ar ? "ظ…ظ† ط¨ظٹط§ظ†ط§طھ ط§ظ„ط¹ظ…ظ„ط§ط،" : "from customer data",
+    fromOrders: ar ? "ظ…ظ† ط¨ظٹط§ظ†ط§طھ ط§ظ„ط·ظ„ط¨ط§طھ" : "from order data",
+    fromPayments: ar ? "ظ…ظ† ط§ظ„ظ…ط¯ظپظˆط¹ط§طھ ط§ظ„ظ…ط¤ظƒط¯ط©" : "from confirmed payments",
 
-    targetTitle: ar ? "هدف التحصيل" : "Your target is incomplete",
+    targetTitle: ar ? "ظ‡ط¯ظپ ط§ظ„طھط­طµظٹظ„" : "Your target is incomplete",
     targetDescription: ar
-      ? "نسبة التحصيل من الفواتير والمدفوعات."
+      ? "ظ†ط³ط¨ط© ط§ظ„طھط­طµظٹظ„ ظ…ظ† ط§ظ„ظپظˆط§طھظٹط± ظˆط§ظ„ظ…ط¯ظپظˆط¹ط§طھ."
       : "You have completed part of the collection target, you can also check your status.",
-    current: ar ? "المحقق" : "Current",
-    target: ar ? "الهدف" : "Goal",
-    targetUnit: ar ? "التحصيل" : "Target",
+    current: ar ? "ط§ظ„ظ…ط­ظ‚ظ‚" : "Current",
+    target: ar ? "ط§ظ„ظ‡ط¯ظپ" : "Goal",
+    targetUnit: ar ? "ط§ظ„طھط­طµظٹظ„" : "Target",
 
-    paymentsByMethod: ar ? "طرق الدفع" : "Leads by Source",
-    paymentsCenter: ar ? "مدفوعات" : "Leads",
-    export: ar ? "تصدير" : "Export",
+    paymentsByMethod: ar ? "ط·ط±ظ‚ ط§ظ„ط¯ظپط¹" : "Leads by Source",
+    paymentsCenter: ar ? "ظ…ط¯ظپظˆط¹ط§طھ" : "Leads",
+    export: ar ? "طھطµط¯ظٹط±" : "Export",
 
-    tasks: ar ? "المهام" : "Tasks",
+    tasks: ar ? "ط§ظ„ظ…ظ‡ط§ظ…" : "Tasks",
     tasksDescription: ar
-      ? "متابعات تشغيلية قادمة."
+      ? "ظ…طھط§ط¨ط¹ط§طھ طھط´ط؛ظٹظ„ظٹط© ظ‚ط§ط¯ظ…ط©."
       : "Track and manage your upcoming tasks.",
-    viewAll: ar ? "عرض الكل" : "Add Task",
+    viewAll: ar ? "ط¹ط±ط¶ ط§ظ„ظƒظ„" : "Add Task",
 
-    pipeline: ar ? "مسار الطلبات" : "Sales Pipeline",
+    pipeline: ar ? "ظ…ط³ط§ط± ط§ظ„ط·ظ„ط¨ط§طھ" : "Sales Pipeline",
     pipelineDescription: ar
-      ? "توزيع الطلبات حسب الحالة."
+      ? "طھظˆط²ظٹط¹ ط§ظ„ط·ظ„ط¨ط§طھ ط­ط³ط¨ ط§ظ„ط­ط§ظ„ط©."
       : "Current deals in your sales pipeline.",
-    deals: ar ? "طلبات" : "deals",
+    deals: ar ? "ط·ظ„ط¨ط§طھ" : "deals",
 
-    leads: ar ? "آخر الطلبات" : "Leads",
-    status: ar ? "الحالة" : "Status",
-    email: ar ? "العميل" : "Email",
-    amount: ar ? "المبلغ" : "Amount",
-    columns: ar ? "الأعمدة" : "Columns",
+    leads: ar ? "ط¢ط®ط± ط§ظ„ط·ظ„ط¨ط§طھ" : "Leads",
+    status: ar ? "ط§ظ„ط­ط§ظ„ط©" : "Status",
+    email: ar ? "ط§ظ„ط¹ظ…ظٹظ„" : "Email",
+    amount: ar ? "ط§ظ„ظ…ط¨ظ„ط؛" : "Amount",
+    columns: ar ? "ط§ظ„ط£ط¹ظ…ط¯ط©" : "Columns",
 
-    filterLeads: ar ? "تصفية الطلبات..." : "Filter leads...",
-    selectedRows: ar ? "0 من {count} صف محدد." : "0 of {count} row(s) selected.",
-    previous: ar ? "السابق" : "Previous",
-    next: ar ? "التالي" : "Next",
-    empty: ar ? "لا توجد بيانات." : "No data available",
+    filterLeads: ar ? "طھطµظپظٹط© ط§ظ„ط·ظ„ط¨ط§طھ..." : "Filter leads...",
+    selectedRows: ar ? "0 ظ…ظ† {count} طµظپ ظ…ط­ط¯ط¯." : "0 of {count} row(s) selected.",
+    previous: ar ? "ط§ظ„ط³ط§ط¨ظ‚" : "Previous",
+    next: ar ? "ط§ظ„طھط§ظ„ظٹ" : "Next",
+    empty: ar ? "ظ„ط§ طھظˆط¬ط¯ ط¨ظٹط§ظ†ط§طھ." : "No data available",
 
-    openInvoices: ar ? "فواتير مفتوحة" : "Open invoices",
-    openInvoicesDesc: ar ? "تحتاج متابعة مالية" : "Need finance follow-up",
-    waitingDelivery: ar ? "بانتظار التنفيذ" : "Waiting fulfillment",
+    openInvoices: ar ? "ظپظˆط§طھظٹط± ظ…ظپطھظˆط­ط©" : "Open invoices",
+    openInvoicesDesc: ar ? "طھط­طھط§ط¬ ظ…طھط§ط¨ط¹ط© ظ…ط§ظ„ظٹط©" : "Need finance follow-up",
+    waitingDelivery: ar ? "ط¨ط§ظ†طھط¸ط§ط± ط§ظ„طھظ†ظپظٹط°" : "Waiting fulfillment",
     waitingDeliveryDesc: ar
-      ? "طلبات تحتاج متابعة"
+      ? "ط·ظ„ط¨ط§طھ طھط­طھط§ط¬ ظ…طھط§ط¨ط¹ط©"
       : "Orders need fulfillment follow-up",
-    pendingItems: ar ? "بنود معلقة" : "Pending order items",
+    pendingItems: ar ? "ط¨ظ†ظˆط¯ ظ…ط¹ظ„ظ‚ط©" : "Pending order items",
     pendingItemsDesc: ar
-      ? "بنود تحتاج إجراء"
+      ? "ط¨ظ†ظˆط¯ طھط­طھط§ط¬ ط¥ط¬ط±ط§ط،"
       : "Items and services that need action",
-    unreadNotifications: ar ? "تنبيهات غير مقروءة" : "Unread notifications",
-    unreadNotificationsDesc: ar ? "من مركز التنبيهات" : "From notification center",
-    errorsLogs: ar ? "أخطاء حرجة" : "Errors and critical logs",
-    warnings: ar ? "تحذيرات" : "warnings",
+    unreadNotifications: ar ? "طھظ†ط¨ظٹظ‡ط§طھ ط؛ظٹط± ظ…ظ‚ط±ظˆط،ط©" : "Unread notifications",
+    unreadNotificationsDesc: ar ? "ظ…ظ† ظ…ط±ظƒط² ط§ظ„طھظ†ط¨ظٹظ‡ط§طھ" : "From notification center",
+    errorsLogs: ar ? "ط£ط®ط·ط§ط، ط­ط±ط¬ط©" : "Errors and critical logs",
+    warnings: ar ? "طھط­ط°ظٹط±ط§طھ" : "warnings",
 
-    today: ar ? "اليوم" : "Due Today",
-    tomorrow: ar ? "غدًا" : "Due Tomorrow",
-    progress: ar ? "قيد التنفيذ" : "In progress",
-    alerts: ar ? "تنبيهات" : "Alerts",
-    systemLog: ar ? "سجل النظام" : "System log",
+    today: ar ? "ط§ظ„ظٹظˆظ…" : "Due Today",
+    tomorrow: ar ? "ط؛ط¯ظ‹ط§" : "Due Tomorrow",
+    progress: ar ? "ظ‚ظٹط¯ ط§ظ„طھظ†ظپظٹط°" : "In progress",
+    alerts: ar ? "طھظ†ط¨ظٹظ‡ط§طھ" : "Alerts",
+    systemLog: ar ? "ط³ط¬ظ„ ط§ظ„ظ†ط¸ط§ظ…" : "System log",
 
-    cash: ar ? "نقدي" : "Cash",
-    bankTransfer: ar ? "تحويل" : "Bank Transfer",
-    gateway: ar ? "بوابة" : "Gateway",
-    others: ar ? "أخرى" : "Others",
+    cash: ar ? "ظ†ظ‚ط¯ظٹ" : "Cash",
+    bankTransfer: ar ? "طھط­ظˆظٹظ„" : "Bank Transfer",
+    gateway: ar ? "ط¨ظˆط§ط¨ط©" : "Gateway",
+    others: ar ? "ط£ط®ط±ظ‰" : "Others",
 
-    leadStage: ar ? "معلق" : "Lead",
-    qualifiedStage: ar ? "مؤكد" : "Qualified",
-    proposalStage: ar ? "تنفيذ" : "Proposal",
-    negotiationStage: ar ? "مدفوع" : "Negotiation",
-    closedWonStage: ar ? "مكتمل" : "Closed Won",
-    ordersInStage: ar ? "طلبات في المرحلة" : "orders in this stage",
+    leadStage: ar ? "ظ…ط¹ظ„ظ‚" : "Lead",
+    qualifiedStage: ar ? "ظ…ط¤ظƒط¯" : "Qualified",
+    proposalStage: ar ? "طھظ†ظپظٹط°" : "Proposal",
+    negotiationStage: ar ? "ظ…ط¯ظپظˆط¹" : "Negotiation",
+    closedWonStage: ar ? "ظ…ظƒطھظ…ظ„" : "Closed Won",
+    ordersInStage: ar ? "ط·ظ„ط¨ط§طھ ظپظٹ ط§ظ„ظ…ط±ط­ظ„ط©" : "orders in this stage",
 
-    customerFallback: ar ? "عميل" : "Customer",
+    customerFallback: ar ? "ط¹ظ…ظٹظ„" : "Customer",
   };
 }
 
@@ -417,19 +417,19 @@ function statusLabel(value: string | undefined, locale: AppLocale) {
   const normalized = String(value || "UNKNOWN").toUpperCase();
 
   const arMap: Record<string, string> = {
-    DRAFT: "مسودة",
-    PENDING: "معلق",
-    ACTIVE: "نشط",
-    PAID: "مدفوع",
-    COMPLETED: "مكتمل",
-    CONFIRMED: "مؤكد",
-    PROCESSING: "تنفيذ",
-    ISSUED: "مصدر",
-    PARTIALLY_PAID: "جزئي",
-    CANCELLED: "ملغي",
-    FAILED: "فاشل",
-    REFUNDED: "مسترجع",
-    UNKNOWN: "غير محدد",
+    DRAFT: "ظ…ط³ظˆط¯ط©",
+    PENDING: "ظ…ط¹ظ„ظ‚",
+    ACTIVE: "ظ†ط´ط·",
+    PAID: "ظ…ط¯ظپظˆط¹",
+    COMPLETED: "ظ…ظƒطھظ…ظ„",
+    CONFIRMED: "ظ…ط¤ظƒط¯",
+    PROCESSING: "طھظ†ظپظٹط°",
+    ISSUED: "ظ…طµط¯ط±",
+    PARTIALLY_PAID: "ط¬ط²ط¦ظٹ",
+    CANCELLED: "ظ…ظ„ط؛ظٹ",
+    FAILED: "ظپط§ط´ظ„",
+    REFUNDED: "ظ…ط³طھط±ط¬ط¹",
+    UNKNOWN: "ط؛ظٹط± ظ…ط­ط¯ط¯",
   };
 
   const enMap: Record<string, string> = {
@@ -670,7 +670,7 @@ function makePipelineItems(
       label: text.leadStage,
       value: leadStageValue,
       description: `${leadStageValue} ${text.ordersInStage}`,
-      href: "/system/orders",
+      href: "/system",
       icon: Package,
       tone: "default",
     },
@@ -678,7 +678,7 @@ function makePipelineItems(
       label: text.qualifiedStage,
       value: qualifiedStageValue,
       description: `${qualifiedStageValue} ${text.ordersInStage}`,
-      href: "/system/orders",
+      href: "/system",
       icon: FileText,
       tone: "info",
     },
@@ -686,7 +686,7 @@ function makePipelineItems(
       label: text.proposalStage,
       value: proposalStageValue,
       description: `${proposalStageValue} ${text.ordersInStage}`,
-      href: "/system/orders",
+      href: "/system",
       icon: Truck,
       tone: "warning",
     },
@@ -694,7 +694,7 @@ function makePipelineItems(
       label: text.negotiationStage,
       value: negotiationStageValue,
       description: `${negotiationStageValue} ${text.ordersInStage}`,
-      href: "/system/orders",
+      href: "/system",
       icon: HandCoins,
       tone: "violet",
     },
@@ -702,7 +702,7 @@ function makePipelineItems(
       label: text.closedWonStage,
       value: closedWonStageValue,
       description: `${closedWonStageValue} ${text.ordersInStage}`,
-      href: "/system/orders",
+      href: "/system",
       icon: BriefcaseBusiness,
       tone: "success",
     },
@@ -755,7 +755,7 @@ function useDashboardComputed() {
         title: text.openInvoices,
         description: text.openInvoicesDesc,
         value: openInvoices,
-        href: "/system/invoices",
+        href: "/system",
         icon: ReceiptText,
         tone: openInvoices > 0 ? "danger" : "success",
         status: openInvoices > 0 ? "warning" : "done",
@@ -765,7 +765,7 @@ function useDashboardComputed() {
         title: text.waitingDelivery,
         description: text.waitingDeliveryDesc,
         value: waitingDelivery,
-        href: "/system/orders",
+        href: "/system",
         icon: Truck,
         tone: waitingDelivery > 0 ? "warning" : "success",
         status: waitingDelivery > 0 ? "active" : "done",
@@ -775,7 +775,7 @@ function useDashboardComputed() {
         title: text.pendingItems,
         description: text.pendingItemsDesc,
         value: dashboard.data.totals.pendingOrderItems || pendingOrderItems.length,
-        href: "/system/order-items",
+        href: "/system",
         icon: FileText,
         tone: pendingOrderItems.length > 0 ? "warning" : "success",
         status: pendingOrderItems.length > 0 ? "active" : "done",
@@ -795,7 +795,7 @@ function useDashboardComputed() {
         title: text.errorsLogs,
         description: `${warningLogs} ${text.warnings}`,
         value: errorLogs + criticalLogs,
-        href: "/system/system-log",
+        href: "/system",
         icon: AlertTriangle,
         tone: errorLogs + criticalLogs > 0 ? "danger" : "success",
         status: errorLogs + criticalLogs > 0 ? "danger" : "done",
@@ -812,7 +812,7 @@ function useDashboardComputed() {
         order.customer?.full_name ||
         `${text.customerFallback} #${order.customer_id || order.id}`,
       amount: toNumber(order.total_amount),
-      href: `/system/orders/${order.id}`,
+      href: "/system",
     }));
 
     return {
@@ -939,7 +939,7 @@ export function RecentTasks() {
     description: computed.text.tasksDescription,
     items: computed.taskItems,
     actionLabel: computed.text.viewAll,
-    actionHref: "/system/reports",
+    actionHref: "/system",
     icon: Bell,
     loading: computed.loading,
   } satisfies AnalyticsTaskListProps);
@@ -984,7 +984,7 @@ export function LeadsCard() {
     getRowKey: (row) => row.id,
     getRowHref: (row) => row.href,
     actionLabel: computed.text.columns,
-    actionHref: "/system/orders",
+    actionHref: "/system",
     loading: computed.loading,
     emptyLabel: computed.text.empty,
     filterPlaceholder: computed.text.filterLeads,
