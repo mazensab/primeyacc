@@ -1,3 +1,22 @@
+/* ============================================================
+   📂 app/(guest)/login/page.tsx
+   🧠 PrimeyAcc | Unified Login Page — Phase 5.1.2
+
+   ✅ صفحة دخول موحدة
+   ✅ دخول النظام: username/password
+   ✅ دخول العميل: phone + WhatsApp OTP
+   ✅ يدعم العربية والإنجليزية
+   ✅ يدعم RTL / LTR
+   ✅ CSRF + Cookies Session
+   ✅ Redirect ذكي حسب whoami/dashboard_path
+   ✅ Sonner Toasts
+
+   القاعدة المعتمدة:
+   - لا يتم إنشاء ملفات backup داخل المشروع.
+   - لا يتم كسر تصميم الدخول الحالي.
+   - لا يتم تكرار AuthProvider.
+   - صفحة الدخول الرسمية هي /login.
+============================================================ */
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -23,17 +42,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 /* =========================================================
-   📌 Primey Care - Unified Login Page
+   ًں“Œ PrimeyAcc - Unified Login Page
    Path: primey_frontend/app/(guest)/login/page.tsx
 
-   ✅ صفحة دخول موحدة
-   ✅ دخول النظام: username/password
-   ✅ دخول العميل: phone + WhatsApp OTP
-   ✅ يدعم العربية والإنجليزية
-   ✅ يدعم RTL / LTR
-   ✅ CSRF + Cookies Session
-   ✅ Redirect ذكي حسب whoami/dashboard_path
-   ✅ Sonner Toasts
+   âœ… طµظپط­ط© ط¯ط®ظˆظ„ ظ…ظˆط­ط¯ط©
+   âœ… ط¯ط®ظˆظ„ ط§ظ„ظ†ط¸ط§ظ…: username/password
+   âœ… ط¯ط®ظˆظ„ ط§ظ„ط¹ظ…ظٹظ„: phone + WhatsApp OTP
+   âœ… ظٹط¯ط¹ظ… ط§ظ„ط¹ط±ط¨ظٹط© ظˆط§ظ„ط¥ظ†ط¬ظ„ظٹط²ظٹط©
+   âœ… ظٹط¯ط¹ظ… RTL / LTR
+   âœ… CSRF + Cookies Session
+   âœ… Redirect ط°ظƒظٹ ط­ط³ط¨ whoami/dashboard_path
+   âœ… Sonner Toasts
 ========================================================= */
 
 type AppLocale = "ar" | "en";
@@ -302,84 +321,84 @@ export default function Page() {
 
   const content = useMemo(
     () => ({
-      title: isArabic ? "مرحبًا بعودتك" : "Welcome back",
+      title: isArabic ? "ظ…ط±ط­ط¨ظ‹ط§ ط¨ط¹ظˆط¯طھظƒ" : "Welcome back",
       subtitle: isArabic
-        ? "سجّل الدخول للوصول إلى منصة Primey Care وإدارة عملياتك بسهولة وأمان"
-        : "Sign in to access Primey Care and manage your operations securely",
+        ? "ط³ط¬ظ‘ظ„ ط§ظ„ط¯ط®ظˆظ„ ظ„ظ„ظˆطµظˆظ„ ط¥ظ„ظ‰ ظ…ظ†طµط© PrimeyAcc ظˆط¥ط¯ط§ط±ط© ط¹ظ…ظ„ظٹط§طھظƒ ط¨ط³ظ‡ظˆظ„ط© ظˆط£ظ…ط§ظ†"
+        : "Sign in to access PrimeyAcc and manage your operations securely",
 
-      systemTab: isArabic ? "دخول النظام" : "System access",
-      customerTab: isArabic ? "دخول العميل" : "Customer access",
+      systemTab: isArabic ? "ط¯ط®ظˆظ„ ط§ظ„ظ†ط¸ط§ظ…" : "System access",
+      customerTab: isArabic ? "ط¯ط®ظˆظ„ ط§ظ„ط¹ظ…ظٹظ„" : "Customer access",
 
-      usernameLabel: isArabic ? "اسم المستخدم" : "Username",
-      passwordLabel: isArabic ? "كلمة المرور" : "Password",
-      remember: isArabic ? "تذكرني" : "Remember me",
-      resetPassword: isArabic ? "إعادة تعيين كلمة المرور؟" : "Reset password?",
-      login: isArabic ? "تسجيل الدخول" : "Sign in",
-      loading: isArabic ? "جارٍ تسجيل الدخول..." : "Signing in...",
-      passwordShow: isArabic ? "إظهار كلمة المرور" : "Show password",
-      passwordHide: isArabic ? "إخفاء كلمة المرور" : "Hide password",
+      usernameLabel: isArabic ? "ط§ط³ظ… ط§ظ„ظ…ط³طھط®ط¯ظ…" : "Username",
+      passwordLabel: isArabic ? "ظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط±" : "Password",
+      remember: isArabic ? "طھط°ظƒط±ظ†ظٹ" : "Remember me",
+      resetPassword: isArabic ? "ط¥ط¹ط§ط¯ط© طھط¹ظٹظٹظ† ظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط±طں" : "Reset password?",
+      login: isArabic ? "طھط³ط¬ظٹظ„ ط§ظ„ط¯ط®ظˆظ„" : "Sign in",
+      loading: isArabic ? "ط¬ط§ط±ظچ طھط³ط¬ظٹظ„ ط§ظ„ط¯ط®ظˆظ„..." : "Signing in...",
+      passwordShow: isArabic ? "ط¥ط¸ظ‡ط§ط± ظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط±" : "Show password",
+      passwordHide: isArabic ? "ط¥ط®ظپط§ط، ظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط±" : "Hide password",
       securityNote: isArabic
-        ? "جلسة دخول آمنة ومحمية"
+        ? "ط¬ظ„ط³ط© ط¯ط®ظˆظ„ ط¢ظ…ظ†ط© ظˆظ…ط­ظ…ظٹط©"
         : "Secure protected session",
-      welcomeBadge: isArabic ? "بوابة الدخول" : "Access portal",
+      welcomeBadge: isArabic ? "ط¨ظˆط§ط¨ط© ط§ظ„ط¯ط®ظˆظ„" : "Access portal",
       invalidCredentials: isArabic
-        ? "اسم المستخدم أو كلمة المرور غير صحيحة"
+        ? "ط§ط³ظ… ط§ظ„ظ…ط³طھط®ط¯ظ… ط£ظˆ ظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط± ط؛ظٹط± طµط­ظٹط­ط©"
         : "Invalid username or password",
       csrfMissing: isArabic
-        ? "تعذر تجهيز جلسة الأمان، حاول مرة أخرى"
+        ? "طھط¹ط°ط± طھط¬ظ‡ظٹط² ط¬ظ„ط³ط© ط§ظ„ط£ظ…ط§ظ†طŒ ط­ط§ظˆظ„ ظ…ط±ط© ط£ط®ط±ظ‰"
         : "Unable to initialize secure session, please try again",
       sessionFailed: isArabic
-        ? "تم تسجيل الدخول لكن تعذر التحقق من الجلسة"
+        ? "طھظ… طھط³ط¬ظٹظ„ ط§ظ„ط¯ط®ظˆظ„ ظ„ظƒظ† طھط¹ط°ط± ط§ظ„طھط­ظ‚ظ‚ ظ…ظ† ط§ظ„ط¬ظ„ط³ط©"
         : "Signed in, but session validation failed",
-      loginFailed: isArabic ? "فشل تسجيل الدخول" : "Login failed",
+      loginFailed: isArabic ? "ظپط´ظ„ طھط³ط¬ظٹظ„ ط§ظ„ط¯ط®ظˆظ„" : "Login failed",
       requiredFields: isArabic
-        ? "يرجى تعبئة اسم المستخدم وكلمة المرور"
+        ? "ظٹط±ط¬ظ‰ طھط¹ط¨ط¦ط© ط§ط³ظ… ط§ظ„ظ…ط³طھط®ط¯ظ… ظˆظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط±"
         : "Please enter username and password",
       loginSuccess: isArabic
-        ? "تم تسجيل الدخول بنجاح"
+        ? "طھظ… طھط³ط¬ظٹظ„ ط§ظ„ط¯ط®ظˆظ„ ط¨ظ†ط¬ط§ط­"
         : "Signed in successfully",
-      usernamePlaceholder: isArabic ? "أدخل اسم المستخدم" : "Enter username",
-      passwordPlaceholder: isArabic ? "أدخل كلمة المرور" : "Enter password",
+      usernamePlaceholder: isArabic ? "ط£ط¯ط®ظ„ ط§ط³ظ… ط§ظ„ظ…ط³طھط®ط¯ظ…" : "Enter username",
+      passwordPlaceholder: isArabic ? "ط£ط¯ط®ظ„ ظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط±" : "Enter password",
 
-      customerTitle: isArabic ? "دخول العميل" : "Customer sign in",
+      customerTitle: isArabic ? "ط¯ط®ظˆظ„ ط§ظ„ط¹ظ…ظٹظ„" : "Customer sign in",
       customerSubtitle: isArabic
-        ? "أدخل رقم جوالك لاستلام كود التحقق عبر واتساب"
+        ? "ط£ط¯ط®ظ„ ط±ظ‚ظ… ط¬ظˆط§ظ„ظƒ ظ„ط§ط³طھظ„ط§ظ… ظƒظˆط¯ ط§ظ„طھط­ظ‚ظ‚ ط¹ط¨ط± ظˆط§طھط³ط§ط¨"
         : "Enter your phone number to receive a WhatsApp OTP",
-      phoneLabel: isArabic ? "رقم الجوال" : "Phone number",
+      phoneLabel: isArabic ? "ط±ظ‚ظ… ط§ظ„ط¬ظˆط§ظ„" : "Phone number",
       phonePlaceholder: isArabic ? "05xxxxxxxx" : "05xxxxxxxx",
-      otpLabel: isArabic ? "كود التحقق" : "Verification code",
-      otpPlaceholder: isArabic ? "أدخل كود التحقق" : "Enter verification code",
-      requestOtp: isArabic ? "إرسال كود التحقق" : "Send OTP",
-      requestOtpLoading: isArabic ? "جارٍ إرسال الكود..." : "Sending OTP...",
-      verifyOtp: isArabic ? "تأكيد الدخول" : "Verify and sign in",
+      otpLabel: isArabic ? "ظƒظˆط¯ ط§ظ„طھط­ظ‚ظ‚" : "Verification code",
+      otpPlaceholder: isArabic ? "ط£ط¯ط®ظ„ ظƒظˆط¯ ط§ظ„طھط­ظ‚ظ‚" : "Enter verification code",
+      requestOtp: isArabic ? "ط¥ط±ط³ط§ظ„ ظƒظˆط¯ ط§ظ„طھط­ظ‚ظ‚" : "Send OTP",
+      requestOtpLoading: isArabic ? "ط¬ط§ط±ظچ ط¥ط±ط³ط§ظ„ ط§ظ„ظƒظˆط¯..." : "Sending OTP...",
+      verifyOtp: isArabic ? "طھط£ظƒظٹط¯ ط§ظ„ط¯ط®ظˆظ„" : "Verify and sign in",
       verifyOtpLoading: isArabic
-        ? "جارٍ التحقق من الكود..."
+        ? "ط¬ط§ط±ظچ ط§ظ„طھط­ظ‚ظ‚ ظ…ظ† ط§ظ„ظƒظˆط¯..."
         : "Verifying code...",
-      backToPhone: isArabic ? "تغيير رقم الجوال" : "Change phone number",
-      resendOtp: isArabic ? "إعادة إرسال الكود" : "Resend OTP",
+      backToPhone: isArabic ? "طھط؛ظٹظٹط± ط±ظ‚ظ… ط§ظ„ط¬ظˆط§ظ„" : "Change phone number",
+      resendOtp: isArabic ? "ط¥ط¹ط§ط¯ط© ط¥ط±ط³ط§ظ„ ط§ظ„ظƒظˆط¯" : "Resend OTP",
       phoneRequired: isArabic
-        ? "يرجى إدخال رقم الجوال"
+        ? "ظٹط±ط¬ظ‰ ط¥ط¯ط®ط§ظ„ ط±ظ‚ظ… ط§ظ„ط¬ظˆط§ظ„"
         : "Please enter phone number",
       phoneInvalid: isArabic
-        ? "رقم الجوال غير صحيح، استخدم رقم سعودي يبدأ بـ 05"
+        ? "ط±ظ‚ظ… ط§ظ„ط¬ظˆط§ظ„ ط؛ظٹط± طµط­ظٹط­طŒ ط§ط³طھط®ط¯ظ… ط±ظ‚ظ… ط³ط¹ظˆط¯ظٹ ظٹط¨ط¯ط£ ط¨ظ€ 05"
         : "Invalid phone number, use a Saudi number starting with 05",
       otpRequired: isArabic
-        ? "يرجى إدخال كود التحقق"
+        ? "ظٹط±ط¬ظ‰ ط¥ط¯ط®ط§ظ„ ظƒظˆط¯ ط§ظ„طھط­ظ‚ظ‚"
         : "Please enter verification code",
       otpSent: isArabic
-        ? "تم إرسال كود التحقق عبر واتساب"
+        ? "طھظ… ط¥ط±ط³ط§ظ„ ظƒظˆط¯ ط§ظ„طھط­ظ‚ظ‚ ط¹ط¨ط± ظˆط§طھط³ط§ط¨"
         : "OTP has been sent via WhatsApp",
       otpVerified: isArabic
-        ? "تم تسجيل دخول العميل بنجاح"
+        ? "طھظ… طھط³ط¬ظٹظ„ ط¯ط®ظˆظ„ ط§ظ„ط¹ظ…ظٹظ„ ط¨ظ†ط¬ط§ط­"
         : "Customer signed in successfully",
       otpRequestFailed: isArabic
-        ? "تعذر إرسال كود التحقق"
+        ? "طھط¹ط°ط± ط¥ط±ط³ط§ظ„ ظƒظˆط¯ ط§ظ„طھط­ظ‚ظ‚"
         : "Unable to send OTP",
       otpVerifyFailed: isArabic
-        ? "كود التحقق غير صحيح أو منتهي"
+        ? "ظƒظˆط¯ ط§ظ„طھط­ظ‚ظ‚ ط؛ظٹط± طµط­ظٹط­ ط£ظˆ ظ…ظ†طھظ‡ظٹ"
         : "Invalid or expired verification code",
       customerNote: isArabic
-        ? "دخول العميل يتم برقم الجوال وكود تحقق واتساب بدون كلمة مرور."
+        ? "ط¯ط®ظˆظ„ ط§ظ„ط¹ظ…ظٹظ„ ظٹطھظ… ط¨ط±ظ‚ظ… ط§ظ„ط¬ظˆط§ظ„ ظˆظƒظˆط¯ طھط­ظ‚ظ‚ ظˆط§طھط³ط§ط¨ ط¨ط¯ظˆظ† ظƒظ„ظ…ط© ظ…ط±ظˆط±."
         : "Customer access uses phone number and WhatsApp OTP without a password.",
     }),
     [isArabic]
@@ -450,7 +469,7 @@ export default function Page() {
   };
 
   /* =========================================================
-     🚀 System Login Handler
+     ًںڑ€ System Login Handler
   ========================================================= */
   const handleSystemSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -509,7 +528,7 @@ export default function Page() {
   };
 
   /* =========================================================
-     📲 Customer OTP - Request
+     ًں“² Customer OTP - Request
   ========================================================= */
   const handleRequestCustomerOtp = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
@@ -580,7 +599,7 @@ export default function Page() {
   };
 
   /* =========================================================
-     ✅ Customer OTP - Verify
+     âœ… Customer OTP - Verify
   ========================================================= */
   const handleVerifyCustomerOtp = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -682,7 +701,7 @@ export default function Page() {
                     {content.welcomeBadge}
                   </p>
                   <h1 className="text-2xl font-bold tracking-tight">
-                    Primey Care
+                    PrimeyAcc
                   </h1>
                 </div>
               </div>
@@ -699,13 +718,13 @@ export default function Page() {
 
                 <h2 className="max-w-xl text-4xl font-extrabold leading-tight xl:text-5xl">
                   {isArabic
-                    ? "دخول موحد للنظام والعملاء عبر Primey Care"
+                    ? "ط¯ط®ظˆظ„ ظ…ظˆط­ط¯ ظ„ظ„ظ†ط¸ط§ظ… ظˆط§ظ„ط¹ظ…ظ„ط§ط، ط¹ط¨ط± PrimeyAcc"
                     : "Unified access for system users and customers"}
                 </h2>
 
                 <p className="mt-6 max-w-xl text-base leading-8 text-white/85 xl:text-lg">
                   {isArabic
-                    ? "يمكن لمستخدمي النظام الدخول بكلمة المرور، ويمكن للعملاء الدخول برقم الجوال وكود تحقق واتساب من نفس صفحة الدخول."
+                    ? "ظٹظ…ظƒظ† ظ„ظ…ط³طھط®ط¯ظ…ظٹ ط§ظ„ظ†ط¸ط§ظ… ط§ظ„ط¯ط®ظˆظ„ ط¨ظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط±طŒ ظˆظٹظ…ظƒظ† ظ„ظ„ط¹ظ…ظ„ط§ط، ط§ظ„ط¯ط®ظˆظ„ ط¨ط±ظ‚ظ… ط§ظ„ط¬ظˆط§ظ„ ظˆظƒظˆط¯ طھط­ظ‚ظ‚ ظˆط§طھط³ط§ط¨ ظ…ظ† ظ†ظپط³ طµظپط­ط© ط§ظ„ط¯ط®ظˆظ„."
                     : "System users can sign in with a password, while customers can access their workspace using phone number and WhatsApp OTP from the same page."}
                 </p>
               </div>
@@ -721,12 +740,12 @@ export default function Page() {
                       <User2 className="h-5 w-5" />
                     </div>
                     <h3 className="font-semibold">
-                      {isArabic ? "دخول حسب الدور" : "Role-based access"}
+                      {isArabic ? "ط¯ط®ظˆظ„ ط­ط³ط¨ ط§ظ„ط¯ظˆط±" : "Role-based access"}
                     </h3>
                   </div>
                   <p className="text-sm leading-7 text-white/80">
                     {isArabic
-                      ? "يتم توجيه كل مستخدم تلقائيًا إلى الواجهة المناسبة بعد الدخول."
+                      ? "ظٹطھظ… طھظˆط¬ظٹظ‡ ظƒظ„ ظ…ط³طھط®ط¯ظ… طھظ„ظ‚ط§ط¦ظٹظ‹ط§ ط¥ظ„ظ‰ ط§ظ„ظˆط§ط¬ظ‡ط© ط§ظ„ظ…ظ†ط§ط³ط¨ط© ط¨ط¹ط¯ ط§ظ„ط¯ط®ظˆظ„."
                       : "Each user is redirected automatically to the correct workspace after sign in."}
                   </p>
                 </div>
@@ -741,12 +760,12 @@ export default function Page() {
                       <MessageCircle className="h-5 w-5" />
                     </div>
                     <h3 className="font-semibold">
-                      {isArabic ? "تحقق واتساب" : "WhatsApp OTP"}
+                      {isArabic ? "طھط­ظ‚ظ‚ ظˆط§طھط³ط§ط¨" : "WhatsApp OTP"}
                     </h3>
                   </div>
                   <p className="text-sm leading-7 text-white/80">
                     {isArabic
-                      ? "العملاء يدخلون برقم الجوال وكود تحقق بدون كلمة مرور."
+                      ? "ط§ظ„ط¹ظ…ظ„ط§ط، ظٹط¯ط®ظ„ظˆظ† ط¨ط±ظ‚ظ… ط§ظ„ط¬ظˆط§ظ„ ظˆظƒظˆط¯ طھط­ظ‚ظ‚ ط¨ط¯ظˆظ† ظƒظ„ظ…ط© ظ…ط±ظˆط±."
                       : "Customers sign in with phone number and verification code without a password."}
                   </p>
                 </div>
@@ -760,7 +779,7 @@ export default function Page() {
                 <div className="flex items-center gap-3">
                   <Image
                     src="/logo/primey.svg"
-                    alt="Primey Care"
+                    alt="PrimeyAcc"
                     width={132}
                     height={44}
                     priority
@@ -776,7 +795,7 @@ export default function Page() {
                   className="h-10 rounded-2xl border-border/70 bg-background/70 px-3 shadow-sm backdrop-blur"
                 >
                   <Languages className="me-1 h-4 w-4" />
-                  <span>{isArabic ? "EN" : "عربي"}</span>
+                  <span>{isArabic ? "EN" : "ط¹ط±ط¨ظٹ"}</span>
                 </Button>
               </div>
 
@@ -1023,7 +1042,7 @@ export default function Page() {
                               }`}
                             >
                               {isArabic
-                                ? `سيتم استخدام الرقم: ${normalizedCustomerPhone || customerPhone}`
+                                ? `ط³ظٹطھظ… ط§ط³طھط®ط¯ط§ظ… ط§ظ„ط±ظ‚ظ…: ${normalizedCustomerPhone || customerPhone}`
                                 : `Using: ${normalizedCustomerPhone || customerPhone}`}
                             </p>
                           ) : null}
@@ -1079,7 +1098,7 @@ export default function Page() {
                             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
                             <span>
                               {isArabic
-                                ? `تم إرسال كود التحقق إلى ${normalizedCustomerPhone}`
+                                ? `طھظ… ط¥ط±ط³ط§ظ„ ظƒظˆط¯ ط§ظ„طھط­ظ‚ظ‚ ط¥ظ„ظ‰ ${normalizedCustomerPhone}`
                                 : `Verification code sent to ${normalizedCustomerPhone}`}
                             </span>
                           </div>
@@ -1212,10 +1231,10 @@ export default function Page() {
                   >
                     {mode === "system"
                       ? isArabic
-                        ? "دخول النظام مخصص للإدارة والموظفين والمندوبين ومستخدمي Primey Care حسب الصلاحيات."
-                        : "System access is for admins, staff, agents, and Primey Care users based on permissions."
+                        ? "ط¯ط®ظˆظ„ ط§ظ„ظ†ط¸ط§ظ… ظ…ط®طµطµ ظ„ظ„ط¥ط¯ط§ط±ط© ظˆط§ظ„ظ…ظˆط¸ظپظٹظ† ظˆط§ظ„ظ…ظ†ط¯ظˆط¨ظٹظ† ظˆظ…ط³طھط®ط¯ظ…ظٹ PrimeyAcc ط­ط³ط¨ ط§ظ„طµظ„ط§ط­ظٹط§طھ."
+                        : "System access is for admins, staff, agents, and PrimeyAcc users based on permissions."
                       : isArabic
-                        ? "دخول العميل مخصص لحسابات العملاء عبر رقم الجوال وكود التحقق المرسل على واتساب."
+                        ? "ط¯ط®ظˆظ„ ط§ظ„ط¹ظ…ظٹظ„ ظ…ط®طµطµ ظ„ط­ط³ط§ط¨ط§طھ ط§ظ„ط¹ظ…ظ„ط§ط، ط¹ط¨ط± ط±ظ‚ظ… ط§ظ„ط¬ظˆط§ظ„ ظˆظƒظˆط¯ ط§ظ„طھط­ظ‚ظ‚ ط§ظ„ظ…ط±ط³ظ„ ط¹ظ„ظ‰ ظˆط§طھط³ط§ط¨."
                         : "Customer access is for customer accounts using phone number and WhatsApp verification code."}
                   </p>
                 </div>
