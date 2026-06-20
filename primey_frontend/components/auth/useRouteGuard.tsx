@@ -23,20 +23,29 @@ export default function RouteGuard({ children, role }: Props) {
       workspace === "system" ||
       roleName === "system_admin" ||
       roleName === "super_admin" ||
-      roleName === "support";
+      roleName === "superuser" ||
+      roleName === "admin" ||
+      roleName === "staff" ||
+      roleName === "accountant" ||
+      roleName === "support" ||
+      roleName === "viewer";
     const isCompanyUser =
       workspace === "company" ||
       workspace === "provider" ||
       workspace === "center" ||
       roleName === "provider_admin" ||
+      roleName === "center_admin" ||
+      roleName === "service_provider" ||
       roleName === "company_admin" ||
-      roleName === "company_owner";
+      roleName === "company_owner" ||
+      roleName === "owner";
     const isAgentUser =
       workspace === "agent" ||
       roleName === "agent_user" ||
       roleName === "agent_admin" ||
       roleName === "broker" ||
-      roleName === "broker_user";
+      roleName === "broker_user" ||
+      roleName === "broker_admin";
     if (role === "system" && !isSystemUser) {
       router.replace("/company");
       return;

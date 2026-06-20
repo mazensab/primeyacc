@@ -12,7 +12,7 @@
 // âœ… ظٹط¯ط¹ظ… profile_permissions.codes
 // âœ… ظ…طھظˆط§ظپظ‚ ظ…ط¹ lib/permissions.ts
 // âœ… ظ…طھظˆط§ظپظ‚ ظ…ط¹ Sidebar / Pages / Actions Guards
-// âœ… provider ظ‡ظˆ ط§ظ„ط±ط³ظ…ظٹ ظ…ط¹ ط¯ط¹ظ… company/center ظƒطھظˆط§ظپظ‚ ط®ظ„ظپظٹ
+// ✅ company هو المسار الرسمي، مع دعم provider/center كـ aliases توافق داخلية
 // âœ… طھط­ط¯ظٹط« ط§ظ„ظ„ط؛ط© ظ…ظ† profile.preferred_language ط¹ظ†ط¯ طھظˆظپط±ظ‡ط§
 // âœ… ط¥طµظ„ط§ط­ TypeScript: inferWorkspaceFromRole ظ„ط§ ظٹط³طھظ‚ط¨ظ„ undefined
 // ======================================================
@@ -304,7 +304,7 @@ function normalizeWorkspace(value: unknown): AppWorkspace | string | null {
 
   if (!workspace) return null;
 
-  if (workspace === "company" || workspace === "center") { return "company"; }
+  if (workspace === "company" || workspace === "center" || workspace === "provider") { return "company"; }
 
   if (
     workspace === "system" ||
