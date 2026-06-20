@@ -403,7 +403,7 @@ function resolveDashboardPath(
 
   if (explicit) return explicit;
 
-  if (workspace === "company") return "/provider";
+  if (workspace === "company") return "/company";
   if (workspace === "customer") return "/company";
   if (workspace === "agent") return "/agent";
   if (workspace === "system") return "/system";
