@@ -1,6 +1,6 @@
 /* ============================================================
    📂 lib/api.ts
-   Primey Care - Frontend API Client (Enhanced)
+   PrimeyAcc - Frontend API Client (Enhanced)
 ============================================================ */
 
 import { toast } from "sonner";
@@ -167,7 +167,7 @@ export async function apiRequest<T = unknown>(
     if (!response.ok) {
       const message = extractErrorMessage(payload);
 
-      console.error("❌ API Error:", {
+      console.error("API Error:", {
         path,
         method,
         status: response.status,
@@ -198,7 +198,7 @@ export async function apiRequest<T = unknown>(
     const message =
       error instanceof Error ? error.message : DEFAULT_ERROR_MESSAGE;
 
-    console.error("🔥 Network Error:", { path, method, error });
+    console.error("Network Error:", { path, method, error });
 
     if (options.showToast !== false) {
       toast.error(message);
