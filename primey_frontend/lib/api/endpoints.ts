@@ -1,11 +1,11 @@
 /* ============================================================
    📂 lib/api/endpoints.ts
-   PrimeyAcc - API Paths
+   PrimeyAcc - API Contract Paths
    ------------------------------------------------------------
    ✅ Centralized API endpoints
    ✅ No hardcoded localhost
    ✅ Compatible with current pages and future API Layer
-   ✅ Keeps all previous paths without breaking imports
+   ✅ Keeps compatibility keys while aligning paths to official contracts
    ✅ Adds accounting / treasury / reports / WhatsApp / gateways
 ============================================================ */
 
@@ -45,34 +45,34 @@ export const API_PATHS = {
   },
 
   centers: {
-    list: "/api/providers/",
-    create: "/api/providers/",
-    reports: "/api/providers/reports/",
-    export: "/api/providers/export/",
-    detail: (id: ApiPathId) => `/api/providers/${id}/`,
-    contracts: (id: ApiPathId) => `/api/providers/${id}/contracts/`,
-    services: (id: ApiPathId) => `/api/providers/${id}/services/`,
+    list: "/api/system/companies/",
+    create: "/api/system/companies/",
+    reports: "/api/system/companies/reports/",
+    export: "/api/system/companies/export/",
+    detail: (id: ApiPathId) => `/api/system/companies/${id}/`,
+    contracts: (id: ApiPathId) => `/api/system/companies/${id}/contracts/`,
+    services: (id: ApiPathId) => `/api/system/companies/${id}/services/`,
   },
 
   providers: {
-    list: "/api/providers/",
-    create: "/api/providers/",
-    reports: "/api/providers/reports/",
-    export: "/api/providers/export/",
-    detail: (id: ApiPathId) => `/api/providers/${id}/`,
-    contracts: (id: ApiPathId) => `/api/providers/${id}/contracts/`,
-    services: (id: ApiPathId) => `/api/providers/${id}/services/`,
+    list: "/api/system/companies/",
+    create: "/api/system/companies/",
+    reports: "/api/system/companies/reports/",
+    export: "/api/system/companies/export/",
+    detail: (id: ApiPathId) => `/api/system/companies/${id}/`,
+    contracts: (id: ApiPathId) => `/api/system/companies/${id}/contracts/`,
+    services: (id: ApiPathId) => `/api/system/companies/${id}/services/`,
   },
 
   agents: {
-    list: "/api/agents/",
-    create: "/api/agents/",
-    reports: "/api/agents/reports/",
-    export: "/api/agents/export/",
-    commissions: "/api/agents/commissions/",
-    detail: (id: ApiPathId) => `/api/agents/${id}/`,
-    approve: (id: ApiPathId) => `/api/agents/${id}/approve/`,
-    commissionsByAgent: (id: ApiPathId) => `/api/agents/${id}/commissions/`,
+    list: "/api/company/reports/agents/",
+    create: "/api/company/reports/agents/",
+    reports: "/api/company/reports/agents/reports/",
+    export: "/api/company/reports/agents/export/",
+    commissions: "/api/company/reports/agents/commissions/",
+    detail: (id: ApiPathId) => `/api/company/reports/agents/${id}/`,
+    approve: (id: ApiPathId) => `/api/company/reports/agents/${id}/approve/`,
+    commissionsByAgent: (id: ApiPathId) => `/api/company/reports/agents/${id}/commissions/`,
   },
 
   products: {
@@ -99,35 +99,35 @@ export const API_PATHS = {
   },
 
   orderItems: {
-    list: "/api/order-items/",
-    create: "/api/order-items/",
-    pending: "/api/order-items/pending/",
-    active: "/api/order-items/active/",
-    reports: "/api/order-items/reports/",
-    detail: (id: ApiPathId) => `/api/order-items/${id}/`,
-    approve: (id: ApiPathId) => `/api/order-items/${id}/approve/`,
-    fulfill: (id: ApiPathId) => `/api/order-items/${id}/fulfill/`,
+    list: "/api/company/sales/order-items/",
+    create: "/api/company/sales/order-items/",
+    pending: "/api/company/sales/order-items/pending/",
+    active: "/api/company/sales/order-items/active/",
+    reports: "/api/company/sales/order-items/reports/",
+    detail: (id: ApiPathId) => `/api/company/sales/order-items/${id}/`,
+    approve: (id: ApiPathId) => `/api/company/sales/order-items/${id}/approve/`,
+    fulfill: (id: ApiPathId) => `/api/company/sales/order-items/${id}/fulfill/`,
   },
 
   contracts: {
-    list: "/api/contracts/",
-    create: "/api/contracts/",
-    active: "/api/contracts/active/",
-    reports: "/api/contracts/reports/",
-    export: "/api/contracts/export/",
-    detail: (id: ApiPathId) => `/api/contracts/${id}/`,
-    activate: (id: ApiPathId) => `/api/contracts/${id}/activate/`,
-    suspend: (id: ApiPathId) => `/api/contracts/${id}/suspend/`,
-    services: (id: ApiPathId) => `/api/contracts/${id}/services/`,
+    list: "/api/company/documents/contracts/",
+    create: "/api/company/documents/contracts/",
+    active: "/api/company/documents/contracts/active/",
+    reports: "/api/company/documents/contracts/reports/",
+    export: "/api/company/documents/contracts/export/",
+    detail: (id: ApiPathId) => `/api/company/documents/contracts/${id}/`,
+    activate: (id: ApiPathId) => `/api/company/documents/contracts/${id}/activate/`,
+    suspend: (id: ApiPathId) => `/api/company/documents/contracts/${id}/suspend/`,
+    services: (id: ApiPathId) => `/api/company/documents/contracts/${id}/services/`,
   },
 
   serviceItems: {
-    list: "/api/service-items/",
-    create: "/api/service-items/",
-    active: "/api/service-items/active/",
-    featured: "/api/service-items/featured/",
-    reports: "/api/service-items/reports/",
-    detail: (id: ApiPathId) => `/api/service-items/${id}/`,
+    list: "/api/company/products/service-items/",
+    create: "/api/company/products/service-items/",
+    active: "/api/company/products/service-items/active/",
+    featured: "/api/company/products/service-items/featured/",
+    reports: "/api/company/products/service-items/reports/",
+    detail: (id: ApiPathId) => `/api/company/products/service-items/${id}/`,
   },
 
   invoices: {
@@ -236,30 +236,30 @@ export const API_PATHS = {
   },
 
   systemLog: {
-    list: "/api/system-log/list/",
-    summary: "/api/system-log/summary/",
-    export: "/api/system-log/export/",
-    detail: (id: ApiPathId) => `/api/system-log/${id}/`,
+    list: "/api/system/release-readiness/logs/list/",
+    summary: "/api/system/release-readiness/logs/summary/",
+    export: "/api/system/release-readiness/logs/export/",
+    detail: (id: ApiPathId) => `/api/system/release-readiness/logs/${id}/`,
   },
 
   performanceCenter: {
-    overview: "/api/performance-center/",
-    list: "/api/performance-center/list/",
-    detail: "/api/performance-center/detail/",
-    metrics: "/api/performance-center/metrics/",
+    overview: "/api/system/release-readiness/performance/",
+    list: "/api/system/release-readiness/performance/list/",
+    detail: "/api/system/release-readiness/performance/detail/",
+    metrics: "/api/system/release-readiness/performance/metrics/",
   },
 
   paymentGateways: {
-    list: "/api/payment-gateways/",
-    detail: (id: ApiPathId) => `/api/payment-gateways/${id}/`,
+    list: "/api/company/payments/gateways/",
+    detail: (id: ApiPathId) => `/api/company/payments/gateways/${id}/`,
 
-    tapCreateCheckout: "/api/payment-gateways/tap/create-checkout/",
-    tapWebhook: "/api/payment-gateways/tap/webhook/",
-    tapCheckoutStatus: "/api/payment-gateways/tap/checkout-status/",
-    tapSuccessLookup: "/api/payment-gateways/tap/success-lookup/",
+    tapCreateCheckout: "/api/company/payments/gateways/tap/create-checkout/",
+    tapWebhook: "/api/company/payments/gateways/tap/webhook/",
+    tapCheckoutStatus: "/api/company/payments/gateways/tap/checkout-status/",
+    tapSuccessLookup: "/api/company/payments/gateways/tap/success-lookup/",
 
-    tamaraCreateCheckout: "/api/payment-gateways/tamara/create-checkout/",
-    tamaraWebhook: "/api/payment-gateways/tamara/webhook/",
+    tamaraCreateCheckout: "/api/company/payments/gateways/tamara/create-checkout/",
+    tamaraWebhook: "/api/company/payments/gateways/tamara/webhook/",
   },
 
   whatsapp: {
@@ -284,10 +284,10 @@ export const API_PATHS = {
     orders: "/api/company/sales/orders/reports/",
     customers: "/api/company/customers/reports/",
     products: "/api/company/products/reports/",
-    providers: "/api/providers/reports/",
-    centers: "/api/providers/reports/",
-    contracts: "/api/contracts/reports/",
-    agents: "/api/agents/reports/",
+    providers: "/api/system/companies/reports/",
+    centers: "/api/system/companies/reports/",
+    contracts: "/api/company/documents/contracts/reports/",
+    agents: "/api/company/reports/agents/reports/",
     treasury: "/api/company/treasury/reports/",
   },
 
@@ -297,12 +297,12 @@ export const API_PATHS = {
     orders: "/api/company/sales/orders/export/",
     customers: "/api/company/customers/export/",
     products: "/api/company/products/export/",
-    providers: "/api/providers/export/",
-    centers: "/api/providers/export/",
-    contracts: "/api/contracts/export/",
-    agents: "/api/agents/export/",
+    providers: "/api/system/companies/export/",
+    centers: "/api/system/companies/export/",
+    contracts: "/api/company/documents/contracts/export/",
+    agents: "/api/company/reports/agents/export/",
     treasuryTransactions: "/api/company/treasury/transactions/excel/",
-    systemLog: "/api/system-log/export/",
+    systemLog: "/api/system/release-readiness/logs/export/",
   },
 } as const;
 
