@@ -249,6 +249,23 @@ const systemNavItems: NavGroup[] = [
             permission: PERMISSIONS.PAYMENTS_VIEW,
             workspaces: ["system"],
           },
+
+          {
+            title: { ar: "اشتراكات الشركات", en: "Company Subscriptions" },
+            href: "/system/subscriptions",
+            aliases: ["/system/subscriptions/list", "/system/subscriptions/reports"],
+            icon: ReceiptText,
+            anyPermissions: [PERMISSIONS.SYSTEM_VIEW, PERMISSIONS.PAYMENTS_VIEW],
+            workspaces: ["system"],
+          },
+          {
+            title: { ar: "مدفوعات المنصة", en: "Platform Payments" },
+            href: "/system/platform-payments",
+            aliases: ["/system/platform-payments/list", "/system/platform-payments/reports"],
+            icon: CreditCard,
+            anyPermissions: [PERMISSIONS.SYSTEM_VIEW, PERMISSIONS.PAYMENTS_VIEW],
+            workspaces: ["system"],
+          },
         ],
       },
       {

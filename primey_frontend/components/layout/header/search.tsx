@@ -154,6 +154,27 @@ const systemSearchItems: SearchItem[] = [
       en: "Manage payments and collections",
     },
   },
+
+  {
+    title: { ar: "اشتراكات الشركات", en: "Company Subscriptions" },
+    href: "/system/subscriptions",
+    aliases: ["/system/subscriptions/list", "/system/subscriptions/reports"],
+    icon: ReceiptText,
+    description: {
+      ar: "متابعة اشتراكات الشركات وخطط المنصة",
+      en: "Track company subscriptions and platform plans",
+    },
+  },
+  {
+    title: { ar: "مدفوعات المنصة", en: "Platform Payments" },
+    href: "/system/platform-payments",
+    aliases: ["/system/platform-payments/list", "/system/platform-payments/reports"],
+    icon: CreditCard,
+    description: {
+      ar: "مراقبة مدفوعات المنصة والتحصيل",
+      en: "Monitor platform payments and collections",
+    },
+  },
   {
     title: { ar: "الخزينة", en: "Treasury" },
     href: "/system/treasury",
