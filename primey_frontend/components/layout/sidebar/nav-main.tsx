@@ -372,6 +372,13 @@ const systemNavItems: NavGroup[] = [
         workspaces: ["system"],
         items: [
           {
+            title: { ar: "\u0627\u0644\u0634\u0631\u0643\u0627\u062a", en: "Companies" },
+            href: "/system/companies",
+            icon: UserCog,
+            anyPermissions: [PERMISSIONS.SYSTEM_VIEW, PERMISSIONS.SYSTEM_SETTINGS],
+            workspaces: ["system"],
+          },
+          {
             title: { ar: "مستخدمو النظام", en: "System Users" },
             href: "/system/users",
             icon: UserCog,
@@ -752,6 +759,13 @@ function inferPermissionInputByHref(item: NavItem): PermissionCheckInput {
   if (href === "/system") {
     return {
       permission: PERMISSIONS.SYSTEM_VIEW,
+      workspaces: ["system"],
+    };
+  }
+
+  if (href.startsWith("/system/companies")) {
+    return {
+      anyPermissions: [PERMISSIONS.SYSTEM_VIEW, PERMISSIONS.SYSTEM_SETTINGS],
       workspaces: ["system"],
     };
   }
