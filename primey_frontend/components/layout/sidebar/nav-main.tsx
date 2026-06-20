@@ -395,7 +395,7 @@ const systemNavItems: NavGroup[] = [
    PROVIDER WORKSPACE NAV
 ===================================================== */
 
-const providerNavItems: NavGroup[] = [
+const companyNavItems: NavGroup[] = [
   {
     title: {
       ar: "مساحة مقدم الخدمة",
@@ -408,7 +408,7 @@ const providerNavItems: NavGroup[] = [
         aliases: ["/center", "/provider"],
         icon: Home,
         permission: PERMISSIONS.PROVIDER_WORKSPACE_VIEW,
-        workspaces: ["provider"],
+        workspaces: ["company"],
       },
       {
         title: { ar: "العملاء", en: "Customers" },
@@ -416,7 +416,7 @@ const providerNavItems: NavGroup[] = [
         aliases: ["/center/customers", "/provider/customers"],
         icon: Users,
         permission: PERMISSIONS.CUSTOMERS_VIEW,
-        workspaces: ["provider"],
+        workspaces: ["company"],
       },
       {
         title: { ar: "الطلبات", en: "Orders" },
@@ -427,7 +427,7 @@ const providerNavItems: NavGroup[] = [
           PERMISSIONS.PROVIDER_ORDERS_VIEW,
           PERMISSIONS.ORDERS_VIEW,
         ],
-        workspaces: ["provider"],
+        workspaces: ["company"],
       },
       {
         title: { ar: "المنتجات", en: "Products" },
@@ -435,7 +435,7 @@ const providerNavItems: NavGroup[] = [
         aliases: ["/center/products", "/provider/products"],
         icon: Boxes,
         permission: PERMISSIONS.PRODUCTS_VIEW,
-        workspaces: ["provider"],
+        workspaces: ["company"],
       },
       {
         title: { ar: "العقود", en: "Contracts" },
@@ -446,7 +446,7 @@ const providerNavItems: NavGroup[] = [
           PERMISSIONS.PROVIDER_CONTRACTS_VIEW,
           PERMISSIONS.CONTRACTS_VIEW,
         ],
-        workspaces: ["provider"],
+        workspaces: ["company"],
       },
       {
         title: { ar: "الفواتير", en: "Invoices" },
@@ -454,7 +454,7 @@ const providerNavItems: NavGroup[] = [
         aliases: ["/center/invoices", "/provider/invoices"],
         icon: ReceiptText,
         permission: PERMISSIONS.INVOICES_VIEW,
-        workspaces: ["provider"],
+        workspaces: ["company"],
       },
       {
         title: { ar: "المدفوعات", en: "Payments" },
@@ -462,7 +462,7 @@ const providerNavItems: NavGroup[] = [
         aliases: ["/center/payments", "/provider/payments"],
         icon: CreditCard,
         permission: PERMISSIONS.PAYMENTS_VIEW,
-        workspaces: ["provider"],
+        workspaces: ["company"],
       },
       {
         title: { ar: "المستخدمون", en: "Users" },
@@ -470,7 +470,7 @@ const providerNavItems: NavGroup[] = [
         aliases: ["/center/users", "/provider/users"],
         icon: UserCog,
         roles: ["provider_admin", "system_admin"],
-        workspaces: ["provider"],
+        workspaces: ["company"],
       },
       {
         title: { ar: "الإعدادات", en: "Settings" },
@@ -478,7 +478,7 @@ const providerNavItems: NavGroup[] = [
         aliases: ["/center/settings", "/provider/settings"],
         icon: Settings,
         roles: ["provider_admin", "system_admin"],
-        workspaces: ["provider"],
+        workspaces: ["company"],
       },
     ],
   },
@@ -932,7 +932,7 @@ function inferPermissionInputByHref(item: NavItem): PermissionCheckInput {
   ) {
     return {
       permission: PERMISSIONS.PROVIDER_WORKSPACE_VIEW,
-      workspaces: ["provider"],
+      workspaces: ["company"],
     };
   }
 
@@ -1102,7 +1102,7 @@ export function NavMain({ type }: NavMainProps) {
     }
 
     return filterNavGroups(
-      providerNavItems,
+      companyNavItems,
       authSession,
       currentRole,
       enabledApps,

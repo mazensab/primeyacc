@@ -59,7 +59,7 @@ type WorkspaceType =
   | "customer"
   | "agent"
 
-type NormalizedWorkspace = "system" | "provider" | "customer" | "agent"
+type NormalizedWorkspace = "system" | "company" | "customer" | "agent"
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   type: WorkspaceType
@@ -103,7 +103,7 @@ function applyDocumentLocale(locale: AppLocale): void {
 
 function normalizeWorkspace(type: WorkspaceType): NormalizedWorkspace {
   if (type === "company" || type === "center" || type === "provider") {
-    return "provider"
+    return "company"
   }
 
   if (type === "customer") return "customer"
@@ -134,13 +134,13 @@ function getWorkspaceCopy(
     }
   }
 
-  if (workspace === "provider") {
+  if (workspace === "company") {
     return {
-      workspaceLabel: isArabic ? "مساحة مقدم الخدمة" : "Provider Workspace",
+      workspaceLabel: isArabic ? "مساحة الشركة" : "Company Workspace",
       workspaceBadge: isArabic ? "شبكة الخدمة" : "Service Network",
-      firstItemTitle: isArabic ? "لوحة مقدم الخدمة" : "Provider Dashboard",
+      firstItemTitle: isArabic ? "لوحة الشركة" : "Company Dashboard",
       firstItemStatus: isArabic ? "نشط" : "Active",
-      secondItemTitle: isArabic ? "تشغيل مقدم الخدمة" : "Provider Operations",
+      secondItemTitle: isArabic ? "تشغيل الشركة" : "Company Operations",
       secondItemSubtitle: isArabic ? "المنطقة التشغيلية" : "Workspace Area",
     }
   }
@@ -174,7 +174,7 @@ function getWorkspaceIcons(workspace: NormalizedWorkspace) {
     }
   }
 
-  if (workspace === "provider") {
+  if (workspace === "company") {
     return {
       first: Building2,
       second: Briefcase,
