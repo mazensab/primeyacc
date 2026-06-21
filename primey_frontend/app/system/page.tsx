@@ -146,8 +146,6 @@ type DataColumn<T> = {
 const API_ENDPOINTS = {
   companies: "/api/system/companies/",
   subscriptions: "/api/system/subscriptions/",
-  platformPayments: "/api/system/platform-payments/",
-  apiContracts: "/api/system/api-contracts/",
   releaseReadiness: "/api/system/release-readiness/",
 };
 
@@ -1079,14 +1077,11 @@ export default function SystemDashboardPage() {
         setError("");
         setWarnings([]);
 
-        const countParams = new URLSearchParams({ page: "1", page_size: "1" });
         const rowsParams = new URLSearchParams({ page: "1", page_size: "12", ordering: "-created_at" });
 
         const results = await Promise.allSettled([
           fetchJson<ApiResponse>(makeApiUrl(API_ENDPOINTS.companies, rowsParams), controller.signal),
           fetchJson<ApiResponse>(makeApiUrl(API_ENDPOINTS.subscriptions, rowsParams), controller.signal),
-          fetchJson<ApiResponse>(makeApiUrl(API_ENDPOINTS.platformPayments, rowsParams), controller.signal),
-          fetchJson<ApiResponse>(makeApiUrl(API_ENDPOINTS.apiContracts, countParams), controller.signal),
           fetchJson<ApiResponse>(makeApiUrl(API_ENDPOINTS.releaseReadiness), controller.signal),
         ]);
 
@@ -1094,9 +1089,10 @@ export default function SystemDashboardPage() {
           .filter((result): result is PromiseRejectedResult => result.status === "rejected")
           .map((result) => normalizeText(result.reason instanceof Error ? result.reason.message : result.reason));
 
-        const [companiesPayload, subscriptionsPayload, paymentsPayload, contractsPayload, readinessPayload] = results.map(
+        const [companiesPayload, subscriptionsPayload, readinessPayload] = results.map(
           (result) => (result.status === "fulfilled" ? result.value : {}),
         );
+        const paymentsPayload: ApiResponse = { results: [] };
 
         const companyRows = extractArray(companiesPayload).map(normalizeCompany);
         const subscriptionRows = extractArray(subscriptionsPayload).map(normalizeSubscription);
@@ -1104,6 +1100,7 @@ export default function SystemDashboardPage() {
         const companiesSummary = extractSummary(companiesPayload);
         const subscriptionsSummary = extractSummary(subscriptionsPayload);
         const paymentsSummary = extractSummary(paymentsPayload);
+        const readinessSummary = extractSummary(readinessPayload);
 
         setCompanies(companyRows);
         setSubscriptions(subscriptionRows);
@@ -1127,7 +1124,13 @@ export default function SystemDashboardPage() {
               paymentsSummary.collected_amount,
             paymentRows.reduce((sum, item) => sum + item.amount, 0),
           ),
-          apiContracts: extractCount(contractsPayload),
+          apiContracts: toNumber(
+            readinessSummary.api_contracts_count ??
+              readinessSummary.api_contracts ??
+              readinessSummary.contracts_count ??
+              readinessSummary.total_contracts,
+            0,
+          ),
           readinessScore: normalizeReadinessScore(readinessPayload),
         });
 
