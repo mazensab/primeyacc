@@ -4,12 +4,12 @@ import { cn } from "@/lib/utils";
 
 /* =====================================================
    📂 components/ui/card.tsx
-   🧠 Primey Care — Premium Card
+   🧩 PrimeyAcc — Premium Card
    -----------------------------------------------------
-   ✅ نفس روح العنصر النشط في السايدر
-   ✅ تدرج بنفسجي خفيف وناعم
-   ✅ أبيض موحد بدون رمادي ثقيل
-   ✅ يحافظ على Card API بدون كسر الصفحات
+   ✅ Keeps the existing Card API without breaking pages.
+   ✅ Uses PrimeyAcc black/neutral accents instead of PrimeyCare purple.
+   ✅ Keeps a clean white premium workspace surface.
+   ✅ Supports dark mode with neutral black/gray shadows.
 ===================================================== */
 
 function Card({ className, ...props }: React.ComponentProps<"div">) {
@@ -19,17 +19,17 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
       className={cn(
         [
           "relative isolate flex flex-col gap-6 overflow-hidden rounded-3xl border py-6",
-          "border-primary/10 bg-gradient-to-br from-white via-primary/[0.025] to-primary/[0.075]",
-          "text-card-foreground shadow-[0_16px_40px_rgba(67,42,88,0.075)]",
+          "border-primary/15 bg-gradient-to-br from-white via-primary/[0.018] to-primary/[0.045]",
+          "text-card-foreground shadow-[0_16px_40px_rgba(17,24,39,0.075)]",
           "backdrop-blur-xl transition-all duration-200",
           "before:pointer-events-none before:absolute before:inset-0 before:-z-10 before:content-['']",
-          "before:bg-[radial-gradient(circle_at_top_right,rgba(67,42,88,0.08),transparent_36%),linear-gradient(135deg,rgba(255,255,255,0.92),rgba(255,255,255,0.62),rgba(67,42,88,0.035))]",
+          "before:bg-[radial-gradient(circle_at_top_right,rgba(17,24,39,0.055),transparent_36%),linear-gradient(135deg,rgba(255,255,255,0.94),rgba(255,255,255,0.68),rgba(17,24,39,0.025))]",
           "after:pointer-events-none after:absolute after:inset-0 after:-z-10 after:content-['']",
           "after:bg-[linear-gradient(180deg,rgba(255,255,255,0.72),rgba(255,255,255,0.18))]",
-          "hover:border-primary/15 hover:shadow-[0_18px_48px_rgba(67,42,88,0.095)]",
+          "hover:border-primary/25 hover:shadow-[0_18px_48px_rgba(17,24,39,0.095)]",
           "dark:border-white/10 dark:bg-gradient-to-br dark:from-white/[0.075] dark:via-primary/[0.10] dark:to-white/[0.025]",
           "dark:text-card-foreground dark:shadow-[0_18px_48px_rgba(0,0,0,0.30)]",
-          "dark:before:bg-[radial-gradient(circle_at_top_right,rgba(211,216,236,0.12),transparent_38%),linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.035),rgba(211,216,236,0.055))]",
+          "dark:before:bg-[radial-gradient(circle_at_top_right,rgba(249,250,251,0.10),transparent_38%),linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.035),rgba(249,250,251,0.045))]",
           "dark:after:bg-[linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.015))]",
         ].join(" "),
         className

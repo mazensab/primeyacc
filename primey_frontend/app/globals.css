@@ -74,100 +74,100 @@
   --radius: 0.625rem;
 
   /* ======================================================
-     Primey Care Brand Colors
-     Primary:   #432a58
-     Secondary: #8c9cdc
+     PrimeyAcc Black / Neutral Brand Colors
+     Primary:   #111827
+     Secondary: #374151
 
      Layout direction:
      - Keep the workspace background visually white and unified.
-     - Keep Primey purple as action/brand color only.
+     - Keep PrimeyAcc black/neutral as action/brand color only.
   ====================================================== */
 
   --background: #ffffff;
-  --foreground: #18121f;
+  --foreground: #111827;
 
   --card: #ffffff;
-  --card-foreground: #18121f;
+  --card-foreground: #111827;
 
   --popover: #ffffff;
-  --popover-foreground: #18121f;
+  --popover-foreground: #111827;
 
-  --primary: #432a58;
+  --primary: #111827;
   --primary-foreground: #ffffff;
 
   --secondary: #f8fafc;
-  --secondary-foreground: #18121f;
+  --secondary-foreground: #111827;
 
   --muted: #ffffff;
   --muted-foreground: #6b7280;
 
   --accent: #ffffff;
-  --accent-foreground: #432a58;
+  --accent-foreground: #111827;
 
   --destructive: #dc2626;
 
   --border: #edf0f4;
   --input: #edf0f4;
-  --ring: #8c9cdc;
+  --ring: #374151;
 
-  --chart-1: #432a58;
-  --chart-2: #8c9cdc;
-  --chart-3: #6d4c82;
-  --chart-4: #b6c1f3;
-  --chart-5: #d8ddfb;
+  --chart-1: #111827;
+  --chart-2: #374151;
+  --chart-3: #4b5563;
+  --chart-4: #9ca3af;
+  --chart-5: #e5e7eb;
 
   --sidebar: #ffffff;
-  --sidebar-foreground: #18121f;
-  --sidebar-primary: #432a58;
+  --sidebar-foreground: #111827;
+  --sidebar-primary: #111827;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #ffffff;
-  --sidebar-accent-foreground: #432a58;
+  --sidebar-accent: #111827;
+  --sidebar-accent-foreground: #ffffff;
   --sidebar-border: #edf0f4;
-  --sidebar-ring: #8c9cdc;
+  --sidebar-ring: #111827;
 }
 
 .dark {
-  --background: #15101b;
-  --foreground: #f8f5fb;
+  --background: #030712;
+  --foreground: #f9fafb;
 
-  --card: #1f1728;
-  --card-foreground: #f8f5fb;
+  --card: #111827;
+  --card-foreground: #f9fafb;
 
-  --popover: #1f1728;
-  --popover-foreground: #f8f5fb;
+  --popover: #111827;
+  --popover-foreground: #f9fafb;
 
-  --primary: #d3d8ec;
-  --primary-foreground: #15101b;
+  --primary: #f9fafb;
+  --primary-foreground: #030712;
 
-  --secondary: #432a58;
+  --secondary: #111827;
   --secondary-foreground: #ffffff;
 
-  --muted: #261d31;
-  --muted-foreground: #c8bfd0;
+  --muted: #1f2937;
+  --muted-foreground: #d1d5db;
 
-  --accent: #332340;
-  --accent-foreground: #f8f5fb;
+  --accent: #374151;
+  --accent-foreground: #f9fafb;
 
   --destructive: #f87171;
 
   --border: rgb(255 255 255 / 12%);
   --input: rgb(255 255 255 / 16%);
-  --ring: #8c9cdc;
+  --ring: #374151;
 
-  --chart-1: #8c9cdc;
-  --chart-2: #b6c1f3;
-  --chart-3: #6d4c82;
-  --chart-4: #d8ddfb;
-  --chart-5: #432a58;
+  --chart-1: #374151;
+  --chart-2: #9ca3af;
+  --chart-3: #4b5563;
+  --chart-4: #e5e7eb;
+  --chart-5: #111827;
 
-  --sidebar: #1f1728;
-  --sidebar-foreground: #f8f5fb;
-  --sidebar-primary: #8c9cdc;
-  --sidebar-primary-foreground: #15101b;
-  --sidebar-accent: #261d31;
-  --sidebar-accent-foreground: #f8f5fb;
+  --sidebar: #111827;
+  --sidebar-foreground: #f9fafb;
+  --sidebar-primary: #374151;
+  --sidebar-primary-foreground: #030712;
+  --sidebar-accent: #1f2937;
+  --sidebar-accent-foreground: #f9fafb;
   --sidebar-border: rgb(255 255 255 / 12%);
-  --sidebar-ring: #8c9cdc;
+  --sidebar-ring: #111827;
 }
 
 @layer base {
@@ -220,8 +220,8 @@ h4 {
 .btn-bezel {
   box-shadow:
     inset 0 2px 0 0 hsla(0, 0%, 100%, 0.25),
-    inset 0 -1px 0 0 rgba(67, 42, 88, 0.2),
-    0 2px 6px 0 rgba(67, 42, 88, 0.12);
+    inset 0 -1px 0 0 rgba(17, 24, 39, 0.2),
+    0 2px 6px 0 rgba(17, 24, 39, 0.12);
 }
 
 @utility container {
