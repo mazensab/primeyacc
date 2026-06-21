@@ -1,17 +1,23 @@
-/* ============================================================
-   📂 app/system/api-contracts/page.tsx
-   🧠 PrimeyAcc | API Contracts Page — Phase 5.2.2
+﻿/**
+ * PrimeyAcc Frontend
+ * File: app/system/api-contracts/page.tsx
+ * Route: /system/api-contracts
+ * Page: API Contracts
+ *
+ * Purpose:
+ * Header-only placeholder page.
+ * This file is intentionally kept minimal so the page can be rebuilt
+ * step-by-step without carrying previous UI mistakes forward.
+ */
 
-   ✅ صفحة عقود API
-   ✅ تعرض registry القادم من الباكند
-   ✅ بدون API مكرر في الفرونت
-
-   القاعدة المعتمدة:
-   - الفرونت يعرض فقط ما يرجع من الباكند.
-============================================================ */
-
-import { SystemReadinessView } from "@/components/system/SystemReadinessView";
-
-export default function ApiContractsPage() {
-  return <SystemReadinessView mode="contracts" />;
+export default function SystemRoutePlaceholderPage() {
+  return (
+    <main className="min-h-screen bg-slate-50 px-6 py-8 text-slate-950">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <p className="text-sm font-medium text-slate-500">PrimeyAcc System Page</p>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight">API Contracts</h1>
+        <p className="mt-3 text-sm text-slate-500">/system/api-contracts</p>
+      </section>
+    </main>
+  );
 }

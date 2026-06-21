@@ -1,5 +1,23 @@
-﻿import { SystemBillingView } from "@/components/system/billing/SystemBillingView";
+﻿/**
+ * PrimeyAcc Frontend
+ * File: app/system/platform-payments/[id]/page.tsx
+ * Route: /system/platform-payments/[id]
+ * Page: Platform Payment Details
+ *
+ * Purpose:
+ * Header-only placeholder page.
+ * This file is intentionally kept minimal so the page can be rebuilt
+ * step-by-step without carrying previous UI mistakes forward.
+ */
 
-export default function SystemPlatformPaymentDetailPage() {
-  return <SystemBillingView entity="payments" mode="detail" />;
+export default function SystemRoutePlaceholderPage() {
+  return (
+    <main className="min-h-screen bg-slate-50 px-6 py-8 text-slate-950">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <p className="text-sm font-medium text-slate-500">PrimeyAcc System Page</p>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight">Platform Payment Details</h1>
+        <p className="mt-3 text-sm text-slate-500">/system/platform-payments/[id]</p>
+      </section>
+    </main>
+  );
 }
