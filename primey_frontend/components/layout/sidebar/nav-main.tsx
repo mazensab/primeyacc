@@ -1099,39 +1099,43 @@ export function NavMain({ type }: NavMainProps) {
   const ChevronIcon = isArabic ? ChevronLeft : ChevronRight;
 
   const navItems = useMemo(() => {
-    if (type === "system") {
-      return filterNavGroups(
-        systemNavItems,
-        authSession,
-        currentRole,
-        enabledApps,
-      );
-    }
+    const sourceGroups =
+      type === "system"
+        ? systemNavItems
+        : type === "customer"
+          ? customerNavItems
+          : type === "agent"
+            ? agentNavItems
+            : companyNavItems;
 
-    if (type === "customer") {
-      return filterNavGroups(
-        customerNavItems,
-        authSession,
-        currentRole,
-        enabledApps,
-      );
-    }
-
-    if (type === "agent") {
-      return filterNavGroups(
-        agentNavItems,
-        authSession,
-        currentRole,
-        enabledApps,
-      );
-    }
-
-    return filterNavGroups(
-      companyNavItems,
+    const filteredGroups = filterNavGroups(
+      sourceGroups,
       authSession,
       currentRole,
       enabledApps,
     );
+
+    if (filteredGroups.length > 0) {
+      return filteredGroups;
+    }
+
+    const normalizedRole = currentRole.trim().toLowerCase();
+    const canUseSystemFallback =
+      type === "system" &&
+      Boolean(authSession.user) &&
+      (authSession.is_superuser === true ||
+        authSession.is_staff === true ||
+        authSession.is_system_user === true ||
+        normalizedRole === "super_admin" ||
+        normalizedRole === "system_admin" ||
+        normalizedRole === "admin" ||
+        normalizedRole === "staff");
+
+    if (canUseSystemFallback) {
+      return sourceGroups;
+    }
+
+    return filteredGroups;
   }, [type, authSession, currentRole, enabledApps]);
 
   const getRowClassName = (level: number) =>
