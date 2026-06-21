@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
-import RouteGuard from "@/components/auth/useRouteGuard";
+import { AuthProvider } from "@/components/providers/AuthProvider";
 import DashboardFrame from "@/components/layout/DashboardFrame";
+
 export default function CompanyLayout({ children }: { children: ReactNode }) {
   return (
-    <RouteGuard role="company">
+    <AuthProvider>
       <DashboardFrame sidebarType="company">{children}</DashboardFrame>
-    </RouteGuard>
+    </AuthProvider>
   );
 }
