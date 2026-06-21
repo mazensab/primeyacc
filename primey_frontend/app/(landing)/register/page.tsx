@@ -53,12 +53,12 @@ function buildApiUrl(path: string): string {
 type AppLocale = "ar" | "en";
 
 type ProgramValue =
-  | "individual_card"
-  | "family_card"
-  | "dental_program"
-  | "checkups_labs"
-  | "dermatology_beauty"
-  | "maternity_care";
+  | "starter_plan"
+  | "growth_plan"
+  | "sales_invoicing"
+  | "inventory_operations"
+  | "treasury_payments"
+  | "reports_management";
 
 type ContactPreference = "whatsapp" | "phone" | "email";
 
@@ -103,7 +103,7 @@ type Content = {
   backHome: string;
   viewPricing: string;
   contactUs: string;
-  benefitsTitle: string;
+  nextStepsTitle: string;
   disclaimerTitle: string;
   disclaimerText: string;
   sideTitle: string;
@@ -129,75 +129,75 @@ type Content = {
 ========================================================= */
 const programOptions: ProgramOption[] = [
   {
-    value: "individual_card",
+    value: "starter_plan",
     icon: UserRound,
     title: {
-      ar: "بطاقة فردية",
-      en: "Individual Card",
+      ar: "باقة البداية",
+      en: "Starter Plan",
     },
     description: {
-      ar: "مناسبة للاستفادة من مزايا وخصومات طبية طوال العام.",
-      en: "Suitable for year-round healthcare benefits and selected discounts.",
+      ar: "مناسبة للبدء بالمحاسبة الأساسية وإدارة الأعمال اليومية.",
+      en: "Suitable for starting with core accounting and business management.",
     },
   },
   {
-    value: "family_card",
+    value: "growth_plan",
     icon: HeartPulse,
     title: {
-      ar: "بطاقة عائلية",
-      en: "Family Card",
+      ar: "باقة النمو",
+      en: "Growth Plan",
     },
     description: {
-      ar: "خيار مناسب للعائلة حسب نوع البطاقة وشروط الاشتراك.",
-      en: "A family-friendly option depending on the card type and terms.",
+      ar: "مناسبة للشركات النامية التي تحتاج وحدات تشغيلية أكثر.",
+      en: "Suitable for growing companies that need more operational modules.",
     },
   },
   {
-    value: "dental_program",
+    value: "sales_invoicing",
     icon: BadgeCheck,
     title: {
-      ar: "برنامج الأسنان",
-      en: "Dental Program",
+      ar: "المبيعات والفوترة",
+      en: "Sales & Invoicing",
     },
     description: {
-      ar: "مزايا على الكشف والتنظيف والحشوات وخدمات العناية بالفم.",
-      en: "Benefits on consultations, cleaning, fillings, and oral care.",
+      ar: "إدارة العملاء وعروض الأسعار والفواتير وضريبة القيمة المضافة وسير عمل المبيعات.",
+      en: "Manage quotations, invoices, customers, VAT, and sales workflow.",
     },
   },
   {
-    value: "checkups_labs",
+    value: "inventory_operations",
     icon: ShieldCheck,
     title: {
-      ar: "الفحوصات والتحاليل",
-      en: "Checkups & Lab Tests",
+      ar: "المخزون والعمليات",
+      en: "Inventory Operations",
     },
     description: {
-      ar: "خيارات للفحوصات الدورية والتحاليل والخدمات التشخيصية.",
-      en: "Options for routine checkups, lab tests, and diagnostics.",
+      ar: "إدارة المنتجات والمستودعات وحركات المخزون والرقابة التشغيلية.",
+      en: "Manage products, warehouses, stock movements, and inventory control.",
     },
   },
   {
-    value: "dermatology_beauty",
+    value: "treasury_payments",
     icon: Sparkles,
     title: {
-      ar: "الجلدية والتجميل",
-      en: "Dermatology & Beauty",
+      ar: "الخزينة والمدفوعات",
+      en: "Treasury & Payments",
     },
     description: {
-      ar: "مزايا على العناية بالبشرة والجلسات التجميلية المختارة.",
-      en: "Benefits on skincare and selected beauty services.",
+      ar: "متابعة النقد والبنوك ومدفوعات العملاء والموردين والتحويلات.",
+      en: "Track cash, bank accounts, customer payments, supplier payments, and transfers.",
     },
   },
   {
-    value: "maternity_care",
+    value: "reports_management",
     icon: HeartPulse,
     title: {
-      ar: "الولادة والرعاية",
-      en: "Maternity Care",
+      ar: "التقارير والإدارة",
+      en: "Reports & Management",
     },
     description: {
-      ar: "خيارات مساندة للمتابعة والولادة حسب البرامج المتاحة.",
-      en: "Supportive options for follow-ups and maternity care.",
+      ar: "متابعة أداء الشركة من خلال التقارير ولوحات المعلومات.",
+      en: "Use dashboards and reports to follow company performance and operations.",
     },
   },
 ];
@@ -207,15 +207,15 @@ const programOptions: ProgramOption[] = [
 ========================================================= */
 const content: Record<AppLocale, Content> = {
   ar: {
-    badge: "طلب اشتراك Primey Care",
-    title: "ابدأ رحلتك مع رعاية صحية أوفر وأسهل",
+    badge: "طلب تجربة PrimeyAcc",
+    title: "ابدأ رحلتك مع نظام محاسبي وإداري سحابي",
     description:
-      "املأ بياناتك واختر البطاقة أو البرنامج المناسب لك، وسيتواصل معك فريق Primey Care لتوضيح المزايا والشبكة الطبية وخطوات الاشتراك.",
+      "املأ بياناتك واختر الباقة أو الوحدات المناسبة لشركتك، وسيتواصل معك فريق PrimeyAcc لتوضيح إمكانيات المنصة وخطوات التفعيل.",
     primaryNote:
-      "Primey Care بطاقة وبرامج مزايا وخصومات طبية وليست تأمينًا طبيًا.",
-    formTitle: "بيانات الاشتراك",
+      "PrimeyAcc منصة محاسبية وإدارية سحابية لاستخدام الشركات وإدارة العمليات اليومية.",
+    formTitle: "بيانات طلب التجربة",
     formDescription:
-      "أدخل بياناتك الأساسية وسنساعدك في اختيار الخيار الأنسب لك ولعائلتك.",
+      "أدخل بياناتك الأساسية وسنساعدك في اختيار الخيار الأنسب لشركتك.",
     fullName: "الاسم الكامل",
     fullNamePlaceholder: "مثال: مازن العتيبي",
     phone: "رقم الجوال",
@@ -224,38 +224,38 @@ const content: Record<AppLocale, Content> = {
     emailPlaceholder: "name@example.com",
     city: "المدينة",
     cityPlaceholder: "مثال: الرياض",
-    program: "البطاقة أو البرنامج المطلوب",
+    program: "الباقة أو الوحدات المطلوبة",
     contactPreference: "طريقة التواصل المفضلة",
     message: "ملاحظات إضافية",
     messagePlaceholder:
-      "اكتب أي تفاصيل مهمة مثل المدينة، عدد أفراد العائلة، أو نوع الخدمة الطبية التي تهتم بها...",
-    submit: "إرسال طلب الاشتراك",
+      "اكتب أي تفاصيل مهمة مثل نشاط الشركة، عدد المستخدمين، الفروع، أو الوحدات التي تحتاجها...",
+    submit: "إرسال طلب التجربة",
     submitting: "جارٍ إرسال الطلب...",
     backHome: "العودة للرئيسية",
-    viewPricing: "عرض الاشتراكات",
+    viewPricing: "عرض الباقات",
     contactUs: "تواصل معنا",
-    benefitsTitle: "ماذا يحدث بعد إرسال الطلب؟",
+    nextStepsTitle: "ماذا يحدث بعد إرسال الطلب؟",
     disclaimerTitle: "تنبيه مهم",
     disclaimerText:
-      "المزايا والخصومات تختلف حسب مقدم الخدمة، المدينة، نوع البرنامج، وشروط العرض المتاحة. سيتم توضيح التفاصيل قبل إتمام الاشتراك.",
-    sideTitle: "Primey Care تجعل اختيار الرعاية أوضح",
+      "الوحدات والحدود وشروط الاشتراك تختلف حسب الباقة وإعدادات الشركة. سيتم توضيح التفاصيل قبل التفعيل.",
+    sideTitle: "PrimeyAcc تجعل اختيار النظام أوضح",
     sideDescription:
-      "بدل البحث المتكرر عن العروض، اختر بطاقة أو برنامجًا صحيًا يساعدك على الوصول إلى مزايا طبية مناسبة لك ولعائلتك.",
+      "بدل استخدام أدوات متفرقة، اختر منصة محاسبية وإدارية تساعد شركتك على إدارة العمليات اليومية من مكان واحد.",
     steps: [
       {
         title: "نراجع طلبك",
         description:
-          "نتأكد من نوع البطاقة أو البرنامج الذي يناسب احتياجك والمدينة المطلوبة.",
+          "نراجع الباقة والوحدات التي تناسب احتياج شركتك.",
       },
       {
-        title: "نوضح المزايا",
+        title: "نوضح إمكانيات النظام",
         description:
-          "نرسل لك تفاصيل المزايا والشبكة الطبية والشروط المتاحة قبل الاشتراك.",
+          "نوضح لك الوحدات المتاحة وخطوات الإعداد وشروط الاشتراك قبل التفعيل.",
       },
       {
-        title: "تبدأ الاستفادة",
+        title: "تبدأ استخدام النظام",
         description:
-          "بعد التفعيل، يمكنك استخدام بيانات عضويتك لدى مزودي الخدمة المشاركين.",
+          "بعد التفعيل، يمكن لشركتك استخدام PrimeyAcc حسب المستخدمين والوحدات المفعلة.",
       },
     ],
     contactPreferences: {
@@ -268,21 +268,21 @@ const content: Record<AppLocale, Content> = {
       phone: "اكتب رقم جوال صحيح",
       email: "اكتب بريدًا إلكترونيًا صحيحًا",
       city: "اكتب المدينة",
-      program: "اختر البطاقة أو البرنامج",
-      submitError: "تعذر إرسال طلب الاشتراك",
-      submitSuccess: "تم إرسال طلب الاشتراك بنجاح",
+      program: "اختر الباقة أو الوحدات",
+      submitError: "تعذر إرسال طلب التجربة",
+      submitSuccess: "تم إرسال طلب التجربة بنجاح",
     },
   },
   en: {
-    badge: "Primey Care Subscription Request",
-    title: "Start your journey toward easier and more affordable care",
+    badge: "PrimeyAcc Subscription Request",
+    title: "Start your journey with cloud accounting and business management",
     description:
-      "Fill in your details and choose the card or program that fits your needs. The Primey Care team will contact you with benefits, network details, and subscription steps.",
+      "Fill in your details and choose the plan or modules that fit your business needs. The PrimeyAcc team will contact you with platform details, setup steps, and subscription options.",
     primaryNote:
-      "Primey Care is a healthcare benefits and discount card, not medical insurance.",
-    formTitle: "Subscription Details",
+      "PrimeyAcc is a cloud accounting and ERP platform for business subscriptions and company operations.",
+    formTitle: "Company Request Details",
     formDescription:
-      "Enter your basic information and we will help you choose the best option for you and your family.",
+      "Enter your basic information and we will help you choose the best option for your company.",
     fullName: "Full Name",
     fullNamePlaceholder: "Example: Mazen Alotaibi",
     phone: "Mobile Number",
@@ -291,38 +291,38 @@ const content: Record<AppLocale, Content> = {
     emailPlaceholder: "name@example.com",
     city: "City",
     cityPlaceholder: "Example: Riyadh",
-    program: "Preferred Card or Program",
+    program: "Preferred Plan or Modules",
     contactPreference: "Preferred Contact Method",
     message: "Additional Notes",
     messagePlaceholder:
-      "Write any important details such as your city, family members, or the healthcare service you are interested in...",
-    submit: "Send Subscription Request",
+      "Write any important details such as your company activity, number of users, branches, or the modules you need...",
+    submit: "Send Trial Request",
     submitting: "Sending request...",
     backHome: "Back Home",
-    viewPricing: "View Subscriptions",
+    viewPricing: "View Plans",
     contactUs: "Contact Us",
-    benefitsTitle: "What happens after submitting?",
+    nextStepsTitle: "What happens after submitting?",
     disclaimerTitle: "Important Notice",
     disclaimerText:
-      "Benefits and discounts may vary by provider, city, program type, and available offer terms. Details will be clarified before completing the subscription.",
-    sideTitle: "Primey Care makes choosing care clearer",
+      "Available modules, limits, and subscription terms may vary by plan and company setup. Details will be clarified before activation.",
+    sideTitle: "PrimeyAcc makes choosing business software clearer",
     sideDescription:
-      "Instead of searching repeatedly for offers, choose a healthcare card or program that helps you access suitable medical benefits for you and your family.",
+      "Instead of using disconnected tools, choose a cloud accounting and ERP platform that helps your company manage daily operations from one place.",
     steps: [
       {
         title: "We review your request",
         description:
-          "We check the card or program that fits your needs and requested city.",
+          "We review the plan and modules that fit your company needs.",
       },
       {
-        title: "We explain the benefits",
+        title: "We explain the platform",
         description:
-          "You receive benefit details, healthcare network information, and available terms before subscribing.",
+          "You receive platform details, available modules, and subscription terms before activation.",
       },
       {
-        title: "You start using benefits",
+        title: "You start using the platform",
         description:
-          "After activation, you can use your membership details with participating providers.",
+          "After activation, your company can start using PrimeyAcc with the configured users and modules.",
       },
     ],
     contactPreferences: {
@@ -335,9 +335,9 @@ const content: Record<AppLocale, Content> = {
       phone: "Enter a valid mobile number",
       email: "Enter a valid email address",
       city: "Enter your city",
-      program: "Choose a card or program",
-      submitError: "Failed to send subscription request",
-      submitSuccess: "Subscription request sent successfully",
+      program: "Choose a plan or modules",
+      submitError: "Failed to send trial request",
+      submitSuccess: "Trial request sent successfully",
     },
   },
 };
@@ -393,7 +393,7 @@ export default function RegisterPage() {
     phone: "",
     email: "",
     city: "",
-    program: "individual_card",
+    program: "starter_plan",
     contactPreference: "whatsapp",
     message: "",
   });
@@ -498,7 +498,7 @@ export default function RegisterPage() {
               selectedProgram?.title[locale] || form.program,
             contact_preference: form.contactPreference,
             message: form.message.trim(),
-            source: "primey_care_landing_register",
+            source: "primeyacc_landing_register",
           }),
         }
       );
@@ -516,7 +516,7 @@ export default function RegisterPage() {
         phone: "",
         email: "",
         city: "",
-        program: "individual_card",
+        program: "starter_plan",
         contactPreference: "whatsapp",
         message: "",
       });
@@ -555,11 +555,11 @@ export default function RegisterPage() {
           <Link
             href="/"
             className="inline-flex w-fit items-center transition hover:opacity-80"
-            aria-label="Primey Care"
+            aria-label="PrimeyAcc"
           >
             <Image
               src="/hero logo.png"
-              alt="Primey Care"
+              alt="PrimeyAcc"
               width={1200}
               height={420}
               priority
@@ -634,7 +634,7 @@ export default function RegisterPage() {
                 <div className="relative min-h-[320px] overflow-hidden">
                   <Image
                     src="/hero.png"
-                    alt="Primey Care benefits"
+                    alt="PrimeyAcc platform"
                     fill
                     priority
                     unoptimized
@@ -645,7 +645,7 @@ export default function RegisterPage() {
                   <div className="absolute bottom-0 p-6">
                     <Badge className="mb-3 rounded-full">
                       <HeartPulse className="size-4" />
-                      Primey Care
+                      PrimeyAcc
                     </Badge>
 
                     <h2
@@ -678,7 +678,7 @@ export default function RegisterPage() {
                     isArabic && "text-right"
                   )}
                 >
-                  {t.benefitsTitle}
+                  {t.nextStepsTitle}
                 </h3>
 
                 <div className="space-y-5">

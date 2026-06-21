@@ -58,7 +58,7 @@ type PricingContent = {
   startsFrom: string;
   customPrice: string;
   annualNote: string;
-  includedBenefits: string;
+  includedModules: string;
   getStarted: string;
   askForDetails: string;
   toastMessage: string;
@@ -70,10 +70,10 @@ type PricingContent = {
 const content: Record<AppLang, PricingContent> = {
   ar: {
     section: {
-      subTitle: "الاشتراكات",
-      title: "اختر بطاقة أو برنامج رعاية يناسبك",
+      subTitle: "الباقات",
+      title: "اختر باقة PrimeyAcc المناسبة لشركتك",
       description:
-        "ابدأ مع Primey Care بخيارات مرنة للأفراد والعائلات والبرامج الطبية المتخصصة، واستفد من خصومات ومزايا مختارة لدى مزودي الخدمة المشاركين.",
+        "ابدأ مع PrimeyAcc بباقات مرنة للمحاسبة والمبيعات والمشتريات والمخزون والخزينة والتقارير وإدارة العمليات.",
     },
     periods: {
       monthly: "شهري",
@@ -82,33 +82,33 @@ const content: Record<AppLang, PricingContent> = {
     saveLabel: "الأوفر",
     mostPopular: "الأكثر اختيارًا",
     startsFrom: "تبدأ من",
-    customPrice: "حسب البرنامج",
-    annualNote: "الاشتراك السنوي يمنحك استفادة أطول من مزايا البطاقة",
-    includedBenefits: "المزايا المتضمنة",
-    getStarted: "اشترك الآن",
-    askForDetails: "استفسر عن البرنامج",
-    toastMessage: "سيتم تحويلك إلى صفحة الاشتراك في Primey Care",
+    customPrice: "حسب الباقة",
+    annualNote: "الاشتراك السنوي يمنح شركتك قيمة أفضل ومدة استخدام أطول",
+    includedModules: "الوحدات المتضمنة",
+    getStarted: "ابدأ الآن",
+    askForDetails: "استفسر عن الباقة",
+    toastMessage: "سيتم تحويلك إلى صفحة طلب تجربة PrimeyAcc",
   },
   en: {
     section: {
-      subTitle: "Subscriptions",
-      title: "Choose a care card or program that fits you",
+      subTitle: "Plans",
+      title: "Choose a PrimeyAcc plan that fits your company",
       description:
-        "Start with Primey Care through flexible options for individuals, families, and specialized healthcare programs, and enjoy selected benefits with participating providers.",
+        "Start with PrimeyAcc through flexible plans for accounting, sales, purchases, inventory, treasury, reports, and business operations.",
     },
     periods: {
       monthly: "Monthly",
       annually: "Annually",
     },
     saveLabel: "Best Value",
-    mostPopular: "Most Chosen",
+    mostPopular: "Most Popular",
     startsFrom: "Starts from",
-    customPrice: "By program",
-    annualNote: "Annual subscription gives you longer access to card benefits",
-    includedBenefits: "Included Benefits",
-    getStarted: "Join Now",
+    customPrice: "By plan",
+    annualNote: "Annual subscription gives your company longer access with better value",
+    includedModules: "Included Modules",
+    getStarted: "Start Now",
     askForDetails: "Ask for Details",
-    toastMessage: "You will be redirected to the Primey Care registration page",
+    toastMessage: "You will be redirected to the PrimeyAcc trial request page",
   },
 };
 
@@ -116,18 +116,18 @@ const content: Record<AppLang, PricingContent> = {
    💳 Landing Plans
    ملاحظة:
    الأسعار هنا قابلة للتعديل لاحقًا حسب الأسعار الرسمية.
-   إذا لم يكن السعر ثابتًا نستخدم null وتظهر عبارة "حسب البرنامج".
+   إذا لم يكن السعر ثابتًا نستخدم null وتظهر عبارة "حسب الباقة".
 ========================================================= */
 const landingPlans: LandingPlan[] = [
   {
-    id: "individual",
+    id: "starter",
     title: {
-      ar: "بطاقة فردية",
-      en: "Individual Card",
+      ar: "باقة البداية",
+      en: "Starter Plan",
     },
     description: {
-      ar: "خيار مناسب لمن يريد الاستفادة من خصومات ومزايا طبية طوال العام بطريقة سهلة وواضحة.",
-      en: "A suitable option for individuals who want year-round medical benefits and selected discounts with a simple experience.",
+      ar: "خيار مناسب للشركات التي تبدأ بالمحاسبة الأساسية وإدارة الأعمال اليومية.",
+      en: "A suitable option for companies starting with core accounting and daily business management.",
     },
     price: {
       monthly: null,
@@ -135,62 +135,62 @@ const landingPlans: LandingPlan[] = [
     },
     features: {
       ar: [
-        "مزايا على الكشف والاستشارات",
-        "خصومات على التحاليل والفحوصات",
-        "استخدام سهل لدى مزودي الخدمة المشاركين",
-        "دعم واستفسارات عبر القنوات المعتمدة",
+        "إعداد الشركة والمحاسبة الأساسية",
+        "فواتير المبيعات وإدارة العملاء",
+        "إدارة المشتريات والموردين",
+        "تقارير أساسية ودعم المنصة",
       ],
       en: [
-        "Benefits on consultations and checkups",
-        "Discounts on lab tests and diagnostics",
-        "Easy use with participating providers",
-        "Support through approved channels",
+        "Core accounting and company setup",
+        "Sales invoices and customer management",
+        "Purchases and supplier management",
+        "Basic reports and platform support",
       ],
     },
   },
   {
-    id: "family",
+    id: "growth",
     popular: true,
     title: {
-      ar: "بطاقة عائلية",
-      en: "Family Card",
+      ar: "باقة النمو",
+      en: "Growth Plan",
     },
     description: {
-      ar: "خيار مناسب للعائلة للاستفادة من مزايا صحية متنوعة لدى شبكة مختارة من مقدمي الخدمة.",
-      en: "A suitable option for families to access selected healthcare benefits through a trusted provider network.",
+      ar: "خيار مناسب للشركات النامية التي تحتاج مستخدمين أكثر ووحدات تشغيلية أوسع.",
+      en: "A suitable option for growing companies that need more users, modules, and operational control.",
     },
     price: {
       monthly: null,
       annually: null,
     },
     note: {
-      ar: "أفضل خيار للعائلات",
-      en: "Best option for families",
+      ar: "أفضل خيار للشركات النامية",
+      en: "Best option for growing companies",
     },
     features: {
       ar: [
-        "مناسبة لأكثر من فرد حسب نوع البطاقة",
-        "مزايا على الأسنان والجلدية والفحوصات",
-        "خيارات صحية متنوعة للعائلة",
-        "اشتراك سنوي يساعدك على التوفير",
+        "مناسبة للشركات والفرق النامية",
+        "وحدات المبيعات والمشتريات والمخزون والخزينة",
+        "تغطية تشغيلية أوسع بين الإدارات",
+        "اشتراك سنوي بقيمة أفضل",
       ],
       en: [
-        "Suitable for more than one member depending on card type",
-        "Benefits on dental, dermatology, and checkups",
-        "Multiple healthcare options for the family",
-        "Annual subscription helps you save",
+        "Suitable for growing companies and teams",
+        "Sales, purchases, inventory, and treasury modules",
+        "More operational coverage across departments",
+        "Annual subscription gives better value",
       ],
     },
   },
   {
-    id: "programs",
+    id: "professional",
     title: {
-      ar: "برامج طبية متخصصة",
-      en: "Specialized Programs",
+      ar: "باقة الاحتراف",
+      en: "Professional Plan",
     },
     description: {
-      ar: "برامج مخصصة لاحتياجات معينة مثل الأسنان، الفحوصات، الجلدية، التجميل، الولادة والخدمات المختارة.",
-      en: "Specialized programs for needs such as dental care, checkups, dermatology, beauty, maternity, and selected services.",
+      ar: "خيار مناسب للشركات التي تحتاج وحدات متقدمة وتقارير وصلاحيات وتغطية تشغيلية أوسع.",
+      en: "A suitable option for companies that need advanced modules, reports, permissions, and wider operational coverage.",
     },
     price: {
       monthly: null,
@@ -198,16 +198,16 @@ const landingPlans: LandingPlan[] = [
     },
     features: {
       ar: [
-        "برامج للأسنان والفحوصات والتحاليل",
-        "خيارات للجلدية والتجميل والولادة",
-        "مزايا حسب مقدم الخدمة والعرض المتاح",
-        "مناسب لمن يبحث عن خدمة محددة",
+        "محاسبة متقدمة وتقارير ورقابة",
+        "مخزون وخزينة وصلاحيات وأدوات إدارة",
+        "الوحدات حسب الباقة وإعدادات الشركة",
+        "مناسبة للعمليات المتقدمة داخل الشركة",
       ],
       en: [
-        "Programs for dental care, checkups, and lab tests",
-        "Options for dermatology, beauty, and maternity",
-        "Benefits depend on provider and available offer",
-        "Suitable for specific healthcare needs",
+        "Advanced accounting, reports, and controls",
+        "Inventory, treasury, permissions, and management tools",
+        "Modules depend on selected plan and company setup",
+        "Suitable for advanced company operations",
       ],
     },
   },
@@ -451,7 +451,7 @@ export const PricingSection = () => {
                         )}
                       >
                         <Sparkles className="text-primary size-4" />
-                        <span>{t.includedBenefits}</span>
+                        <span>{t.includedModules}</span>
                       </div>
 
                       <ul className="space-y-3">
@@ -480,7 +480,7 @@ export const PricingSection = () => {
 
                     <Button asChild variant={isPopular ? "default" : "outline"}>
                       <Link href="/register" onClick={handleRegisterClick}>
-                        {plan.id === "programs" ? t.askForDetails : t.getStarted}
+                        {plan.id === "professional" ? t.askForDetails : t.getStarted}
                       </Link>
                     </Button>
                   </CardContent>

@@ -1,14 +1,23 @@
+/* ============================================================
+   primey_frontend/app/(landing)/layout.tsx
+   PrimeyAcc — Landing Layout
+   ------------------------------------------------------------
+   Approved landing layout wrapper.
+   Preserves Navbar locale initialization.
+   Preserves ar/en locale and rtl/ltr direction handling.
+   No design or routing changes.
+============================================================ */
 import { cookies } from "next/headers";
 
 import { Navbar } from "@/components/layout/navbar";
 
 /* =========================================================
-   🌐 Types
+   Types
 ========================================================= */
 type AppLocale = "ar" | "en";
 
 /* =========================================================
-   🌐 Locale Helper
+   Locale Helper
 ========================================================= */
 function normalizeLocale(value?: string | null): AppLocale {
   const normalized = (value || "").trim().toLowerCase();
@@ -35,9 +44,8 @@ async function getLandingLocale(): Promise<AppLocale> {
 
   return normalizeLocale(cookieLocale);
 }
-
 /* =========================================================
-   🧩 Landing Layout
+   Landing Layout
 ========================================================= */
 export default async function LandingLayout({
   children,
