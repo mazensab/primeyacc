@@ -2,7 +2,7 @@
 
 /* =====================================================
    📂 components/layout/sidebar/nav-user.tsx
-   🧠 Primey Care — Premium Sidebar User Menu
+   🧠 PrimeyAcc — Premium Sidebar User Menu
    -----------------------------------------------------
    ✅ يدعم النظام / العميل / المندوب / مقدم الخدمة
    ✅ يوجه روابط القائمة حسب المساحة الحالية
@@ -160,14 +160,27 @@ function getRoleLabel(role: string | null | undefined, isArabic: boolean): strin
   const normalizedRole = String(role || "").trim().toLowerCase();
 
   const labels: Record<string, { ar: string; en: string }> = {
+    super_admin: { ar: "مدير عام", en: "Super Admin" },
     system_admin: { ar: "مدير النظام", en: "System Admin" },
-    superuser: { ar: "مدير عام", en: "Superuser" },
-    provider_admin: { ar: "مدير مقدم خدمة", en: "Provider Admin" },
+    billing_manager: { ar: "مدير الفوترة", en: "Billing Manager" },
+    support: { ar: "دعم فني", en: "Support" },
+
+    owner: { ar: "مالك الشركة", en: "Company Owner" },
+    company_owner: { ar: "مالك الشركة", en: "Company Owner" },
+    admin: { ar: "مدير الشركة", en: "Company Admin" },
+    company_admin: { ar: "مدير الشركة", en: "Company Admin" },
+    manager: { ar: "مدير", en: "Manager" },
+    accountant: { ar: "محاسب", en: "Accountant" },
+    cashier: { ar: "كاشير", en: "Cashier" },
+    sales: { ar: "مبيعات", en: "Sales" },
+    inventory: { ar: "مخزون", en: "Inventory" },
+    hr: { ar: "موارد بشرية", en: "HR" },
+    employee: { ar: "موظف", en: "Employee" },
+    viewer: { ar: "مشاهد", en: "Viewer" },
+
+    provider_admin: { ar: "مدير الشركة", en: "Company Admin" },
     customer_user: { ar: "عميل", en: "Customer" },
     agent_user: { ar: "مندوب", en: "Agent" },
-    accountant: { ar: "محاسب", en: "Accountant" },
-    support: { ar: "دعم", en: "Support" },
-    viewer: { ar: "مشاهد", en: "Viewer" },
   };
 
   return labels[normalizedRole]?.[isArabic ? "ar" : "en"] || normalizedRole || (isArabic ? "حساب مستخدم" : "User Account");
@@ -245,7 +258,7 @@ export function NavUser() {
     if (isAgentArea) return "/agent/commissions";
     if (isCompanyArea) return "/company/billing";
 
-    return "/system/invoices";
+    return "/system/platform-payments";
   }, [isCompanyArea, isCustomerArea, isAgentArea]);
 
   const notificationsHref = useMemo(() => {
@@ -267,7 +280,7 @@ export function NavUser() {
     if (isCustomerArea) return isArabic ? "فواتيري" : "My Invoices";
     if (isAgentArea) return isArabic ? "عمولاتي" : "My Commissions";
 
-    return isArabic ? "الفواتير" : "Invoices";
+    return isArabic ? "المدفوعات" : "Payments";
   }, [isArabic, isCustomerArea, isAgentArea]);
 
   const notificationsLabel = useMemo(() => {

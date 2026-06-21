@@ -1,9 +1,9 @@
 "use client"
 
 // ======================================================
-// 🏛 Primey Care — APP SIDEBAR
+// 🏛 PrimeyAcc — APP SIDEBAR
 // Premium workspace sidebar
-// RTL/LTR ready — keeps Primey Care navigation intact
+// RTL/LTR ready — keeps PrimeyAcc navigation intact
 // ======================================================
 
 import * as React from "react"
@@ -126,43 +126,43 @@ function getWorkspaceCopy(
   if (workspace === "system") {
     return {
       workspaceLabel: isArabic ? "مساحة عمل النظام" : "System Workspace",
-      workspaceBadge: isArabic ? "Primey Care" : "Primey Care",
+      workspaceBadge: "PrimeyAcc",
       firstItemTitle: isArabic ? "لوحة النظام" : "System Dashboard",
       firstItemStatus: isArabic ? "نشط" : "Active",
       secondItemTitle: isArabic ? "إدارة المنصة" : "Platform Management",
-      secondItemSubtitle: isArabic ? "منطقة الإدارة" : "Admin Area",
+      secondItemSubtitle: isArabic ? "الشركات، الاشتراكات، والمدفوعات" : "Companies, subscriptions, and payments",
     }
   }
 
   if (workspace === "company") {
     return {
       workspaceLabel: isArabic ? "مساحة الشركة" : "Company Workspace",
-      workspaceBadge: isArabic ? "شبكة الخدمة" : "Service Network",
+      workspaceBadge: isArabic ? "نظام ERP متكامل" : "Integrated ERP",
       firstItemTitle: isArabic ? "لوحة الشركة" : "Company Dashboard",
       firstItemStatus: isArabic ? "نشط" : "Active",
-      secondItemTitle: isArabic ? "تشغيل الشركة" : "Company Operations",
-      secondItemSubtitle: isArabic ? "المنطقة التشغيلية" : "Workspace Area",
+      secondItemTitle: isArabic ? "تشغيل الأعمال" : "Business Operations",
+      secondItemSubtitle: isArabic ? "مبيعات، مشتريات، مخزون، ومالية" : "Sales, purchases, inventory, and finance",
     }
   }
 
   if (workspace === "customer") {
     return {
-      workspaceLabel: isArabic ? "مساحة العميل" : "Customer Workspace",
-      workspaceBadge: isArabic ? "بوابة العميل" : "Customer Portal",
+      workspaceLabel: isArabic ? "بوابة العميل" : "Customer Portal",
+      workspaceBadge: "PrimeyAcc",
       firstItemTitle: isArabic ? "لوحة العميل" : "Customer Dashboard",
       firstItemStatus: isArabic ? "نشط" : "Active",
-      secondItemTitle: isArabic ? "خدماتي وطلباتي" : "My Services & Orders",
-      secondItemSubtitle: isArabic ? "المساحة الشخصية" : "Personal Area",
+      secondItemTitle: isArabic ? "الفواتير والمدفوعات" : "Invoices & Payments",
+      secondItemSubtitle: isArabic ? "متابعة التعاملات" : "Transaction tracking",
     }
   }
 
   return {
     workspaceLabel: isArabic ? "مساحة المندوب" : "Agent Workspace",
-    workspaceBadge: isArabic ? "تشغيل المندوب" : "Agent Operations",
+    workspaceBadge: "PrimeyAcc",
     firstItemTitle: isArabic ? "لوحة المندوب" : "Agent Dashboard",
     firstItemStatus: isArabic ? "نشط" : "Active",
-    secondItemTitle: isArabic ? "عملائي وعمولاتي" : "Customers & Commissions",
-    secondItemSubtitle: isArabic ? "مساحة المندوب" : "Agent Area",
+    secondItemTitle: isArabic ? "العملاء والعمولات" : "Customers & Commissions",
+    secondItemSubtitle: isArabic ? "مساحة التشغيل" : "Operations area",
   }
 }
 
