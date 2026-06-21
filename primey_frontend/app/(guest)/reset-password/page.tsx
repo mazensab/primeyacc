@@ -6,8 +6,11 @@ import Image from "next/image";
 import {
   ArrowLeft,
   ArrowRight,
+  Building2,
+  CheckCircle2,
   Eye,
   EyeOff,
+  KeyRound,
   Languages,
   Loader2,
   LockKeyhole,
@@ -20,18 +23,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 /* =========================================================
-   📌 Primey Care - Guest Reset Password Page
-   ✅ متوافق مع Primey Care
+   📌 PrimeyAcc - Guest Reset Password Page
+   Path: primey_frontend/app/(guest)/reset-password/page.tsx
+
+   ✅ صفحة إعادة تعيين كلمة المرور
+   ✅ متوافقة مع هوية PrimeyAcc
    ✅ يدعم العربية والإنجليزية
    ✅ يدعم RTL / LTR
-   ✅ CSRF + Reset Password Flow
-   ✅ تصميم متناسق مع صفحة تسجيل الدخول
+   ✅ CSRF + Cookies Session
+   ✅ Sonner Toasts
+   ✅ لا تنفذ أي تغيير أمني محليا القرار النهائي للـ Backend
 ========================================================= */
 
 type AppLocale = "ar" | "en";
+type JsonObject = Record<string, unknown>;
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "") || "";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "") || "";
 
 function getCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
@@ -51,7 +58,66 @@ function resolveApiUrl(path: string): string {
   return API_BASE ? `${API_BASE}${safePath}` : safePath;
 }
 
-export default function ResetGuestPasswordPage() {
+function asString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function firstString(value: unknown): string {
+  if (asString(value)) return asString(value);
+
+  if (Array.isArray(value)) {
+    const found = value.find((item) => asString(item));
+    return asString(found);
+  }
+
+  return "";
+}
+
+function extractApiMessage(data: unknown, fallback: string): string {
+  if (!data || typeof data !== "object") return fallback;
+
+  const payload = data as JsonObject;
+
+  const directMessage =
+    firstString(payload.message) ||
+    firstString(payload.detail) ||
+    firstString(payload.error) ||
+    firstString(payload.non_field_errors);
+
+  if (directMessage) return directMessage;
+
+  const errors = payload.errors;
+  if (errors && typeof errors === "object") {
+    const firstValue = Object.values(errors as JsonObject)[0];
+    const message = firstString(firstValue);
+
+    if (message) return message;
+  }
+
+  return fallback;
+}
+
+async function prepareCsrf(errorMessage: string): Promise<string> {
+  const csrfResponse = await fetch(resolveApiUrl("/api/auth/csrf/"), {
+    method: "GET",
+    credentials: "include",
+    cache: "no-store",
+  });
+
+  if (!csrfResponse.ok) {
+    throw new Error(errorMessage);
+  }
+
+  const csrfToken = getCookie("csrftoken");
+
+  if (!csrfToken) {
+    throw new Error(errorMessage);
+  }
+
+  return csrfToken;
+}
+
+export default function ResetPasswordPage() {
   const [locale, setLocale] = useState<AppLocale>("ar");
 
   const [identifier, setIdentifier] = useState("");
@@ -72,59 +138,85 @@ export default function ResetGuestPasswordPage() {
     () => ({
       title: isArabic ? "إعادة تعيين كلمة المرور" : "Reset password",
       subtitle: isArabic
-        ? "أدخل اسم المستخدم أو البريد الإلكتروني وحدد كلمة مرور جديدة للوصول الآمن إلى Primey Care"
-        : "Enter your username or email and choose a new password for secure Primey Care access",
+        ? "أدخل اسم المستخدم أو البريد الإلكتروني وحدد كلمة مرور جديدة لحسابك في PrimeyAcc."
+        : "Enter your username or email and choose a new password for your PrimeyAcc account.",
       badge: isArabic ? "استعادة الوصول" : "Restore access",
+      secureSession: isArabic ? "إجراء آمن ومحمي" : "Secure protected action",
+
       successTitle: isArabic
-        ? "اكتملت إعادة تعيين كلمة المرور"
-        : "Password reset completed",
+        ? "تم إرسال طلب إعادة التعيين"
+        : "Reset request completed",
       successDescription: isArabic
-        ? "تم تحديث كلمة المرور بنجاح. إذا كان الحساب مرتبطًا ببريد إلكتروني، فقد يتم إرسال إشعار أمني إليه."
-        : "Your password was updated successfully. If the account has an email address, a security notification may be sent.",
+        ? "تمت معالجة الطلب بنجاح. يمكنك العودة إلى صفحة تسجيل الدخول واستخدام بياناتك بعد اعتماد التغيير من النظام."
+        : "Your request was processed successfully. You can return to sign in and use your credentials after the system accepts the change.",
+
       identifierLabel: isArabic
         ? "اسم المستخدم أو البريد الإلكتروني"
         : "Username or email",
       identifierPlaceholder: isArabic
         ? "أدخل اسم المستخدم أو البريد الإلكتروني"
         : "Enter username or email",
+
       newPasswordLabel: isArabic ? "كلمة المرور الجديدة" : "New password",
       newPasswordPlaceholder: isArabic
         ? "أدخل كلمة المرور الجديدة"
         : "Enter new password",
+
       confirmPasswordLabel: isArabic
         ? "تأكيد كلمة المرور"
         : "Confirm password",
       confirmPasswordPlaceholder: isArabic
         ? "أكد كلمة المرور الجديدة"
         : "Confirm new password",
+
       resetButton: isArabic ? "إعادة تعيين كلمة المرور" : "Reset password",
-      loadingButton: isArabic ? "جارٍ إعادة التعيين..." : "Resetting...",
+      loadingButton: isArabic ? "جار إعادة التعيين..." : "Resetting...",
       backToLogin: isArabic ? "العودة إلى تسجيل الدخول" : "Back to login",
+      tryAgain: isArabic ? "إعادة المحاولة" : "Try again",
+
       showPassword: isArabic ? "إظهار كلمة المرور" : "Show password",
       hidePassword: isArabic ? "إخفاء كلمة المرور" : "Hide password",
-      secureSession: isArabic ? "إجراء آمن ومحمي" : "Secure protected action",
+
       identifierRequired: isArabic
         ? "الرجاء إدخال اسم المستخدم أو البريد الإلكتروني"
         : "Please enter username or email",
       newPasswordRequired: isArabic
         ? "الرجاء إدخال كلمة المرور الجديدة"
         : "Please enter the new password",
-      passwordMinLength: isArabic
-        ? "يجب أن تكون كلمة المرور الجديدة 8 أحرف على الأقل"
-        : "New password must be at least 8 characters",
-      passwordsMismatch: isArabic
-        ? "كلمتا المرور غير متطابقتين"
-        : "Passwords do not match",
+      confirmPasswordRequired: isArabic
+        ? "الرجاء تأكيد كلمة المرور الجديدة"
+        : "Please confirm the new password",
+      passwordTooShort: isArabic
+        ? "كلمة المرور يجب أن تكون 8 أحرف على الأقل"
+        : "Password must be at least 8 characters",
+      passwordMismatch: isArabic
+        ? "كلمة المرور وتأكيدها غير متطابقين"
+        : "Password and confirmation do not match",
       csrfMissing: isArabic
-        ? "تعذر تجهيز جلسة الأمان، حاول مرة أخرى"
+        ? "تعذر تجهيز جلسة الأمان حاول مرة أخرى"
         : "Unable to initialize secure session, please try again",
       resetFailed: isArabic
-        ? "فشلت إعادة تعيين كلمة المرور"
-        : "Failed to reset password",
-      successToast: isArabic
-        ? "تمت إعادة تعيين كلمة المرور بنجاح"
-        : "Password reset successfully",
-      serverError: isArabic ? "خطأ في الخادم" : "Server error",
+        ? "تعذر إعادة تعيين كلمة المرور"
+        : "Unable to reset password",
+
+      sideTitle: isArabic
+        ? "استعادة آمنة لحساب PrimeyAcc"
+        : "Secure PrimeyAcc account recovery",
+      sideDescription: isArabic
+        ? "تساعدك هذه الصفحة على استعادة الوصول لحساب النظام أو حساب الشركة مع الحفاظ على حماية الجلسة والتحقق من الطلب عبر الـ Backend."
+        : "This page helps restore access for platform and company accounts while keeping the session protected and the backend in control.",
+      pointOneTitle: isArabic ? "حسابات النظام" : "System accounts",
+      pointOneDescription: isArabic
+        ? "مناسب لمستخدمي إدارة المنصة والصلاحيات العليا."
+        : "Suitable for platform admins and system-level roles.",
+      pointTwoTitle: isArabic ? "حسابات الشركات" : "Company accounts",
+      pointTwoDescription: isArabic
+        ? "مناسب للمالك والمدير والمحاسب والموظفين حسب صلاحيات العضوية."
+        : "Suitable for owners, admins, accountants, and staff based on memberships.",
+      pointThreeTitle: isArabic ? "جاهز للسعودية" : "Saudi-ready",
+      pointThreeDescription: isArabic
+        ? "متوافق مع تجربة PrimeyAcc العربية والريال السعودي."
+        : "Aligned with Arabic-first PrimeyAcc workflows and SAR.",
     }),
     [isArabic]
   );
@@ -133,7 +225,8 @@ export default function ResetGuestPasswordPage() {
     try {
       const savedLocale =
         typeof window !== "undefined"
-          ? (window.localStorage.getItem("primey-locale") as AppLocale | null)
+          ? ((window.localStorage.getItem("primeyacc-locale") ||
+              window.localStorage.getItem("primey-locale")) as AppLocale | null)
           : null;
 
       const nextLocale: AppLocale = savedLocale === "en" ? "en" : "ar";
@@ -155,7 +248,7 @@ export default function ResetGuestPasswordPage() {
       setLocale(nextLocale);
 
       if (typeof window !== "undefined") {
-        window.localStorage.setItem("primey-locale", nextLocale);
+        window.localStorage.setItem("primeyacc-locale", nextLocale);
       }
 
       if (typeof document !== "undefined") {
@@ -168,118 +261,104 @@ export default function ResetGuestPasswordPage() {
     }
   };
 
-  /* =========================================================
-     🚀 Reset Password Handler
-  ========================================================= */
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const clearFormErrors = () => {
+    setError(null);
+    setDone(false);
+  };
+
+  const validateForm = (): string | null => {
+    if (!identifier.trim()) return content.identifierRequired;
+    if (!newPassword.trim()) return content.newPasswordRequired;
+    if (!confirmPassword.trim()) return content.confirmPasswordRequired;
+    if (newPassword.length < 8) return content.passwordTooShort;
+    if (newPassword !== confirmPassword) return content.passwordMismatch;
+
+    return null;
+  };
+
+  const handleResetSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (loading) return;
 
-    const cleanIdentifier = identifier.trim();
+    const validationError = validateForm();
 
-    if (!cleanIdentifier) {
-      setError(content.identifierRequired);
-      toast.error(content.identifierRequired);
-      return;
-    }
-
-    if (!newPassword || !confirmPassword) {
-      setError(content.newPasswordRequired);
-      toast.error(content.newPasswordRequired);
-      return;
-    }
-
-    if (newPassword.length < 8) {
-      setError(content.passwordMinLength);
-      toast.error(content.passwordMinLength);
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setError(content.passwordsMismatch);
-      toast.error(content.passwordsMismatch);
+    if (validationError) {
+      setError(validationError);
+      toast.error(validationError);
       return;
     }
 
     setLoading(true);
     setError(null);
+    setDone(false);
 
     try {
-      const csrfResponse = await fetch(resolveApiUrl("/api/auth/csrf/"), {
-        method: "GET",
+      const trimmedIdentifier = identifier.trim();
+      const csrfToken = await prepareCsrf(content.csrfMissing);
+
+      const response = await fetch(resolveApiUrl("/api/auth/reset-password/"), {
+        method: "POST",
         credentials: "include",
-        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrfToken,
+        },
+        body: JSON.stringify({
+          identifier: trimmedIdentifier,
+          username: trimmedIdentifier,
+          email: trimmedIdentifier.includes("@") ? trimmedIdentifier : undefined,
+          new_password: newPassword,
+          confirm_password: confirmPassword,
+          password: newPassword,
+          password_confirm: confirmPassword,
+        }),
       });
 
-      if (!csrfResponse.ok) {
-        throw new Error(content.csrfMissing);
+      let payload: unknown = null;
+
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
       }
-
-      const csrfToken = getCookie("csrftoken");
-
-      if (!csrfToken) {
-        throw new Error(content.csrfMissing);
-      }
-
-      const response = await fetch(
-        resolveApiUrl("/api/auth/resetguest-password/"),
-        {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": csrfToken,
-          },
-          body: JSON.stringify({
-            identifier: cleanIdentifier,
-            new_password: newPassword,
-            confirm_password: confirmPassword,
-          }),
-        }
-      );
-
-      const data = await response.json().catch(() => null);
 
       if (!response.ok) {
-        throw new Error(
-          data?.message || data?.error || content.resetFailed
-        );
+        throw new Error(extractApiMessage(payload, content.resetFailed));
       }
 
+      const message = extractApiMessage(payload, content.successTitle);
       setDone(true);
       setIdentifier("");
       setNewPassword("");
       setConfirmPassword("");
-      setShowNewPassword(false);
-      setShowConfirmPassword(false);
-
-      const successMessage = data?.message || content.successToast;
-      toast.success(successMessage);
+      toast.success(message);
     } catch (err) {
-      const message = err instanceof Error ? err.message : content.serverError;
+      const message =
+        err instanceof Error ? err.message : content.resetFailed;
+
       setError(message);
       toast.error(message);
-      console.error("Reset guest password error:", err);
+      console.error("PrimeyAcc reset password error:", err);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(34,197,94,0.10),_transparent_30%),radial-gradient(circle_at_bottom,_rgba(59,130,246,0.10),_transparent_35%),linear-gradient(to_bottom_right,_hsl(var(--background)),_hsl(var(--muted)/0.55))]">
+    <main
+      dir={isArabic ? "rtl" : "ltr"}
+      className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(67,42,88,0.14),_transparent_32%),radial-gradient(circle_at_bottom,_rgba(140,156,220,0.14),_transparent_36%),linear-gradient(to_bottom_right,_hsl(var(--background)),_hsl(var(--muted)/0.55))]"
+    >
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-primary/10 to-transparent" />
         <div className="absolute -left-16 top-24 h-52 w-52 rounded-full bg-primary/10 blur-3xl" />
-        <div className="absolute -right-16 bottom-16 h-60 w-60 rounded-full bg-emerald-500/10 blur-3xl" />
+        <div className="absolute -right-16 bottom-16 h-60 w-60 rounded-full bg-[#8c9cdc]/15 blur-3xl" />
       </div>
 
       <div className="relative mx-auto flex min-h-screen w-full max-w-7xl items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
         <div className="grid w-full max-w-6xl overflow-hidden rounded-[32px] border border-white/20 bg-background/80 shadow-2xl backdrop-blur-xl lg:grid-cols-2">
-          {/* =====================================================
-              الجانب التعريفي
-          ===================================================== */}
-          <section className="relative hidden min-h-[720px] overflow-hidden bg-gradient-to-br from-primary/95 via-primary to-emerald-600 text-white lg:flex">
+          <section className="relative hidden min-h-[720px] overflow-hidden bg-gradient-to-br from-[#432a58] via-primary to-[#8c9cdc] text-white lg:flex">
             <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
             <div className="absolute right-[-80px] top-[-80px] h-72 w-72 rounded-full bg-white/10 blur-3xl" />
             <div className="absolute bottom-[-90px] left-[-90px] h-80 w-80 rounded-full bg-black/10 blur-3xl" />
@@ -298,7 +377,7 @@ export default function ResetGuestPasswordPage() {
                     {content.badge}
                   </p>
                   <h1 className="text-2xl font-bold tracking-tight">
-                    Primey Care
+                    PrimeyAcc
                   </h1>
                 </div>
               </div>
@@ -314,39 +393,15 @@ export default function ResetGuestPasswordPage() {
                 </div>
 
                 <h2 className="max-w-xl text-4xl font-extrabold leading-tight xl:text-5xl">
-                  {isArabic
-                    ? "استعد الوصول إلى حسابك بسهولة ضمن بيئة Primey Care الآمنة"
-                    : "Restore access to your account inside the secure Primey Care environment"}
+                  {content.sideTitle}
                 </h2>
 
                 <p className="mt-6 max-w-xl text-base leading-8 text-white/85 xl:text-lg">
-                  {isArabic
-                    ? "هذه الصفحة مخصصة لإعادة تعيين كلمة المرور بسرعة وأمان، مع تجربة موحدة ومتوافقة مع هوية النظام وصفحات الدخول."
-                    : "This page helps you reset your password quickly and securely through a unified experience that matches the platform login flow."}
+                  {content.sideDescription}
                 </p>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-3xl border border-white/15 bg-white/10 p-5 backdrop-blur-md">
-                  <div
-                    className={`mb-3 flex items-center gap-3 ${
-                      isArabic ? "flex-row-reverse" : ""
-                    }`}
-                  >
-                    <div className="rounded-2xl bg-white/10 p-2">
-                      <Mail className="h-5 w-5" />
-                    </div>
-                    <h3 className="font-semibold">
-                      {isArabic ? "تعريف مرن للحساب" : "Flexible account lookup"}
-                    </h3>
-                  </div>
-                  <p className="text-sm leading-7 text-white/80">
-                    {isArabic
-                      ? "يمكنك استخدام اسم المستخدم أو البريد الإلكتروني للوصول إلى الحساب المطلوب."
-                      : "You can use either the username or email address to identify the target account."}
-                  </p>
-                </div>
-
+              <div className="grid gap-4">
                 <div className="rounded-3xl border border-white/15 bg-white/10 p-5 backdrop-blur-md">
                   <div
                     className={`mb-3 flex items-center gap-3 ${
@@ -356,30 +411,61 @@ export default function ResetGuestPasswordPage() {
                     <div className="rounded-2xl bg-white/10 p-2">
                       <ShieldCheck className="h-5 w-5" />
                     </div>
-                    <h3 className="font-semibold">
-                      {isArabic ? "تحديث آمن" : "Secure update"}
-                    </h3>
+                    <h3 className="font-semibold">{content.pointOneTitle}</h3>
                   </div>
                   <p className="text-sm leading-7 text-white/80">
-                    {isArabic
-                      ? "يتم تنفيذ العملية عبر CSRF + Cookies بشكل متوافق مع الباكند المعتمد في Primey Care."
-                      : "The flow runs through CSRF + cookie-based protection and stays fully compatible with the Primey Care backend."}
+                    {content.pointOneDescription}
+                  </p>
+                </div>
+
+                <div className="rounded-3xl border border-white/15 bg-white/10 p-5 backdrop-blur-md">
+                  <div
+                    className={`mb-3 flex items-center gap-3 ${
+                      isArabic ? "flex-row-reverse" : ""
+                    }`}
+                  >
+                    <div className="rounded-2xl bg-white/10 p-2">
+                      <Building2 className="h-5 w-5" />
+                    </div>
+                    <h3 className="font-semibold">{content.pointTwoTitle}</h3>
+                  </div>
+                  <p className="text-sm leading-7 text-white/80">
+                    {content.pointTwoDescription}
+                  </p>
+                </div>
+
+                <div className="rounded-3xl border border-white/15 bg-white/10 p-5 backdrop-blur-md">
+                  <div
+                    className={`mb-3 flex items-center gap-3 ${
+                      isArabic ? "flex-row-reverse" : ""
+                    }`}
+                  >
+                    <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white/90 p-2">
+                      <Image
+                        src="/currency/sar.svg"
+                        alt="SAR"
+                        width={20}
+                        height={20}
+                        className="h-5 w-5"
+                      />
+                    </div>
+                    <h3 className="font-semibold">{content.pointThreeTitle}</h3>
+                  </div>
+                  <p className="text-sm leading-7 text-white/80">
+                    {content.pointThreeDescription}
                   </p>
                 </div>
               </div>
             </div>
           </section>
 
-          {/* =====================================================
-              نموذج إعادة التعيين
-          ===================================================== */}
           <section className="flex min-h-[720px] items-center justify-center p-5 sm:p-8 lg:p-10">
             <div className="w-full max-w-md">
               <div className="mb-6 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Image
                     src="/logo/primey.svg"
-                    alt="Primey Care"
+                    alt="PrimeyAcc"
                     width={132}
                     height={44}
                     priority
@@ -392,221 +478,273 @@ export default function ResetGuestPasswordPage() {
                   variant="outline"
                   size="sm"
                   onClick={toggleLanguage}
-                  className="h-10 rounded-2xl border-border/70 bg-background/70 px-3 shadow-sm backdrop-blur"
+                  className="h-10 rounded-2xl px-3"
                 >
-                  <Languages className="me-1 h-4 w-4" />
-                  <span>{isArabic ? "EN" : "عربي"}</span>
+                  <span
+                    className={`flex items-center gap-2 ${
+                      isArabic ? "flex-row-reverse" : ""
+                    }`}
+                  >
+                    <Languages className="h-4 w-4" />
+                    <span>{isArabic ? "EN" : "عربي"}</span>
+                  </span>
                 </Button>
               </div>
 
-              <div
-                className={`rounded-[28px] border border-border/60 bg-background/90 p-6 shadow-xl backdrop-blur sm:p-8 ${
-                  isArabic ? "text-right" : "text-left"
-                }`}
-              >
-                <div className="mb-8">
-                  <div
-                    className={`mb-4 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary ${
-                      isArabic ? "flex-row-reverse" : ""
-                    }`}
-                  >
-                    <ShieldCheck className="h-3.5 w-3.5" />
-                    <span>{content.badge}</span>
-                  </div>
-
-                  <h2 className="text-3xl font-bold tracking-tight">
-                    {content.title}
-                  </h2>
-                  <p className="mt-3 text-sm leading-7 text-muted-foreground">
-                    {content.subtitle}
-                  </p>
+              <div className={isArabic ? "text-right" : "text-left"}>
+                <div
+                  className={`mb-3 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-medium text-primary ${
+                    isArabic ? "flex-row-reverse" : ""
+                  }`}
+                >
+                  <KeyRound className="h-3.5 w-3.5" />
+                  <span>{content.badge}</span>
                 </div>
 
+                <h2 className="text-3xl font-extrabold tracking-tight text-foreground">
+                  {content.title}
+                </h2>
+                <p className="mt-3 text-sm leading-7 text-muted-foreground">
+                  {content.subtitle}
+                </p>
+              </div>
+
+              <div className="mt-8 rounded-[28px] border border-border/70 bg-card/95 p-4 shadow-xl shadow-primary/5">
                 {done ? (
-                  <div className="mb-6 rounded-3xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+                  <div className="space-y-5">
                     <div
-                      className={`flex items-start gap-3 ${
-                        isArabic ? "flex-row-reverse" : ""
-                      }`}
-                    >
-                      <div className="rounded-2xl bg-emerald-500/10 p-2 text-emerald-600 dark:text-emerald-400">
-                        <ShieldCheck className="h-5 w-5" />
-                      </div>
-
-                      <div className={isArabic ? "text-right" : "text-left"}>
-                        <p className="font-semibold text-foreground">
-                          {content.successTitle}
-                        </p>
-                        <p className="mt-1 text-sm leading-7 text-muted-foreground">
-                          {content.successDescription}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-
-                <form onSubmit={handleSubmit} className="space-y-5">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">
-                      {content.identifierLabel}
-                    </label>
-
-                    <div className="relative">
-                      <Mail
-                        className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground ${
-                          isArabic ? "right-4" : "left-4"
-                        }`}
-                      />
-                      <Input
-                        dir={isArabic ? "rtl" : "ltr"}
-                        value={identifier}
-                        onChange={(e) => setIdentifier(e.target.value)}
-                        placeholder={content.identifierPlaceholder}
-                        className={`h-12 rounded-2xl border-border/70 bg-muted/30 shadow-sm ${
-                          isArabic
-                            ? "pr-11 text-right"
-                            : "pl-11 text-left"
-                        }`}
-                        autoComplete="username"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">
-                      {content.newPasswordLabel}
-                    </label>
-
-                    <div className="relative">
-                      <LockKeyhole
-                        className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground ${
-                          isArabic ? "right-4" : "left-4"
-                        }`}
-                      />
-
-                      <Input
-                        type={showNewPassword ? "text" : "password"}
-                        dir={isArabic ? "rtl" : "ltr"}
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder={content.newPasswordPlaceholder}
-                        className={`h-12 rounded-2xl border-border/70 bg-muted/30 shadow-sm ${
-                          isArabic
-                            ? "pr-11 pl-12 text-right"
-                            : "pl-11 pr-12 text-left"
-                        }`}
-                        autoComplete="new-password"
-                      />
-
-                      <button
-                        type="button"
-                        onClick={() => setShowNewPassword((prev) => !prev)}
-                        className={`absolute top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground ${
-                          isArabic ? "left-2" : "right-2"
-                        }`}
-                        aria-label={
-                          showNewPassword
-                            ? content.hidePassword
-                            : content.showPassword
-                        }
-                      >
-                        {showNewPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">
-                      {content.confirmPasswordLabel}
-                    </label>
-
-                    <div className="relative">
-                      <LockKeyhole
-                        className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground ${
-                          isArabic ? "right-4" : "left-4"
-                        }`}
-                      />
-
-                      <Input
-                        type={showConfirmPassword ? "text" : "password"}
-                        dir={isArabic ? "rtl" : "ltr"}
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder={content.confirmPasswordPlaceholder}
-                        className={`h-12 rounded-2xl border-border/70 bg-muted/30 shadow-sm ${
-                          isArabic
-                            ? "pr-11 pl-12 text-right"
-                            : "pl-11 pr-12 text-left"
-                        }`}
-                        autoComplete="new-password"
-                      />
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setShowConfirmPassword((prev) => !prev)
-                        }
-                        className={`absolute top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground ${
-                          isArabic ? "left-2" : "right-2"
-                        }`}
-                        aria-label={
-                          showConfirmPassword
-                            ? content.hidePassword
-                            : content.showPassword
-                        }
-                      >
-                        {showConfirmPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {error ? (
-                    <div
-                      className={`rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400 ${
+                      className={`rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300 ${
                         isArabic ? "text-right" : "text-left"
                       }`}
                     >
-                      {error}
-                    </div>
-                  ) : null}
-
-                  <Button
-                    type="submit"
-                    disabled={loading}
-                    className="h-12 w-full rounded-2xl text-base font-semibold shadow-lg"
-                  >
-                    {loading ? (
-                      <span
-                        className={`flex items-center justify-center gap-2 ${
+                      <div
+                        className={`mb-3 flex items-center gap-2 font-semibold ${
                           isArabic ? "flex-row-reverse" : ""
                         }`}
                       >
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>{content.loadingButton}</span>
-                      </span>
-                    ) : (
-                      content.resetButton
-                    )}
-                  </Button>
+                        <CheckCircle2 className="h-5 w-5" />
+                        <span>{content.successTitle}</span>
+                      </div>
+                      <p className="text-sm leading-7">
+                        {content.successDescription}
+                      </p>
+                    </div>
 
-                  <Link
-                    href="/login"
-                    className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-border/60 px-4 py-3 text-sm font-medium text-muted-foreground transition hover:bg-muted/50 hover:text-foreground ${
-                      isArabic ? "flex-row-reverse" : ""
-                    }`}
-                  >
-                    <BackIcon className="h-4 w-4" />
-                    <span>{content.backToLogin}</span>
-                  </Link>
-                </form>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setDone(false);
+                        setError(null);
+                      }}
+                      className="h-12 w-full rounded-2xl"
+                    >
+                      {content.tryAgain}
+                    </Button>
+
+                    <Link
+                      href="/login"
+                      className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-lg transition hover:bg-primary/90 ${
+                        isArabic ? "flex-row-reverse" : ""
+                      }`}
+                    >
+                      <BackIcon className="h-4 w-4" />
+                      <span>{content.backToLogin}</span>
+                    </Link>
+                  </div>
+                ) : (
+                  <form onSubmit={handleResetSubmit} className="space-y-5">
+                    <div
+                      className={`rounded-3xl border border-[#8c9cdc]/25 bg-[#8c9cdc]/10 p-4 ${
+                        isArabic ? "text-right" : "text-left"
+                      }`}
+                    >
+                      <div
+                        className={`mb-2 flex items-center gap-2 font-semibold text-foreground ${
+                          isArabic ? "flex-row-reverse" : ""
+                        }`}
+                      >
+                        <ShieldCheck className="h-4 w-4 text-primary" />
+                        <span>{content.secureSession}</span>
+                      </div>
+                      <p className="text-sm leading-7 text-muted-foreground">
+                        {content.sideDescription}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">
+                        {content.identifierLabel}
+                      </label>
+
+                      <div className="relative">
+                        <Mail
+                          className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground ${
+                            isArabic ? "right-4" : "left-4"
+                          }`}
+                        />
+
+                        <Input
+                          required
+                          autoComplete="username email"
+                          dir={isArabic ? "rtl" : "ltr"}
+                          placeholder={content.identifierPlaceholder}
+                          value={identifier}
+                          onChange={(e) => {
+                            setIdentifier(e.target.value);
+                            clearFormErrors();
+                          }}
+                          className={`h-12 rounded-2xl border-border/70 bg-muted/30 shadow-sm ${
+                            isArabic ? "pr-11 text-right" : "pl-11 text-left"
+                          }`}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">
+                        {content.newPasswordLabel}
+                      </label>
+
+                      <div className="relative">
+                        <LockKeyhole
+                          className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground ${
+                            isArabic ? "right-4" : "left-4"
+                          }`}
+                        />
+
+                        <Input
+                          required
+                          autoComplete="new-password"
+                          type={showNewPassword ? "text" : "password"}
+                          dir={isArabic ? "rtl" : "ltr"}
+                          placeholder={content.newPasswordPlaceholder}
+                          value={newPassword}
+                          onChange={(e) => {
+                            setNewPassword(e.target.value);
+                            clearFormErrors();
+                          }}
+                          className={`h-12 rounded-2xl border-border/70 bg-muted/30 shadow-sm ${
+                            isArabic
+                              ? "pr-11 pl-12 text-right"
+                              : "pl-11 pr-12 text-left"
+                          }`}
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword((prev) => !prev)}
+                          className={`absolute top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground ${
+                            isArabic ? "left-2" : "right-2"
+                          }`}
+                          aria-label={
+                            showNewPassword
+                              ? content.hidePassword
+                              : content.showPassword
+                          }
+                        >
+                          {showNewPassword ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">
+                        {content.confirmPasswordLabel}
+                      </label>
+
+                      <div className="relative">
+                        <LockKeyhole
+                          className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground ${
+                            isArabic ? "right-4" : "left-4"
+                          }`}
+                        />
+
+                        <Input
+                          required
+                          autoComplete="new-password"
+                          type={showConfirmPassword ? "text" : "password"}
+                          dir={isArabic ? "rtl" : "ltr"}
+                          placeholder={content.confirmPasswordPlaceholder}
+                          value={confirmPassword}
+                          onChange={(e) => {
+                            setConfirmPassword(e.target.value);
+                            clearFormErrors();
+                          }}
+                          className={`h-12 rounded-2xl border-border/70 bg-muted/30 shadow-sm ${
+                            isArabic
+                              ? "pr-11 pl-12 text-right"
+                              : "pl-11 pr-12 text-left"
+                          }`}
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowConfirmPassword((prev) => !prev)
+                          }
+                          className={`absolute top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground ${
+                            isArabic ? "left-2" : "right-2"
+                          }`}
+                          aria-label={
+                            showConfirmPassword
+                              ? content.hidePassword
+                              : content.showPassword
+                          }
+                        >
+                          {showConfirmPassword ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {error ? (
+                      <div
+                        className={`rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400 ${
+                          isArabic ? "text-right" : "text-left"
+                        }`}
+                      >
+                        {error}
+                      </div>
+                    ) : null}
+
+                    <Button
+                      type="submit"
+                      disabled={loading}
+                      className="h-12 w-full rounded-2xl text-base font-semibold shadow-lg"
+                    >
+                      {loading ? (
+                        <span
+                          className={`flex items-center justify-center gap-2 ${
+                            isArabic ? "flex-row-reverse" : ""
+                          }`}
+                        >
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>{content.loadingButton}</span>
+                        </span>
+                      ) : (
+                        content.resetButton
+                      )}
+                    </Button>
+
+                    <Link
+                      href="/login"
+                      className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-border/60 px-4 py-3 text-sm font-medium text-muted-foreground transition hover:bg-muted/50 hover:text-foreground ${
+                        isArabic ? "flex-row-reverse" : ""
+                      }`}
+                    >
+                      <BackIcon className="h-4 w-4" />
+                      <span>{content.backToLogin}</span>
+                    </Link>
+                  </form>
+                )}
               </div>
             </div>
           </section>
