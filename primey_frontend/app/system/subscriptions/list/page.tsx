@@ -1161,7 +1161,7 @@ export default function SystemSubscriptionsListPage() {
                           </TableCell>
                           <TableCell className="sticky left-0 z-10 h-[68px] bg-background px-3 text-center align-middle">
                             <Button asChild variant="outline" size="sm" className="h-8 rounded-lg bg-background px-3">
-                              <Link href={company.id ? `/system/companies/${company.id}` : "/system/companies"}>
+                              <Link href={company.id ? `/system/subscriptions/${company.id}` : "/system/subscriptions"}>
                                 {t.open}
                               </Link>
                             </Button>
@@ -1203,6 +1203,7 @@ export default function SystemSubscriptionsListPage() {
     </main>
   );
 }
+
 
 
 
