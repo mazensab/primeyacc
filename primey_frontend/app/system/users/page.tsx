@@ -29,7 +29,6 @@ import {
   FileBarChart2,
   FileSpreadsheet,
   FileText,
-  LayoutDashboard,
   ListChecks,
   Loader2,
   Plus,
@@ -153,10 +152,10 @@ const translations = {
     openListDesc: "جدول كامل للمستخدمين مع الفلاتر والتصدير والطباعة.",
     createTitle: "إضافة مستخدم جديدة",
     createDesc: "إنشاء مستخدم جديد وربطه بإعدادات المنصة.",
+    permissionsTitle: "صلاحيات المستخدمين",
+    permissionsDesc: "مراجعة أدوار وصلاحيات مستخدمي النظام من واجهات النظام الحقيقية.",
     reportsTitle: "تقارير المستخدمين",
     reportsDesc: "تحليل المستخدمين حسب الحالة والدور وصلاحيات النظام.",
-    dashboardTitle: "لوحة النظام",
-    dashboardDesc: "العودة إلى لوحة تحكم النظام الرئيسية.",
 
     tableTitle: "أحدث المستخدمين",
     tableDesc:
@@ -231,10 +230,10 @@ const translations = {
     openListDesc: "Full users table with filters, export, and print.",
     createTitle: "Add a new user",
     createDesc: "Create a new user and connect it to platform settings.",
+    permissionsTitle: "Users permissions",
+    permissionsDesc: "Review platform user roles and system permissions from live API data.",
     reportsTitle: "Users reports",
     reportsDesc: "Analyze users by status, role, and system permissions.",
-    dashboardTitle: "System dashboard",
-    dashboardDesc: "Return to the main system dashboard.",
 
     tableTitle: "Latest users",
     tableDesc:
@@ -833,20 +832,20 @@ export default function SystemUsersPage() {
         href: "/system/users/create",
         icon: Plus,
       },
+            {
+        title: t.permissionsTitle,
+        description: t.permissionsDesc,
+        href: "/system/users/permissions",
+        icon: ShieldCheck,
+      },
       {
         title: t.reportsTitle,
         description: t.reportsDesc,
         href: "/system/users/reports",
         icon: FileBarChart2,
       },
-      {
-        title: t.dashboardTitle,
-        description: t.dashboardDesc,
-        href: "/system",
-        icon: LayoutDashboard,
-      },
     ],
-    [t.createDesc, t.createTitle, t.dashboardDesc, t.dashboardTitle, t.openListDesc, t.openListTitle, t.reportsDesc, t.reportsTitle],
+    [t.createDesc, t.createTitle, t.openListDesc, t.openListTitle, t.permissionsDesc, t.permissionsTitle, t.reportsDesc, t.reportsTitle],
   );
 
   const hasFilters = Boolean(search || status !== "all" || sort !== "newest");
@@ -1265,6 +1264,10 @@ export default function SystemUsersPage() {
     </main>
   );
 }
+
+
+
+
 
 
 
