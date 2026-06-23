@@ -1,27 +1,27 @@
-# ============================================================
-# 📂 api/system/urls.py
-# 🧠 PrimeyAcc | System Workspace API URLs V1.5
+﻿# ============================================================
+# ًں“‚ api/system/urls.py
+# ًں§  PrimeyAcc | System Workspace API URLs V1.5
 # ------------------------------------------------------------
-# ✅ Central routes for system workspace APIs
-# ✅ Includes system companies APIs
-# ✅ Includes SaaS subscription plans APIs
-# ✅ Includes company subscriptions APIs
-# ✅ Includes platform billing documents APIs
-# ✅ Each module owns its own urls.py
-# ✅ Views protected by central api/permissions.py guards
+# âœ… Central routes for system workspace APIs
+# âœ… Includes system companies APIs
+# âœ… Includes SaaS subscription plans APIs
+# âœ… Includes company subscriptions APIs
+# âœ… Includes platform billing documents APIs
+# âœ… Each module owns its own urls.py
+# âœ… Views protected by central api/permissions.py guards
 # ------------------------------------------------------------
-# القاعدة المعتمدة:
-# - هذا الملف هو نقطة تجميع APIs الخاصة بمساحة النظام
-# - لا نضع منطق business داخل urls.py
-# - كل وحدة داخل /api/system/ يكون لها urls.py مستقل
-# - جميع Views داخل /api/system/ يجب أن تتحقق من صلاحيات النظام
-# - الصلاحيات تطبق داخل views عبر api/permissions.py
-# - مستندات فوترة المنصة مستقلة عن مستندات ومدفوعات الشركات
+# ط§ظ„ظ‚ط§ط¹ط¯ط© ط§ظ„ظ…ط¹طھظ…ط¯ط©:
+# - ظ‡ط°ط§ ط§ظ„ظ…ظ„ظپ ظ‡ظˆ ظ†ظ‚ط·ط© طھط¬ظ…ظٹط¹ APIs ط§ظ„ط®ط§طµط© ط¨ظ…ط³ط§ط­ط© ط§ظ„ظ†ط¸ط§ظ…
+# - ظ„ط§ ظ†ط¶ط¹ ظ…ظ†ط·ظ‚ business ط¯ط§ط®ظ„ urls.py
+# - ظƒظ„ ظˆط­ط¯ط© ط¯ط§ط®ظ„ /api/system/ ظٹظƒظˆظ† ظ„ظ‡ط§ urls.py ظ…ط³طھظ‚ظ„
+# - ط¬ظ…ظٹط¹ Views ط¯ط§ط®ظ„ /api/system/ ظٹط¬ط¨ ط£ظ† طھطھط­ظ‚ظ‚ ظ…ظ† طµظ„ط§ط­ظٹط§طھ ط§ظ„ظ†ط¸ط§ظ…
+# - ط§ظ„طµظ„ط§ط­ظٹط§طھ طھط·ط¨ظ‚ ط¯ط§ط®ظ„ views ط¹ط¨ط± api/permissions.py
+# - ظ…ط³طھظ†ط¯ط§طھ ظپظˆطھط±ط© ط§ظ„ظ…ظ†طµط© ظ…ط³طھظ‚ظ„ط© ط¹ظ† ظ…ط³طھظ†ط¯ط§طھ ظˆظ…ط¯ظپظˆط¹ط§طھ ط§ظ„ط´ط±ظƒط§طھ
 # ============================================================
 
 from __future__ import annotations
 
-from django.urls import include, include, path
+from django.urls import include, path
 
 
 app_name = "system"
@@ -46,4 +46,9 @@ urlpatterns = [
         "billing-documents/",
         include("api.system.billing_documents.urls"),
     ),
+    path(
+        "users/",
+        include("api.system.users.urls"),
+    ),
 ]
+
