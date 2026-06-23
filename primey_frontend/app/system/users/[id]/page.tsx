@@ -83,7 +83,7 @@ const translations = {
     subtitle:
       "عرض ملف المستخدم داخل إدارة منصة PrimeyAcc مع بيانات التعريف والحالة والدور ونوع الوصول والتواصل.",
     badge: "إدارة المنصة",
-    backToUsers: "العودة للشركات",
+    backToUsers: "العودة للمستخدمين",
     usersList: "قائمة المستخدمين",
     systemDashboard: "لوحة النظام",
     refresh: "تحديث",
@@ -95,9 +95,9 @@ const translations = {
     refreshed: "تم تحديث تفاصيل المستخدم.",
 
     identity: "بيانات التعريف",
-    identityDesc: "اسم المستخدم والكود والمعرف الداخلي.",
+    identityDesc: "الاسم واسم الدخول والمعرف الداخلي.",
     contact: "بيانات التواصل",
-    contactDesc: "بيانات اسم المستخدم والبريد والهاتف والصلاحيات.",
+    contactDesc: "اسم المستخدم والبريد والهاتف والصلاحيات.",
     operations: "التشغيل ونوع الوصول",
     operationsDesc: "الحالة التشغيلية والدور ونوع الوصول.",
     notes: "ملاحظات",
@@ -105,8 +105,8 @@ const translations = {
     quickLinks: "روابط سريعة",
     quickLinksDesc: "تنقل سريع داخل وحدة المستخدمين.",
 
-    userName: "اسم المستخدم",
-    userCode: "معرف المستخدم",
+    userName: "الاسم",
+    userCode: "اسم الدخول",
     userId: "معرف المستخدم",
     owner: "اسم المستخدم",
     email: "البريد الإلكتروني",
@@ -157,23 +157,23 @@ const translations = {
     identity: "Identity",
     identityDesc: "User name, code, and internal identifier.",
     contact: "Contact details",
-    contactDesc: "Owner, email, phone, and city.",
-    operations: "Operations and subscription",
-    operationsDesc: "Operational status, activity, and subscription.",
+    contactDesc: "Username, email, phone, and permissions.",
+    operations: "Operations and access",
+    operationsDesc: "Operational status, role, and access type.",
     notes: "Notes",
     notesDesc: "Internal administrative notes when available.",
     quickLinks: "Quick links",
     quickLinksDesc: "Quick navigation inside the users module.",
 
     userName: "User name",
-    userCode: "User code",
+    userCode: "Username",
     userId: "User ID",
-    owner: "Owner",
+    owner: "Username",
     email: "Email",
     phone: "Phone",
-    city: "City",
-    activity: "Activity",
-    subscription: "Subscription",
+    city: "Permissions",
+    activity: "Role",
+    subscription: "Access type",
     status: "Status",
     createdAt: "Created at",
     updatedAt: "Updated at",
@@ -319,58 +319,108 @@ function extractUserPayload(payload: unknown): ApiRecord {
 
 function normalizeUser(payload: unknown): UserRecord {
   const record = extractUserPayload(payload);
-  const owner = record.owner || record.user || record.account_owner || record.created_by;
-  const activity = record.activity_profile_ref || record.activity_profile || record.activity;
-  const subscription =
-    record.subscription ||
-    record.current_subscription ||
-    record.active_subscription ||
-    record.plan;
-  const contact = asRecord(record.contact);
-  const address = asRecord(record.address);
-  const settings = asRecord(record.settings);
-
-  return {
-    id: normalizeText(record.id || record.uuid || record.pk || record.slug || record.code),
-    name: normalizeText(
+  const profile = asRecord(record.profile);
+  const defaultWorkspace = asRecord(record.default_workspace);
+  const membership = asRecord(
+    record.default_membership || record.membership || record.company_membership
+  );
+  const rawId = normalizeText(record.id || record.pk || record.user_id);
+  const userId = normalizeText(record.user_id || rawId);
+  const username = normalizeText(
+    record.username || profile.username || record.code || userId,
+    "—"
+  );
+  const firstName = normalizeText(record.first_name || profile.first_name);
+  const lastName = normalizeText(record.last_name || profile.last_name);
+  const joinedName = `${firstName} ${lastName}`.trim();
+  const displayName = normalizeText(
+    record.display_name ||
+      record.full_name ||
       record.name ||
-        record.user_name ||
-        record.display_name ||
-        record.legal_name ||
-        record.name_ar ||
-        record.arabic_name ||
-        record.title,
-      "—",
+      joinedName ||
+      username ||
+      record.email,
+    "—"
+  );
+  const email = normalizeText(record.email || profile.email, "—");
+  const phone = normalizeText(
+    record.phone ||
+      record.mobile ||
+      record.whatsapp ||
+      profile.phone ||
+      profile.mobile,
+    "—"
+  );
+  const role = normalizeText(
+    record.system_role ||
+      record.role ||
+      record.access_role ||
+      membership.role,
+    "—"
+  );
+  const accessType = normalizeText(
+    record.access_type ||
+      defaultWorkspace.type ||
+      defaultWorkspace.code ||
+      defaultWorkspace.name ||
+      (record.can_access_system === true ? "system" : ""),
+    "—"
+  );
+  const permissionsValue =
+    record.system_permissions ||
+    record.permissions ||
+    record.permission_codes ||
+    record.permission_list;
+  let permissions = "—";
+  if (Array.isArray(permissionsValue)) {
+    const values = permissionsValue
+      .map((item) => {
+        if (typeof item === "string") return item;
+        const permission = asRecord(item);
+        return normalizeText(
+          permission.code ||
+            permission.key ||
+            permission.name ||
+            permission.label ||
+            permission.codename
+        );
+      })
+      .filter(Boolean);
+    permissions =
+      values.length > 6
+        ? `${values.slice(0, 6).join(", ")} +${values.length - 6}`
+        : values.join(", ") || "—";
+  } else if (isRecord(permissionsValue)) {
+    const enabled = Object.entries(permissionsValue)
+      .filter(([, value]) => Boolean(value))
+      .map(([key]) => key);
+    permissions =
+      enabled.length > 6
+        ? `${enabled.slice(0, 6).join(", ")} +${enabled.length - 6}`
+        : enabled.join(", ") || "—";
+  } else {
+    permissions = normalizeText(permissionsValue, "—");
+  }
+  return {
+    id: rawId || userId || username,
+    name: displayName,
+    code: username,
+    status: normalizeStatus(
+      record.status || (record.is_active === false ? "inactive" : "active")
     ),
-    code: normalizeText(
-      record.code ||
-        record.user_code ||
-        record.tenant_code ||
-        record.short_code ||
-        record.slug ||
-        record.registration_number ||
-        record.commercial_registration,
-      "—",
-    ),
-    status: normalizeStatus(record.status ?? record.state ?? record.is_active),
-    owner: normalizeNestedName(owner, ["name", "full_name", "email", "username"]) || "—",
-    activity:
-      normalizeNestedName(activity, ["name", "code", "title"]) ||
-      normalizeText(record.activity_profile_code || record.activity_profile_name || settings.activity_profile) ||
-      "—",
-    subscription:
-      normalizeText(record.subscription_status) ||
-      normalizeNestedName(subscription, ["plan_name", "name", "title", "status"]) ||
-      "—",
-    email: normalizeText(record.email || record.user_email || contact.email),
-    phone: normalizeText(record.phone || record.mobile || record.user_phone || contact.phone || contact.mobile),
-    city: normalizeText(
-      record.city || record.address_city || record.national_address_city || address.city,
-      "—",
-    ),
-    notes: normalizeText(record.notes || record.description || record.internal_notes),
-    created_at: normalizeText(record.created_at || record.created || record.inserted_at || record.date_joined) || null,
-    updated_at: normalizeText(record.updated_at || record.modified_at || record.updated || record.last_modified) || null,
+    owner: username,
+    activity: role,
+    subscription: accessType,
+    email,
+    phone,
+    city: permissions,
+    notes: normalizeText(record.status_reason || record.notes || record.description || record.internal_notes),
+    created_at:
+      normalizeText(record.created_at || record.created || record.inserted_at || record.date_joined || profile.created_at) ||
+      null,
+    updated_at:
+      normalizeText(record.updated_at || record.modified_at || record.updated || record.last_login || profile.updated_at) ||
+      null,
   };
 }
 
@@ -938,5 +988,6 @@ export default function SystemUserDetailPage() {
     </main>
   );
 }
+
 
 
