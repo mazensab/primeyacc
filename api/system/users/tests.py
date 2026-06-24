@@ -83,3 +83,95 @@ class SystemUsersAPITests(TestCase):
         self.assertEqual(payload["profile_id"], self.regular_profile.id)
         self.assertIn("system_permissions", payload)
         self.assertIn("memberships", payload)
+    def test_system_user_create_alias_route_creates_profile(self) -> None:
+        import json
+        self.client.force_login(self.system_user)
+        response = self.client.post(
+            "/api/users/",
+            data=json.dumps(
+                {
+                    "username": "created-support",
+                    "password": "StrongPass123!",
+                    "email": "created-support@example.com",
+                    "first_name": "Created",
+                    "last_name": "Support",
+                    "phone": "0500000000",
+                    "system_role": "SUPPORT",
+                    "access_type": "system",
+                    "is_active": True,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertEqual(payload["username"], "created-support")
+        self.assertEqual(payload["system_role"], SystemRole.SUPPORT)
+        self.assertTrue(payload["is_system_user"])
+        self.assertTrue(payload["can_access_system"])
+        created_user = UserModel.objects.get(username="created-support")
+        self.assertEqual(created_user.email, "created-support@example.com")
+        self.assertTrue(created_user.check_password("StrongPass123!"))
+        self.assertEqual(created_user.primeyacc_profile.system_role, SystemRole.SUPPORT)
+        self.assertTrue(created_user.primeyacc_profile.is_system_user)
+    def test_system_user_create_explicit_route_creates_profile(self) -> None:
+        import json
+        self.client.force_login(self.system_user)
+        response = self.client.post(
+            "/api/system/users/create/",
+            data=json.dumps(
+                {
+                    "username": "created-billing",
+                    "password": "StrongPass123!",
+                    "email": "created-billing@example.com",
+                    "first_name": "Created",
+                    "last_name": "Billing",
+                    "phone": "0511111111",
+                    "system_role": "BILLING_MANAGER",
+                    "access_type": "system",
+                    "is_active": True,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertEqual(payload["username"], "created-billing")
+        self.assertEqual(payload["system_role"], SystemRole.BILLING_MANAGER)
+        self.assertTrue(payload["is_system_user"])
+    def test_system_user_create_requires_system_permission(self) -> None:
+        import json
+        self.client.force_login(self.regular_user)
+        response = self.client.post(
+            "/api/users/",
+            data=json.dumps(
+                {
+                    "username": "forbidden-user",
+                    "password": "StrongPass123!",
+                    "email": "forbidden-user@example.com",
+                    "system_role": "SUPPORT",
+                    "access_type": "system",
+                    "is_active": True,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(UserModel.objects.filter(username="forbidden-user").exists())
+    def test_system_user_create_validates_required_payload(self) -> None:
+        import json
+        self.client.force_login(self.system_user)
+        response = self.client.post(
+            "/api/users/",
+            data=json.dumps(
+                {
+                    "username": "",
+                    "password": "short",
+                    "system_role": "SUPPORT",
+                    "access_type": "system",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "username_required")
