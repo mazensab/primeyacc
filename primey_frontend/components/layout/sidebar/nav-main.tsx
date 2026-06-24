@@ -157,6 +157,13 @@ const systemNavItems: NavGroup[] = [
             workspaces: ["system"],
           },
           {
+            title: { ar: "\u0628\u0627\u0642\u0627\u062a \u0627\u0644\u0645\u0646\u0635\u0629", en: "Platform Plans" },
+            href: "/system/plans",
+            icon: Gift,
+            anyPermissions: [PERMISSIONS.SYSTEM_VIEW, PERMISSIONS.SYSTEM_SETTINGS],
+            workspaces: ["system"],
+          },
+          {
             title: { ar: "مدفوعات المنصة", en: "Platform Payments" },
             href: "/system/platform-payments",
             aliases: [
