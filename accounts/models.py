@@ -118,6 +118,7 @@ SYSTEM_ROLE_PERMISSIONS: dict[str, list[str]] = {
     SystemRole.SUPER_ADMIN: [SYSTEM_PERMISSION_ALL],
     SystemRole.SYSTEM_ADMIN: [
         "system.dashboard.view",
+        "system.release_readiness.view",
         "system.companies.view",
         "system.companies.create",
         "system.companies.update",
