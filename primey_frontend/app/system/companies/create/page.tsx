@@ -5,7 +5,7 @@
    🏢 PrimeyAcc — Create System Company
    ------------------------------------------------------------
    ✅ Premium PrimeyCare form pattern adapted for PrimeyAcc
-   ✅ Real API only: POST /api/system/companies/
+   ✅ Real API only: POST /api/system/companies/create/
    ✅ CSRF/session auth with credentials include
    ✅ Validation before submit
    ✅ Local draft save/restore
@@ -78,7 +78,7 @@ type CompanyForm = {
   notes: string;
 };
 
-const API_ENDPOINT = "/api/system/companies/";
+const API_ENDPOINT = "/api/system/companies/create/";
 const CSRF_ENDPOINT = "/api/auth/csrf";
 const DRAFT_KEY: DraftKey = "primeyacc-system-company-create-draft";
 
@@ -164,7 +164,7 @@ const translations = {
     requiredFields: "حقول مطلوبة",
     readyToSubmit: "جاهز للإرسال",
     notReady: "غير مكتمل",
-    apiHint: "سيتم استخدام Session + CSRF وإرسال الطلب إلى /api/system/companies/.",
+    apiHint: "سيتم استخدام Session + CSRF وإرسال الطلب إلى /api/system/companies/create/.",
     noFakeData: "لا توجد بيانات وهمية أو localhost hardcoding.",
     afterSaveHint: "بعد الإنشاء سيتم فتح صفحة التفاصيل إذا أعاد API رقم الشركة وإلا سيتم فتح قائمة الشركات.",
 
@@ -241,7 +241,7 @@ const translations = {
     requiredFields: "Required fields",
     readyToSubmit: "Ready to submit",
     notReady: "Incomplete",
-    apiHint: "Session + CSRF will be used and the request is sent to /api/system/companies/.",
+    apiHint: "Session + CSRF will be used and the request is sent to /api/system/companies/create/.",
     noFakeData: "No fake data or localhost hardcoding.",
     afterSaveHint: "After creation, details will open if the API returns an ID; otherwise the list opens.",
 
@@ -954,6 +954,7 @@ export default function SystemCompaniesCreatePage() {
     </main>
   );
 }
+
 
 
 
