@@ -1,5 +1,16 @@
+# ============================================================
+# 📂 settings_center/apps.py
+# PrimeyAcc | Settings Center App Config
+# ------------------------------------------------------------
+# ✅ Backend only
+# ✅ System settings center foundation
+# ✅ No frontend changes
+# ============================================================
+
 from django.apps import AppConfig
 
 
 class SettingsCenterConfig(AppConfig):
-    name = 'settings_center'
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "settings_center"
+    verbose_name = "Settings Center"

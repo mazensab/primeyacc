@@ -1,22 +1,22 @@
-﻿# ============================================================
-# ًں“‚ api/system/urls.py
-# ًں§  PrimeyAcc | System Workspace API URLs V1.5
+# ============================================================
+# ظ‹ع؛â€œâ€ڑ api/system/urls.py
+# ظ‹ع؛آ§آ  PrimeyAcc | System Workspace API URLs V1.5
 # ------------------------------------------------------------
-# âœ… Central routes for system workspace APIs
-# âœ… Includes system companies APIs
-# âœ… Includes SaaS subscription plans APIs
-# âœ… Includes company subscriptions APIs
-# âœ… Includes platform billing documents APIs
-# âœ… Each module owns its own urls.py
-# âœ… Views protected by central api/permissions.py guards
+# أ¢إ“â€¦ Central routes for system workspace APIs
+# أ¢إ“â€¦ Includes system companies APIs
+# أ¢إ“â€¦ Includes SaaS subscription plans APIs
+# أ¢إ“â€¦ Includes company subscriptions APIs
+# أ¢إ“â€¦ Includes platform billing documents APIs
+# أ¢إ“â€¦ Each module owns its own urls.py
+# أ¢إ“â€¦ Views protected by central api/permissions.py guards
 # ------------------------------------------------------------
-# ط§ظ„ظ‚ط§ط¹ط¯ط© ط§ظ„ظ…ط¹طھظ…ط¯ط©:
-# - ظ‡ط°ط§ ط§ظ„ظ…ظ„ظپ ظ‡ظˆ ظ†ظ‚ط·ط© طھط¬ظ…ظٹط¹ APIs ط§ظ„ط®ط§طµط© ط¨ظ…ط³ط§ط­ط© ط§ظ„ظ†ط¸ط§ظ…
-# - ظ„ط§ ظ†ط¶ط¹ ظ…ظ†ط·ظ‚ business ط¯ط§ط®ظ„ urls.py
-# - ظƒظ„ ظˆط­ط¯ط© ط¯ط§ط®ظ„ /api/system/ ظٹظƒظˆظ† ظ„ظ‡ط§ urls.py ظ…ط³طھظ‚ظ„
-# - ط¬ظ…ظٹط¹ Views ط¯ط§ط®ظ„ /api/system/ ظٹط¬ط¨ ط£ظ† طھطھط­ظ‚ظ‚ ظ…ظ† طµظ„ط§ط­ظٹط§طھ ط§ظ„ظ†ط¸ط§ظ…
-# - ط§ظ„طµظ„ط§ط­ظٹط§طھ طھط·ط¨ظ‚ ط¯ط§ط®ظ„ views ط¹ط¨ط± api/permissions.py
-# - ظ…ط³طھظ†ط¯ط§طھ ظپظˆطھط±ط© ط§ظ„ظ…ظ†طµط© ظ…ط³طھظ‚ظ„ط© ط¹ظ† ظ…ط³طھظ†ط¯ط§طھ ظˆظ…ط¯ظپظˆط¹ط§طھ ط§ظ„ط´ط±ظƒط§طھ
+# ط·آ§ط¸â€‍ط¸â€ڑط·آ§ط·آ¹ط·آ¯ط·آ© ط·آ§ط¸â€‍ط¸â€¦ط·آ¹ط·ع¾ط¸â€¦ط·آ¯ط·آ©:
+# - ط¸â€،ط·آ°ط·آ§ ط·آ§ط¸â€‍ط¸â€¦ط¸â€‍ط¸ظ¾ ط¸â€،ط¸ث† ط¸â€ ط¸â€ڑط·آ·ط·آ© ط·ع¾ط·آ¬ط¸â€¦ط¸ظ¹ط·آ¹ APIs ط·آ§ط¸â€‍ط·آ®ط·آ§ط·آµط·آ© ط·آ¨ط¸â€¦ط·آ³ط·آ§ط·آ­ط·آ© ط·آ§ط¸â€‍ط¸â€ ط·آ¸ط·آ§ط¸â€¦
+# - ط¸â€‍ط·آ§ ط¸â€ ط·آ¶ط·آ¹ ط¸â€¦ط¸â€ ط·آ·ط¸â€ڑ business ط·آ¯ط·آ§ط·آ®ط¸â€‍ urls.py
+# - ط¸ئ’ط¸â€‍ ط¸ث†ط·آ­ط·آ¯ط·آ© ط·آ¯ط·آ§ط·آ®ط¸â€‍ /api/system/ ط¸ظ¹ط¸ئ’ط¸ث†ط¸â€  ط¸â€‍ط¸â€،ط·آ§ urls.py ط¸â€¦ط·آ³ط·ع¾ط¸â€ڑط¸â€‍
+# - ط·آ¬ط¸â€¦ط¸ظ¹ط·آ¹ Views ط·آ¯ط·آ§ط·آ®ط¸â€‍ /api/system/ ط¸ظ¹ط·آ¬ط·آ¨ ط·آ£ط¸â€  ط·ع¾ط·ع¾ط·آ­ط¸â€ڑط¸â€ڑ ط¸â€¦ط¸â€  ط·آµط¸â€‍ط·آ§ط·آ­ط¸ظ¹ط·آ§ط·ع¾ ط·آ§ط¸â€‍ط¸â€ ط·آ¸ط·آ§ط¸â€¦
+# - ط·آ§ط¸â€‍ط·آµط¸â€‍ط·آ§ط·آ­ط¸ظ¹ط·آ§ط·ع¾ ط·ع¾ط·آ·ط·آ¨ط¸â€ڑ ط·آ¯ط·آ§ط·آ®ط¸â€‍ views ط·آ¹ط·آ¨ط·آ± api/permissions.py
+# - ط¸â€¦ط·آ³ط·ع¾ط¸â€ ط·آ¯ط·آ§ط·ع¾ ط¸ظ¾ط¸ث†ط·ع¾ط·آ±ط·آ© ط·آ§ط¸â€‍ط¸â€¦ط¸â€ ط·آµط·آ© ط¸â€¦ط·آ³ط·ع¾ط¸â€ڑط¸â€‍ط·آ© ط·آ¹ط¸â€  ط¸â€¦ط·آ³ط·ع¾ط¸â€ ط·آ¯ط·آ§ط·ع¾ ط¸ث†ط¸â€¦ط·آ¯ط¸ظ¾ط¸ث†ط·آ¹ط·آ§ط·ع¾ ط·آ§ط¸â€‍ط·آ´ط·آ±ط¸ئ’ط·آ§ط·ع¾
 # ============================================================
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ app_name = "system"
 
 
 urlpatterns = [
+    path("settings/", include(("settings_center.urls", "settings_center"), namespace="settings_center")),
     path("release-readiness/", include("api.system.release_readiness.urls")),
 
     path(
