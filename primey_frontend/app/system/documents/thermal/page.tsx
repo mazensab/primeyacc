@@ -1,23 +1,10 @@
-﻿/**
- * PrimeyAcc Frontend
- * File: app/system/documents/thermal/page.tsx
- * Route: /system/documents/thermal
- * Page: Thermal Documents
- *
- * Purpose:
- * Header-only placeholder page.
- * This file is intentionally kept minimal so the page can be rebuilt
- * step-by-step without carrying previous UI mistakes forward.
- */
-
-export default function SystemRoutePlaceholderPage() {
-  return (
-    <main className="min-h-screen bg-slate-50 px-6 py-8 text-slate-950">
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <p className="text-sm font-medium text-slate-500">PrimeyAcc System Page</p>
-        <h1 className="mt-2 text-2xl font-bold tracking-tight">Thermal Documents</h1>
-        <p className="mt-3 text-sm text-slate-500">/system/documents/thermal</p>
-      </section>
-    </main>
-  );
+﻿/* ============================================================
+   📂 primey_frontend/app/system/documents/thermal/page.tsx
+   🧩 PrimeyAcc — System Thermal Documents
+   ------------------------------------------------------------
+   ✅ Real API only via SystemDocumentsCenter
+============================================================ */
+import { SystemDocumentsCenter } from "@/components/system/documents/SystemDocumentsCenter";
+export default function SystemThermalDocumentsPage() {
+  return <SystemDocumentsCenter mode="thermal" />;
 }

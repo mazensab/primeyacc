@@ -1,23 +1,10 @@
-﻿/**
- * PrimeyAcc Frontend
- * File: app/system/documents/templates/page.tsx
- * Route: /system/documents/templates
- * Page: Document Templates
- *
- * Purpose:
- * Header-only placeholder page.
- * This file is intentionally kept minimal so the page can be rebuilt
- * step-by-step without carrying previous UI mistakes forward.
- */
-
-export default function SystemRoutePlaceholderPage() {
-  return (
-    <main className="min-h-screen bg-slate-50 px-6 py-8 text-slate-950">
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <p className="text-sm font-medium text-slate-500">PrimeyAcc System Page</p>
-        <h1 className="mt-2 text-2xl font-bold tracking-tight">Document Templates</h1>
-        <p className="mt-3 text-sm text-slate-500">/system/documents/templates</p>
-      </section>
-    </main>
-  );
+﻿/* ============================================================
+   📂 primey_frontend/app/system/documents/templates/page.tsx
+   🧩 PrimeyAcc — System Document Templates
+   ------------------------------------------------------------
+   ✅ Real API only via SystemDocumentsCenter
+============================================================ */
+import { SystemDocumentsCenter } from "@/components/system/documents/SystemDocumentsCenter";
+export default function SystemDocumentTemplatesPage() {
+  return <SystemDocumentsCenter mode="templates" />;
 }
