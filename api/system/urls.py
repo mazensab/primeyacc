@@ -56,10 +56,18 @@ urlpatterns = [
         include("api.system.whatsapp.urls"),
     ),
     path(
+        "activity-profiles/",
+        include("api.system.activity_profiles.urls"),
+    ),
+    path(
+        "activity-backends/",
+        include("api.system.activity_backends.urls"),
+    ),    path(
         "users/",
         include("api.system.users.urls"),
     ),
 ]
+
 
 
 
