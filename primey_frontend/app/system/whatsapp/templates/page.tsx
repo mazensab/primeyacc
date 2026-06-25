@@ -1,12 +1,13 @@
 ﻿/* ============================================================
-   📂 primey_frontend/app/system/whatsapp/page.tsx
-   💬 PrimeyAcc — System WhatsApp Overview Route
+   📂 primey_frontend/app/system/whatsapp/templates/page.tsx
+   💬 PrimeyAcc — System WhatsApp Templates Route
    ------------------------------------------------------------
+   ✅ قوالب واتساب
+   ✅ إدارة حالة القوالب ومراجعة محتواها
    ✅ Uses shared SystemWhatsAppCenter
-   ✅ Overview mode
    ✅ Real API only through shared component
 ============================================================ */
 import { SystemWhatsAppCenter } from "@/components/system/whatsapp/SystemWhatsAppCenter";
-export default function SystemWhatsAppPage() {
-  return <SystemWhatsAppCenter initialView="settings" pageMode="overview" />;
+export default function SystemWhatsAppTemplatesPage() {
+  return <SystemWhatsAppCenter initialView="templates" pageMode="templates" />;
 }
