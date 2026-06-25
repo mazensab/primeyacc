@@ -128,11 +128,11 @@ def _normalize_features(value: Any) -> list[Any]:
     يقبل features كقائمة JSON أو نص JSON أو نص مفصول بأسطر.
     """
 
-    if value in {None, ""}:
+    if value is None:
         return []
 
     if isinstance(value, list):
-        return value
+        return [str(item).strip() for item in value if str(item).strip()]
 
     if isinstance(value, str):
         stripped = value.strip()
@@ -143,7 +143,7 @@ def _normalize_features(value: Any) -> list[Any]:
         try:
             parsed = json.loads(stripped)
             if isinstance(parsed, list):
-                return parsed
+                return [str(item).strip() for item in parsed if str(item).strip()]
         except json.JSONDecodeError:
             pass
 

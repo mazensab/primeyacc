@@ -1,20 +1,15 @@
 ﻿"use client";
 
 /* ============================================================
-   📂 primey_frontend/app/system/plans/page.tsx
-   💼 PrimeyAcc — System Plans Management
+   📂 primey_frontend/app/system/plans/reports/page.tsx
+   💼 PrimeyAcc — System Plans Reports
    ------------------------------------------------------------
-   ✅ Approved Premium PrimeyAcc system page pattern
-   ✅ Same spirit as companies/subscriptions/platform-payments pages
-   ✅ Real API only:
-      - GET  /api/system/plans/
-      - POST /api/system/plans/{id}/status/
-   ✅ KPI cards + quick actions + plans management table
-   ✅ Search, status filter, visibility filter, code filter, sorting, reset
-   ✅ Activate / deactivate plans
-   ✅ Publish / hide plans
-   ✅ Create/detail/edit navigation prepared for the next approved pages
-   ✅ CSRF/session auth with credentials include for status actions
+   ✅ Approved PrimeyAcc reports pattern
+   ✅ Real API only: GET /api/system/plans/
+   ✅ Summary KPIs + status/visibility/pricing distributions
+   ✅ Analytical full-width table
+   ✅ Search, status, visibility, code, price tier, sort filters
+   ✅ Row actions use compact vertical dots menu
    ✅ Excel .xls export
    ✅ Web print + PDF through browser print dialog
    ✅ Skeleton loading
@@ -31,12 +26,11 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   Activity,
+  ArrowLeft,
   ArrowUpDown,
-  BarChart3,
   BadgeCheck,
-  CreditCard,
+  BarChart3,
   Eye,
-  EyeOff,
   FileSpreadsheet,
   FileText,
   Gift,
@@ -44,14 +38,14 @@ import {
   ListChecks,
   Loader2,
   MoreVertical,
-  Pencil,
-  Plus,
+  PieChart,
   Power,
   Printer,
   RefreshCw,
   RotateCcw,
   Search,
   Sparkles,
+  TableProperties,
   TriangleAlert,
   UsersRound,
   Warehouse,
@@ -68,6 +62,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -85,20 +86,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 type Locale = "ar" | "en";
 type ApiRecord = Record<string, unknown>;
 type StatusFilter = "all" | "active" | "inactive";
 type VisibilityFilter = "all" | "public" | "internal";
-type SortKey = "order" | "name" | "monthly" | "yearly" | "companies";
-type PlanAction = "activate" | "deactivate" | "publish" | "hide";
+type PriceTierFilter = "all" | "free" | "paid" | "low" | "mid" | "high";
+type SortKey =
+  | "order"
+  | "name"
+  | "monthly"
+  | "yearly"
+  | "companies"
+  | "users"
+  | "updated";
 
 type PlanRecord = {
   id: string;
@@ -121,6 +122,13 @@ type PlanRecord = {
   updated_at: string | null;
 };
 
+type DistributionRow = {
+  key: string;
+  label: string;
+  count: number;
+  percent: number;
+};
+
 type ServerStats = {
   total: number;
   active: number;
@@ -129,79 +137,72 @@ type ServerStats = {
   internal: number;
 };
 
-type QuickAction = {
-  title: string;
-  description: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-};
-
 const API_ENDPOINT = "/api/system/plans/";
-const CSRF_ENDPOINT = "/api/auth/csrf";
 
 const translations = {
   ar: {
-    title: "باقات المنصة",
+    title: "تقارير الباقات",
     subtitle:
-      "إدارة باقات PrimeyAcc من مكان واحد: الأسعار الحدود الظهور التفعيل وعلاقة الباقة باشتراكات الشركات.",
+      "تحليلات باقات PrimeyAcc حسب الحالة والظهور والأسعار والحدود وعدد الشركات المرتبطة من بيانات API الحقيقية.",
     badge: "إدارة المنصة",
     refresh: "تحديث",
     exportExcel: "تصدير Excel",
     print: "طباعة",
     pdf: "PDF",
-    reset: "إعادة ضبط",
+    pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
+    backToPlans: "قائمة الباقات",
     createPlan: "إنشاء باقة",
-    details: "تفاصيل",
-    edit: "تعديل",
-    actions: "الإجراءات",
-    activate: "تفعيل",
-    deactivate: "تعطيل",
-    publish: "إظهار",
-    hide: "إخفاء",
-    activating: "جاري التفعيل...",
-    deactivating: "جاري التعطيل...",
-    publishing: "جاري الإظهار...",
-    hiding: "جاري الإخفاء...",
-    confirmDeactivate:
-      "تعطيل الباقة لا يلغي اشتراكات الشركات الحالية لكنه يمنع استخدامها كباقة مفعلة. هل تريد المتابعة",
-    confirmHide:
-      "إخفاء الباقة يمنع ظهورها مستقبلا للاشتراك ولا يمس البيانات السابقة. هل تريد المتابعة",
-    actionSuccess: "تم تحديث حالة الباقة بنجاح.",
-    searchPlaceholder: "ابحث باسم الباقة أو الكود أو المعرف أو الوصف...",
+    systemDashboard: "لوحة النظام",
+    reset: "إعادة ضبط",
+
+    searchPlaceholder: "ابحث باسم الباقة أو الكود أو المعرف أو الوصف أو المميزات...",
+    statusFilter: "الحالة",
+    visibilityFilter: "الظهور",
+    codeFilter: "الكود",
+    priceTierFilter: "نطاق السعر",
+    sort: "الترتيب",
     all: "الكل",
     allStatuses: "كل الحالات",
     allVisibility: "كل أنواع الظهور",
     allCodes: "كل الأكواد",
+    allPrices: "كل الأسعار",
     activeOnly: "المفعلة",
     inactiveOnly: "الموقفة",
     publicOnly: "العامة",
     internalOnly: "الداخلية",
-    sort: "الترتيب",
-    sortOrder: "الترتيب",
+    freePlans: "مجانية",
+    paidPlans: "مدفوعة",
+    lowPlans: "أقل من 100",
+    midPlans: "100 إلى 499",
+    highPlans: "500 فأكثر",
+    sortOrder: "ترتيب العرض",
     sortName: "الاسم",
     sortMonthly: "السعر الشهري",
     sortYearly: "السعر السنوي",
     sortCompanies: "عدد الشركات",
+    sortUsers: "عدد المستخدمين",
+    sortUpdated: "آخر تحديث",
+
     totalPlans: "إجمالي الباقات",
     activePlans: "الباقات المفعلة",
-    inactivePlans: "الباقات الموقفة",
     publicPlans: "باقات ظاهرة",
+    linkedCompanies: "الشركات المرتبطة",
+    averageMonthly: "متوسط الشهري",
+    averageYearly: "متوسط السنوي",
+    maxUsersTotal: "إجمالي حدود المستخدمين",
+    filteredRows: "نتائج التقرير",
     fromLiveApi: "من واجهات النظام الحقيقية",
-    actionsTitle: "اختصارات وحدة الباقات",
-    actionsDesc: "تنقل سريع بنفس نمط إدارة المنصة المعتمد.",
-    createTitle: "إنشاء باقة جديدة",
-    createDesc: "إضافة باقة SaaS جديدة من API الباقات الحقيقي.",
-    openSubscriptionsTitle: "اشتراكات الشركات",
-    openSubscriptionsDesc: "متابعة الاشتراكات المرتبطة بالباقات.",
-    openPaymentsTitle: "مدفوعات المنصة",
-    openPaymentsDesc: "مراجعة عمليات تحصيل اشتراكات المنصة.",
-    openSettingsTitle: "إعدادات النظام",
-    openSettingsDesc: "تحكم بإعدادات المنصة وسياساتها.",
-    dashboardTitle: "تقارير الباقات",
-    dashboardDesc: "تحليل الباقات حسب الحالة والظهور والأسعار وحدود الاستخدام.",
-    tableTitle: "قائمة الباقات",
-    tableDesc:
-      "جدول إدارة باقات PrimeyAcc مع الأسعار والحدود والحالة والظهور وإجراءات الإدارة.",
+
+    statusDistribution: "توزيع الباقات حسب الحالة",
+    statusDistributionDesc: "عدد ونسبة الباقات المفعلة والموقفة.",
+    visibilityDistribution: "توزيع الباقات حسب الظهور",
+    visibilityDistributionDesc: "عدد ونسبة الباقات العامة والداخلية.",
+    priceDistribution: "توزيع الباقات حسب السعر الشهري",
+    priceDistributionDesc: "تحليل نطاقات الأسعار الشهرية الحالية.",
+    reportTable: "جدول التقرير التحليلي",
+    reportTableDesc:
+      "بيانات الباقات بعد تطبيق الفلاتر الحالية وهي نفس البيانات المستخدمة في التصدير والطباعة.",
+
     plan: "الباقة",
     code: "الكود",
     prices: "الأسعار",
@@ -213,94 +214,100 @@ const translations = {
     warehouses: "مخزن",
     pos: "نقطة بيع",
     companies: "الشركات",
+    features: "المميزات",
     status: "الحالة",
     visibility: "الظهور",
     updatedAt: "آخر تحديث",
+    actions: "الإجراءات",
+    details: "تفاصيل",
+    plansCenter: "مركز الباقات",
+
     active: "مفعلة",
     inactive: "موقفة",
     public: "عامة",
     internal: "داخلية",
     unknown: "غير محدد",
+
+    showing: "عرض",
+    of: "من",
+    rows: "صفوف",
     noDataTitle: "لا توجد باقات",
-    noDataDesc: "ستظهر باقات المنصة هنا عند توفرها من API.",
+    noDataDesc: "ستظهر تقارير الباقات هنا عند توفر بيانات من API.",
     noResultsTitle: "لا توجد نتائج مطابقة",
     noResultsDesc: "غير البحث أو الفلاتر لعرض نتائج أخرى.",
-    errorTitle: "تعذر تحميل مركز الباقات",
+    errorTitle: "تعذر تحميل تقارير الباقات",
     errorDesc:
       "تأكد من تسجيل الدخول بصلاحية نظام ومن تشغيل الباكند ثم أعد المحاولة.",
     tryAgain: "إعادة المحاولة",
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
-    pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
     reportTitle: "تقرير باقات PrimeyAcc",
     generatedAt: "تاريخ الإنشاء",
-    showing: "عرض",
-    of: "من",
-    rows: "صفوف",
-    refreshed: "تم تحديث مركز الباقات.",
+    refreshed: "تم تحديث تقارير الباقات.",
   },
   en: {
-    title: "Platform Plans",
+    title: "Plans reports",
     subtitle:
-      "Manage PrimeyAcc plans in one place: prices, limits, visibility, activation, and company subscription usage.",
+      "Analyze PrimeyAcc plans by status, visibility, pricing, limits, and linked companies using real API data.",
     badge: "Platform management",
     refresh: "Refresh",
     exportExcel: "Export Excel",
     print: "Print",
     pdf: "PDF",
-    reset: "Reset",
+    pdfHint: "Choose Save as PDF from the print dialog.",
+    backToPlans: "Plans list",
     createPlan: "Create plan",
-    details: "Details",
-    edit: "Edit",
-    actions: "Actions",
-    activate: "Activate",
-    deactivate: "Deactivate",
-    publish: "Publish",
-    hide: "Hide",
-    activating: "Activating...",
-    deactivating: "Deactivating...",
-    publishing: "Publishing...",
-    hiding: "Hiding...",
-    confirmDeactivate:
-      "Deactivating a plan does not cancel existing company subscriptions, but it marks the plan inactive. Continue?",
-    confirmHide:
-      "Hiding a plan prevents future public visibility and does not affect previous data. Continue?",
-    actionSuccess: "Plan status updated successfully.",
-    searchPlaceholder: "Search by plan name, code, slug, or description...",
+    systemDashboard: "System dashboard",
+    reset: "Reset",
+
+    searchPlaceholder: "Search by plan name, code, slug, description, or features...",
+    statusFilter: "Status",
+    visibilityFilter: "Visibility",
+    codeFilter: "Code",
+    priceTierFilter: "Price tier",
+    sort: "Sort",
     all: "All",
     allStatuses: "All statuses",
     allVisibility: "All visibility",
     allCodes: "All codes",
+    allPrices: "All prices",
     activeOnly: "Active only",
     inactiveOnly: "Inactive only",
     publicOnly: "Public only",
     internalOnly: "Internal only",
-    sort: "Sort",
-    sortOrder: "Order",
+    freePlans: "Free",
+    paidPlans: "Paid",
+    lowPlans: "Below 100",
+    midPlans: "100 to 499",
+    highPlans: "500 and above",
+    sortOrder: "Display order",
     sortName: "Name",
     sortMonthly: "Monthly price",
     sortYearly: "Yearly price",
     sortCompanies: "Companies count",
+    sortUsers: "Users limit",
+    sortUpdated: "Last updated",
+
     totalPlans: "Total plans",
     activePlans: "Active plans",
-    inactivePlans: "Inactive plans",
     publicPlans: "Public plans",
+    linkedCompanies: "Linked companies",
+    averageMonthly: "Average monthly",
+    averageYearly: "Average yearly",
+    maxUsersTotal: "Total user limits",
+    filteredRows: "Report results",
     fromLiveApi: "From real system APIs",
-    actionsTitle: "Plans module shortcuts",
-    actionsDesc: "Quick navigation using the approved platform management pattern.",
-    createTitle: "Create a new plan",
-    createDesc: "Add a new SaaS plan through the real plans API.",
-    openSubscriptionsTitle: "Company subscriptions",
-    openSubscriptionsDesc: "Review company subscriptions linked to platform plans.",
-    openPaymentsTitle: "Platform payments",
-    openPaymentsDesc: "Review platform subscription payment collection.",
-    openSettingsTitle: "System settings",
-    openSettingsDesc: "Control platform settings and policies.",
-    dashboardTitle: "Plans reports",
-    dashboardDesc: "Analyze plans by status, visibility, pricing, and usage limits.",
-    tableTitle: "Plans list",
-    tableDesc:
-      "A management table for PrimeyAcc plans with prices, limits, status, visibility, and actions.",
+
+    statusDistribution: "Plans by status",
+    statusDistributionDesc: "Count and percentage of active and inactive plans.",
+    visibilityDistribution: "Plans by visibility",
+    visibilityDistributionDesc: "Count and percentage of public and internal plans.",
+    priceDistribution: "Plans by monthly price",
+    priceDistributionDesc: "Analysis of current monthly price ranges.",
+    reportTable: "Analytical report table",
+    reportTableDesc:
+      "Filtered plan data used for the current export and print output.",
+
     plan: "Plan",
     code: "Code",
     prices: "Prices",
@@ -312,31 +319,36 @@ const translations = {
     warehouses: "warehouses",
     pos: "POS",
     companies: "Companies",
+    features: "Features",
     status: "Status",
     visibility: "Visibility",
     updatedAt: "Updated at",
+    actions: "Actions",
+    details: "Details",
+    plansCenter: "Plans center",
+
     active: "Active",
     inactive: "Inactive",
     public: "Public",
     internal: "Internal",
     unknown: "Unknown",
+
+    showing: "Showing",
+    of: "of",
+    rows: "rows",
     noDataTitle: "No plans",
-    noDataDesc: "Platform plans will appear here when returned by the API.",
+    noDataDesc: "Plans reports will appear here when the API returns data.",
     noResultsTitle: "No matching results",
     noResultsDesc: "Change search or filters to show other results.",
-    errorTitle: "Could not load plans center",
+    errorTitle: "Could not load plans reports",
     errorDesc:
       "Make sure you are signed in as a system user and the backend is running, then try again.",
     tryAgain: "Try again",
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
-    pdfHint: "Choose Save as PDF from the print dialog.",
-    reportTitle: "PrimeyAcc Platform Plans Report",
+    reportTitle: "PrimeyAcc Plans Report",
     generatedAt: "Generated at",
-    showing: "Showing",
-    of: "of",
-    rows: "rows",
-    refreshed: "Plans center refreshed.",
+    refreshed: "Plans reports refreshed.",
   },
 } as const;
 
@@ -370,25 +382,31 @@ function toNumber(value: unknown, fallback = 0) {
 
 function toBoolean(value: unknown, fallback = false) {
   if (typeof value === "boolean") return value;
-
-  if (typeof value === "number") {
-    if (value === 1) return true;
-    if (value === 0) return false;
-  }
+  if (typeof value === "number") return value === 1;
 
   if (typeof value === "string") {
     const normalized = value.trim().toLowerCase();
 
-    if (["1", "true", "yes", "y", "on", "active", "public"].includes(normalized)) {
-      return true;
-    }
-
-    if (["0", "false", "no", "n", "off", "inactive", "internal"].includes(normalized)) {
-      return false;
-    }
+    if (["1", "true", "yes", "active", "public"].includes(normalized)) return true;
+    if (["0", "false", "no", "inactive", "internal"].includes(normalized)) return false;
   }
 
   return fallback;
+}
+
+function normalizeFeatures(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeText(item)).filter(Boolean);
+  }
+
+  const text = normalizeText(value);
+
+  if (!text) return [];
+
+  return text
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function formatInteger(value: unknown) {
@@ -443,98 +461,20 @@ function getApiBaseUrl() {
   return envBase;
 }
 
-function makeApiUrl(path: string, params?: URLSearchParams) {
-  const query = params?.toString();
-
-  return `${getApiBaseUrl()}${path}${query ? `?${query}` : ""}`;
+function makeApiUrl(path: string) {
+  return `${getApiBaseUrl()}${path}`;
 }
 
-function getCookie(name: string) {
-  if (typeof document === "undefined") return "";
-
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-
-  if (parts.length !== 2) return "";
-
-  return decodeURIComponent(parts.pop()?.split(";").shift() || "");
-}
-
-async function ensureCsrfToken() {
-  let token = getCookie("csrftoken");
-
-  if (token) return token;
-
-  const response = await fetch(makeApiUrl(CSRF_ENDPOINT), {
-    method: "GET",
-    credentials: "include",
-    cache: "no-store",
-    headers: {
-      Accept: "application/json",
-      "X-Requested-With": "XMLHttpRequest",
-    },
-  });
-
-  if (!response.ok) return "";
-
-  token = getCookie("csrftoken");
-
-  return token;
-}
-
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, {
-    method: "GET",
-    credentials: "include",
-    cache: "no-store",
-    redirect: "follow",
-    headers: {
-      Accept: "application/json",
-      "X-Requested-With": "XMLHttpRequest",
-    },
-  });
-
-  const contentType = response.headers.get("content-type") || "";
-  const rawText = await response.text();
-  let payload: unknown = null;
-
-  if (rawText && contentType.includes("application/json")) {
-    try {
-      payload = JSON.parse(rawText) as unknown;
-    } catch {
-      payload = null;
-    }
-  }
-
-  if (!response.ok) {
-    const record = asRecord(payload);
-    const message =
-      normalizeText(record.message) ||
-      normalizeText(record.detail) ||
-      normalizeText(record.error) ||
-      `Request failed with status ${response.status}`;
-
-    throw new Error(message);
-  }
-
-  return (payload || {}) as T;
-}
-
-async function postJson<T>(path: string, body: ApiRecord): Promise<T> {
-  const csrfToken = await ensureCsrfToken();
-
+async function fetchJson<T>(path: string): Promise<T> {
   const response = await fetch(makeApiUrl(path), {
-    method: "POST",
+    method: "GET",
     credentials: "include",
     cache: "no-store",
     redirect: "follow",
     headers: {
       Accept: "application/json",
-      "Content-Type": "application/json",
       "X-Requested-With": "XMLHttpRequest",
-      ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
     },
-    body: JSON.stringify(body),
   });
 
   const contentType = response.headers.get("content-type") || "";
@@ -551,14 +491,12 @@ async function postJson<T>(path: string, body: ApiRecord): Promise<T> {
 
   if (!response.ok) {
     const record = asRecord(payload);
-    const message =
+    throw new Error(
       normalizeText(record.message) ||
-      normalizeText(record.detail) ||
-      normalizeText(record.error) ||
-      normalizeText(record.non_field_errors) ||
-      `Request failed with status ${response.status}`;
-
-    throw new Error(message);
+        normalizeText(record.detail) ||
+        normalizeText(record.error) ||
+        `Request failed with status ${response.status}`,
+    );
   }
 
   return (payload || {}) as T;
@@ -601,21 +539,6 @@ function extractStats(payload: unknown, fallback: ServerStats): ServerStats {
   };
 }
 
-function normalizeFeatures(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.map((item) => normalizeText(item)).filter(Boolean);
-  }
-
-  const text = normalizeText(value);
-
-  if (!text) return [];
-
-  return text
-    .split(/\r?\n|,/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
 function normalizePlan(value: unknown): PlanRecord {
   const record = asRecord(value);
   const limits = asRecord(record.limits);
@@ -651,16 +574,6 @@ function normalizePlan(value: unknown): PlanRecord {
   };
 }
 
-function extractPlanFromPayload(payload: unknown): PlanRecord | null {
-  const record = asRecord(payload);
-  const dataRecord = asRecord(record.data);
-  const planRecord = asRecord(record.plan ?? dataRecord.plan ?? dataRecord.item ?? dataRecord.result);
-
-  if (!Object.keys(planRecord).length) return null;
-
-  return normalizePlan(planRecord);
-}
-
 function rowDateValue(value: string | null) {
   if (!value) return 0;
 
@@ -669,47 +582,47 @@ function rowDateValue(value: string | null) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function getStatusClass(isActive: boolean) {
-  return isActive
-    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-    : "border-slate-200 bg-slate-50 text-slate-700";
+function priceTier(plan: PlanRecord): PriceTierFilter {
+  const monthly = toNumber(plan.monthly_price);
+
+  if (monthly === 0) return "free";
+  if (monthly < 100) return "low";
+  if (monthly < 500) return "mid";
+
+  return "high";
 }
 
-function getVisibilityClass(isPublic: boolean) {
-  return isPublic
-    ? "border-sky-200 bg-sky-50 text-sky-700"
-    : "border-amber-200 bg-amber-50 text-amber-700";
+function makeDistribution(rows: PlanRecord[], items: Array<{ key: string; label: string; test: (plan: PlanRecord) => boolean }>) {
+  const total = rows.length || 1;
+
+  return items.map((item) => {
+    const count = rows.filter(item.test).length;
+
+    return {
+      key: item.key,
+      label: item.label,
+      count,
+      percent: Math.round((count / total) * 100),
+    };
+  });
 }
 
-function actionBusyText(action: PlanAction, locale: Locale) {
-  const t = translations[locale];
-
-  if (action === "activate") return t.activating;
-  if (action === "deactivate") return t.deactivating;
-  if (action === "publish") return t.publishing;
-
-  return t.hiding;
-}
-
-function applyLocalAction(plan: PlanRecord, action: PlanAction): PlanRecord {
-  if (action === "activate") return { ...plan, is_active: true };
-  if (action === "deactivate") return { ...plan, is_active: false };
-  if (action === "publish") return { ...plan, is_public: true };
-  if (action === "hide") return { ...plan, is_public: false };
-
-  return plan;
-}
-
-function MoneyValue({ value }: { value: string }) {
+function MoneyIcon() {
   return (
-    <span className="inline-flex items-center gap-1 font-semibold tabular-nums text-foreground">
-      <Image
-        src="/currency/sar.svg"
-        alt="SAR"
-        width={14}
-        height={14}
-        className="h-3.5 w-3.5"
-      />
+    <Image
+      src="/currency/sar.svg"
+      alt="SAR"
+      width={15}
+      height={15}
+      className="h-[15px] w-[15px]"
+    />
+  );
+}
+
+function MoneyValue({ value }: { value: unknown }) {
+  return (
+    <span dir="ltr" className="inline-flex items-center gap-1 font-semibold tabular-nums">
+      <MoneyIcon />
       {formatMoney(value)}
     </span>
   );
@@ -719,7 +632,15 @@ function StatusBadge({ active, locale }: { active: boolean; locale: Locale }) {
   const t = translations[locale];
 
   return (
-    <Badge variant="outline" className={cn("rounded-full px-3 py-1", getStatusClass(active))}>
+    <Badge
+      variant="outline"
+      className={cn(
+        "rounded-full px-3 py-1",
+        active
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : "border-slate-200 bg-slate-50 text-slate-700",
+      )}
+    >
       {active ? t.active : t.inactive}
     </Badge>
   );
@@ -731,7 +652,12 @@ function VisibilityBadge({ isPublic, locale }: { isPublic: boolean; locale: Loca
   return (
     <Badge
       variant="outline"
-      className={cn("rounded-full px-3 py-1", getVisibilityClass(isPublic))}
+      className={cn(
+        "rounded-full px-3 py-1",
+        isPublic
+          ? "border-sky-200 bg-sky-50 text-sky-700"
+          : "border-amber-200 bg-amber-50 text-amber-700",
+      )}
     >
       {isPublic ? t.public : t.internal}
     </Badge>
@@ -745,7 +671,7 @@ function MetricCard({
   icon: Icon,
 }: {
   title: string;
-  value: string;
+  value: React.ReactNode;
   description: string;
   icon: React.ComponentType<{ className?: string }>;
 }) {
@@ -767,29 +693,40 @@ function MetricCard({
   );
 }
 
-function QuickActionCard({ action }: { action: QuickAction }) {
-  const Icon = action.icon;
-
+function DistributionCard({
+  title,
+  description,
+  rows,
+}: {
+  title: string;
+  description: string;
+  rows: DistributionRow[];
+}) {
   return (
-    <Button
-      asChild
-      variant="outline"
-      className="h-auto justify-start rounded-2xl bg-background p-4 text-start transition hover:-translate-y-0.5 hover:shadow-sm"
-    >
-      <Link href={action.href}>
-        <span className="flex w-full items-start gap-3">
-          <span className="rounded-xl bg-primary/10 p-2 text-primary">
-            <Icon className="h-4 w-4" />
-          </span>
-          <span className="space-y-1">
-            <span className="block font-semibold text-foreground">{action.title}</span>
-            <span className="block text-xs leading-5 text-muted-foreground">
-              {action.description}
-            </span>
-          </span>
-        </span>
-      </Link>
-    </Button>
+    <Card className="rounded-2xl shadow-sm">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {rows.map((row) => (
+          <div key={row.key} className="rounded-2xl border bg-background p-4">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="font-medium">{row.label}</span>
+              <span className="text-sm font-semibold tabular-nums">
+                {formatInteger(row.count)} · {formatInteger(row.percent)}%
+              </span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary"
+                style={{ width: `${Math.min(row.percent, 100)}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -809,7 +746,7 @@ function EmptyState({
   return (
     <div className="flex min-h-[220px] flex-col items-center justify-center rounded-2xl border border-dashed bg-muted/20 p-8 text-center">
       <div className="mb-4 rounded-2xl bg-background p-3 shadow-sm">
-        <Gift className="h-6 w-6 text-muted-foreground" />
+        <BarChart3 className="h-6 w-6 text-muted-foreground" />
       </div>
       <h3 className="text-base font-semibold">{title}</h3>
       <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">{description}</p>
@@ -823,11 +760,11 @@ function EmptyState({
   );
 }
 
-function PlansManagementSkeleton() {
+function ReportsSkeleton() {
   return (
     <main className="min-h-screen bg-muted/30 px-4 py-6 sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
-        <Skeleton className="h-48 rounded-3xl" />
+        <Skeleton className="h-44 rounded-3xl" />
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => (
             <Skeleton key={index} className="h-32 rounded-2xl" />
@@ -839,7 +776,7 @@ function PlansManagementSkeleton() {
   );
 }
 
-export default function SystemPlansPage() {
+export default function SystemPlansReportsPage() {
   const [locale, setLocale] = React.useState<Locale>("ar");
   const [plans, setPlans] = React.useState<PlanRecord[]>([]);
   const [apiTotal, setApiTotal] = React.useState(0);
@@ -852,12 +789,13 @@ export default function SystemPlansPage() {
   });
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
-  const [busyAction, setBusyAction] = React.useState("");
   const [error, setError] = React.useState("");
+
   const [search, setSearch] = React.useState("");
   const [status, setStatus] = React.useState<StatusFilter>("all");
   const [visibility, setVisibility] = React.useState<VisibilityFilter>("all");
   const [code, setCode] = React.useState("all");
+  const [price, setPrice] = React.useState<PriceTierFilter>("all");
   const [sort, setSort] = React.useState<SortKey>("order");
 
   const t = translations[locale];
@@ -867,6 +805,7 @@ export default function SystemPlansPage() {
   React.useEffect(() => {
     const applyLocale = () => {
       const nextLocale = getInitialLocale();
+
       setLocale(nextLocale);
       document.documentElement.lang = nextLocale;
       document.documentElement.dir = nextLocale === "ar" ? "rtl" : "ltr";
@@ -883,14 +822,14 @@ export default function SystemPlansPage() {
     };
   }, []);
 
-  const loadPlans = React.useCallback(
+  const loadReports = React.useCallback(
     async ({ silent = false }: { silent?: boolean } = {}) => {
       try {
         if (!silent) setLoading(true);
         setRefreshing(true);
         setError("");
 
-        const payload = await fetchJson<unknown>(makeApiUrl(API_ENDPOINT));
+        const payload = await fetchJson<unknown>(API_ENDPOINT);
         const rows = extractArray(payload).map(normalizePlan);
 
         const fallbackStats = {
@@ -919,14 +858,15 @@ export default function SystemPlansPage() {
   );
 
   React.useEffect(() => {
-    void loadPlans();
-  }, [loadPlans]);
+    void loadReports();
+  }, [loadReports]);
 
   const resetFilters = React.useCallback(() => {
     setSearch("");
     setStatus("all");
     setVisibility("all");
     setCode("all");
+    setPrice("all");
     setSort("order");
   }, []);
 
@@ -956,76 +896,79 @@ export default function SystemPlansPage() {
       if (visibility === "public" && !plan.is_public) return false;
       if (visibility === "internal" && plan.is_public) return false;
       if (code !== "all" && plan.code !== code) return false;
+      if (price !== "all") {
+        const tier = priceTier(plan);
+
+        if (price === "paid" && tier === "free") return false;
+        if (price !== "paid" && tier !== price) return false;
+      }
 
       return true;
     });
 
     return [...rows].sort((a, b) => {
       if (sort === "name") return a.name.localeCompare(b.name);
-      if (sort === "monthly") return toNumber(a.monthly_price) - toNumber(b.monthly_price);
-      if (sort === "yearly") return toNumber(a.yearly_price) - toNumber(b.yearly_price);
+      if (sort === "monthly") return toNumber(b.monthly_price) - toNumber(a.monthly_price);
+      if (sort === "yearly") return toNumber(b.yearly_price) - toNumber(a.yearly_price);
       if (sort === "companies") return b.companies_count - a.companies_count;
+      if (sort === "users") return b.max_users - a.max_users;
+      if (sort === "updated") {
+        return rowDateValue(b.updated_at || b.created_at) - rowDateValue(a.updated_at || a.created_at);
+      }
 
       const orderDiff = a.sort_order - b.sort_order;
 
       if (orderDiff !== 0) return orderDiff;
 
-      return rowDateValue(b.updated_at || b.created_at) - rowDateValue(a.updated_at || a.created_at);
+      return a.name.localeCompare(b.name);
     });
-  }, [code, plans, search, sort, status, visibility]);
+  }, [code, plans, price, search, sort, status, visibility]);
 
-  const stats = React.useMemo<ServerStats>(() => {
+  const hasFilters = Boolean(
+    search || status !== "all" || visibility !== "all" || code !== "all" || price !== "all" || sort !== "order",
+  );
+
+  const reportStats = React.useMemo(() => {
+    const monthlyTotal = filteredPlans.reduce((sum, plan) => sum + toNumber(plan.monthly_price), 0);
+    const yearlyTotal = filteredPlans.reduce((sum, plan) => sum + toNumber(plan.yearly_price), 0);
+    const companiesTotal = filteredPlans.reduce((sum, plan) => sum + plan.companies_count, 0);
+    const usersTotal = filteredPlans.reduce((sum, plan) => sum + plan.max_users, 0);
+    const divisor = filteredPlans.length || 1;
+
     return {
       total: serverStats.total || apiTotal || plans.length,
       active: serverStats.active || plans.filter((plan) => plan.is_active).length,
-      inactive: serverStats.inactive || plans.filter((plan) => !plan.is_active).length,
       public: serverStats.public || plans.filter((plan) => plan.is_public).length,
-      internal: serverStats.internal || plans.filter((plan) => !plan.is_public).length,
+      linkedCompanies: companiesTotal,
+      averageMonthly: monthlyTotal / divisor,
+      averageYearly: yearlyTotal / divisor,
+      usersTotal,
+      filtered: filteredPlans.length,
     };
-  }, [apiTotal, plans, serverStats]);
+  }, [apiTotal, filteredPlans, plans, serverStats]);
 
-  const quickActions = React.useMemo<QuickAction[]>(
-    () => [
-      {
-        title: t.createTitle,
-        description: t.createDesc,
-        href: "/system/plans/create",
-        icon: Plus,
-      },
-      {
-        title: t.openSubscriptionsTitle,
-        description: t.openSubscriptionsDesc,
-        href: "/system/subscriptions",
-        icon: CreditCard,
-      },
-      {
-        title: t.openPaymentsTitle,
-        description: t.openPaymentsDesc,
-        href: "/system/platform-payments",
-        icon: FileText,
-      },
-      {
-        title: t.dashboardTitle,
-        description: t.dashboardDesc,
-        href: "/system/plans/reports",
-        icon: BarChart3,
-      },
-    ],
-    [
-      t.createDesc,
-      t.createTitle,
-      t.dashboardDesc,
-      t.dashboardTitle,
-      t.openPaymentsDesc,
-      t.openPaymentsTitle,
-      t.openSubscriptionsDesc,
-      t.openSubscriptionsTitle,
-    ],
-  );
+  const statusDistribution = React.useMemo(() => {
+    return makeDistribution(filteredPlans, [
+      { key: "active", label: t.active, test: (plan) => plan.is_active },
+      { key: "inactive", label: t.inactive, test: (plan) => !plan.is_active },
+    ]);
+  }, [filteredPlans, t.active, t.inactive]);
 
-  const hasFilters = Boolean(
-    search || status !== "all" || visibility !== "all" || code !== "all" || sort !== "order",
-  );
+  const visibilityDistribution = React.useMemo(() => {
+    return makeDistribution(filteredPlans, [
+      { key: "public", label: t.public, test: (plan) => plan.is_public },
+      { key: "internal", label: t.internal, test: (plan) => !plan.is_public },
+    ]);
+  }, [filteredPlans, t.internal, t.public]);
+
+  const priceDistribution = React.useMemo(() => {
+    return makeDistribution(filteredPlans, [
+      { key: "free", label: t.freePlans, test: (plan) => priceTier(plan) === "free" },
+      { key: "low", label: t.lowPlans, test: (plan) => priceTier(plan) === "low" },
+      { key: "mid", label: t.midPlans, test: (plan) => priceTier(plan) === "mid" },
+      { key: "high", label: t.highPlans, test: (plan) => priceTier(plan) === "high" },
+    ]);
+  }, [filteredPlans, t.freePlans, t.highPlans, t.lowPlans, t.midPlans]);
 
   function buildExportRows() {
     return filteredPlans.map((plan) => [
@@ -1039,6 +982,7 @@ export default function SystemPlansPage() {
       plan.max_warehouses,
       plan.max_pos,
       plan.companies_count,
+      plan.features.join(", "),
       plan.is_active ? t.active : t.inactive,
       plan.is_public ? t.public : t.internal,
       formatDate(plan.updated_at || plan.created_at),
@@ -1056,6 +1000,7 @@ export default function SystemPlansPage() {
       t.warehouses,
       t.pos,
       t.companies,
+      t.features,
       t.status,
       t.visibility,
       t.updatedAt,
@@ -1103,7 +1048,7 @@ export default function SystemPlansPage() {
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = `primeyacc-system-plans-management-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `primeyacc-system-plans-reports-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -1156,40 +1101,7 @@ export default function SystemPlansPage() {
     printWindow.document.close();
   }
 
-  async function runPlanAction(plan: PlanRecord, action: PlanAction) {
-    if (!plan.id) return;
-
-    if (action === "deactivate" && !window.confirm(t.confirmDeactivate)) return;
-    if (action === "hide" && !window.confirm(t.confirmHide)) return;
-
-    const actionKey = `${plan.id}:${action}`;
-
-    try {
-      setBusyAction(actionKey);
-
-      const payload = await postJson<unknown>(
-        `/api/system/plans/${encodeURIComponent(plan.id)}/status/`,
-        { action },
-      );
-
-      const updatedPlan = extractPlanFromPayload(payload) || applyLocalAction(plan, action);
-      const record = asRecord(payload);
-      const message = normalizeText(record.message) || t.actionSuccess;
-
-      setPlans((current) =>
-        current.map((item) => (item.id === plan.id ? updatedPlan : item)),
-      );
-
-      toast.success(message);
-    } catch (caughtError) {
-      const message = caughtError instanceof Error ? caughtError.message : t.errorDesc;
-      toast.error(message);
-    } finally {
-      setBusyAction("");
-    }
-  }
-
-  if (loading) return <PlansManagementSkeleton />;
+  if (loading) return <ReportsSkeleton />;
 
   if (error) {
     return (
@@ -1208,7 +1120,7 @@ export default function SystemPlansPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <Button className="rounded-xl" onClick={() => void loadPlans()}>
+              <Button className="rounded-xl" onClick={() => void loadReports()}>
                 <RefreshCw className="h-4 w-4" />
                 {t.tryAgain}
               </Button>
@@ -1232,14 +1144,22 @@ export default function SystemPlansPage() {
                   {t.badge}
                 </div>
                 <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{t.title}</h1>
-                <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">{t.subtitle}</p>
+                <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">
+                  {t.subtitle}
+                </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
+                <Button asChild variant="outline" className="rounded-xl bg-background">
+                  <Link href="/system/plans">
+                    <ArrowLeft className="h-4 w-4" />
+                    {t.backToPlans}
+                  </Link>
+                </Button>
                 <Button
                   variant="outline"
                   className="rounded-xl bg-background"
-                  onClick={() => void loadPlans({ silent: true })}
+                  onClick={() => void loadReports({ silent: true })}
                   disabled={refreshing}
                 >
                   {refreshing ? (
@@ -1275,7 +1195,7 @@ export default function SystemPlansPage() {
                 </Button>
                 <Button asChild className="rounded-xl">
                   <Link href="/system/plans/create">
-                    <Plus className="h-4 w-4" />
+                    <Gift className="h-4 w-4" />
                     {t.createPlan}
                   </Link>
                 </Button>
@@ -1287,50 +1207,78 @@ export default function SystemPlansPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard
             title={t.totalPlans}
-            value={formatInteger(stats.total)}
+            value={formatInteger(reportStats.total)}
             description={t.fromLiveApi}
             icon={Gift}
           />
           <MetricCard
             title={t.activePlans}
-            value={formatInteger(stats.active)}
+            value={formatInteger(reportStats.active)}
             description={t.fromLiveApi}
             icon={BadgeCheck}
           />
           <MetricCard
-            title={t.inactivePlans}
-            value={formatInteger(stats.inactive)}
-            description={t.fromLiveApi}
-            icon={Power}
-          />
-          <MetricCard
             title={t.publicPlans}
-            value={formatInteger(stats.public)}
+            value={formatInteger(reportStats.public)}
             description={t.fromLiveApi}
             icon={Eye}
+          />
+          <MetricCard
+            title={t.linkedCompanies}
+            value={formatInteger(reportStats.linkedCompanies)}
+            description={t.fromLiveApi}
+            icon={UsersRound}
+          />
+          <MetricCard
+            title={t.averageMonthly}
+            value={<MoneyValue value={reportStats.averageMonthly} />}
+            description={t.fromLiveApi}
+            icon={BarChart3}
+          />
+          <MetricCard
+            title={t.averageYearly}
+            value={<MoneyValue value={reportStats.averageYearly} />}
+            description={t.fromLiveApi}
+            icon={PieChart}
+          />
+          <MetricCard
+            title={t.maxUsersTotal}
+            value={formatInteger(reportStats.usersTotal)}
+            description={t.fromLiveApi}
+            icon={UsersRound}
+          />
+          <MetricCard
+            title={t.filteredRows}
+            value={formatInteger(reportStats.filtered)}
+            description={t.fromLiveApi}
+            icon={TableProperties}
+          />
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-3">
+          <DistributionCard
+            title={t.statusDistribution}
+            description={t.statusDistributionDesc}
+            rows={statusDistribution}
+          />
+          <DistributionCard
+            title={t.visibilityDistribution}
+            description={t.visibilityDistributionDesc}
+            rows={visibilityDistribution}
+          />
+          <DistributionCard
+            title={t.priceDistribution}
+            description={t.priceDistributionDesc}
+            rows={priceDistribution}
           />
         </div>
 
         <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
-            <CardTitle>{t.actionsTitle}</CardTitle>
-            <CardDescription>{t.actionsDesc}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {quickActions.map((action) => (
-                <QuickActionCard key={action.href} action={action} />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="w-full rounded-2xl shadow-sm">
           <CardHeader className="gap-3">
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <CardTitle>{t.tableTitle}</CardTitle>
-                <CardDescription className="mt-2">{t.tableDesc}</CardDescription>
+                <CardTitle>{t.reportTable}</CardTitle>
+                <CardDescription className="mt-2">{t.reportTableDesc}</CardDescription>
               </div>
               <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
                 <Activity className="h-3.5 w-3.5" />
@@ -1360,7 +1308,7 @@ export default function SystemPlansPage() {
 
               <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
                 <SelectTrigger className="h-11 rounded-xl bg-background">
-                  <SelectValue placeholder={t.allStatuses} />
+                  <SelectValue placeholder={t.statusFilter} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t.allStatuses}</SelectItem>
@@ -1374,7 +1322,7 @@ export default function SystemPlansPage() {
                 onValueChange={(value) => setVisibility(value as VisibilityFilter)}
               >
                 <SelectTrigger className="h-11 rounded-xl bg-background">
-                  <SelectValue placeholder={t.allVisibility} />
+                  <SelectValue placeholder={t.visibilityFilter} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t.allVisibility}</SelectItem>
@@ -1385,7 +1333,7 @@ export default function SystemPlansPage() {
 
               <Select value={code} onValueChange={setCode}>
                 <SelectTrigger className="h-11 rounded-xl bg-background">
-                  <SelectValue placeholder={t.allCodes} />
+                  <SelectValue placeholder={t.codeFilter} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t.allCodes}</SelectItem>
@@ -1397,8 +1345,24 @@ export default function SystemPlansPage() {
                 </SelectContent>
               </Select>
 
-              <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
+              <Select value={price} onValueChange={(value) => setPrice(value as PriceTierFilter)}>
                 <SelectTrigger className="h-11 rounded-xl bg-background">
+                  <SelectValue placeholder={t.priceTierFilter} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t.allPrices}</SelectItem>
+                  <SelectItem value="free">{t.freePlans}</SelectItem>
+                  <SelectItem value="paid">{t.paidPlans}</SelectItem>
+                  <SelectItem value="low">{t.lowPlans}</SelectItem>
+                  <SelectItem value="mid">{t.midPlans}</SelectItem>
+                  <SelectItem value="high">{t.highPlans}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
+                <SelectTrigger className="h-11 w-[210px] rounded-xl bg-background">
                   <ArrowUpDown className="h-4 w-4" />
                   <SelectValue placeholder={t.sort} />
                 </SelectTrigger>
@@ -1408,260 +1372,188 @@ export default function SystemPlansPage() {
                   <SelectItem value="monthly">{t.sortMonthly}</SelectItem>
                   <SelectItem value="yearly">{t.sortYearly}</SelectItem>
                   <SelectItem value="companies">{t.sortCompanies}</SelectItem>
+                  <SelectItem value="users">{t.sortUsers}</SelectItem>
+                  <SelectItem value="updated">{t.sortUpdated}</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
 
-            {hasFilters ? (
-              <Button
-                variant="ghost"
-                className="w-fit rounded-xl"
-                onClick={resetFilters}
-              >
-                <RotateCcw className="h-4 w-4" />
-                {t.reset}
-              </Button>
-            ) : null}
+              {hasFilters ? (
+                <Button
+                  variant="ghost"
+                  className="rounded-xl"
+                  onClick={resetFilters}
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  {t.reset}
+                </Button>
+              ) : null}
+            </div>
           </CardHeader>
 
           <CardContent className="space-y-4">
             <div className="overflow-hidden rounded-2xl border bg-background">
               <div className="overflow-x-auto">
-                <Table className="w-full min-w-[1120px] table-fixed">
+                <Table className="w-full min-w-[1220px] table-fixed">
                   <TableHeader>
                     <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
-                      <TableHead className={cn("h-11 w-[220px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                      <TableHead className={cn("w-[230px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
                         {t.plan}
                       </TableHead>
-                      <TableHead className={cn("h-11 w-[95px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                      <TableHead className={cn("w-[100px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
                         {t.code}
                       </TableHead>
-                      <TableHead className={cn("h-11 w-[155px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                      <TableHead className={cn("w-[170px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
                         {t.prices}
                       </TableHead>
-                      <TableHead className={cn("h-11 w-[185px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                      <TableHead className={cn("w-[190px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
                         {t.limits}
                       </TableHead>
-                      <TableHead className={cn("h-11 w-[105px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                      <TableHead className={cn("w-[100px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
                         {t.companies}
                       </TableHead>
-                      <TableHead className={cn("min-w-[120px] px-4", alignClass)}>
+                      <TableHead className={cn("w-[170px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                        {t.features}
+                      </TableHead>
+                      <TableHead className={cn("w-[110px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
                         {t.status}
                       </TableHead>
-                      <TableHead className={cn("min-w-[120px] px-4", alignClass)}>
+                      <TableHead className={cn("w-[110px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
                         {t.visibility}
                       </TableHead>
-                      <TableHead className={cn("h-11 w-[120px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                      <TableHead className={cn("w-[120px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
                         {t.updatedAt}
                       </TableHead>
-                      <TableHead className="sticky left-0 z-10 h-11 w-[76px] bg-muted/40 px-3 text-center text-xs font-semibold text-muted-foreground">{t.actions}</TableHead>
+                      <TableHead className="sticky left-0 z-10 h-11 w-[76px] bg-muted/40 px-3 text-center text-xs font-semibold text-muted-foreground">
+                        {t.actions}
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredPlans.length ? (
-                      filteredPlans.map((plan) => {
-                        const activateKey = `${plan.id}:activate`;
-                        const deactivateKey = `${plan.id}:deactivate`;
-                        const publishKey = `${plan.id}:publish`;
-                        const hideKey = `${plan.id}:hide`;
-                        const isAnyBusy = busyAction.startsWith(`${plan.id}:`);
+                      filteredPlans.map((plan) => (
+                        <TableRow key={plan.id || plan.slug || plan.code} className="h-[68px] hover:bg-muted/30">
+                          <TableCell className={cn("px-4", alignClass)}>
+                            <div className="space-y-1">
+                              <p className="font-semibold">{plan.name}</p>
+                              <p className="line-clamp-1 text-xs text-muted-foreground">
+                                {plan.description || plan.slug}
+                              </p>
+                            </div>
+                          </TableCell>
 
-                        return (
-                          <TableRow key={plan.id || plan.slug || plan.code} className="h-[64px] hover:bg-muted/30">
-                            <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
-                              <div className="space-y-1">
-                                <div className="font-semibold text-foreground">{plan.name}</div>
-                                <div className="text-xs text-muted-foreground">{plan.slug}</div>
-                                {plan.description ? (
-                                  <div className="line-clamp-1 max-w-[360px] text-xs text-muted-foreground">
-                                    {plan.description}
-                                  </div>
-                                ) : null}
+                          <TableCell className={cn("px-4", alignClass)}>
+                            <Badge variant="outline" className="rounded-full">
+                              {plan.code || t.unknown}
+                            </Badge>
+                          </TableCell>
+
+                          <TableCell className={cn("px-4", alignClass)}>
+                            <div className="space-y-1 text-xs">
+                              <div className="flex items-center gap-2">
+                                <span className="text-muted-foreground">{t.monthly}</span>
+                                <MoneyValue value={plan.monthly_price} />
                               </div>
-                            </TableCell>
-
-                            <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
-                              <Badge variant="outline" className="rounded-full">
-                                {plan.code || t.unknown}
-                              </Badge>
-                            </TableCell>
-
-                            <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
-                              <div className="space-y-1 text-sm">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-muted-foreground">{t.monthly}</span>
-                                  <MoneyValue value={plan.monthly_price} />
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-muted-foreground">{t.yearly}</span>
-                                  <MoneyValue value={plan.yearly_price} />
-                                </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-muted-foreground">{t.yearly}</span>
+                                <MoneyValue value={plan.yearly_price} />
                               </div>
-                            </TableCell>
+                            </div>
+                          </TableCell>
 
-                            <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
-                              <div className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
-                                <span className="inline-flex items-center gap-1">
-                                  <UsersRound className="h-3.5 w-3.5" />
-                                  {formatInteger(plan.max_users)} {t.users}
-                                </span>
-                                <span className="inline-flex items-center gap-1">
-                                  <Activity className="h-3.5 w-3.5" />
-                                  {formatInteger(plan.max_branches)} {t.branches}
-                                </span>
-                                <span className="inline-flex items-center gap-1">
-                                  <Warehouse className="h-3.5 w-3.5" />
-                                  {formatInteger(plan.max_warehouses)} {t.warehouses}
-                                </span>
-                                <span className="inline-flex items-center gap-1">
-                                  <Zap className="h-3.5 w-3.5" />
-                                  {formatInteger(plan.max_pos)} {t.pos}
-                                </span>
-                              </div>
-                            </TableCell>
-
-                            <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
-                              <span className="font-semibold tabular-nums">
-                                {formatInteger(plan.companies_count)}
+                          <TableCell className={cn("px-4", alignClass)}>
+                            <div className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
+                              <span className="inline-flex items-center gap-1">
+                                <UsersRound className="h-3.5 w-3.5" />
+                                {formatInteger(plan.max_users)} {t.users}
                               </span>
-                            </TableCell>
-
-                            <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
-                              <StatusBadge active={plan.is_active} locale={locale} />
-                            </TableCell>
-
-                            <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
-                              <VisibilityBadge isPublic={plan.is_public} locale={locale} />
-                            </TableCell>
-
-                            <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
-                              <span className="text-sm tabular-nums text-muted-foreground">
-                                {formatDate(plan.updated_at || plan.created_at)}
+                              <span className="inline-flex items-center gap-1">
+                                <Activity className="h-3.5 w-3.5" />
+                                {formatInteger(plan.max_branches)} {t.branches}
                               </span>
-                            </TableCell>
-                            <TableCell className="sticky left-0 z-10 h-[64px] w-[76px] bg-background px-3 text-center align-middle">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-8 w-8 rounded-lg bg-background"
-                                    aria-label={t.actions}
-                                    disabled={isAnyBusy}
-                                  >
-                                    {isAnyBusy ? (
-                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                    ) : (
-                                      <MoreVertical className="h-3.5 w-3.5" />
-                                    )}
-                                  </Button>
-                                </DropdownMenuTrigger>
+                              <span className="inline-flex items-center gap-1">
+                                <Warehouse className="h-3.5 w-3.5" />
+                                {formatInteger(plan.max_warehouses)} {t.warehouses}
+                              </span>
+                              <span className="inline-flex items-center gap-1">
+                                <Zap className="h-3.5 w-3.5" />
+                                {formatInteger(plan.max_pos)} {t.pos}
+                              </span>
+                            </div>
+                          </TableCell>
 
-                                <DropdownMenuContent
-                                  align={locale === "ar" ? "start" : "end"}
-                                  className="w-48 rounded-xl p-1"
+                          <TableCell className={cn("px-4", alignClass)}>
+                            <span className="font-semibold tabular-nums">
+                              {formatInteger(plan.companies_count)}
+                            </span>
+                          </TableCell>
+
+                          <TableCell className={cn("px-4", alignClass)}>
+                            <div className="flex max-w-[160px] flex-wrap gap-1">
+                              {plan.features.slice(0, 2).map((feature) => (
+                                <Badge key={feature} variant="secondary" className="rounded-full text-[11px]">
+                                  {feature}
+                                </Badge>
+                              ))}
+                              {plan.features.length > 2 ? (
+                                <Badge variant="outline" className="rounded-full text-[11px]">
+                                  +{formatInteger(plan.features.length - 2)}
+                                </Badge>
+                              ) : null}
+                            </div>
+                          </TableCell>
+
+                          <TableCell className={cn("px-4", alignClass)}>
+                            <StatusBadge active={plan.is_active} locale={locale} />
+                          </TableCell>
+
+                          <TableCell className={cn("px-4", alignClass)}>
+                            <VisibilityBadge isPublic={plan.is_public} locale={locale} />
+                          </TableCell>
+
+                          <TableCell className={cn("px-4", alignClass)}>
+                            <span className="text-sm tabular-nums text-muted-foreground">
+                              {formatDate(plan.updated_at || plan.created_at)}
+                            </span>
+                          </TableCell>
+
+                          <TableCell className="sticky left-0 z-10 w-[76px] bg-background px-3 text-center">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8 rounded-lg bg-background"
+                                  aria-label={t.actions}
                                 >
-                                  <DropdownMenuItem asChild className="cursor-pointer gap-2 rounded-lg text-xs">
-                                    <Link href={plan.id ? `/system/plans/${plan.id}` : "/system/plans"}>
-                                      <ListChecks className="h-3.5 w-3.5" />
-                                      {t.details}
-                                    </Link>
-                                  </DropdownMenuItem>
-
-                                  <DropdownMenuItem asChild className="cursor-pointer gap-2 rounded-lg text-xs">
-                                    <Link href={plan.id ? `/system/plans/${plan.id}` : "/system/plans"}>
-                                      <Pencil className="h-3.5 w-3.5" />
-                                      {t.edit}
-                                    </Link>
-                                  </DropdownMenuItem>
-
-                                  <DropdownMenuSeparator />
-
-                                  {plan.is_active ? (
-                                    <DropdownMenuItem
-                                      className="cursor-pointer gap-2 rounded-lg text-xs"
-                                      disabled={isAnyBusy}
-                                      onSelect={(event) => {
-                                        event.preventDefault();
-                                        void runPlanAction(plan, "deactivate");
-                                      }}
-                                    >
-                                      {busyAction === deactivateKey ? (
-                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                      ) : (
-                                        <Power className="h-3.5 w-3.5" />
-                                      )}
-                                      {busyAction === deactivateKey
-                                        ? actionBusyText("deactivate", locale)
-                                        : t.deactivate}
-                                    </DropdownMenuItem>
-                                  ) : (
-                                    <DropdownMenuItem
-                                      className="cursor-pointer gap-2 rounded-lg text-xs"
-                                      disabled={isAnyBusy}
-                                      onSelect={(event) => {
-                                        event.preventDefault();
-                                        void runPlanAction(plan, "activate");
-                                      }}
-                                    >
-                                      {busyAction === activateKey ? (
-                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                      ) : (
-                                        <BadgeCheck className="h-3.5 w-3.5" />
-                                      )}
-                                      {busyAction === activateKey
-                                        ? actionBusyText("activate", locale)
-                                        : t.activate}
-                                    </DropdownMenuItem>
-                                  )}
-
-                                  {plan.is_public ? (
-                                    <DropdownMenuItem
-                                      className="cursor-pointer gap-2 rounded-lg text-xs"
-                                      disabled={isAnyBusy}
-                                      onSelect={(event) => {
-                                        event.preventDefault();
-                                        void runPlanAction(plan, "hide");
-                                      }}
-                                    >
-                                      {busyAction === hideKey ? (
-                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                      ) : (
-                                        <EyeOff className="h-3.5 w-3.5" />
-                                      )}
-                                      {busyAction === hideKey
-                                        ? actionBusyText("hide", locale)
-                                        : t.hide}
-                                    </DropdownMenuItem>
-                                  ) : (
-                                    <DropdownMenuItem
-                                      className="cursor-pointer gap-2 rounded-lg text-xs"
-                                      disabled={isAnyBusy}
-                                      onSelect={(event) => {
-                                        event.preventDefault();
-                                        void runPlanAction(plan, "publish");
-                                      }}
-                                    >
-                                      {busyAction === publishKey ? (
-                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                      ) : (
-                                        <Eye className="h-3.5 w-3.5" />
-                                      )}
-                                      {busyAction === publishKey
-                                        ? actionBusyText("publish", locale)
-                                        : t.publish}
-                                    </DropdownMenuItem>
-                                  )}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
+                                  <MoreVertical className="h-3.5 w-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent
+                                align={locale === "ar" ? "start" : "end"}
+                                className="w-48 rounded-xl p-1"
+                              >
+                                <DropdownMenuItem asChild className="cursor-pointer gap-2 rounded-lg text-xs">
+                                  <Link href={plan.id ? `/system/plans/${plan.id}` : "/system/plans"}>
+                                    <ListChecks className="h-3.5 w-3.5" />
+                                    {t.details}
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem asChild className="cursor-pointer gap-2 rounded-lg text-xs">
+                                  <Link href="/system/plans">
+                                    <Gift className="h-3.5 w-3.5" />
+                                    {t.plansCenter}
+                                  </Link>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={9}>
+                        <TableCell colSpan={10}>
                           <EmptyState
                             title={hasFilters ? t.noResultsTitle : t.noDataTitle}
                             description={hasFilters ? t.noResultsDesc : t.noDataDesc}
@@ -1689,12 +1581,21 @@ export default function SystemPlansPage() {
                 </span>{" "}
                 {t.rows}
               </p>
-              <Button asChild variant="outline" className="w-fit rounded-xl bg-background">
-                <Link href="/system/plans/create">
-                  <Plus className="h-4 w-4" />
-                  {t.createPlan}
-                </Link>
-              </Button>
+
+              <div className="flex flex-wrap gap-2">
+                <Button asChild variant="outline" className="rounded-xl bg-background">
+                  <Link href="/system">
+                    <LayoutDashboard className="h-4 w-4" />
+                    {t.systemDashboard}
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="rounded-xl bg-background">
+                  <Link href="/system/plans">
+                    <Gift className="h-4 w-4" />
+                    {t.backToPlans}
+                  </Link>
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
