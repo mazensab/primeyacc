@@ -52,6 +52,10 @@ urlpatterns = [
         include("api.system.notifications.urls"),
     ),
     path(
+        "whatsapp/",
+        include("api.system.whatsapp.urls"),
+    ),
+    path(
         "users/",
         include("api.system.users.urls"),
     ),
