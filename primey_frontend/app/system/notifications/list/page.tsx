@@ -1,12 +1,13 @@
 ﻿/* ============================================================
-   📂 primey_frontend/app/system/notifications/page.tsx
-   🔔 PrimeyAcc — System Notifications Overview Route
+   📂 primey_frontend/app/system/notifications/list/page.tsx
+   🔔 PrimeyAcc — System Notifications List Route
    ------------------------------------------------------------
+   ✅ عرض قائمة الإشعارات
+   ✅ جدول إشعارات النظام مع الفلاتر والتصدير والطباعة
    ✅ Uses shared SystemNotificationsCenter
-   ✅ Overview mode
    ✅ Real API only through shared component
 ============================================================ */
 import { SystemNotificationsCenter } from "@/components/system/notifications/SystemNotificationsCenter";
-export default function SystemNotificationsPage() {
-  return <SystemNotificationsCenter mode="overview" />;
+export default function SystemNotificationsListPage() {
+  return <SystemNotificationsCenter mode="list" />;
 }
