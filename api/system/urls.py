@@ -30,7 +30,6 @@ app_name = "system"
 urlpatterns = [
     path("settings/", include(("settings_center.urls", "settings_center"), namespace="settings_center")),
     path("release-readiness/", include("api.system.release_readiness.urls")),
-
     path(
         "companies/",
         include("api.system.companies.urls"),
@@ -62,11 +61,18 @@ urlpatterns = [
     path(
         "activity-backends/",
         include("api.system.activity_backends.urls"),
-    ),    path(
+    ),
+    path(
+        "business-controls/",
+        include("api.system.business_controls.urls"),
+    ),
+    path(
         "users/",
         include("api.system.users.urls"),
     ),
 ]
+
+
 
 
 
