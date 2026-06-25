@@ -1,23 +1,15 @@
-﻿/**
- * PrimeyAcc Frontend
- * File: app/system/activity-profiles/[id]/page.tsx
- * Route: /system/activity-profiles/[id]
- * Page: Activity Profile Details
- *
- * Purpose:
- * Header-only placeholder page.
- * This file is intentionally kept minimal so the page can be rebuilt
- * step-by-step without carrying previous UI mistakes forward.
- */
-
-export default function SystemRoutePlaceholderPage() {
-  return (
-    <main className="min-h-screen bg-slate-50 px-6 py-8 text-slate-950">
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <p className="text-sm font-medium text-slate-500">PrimeyAcc System Page</p>
-        <h1 className="mt-2 text-2xl font-bold tracking-tight">Activity Profile Details</h1>
-        <p className="mt-3 text-sm text-slate-500">/system/activity-profiles/[id]</p>
-      </section>
-    </main>
-  );
+﻿"use client";
+/* ============================================================
+   📂 primey_frontend/app/system/activity-profiles/[id]/page.tsx
+   🧩 PrimeyAcc — System Activity Profile Detail
+   ------------------------------------------------------------
+   ✅ Real API only via SystemActivityProfileDetail
+============================================================ */
+import { useParams } from "next/navigation";
+import { SystemActivityProfileDetail } from "@/components/system/activity-profiles/SystemActivityProfileDetail";
+export default function SystemActivityProfileDetailPage() {
+  const params = useParams();
+  const rawId = params?.id;
+  const profileId = Array.isArray(rawId) ? rawId[0] : String(rawId || "");
+  return <SystemActivityProfileDetail profileId={profileId} />;
 }
