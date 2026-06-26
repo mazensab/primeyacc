@@ -69,24 +69,24 @@ export async function generateMetadata(): Promise<Metadata> {
   const isArabic = lang === "ar";
 
   const title = isArabic
-    ? "PrimeyAcc | نظام محاسبي وإداري سحابي"
-    : "PrimeyAcc | Cloud Accounting and ERP Platform";
+    ? "Mhamcloud | نظام محاسبي وإداري سحابي"
+    : "Mhamcloud | Cloud Accounting and ERP Platform";
 
   const description = isArabic
-    ? "PrimeyAcc نظام محاسبي وإداري سحابي يساعد الشركات على إدارة الفواتير المبيعات المشتريات المخزون الخزينة المدفوعات التقارير والعمليات اليومية من منصة واحدة."
-    : "PrimeyAcc is a cloud accounting and ERP platform that helps businesses manage invoices, sales, purchases, inventory, treasury, payments, reports, and daily operations from one place.";
+    ? "Mhamcloud نظام محاسبي وإداري سحابي يساعد الشركات على إدارة الفواتير المبيعات المشتريات المخزون الخزينة المدفوعات التقارير والعمليات اليومية من منصة واحدة."
+    : "Mhamcloud is a cloud accounting and ERP platform that helps businesses manage invoices, sales, purchases, inventory, treasury, payments, reports, and daily operations from one place.";
 
   const imageAlt = isArabic
-    ? "PrimeyAcc نظام محاسبي وإداري سحابي"
-    : "PrimeyAcc cloud accounting and ERP platform";
+    ? "Mhamcloud نظام محاسبي وإداري سحابي"
+    : "Mhamcloud  accounting and ERP platform";
 
   return {
     title,
     description,
     keywords: isArabic
       ? [
-          "PrimeyAcc",
-          "برايمي أك",
+          "Mhamcloud",
+          " مهام السحابي",
           "نظام محاسبي سحابي",
           "ERP سعودي",
           "فواتير إلكترونية",
@@ -98,7 +98,7 @@ export async function generateMetadata(): Promise<Metadata> {
           "ضريبة القيمة المضافة",
         ]
       : [
-          "PrimeyAcc",
+          "Mhamcloud",
           "cloud accounting",
           "ERP platform",
           "Saudi ERP",
@@ -121,7 +121,7 @@ export async function generateMetadata(): Promise<Metadata> {
       type: "website",
       title,
       description,
-      siteName: "PrimeyAcc",
+      siteName: "Mhamcloud",
       locale: isArabic ? "ar_SA" : "en_US",
       images: [
         {
@@ -154,8 +154,8 @@ function buildStructuredData(lang: AppLang) {
     url: "/",
     logo: "/hero logo.png",
     description: isArabic
-      ? "PrimeyAcc منصة محاسبية وإدارية سحابية تساعد الشركات على تنظيم الفواتير والمخزون والمبيعات والمشتريات والتقارير."
-      : "PrimeyAcc is a cloud accounting and ERP platform for invoices, inventory, sales, purchases, treasury, and reports.",
+      ? "Mhamcloud منصة محاسبية وإدارية سحابية تساعد الشركات على تنظيم الفواتير والمخزون والمبيعات والمشتريات والتقارير."
+      : "Mhamcloud is a cloud accounting and ERP platform for invoices, inventory, sales, purchases, treasury, and reports.",
     sameAs: [
       "https://www.facebook.com/mhamcloud",
       "https://www.instagram.com/mhamcloud",
@@ -190,13 +190,13 @@ export default async function Home() {
       {/* القطاعات والأنشطة */}
       <SponsorsSection />
 
-      {/* لماذا PrimeyAcc */}
+      {/* لماذا Mhamcloud */}
       <BenefitsSection />
 
       {/* وحدات النظام والمزايا */}
       <FeaturesSection />
 
-      {/* حلول PrimeyAcc */}
+      {/* حلول Mhamcloud */}
       <ServicesSection />
 
       {/* الباقات والاشتراكات */}

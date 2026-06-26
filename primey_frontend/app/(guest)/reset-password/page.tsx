@@ -138,8 +138,8 @@ export default function ResetPasswordPage() {
     () => ({
       title: isArabic ? "إعادة تعيين كلمة المرور" : "Reset password",
       subtitle: isArabic
-        ? "أدخل اسم المستخدم أو البريد الإلكتروني وحدد كلمة مرور جديدة لحسابك في PrimeyAcc."
-        : "Enter your username or email and choose a new password for your PrimeyAcc account.",
+        ? "أدخل اسم المستخدم أو البريد الإلكتروني وحدد كلمة مرور جديدة لحسابك في Mhamcloud."
+        : "Enter your username or email and choose a new password for your Mhamcloud account.",
       badge: isArabic ? "استعادة الوصول" : "Restore access",
       secureSession: isArabic ? "إجراء آمن ومحمي" : "Secure protected action",
 
@@ -200,8 +200,8 @@ export default function ResetPasswordPage() {
         : "Unable to reset password",
 
       sideTitle: isArabic
-        ? "استعادة آمنة لحساب PrimeyAcc"
-        : "Secure PrimeyAcc account recovery",
+        ? "استعادة آمنة لحساب Mhamcloud"
+        : "Secure Mhamcloud account recovery",
       sideDescription: isArabic
         ? "تساعدك هذه الصفحة على استعادة الوصول لحساب النظام أو حساب الشركة مع الحفاظ على حماية الجلسة والتحقق من الطلب عبر الـ Backend."
         : "This page helps restore access for platform and company accounts while keeping the session protected and the backend in control.",
@@ -215,8 +215,8 @@ export default function ResetPasswordPage() {
         : "Suitable for owners, admins, accountants, and staff based on memberships.",
       pointThreeTitle: isArabic ? "جاهز للسعودية" : "Saudi-ready",
       pointThreeDescription: isArabic
-        ? "متوافق مع تجربة PrimeyAcc العربية والريال السعودي."
-        : "Aligned with Arabic-first PrimeyAcc workflows and SAR.",
+        ? "متوافق مع تجربة Mhamcloud العربية والريال السعودي."
+        : "Aligned with Arabic-first Mhamcloud workflows and SAR.",
     }),
     [isArabic]
   );

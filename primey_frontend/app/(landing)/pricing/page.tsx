@@ -51,12 +51,12 @@ export async function generateMetadata(): Promise<Metadata> {
   const isArabic = lang === "ar";
 
   const title = isArabic
-    ? "باقات PrimeyAcc | خطط الاشتراك"
-    : "PrimeyAcc Pricing | Subscription Plans";
+    ? "باقات Mhamcloud | خطط الاشتراك"
+    : "Mhamcloud Pricing | Subscription Plans";
 
   const description = isArabic
-    ? "استعرض باقات PrimeyAcc المناسبة للشركات مع وحدات المحاسبة المبيعات المشتريات المخزون الخزينة والتقارير."
-    : "Explore PrimeyAcc subscription plans for businesses, including accounting, sales, purchases, inventory, treasury, and reporting modules.";
+    ? "استعرض باقات Mhamcloud المناسبة للشركات مع وحدات المحاسبة المبيعات المشتريات المخزون الخزينة والتقارير."
+    : "Explore Mhamcloud subscription plans for businesses, including accounting, sales, purchases, inventory, treasury, and reporting modules.";
 
   return {
     title,
@@ -79,7 +79,7 @@ export async function generateMetadata(): Promise<Metadata> {
           url: "/seo.jpg",
           width: 1200,
           height: 630,
-          alt: isArabic ? "باقات PrimeyAcc" : "PrimeyAcc pricing plans",
+          alt: isArabic ? "باقات Mhamcloud" : "Mhamcloud pricing plans",
         },
       ],
     },

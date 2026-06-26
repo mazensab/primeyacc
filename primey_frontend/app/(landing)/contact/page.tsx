@@ -74,34 +74,34 @@ export async function generateMetadata(): Promise<Metadata> {
   const isArabic = lang === "ar";
 
   const title = isArabic
-    ? "تواصل مع PrimeyAcc | استفسر عن الباقات والنظام"
-    : "Contact PrimeyAcc | Ask About Plans and Platform";
+    ? "تواصل مع Mhamcloud | استفسر عن الباقات والنظام"
+    : "Contact Mhamcloud | Ask About Plans and Platform";
 
   const description = isArabic
-    ? "تواصل مع PrimeyAcc للاستفسار عن الباقات، وحدات النظام، التسجيل، وتجهيز شركتك على المنصة."
-    : "Contact PrimeyAcc to ask about plans, system modules, registration, and preparing your company on the platform.";
+    ? "تواصل مع Mhamcloud للاستفسار عن الباقات، وحدات النظام، التسجيل، وتجهيز شركتك على المنصة."
+    : "Contact Mhamcloud to ask about plans, system modules, registration, and preparing your company on the platform.";
 
   return {
     title,
     description,
     keywords: isArabic
       ? [
-          "تواصل PrimeyAcc",
-          "برايمي أك",
+          "تواصل Mhamcloud",
+          "مهام السحابي",
           "استفسار نظام محاسبي",
           "نظام ERP",
           "إدارة الفواتير",
           "إدارة المخزون",
-          "اشتراك PrimeyAcc",
+          "اشتراك Mhamcloud",
         ]
       : [
-          "Contact PrimeyAcc",
-          "PrimeyAcc support",
+          "Contact Mhamcloud",
+          "Mhamcloud support",
           "cloud accounting inquiry",
           "ERP modules",
           "business management platform",
           "inventory and sales management",
-          "PrimeyAcc subscription",
+          "Mhamcloud subscription",
         ],
     alternates: {
       canonical: "/contact",
@@ -121,7 +121,7 @@ export async function generateMetadata(): Promise<Metadata> {
           url: "/seo.jpg",
           width: 1200,
           height: 630,
-          alt: isArabic ? "تواصل مع PrimeyAcc" : "Contact PrimeyAcc",
+          alt: isArabic ? "تواصل مع Mhamcloud" : "Contact Mhamcloud",
         },
       ],
     },
@@ -139,14 +139,14 @@ export async function generateMetadata(): Promise<Metadata> {
 ========================================================= */
 const content = {
   ar: {
-    badge: "تواصل مع PrimeyAcc",
+    badge: "تواصل مع Mhamcloud",
     title: "نساعدك تختار الباقة والوحدات الأنسب لشركتك",
     description:
       "لديك سؤال عن الباقات، الفواتير، المخزون، المبيعات، المشتريات، الموارد البشرية أو طريقة بدء استخدام النظام؟ أرسل استفسارك وسنساعدك في اختيار المسار المناسب.",
     primaryButton: "أرسل طلب تجربة",
     secondaryButton: "عرض الباقات",
     note:
-      "PrimeyAcc منصة محاسبية وإدارية سحابية، وتختلف الوحدات والحدود حسب الباقة المفعلة من لوحة النظام.",
+      "Mhamcloud منصة محاسبية وإدارية سحابية، وتختلف الوحدات والحدود حسب الباقة المفعلة من لوحة النظام.",
     cards: [
       {
         title: "استفسار عن الباقات",
@@ -185,14 +185,14 @@ const content = {
     ],
   },
   en: {
-    badge: "Contact PrimeyAcc",
+    badge: "Contact Mhamcloud",
     title: "We help you choose the right plan and modules",
     description:
       "Have a question about plans, invoices, inventory, sales, purchases, HR, or how to start using the platform? Send your inquiry and we will help you choose the right path.",
     primaryButton: "Send Trial Request",
     secondaryButton: "View Plans",
     note:
-      "PrimeyAcc is a cloud accounting and ERP platform. Available modules and limits depend on the active system plan.",
+      "Mhamcloud is a cloud accounting and ERP platform. Available modules and limits depend on the active system plan.",
     cards: [
       {
         title: "Ask About Plans",

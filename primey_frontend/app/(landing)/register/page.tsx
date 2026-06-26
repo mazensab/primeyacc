@@ -207,12 +207,12 @@ const programOptions: ProgramOption[] = [
 ========================================================= */
 const content: Record<AppLocale, Content> = {
   ar: {
-    badge: "طلب تجربة PrimeyAcc",
+    badge: "طلب تجربة Mhamcloud",
     title: "ابدأ رحلتك مع نظام محاسبي وإداري سحابي",
     description:
-      "املأ بياناتك واختر الباقة أو الوحدات المناسبة لشركتك، وسيتواصل معك فريق PrimeyAcc لتوضيح إمكانيات المنصة وخطوات التفعيل.",
+      "املأ بياناتك واختر الباقة أو الوحدات المناسبة لشركتك، وسيتواصل معك فريق Mhamcloud لتوضيح إمكانيات المنصة وخطوات التفعيل.",
     primaryNote:
-      "PrimeyAcc منصة محاسبية وإدارية سحابية لاستخدام الشركات وإدارة العمليات اليومية.",
+      "Mhamcloud منصة محاسبية وإدارية سحابية لاستخدام الشركات وإدارة العمليات اليومية.",
     formTitle: "بيانات طلب التجربة",
     formDescription:
       "أدخل بياناتك الأساسية وسنساعدك في اختيار الخيار الأنسب لشركتك.",
@@ -238,7 +238,7 @@ const content: Record<AppLocale, Content> = {
     disclaimerTitle: "تنبيه مهم",
     disclaimerText:
       "الوحدات والحدود وشروط الاشتراك تختلف حسب الباقة وإعدادات الشركة. سيتم توضيح التفاصيل قبل التفعيل.",
-    sideTitle: "PrimeyAcc تجعل اختيار النظام أوضح",
+    sideTitle: "Mhamcloud تجعل اختيار النظام أوضح",
     sideDescription:
       "بدل استخدام أدوات متفرقة، اختر منصة محاسبية وإدارية تساعد شركتك على إدارة العمليات اليومية من مكان واحد.",
     steps: [
@@ -255,7 +255,7 @@ const content: Record<AppLocale, Content> = {
       {
         title: "تبدأ استخدام النظام",
         description:
-          "بعد التفعيل، يمكن لشركتك استخدام PrimeyAcc حسب المستخدمين والوحدات المفعلة.",
+          "بعد التفعيل، يمكن لشركتك استخدام Mhamcloud حسب المستخدمين والوحدات المفعلة.",
       },
     ],
     contactPreferences: {
@@ -274,12 +274,12 @@ const content: Record<AppLocale, Content> = {
     },
   },
   en: {
-    badge: "PrimeyAcc Subscription Request",
+    badge: "Mhamcloud Subscription Request",
     title: "Start your journey with cloud accounting and business management",
     description:
-      "Fill in your details and choose the plan or modules that fit your business needs. The PrimeyAcc team will contact you with platform details, setup steps, and subscription options.",
+      "Fill in your details and choose the plan or modules that fit your business needs. The Mhamcloud team will contact you with platform details, setup steps, and subscription options.",
     primaryNote:
-      "PrimeyAcc is a cloud accounting and ERP platform for business subscriptions and company operations.",
+      "Mhamcloud is a cloud accounting and ERP platform for business subscriptions and company operations.",
     formTitle: "Company Request Details",
     formDescription:
       "Enter your basic information and we will help you choose the best option for your company.",
@@ -305,7 +305,7 @@ const content: Record<AppLocale, Content> = {
     disclaimerTitle: "Important Notice",
     disclaimerText:
       "Available modules, limits, and subscription terms may vary by plan and company setup. Details will be clarified before activation.",
-    sideTitle: "PrimeyAcc makes choosing business software clearer",
+    sideTitle: "Mhamcloud makes choosing business software clearer",
     sideDescription:
       "Instead of using disconnected tools, choose a cloud accounting and ERP platform that helps your company manage daily operations from one place.",
     steps: [
@@ -322,7 +322,7 @@ const content: Record<AppLocale, Content> = {
       {
         title: "You start using the platform",
         description:
-          "After activation, your company can start using PrimeyAcc with the configured users and modules.",
+          "After activation, your company can start using Mhamcloud with the configured users and modules.",
       },
     ],
     contactPreferences: {
@@ -498,7 +498,7 @@ export default function RegisterPage() {
               selectedProgram?.title[locale] || form.program,
             contact_preference: form.contactPreference,
             message: form.message.trim(),
-            source: "primeyacc_landing_register",
+            source: "Mhamcloud_landing_register",
           }),
         }
       );
@@ -555,11 +555,11 @@ export default function RegisterPage() {
           <Link
             href="/"
             className="inline-flex w-fit items-center transition hover:opacity-80"
-            aria-label="PrimeyAcc"
+            aria-label="Mhamcloud"
           >
             <Image
               src="/hero logo.png"
-              alt="PrimeyAcc"
+              alt="Mhamcloud"
               width={1200}
               height={420}
               priority
@@ -634,7 +634,7 @@ export default function RegisterPage() {
                 <div className="relative min-h-[320px] overflow-hidden">
                   <Image
                     src="/hero.png"
-                    alt="PrimeyAcc platform"
+                    alt="Mhamcloud platform"
                     fill
                     priority
                     unoptimized
@@ -645,7 +645,7 @@ export default function RegisterPage() {
                   <div className="absolute bottom-0 p-6">
                     <Badge className="mb-3 rounded-full">
                       <HeartPulse className="size-4" />
-                      PrimeyAcc
+                      Mhamcloud
                     </Badge>
 
                     <h2

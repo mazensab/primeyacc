@@ -279,7 +279,7 @@ export default function Page() {
 
   const content = useMemo(
     () => ({
-      title: isArabic ? "مرحبا بعودتك إلى PrimeyAcc" : "Welcome back to PrimeyAcc",
+      title: isArabic ? "مرحبا بعودتك إلى Mhamcloud" : "Welcome back to Mhamcloud",
       subtitle: isArabic
         ? "سجل الدخول لإدارة المحاسبة والفواتير والمخزون والاشتراكات من منصة واحدة آمنة."
         : "Sign in to manage accounting, invoicing, inventory, and subscriptions from one secure platform.",
@@ -320,16 +320,16 @@ export default function Page() {
       modeNote:
         mode === "system"
           ? isArabic
-            ? "دخول إدارة المنصة مخصص لفريق PrimeyAcc وصلاحيات النظام العليا."
-            : "Platform admin access is for PrimeyAcc internal and system-level roles."
+            ? "دخول إدارة المنصة مخصص لفريق Mhamcloud وصلاحيات النظام العليا."
+            : "Platform admin access is for Mhamcloud internal and system-level roles."
           : isArabic
             ? "دخول الشركة مخصص للمالك والمدير والمحاسب والموظفين حسب صلاحيات العضوية."
             : "Company portal access is for owners, admins, accountants, and staff based on membership permissions.",
       formTitle:
         mode === "system"
           ? isArabic
-            ? "دخول إدارة PrimeyAcc"
-            : "PrimeyAcc admin sign in"
+            ? "دخول إدارة Mhamcloud"
+            : "Mhamcloud admin sign in"
           : isArabic
             ? "دخول حساب الشركة"
             : "Company account sign in",
@@ -523,8 +523,8 @@ export default function Page() {
 
                 <p className="mt-6 max-w-xl text-base leading-8 text-white/85 xl:text-lg">
                   {isArabic
-                    ? "PrimeyAcc يجمع المحاسبة والفواتير والمخزون والمدفوعات والتقارير المالية في تجربة واحدة آمنة ومهيأة للشركات داخل السعودية."
-                    : "PrimeyAcc brings accounting, invoicing, inventory, payments, and financial reports into one secure experience for Saudi businesses."}
+                    ? "Mhamcloud يجمع المحاسبة والفواتير والمخزون والمدفوعات والتقارير المالية في تجربة واحدة آمنة ومهيأة للشركات داخل السعودية."
+                    : "Mhamcloud brings accounting, invoicing, inventory, payments, and financial reports into one secure experience for Saudi businesses."}
                 </p>
               </div>
 
