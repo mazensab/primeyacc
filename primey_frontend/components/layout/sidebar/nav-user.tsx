@@ -200,6 +200,7 @@ export function NavUser() {
 
   const [loading, setLoading] = useState(false);
   const [locale, setLocale] = useState<AppLocale>("ar");
+  const [notificationsUnreadCount, setNotificationsUnreadCount] = useState<number>(0);
 
   useEffect(() => {
     const syncLocale = () => {
@@ -269,6 +270,67 @@ export function NavUser() {
     return "/system/notifications";
   }, [isCompanyArea, isCustomerArea, isAgentArea]);
 
+
+  const notificationsCountEndpoint = useMemo(() => {
+    if (isCustomerArea || isAgentArea) return "";
+    if (isCompanyArea) return "/api/company/notifications/unread-count/";
+    return "/api/system/notifications/unread-count/";
+  }, [isCompanyArea, isCustomerArea, isAgentArea]);
+  useEffect(() => {
+    if (!notificationsCountEndpoint) {
+      setNotificationsUnreadCount(0);
+      return;
+    }
+    let isMounted = true;
+    async function loadUnreadCount() {
+      try {
+        const res = await fetch(buildApiUrl(notificationsCountEndpoint), {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+          headers: {
+            Accept: "application/json",
+          },
+        });
+        if (!isMounted) return;
+        if (!res.ok) {
+          setNotificationsUnreadCount(0);
+          return;
+        }
+        const payload = (await res.json()) as {
+          unread_count?: number;
+          data?: { unread_count?: number };
+          meta?: { unread_count?: number; counts?: { unread?: number } };
+        };
+        const nextCount = Number(
+          payload.unread_count ??
+            payload.data?.unread_count ??
+            payload.meta?.unread_count ??
+            payload.meta?.counts?.unread ??
+            0,
+        );
+        setNotificationsUnreadCount(Number.isFinite(nextCount) ? nextCount : 0);
+      } catch (error) {
+        console.error("Nav user unread notifications error:", error);
+        if (isMounted) {
+          setNotificationsUnreadCount(0);
+        }
+      }
+    }
+    void loadUnreadCount();
+    const intervalId = window.setInterval(() => {
+      void loadUnreadCount();
+    }, 30000);
+    const handleFocus = () => {
+      void loadUnreadCount();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [notificationsCountEndpoint]);
   const accountLabel = useMemo(() => {
     if (isCustomerArea) return isArabic ? "حسابي" : "My Profile";
     if (isAgentArea) return isArabic ? "حسابي" : "My Account";
@@ -496,6 +558,11 @@ export function NavUser() {
                   <span className="min-w-0 flex-1 truncate">
                     {notificationsLabel}
                   </span>
+                  {notificationsUnreadCount > 0 ? (
+                    <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-bold leading-none text-white shadow-sm">
+                      {notificationsUnreadCount > 99 ? "99+" : notificationsUnreadCount}
+                    </span>
+                  ) : null}
                 </DropdownMenuItem>
               </DropdownMenuGroup>
 
