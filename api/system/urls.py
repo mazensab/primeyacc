@@ -70,6 +70,8 @@ urlpatterns = [
         "business-controls/",
         include("api.system.business_controls.urls"),
     ),
+    path("permissions/", include("api.system.permissions.urls")),
+    path("roles/", include("api.system.roles.urls")),
     path(
         "users/",
         include("api.system.users.urls"),
