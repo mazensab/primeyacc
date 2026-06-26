@@ -31,91 +31,29 @@ const nextConfig: NextConfig = {
     return {
       beforeFiles: [
         // ======================================================
-        // 🟣 WHATSAPP CENTER - EXPLICIT DEV PROXY
+        // CURRENT WHATSAPP APIs - EXPLICIT DEV PROXY
         // ------------------------------------------------------
-        // يمنع 301 بسبب trailing slash في Django
+        // PrimeyAcc current routes:
+        // - /api/system/whatsapp/
+        // - /api/company/whatsapp/
+        // Keeps trailing slash alignment with Django.
         // ======================================================
         {
-          source: "/api/whatsapp/settings",
-          destination: `${djangoBaseUrl}/api/whatsapp/settings/`,
+          source: "/api/system/whatsapp",
+          destination: `${djangoBaseUrl}/api/system/whatsapp/`,
         },
         {
-          source: "/api/whatsapp/settings/",
-          destination: `${djangoBaseUrl}/api/whatsapp/settings/`,
+          source: "/api/system/whatsapp/:path*",
+          destination: `${djangoBaseUrl}/api/system/whatsapp/:path*/`,
         },
         {
-          source: "/api/whatsapp/status",
-          destination: `${djangoBaseUrl}/api/whatsapp/status/`,
+          source: "/api/company/whatsapp",
+          destination: `${djangoBaseUrl}/api/company/whatsapp/`,
         },
         {
-          source: "/api/whatsapp/status/",
-          destination: `${djangoBaseUrl}/api/whatsapp/status/`,
+          source: "/api/company/whatsapp/:path*",
+          destination: `${djangoBaseUrl}/api/company/whatsapp/:path*/`,
         },
-        {
-          source: "/api/whatsapp/session/create-qr",
-          destination: `${djangoBaseUrl}/api/whatsapp/session/create-qr/`,
-        },
-        {
-          source: "/api/whatsapp/session/create-qr/",
-          destination: `${djangoBaseUrl}/api/whatsapp/session/create-qr/`,
-        },
-        {
-          source: "/api/whatsapp/session/create-pairing-code",
-          destination: `${djangoBaseUrl}/api/whatsapp/session/create-pairing-code/`,
-        },
-        {
-          source: "/api/whatsapp/session/create-pairing-code/",
-          destination: `${djangoBaseUrl}/api/whatsapp/session/create-pairing-code/`,
-        },
-        {
-          source: "/api/whatsapp/session/disconnect",
-          destination: `${djangoBaseUrl}/api/whatsapp/session/disconnect/`,
-        },
-        {
-          source: "/api/whatsapp/session/disconnect/",
-          destination: `${djangoBaseUrl}/api/whatsapp/session/disconnect/`,
-        },
-        {
-          source: "/api/whatsapp/logs",
-          destination: `${djangoBaseUrl}/api/whatsapp/logs/`,
-        },
-        {
-          source: "/api/whatsapp/logs/",
-          destination: `${djangoBaseUrl}/api/whatsapp/logs/`,
-        },
-        {
-          source: "/api/whatsapp/templates",
-          destination: `${djangoBaseUrl}/api/whatsapp/templates/`,
-        },
-        {
-          source: "/api/whatsapp/templates/",
-          destination: `${djangoBaseUrl}/api/whatsapp/templates/`,
-        },
-        {
-          source: "/api/whatsapp/broadcasts",
-          destination: `${djangoBaseUrl}/api/whatsapp/broadcasts/`,
-        },
-        {
-          source: "/api/whatsapp/broadcasts/",
-          destination: `${djangoBaseUrl}/api/whatsapp/broadcasts/`,
-        },
-        {
-          source: "/api/whatsapp/inbox/summary",
-          destination: `${djangoBaseUrl}/api/whatsapp/inbox/summary/`,
-        },
-        {
-          source: "/api/whatsapp/inbox/summary/",
-          destination: `${djangoBaseUrl}/api/whatsapp/inbox/summary/`,
-        },
-        {
-          source: "/api/whatsapp/inbox/conversations",
-          destination: `${djangoBaseUrl}/api/whatsapp/inbox/conversations/`,
-        },
-        {
-          source: "/api/whatsapp/inbox/conversations/",
-          destination: `${djangoBaseUrl}/api/whatsapp/inbox/conversations/`,
-        },
-
         // ======================================================
         // 🏥 PRIMEY CARE PROVIDERS / CENTERS
         // ======================================================
