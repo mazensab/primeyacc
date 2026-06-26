@@ -20,6 +20,7 @@ from accounts.models import CompanyMembership, CompanyRole, MembershipStatus
 from companies.models import Company
 from whatsapp.models import (
     CompanyWhatsAppSetting,
+    SystemWhatsAppConnection,
     WhatsAppMessageLog,
     WhatsAppMessageStatus,
     WhatsAppProvider,
@@ -697,3 +698,59 @@ class CompanyWhatsAppAPITests(TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertFalse(response.data["success"])
+class SystemWhatsAppConnectionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_superuser(
+            username="system_whatsapp_admin",
+            email="system_whatsapp_admin@example.com",
+            password="StrongPass123!",
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+    def test_system_whatsapp_connection_get_creates_singleton(self):
+        response = self.client.get("/api/system/whatsapp/connection/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["connection"]["id"], 1)
+        self.assertEqual(SystemWhatsAppConnection.objects.count(), 1)
+    def test_system_whatsapp_connection_post_updates_settings_and_hides_secrets(self):
+        response = self.client.post(
+            "/api/system/whatsapp/connection/",
+            {
+                "is_enabled": True,
+                "is_active": True,
+                "provider": "WEB_SESSION",
+                "business_name": "PrimeyAcc Support",
+                "phone_number": "+966500000000",
+                "access_token": "secret-token",
+                "webhook_verify_token": "secret-webhook-token",
+                "session_name": "primeyacc-system-session",
+                "default_country_code": "+966",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["connection"]["provider"], "WEB_SESSION")
+        self.assertEqual(response.data["connection"]["phone_number"], "+966500000000")
+        self.assertTrue(response.data["connection"]["has_access_token"])
+        self.assertTrue(response.data["connection"]["has_webhook_verify_token"])
+        self.assertNotIn("access_token", response.data["connection"])
+        self.assertNotIn("webhook_verify_token", response.data["connection"])
+    def test_system_whatsapp_connection_status_without_gateway_is_safe(self):
+        response = self.client.post("/api/system/whatsapp/connection/status/", {}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["success"])
+        self.assertIn("connection", response.data)
+        self.assertFalse(response.data["connection"]["gateway_configured"])
+    def test_system_whatsapp_pairing_without_gateway_is_safe(self):
+        response = self.client.post(
+            "/api/system/whatsapp/connection/pairing/",
+            {"phone_number": "0500000000"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["success"])
+        self.assertIn("connection", response.data)
+        self.assertFalse(response.data["connection"]["gateway_configured"])
+

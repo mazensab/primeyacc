@@ -573,3 +573,387 @@ def serialize_whatsapp_message_log(message: WhatsAppMessageLog) -> dict[str, Any
         "created_at": message.created_at.isoformat() if message.created_at else None,
         "updated_at": message.updated_at.isoformat() if message.updated_at else None,
     }
+
+# ============================================================
+# ?? System WhatsApp Connection Services
+# ============================================================
+SYSTEM_WHATSAPP_GATEWAY_ENV_NAMES = (
+    "WHATSAPP_SESSION_GATEWAY_URL",
+    "WHATSAPP_GATEWAY_URL",
+    "WHATSAPP_WEB_SESSION_GATEWAY_URL",
+)
+SYSTEM_WHATSAPP_GATEWAY_TOKEN_ENV_NAMES = (
+    "WHATSAPP_SESSION_GATEWAY_TOKEN",
+    "WHATSAPP_GATEWAY_TOKEN",
+    "WHATSAPP_WEB_SESSION_GATEWAY_TOKEN",
+)
+def _system_safe_text(value: Any, default: str = "") -> str:
+    if value is None:
+        return default
+    text = str(value).strip()
+    return text or default
+def _system_safe_bool(value: Any, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on"}:
+            return True
+        if lowered in {"0", "false", "no", "off"}:
+            return False
+    if isinstance(value, int):
+        return value == 1
+    return default
+def get_or_create_system_whatsapp_connection(*, user=None):
+    """
+    Return the singleton system WhatsApp connection.
+    """
+    from whatsapp.models import SystemWhatsAppConnection
+    connection, created = SystemWhatsAppConnection.objects.get_or_create(
+        id=1,
+        defaults={
+            "provider": "WEB_SESSION",
+            "session_name": "primeyacc-system-session",
+            "created_by": user,
+            "updated_by": user,
+        },
+    )
+    return connection
+def update_system_whatsapp_connection(*, data: dict[str, Any], user=None):
+    """
+    Update system WhatsApp connection settings safely.
+    """
+    connection = get_or_create_system_whatsapp_connection(user=user)
+    allowed_fields = [
+        "provider",
+        "is_enabled",
+        "is_active",
+        "business_name",
+        "phone_number",
+        "phone_number_id",
+        "business_account_id",
+        "app_id",
+        "access_token",
+        "webhook_verify_token",
+        "webhook_callback_url",
+        "webhook_verified",
+        "api_version",
+        "default_language_code",
+        "default_country_code",
+        "allow_broadcasts",
+        "send_test_enabled",
+        "default_test_recipient",
+        "session_name",
+        "session_mode",
+        "provider_config",
+    ]
+    for field in allowed_fields:
+        if field in data:
+            setattr(connection, field, data[field])
+    if user:
+        connection.updated_by = user
+    connection.save()
+    return connection
+def _system_gateway_base_url() -> str:
+    import os
+    for env_name in SYSTEM_WHATSAPP_GATEWAY_ENV_NAMES:
+        value = _system_safe_text(os.getenv(env_name))
+        if value:
+            return value.rstrip("/")
+    return ""
+def _system_gateway_token() -> str:
+    import os
+    for env_name in SYSTEM_WHATSAPP_GATEWAY_TOKEN_ENV_NAMES:
+        value = _system_safe_text(os.getenv(env_name))
+        if value:
+            return value
+    return ""
+def _system_gateway_configured() -> bool:
+    return bool(_system_gateway_base_url())
+def _system_gateway_request(
+    *,
+    path: str,
+    payload: dict[str, Any] | None = None,
+    method: str = "POST",
+) -> dict[str, Any]:
+    """
+    Call the external WhatsApp session gateway if configured.
+    """
+    import json
+    from urllib.error import HTTPError, URLError
+    from urllib.parse import urljoin
+    from urllib.request import Request, urlopen
+    base_url = _system_gateway_base_url()
+    if not base_url:
+        message = (
+            "WHATSAPP_SESSION_GATEWAY_URL is not configured. "
+            "Set it in .env, for example: WHATSAPP_SESSION_GATEWAY_URL=http://127.0.0.1:3100"
+        )
+        return {
+            "success": False,
+            "status_code": 500,
+            "provider_status": "gateway_not_configured",
+            "message": message,
+            "error_message": message,
+            "session_status": "failed",
+            "connected": False,
+            "gateway_configured": False,
+        }
+    target_url = urljoin(f"{base_url}/", path.lstrip("/"))
+    body = json.dumps(payload or {}).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    token = _system_gateway_token()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request_obj = Request(
+        target_url,
+        data=body,
+        headers=headers,
+        method=method.upper(),
+    )
+    try:
+        with urlopen(request_obj, timeout=20) as response:
+            raw = response.read().decode("utf-8") or "{}"
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                data = {"raw_response": raw}
+            if not isinstance(data, dict):
+                data = {"raw_response": data}
+            data.setdefault("success", True)
+            data.setdefault("status_code", getattr(response, "status", 200))
+            data["gateway_configured"] = True
+            return data
+    except HTTPError as exc:
+        raw = ""
+        try:
+            raw = exc.read().decode("utf-8") or "{}"
+            parsed = json.loads(raw)
+            if not isinstance(parsed, dict):
+                parsed = {"raw_response": parsed}
+        except Exception:
+            parsed = {"raw_response": raw}
+        message = _system_safe_text(
+            parsed.get("message")
+            or parsed.get("error")
+            or parsed.get("error_message"),
+            f"Gateway HTTP error {exc.code}",
+        )
+        return {
+            "success": False,
+            "status_code": exc.code,
+            "provider_status": "gateway_http_error",
+            "message": message,
+            "error_message": message,
+            "details": parsed,
+            "session_status": parsed.get("session_status") or "failed",
+            "connected": _system_safe_bool(parsed.get("connected"), False),
+            "gateway_configured": True,
+        }
+    except URLError as exc:
+        reason = _system_safe_text(getattr(exc, "reason", ""), "unknown")
+        message = f"Gateway connection failed: {reason}"
+        return {
+            "success": False,
+            "status_code": 503,
+            "provider_status": "gateway_connection_failed",
+            "message": message,
+            "error_message": message,
+            "session_status": "failed",
+            "connected": False,
+            "gateway_configured": True,
+        }
+    except Exception as exc:
+        message = f"Unexpected gateway error: {str(exc)}"
+        return {
+            "success": False,
+            "status_code": 500,
+            "provider_status": "gateway_unexpected_error",
+            "message": message,
+            "error_message": message,
+            "session_status": "failed",
+            "connected": False,
+            "gateway_configured": True,
+        }
+def _sync_system_connection_from_gateway(connection, result: dict[str, Any]):
+    from django.utils import timezone
+    if not isinstance(result, dict):
+        result = {}
+    connected = _system_safe_bool(result.get("connected"), False)
+    status = _system_safe_text(
+        result.get("session_status") or result.get("status"),
+        "connected" if connected else "disconnected",
+    )
+    connection.session_status = status
+    connection.session_connected_phone = _system_safe_text(
+        result.get("connected_phone") or result.get("phone_number") or result.get("phone")
+    )
+    connection.session_device_label = _system_safe_text(
+        result.get("device_label") or result.get("device_name") or result.get("browser")
+    )
+    connection.session_qr_code = _system_safe_text(
+        result.get("qr_code") or result.get("qr") or result.get("qrDataUrl")
+    )
+    connection.session_pairing_code = _system_safe_text(
+        result.get("pairing_code") or result.get("pairingCode")
+    )
+    connection.last_error_message = _system_safe_text(
+        result.get("error_message") or result.get("message")
+    )
+    connection.last_health_check_at = timezone.now()
+    if connected:
+        connection.is_enabled = True
+        connection.is_active = True
+        connection.session_last_connected_at = timezone.now()
+    if status == "disconnected":
+        connection.is_active = False
+        connection.session_qr_code = ""
+        connection.session_pairing_code = ""
+    connection.save()
+    return connection
+def serialize_system_whatsapp_connection(connection) -> dict[str, Any]:
+    """
+    Serialize system WhatsApp connection without exposing secrets.
+    """
+    return {
+        "id": connection.id,
+        "provider": connection.provider,
+        "is_enabled": connection.is_enabled,
+        "is_active": connection.is_active,
+        "business_name": connection.business_name,
+        "phone_number": connection.phone_number,
+        "phone_number_id": connection.phone_number_id,
+        "business_account_id": connection.business_account_id,
+        "app_id": connection.app_id,
+        "has_access_token": bool(connection.access_token),
+        "has_webhook_verify_token": bool(connection.webhook_verify_token),
+        "webhook_callback_url": connection.webhook_callback_url,
+        "webhook_verified": connection.webhook_verified,
+        "api_version": connection.api_version,
+        "default_language_code": connection.default_language_code,
+        "default_country_code": connection.default_country_code,
+        "allow_broadcasts": connection.allow_broadcasts,
+        "send_test_enabled": connection.send_test_enabled,
+        "default_test_recipient": connection.default_test_recipient,
+        "session_name": connection.session_name,
+        "session_mode": connection.session_mode,
+        "session_status": connection.session_status,
+        "session_connected_phone": connection.session_connected_phone,
+        "session_device_label": connection.session_device_label,
+        "session_last_connected_at": connection.session_last_connected_at.isoformat() if connection.session_last_connected_at else None,
+        "session_qr_code": connection.session_qr_code,
+        "session_pairing_code": connection.session_pairing_code,
+        "last_health_check_at": connection.last_health_check_at.isoformat() if connection.last_health_check_at else None,
+        "last_error_message": connection.last_error_message,
+        "provider_config": connection.provider_config or {},
+        "gateway_configured": _system_gateway_configured(),
+        "created_at": connection.created_at.isoformat() if connection.created_at else None,
+        "updated_at": connection.updated_at.isoformat() if connection.updated_at else None,
+    }
+def system_whatsapp_session_status(*, user=None) -> dict[str, Any]:
+    connection = get_or_create_system_whatsapp_connection(user=user)
+    result = _system_gateway_request(
+        path="/session/status",
+        payload={"session_name": connection.session_name},
+    )
+    connection = _sync_system_connection_from_gateway(connection, result)
+    return {
+        "success": bool(result.get("success")),
+        "message": _system_safe_text(result.get("message")),
+        "result": result,
+        "connection": serialize_system_whatsapp_connection(connection),
+    }
+def system_whatsapp_create_qr(*, user=None) -> dict[str, Any]:
+    connection = get_or_create_system_whatsapp_connection(user=user)
+    connection.session_mode = "qr"
+    if user:
+        connection.updated_by = user
+    connection.save(update_fields=["session_mode", "updated_by", "updated_at"])
+    result = _system_gateway_request(
+        path="/session/create-qr",
+        payload={"session_name": connection.session_name},
+    )
+    connection = _sync_system_connection_from_gateway(connection, result)
+    return {
+        "success": bool(result.get("success")),
+        "message": _system_safe_text(result.get("message")),
+        "result": result,
+        "connection": serialize_system_whatsapp_connection(connection),
+    }
+def system_whatsapp_create_pairing_code(*, phone_number: str = "", user=None) -> dict[str, Any]:
+    connection = get_or_create_system_whatsapp_connection(user=user)
+    phone = _system_safe_text(phone_number or connection.default_test_recipient or connection.phone_number)
+    connection.session_mode = "pairing_code"
+    if user:
+        connection.updated_by = user
+    connection.save(update_fields=["session_mode", "updated_by", "updated_at"])
+    result = _system_gateway_request(
+        path="/session/create-pairing-code",
+        payload={
+            "session_name": connection.session_name,
+            "phone_number": phone,
+        },
+    )
+    connection = _sync_system_connection_from_gateway(connection, result)
+    return {
+        "success": bool(result.get("success")),
+        "message": _system_safe_text(result.get("message")),
+        "result": result,
+        "connection": serialize_system_whatsapp_connection(connection),
+    }
+def system_whatsapp_disconnect(*, user=None) -> dict[str, Any]:
+    connection = get_or_create_system_whatsapp_connection(user=user)
+    result = _system_gateway_request(
+        path="/session/disconnect",
+        payload={"session_name": connection.session_name},
+    )
+    connection = _sync_system_connection_from_gateway(connection, result)
+    if bool(result.get("success")):
+        connection.session_status = "disconnected"
+        connection.session_qr_code = ""
+        connection.session_pairing_code = ""
+        connection.is_active = False
+        if user:
+            connection.updated_by = user
+        connection.save()
+    return {
+        "success": bool(result.get("success")),
+        "message": _system_safe_text(result.get("message")),
+        "result": result,
+        "connection": serialize_system_whatsapp_connection(connection),
+    }
+def system_whatsapp_send_test_message(
+    *,
+    recipient_phone: str,
+    message_body: str,
+    user=None,
+) -> dict[str, Any]:
+    connection = get_or_create_system_whatsapp_connection(user=user)
+    if not connection.send_test_enabled:
+        raise ValueError("System WhatsApp test sending is disabled.")
+    normalized_phone = normalize_phone_number(
+        phone_number=recipient_phone,
+        default_country_code=connection.default_country_code,
+    )
+    body = _system_safe_text(message_body, "PrimeyAcc system WhatsApp test message.")
+    result = _system_gateway_request(
+        path="/messages/send-text",
+        payload={
+            "session_name": connection.session_name,
+            "to_phone": normalized_phone,
+            "body": body,
+        },
+    )
+    connection = _sync_system_connection_from_gateway(connection, result)
+    return {
+        "success": bool(result.get("success")),
+        "message": _system_safe_text(result.get("message")),
+        "result": result,
+        "connection": serialize_system_whatsapp_connection(connection),
+    }
+

@@ -76,6 +76,210 @@ class WhatsAppMessageSourceType(models.TextChoices):
     INVENTORY_MOVEMENT = "INVENTORY_MOVEMENT", "Inventory Movement"
     SYSTEM = "SYSTEM", "System"
 
+# ============================================================
+# ?? System WhatsApp Connection
+# ============================================================
+class SystemWhatsAppSessionMode(models.TextChoices):
+    QR = "qr", "QR"
+    PAIRING_CODE = "pairing_code", "Pairing Code"
+class SystemWhatsAppConnectionStatus(models.TextChoices):
+    DISCONNECTED = "disconnected", "Disconnected"
+    CONNECTING = "connecting", "Connecting"
+    QR_PENDING = "qr_pending", "QR Pending"
+    PAIR_PENDING = "pair_pending", "Pair Pending"
+    CONNECTED = "connected", "Connected"
+    RECONNECTING = "reconnecting", "Reconnecting"
+    FAILED = "failed", "Failed"
+class SystemWhatsAppConnection(models.Model):
+    """
+    Singleton system-level WhatsApp connection settings.
+    This model is separate from CompanyWhatsAppSetting because it represents
+    the platform/system support WhatsApp number and session connection.
+    """
+    provider = models.CharField(
+        max_length=50,
+        default="WEB_SESSION",
+        db_index=True,
+        verbose_name="Provider",
+    )
+    is_enabled = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="Enabled",
+    )
+    is_active = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="Active",
+    )
+    business_name = models.CharField(
+        max_length=150,
+        blank=True,
+        verbose_name="Business name",
+    )
+    phone_number = models.CharField(
+        max_length=50,
+        blank=True,
+        db_index=True,
+        verbose_name="WhatsApp phone number",
+    )
+    phone_number_id = models.CharField(
+        max_length=150,
+        blank=True,
+        verbose_name="Phone number ID",
+    )
+    business_account_id = models.CharField(
+        max_length=150,
+        blank=True,
+        verbose_name="Business account ID",
+    )
+    app_id = models.CharField(
+        max_length=150,
+        blank=True,
+        verbose_name="App ID",
+    )
+    access_token = models.TextField(
+        blank=True,
+        verbose_name="Access token",
+    )
+    webhook_verify_token = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Webhook verify token",
+    )
+    webhook_callback_url = models.URLField(
+        blank=True,
+        verbose_name="Webhook callback URL",
+    )
+    webhook_verified = models.BooleanField(
+        default=False,
+        verbose_name="Webhook verified",
+    )
+    api_version = models.CharField(
+        max_length=50,
+        default="v22.0",
+        verbose_name="API version",
+    )
+    default_language_code = models.CharField(
+        max_length=20,
+        default="ar",
+        verbose_name="Default language code",
+    )
+    default_country_code = models.CharField(
+        max_length=10,
+        default="+966",
+        verbose_name="Default country code",
+    )
+    allow_broadcasts = models.BooleanField(
+        default=True,
+        verbose_name="Allow broadcasts",
+    )
+    send_test_enabled = models.BooleanField(
+        default=True,
+        verbose_name="Send test enabled",
+    )
+    default_test_recipient = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name="Default test recipient",
+    )
+    session_name = models.CharField(
+        max_length=150,
+        default="primeyacc-system-session",
+        db_index=True,
+        verbose_name="Session name",
+    )
+    session_mode = models.CharField(
+        max_length=30,
+        choices=SystemWhatsAppSessionMode.choices,
+        default=SystemWhatsAppSessionMode.QR,
+        verbose_name="Session mode",
+    )
+    session_status = models.CharField(
+        max_length=30,
+        choices=SystemWhatsAppConnectionStatus.choices,
+        default=SystemWhatsAppConnectionStatus.DISCONNECTED,
+        db_index=True,
+        verbose_name="Session status",
+    )
+    session_connected_phone = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name="Connected phone",
+    )
+    session_device_label = models.CharField(
+        max_length=150,
+        blank=True,
+        verbose_name="Device label",
+    )
+    session_last_connected_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="Last connected at",
+    )
+    session_qr_code = models.TextField(
+        blank=True,
+        verbose_name="QR code",
+    )
+    session_pairing_code = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="Pairing code",
+    )
+    last_health_check_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="Last health check at",
+    )
+    last_error_message = models.TextField(
+        blank=True,
+        verbose_name="Last error message",
+    )
+    provider_config = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Provider config",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="created_system_whatsapp_connections",
+        verbose_name="Created by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="updated_system_whatsapp_connections",
+        verbose_name="Updated by",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+    class Meta:
+        verbose_name = "System WhatsApp connection"
+        verbose_name_plural = "System WhatsApp connections"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["is_enabled", "is_active"]),
+            models.Index(fields=["session_status"]),
+            models.Index(fields=["session_name"]),
+        ]
+    def __str__(self) -> str:
+        return f"System WhatsApp - {self.session_status}"
+    @property
+    def is_connected(self) -> bool:
+        return self.session_status == SystemWhatsAppConnectionStatus.CONNECTED
+
 
 class CompanyWhatsAppSetting(models.Model):
     """

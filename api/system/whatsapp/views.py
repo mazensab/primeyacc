@@ -491,3 +491,93 @@ def system_whatsapp_message_detail(request, message_id: int):
             "choices": _choices_payload(),
         }
     )
+
+# ============================================================
+# ?? System WhatsApp Connection API
+# ============================================================
+@api_view(["GET", "POST"])
+def system_whatsapp_connection(request):
+    permission_error = _permission_response(request, manage=request.method != "GET")
+    if permission_error:
+        return permission_error
+    from whatsapp.services import (
+        get_or_create_system_whatsapp_connection,
+        serialize_system_whatsapp_connection,
+        update_system_whatsapp_connection,
+    )
+    if request.method == "POST":
+        connection = update_system_whatsapp_connection(
+            data=request.data or {},
+            user=request.user,
+        )
+        message = "System WhatsApp connection updated successfully."
+    else:
+        connection = get_or_create_system_whatsapp_connection(user=request.user)
+        message = "System WhatsApp connection loaded successfully."
+    return Response(
+        {
+            "success": True,
+            "message": message,
+            "connection": serialize_system_whatsapp_connection(connection),
+        }
+    )
+@api_view(["GET", "POST"])
+def system_whatsapp_connection_status(request):
+    permission_error = _permission_response(request)
+    if permission_error:
+        return permission_error
+    from whatsapp.services import system_whatsapp_session_status
+    payload = system_whatsapp_session_status(user=request.user)
+    return Response(payload)
+@api_view(["POST"])
+def system_whatsapp_connection_qr(request):
+    permission_error = _permission_response(request, manage=True)
+    if permission_error:
+        return permission_error
+    from whatsapp.services import system_whatsapp_create_qr
+    payload = system_whatsapp_create_qr(user=request.user)
+    return Response(payload)
+@api_view(["POST"])
+def system_whatsapp_connection_pairing(request):
+    permission_error = _permission_response(request, manage=True)
+    if permission_error:
+        return permission_error
+    from whatsapp.services import system_whatsapp_create_pairing_code
+    phone_number = str(request.data.get("phone_number", "") or "").strip()
+    payload = system_whatsapp_create_pairing_code(
+        phone_number=phone_number,
+        user=request.user,
+    )
+    return Response(payload)
+@api_view(["POST"])
+def system_whatsapp_connection_disconnect(request):
+    permission_error = _permission_response(request, manage=True)
+    if permission_error:
+        return permission_error
+    from whatsapp.services import system_whatsapp_disconnect
+    payload = system_whatsapp_disconnect(user=request.user)
+    return Response(payload)
+@api_view(["POST"])
+def system_whatsapp_connection_test(request):
+    permission_error = _permission_response(request, manage=True)
+    if permission_error:
+        return permission_error
+    from whatsapp.services import system_whatsapp_send_test_message
+    recipient_phone = str(request.data.get("recipient_phone", "") or "").strip()
+    message_body = str(request.data.get("message_body", "") or "").strip()
+    try:
+        payload = system_whatsapp_send_test_message(
+            recipient_phone=recipient_phone,
+            message_body=message_body,
+            user=request.user,
+        )
+    except ValueError as exc:
+        return Response(
+            {
+                "success": False,
+                "message": str(exc),
+            },
+            status=400,
+        )
+    return Response(payload)
+
