@@ -842,4 +842,71 @@ class SystemWhatsAppMessageLogTests(TestCase):
         self.assertEqual(log.status, WhatsAppMessageStatus.FAILED)
         self.assertEqual(log.error_message, "Gateway failed.")
         self.assertEqual(log.provider_response["provider_status"], "gateway_failed")
+class SystemWhatsAppPhoneNormalizationTests(TestCase):
+    def setUp(self):
+        from companies.models import Company
+        from django.contrib.auth import get_user_model
+        self.company = Company.objects.create(
+            name="System WhatsApp Phone Normalize Company",
+            company_code="WA-PHONE-NORM-001",
+            is_active=True,
+        )
+        self.user = get_user_model().objects.create_user(
+            username="system_whatsapp_phone_normalize_user",
+            email="system_whatsapp_phone_normalize_user@example.com",
+            password="StrongPass123!",
+            is_staff=True,
+        )
+    def test_system_test_phone_normalization_accepts_saudi_local_and_international(self):
+        from whatsapp.services import _normalize_system_whatsapp_test_phone
+        cases = [
+            ("0505263775", "+966505263775"),
+            ("505263775", "+966505263775"),
+            ("966505263775", "+966505263775"),
+            ("+966505263775", "+966505263775"),
+            ("00966505263775", "+966505263775"),
+            ("+971501234567", "+971501234567"),
+            ("00971501234567", "+971501234567"),
+            ("971501234567", "+971501234567"),
+        ]
+        for raw, expected in cases:
+            with self.subTest(raw=raw):
+                self.assertEqual(
+                    _normalize_system_whatsapp_test_phone(
+                        phone_number=raw,
+                        default_country_code="966+",
+                    ),
+                    expected,
+                )
+    @patch("whatsapp.services._system_gateway_request")
+    def test_system_test_message_does_not_duplicate_saudi_country_code(self, mocked_gateway):
+        from django.apps import apps
+        from whatsapp.services import system_whatsapp_send_test_message
+        mocked_gateway.return_value = {
+            "success": True,
+            "message": "Message accepted by WhatsApp server.",
+            "provider_status": "sent_to_whatsapp_server",
+            "session_status": "connected",
+            "status": "connected",
+            "connected": True,
+            "connected_phone": "966505263775",
+            "phone_number": "966505263775",
+            "device_label": "Mazen",
+            "message_id": "wamid.phone.normalize.001",
+            "external_message_id": "wamid.phone.normalize.001",
+            "recipient_jid": "966503185950@s.whatsapp.net",
+            "remote_jid": "966503185950@s.whatsapp.net",
+        }
+        payload = system_whatsapp_send_test_message(
+            recipient_phone="966503185950",
+            message_body="System WhatsApp normalized phone message.",
+            user=self.user,
+        )
+        self.assertTrue(payload["success"])
+        gateway_payload = mocked_gateway.call_args.kwargs["payload"]
+        self.assertEqual(gateway_payload["to_phone"], "+966503185950")
+        Log = apps.get_model("whatsapp", "WhatsAppMessageLog")
+        log = Log.objects.get(message_body="System WhatsApp normalized phone message.")
+        self.assertEqual(log.recipient_phone, "+966503185950")
+        self.assertNotEqual(log.recipient_phone, "+966966503185950")
 

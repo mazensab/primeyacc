@@ -964,6 +964,58 @@ def system_whatsapp_disconnect(*, user=None) -> dict[str, Any]:
         "result": result,
         "connection": serialize_system_whatsapp_connection(connection),
     }
+
+def _normalize_system_whatsapp_test_phone(
+    *,
+    phone_number: str,
+    default_country_code: str = "966",
+) -> str:
+    """
+    Normalize System WhatsApp test recipient phones.
+    Saudi default behavior:
+    - 0505263775      -> +966505263775
+    - 505263775       -> +966505263775
+    - 966505263775    -> +966505263775
+    - +966505263775   -> +966505263775
+    - 00966505263775  -> +966505263775
+    External numbers are accepted when the user enters a country code:
+    - +971501234567   -> +971501234567
+    - 00971501234567  -> +971501234567
+    - 971501234567    -> +971501234567
+    """
+    raw = _system_safe_text(phone_number).strip()
+    country_code = "".join(
+        ch for ch in _system_safe_text(default_country_code, "966") if ch.isdigit()
+    ) or "966"
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    if not digits:
+        return normalize_phone_number(
+            phone_number=phone_number,
+            default_country_code=country_code,
+        )
+    if raw.startswith("+"):
+        return f"+{digits}"
+    if digits.startswith("00") and len(digits) > 2:
+        return f"+{digits[2:]}"
+    if digits.startswith(country_code):
+        return f"+{digits}"
+    if country_code == "966":
+        if digits.startswith("05") and len(digits) == 10:
+            return f"+966{digits[1:]}"
+        if digits.startswith("5") and len(digits) == 9:
+            return f"+966{digits}"
+        if digits.startswith("0"):
+            return f"+966{digits[1:]}"
+        if len(digits) >= 10:
+            return f"+{digits}"
+        return f"+966{digits}"
+    if digits.startswith("0"):
+        return f"+{country_code}{digits[1:]}"
+    if len(digits) >= 10:
+        return f"+{digits}"
+    return f"+{country_code}{digits}"
+
+
 def system_whatsapp_send_test_message(
     *,
     recipient_phone: str,
@@ -978,7 +1030,7 @@ def system_whatsapp_send_test_message(
             "connection": serialize_system_whatsapp_connection(connection),
             "message_log": None,
         }
-    phone = normalize_phone_number(
+    phone = _normalize_system_whatsapp_test_phone(
         phone_number=recipient_phone,
         default_country_code=connection.default_country_code,
     )
