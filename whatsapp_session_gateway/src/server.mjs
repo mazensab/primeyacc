@@ -31,6 +31,16 @@ const gatewayRoot = path.resolve(__dirname, "..");
 const PORT = Number(process.env.PORT || 3100);
 const HOST = process.env.HOST || "127.0.0.1";
 const TOKEN = String(process.env.WHATSAPP_SESSION_GATEWAY_TOKEN || "").trim();
+const INCOMING_WEBHOOK_URL = String(
+  process.env.WHATSAPP_INCOMING_WEBHOOK_URL ||
+    process.env.DJANGO_WHATSAPP_INCOMING_WEBHOOK_URL ||
+    "http://127.0.0.1:8000/api/system/whatsapp/inbox/webhook/"
+).trim();
+const INCOMING_WEBHOOK_TOKEN = String(
+  process.env.WHATSAPP_INCOMING_WEBHOOK_TOKEN ||
+    process.env.DJANGO_WHATSAPP_INCOMING_WEBHOOK_TOKEN ||
+    ""
+).trim();
 const STORAGE_ROOT = path.resolve(
   gatewayRoot,
   process.env.WHATSAPP_SESSION_STORAGE_DIR || "./storage/sessions",
@@ -176,6 +186,135 @@ function publicState(state, extra = {}) {
     ...extra,
   };
 }
+function incomingJidToPhone(jid) {
+  const value = safeText(jid, "");
+  const first = value.split("@")[0] || "";
+  const phone = first.split(":")[0] || "";
+  return phone.replace(/\D/g, "");
+}
+function unwrapIncomingContent(message) {
+  const content = message?.message || {};
+  return (
+    content.ephemeralMessage?.message ||
+    content.viewOnceMessage?.message ||
+    content.viewOnceMessageV2?.message ||
+    content.documentWithCaptionMessage?.message ||
+    content
+  );
+}
+function extractIncomingMessageType(message) {
+  const content = unwrapIncomingContent(message);
+  if (content.conversation || content.extendedTextMessage) return "TEXT";
+  if (content.imageMessage) return "IMAGE";
+  if (content.audioMessage) return "AUDIO";
+  if (content.videoMessage) return "VIDEO";
+  if (content.documentMessage) return "DOCUMENT";
+  if (content.stickerMessage) return "STICKER";
+  if (content.locationMessage) return "LOCATION";
+  if (content.contactMessage || content.contactsArrayMessage) return "CONTACT";
+  return "UNKNOWN";
+}
+function extractIncomingText(message) {
+  const content = unwrapIncomingContent(message);
+  return safeText(
+    content.conversation ||
+      content.extendedTextMessage?.text ||
+      content.imageMessage?.caption ||
+      content.videoMessage?.caption ||
+      content.documentMessage?.caption ||
+      content.buttonsResponseMessage?.selectedDisplayText ||
+      content.listResponseMessage?.title ||
+      content.templateButtonReplyMessage?.selectedDisplayText ||
+      "",
+    ""
+  );
+}
+async function forwardIncomingMessageToDjango(state, message) {
+  if (!INCOMING_WEBHOOK_URL) {
+    return {
+      success: false,
+      skipped: true,
+      reason: "Incoming webhook URL is not configured.",
+    };
+  }
+  if (!message?.message || message?.key?.fromMe) {
+    return {
+      success: true,
+      skipped: true,
+      reason: "Message is empty or from current account.",
+    };
+  }
+  const remoteJid = safeText(message?.key?.remoteJid, "");
+  if (!remoteJid || remoteJid === "status@broadcast" || remoteJid.endsWith("@g.us")) {
+    return {
+      success: true,
+      skipped: true,
+      reason: "Message is not a direct inbound chat.",
+    };
+  }
+  const messageType = extractIncomingMessageType(message);
+  const body = extractIncomingText(message) || `[${messageType}]`;
+  const externalMessageId = safeText(message?.key?.id, "");
+  const fromPhone = incomingJidToPhone(remoteJid);
+  const payload = {
+    event_type: "message.incoming",
+    session_name: state.session_name,
+    from_jid: remoteJid,
+    from_phone: fromPhone,
+    push_name: safeText(message?.pushName || message?.verifiedBizName || "", ""),
+    message_id: externalMessageId,
+    external_message_id: externalMessageId,
+    body,
+    message_type: messageType,
+    timestamp: message?.messageTimestamp || "",
+    metadata: {
+      source: "whatsapp_session_gateway",
+      upsert_type: safeText(message?.messageStubType || "", ""),
+    },
+  };
+  const headers = {
+    "Content-Type": "application/json",
+  };
+  if (INCOMING_WEBHOOK_TOKEN) {
+    headers["X-PrimeyAcc-Webhook-Token"] = INCOMING_WEBHOOK_TOKEN;
+  }
+  const response = await fetch(INCOMING_WEBHOOK_URL, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload),
+  });
+  const responseBody = await response.text();
+  if (!response.ok) {
+    logger.warn(
+      {
+        status: response.status,
+        body: responseBody,
+        remoteJid,
+        externalMessageId,
+      },
+      "Incoming WhatsApp message webhook failed"
+    );
+    return {
+      success: false,
+      status: response.status,
+      body: responseBody,
+    };
+  }
+  logger.info(
+    {
+      remoteJid,
+      externalMessageId,
+      status: response.status,
+    },
+    "Incoming WhatsApp message forwarded to Django"
+  );
+  return {
+    success: true,
+    status: response.status,
+    body: responseBody,
+  };
+}
+
 function requireGatewayToken(req, res, next) {
   if (!TOKEN) {
     next();
@@ -246,6 +385,25 @@ async function startSocket(state, options = {}) {
   const sock = makeWASocket(socketOptions);
   state.sock = sock;
   sock.ev.on("creds.update", saveCreds);
+
+  sock.ev.on("messages.upsert", async (event) => {
+    const incomingMessages = Array.isArray(event?.messages) ? event.messages : [];
+    for (const incomingMessage of incomingMessages) {
+      try {
+        await forwardIncomingMessageToDjango(state, incomingMessage);
+      } catch (error) {
+        logger.error(
+          {
+            error: String(error?.message || error),
+            message_id: incomingMessage?.key?.id || "",
+            remote_jid: incomingMessage?.key?.remoteJid || "",
+          },
+          "Failed to process incoming WhatsApp message"
+        );
+      }
+    }
+  });
+
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
     if (qr) {
