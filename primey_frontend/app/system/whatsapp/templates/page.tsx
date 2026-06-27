@@ -418,7 +418,7 @@ export default function SystemWhatsAppTemplatesPage() {
   const filteredTemplates = React.useMemo(() => {
     const filtered = templates.filter((item) => {
       if (lowerSearch) {
-        const haystack = [localizedTemplateField(item, locale, "name"), localizedTemplateField(item, locale, "name"), item.code, item.category, item.status, item.language, localizedTemplateField(item, locale, "body"), item.body, item.companyName, item.companyCode, ...item.variables]
+        const haystack = [localizedTemplateField(item, locale, "name"), item.name, item.code, item.category, item.status, item.language, localizedTemplateField(item, locale, "body"), item.body, item.companyName, item.companyCode, ...item.variables]
           .join(" ")
           .toLowerCase();
         if (!haystack.includes(lowerSearch)) return false;
