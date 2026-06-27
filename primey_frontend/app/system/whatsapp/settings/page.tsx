@@ -722,6 +722,25 @@ export default function SystemWhatsAppSettingsPage() {
       setSaving(false);
     }
   }
+
+  async function pollConnectionUntilConnected(maxAttempts = 20) {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, attempt < 3 ? 1500 : 2500));
+      try {
+        const payload = await postJson<unknown>(`${API_ENDPOINT}status/`, {});
+        const record = asRecord(payload);
+        const nextConnection = normalizeConnection(asRecord(record.connection));
+        setConnection(nextConnection);
+        const nextStatus = String(nextConnection.sessionStatus || "").toLowerCase();
+        if (["connected", "failed", "disconnected"].includes(nextStatus)) {
+          return nextConnection;
+        }
+      } catch {
+        // Keep polling quietly. Manual refresh still exists.
+      }
+    }
+    return null;
+  }
   async function runConnectionAction(action: ConnectionAction) {
     try {
       setActionLoading(action);
@@ -754,6 +773,14 @@ export default function SystemWhatsAppSettingsPage() {
         toast.error(toStringValue(record.message) || t.actionError);
       } else {
         toast.success(toStringValue(record.message) || fallback);
+        if (["qr", "pairing"].includes(action)) {
+          void pollConnectionUntilConnected(24);
+        }
+        if (action === "test") {
+          window.setTimeout(() => {
+            void pollConnectionUntilConnected(3);
+          }, 1200);
+        }
       }
     } catch (caughtError) {
       toast.error(caughtError instanceof Error ? caughtError.message : t.actionError);
@@ -1167,3 +1194,4 @@ export default function SystemWhatsAppSettingsPage() {
     </main>
   );
 }
+

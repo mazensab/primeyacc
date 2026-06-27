@@ -64,12 +64,70 @@ function nowIso() {
   return new Date().toISOString();
 }
 function normalizePhone(value) {
-  return safeText(value).replace(/[^\d]/g, "");
+  const raw = safeText(value);
+  const beforeAt = raw.split("@")[0] || raw;
+  const beforeDevice = beforeAt.split(":")[0] || beforeAt;
+  return beforeDevice.replace(/[^\d]/g, "");
 }
 function jidFromPhone(value) {
   const digits = normalizePhone(value);
   if (!digits) return "";
   return `${digits}@s.whatsapp.net`;
+}
+function normalizeWhatsAppSendResult(result) {
+  return {
+    external_message_id: result?.key?.id || "",
+    message_id: result?.key?.id || "",
+    remote_jid: result?.key?.remoteJid || "",
+    from_me: Boolean(result?.key?.fromMe),
+    timestamp: result?.messageTimestamp || "",
+  };
+}
+async function resolveRecipientJid(sock, toPhone) {
+  const cleanPhone = normalizePhone(toPhone);
+  const fallbackJid = jidFromPhone(cleanPhone);
+  if (!cleanPhone || !fallbackJid) {
+    return {
+      exists: false,
+      jid: "",
+      phone: cleanPhone,
+      reason: "Invalid recipient phone.",
+    };
+  }
+  if (typeof sock?.onWhatsApp !== "function") {
+    return {
+      exists: true,
+      jid: fallbackJid,
+      phone: cleanPhone,
+      reason: "",
+      unchecked: true,
+    };
+  }
+  const candidates = [cleanPhone, fallbackJid];
+  for (const candidate of candidates) {
+    try {
+      const lookup = await sock.onWhatsApp(candidate);
+      const rows = Array.isArray(lookup) ? lookup : [];
+      const found = rows.find((item) => item?.exists);
+      if (found?.jid) {
+        return {
+          exists: true,
+          jid: found.jid,
+          phone: cleanPhone,
+          reason: "",
+          lookup,
+        };
+      }
+    } catch (error) {
+      logger.warn({ error: String(error), candidate }, "Recipient WhatsApp lookup failed");
+    }
+  }
+  return {
+    exists: false,
+    jid: fallbackJid,
+    phone: cleanPhone,
+    reason: "Recipient phone is not registered on WhatsApp or lookup failed.",
+  };
 }
 function getSession(sessionName) {
   const name = sanitizeSessionName(sessionName);
@@ -204,7 +262,7 @@ async function startSocket(state, options = {}) {
       state.pairing_code = "";
       state.error_message = "";
       state.connected_phone = normalizePhone(sock.user?.id || sock.user?.jid || "");
-      state.device_label = sock.user?.name || "PrimeyAcc WhatsApp Gateway";
+      state.device_label = sock.user?.name || sock.user?.verifiedName || "PrimeyAcc WhatsApp Gateway";
       state.last_update_at = nowIso();
       logger.info({ session: state.session_name }, "WhatsApp session connected");
     }
@@ -370,13 +428,27 @@ app.post("/messages/send-text", async (req, res) => {
     }));
     return;
   }
-  const jid = jidFromPhone(toPhone);
-  const result = await state.sock.sendMessage(jid, { text: body });
+  const recipient = await resolveRecipientJid(state.sock, toPhone);
+  if (!recipient.exists || !recipient.jid) {
+    res.json(publicState(state, {
+      success: false,
+      provider_status: "recipient_not_on_whatsapp",
+      message: recipient.reason || "Recipient phone is not available on WhatsApp.",
+      error_message: recipient.reason || "Recipient phone is not available on WhatsApp.",
+      to_phone: recipient.phone || toPhone,
+      recipient_jid: recipient.jid || "",
+    }));
+    return;
+  }
+  const result = await state.sock.sendMessage(recipient.jid, { text: body });
+  const normalizedResult = normalizeWhatsAppSendResult(result);
   res.json(publicState(state, {
     success: true,
-    message: "Message sent.",
-    message_id: result?.key?.id || "",
-    to_phone: toPhone,
+    provider_status: "sent_to_whatsapp_server",
+    message: "Message accepted by WhatsApp server.",
+    ...normalizedResult,
+    to_phone: recipient.phone,
+    recipient_jid: recipient.jid,
   }));
 });
 app.use((error, _req, res, _next) => {
