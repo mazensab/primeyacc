@@ -1,22 +1,52 @@
-﻿# ============================================================
-# PrimeyAcc WhatsApp Gateway Status Checker
 # ============================================================
-$ErrorActionPreference = "Stop"
+# PrimeyAcc WhatsApp Gateway Checker
+# Path: scripts/check-primeyacc-whatsapp-gateway.ps1
+# ============================================================
+$ErrorActionPreference = "Continue"
 $Root = "C:\Users\MHAMCLOUD\Documents\GitHub\primeyacc"
-$Gateway = "$Root\whatsapp_session_gateway"
-$TaskName = "PrimeyAcc WhatsApp Gateway"
+$Gateway = Join-Path $Root "whatsapp_session_gateway"
 $HealthUrl = "http://127.0.0.1:3100/health"
+$LauncherLog = Join-Path $Gateway "logs\launcher.log"
+$NodeOutLog = Join-Path $Gateway "logs\node.out.log"
+$NodeErrLog = Join-Path $Gateway "logs\node.err.log"
+$LegacyLog = Join-Path $Gateway "logs\gateway.log"
 Write-Host "`n===== Gateway Health =====" -ForegroundColor Cyan
-Invoke-RestMethod -Method Get -Uri $HealthUrl -TimeoutSec 10 | ConvertTo-Json -Depth 12
+try {
+  Invoke-RestMethod -Uri $HealthUrl -Method Get -TimeoutSec 8 | ConvertTo-Json -Depth 12
+} catch {
+  Write-Host "Gateway health failed: $($_.Exception.Message)" -ForegroundColor Red
+}
 Write-Host "`n===== Port 3100 Listener =====" -ForegroundColor Cyan
-Get-NetTCPConnection -LocalPort 3100 -State Listen -ErrorAction SilentlyContinue |
-  Select-Object LocalAddress, LocalPort, State, OwningProcess
-Write-Host "`n===== Scheduled Task =====" -ForegroundColor Cyan
-schtasks.exe /Query /TN $TaskName /V /FO LIST
-Write-Host "`n===== Recent Gateway Log =====" -ForegroundColor Cyan
-$LogFile = "$Gateway\logs\gateway.log"
-if (Test-Path $LogFile) {
-  Get-Content $LogFile -Tail 40
+try {
+  Get-NetTCPConnection -LocalPort 3100 -State Listen -ErrorAction SilentlyContinue |
+    Select-Object LocalAddress, LocalPort, State, OwningProcess
+} catch {
+  Write-Host "Could not inspect port 3100: $($_.Exception.Message)" -ForegroundColor Yellow
+}
+Write-Host "`n===== Scheduled Tasks =====" -ForegroundColor Cyan
+schtasks.exe /Query /TN "PrimeyAcc WhatsApp Gateway" /V /FO LIST
+schtasks.exe /Query /TN "PrimeyAcc WhatsApp Gateway Startup" /V /FO LIST
+Write-Host "`n===== Launcher Log =====" -ForegroundColor Cyan
+if (Test-Path $LauncherLog) {
+  Get-Content $LauncherLog -Tail 40
 } else {
-  Write-Host "No gateway log file yet."
+  Write-Host "No launcher log found."
+}
+Write-Host "`n===== Node stdout Log =====" -ForegroundColor Cyan
+if (Test-Path $NodeOutLog) {
+  Get-Content $NodeOutLog -Tail 30
+} else {
+  Write-Host "No node stdout log found."
+}
+Write-Host "`n===== Node stderr Log =====" -ForegroundColor Cyan
+if (Test-Path $NodeErrLog) {
+  Get-Content $NodeErrLog -Tail 30
+} else {
+  Write-Host "No node stderr log found."
+}
+Write-Host "`n===== Legacy Gateway Log =====" -ForegroundColor Cyan
+if (Test-Path $LegacyLog) {
+  Get-Content $LegacyLog -Tail 20
+} else {
+  Write-Host "No legacy gateway log found."
 }
