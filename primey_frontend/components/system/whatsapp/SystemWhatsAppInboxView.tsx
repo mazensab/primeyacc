@@ -6,11 +6,12 @@
 ================================================================================
 ✅ Approved Premium pattern matching system companies page
 ✅ Real API only: /api/system/whatsapp/inbox/
+✅ Arabic/English via primey-locale
+✅ Arabic numerals in Arabic mode + English numerals in English mode
 ✅ Main /system/whatsapp page is Inbox, not dashboard quick-card page
 ✅ No "لوحة النظام / العودة إلى لوحة النظام الرئيسية" card
 ✅ System WhatsApp conversations + messages + reply
 ✅ Supports LID/JID reply through backend Phase 3
-✅ Arabic-first visual alignment
 ================================================================================
 */
 import * as React from "react";
@@ -18,7 +19,6 @@ import Link from "next/link";
 import {
   AlertCircle,
   CheckCircle2,
-  Clock3,
   FileText,
   Inbox,
   Loader2,
@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+type Locale = "ar" | "en";
 type InboxSummary = {
   total_conversations?: number;
   open_conversations?: number;
@@ -136,60 +137,162 @@ type QuickAction = {
   icon: React.ComponentType<{ className?: string }>;
 };
 const API_ROOT = "/api/system/whatsapp/inbox/";
-const TEXT = {
-  badge: "التواصل والإشعارات",
-  title: "صندوق محادثات واتساب النظام",
-  desc: "متابعة المحادثات الواردة والرد عليها مباشرة من داخل PrimeyAcc باستخدام اتصال واتساب الرسمي للنظام.",
-  settings: "إعدادات واتساب",
-  settingsDesc: "إدارة الاتصال، QR، Pairing Code، وحالة الجلسة.",
-  templates: "قوالب واتساب",
-  templatesDesc: "مراجعة القوالب الرسمية واختبار إرسالها.",
-  logs: "سجل الرسائل",
-  logsDesc: "متابعة الرسائل المرسلة والفاشلة وسجل الإرسال.",
-  refresh: "تحديث",
-  search: "بحث",
-  searchPlaceholder: "ابحث بالاسم أو الرقم أو آخر رسالة...",
-  all: "الكل",
-  open: "مفتوحة",
-  closed: "مغلقة",
-  archived: "مؤرشفة",
-  spam: "مزعجة",
-  conversations: "المحادثات",
-  conversationCount: "محادثة",
-  noConversations: "لا توجد محادثات بعد",
-  noConversationsDesc: "ستظهر المحادثات تلقائيًا عند وصول أول رسالة إلى رقم النظام.",
-  selectConversation: "اختر محادثة",
-  selectConversationDesc: "اختر محادثة من القائمة لعرض الرسائل والرد من داخل النظام.",
-  jid: "JID",
-  phone: "الرقم",
-  unread: "غير مقروء",
-  total: "إجمالي المحادثات",
-  resolved: "المحادثات المحلولة",
-  openCount: "المحادثات المفتوحة",
-  pinned: "المحادثات المثبتة",
-  messagePlaceholder: "اكتب ردك هنا...",
-  send: "إرسال الرد",
-  sending: "جار الإرسال...",
-  loadError: "تعذر تحميل صندوق واتساب.",
-  messagesLoadError: "تعذر تحميل رسائل المحادثة.",
-  replyRequired: "اكتب رسالة الرد أولًا.",
-  replySent: "تم إرسال الرد وتسجيله في المحادثة.",
-  inbound: "وارد",
-  outbound: "صادر",
-  emptyMessages: "لا توجد رسائل في هذه المحادثة.",
-  media: "رسالة وسائط",
-  status: "الحالة",
-  latest: "آخر نشاط",
-  fromLiveApi: "من واجهات النظام الحقيقية",
-  actionsTitle: "صفحات واتساب النظام",
-  actionsDesc: "تنقل سريع بين صفحات واتساب الأساسية بنفس نمط إدارة المنصة.",
-};
+const translations = {
+  ar: {
+    badge: "التواصل والإشعارات",
+    title: "صندوق محادثات واتساب النظام",
+    desc: "متابعة المحادثات الواردة والرد عليها مباشرة من داخل PrimeyAcc باستخدام اتصال واتساب الرسمي للنظام.",
+    settings: "إعدادات واتساب",
+    settingsDesc: "إدارة الاتصال، QR، Pairing Code، وحالة الجلسة.",
+    templates: "قوالب واتساب",
+    templatesDesc: "مراجعة القوالب الرسمية واختبار إرسالها.",
+    logs: "سجل الرسائل",
+    logsDesc: "متابعة الرسائل المرسلة والفاشلة وسجل الإرسال.",
+    refresh: "تحديث",
+    search: "بحث",
+    searchPlaceholder: "ابحث بالاسم أو الرقم أو آخر رسالة...",
+    all: "الكل",
+    open: "مفتوحة",
+    closed: "مغلقة",
+    archived: "مؤرشفة",
+    spam: "مزعجة",
+    conversations: "المحادثات",
+    conversationCount: "محادثة",
+    noConversations: "لا توجد محادثات بعد",
+    noConversationsDesc: "ستظهر المحادثات تلقائيًا عند وصول أول رسالة إلى رقم النظام.",
+    selectConversation: "اختر محادثة",
+    selectConversationDesc: "اختر محادثة من القائمة لعرض الرسائل والرد من داخل النظام.",
+    jid: "JID",
+    phone: "الرقم",
+    unread: "غير مقروء",
+    total: "إجمالي المحادثات",
+    resolved: "المحادثات المحلولة",
+    openCount: "المحادثات المفتوحة",
+    messagePlaceholder: "اكتب ردك هنا...",
+    send: "إرسال الرد",
+    sending: "جار الإرسال...",
+    loadError: "تعذر تحميل صندوق واتساب.",
+    messagesLoadError: "تعذر تحميل رسائل المحادثة.",
+    replyRequired: "اكتب رسالة الرد أولًا.",
+    replySent: "تم إرسال الرد وتسجيله في المحادثة.",
+    inbound: "وارد",
+    outbound: "صادر",
+    emptyMessages: "لا توجد رسائل في هذه المحادثة.",
+    media: "رسالة وسائط",
+    status: "الحالة",
+    latest: "آخر نشاط",
+    fromLiveApi: "من واجهات النظام الحقيقية",
+    actionsTitle: "صفحات واتساب النظام",
+    actionsDesc: "تنقل سريع بين صفحات واتساب الأساسية بنفس نمط إدارة المنصة.",
+    audio: "صوت",
+    image: "صورة",
+    video: "فيديو",
+    document: "مستند",
+    unknown: "غير معروف",
+    text: "نص",
+    received: "مستلمة",
+    sent: "مرسلة",
+    failed: "فاشلة",
+  },
+  en: {
+    badge: "Communication & Notifications",
+    title: "System WhatsApp Inbox",
+    desc: "Monitor inbound conversations and reply directly from PrimeyAcc using the official system WhatsApp connection.",
+    settings: "WhatsApp Settings",
+    settingsDesc: "Manage connection, QR, Pairing Code, and session status.",
+    templates: "WhatsApp Templates",
+    templatesDesc: "Review official templates and test sending.",
+    logs: "Message Logs",
+    logsDesc: "Track sent, failed, and provider message history.",
+    refresh: "Refresh",
+    search: "Search",
+    searchPlaceholder: "Search by name, number, or latest message...",
+    all: "All",
+    open: "Open",
+    closed: "Closed",
+    archived: "Archived",
+    spam: "Spam",
+    conversations: "Conversations",
+    conversationCount: "conversation",
+    noConversations: "No conversations yet",
+    noConversationsDesc: "Inbound conversations will appear automatically once the first message arrives.",
+    selectConversation: "Select a conversation",
+    selectConversationDesc: "Choose a conversation from the list to view messages and reply from the system.",
+    jid: "JID",
+    phone: "Phone",
+    unread: "Unread",
+    total: "Total conversations",
+    resolved: "Resolved conversations",
+    openCount: "Open conversations",
+    messagePlaceholder: "Write your reply here...",
+    send: "Send reply",
+    sending: "Sending...",
+    loadError: "Unable to load WhatsApp inbox.",
+    messagesLoadError: "Unable to load conversation messages.",
+    replyRequired: "Write a reply message first.",
+    replySent: "Reply sent and recorded in the conversation.",
+    inbound: "Inbound",
+    outbound: "Outbound",
+    emptyMessages: "No messages in this conversation.",
+    media: "Media message",
+    status: "Status",
+    latest: "Latest activity",
+    fromLiveApi: "From real system APIs",
+    actionsTitle: "System WhatsApp pages",
+    actionsDesc: "Quick navigation between core WhatsApp pages using the approved platform style.",
+    audio: "Audio",
+    image: "Image",
+    video: "Video",
+    document: "Document",
+    unknown: "Unknown",
+    text: "Text",
+    received: "Received",
+    sent: "Sent",
+    failed: "Failed",
+  },
+} as const;
+function getInitialLocale(): Locale {
+  if (typeof window === "undefined") return "ar";
+  return window.localStorage.getItem("primey-locale") === "en" ? "en" : "ar";
+}
 function getCookie(name: string): string {
   if (typeof document === "undefined") return "";
   const value = `; ${document.cookie}`;
   const parts = value.split(`; ${name}=`);
   if (parts.length !== 2) return "";
   return parts.pop()?.split(";").shift() || "";
+}
+function localizeDigits(value: string, locale: Locale): string {
+  const easternArabicDigits = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
+  const persianDigits = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
+  if (locale === "ar") {
+    return value.replace(/[0-9]/g, (digit) => easternArabicDigits[Number(digit)] || digit);
+  }
+  return value
+    .replace(/[٠-٩]/g, (digit) => String(easternArabicDigits.indexOf(digit)))
+    .replace(/[۰-۹]/g, (digit) => String(persianDigits.indexOf(digit)));
+}
+function formatNumber(value: number, locale: Locale): string {
+  return new Intl.NumberFormat(
+    locale === "ar" ? "ar-SA-u-nu-arab" : "en-US",
+    { maximumFractionDigits: 0 },
+  ).format(value || 0);
+}
+function formatDate(value: string | null | undefined, locale: Locale): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  const formatted = new Intl.DateTimeFormat(
+    locale === "ar" ? "ar-SA-u-ca-gregory-nu-arab" : "en-US",
+    {
+      dateStyle: "medium",
+      timeStyle: "short",
+    },
+  ).format(date);
+  return localizeDigits(formatted, locale);
+}
+function localizedText(value: string | undefined | null, locale: Locale): string {
+  return localizeDigits(String(value || ""), locale);
 }
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
@@ -226,57 +329,72 @@ function pickConversations(payload: InboxListPayload): InboxConversation[] {
 function pickMessages(payload: InboxMessagesPayload): InboxMessage[] {
   return payload.messages || payload.results || payload.data?.messages || payload.data?.results || [];
 }
-function displayName(conversation?: InboxConversation | null): string {
+function displayName(conversation: InboxConversation | null | undefined, locale: Locale): string {
   const contact = conversation?.contact;
-  return (
+  const value =
     contact?.display_name?.trim() ||
     contact?.push_name?.trim() ||
     contact?.phone_number?.trim() ||
     contact?.normalized_phone?.trim() ||
     contact?.whatsapp_jid?.trim() ||
-    `#${conversation?.id || ""}`
-  );
+    `#${conversation?.id || ""}`;
+  return localizedText(value, locale);
 }
-function displayPhone(conversation?: InboxConversation | null): string {
+function displayPhone(conversation: InboxConversation | null | undefined, locale: Locale): string {
   const contact = conversation?.contact;
-  return contact?.phone_number || contact?.normalized_phone || "—";
+  return localizedText(contact?.phone_number || contact?.normalized_phone || "—", locale);
 }
-function displayJid(conversation?: InboxConversation | null): string {
-  return conversation?.contact?.whatsapp_jid || "—";
+function displayJid(conversation: InboxConversation | null | undefined, locale: Locale): string {
+  return localizedText(conversation?.contact?.whatsapp_jid || "—", locale);
 }
-function messageText(message: InboxMessage): string {
+function messageTypeLabel(type: string | undefined, locale: Locale): string {
+  const normalized = String(type || "").toUpperCase();
+  const t = translations[locale];
+  if (normalized === "TEXT") return t.text;
+  if (normalized === "AUDIO") return t.audio;
+  if (normalized === "IMAGE") return t.image;
+  if (normalized === "VIDEO") return t.video;
+  if (normalized === "DOCUMENT") return t.document;
+  if (normalized === "UNKNOWN") return t.unknown;
+  return normalized || t.media;
+}
+function messageText(message: InboxMessage, locale: Locale): string {
   const body = (message.body || "").trim();
-  if (body) return body;
+  if (body) return localizedText(body, locale);
   const type = (message.message_type || "").trim();
-  if (type && type !== "TEXT") return `[${type}]`;
-  return TEXT.media;
+  if (type) return `[${messageTypeLabel(type, locale)}]`;
+  return translations[locale].media;
 }
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat("ar-SA").format(value || 0);
-}
-function formatDate(value?: string | null): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("ar-SA", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-}
-function statusLabel(status?: string): string {
+function statusLabel(status: string | undefined, locale: Locale): string {
   const value = (status || "OPEN").toUpperCase();
-  const labels: Record<string, string> = {
-    OPEN: "مفتوحة",
-    CLOSED: "مغلقة",
-    ARCHIVED: "مؤرشفة",
-    SPAM: "مزعجة",
+  const labels: Record<Locale, Record<string, string>> = {
+    ar: {
+      OPEN: "مفتوحة",
+      CLOSED: "مغلقة",
+      ARCHIVED: "مؤرشفة",
+      SPAM: "مزعجة",
+    },
+    en: {
+      OPEN: "Open",
+      CLOSED: "Closed",
+      ARCHIVED: "Archived",
+      SPAM: "Spam",
+    },
   };
-  return labels[value] || value;
+  return labels[locale][value] || value;
 }
-function directionLabel(direction?: string): string {
-  return direction === "OUTBOUND" ? TEXT.outbound : TEXT.inbound;
+function deliveryStatusLabel(status: string | undefined, locale: Locale): string {
+  const value = String(status || "").toUpperCase();
+  const t = translations[locale];
+  if (value === "RECEIVED") return t.received;
+  if (value === "SENT") return t.sent;
+  if (value === "FAILED") return t.failed;
+  return value ? localizedText(value, locale) : "—";
 }
-function statusClass(status?: string): string {
+function directionLabel(direction: string | undefined, locale: Locale): string {
+  return direction === "OUTBOUND" ? translations[locale].outbound : translations[locale].inbound;
+}
+function statusClass(status: string | undefined): string {
   const value = (status || "OPEN").toUpperCase();
   if (value === "OPEN") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (value === "CLOSED") return "border-slate-200 bg-slate-50 text-slate-700";
@@ -289,11 +407,13 @@ function KpiCard({
   value,
   description,
   icon: Icon,
+  locale,
 }: {
   title: string;
   value: number;
   description: string;
   icon: React.ComponentType<{ className?: string }>;
+  locale: Locale;
 }) {
   return (
     <Card className="overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
@@ -301,7 +421,7 @@ function KpiCard({
         <div className="min-w-0">
           <CardDescription className="truncate text-sm">{title}</CardDescription>
           <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
-            {formatNumber(value)}
+            {formatNumber(value, locale)}
           </CardTitle>
         </div>
         <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
@@ -318,7 +438,10 @@ function QuickActionCard({ action }: { action: QuickAction }) {
   const Icon = action.icon;
   return (
     <Card className="group rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <Link href={action.href} className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <Link
+        href={action.href}
+        className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
         <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
           <div className="min-w-0">
             <CardTitle className="text-base">{action.title}</CardTitle>
@@ -332,9 +455,10 @@ function QuickActionCard({ action }: { action: QuickAction }) {
     </Card>
   );
 }
-function InboxSkeleton() {
+function InboxSkeleton({ locale }: { locale: Locale }) {
+  const dir = locale === "ar" ? "rtl" : "ltr";
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8" dir="rtl">
+    <main className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8" dir={dir}>
       <div className="w-full space-y-6">
         <div className="rounded-3xl border bg-card p-6 shadow-sm">
           <Skeleton className="h-5 w-40" />
@@ -354,20 +478,12 @@ function InboxSkeleton() {
             </Card>
           ))}
         </div>
-        <Card className="rounded-2xl">
-          <CardHeader>
-            <Skeleton className="h-6 w-52" />
-            <Skeleton className="h-4 w-96 max-w-full" />
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-80 w-full" />
-          </CardContent>
-        </Card>
       </div>
     </main>
   );
 }
 export default function SystemWhatsAppInboxView() {
+  const [locale, setLocale] = React.useState<Locale>("ar");
   const [searchInput, setSearchInput] = React.useState("");
   const [search, setSearch] = React.useState("");
   const [status, setStatus] = React.useState<StatusFilter>("all");
@@ -379,6 +495,25 @@ export default function SystemWhatsAppInboxView() {
   const [loadingMessages, setLoadingMessages] = React.useState(false);
   const [sending, setSending] = React.useState(false);
   const [reply, setReply] = React.useState("");
+  const t = translations[locale];
+  const dir = locale === "ar" ? "rtl" : "ltr";
+  const alignClass = locale === "ar" ? "text-right" : "text-left";
+  React.useEffect(() => {
+    const applyLocale = () => {
+      const nextLocale = getInitialLocale();
+      setLocale(nextLocale);
+      document.documentElement.lang = nextLocale;
+      document.documentElement.dir = nextLocale === "ar" ? "rtl" : "ltr";
+      document.body.dir = nextLocale === "ar" ? "rtl" : "ltr";
+    };
+    applyLocale();
+    window.addEventListener("storage", applyLocale);
+    window.addEventListener("primey-locale-changed", applyLocale);
+    return () => {
+      window.removeEventListener("storage", applyLocale);
+      window.removeEventListener("primey-locale-changed", applyLocale);
+    };
+  }, []);
   const selectedConversation = React.useMemo(
     () => conversations.find((item) => item.id === selectedId) || null,
     [conversations, selectedId],
@@ -399,7 +534,7 @@ export default function SystemWhatsAppInboxView() {
         return items[0]?.id || null;
       });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : TEXT.loadError);
+      toast.error(error instanceof Error ? error.message : translations[getInitialLocale()].loadError);
     } finally {
       setLoadingConversations(false);
     }
@@ -419,7 +554,7 @@ export default function SystemWhatsAppInboxView() {
         );
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : TEXT.messagesLoadError);
+      toast.error(error instanceof Error ? error.message : translations[getInitialLocale()].messagesLoadError);
     } finally {
       setLoadingMessages(false);
     }
@@ -434,7 +569,7 @@ export default function SystemWhatsAppInboxView() {
     }
     void loadMessages(selectedId);
   }, [loadMessages, selectedId]);
-  async function handleSearch(event: FormEvent<HTMLFormElement>) {
+  async function handleSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSearch(searchInput);
   }
@@ -442,12 +577,12 @@ export default function SystemWhatsAppInboxView() {
     await loadConversations();
     if (selectedId) await loadMessages(selectedId);
   }
-  async function handleReply(event: FormEvent<HTMLFormElement>) {
+  async function handleReply(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedId) return;
     const body = reply.trim();
     if (!body) {
-      toast.error(TEXT.replyRequired);
+      toast.error(t.replyRequired);
       return;
     }
     setSending(true);
@@ -457,57 +592,57 @@ export default function SystemWhatsAppInboxView() {
         body: JSON.stringify({ body }),
       });
       if (!payload.success) {
-        throw new Error(payload.message || TEXT.loadError);
+        throw new Error(payload.message || t.loadError);
       }
       setReply("");
-      toast.success(TEXT.replySent);
+      toast.success(t.replySent);
       await loadMessages(selectedId);
       await loadConversations();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : TEXT.loadError);
+      toast.error(error instanceof Error ? error.message : t.loadError);
     } finally {
       setSending(false);
     }
   }
   const quickActions: QuickAction[] = [
     {
-      title: TEXT.settings,
-      description: TEXT.settingsDesc,
+      title: t.settings,
+      description: t.settingsDesc,
       href: "/system/whatsapp/settings",
       icon: Settings2,
     },
     {
-      title: TEXT.templates,
-      description: TEXT.templatesDesc,
+      title: t.templates,
+      description: t.templatesDesc,
       href: "/system/whatsapp/templates",
       icon: FileText,
     },
     {
-      title: TEXT.logs,
-      description: TEXT.logsDesc,
+      title: t.logs,
+      description: t.logsDesc,
       href: "/system/whatsapp/messages",
       icon: SendHorizontal,
     },
   ];
   if (loadingConversations && conversations.length === 0) {
-    return <InboxSkeleton />;
+    return <InboxSkeleton locale={locale} />;
   }
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8" dir="rtl">
+    <main className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8" dir={dir}>
       <div className="w-full space-y-6">
         <Card className="overflow-hidden rounded-3xl border-border/70 bg-card shadow-sm">
           <CardHeader className="gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0 space-y-3 text-right">
+            <div className={cn("min-w-0 space-y-3", alignClass)}>
               <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
                 <MessageCircle className="h-3.5 w-3.5" />
-                {TEXT.badge}
+                {t.badge}
               </Badge>
               <div>
                 <CardTitle className="text-3xl font-bold tracking-tight md:text-4xl">
-                  {TEXT.title}
+                  {t.title}
                 </CardTitle>
                 <CardDescription className="mt-3 max-w-3xl text-sm leading-7">
-                  {TEXT.desc}
+                  {t.desc}
                 </CardDescription>
               </div>
             </div>
@@ -523,24 +658,24 @@ export default function SystemWhatsAppInboxView() {
                 ) : (
                   <RefreshCw className="h-4 w-4" />
                 )}
-                {TEXT.refresh}
+                {t.refresh}
               </Button>
               <Button asChild variant="outline" className="rounded-lg bg-card">
                 <Link href="/system/whatsapp/messages">
                   <SendHorizontal className="h-4 w-4" />
-                  {TEXT.logs}
+                  {t.logs}
                 </Link>
               </Button>
               <Button asChild variant="outline" className="rounded-lg bg-card">
                 <Link href="/system/whatsapp/templates">
                   <FileText className="h-4 w-4" />
-                  {TEXT.templates}
+                  {t.templates}
                 </Link>
               </Button>
               <Button asChild variant="outline" className="rounded-lg bg-card">
                 <Link href="/system/whatsapp/settings">
                   <Settings2 className="h-4 w-4" />
-                  {TEXT.settings}
+                  {t.settings}
                 </Link>
               </Button>
             </div>
@@ -548,34 +683,38 @@ export default function SystemWhatsAppInboxView() {
         </Card>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <KpiCard
-            title={TEXT.total}
+            title={t.total}
             value={summary.total_conversations || conversations.length || 0}
-            description={TEXT.fromLiveApi}
+            description={t.fromLiveApi}
             icon={Inbox}
+            locale={locale}
           />
           <KpiCard
-            title={TEXT.unread}
+            title={t.unread}
             value={summary.unread_conversations || 0}
-            description={TEXT.fromLiveApi}
+            description={t.fromLiveApi}
             icon={AlertCircle}
+            locale={locale}
           />
           <KpiCard
-            title={TEXT.resolved}
+            title={t.resolved}
             value={summary.resolved_conversations || 0}
-            description={TEXT.fromLiveApi}
+            description={t.fromLiveApi}
             icon={CheckCircle2}
+            locale={locale}
           />
           <KpiCard
-            title={TEXT.openCount}
+            title={t.openCount}
             value={summary.open_conversations || 0}
-            description={TEXT.fromLiveApi}
+            description={t.fromLiveApi}
             icon={Wifi}
+            locale={locale}
           />
         </div>
         <Card className="rounded-2xl border-border/70 bg-card shadow-sm">
-          <CardHeader className="text-right">
-            <CardTitle className="text-lg">{TEXT.actionsTitle}</CardTitle>
-            <CardDescription>{TEXT.actionsDesc}</CardDescription>
+          <CardHeader className={alignClass}>
+            <CardTitle className="text-lg">{t.actionsTitle}</CardTitle>
+            <CardDescription>{t.actionsDesc}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-3">
             {quickActions.map((action) => (
@@ -591,34 +730,39 @@ export default function SystemWhatsAppInboxView() {
                   <MessageCircle className="h-7 w-7" />
                 </div>
                 <div>
-                  <h3 className="text-base font-semibold text-foreground">{TEXT.selectConversation}</h3>
+                  <h3 className="text-base font-semibold text-foreground">{t.selectConversation}</h3>
                   <p className="mt-1 max-w-md text-sm leading-7 text-muted-foreground">
-                    {TEXT.selectConversationDesc}
+                    {t.selectConversationDesc}
                   </p>
                 </div>
               </CardContent>
             ) : (
               <>
-                <CardHeader className="border-b border-border/70 text-right">
+                <CardHeader className={cn("border-b border-border/70", alignClass)}>
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-3">
-                      <Badge variant="outline" className={cn("w-fit rounded-full px-3 py-1", statusClass(selectedConversation.status))}>
-                        {statusLabel(selectedConversation.status)}
+                      <Badge
+                        variant="outline"
+                        className={cn("w-fit rounded-full px-3 py-1", statusClass(selectedConversation.status))}
+                      >
+                        {statusLabel(selectedConversation.status, locale)}
                       </Badge>
                       <div>
-                        <CardTitle className="text-2xl">{displayName(selectedConversation)}</CardTitle>
+                        <CardTitle className="text-2xl">
+                          {displayName(selectedConversation, locale)}
+                        </CardTitle>
                         <CardDescription className="mt-3 grid gap-1 text-xs md:grid-cols-2">
                           <span>
-                            <span className="font-semibold text-foreground">{TEXT.phone}: </span>
-                            {displayPhone(selectedConversation)}
+                            <span className="font-semibold text-foreground">{t.phone}: </span>
+                            {displayPhone(selectedConversation, locale)}
                           </span>
                           <span>
-                            <span className="font-semibold text-foreground">{TEXT.latest}: </span>
-                            {formatDate(selectedConversation.last_message_at)}
+                            <span className="font-semibold text-foreground">{t.latest}: </span>
+                            {formatDate(selectedConversation.last_message_at, locale)}
                           </span>
                           <span className="md:col-span-2">
-                            <span className="font-semibold text-foreground">{TEXT.jid}: </span>
-                            {displayJid(selectedConversation)}
+                            <span className="font-semibold text-foreground">{t.jid}: </span>
+                            {displayJid(selectedConversation, locale)}
                           </span>
                         </CardDescription>
                       </div>
@@ -634,7 +778,7 @@ export default function SystemWhatsAppInboxView() {
                       ) : (
                         <RefreshCw className="h-4 w-4" />
                       )}
-                      {TEXT.refresh}
+                      {t.refresh}
                     </Button>
                   </div>
                 </CardHeader>
@@ -648,7 +792,7 @@ export default function SystemWhatsAppInboxView() {
                       <div className="rounded-full bg-muted p-4 text-muted-foreground">
                         <MessageCircle className="h-6 w-6" />
                       </div>
-                      <h3 className="text-sm font-semibold text-foreground">{TEXT.emptyMessages}</h3>
+                      <h3 className="text-sm font-semibold text-foreground">{t.emptyMessages}</h3>
                     </div>
                   ) : (
                     <div className="flex flex-col gap-4">
@@ -668,14 +812,14 @@ export default function SystemWhatsAppInboxView() {
                               )}
                             >
                               <div className="mb-2 flex items-center justify-between gap-5 text-[11px] opacity-80">
-                                <span>{directionLabel(message.direction)}</span>
-                                <span>{message.status || "—"}</span>
+                                <span>{directionLabel(message.direction, locale)}</span>
+                                <span>{deliveryStatusLabel(message.status, locale)}</span>
                               </div>
                               <p className="whitespace-pre-wrap text-sm leading-7">
-                                {messageText(message)}
+                                {messageText(message, locale)}
                               </p>
                               <p className="mt-3 text-[11px] opacity-70">
-                                {formatDate(message.sent_at || message.received_at || message.created_at)}
+                                {formatDate(message.sent_at || message.received_at || message.created_at, locale)}
                               </p>
                             </div>
                           </div>
@@ -689,9 +833,12 @@ export default function SystemWhatsAppInboxView() {
                     <textarea
                       value={reply}
                       onChange={(event) => setReply(event.target.value)}
-                      placeholder={TEXT.messagePlaceholder}
+                      placeholder={t.messagePlaceholder}
                       rows={3}
-                      className="min-h-24 flex-1 resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm leading-7 outline-none transition focus:border-primary"
+                      className={cn(
+                        "min-h-24 flex-1 resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm leading-7 outline-none transition focus:border-primary",
+                        alignClass,
+                      )}
                     />
                     <Button
                       type="submit"
@@ -703,7 +850,7 @@ export default function SystemWhatsAppInboxView() {
                       ) : (
                         <SendHorizontal className="h-4 w-4" />
                       )}
-                      {sending ? TEXT.sending : TEXT.send}
+                      {sending ? t.sending : t.send}
                     </Button>
                   </form>
                 </div>
@@ -711,12 +858,12 @@ export default function SystemWhatsAppInboxView() {
             )}
           </Card>
           <Card className="rounded-2xl border-border/70 bg-card shadow-sm">
-            <CardHeader className="text-right">
+            <CardHeader className={alignClass}>
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <CardTitle className="text-lg">{TEXT.conversations}</CardTitle>
+                  <CardTitle className="text-lg">{t.conversations}</CardTitle>
                   <CardDescription className="mt-1">
-                    {formatNumber(summary.total_conversations || conversations.length || 0)} {TEXT.conversationCount}
+                    {formatNumber(summary.total_conversations || conversations.length || 0, locale)} {t.conversationCount}
                   </CardDescription>
                 </div>
                 <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
@@ -727,28 +874,36 @@ export default function SystemWhatsAppInboxView() {
             <CardContent className="space-y-4">
               <form onSubmit={handleSearch} className="space-y-3">
                 <div className="relative">
-                  <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Search
+                    className={cn(
+                      "absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground",
+                      locale === "ar" ? "right-3" : "left-3",
+                    )}
+                  />
                   <Input
                     value={searchInput}
                     onChange={(event) => setSearchInput(event.target.value)}
-                    placeholder={TEXT.searchPlaceholder}
-                    className="h-11 rounded-xl pr-10 text-right"
+                    placeholder={t.searchPlaceholder}
+                    className={cn(
+                      "h-11 rounded-xl",
+                      locale === "ar" ? "pr-10 text-right" : "pl-10 text-left",
+                    )}
                   />
                 </div>
                 <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
                   <Button type="submit" className="h-11 rounded-lg px-5">
-                    {TEXT.search}
+                    {t.search}
                   </Button>
                   <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
                     <SelectTrigger className="h-11 rounded-xl">
-                      <SelectValue placeholder={TEXT.all} />
+                      <SelectValue placeholder={t.all} />
                     </SelectTrigger>
-                    <SelectContent align="end">
-                      <SelectItem value="all">{TEXT.all}</SelectItem>
-                      <SelectItem value="OPEN">{TEXT.open}</SelectItem>
-                      <SelectItem value="CLOSED">{TEXT.closed}</SelectItem>
-                      <SelectItem value="ARCHIVED">{TEXT.archived}</SelectItem>
-                      <SelectItem value="SPAM">{TEXT.spam}</SelectItem>
+                    <SelectContent align={locale === "ar" ? "end" : "start"}>
+                      <SelectItem value="all">{t.all}</SelectItem>
+                      <SelectItem value="OPEN">{t.open}</SelectItem>
+                      <SelectItem value="CLOSED">{t.closed}</SelectItem>
+                      <SelectItem value="ARCHIVED">{t.archived}</SelectItem>
+                      <SelectItem value="SPAM">{t.spam}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -772,9 +927,9 @@ export default function SystemWhatsAppInboxView() {
                       <Inbox className="h-6 w-6" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-semibold text-foreground">{TEXT.noConversations}</h3>
+                      <h3 className="text-sm font-semibold text-foreground">{t.noConversations}</h3>
                       <p className="mt-1 text-sm leading-7 text-muted-foreground">
-                        {TEXT.noConversationsDesc}
+                        {t.noConversationsDesc}
                       </p>
                     </div>
                   </div>
@@ -788,7 +943,8 @@ export default function SystemWhatsAppInboxView() {
                         type="button"
                         onClick={() => setSelectedId(conversation.id)}
                         className={cn(
-                          "rounded-2xl border p-4 text-right transition hover:-translate-y-0.5 hover:shadow-md",
+                          "rounded-2xl border p-4 transition hover:-translate-y-0.5 hover:shadow-md",
+                          alignClass,
                           isActive
                             ? "border-primary/60 bg-muted shadow-sm"
                             : "border-border/70 bg-card shadow-sm",
@@ -796,29 +952,31 @@ export default function SystemWhatsAppInboxView() {
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-end gap-2">
+                            <div className={cn("flex items-center gap-2", locale === "ar" ? "justify-end" : "justify-start")}>
                               <p className="truncate text-sm font-bold">
-                                {displayName(conversation)}
+                                {displayName(conversation, locale)}
                               </p>
                               <UserRound className="h-4 w-4 shrink-0 text-muted-foreground" />
                             </div>
                             <p className="mt-1 truncate text-xs text-muted-foreground">
-                              {displayPhone(conversation)}
+                              {displayPhone(conversation, locale)}
                             </p>
                           </div>
                           {unread > 0 ? (
                             <span className="rounded-full bg-primary px-2 py-1 text-xs font-bold text-primary-foreground">
-                              {formatNumber(unread)}
+                              {formatNumber(unread, locale)}
                             </span>
                           ) : null}
                         </div>
                         <p className="mt-4 line-clamp-2 text-sm leading-7 text-muted-foreground">
-                          {conversation.last_message_preview || TEXT.media}
+                          {conversation.last_message_preview
+                            ? localizedText(conversation.last_message_preview, locale)
+                            : t.media}
                         </p>
                         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                          <span>{formatDate(conversation.last_message_at || conversation.updated_at)}</span>
+                          <span>{formatDate(conversation.last_message_at || conversation.updated_at, locale)}</span>
                           <Badge variant="outline" className={cn("rounded-full px-2.5 py-1", statusClass(conversation.status))}>
-                            {statusLabel(conversation.status)}
+                            {statusLabel(conversation.status, locale)}
                           </Badge>
                         </div>
                       </button>
