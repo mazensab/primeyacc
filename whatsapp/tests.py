@@ -909,4 +909,46 @@ class SystemWhatsAppPhoneNormalizationTests(TestCase):
         log = Log.objects.get(message_body="System WhatsApp normalized phone message.")
         self.assertEqual(log.recipient_phone, "+966503185950")
         self.assertNotEqual(log.recipient_phone, "+966966503185950")
+class SystemWhatsAppReadyTemplateSeedTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="system_whatsapp_template_seed_user",
+            email="system_whatsapp_template_seed_user@example.com",
+            password="StrongPass123!",
+            is_staff=True,
+        )
+    def test_seed_system_whatsapp_ready_templates_is_idempotent(self):
+        from whatsapp.services import (
+            SYSTEM_WHATSAPP_READY_TEMPLATES,
+            seed_system_whatsapp_ready_templates,
+        )
+        first = seed_system_whatsapp_ready_templates(user=self.user)
+        second = seed_system_whatsapp_ready_templates(user=self.user)
+        self.assertTrue(first["success"])
+        self.assertEqual(first["created_count"], len(SYSTEM_WHATSAPP_READY_TEMPLATES))
+        self.assertEqual(second["created_count"], 0)
+        self.assertEqual(second["updated_count"], len(SYSTEM_WHATSAPP_READY_TEMPLATES))
+        self.assertEqual(
+            WhatsAppTemplate.objects.filter(
+                metadata__scope="SYSTEM",
+                status=WhatsAppTemplateStatus.ACTIVE,
+            ).count(),
+            len(SYSTEM_WHATSAPP_READY_TEMPLATES),
+        )
+        codes = set(
+            WhatsAppTemplate.objects.filter(metadata__scope="SYSTEM").values_list(
+                "code",
+                flat=True,
+            )
+        )
+        self.assertIn("SYSTEM_COMPANY_ACTIVATED", codes)
+        self.assertIn("SYSTEM_USER_ACTIVATED", codes)
+        self.assertIn("SYSTEM_SUBSCRIPTION_RENEWED", codes)
+        self.assertIn("SYSTEM_INVOICE_PDF_READY", codes)
+        self.assertIn("SYSTEM_PAYMENT_CONFIRMED", codes)
+        invoice_pdf = WhatsAppTemplate.objects.get(code="SYSTEM_INVOICE_PDF_READY")
+        self.assertEqual(invoice_pdf.language, "ar")
+        self.assertEqual(invoice_pdf.status, WhatsAppTemplateStatus.ACTIVE)
+        self.assertIn("pdf_url", invoice_pdf.variables)
+        self.assertEqual(invoice_pdf.metadata["module"], "billing")
 

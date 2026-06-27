@@ -556,6 +556,268 @@ def serialize_whatsapp_setting(setting: CompanyWhatsAppSetting) -> dict[str, Any
     }
 
 
+
+SYSTEM_WHATSAPP_TEMPLATE_COMPANY_CODE = "SYSTEM-WHATSAPP-TEMPLATES"
+SYSTEM_WHATSAPP_READY_TEMPLATES: list[dict[str, Any]] = [
+    {
+        "code": "SYSTEM_COMPANY_CREATED",
+        "name": "????? ???? ?????",
+        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
+        "body": "?????? {{owner_name}}? ?? ????? ???? {{company_name}} ????? ?? PrimeyAcc. ????? ?????? ?? ??????: {{login_url}}",
+        "variables": ["owner_name", "company_name", "login_url"],
+        "metadata": {"scope": "SYSTEM", "event": "company.created", "module": "companies"},
+    },
+    {
+        "code": "SYSTEM_COMPANY_ACTIVATED",
+        "name": "????? ????",
+        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
+        "body": "?? ????? ???? {{company_name}} ?????. ???? ?????? ????: ????. ???? ??????: {{login_url}}",
+        "variables": ["company_name", "login_url"],
+        "metadata": {"scope": "SYSTEM", "event": "company.activated", "module": "companies"},
+    },
+    {
+        "code": "SYSTEM_COMPANY_DEACTIVATED",
+        "name": "????? ????",
+        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
+        "body": "?? ????? ???? {{company_name}} ??????. ???????? ?? ????? ??????? ???? ??????? ?? ?????. ?????: {{reason}}",
+        "variables": ["company_name", "reason"],
+        "metadata": {"scope": "SYSTEM", "event": "company.deactivated", "module": "companies"},
+    },
+    {
+        "code": "SYSTEM_USER_INVITED",
+        "name": "???? ??????",
+        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
+        "body": "?????? {{user_name}}? ??? ????? ???????? ??? ???? {{company_name}} ??? PrimeyAcc ???? {{role_name}}. ???? ??????: {{login_url}}",
+        "variables": ["user_name", "company_name", "role_name", "login_url"],
+        "metadata": {"scope": "SYSTEM", "event": "user.invited", "module": "users"},
+    },
+    {
+        "code": "SYSTEM_USER_ACTIVATED",
+        "name": "????? ??????",
+        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
+        "body": "?????? {{user_name}}? ?? ????? ????? ?? ???? {{company_name}} ?????? ???? ??????? ??????. ???? ??????: {{login_url}}",
+        "variables": ["user_name", "company_name", "login_url"],
+        "metadata": {"scope": "SYSTEM", "event": "user.activated", "module": "users"},
+    },
+    {
+        "code": "SYSTEM_USER_DEACTIVATED",
+        "name": "????? ??????",
+        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
+        "body": "?????? {{user_name}}? ?? ????? ????? ?? ???? {{company_name}}. ?????? ?? ???????? ???? ??????? ?? ????? ??????.",
+        "variables": ["user_name", "company_name"],
+        "metadata": {"scope": "SYSTEM", "event": "user.deactivated", "module": "users"},
+    },
+    {
+        "code": "SYSTEM_PASSWORD_RESET",
+        "name": "????? ????? ???? ??????",
+        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
+        "body": "?????? {{user_name}}? ????? ????? ????? ???? ?????? ?? ?????? ??????: {{reset_url}}. ????? ??????? ??? ?? ???? ???.",
+        "variables": ["user_name", "reset_url"],
+        "metadata": {"scope": "SYSTEM", "event": "user.password_reset", "module": "auth"},
+    },
+    {
+        "code": "SYSTEM_SUBSCRIPTION_CREATED",
+        "name": "????? ??????",
+        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
+        "body": "?? ????? ?????? ???? ????? {{company_name}} ??? ???? {{plan_name}}. ???? ?? {{start_date}} ?????? ?? {{end_date}}.",
+        "variables": ["company_name", "plan_name", "start_date", "end_date"],
+        "metadata": {"scope": "SYSTEM", "event": "subscription.created", "module": "subscriptions"},
+    },
+    {
+        "code": "SYSTEM_SUBSCRIPTION_ACTIVATED",
+        "name": "????? ??????",
+        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
+        "body": "?? ????? ?????? ???? {{company_name}} ??? ???? {{plan_name}} ?????. ????? ????????: {{end_date}}.",
+        "variables": ["company_name", "plan_name", "end_date"],
+        "metadata": {"scope": "SYSTEM", "event": "subscription.activated", "module": "subscriptions"},
+    },
+    {
+        "code": "SYSTEM_SUBSCRIPTION_RENEWED",
+        "name": "????? ??????",
+        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
+        "body": "?? ????? ?????? ???? {{company_name}} ??? ???? {{plan_name}} ??? ????? {{end_date}}. ????? ???????? PrimeyAcc.",
+        "variables": ["company_name", "plan_name", "end_date"],
+        "metadata": {"scope": "SYSTEM", "event": "subscription.renewed", "module": "subscriptions"},
+    },
+    {
+        "code": "SYSTEM_SUBSCRIPTION_UPGRADED",
+        "name": "????? ??????",
+        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
+        "body": "??? ????? ?????? ???? {{company_name}} ?? ???? {{old_plan_name}} ??? ???? {{new_plan_name}}. ???? ??????? ?? {{effective_date}}.",
+        "variables": ["company_name", "old_plan_name", "new_plan_name", "effective_date"],
+        "metadata": {"scope": "SYSTEM", "event": "subscription.upgraded", "module": "subscriptions"},
+    },
+    {
+        "code": "SYSTEM_SUBSCRIPTION_EXPIRING_SOON",
+        "name": "?????? ???? ????????",
+        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
+        "body": "?????: ?????? ???? {{company_name}} ??? ???? {{plan_name}} ?????? ?????? {{end_date}}. ???? ??????? ??? ???????? ????? ???????.",
+        "variables": ["company_name", "plan_name", "end_date"],
+        "metadata": {"scope": "SYSTEM", "event": "subscription.expiring_soon", "module": "subscriptions"},
+    },
+    {
+        "code": "SYSTEM_SUBSCRIPTION_EXPIRED",
+        "name": "?????? ??????",
+        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
+        "body": "????? ?????? ???? {{company_name}} ??? ???? {{plan_name}} ?????? {{end_date}}. ???? ??????? ???????? ??????.",
+        "variables": ["company_name", "plan_name", "end_date"],
+        "metadata": {"scope": "SYSTEM", "event": "subscription.expired", "module": "subscriptions"},
+    },
+    {
+        "code": "SYSTEM_SUBSCRIPTION_CANCELLED",
+        "name": "????? ??????",
+        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
+        "body": "?? ????? ?????? ???? {{company_name}} ??? ???? {{plan_name}}. ?????: {{reason}}.",
+        "variables": ["company_name", "plan_name", "reason"],
+        "metadata": {"scope": "SYSTEM", "event": "subscription.cancelled", "module": "subscriptions"},
+    },
+    {
+        "code": "SYSTEM_PAYMENT_CONFIRMED",
+        "name": "????? ???",
+        "category": WhatsAppTemplateCategory.TREASURY,
+        "body": "?? ????? ??? ???? {{amount}} {{currency}} ????? {{company_name}} ?????. ??? ???????: {{payment_reference}}.",
+        "variables": ["amount", "currency", "company_name", "payment_reference"],
+        "metadata": {"scope": "SYSTEM", "event": "payment.confirmed", "module": "payments"},
+    },
+    {
+        "code": "SYSTEM_PAYMENT_FAILED",
+        "name": "??? ???",
+        "category": WhatsAppTemplateCategory.TREASURY,
+        "body": "???? ????? ????? ????? ????? {{company_name}} ????? {{amount}} {{currency}}. ?????: {{failure_reason}}.",
+        "variables": ["company_name", "amount", "currency", "failure_reason"],
+        "metadata": {"scope": "SYSTEM", "event": "payment.failed", "module": "payments"},
+    },
+    {
+        "code": "SYSTEM_INVOICE_ISSUED",
+        "name": "????? ??????",
+        "category": WhatsAppTemplateCategory.ACCOUNTING,
+        "body": "?? ????? ?????? ??? {{invoice_number}} ????? {{company_name}} ????? {{amount}} {{currency}}. ????? ?????????: {{due_date}}.",
+        "variables": ["invoice_number", "company_name", "amount", "currency", "due_date"],
+        "metadata": {"scope": "SYSTEM", "event": "invoice.issued", "module": "billing"},
+    },
+    {
+        "code": "SYSTEM_INVOICE_PDF_READY",
+        "name": "????? PDF ????????",
+        "category": WhatsAppTemplateCategory.ACCOUNTING,
+        "body": "??????? ??? {{invoice_number}} ?????. ????? ????? ???? PDF ?? ??????: {{pdf_url}}",
+        "variables": ["invoice_number", "pdf_url"],
+        "metadata": {"scope": "SYSTEM", "event": "invoice.pdf_ready", "module": "billing", "attachment": "pdf"},
+    },
+    {
+        "code": "SYSTEM_INVOICE_PAYMENT_REMINDER",
+        "name": "????? ?????? ??? ??????",
+        "category": WhatsAppTemplateCategory.ACCOUNTING,
+        "body": "?????: ?????? ??? {{invoice_number}} ????? {{company_name}} ????? {{amount}} {{currency}} ?????? ?????? {{due_date}}.",
+        "variables": ["invoice_number", "company_name", "amount", "currency", "due_date"],
+        "metadata": {"scope": "SYSTEM", "event": "invoice.payment_reminder", "module": "billing"},
+    },
+    {
+        "code": "SYSTEM_GENERAL_ANNOUNCEMENT",
+        "name": "????? ???? ???",
+        "category": WhatsAppTemplateCategory.GENERAL,
+        "body": "????? ?? PrimeyAcc: {{announcement_title}}\n{{announcement_body}}",
+        "variables": ["announcement_title", "announcement_body"],
+        "metadata": {"scope": "SYSTEM", "event": "system.announcement", "module": "system"},
+    },
+    {
+        "code": "SYSTEM_SECURITY_ALERT",
+        "name": "????? ????",
+        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
+        "body": "????? ????: ?? ??? ????? {{security_event}} ??? ???? {{user_name}} ?? ???? {{company_name}} ?????? {{event_time}}.",
+        "variables": ["security_event", "user_name", "company_name", "event_time"],
+        "metadata": {"scope": "SYSTEM", "event": "security.alert", "module": "security"},
+    },
+    {
+        "code": "SYSTEM_SUPPORT_TICKET_CREATED",
+        "name": "??? ????? ???",
+        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
+        "body": "?? ??? ????? ??? ??? {{ticket_number}} ????? {{company_name}} ??????: {{ticket_title}}. ????? ????????? ??????.",
+        "variables": ["ticket_number", "company_name", "ticket_title"],
+        "metadata": {"scope": "SYSTEM", "event": "support.ticket_created", "module": "support"},
+    },
+]
+def get_or_create_system_whatsapp_templates_company(*, user=None) -> Company:
+    """
+    Return the backend-owned company used to host system WhatsApp templates.
+    WhatsAppTemplate is currently company-scoped, so system templates are stored
+    under a dedicated internal company. No company_id is accepted from frontend.
+    """
+    company = Company.objects.filter(company_code=SYSTEM_WHATSAPP_TEMPLATE_COMPANY_CODE).first()
+    if company:
+        return company
+    return Company.objects.create(
+        company_code=SYSTEM_WHATSAPP_TEMPLATE_COMPANY_CODE,
+        name="PrimeyAcc System WhatsApp Templates",
+        is_active=True,
+        created_by=user if getattr(user, "is_authenticated", False) else None,
+        updated_by=user if getattr(user, "is_authenticated", False) else None,
+    )
+def seed_system_whatsapp_ready_templates(*, user=None) -> dict[str, Any]:
+    """
+    Create or update PrimeyAcc system WhatsApp ready templates.
+    Idempotent behavior:
+    - Existing template by company/code is updated in place.
+    - Missing template is created.
+    - All seeded templates are ACTIVE and Arabic by default.
+    """
+    company = get_or_create_system_whatsapp_templates_company(user=user)
+    created_count = 0
+    updated_count = 0
+    template_ids: list[int] = []
+    for item in SYSTEM_WHATSAPP_READY_TEMPLATES:
+        code = _system_safe_text(item["code"]).upper()
+        body = _system_safe_text(item["body"])
+        variables = item.get("variables") or extract_template_variables(body)
+        template, created = WhatsAppTemplate.objects.get_or_create(
+            company=company,
+            code=code,
+            defaults={
+                "name": _system_safe_text(item["name"]),
+                "category": item.get("category") or WhatsAppTemplateCategory.GENERAL,
+                "status": WhatsAppTemplateStatus.ACTIVE,
+                "language": "ar",
+                "body": body,
+                "footer": "PrimeyAcc",
+                "external_template_name": code.lower(),
+                "variables": variables,
+                "metadata": item.get("metadata") or {},
+                "created_by": user if getattr(user, "is_authenticated", False) else None,
+                "updated_by": user if getattr(user, "is_authenticated", False) else None,
+            },
+        )
+        if created:
+            created_count += 1
+        else:
+            template.name = _system_safe_text(item["name"])
+            template.category = item.get("category") or WhatsAppTemplateCategory.GENERAL
+            template.status = WhatsAppTemplateStatus.ACTIVE
+            template.language = "ar"
+            template.body = body
+            template.footer = "PrimeyAcc"
+            template.external_template_name = code.lower()
+            template.variables = variables
+            template.metadata = item.get("metadata") or {}
+            if getattr(user, "is_authenticated", False):
+                template.updated_by = user
+            template.save()
+            updated_count += 1
+        template_ids.append(template.id)
+    return {
+        "success": True,
+        "message": "System WhatsApp ready templates seeded.",
+        "company_id": company.id,
+        "company_code": company.company_code,
+        "created_count": created_count,
+        "updated_count": updated_count,
+        "total_count": len(template_ids),
+        "template_ids": template_ids,
+        "templates": [
+            serialize_whatsapp_template(template)
+            for template in WhatsAppTemplate.objects.filter(id__in=template_ids).order_by("category", "code")
+        ],
+    }
+
+
 def serialize_whatsapp_template(template: WhatsAppTemplate) -> dict[str, Any]:
     """
     Serialize WhatsApp template.
