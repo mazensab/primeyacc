@@ -2,7 +2,7 @@
 """Django's command-line utility for administrative tasks.
 PrimeyAcc local development note:
 - When running `python manage.py runserver`, the persistent WhatsApp Session
-  Gateway is started first through scripts/start-primeyacc-whatsapp-gateway.ps1.
+  Gateway is started in the background through scripts/start-primeyacc-whatsapp-gateway.ps1.
 - This hook is limited to runserver only. It does not run during tests,
   migrations, checks, shell, or other management commands.
 """
@@ -16,12 +16,11 @@ def _primeyacc_should_start_whatsapp_gateway() -> bool:
         return False
     if os.environ.get("PRIMEYACC_WHATSAPP_GATEWAY_STARTED_BY_MANAGE") == "1":
         return False
-    commands = set(sys.argv[1:])
-    if "runserver" not in commands:
+    if "runserver" not in set(sys.argv[1:]):
         return False
     return True
 def _primeyacc_start_whatsapp_gateway() -> None:
-    """Start the local WhatsApp Session Gateway before Django runserver."""
+    """Start the local WhatsApp Session Gateway in the background."""
     root = Path(__file__).resolve().parent
     launcher = root / "scripts" / "start-primeyacc-whatsapp-gateway.ps1"
     if not launcher.exists():
@@ -31,22 +30,26 @@ def _primeyacc_start_whatsapp_gateway() -> None:
         )
         return
     powershell = "powershell.exe" if os.name == "nt" else "pwsh"
-    print("[PrimeyAcc] Starting WhatsApp Gateway before Django runserver...")
+    os.environ["PRIMEYACC_WHATSAPP_GATEWAY_STARTED_BY_MANAGE"] = "1"
+    print("[PrimeyAcc] Starting WhatsApp Gateway in background before Django runserver...")
     try:
-        subprocess.run(
+        subprocess.Popen(
             [
                 powershell,
                 "-NoProfile",
                 "-ExecutionPolicy",
                 "Bypass",
+                "-WindowStyle",
+                "Hidden",
                 "-File",
                 str(launcher),
             ],
             cwd=str(root),
-            check=False,
-            timeout=25,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            close_fds=True,
         )
-        os.environ["PRIMEYACC_WHATSAPP_GATEWAY_STARTED_BY_MANAGE"] = "1"
     except Exception as exc:
         print(
             f"[PrimeyAcc] WhatsApp Gateway autostart warning: {exc}",
