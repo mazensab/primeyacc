@@ -1513,3 +1513,170 @@ def record_system_whatsapp_incoming_message(payload: dict) -> dict:
         "conversation": serialize_whatsapp_inbox_conversation(conversation),
         "message": serialize_whatsapp_inbox_message(message),
     }
+
+# ============================================================
+# WhatsApp Inbox Reply Services
+# ============================================================
+def _post_system_whatsapp_gateway_text(*, session_name: str, body: str, to_phone: str = "", to_jid: str = "") -> dict:
+    import json
+    import os
+    import urllib.error
+    import urllib.request
+    from django.conf import settings
+    gateway_url = str(
+        getattr(settings, "WHATSAPP_SESSION_GATEWAY_URL", "")
+        or os.environ.get("WHATSAPP_SESSION_GATEWAY_URL", "")
+        or "http://127.0.0.1:3100"
+    ).rstrip("/")
+    timeout = int(
+        getattr(settings, "WHATSAPP_SESSION_GATEWAY_TIMEOUT", None)
+        or os.environ.get("WHATSAPP_SESSION_GATEWAY_TIMEOUT", "")
+        or 20
+    )
+    token = str(
+        getattr(settings, "WHATSAPP_SESSION_GATEWAY_TOKEN", "")
+        or os.environ.get("WHATSAPP_SESSION_GATEWAY_TOKEN", "")
+        or ""
+    ).strip()
+    payload = {
+        "session_name": session_name or "primeyacc-system-session",
+        "to_phone": to_phone or "",
+        "to_jid": to_jid or "",
+        "body": body,
+    }
+    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    request = urllib.request.Request(
+        f"{gateway_url}/messages/send-text",
+        data=data,
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            **({"X-PrimeyAcc-Gateway-Token": token} if token else {}),
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            raw = response.read().decode("utf-8")
+            parsed = json.loads(raw or "{}")
+            if isinstance(parsed, dict):
+                return parsed
+            return {"success": False, "message": "Unexpected gateway response.", "raw": parsed}
+    except urllib.error.HTTPError as exc:
+        raw = exc.read().decode("utf-8", errors="replace")
+        try:
+            parsed = json.loads(raw or "{}")
+        except json.JSONDecodeError:
+            parsed = {"raw": raw}
+        return {
+            "success": False,
+            "provider_status": "gateway_http_error",
+            "message": str(exc),
+            "error_message": str(exc),
+            "status_code": exc.code,
+            "response": parsed,
+        }
+    except Exception as exc:
+        return {
+            "success": False,
+            "provider_status": "gateway_error",
+            "message": str(exc),
+            "error_message": str(exc),
+        }
+def _conversation_reply_target(conversation) -> dict:
+    contact = conversation.contact
+    target_jid = (
+        contact.whatsapp_jid
+        or (contact.metadata or {}).get("whatsapp_jid")
+        or ""
+    )
+    if not target_jid:
+        last_inbound = (
+            conversation.messages
+            .filter(direction="INBOUND")
+            .order_by("-created_at", "-id")
+            .first()
+        )
+        if last_inbound:
+            response_payload = last_inbound.provider_response or {}
+            target_jid = (
+                response_payload.get("from_jid")
+                or response_payload.get("remote_jid")
+                or response_payload.get("jid")
+                or ""
+            )
+    target_phone = contact.normalized_phone or contact.phone_number or ""
+    return {
+        "to_jid": str(target_jid or "").strip(),
+        "to_phone": str(target_phone or "").strip(),
+    }
+def send_system_whatsapp_inbox_reply(*, conversation, body: str, user=None) -> dict:
+    from django.utils import timezone
+    body = str(body or "").strip()
+    if not body:
+        raise ValueError("Reply body is required.")
+    target = _conversation_reply_target(conversation)
+    if not target["to_jid"] and not target["to_phone"]:
+        raise ValueError("Conversation has no WhatsApp reply target.")
+    gateway_payload = _post_system_whatsapp_gateway_text(
+        session_name=conversation.session_name,
+        body=body,
+        to_phone=target["to_phone"],
+        to_jid=target["to_jid"],
+    )
+    success = bool(gateway_payload.get("success"))
+    now = timezone.now()
+    message = conversation.messages.create(
+        contact=conversation.contact,
+        company=conversation.company,
+        scope=conversation.scope,
+        session_name=conversation.session_name,
+        direction="OUTBOUND",
+        status="SENT" if success else "FAILED",
+        message_type="TEXT",
+        body=body,
+        external_message_id=str(
+            gateway_payload.get("message_id")
+            or gateway_payload.get("provider_message_id")
+            or gateway_payload.get("id")
+            or ""
+        ),
+        provider="WHATSAPP_GATEWAY",
+        provider_response={
+            **gateway_payload,
+            "reply_target": target,
+        },
+        sent_by=user if getattr(user, "is_authenticated", False) else None,
+        sent_at=now if success else None,
+        metadata={
+            "source": "system_inbox_reply",
+            "target_jid": target["to_jid"],
+            "target_phone": target["to_phone"],
+        },
+    )
+    conversation.last_message_preview = body[:500]
+    conversation.last_message_at = now
+    conversation.unread_count = 0
+    conversation.status = "OPEN"
+    conversation.is_resolved = False
+    conversation.save(
+        update_fields=[
+            "last_message_preview",
+            "last_message_at",
+            "unread_count",
+            "status",
+            "is_resolved",
+            "updated_at",
+        ]
+    )
+    return {
+        "success": success,
+        "message": (
+            "WhatsApp reply sent successfully."
+            if success
+            else gateway_payload.get("message") or "WhatsApp reply failed."
+        ),
+        "gateway": gateway_payload,
+        "reply_target": target,
+        "conversation": serialize_whatsapp_inbox_conversation(conversation),
+        "reply": serialize_whatsapp_inbox_message(message),
+    }

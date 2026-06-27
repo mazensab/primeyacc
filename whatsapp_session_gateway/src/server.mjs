@@ -566,13 +566,14 @@ app.post("/session/disconnect", async (req, res) => {
 });
 app.post("/messages/send-text", async (req, res) => {
   const state = getSession(req.body?.session_name);
+  const toJid = safeText(req.body?.to_jid || req.body?.recipient_jid || req.body?.jid, "");
   const toPhone = normalizePhone(req.body?.to_phone || req.body?.phone_number || req.body?.to);
   const body = safeText(req.body?.body || req.body?.message || req.body?.text, "PrimeyAcc system WhatsApp test message.");
-  if (!toPhone) {
+  if (!toPhone && !toJid) {
     res.json(publicState(state, {
       success: false,
-      message: "Recipient phone is required.",
-      error_message: "Recipient phone is required.",
+      message: "Recipient phone or JID is required.",
+      error_message: "Recipient phone or JID is required.",
     }));
     return;
   }
@@ -588,7 +589,16 @@ app.post("/messages/send-text", async (req, res) => {
     }));
     return;
   }
-  const recipient = await resolveRecipientJid(state.sock, toPhone);
+  const recipient = toJid
+    ? {
+        exists: true,
+        jid: toJid,
+        phone: toPhone || incomingJidToPhone(toJid),
+        unchecked: true,
+        lookup_failed: false,
+        reason: "Direct recipient JID provided.",
+      }
+    : await resolveRecipientJid(state.sock, toPhone);
   if (!recipient.exists || !recipient.jid) {
     res.json(publicState(state, {
       success: false,

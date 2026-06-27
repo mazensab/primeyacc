@@ -1090,3 +1090,64 @@ class SystemWhatsAppInboxWebhookAPITests(SystemWhatsAppInboxWebhookDjangoTestCas
         self.assertFalse(first.json()["duplicate"])
         self.assertTrue(second.json()["duplicate"])
         self.assertEqual(WhatsAppConversationMessage.objects.count(), 1)
+
+from django.test import TestCase as WhatsAppInboxReplyDjangoTestCase
+class WhatsAppInboxReplyServiceTests(WhatsAppInboxReplyDjangoTestCase):
+    def test_send_system_whatsapp_inbox_reply_uses_contact_jid_and_records_outbound_message(self):
+        from unittest.mock import patch
+        from django.contrib.auth import get_user_model
+        from whatsapp.models import WhatsAppConversationMessage
+        from whatsapp.services import (
+            record_system_whatsapp_incoming_message,
+            send_system_whatsapp_inbox_reply,
+        )
+        User = get_user_model()
+        user = User.objects.create_user(
+            username="system-reply-user",
+            email="system-reply@example.com",
+            password="pass",
+            is_staff=True,
+            is_superuser=True,
+        )
+        incoming = record_system_whatsapp_incoming_message(
+            {
+                "session_name": "primeyacc-system-session",
+                "from_jid": "267829899169938@lid",
+                "from_phone": "267829899169938",
+                "push_name": "M.s💙",
+                "message_id": "REPLY-SERVICE-INBOUND-001",
+                "body": "اختبار وارد قبل الرد.",
+            }
+        )
+        conversation_id = incoming["conversation"]["id"]
+        from whatsapp.models import WhatsAppConversation
+        conversation = WhatsAppConversation.objects.select_related("contact").get(id=conversation_id)
+        with patch(
+            "whatsapp.services._post_system_whatsapp_gateway_text",
+            return_value={
+                "success": True,
+                "provider_status": "sent_to_whatsapp_server_unverified_recipient",
+                "message_id": "GATEWAY-REPLY-001",
+                "recipient_jid": "267829899169938@lid",
+            },
+        ) as gateway_call:
+            result = send_system_whatsapp_inbox_reply(
+                conversation=conversation,
+                body="تم استلام رسالتك من داخل النظام.",
+                user=user,
+            )
+        self.assertTrue(result["success"])
+        gateway_call.assert_called_once()
+        call_kwargs = gateway_call.call_args.kwargs
+        self.assertEqual(call_kwargs["to_jid"], "267829899169938@lid")
+        self.assertEqual(call_kwargs["body"], "تم استلام رسالتك من داخل النظام.")
+        messages = WhatsAppConversationMessage.objects.order_by("id")
+        self.assertEqual(messages.count(), 2)
+        outbound = messages.last()
+        self.assertEqual(outbound.direction, "OUTBOUND")
+        self.assertEqual(outbound.status, "SENT")
+        self.assertEqual(outbound.external_message_id, "GATEWAY-REPLY-001")
+        self.assertEqual(outbound.provider_response["reply_target"]["to_jid"], "267829899169938@lid")
+        conversation.refresh_from_db()
+        self.assertEqual(conversation.unread_count, 0)
+        self.assertEqual(conversation.last_message_preview, "تم استلام رسالتك من داخل النظام.")

@@ -662,3 +662,206 @@ def system_whatsapp_inbox_webhook(request):
         },
         status=http_status,
     )
+
+# ============================================================
+# System WhatsApp Inbox Conversation APIs
+# ============================================================
+from rest_framework.permissions import IsAuthenticated as _WhatsAppInboxIsAuthenticated
+def _system_whatsapp_inbox_can_view(user) -> bool:
+    return bool(
+        getattr(user, "is_authenticated", False)
+        and (
+            getattr(user, "is_superuser", False)
+            or _safe_has_system_permission(user, "system.whatsapp.view")
+            or _safe_has_system_permission(user, "system.whatsapp.manage")
+        )
+    )
+def _system_whatsapp_inbox_can_manage(user) -> bool:
+    return bool(
+        getattr(user, "is_authenticated", False)
+        and (
+            getattr(user, "is_superuser", False)
+            or _safe_has_system_permission(user, "system.whatsapp.manage")
+        )
+    )
+def _system_whatsapp_inbox_forbidden(message="You do not have permission to access system WhatsApp inbox."):
+    from rest_framework import status as drf_status
+    from rest_framework.response import Response as DRFResponse
+    return DRFResponse(
+        {
+            "success": False,
+            "message": message,
+            "errors": {"permission": message},
+        },
+        status=drf_status.HTTP_403_FORBIDDEN,
+    )
+def _system_whatsapp_inbox_queryset():
+    from whatsapp.models import WhatsAppConversation
+    return (
+        WhatsAppConversation.objects
+        .select_related("contact", "assigned_to")
+        .filter(scope="SYSTEM", company__isnull=True)
+        .order_by("-is_pinned", "-last_message_at", "-updated_at", "-id")
+    )
+def _parse_positive_int(value, default=1, maximum=100):
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    if parsed < 1:
+        return default
+    return min(parsed, maximum)
+@_whatsapp_inbox_api_view(["GET"])
+@_whatsapp_inbox_permission_classes([_WhatsAppInboxIsAuthenticated])
+def system_whatsapp_inbox_list(request):
+    from rest_framework.response import Response as DRFResponse
+    from whatsapp.services import (
+        serialize_whatsapp_inbox_conversation,
+        serialize_whatsapp_inbox_summary,
+    )
+    if not _system_whatsapp_inbox_can_view(request.user):
+        return _system_whatsapp_inbox_forbidden()
+    queryset = _system_whatsapp_inbox_queryset()
+    status_value = str(request.GET.get("status") or "").upper().strip()
+    if status_value:
+        queryset = queryset.filter(status=status_value)
+    search = str(request.GET.get("search") or "").strip()
+    if search:
+        queryset = queryset.filter(
+            models.Q(contact__display_name__icontains=search)
+            | models.Q(contact__push_name__icontains=search)
+            | models.Q(contact__normalized_phone__icontains=search)
+            | models.Q(contact__whatsapp_jid__icontains=search)
+            | models.Q(last_message_preview__icontains=search)
+        )
+    unread = str(request.GET.get("unread") or "").lower().strip()
+    if unread in {"1", "true", "yes"}:
+        queryset = queryset.filter(unread_count__gt=0)
+    page = _parse_positive_int(request.GET.get("page"), default=1, maximum=100000)
+    page_size = _parse_positive_int(request.GET.get("page_size"), default=25, maximum=100)
+    total = queryset.count()
+    offset = (page - 1) * page_size
+    items = list(queryset[offset:offset + page_size])
+    return DRFResponse(
+        {
+            "success": True,
+            "message": "System WhatsApp inbox conversations loaded successfully.",
+            "summary": serialize_whatsapp_inbox_summary(scope="SYSTEM", session_name="primeyacc-system-session"),
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total": total,
+                "has_next": offset + page_size < total,
+            },
+            "conversations": [
+                serialize_whatsapp_inbox_conversation(item)
+                for item in items
+            ],
+        }
+    )
+@_whatsapp_inbox_api_view(["GET"])
+@_whatsapp_inbox_permission_classes([_WhatsAppInboxIsAuthenticated])
+def system_whatsapp_inbox_detail(request, conversation_id: int):
+    from rest_framework import status as drf_status
+    from rest_framework.response import Response as DRFResponse
+    from whatsapp.services import serialize_whatsapp_inbox_conversation
+    if not _system_whatsapp_inbox_can_view(request.user):
+        return _system_whatsapp_inbox_forbidden()
+    conversation = _system_whatsapp_inbox_queryset().filter(id=conversation_id).first()
+    if conversation is None:
+        return DRFResponse(
+            {
+                "success": False,
+                "message": "WhatsApp inbox conversation was not found.",
+            },
+            status=drf_status.HTTP_404_NOT_FOUND,
+        )
+    return DRFResponse(
+        {
+            "success": True,
+            "message": "System WhatsApp inbox conversation loaded successfully.",
+            "conversation": serialize_whatsapp_inbox_conversation(conversation),
+        }
+    )
+@_whatsapp_inbox_api_view(["GET"])
+@_whatsapp_inbox_permission_classes([_WhatsAppInboxIsAuthenticated])
+def system_whatsapp_inbox_messages(request, conversation_id: int):
+    from rest_framework import status as drf_status
+    from rest_framework.response import Response as DRFResponse
+    from whatsapp.services import (
+        serialize_whatsapp_inbox_conversation,
+        serialize_whatsapp_inbox_message,
+    )
+    if not _system_whatsapp_inbox_can_view(request.user):
+        return _system_whatsapp_inbox_forbidden()
+    conversation = _system_whatsapp_inbox_queryset().filter(id=conversation_id).first()
+    if conversation is None:
+        return DRFResponse(
+            {
+                "success": False,
+                "message": "WhatsApp inbox conversation was not found.",
+            },
+            status=drf_status.HTTP_404_NOT_FOUND,
+        )
+    messages = (
+        conversation.messages
+        .select_related("contact", "sent_by")
+        .order_by("created_at", "id")
+    )
+    conversation.unread_count = 0
+    conversation.save(update_fields=["unread_count", "updated_at"])
+    return DRFResponse(
+        {
+            "success": True,
+            "message": "System WhatsApp inbox messages loaded successfully.",
+            "conversation": serialize_whatsapp_inbox_conversation(conversation),
+            "messages": [
+                serialize_whatsapp_inbox_message(item)
+                for item in messages
+            ],
+        }
+    )
+@_whatsapp_inbox_api_view(["POST"])
+@_whatsapp_inbox_permission_classes([_WhatsAppInboxIsAuthenticated])
+def system_whatsapp_inbox_reply(request, conversation_id: int):
+    from rest_framework import status as drf_status
+    from rest_framework.response import Response as DRFResponse
+    from whatsapp.services import send_system_whatsapp_inbox_reply
+    if not _system_whatsapp_inbox_can_manage(request.user):
+        return _system_whatsapp_inbox_forbidden("You do not have permission to reply to system WhatsApp inbox conversations.")
+    conversation = _system_whatsapp_inbox_queryset().filter(id=conversation_id).first()
+    if conversation is None:
+        return DRFResponse(
+            {
+                "success": False,
+                "message": "WhatsApp inbox conversation was not found.",
+            },
+            status=drf_status.HTTP_404_NOT_FOUND,
+        )
+    body = str(request.data.get("body") or request.data.get("message") or request.data.get("text") or "").strip()
+    if not body:
+        return DRFResponse(
+            {
+                "success": False,
+                "message": "Reply body is required.",
+                "errors": {"body": "Reply body is required."},
+            },
+            status=drf_status.HTTP_400_BAD_REQUEST,
+        )
+    try:
+        payload = send_system_whatsapp_inbox_reply(
+            conversation=conversation,
+            body=body,
+            user=request.user,
+        )
+    except ValueError as exc:
+        return DRFResponse(
+            {
+                "success": False,
+                "message": str(exc),
+                "errors": {"detail": str(exc)},
+            },
+            status=drf_status.HTTP_400_BAD_REQUEST,
+        )
+    http_status = drf_status.HTTP_200_OK if payload.get("success") else drf_status.HTTP_502_BAD_GATEWAY
+    return DRFResponse(payload, status=http_status)
