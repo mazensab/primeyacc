@@ -1177,3 +1177,339 @@ def system_whatsapp_send_test_message(
         "connection": serialize_system_whatsapp_connection(connection),
         "message_log": serialize_whatsapp_message_log(message_log),
     }
+
+# ============================================================
+# WhatsApp Inbox Foundation Services
+# ============================================================
+def _normalize_whatsapp_inbox_phone(value) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    raw = raw.split("@", 1)[0]
+    raw = raw.split(":", 1)[0]
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    if not digits:
+        return ""
+    if digits.startswith("00"):
+        digits = digits[2:]
+    if digits.startswith("0") and len(digits) == 10:
+        digits = "966" + digits[1:]
+    if len(digits) == 9 and digits.startswith("5"):
+        digits = "966" + digits
+    return digits
+def _parse_whatsapp_inbox_datetime(value):
+    from datetime import datetime
+    from django.utils import timezone
+    if value in (None, ""):
+        return None
+    if isinstance(value, (int, float)):
+        candidate = float(value)
+        if candidate > 10_000_000_000:
+            candidate = candidate / 1000
+        return datetime.fromtimestamp(candidate, tz=timezone.get_current_timezone())
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if timezone.is_naive(parsed):
+            parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+        return parsed
+    except ValueError:
+        return None
+def _whatsapp_inbox_safe_dict(value) -> dict:
+    return value if isinstance(value, dict) else {}
+def _whatsapp_inbox_event_uid(payload: dict) -> str:
+    import hashlib
+    import json
+    session_name = str(payload.get("session_name") or "primeyacc-system-session")
+    message_id = str(
+        payload.get("message_id")
+        or payload.get("external_message_id")
+        or payload.get("id")
+        or ""
+    ).strip()
+    if message_id:
+        return f"{session_name}:{message_id}"
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
+    return f"{session_name}:{hashlib.sha256(raw.encode('utf-8')).hexdigest()}"
+def serialize_whatsapp_inbox_contact(contact) -> dict:
+    return {
+        "id": contact.id,
+        "scope": contact.scope,
+        "company_id": contact.company_id,
+        "session_name": contact.session_name,
+        "phone_number": contact.phone_number,
+        "normalized_phone": contact.normalized_phone,
+        "whatsapp_jid": contact.whatsapp_jid,
+        "display_name": contact.display_name,
+        "push_name": contact.push_name,
+        "last_seen_at": contact.last_seen_at.isoformat() if contact.last_seen_at else None,
+        "metadata": contact.metadata or {},
+        "created_at": contact.created_at.isoformat() if contact.created_at else None,
+        "updated_at": contact.updated_at.isoformat() if contact.updated_at else None,
+    }
+def serialize_whatsapp_inbox_message(message) -> dict:
+    return {
+        "id": message.id,
+        "conversation_id": message.conversation_id,
+        "contact_id": message.contact_id,
+        "company_id": message.company_id,
+        "scope": message.scope,
+        "session_name": message.session_name,
+        "direction": message.direction,
+        "status": message.status,
+        "message_type": message.message_type,
+        "body": message.body,
+        "external_message_id": message.external_message_id,
+        "provider": message.provider,
+        "provider_response": message.provider_response or {},
+        "sent_by_id": message.sent_by_id,
+        "received_at": message.received_at.isoformat() if message.received_at else None,
+        "sent_at": message.sent_at.isoformat() if message.sent_at else None,
+        "metadata": message.metadata or {},
+        "created_at": message.created_at.isoformat() if message.created_at else None,
+        "updated_at": message.updated_at.isoformat() if message.updated_at else None,
+    }
+def serialize_whatsapp_inbox_conversation(conversation, *, include_contact: bool = True) -> dict:
+    payload = {
+        "id": conversation.id,
+        "scope": conversation.scope,
+        "company_id": conversation.company_id,
+        "contact_id": conversation.contact_id,
+        "session_name": conversation.session_name,
+        "status": conversation.status,
+        "is_pinned": conversation.is_pinned,
+        "is_resolved": conversation.is_resolved,
+        "assigned_to_id": conversation.assigned_to_id,
+        "assigned_to_name": (
+            conversation.assigned_to.get_full_name()
+            or conversation.assigned_to.get_username()
+            if conversation.assigned_to_id and conversation.assigned_to
+            else ""
+        ),
+        "last_message_preview": conversation.last_message_preview,
+        "last_message_at": conversation.last_message_at.isoformat() if conversation.last_message_at else None,
+        "unread_count": conversation.unread_count,
+        "metadata": conversation.metadata or {},
+        "created_at": conversation.created_at.isoformat() if conversation.created_at else None,
+        "updated_at": conversation.updated_at.isoformat() if conversation.updated_at else None,
+    }
+    if include_contact:
+        payload["contact"] = serialize_whatsapp_inbox_contact(conversation.contact)
+    return payload
+def serialize_whatsapp_inbox_summary(*, scope: str = "SYSTEM", company=None, session_name: str = "primeyacc-system-session") -> dict:
+    from django.apps import apps
+    Conversation = apps.get_model("whatsapp", "WhatsAppConversation")
+    queryset = Conversation.objects.filter(scope=scope, session_name=session_name)
+    if company is not None:
+        queryset = queryset.filter(company=company)
+    elif scope == "SYSTEM":
+        queryset = queryset.filter(company__isnull=True)
+    return {
+        "scope": scope,
+        "company_id": getattr(company, "id", None),
+        "session_name": session_name,
+        "total_conversations": queryset.count(),
+        "open_conversations": queryset.filter(status="OPEN").count(),
+        "closed_conversations": queryset.filter(status="CLOSED").count(),
+        "archived_conversations": queryset.filter(status="ARCHIVED").count(),
+        "spam_conversations": queryset.filter(status="SPAM").count(),
+        "unread_conversations": queryset.filter(unread_count__gt=0).count(),
+        "resolved_conversations": queryset.filter(is_resolved=True).count(),
+        "pinned_conversations": queryset.filter(is_pinned=True).count(),
+    }
+def record_system_whatsapp_incoming_message(payload: dict) -> dict:
+    """
+    Record an inbound WhatsApp Gateway message into the system inbox.
+    This function is idempotent by session_name + message_id/event_uid.
+    It does not trust frontend company_id and stores system-level inbox rows
+    with company=NULL.
+    """
+    from django.apps import apps
+    from django.db import transaction
+    from django.utils import timezone
+    if not isinstance(payload, dict):
+        raise ValueError("Incoming WhatsApp payload must be a dictionary.")
+    Contact = apps.get_model("whatsapp", "WhatsAppContact")
+    Conversation = apps.get_model("whatsapp", "WhatsAppConversation")
+    Message = apps.get_model("whatsapp", "WhatsAppConversationMessage")
+    WebhookEvent = apps.get_model("whatsapp", "WhatsAppWebhookEvent")
+    session_name = str(payload.get("session_name") or "primeyacc-system-session").strip()
+    from_jid = str(
+        payload.get("from_jid")
+        or payload.get("remote_jid")
+        or payload.get("jid")
+        or payload.get("from")
+        or ""
+    ).strip()
+    from_phone = str(payload.get("from_phone") or payload.get("phone_number") or "").strip()
+    normalized_phone = _normalize_whatsapp_inbox_phone(from_phone or from_jid)
+    if not normalized_phone:
+        raise ValueError("Incoming WhatsApp phone/JID could not be resolved.")
+    message_id = str(
+        payload.get("message_id")
+        or payload.get("external_message_id")
+        or payload.get("id")
+        or ""
+    ).strip()
+    body = str(
+        payload.get("body")
+        or payload.get("message")
+        or payload.get("text")
+        or payload.get("message_body")
+        or ""
+    )
+    push_name = str(payload.get("push_name") or payload.get("pushName") or "").strip()
+    display_name = str(payload.get("display_name") or payload.get("name") or push_name or normalized_phone).strip()
+    event_uid = str(payload.get("event_uid") or _whatsapp_inbox_event_uid(payload)).strip()
+    message_at = (
+        _parse_whatsapp_inbox_datetime(payload.get("timestamp"))
+        or _parse_whatsapp_inbox_datetime(payload.get("messageTimestamp"))
+        or timezone.now()
+    )
+    with transaction.atomic():
+        webhook_event, event_created = WebhookEvent.objects.get_or_create(
+            event_uid=event_uid,
+            defaults={
+                "session_name": session_name,
+                "event_type": str(payload.get("event_type") or "message.incoming"),
+                "status": "RECEIVED",
+                "external_message_id": message_id,
+                "payload": payload,
+            },
+        )
+        existing_message = None
+        if message_id:
+            existing_message = Message.objects.filter(
+                scope="SYSTEM",
+                session_name=session_name,
+                external_message_id=message_id,
+            ).select_related("conversation", "contact").first()
+        if existing_message:
+            webhook_event.status = "PROCESSED"
+            webhook_event.processed_at = timezone.now()
+            webhook_event.save(update_fields=["status", "processed_at"])
+            return {
+                "success": True,
+                "duplicate": True,
+                "event": {
+                    "id": webhook_event.id,
+                    "event_uid": webhook_event.event_uid,
+                    "status": webhook_event.status,
+                },
+                "contact": serialize_whatsapp_inbox_contact(existing_message.contact),
+                "conversation": serialize_whatsapp_inbox_conversation(existing_message.conversation),
+                "message": serialize_whatsapp_inbox_message(existing_message),
+            }
+        contact = Contact.objects.filter(
+            scope="SYSTEM",
+            company__isnull=True,
+            session_name=session_name,
+            normalized_phone=normalized_phone,
+        ).first()
+        if contact is None:
+            contact = Contact.objects.create(
+                scope="SYSTEM",
+                company=None,
+                session_name=session_name,
+                phone_number=from_phone or normalized_phone,
+                normalized_phone=normalized_phone,
+                whatsapp_jid=from_jid,
+                display_name=display_name,
+                push_name=push_name,
+                last_seen_at=message_at,
+                metadata={
+                    "source": "gateway",
+                    "created_from": "incoming_message",
+                },
+            )
+        else:
+            changed_fields = []
+            if from_jid and contact.whatsapp_jid != from_jid:
+                contact.whatsapp_jid = from_jid
+                changed_fields.append("whatsapp_jid")
+            if display_name and contact.display_name != display_name:
+                contact.display_name = display_name
+                changed_fields.append("display_name")
+            if push_name and contact.push_name != push_name:
+                contact.push_name = push_name
+                changed_fields.append("push_name")
+            contact.last_seen_at = message_at
+            changed_fields.append("last_seen_at")
+            changed_fields.append("updated_at")
+            contact.save(update_fields=changed_fields)
+        conversation = Conversation.objects.filter(
+            scope="SYSTEM",
+            company__isnull=True,
+            session_name=session_name,
+            contact=contact,
+            status__in=["OPEN", "CLOSED"],
+        ).order_by("-last_message_at", "-id").first()
+        if conversation is None:
+            conversation = Conversation.objects.create(
+                scope="SYSTEM",
+                company=None,
+                contact=contact,
+                session_name=session_name,
+                status="OPEN",
+                is_resolved=False,
+                last_message_preview=body[:500],
+                last_message_at=message_at,
+                unread_count=0,
+                metadata={
+                    "source": "gateway",
+                    "created_from": "incoming_message",
+                },
+            )
+        message = Message.objects.create(
+            conversation=conversation,
+            contact=contact,
+            company=None,
+            scope="SYSTEM",
+            session_name=session_name,
+            direction="INBOUND",
+            status="RECEIVED",
+            message_type=str(payload.get("message_type") or "TEXT").upper()[:30] or "TEXT",
+            body=body,
+            external_message_id=message_id,
+            provider="WHATSAPP_GATEWAY",
+            provider_response=payload,
+            received_at=message_at,
+            metadata={
+                "source": "gateway",
+                "event_uid": event_uid,
+                "raw_from_jid": from_jid,
+            },
+        )
+        conversation.last_message_preview = body[:500]
+        conversation.last_message_at = message_at
+        conversation.unread_count = (conversation.unread_count or 0) + 1
+        if conversation.status == "CLOSED":
+            conversation.status = "OPEN"
+            conversation.is_resolved = False
+        conversation.save(
+            update_fields=[
+                "last_message_preview",
+                "last_message_at",
+                "unread_count",
+                "status",
+                "is_resolved",
+                "updated_at",
+            ]
+        )
+        webhook_event.status = "PROCESSED"
+        webhook_event.processed_at = timezone.now()
+        webhook_event.save(update_fields=["status", "processed_at"])
+    return {
+        "success": True,
+        "duplicate": False,
+        "event": {
+            "id": webhook_event.id,
+            "event_uid": webhook_event.event_uid,
+            "status": webhook_event.status,
+        },
+        "contact": serialize_whatsapp_inbox_contact(contact),
+        "conversation": serialize_whatsapp_inbox_conversation(conversation),
+        "message": serialize_whatsapp_inbox_message(message),
+    }

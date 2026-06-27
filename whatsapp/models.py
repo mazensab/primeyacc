@@ -808,3 +808,394 @@ class WhatsAppMessageLog(models.Model):
                 "updated_at",
             ]
         )
+
+class WhatsAppInboxScope(models.TextChoices):
+    SYSTEM = "SYSTEM", "System"
+    COMPANY = "COMPANY", "Company"
+class WhatsAppConversationStatus(models.TextChoices):
+    OPEN = "OPEN", "Open"
+    CLOSED = "CLOSED", "Closed"
+    ARCHIVED = "ARCHIVED", "Archived"
+    SPAM = "SPAM", "Spam"
+class WhatsAppConversationMessageStatus(models.TextChoices):
+    RECEIVED = "RECEIVED", "Received"
+    QUEUED = "QUEUED", "Queued"
+    SENT = "SENT", "Sent"
+    DELIVERED = "DELIVERED", "Delivered"
+    READ = "READ", "Read"
+    FAILED = "FAILED", "Failed"
+class WhatsAppConversationMessageType(models.TextChoices):
+    TEXT = "TEXT", "Text"
+    IMAGE = "IMAGE", "Image"
+    AUDIO = "AUDIO", "Audio"
+    VIDEO = "VIDEO", "Video"
+    DOCUMENT = "DOCUMENT", "Document"
+    STICKER = "STICKER", "Sticker"
+    LOCATION = "LOCATION", "Location"
+    CONTACT = "CONTACT", "Contact"
+    UNKNOWN = "UNKNOWN", "Unknown"
+class WhatsAppWebhookEventStatus(models.TextChoices):
+    RECEIVED = "RECEIVED", "Received"
+    PROCESSED = "PROCESSED", "Processed"
+    FAILED = "FAILED", "Failed"
+    IGNORED = "IGNORED", "Ignored"
+class WhatsAppContact(models.Model):
+    """
+    WhatsApp contact identity for system/company inbox conversations.
+    """
+    scope = models.CharField(
+        max_length=30,
+        choices=WhatsAppInboxScope.choices,
+        default=WhatsAppInboxScope.SYSTEM,
+        db_index=True,
+        verbose_name="Inbox scope",
+    )
+    company = models.ForeignKey(
+        "companies.Company",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="whatsapp_inbox_contacts",
+        verbose_name="Company",
+    )
+    session_name = models.CharField(
+        max_length=120,
+        default="primeyacc-system-session",
+        db_index=True,
+        verbose_name="Session name",
+    )
+    phone_number = models.CharField(
+        max_length=50,
+        blank=True,
+        db_index=True,
+        verbose_name="Phone number",
+    )
+    normalized_phone = models.CharField(
+        max_length=50,
+        blank=True,
+        db_index=True,
+        verbose_name="Normalized phone",
+    )
+    whatsapp_jid = models.CharField(
+        max_length=180,
+        blank=True,
+        db_index=True,
+        verbose_name="WhatsApp JID",
+    )
+    display_name = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Display name",
+    )
+    push_name = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="WhatsApp push name",
+    )
+    last_seen_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Last seen at",
+    )
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Metadata",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+    class Meta:
+        verbose_name = "WhatsApp contact"
+        verbose_name_plural = "WhatsApp contacts"
+        indexes = [
+            models.Index(fields=["scope", "session_name", "normalized_phone"]),
+            models.Index(fields=["scope", "company", "updated_at"]),
+        ]
+    def __str__(self) -> str:
+        return self.display_name or self.push_name or self.normalized_phone or self.whatsapp_jid or f"WhatsApp contact #{self.pk}"
+class WhatsAppConversation(models.Model):
+    """
+    Inbox conversation linked to a WhatsApp contact.
+    """
+    scope = models.CharField(
+        max_length=30,
+        choices=WhatsAppInboxScope.choices,
+        default=WhatsAppInboxScope.SYSTEM,
+        db_index=True,
+        verbose_name="Inbox scope",
+    )
+    company = models.ForeignKey(
+        "companies.Company",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="whatsapp_inbox_conversations",
+        verbose_name="Company",
+    )
+    contact = models.ForeignKey(
+        WhatsAppContact,
+        on_delete=models.CASCADE,
+        related_name="conversations",
+        verbose_name="Contact",
+    )
+    session_name = models.CharField(
+        max_length=120,
+        default="primeyacc-system-session",
+        db_index=True,
+        verbose_name="Session name",
+    )
+    status = models.CharField(
+        max_length=30,
+        choices=WhatsAppConversationStatus.choices,
+        default=WhatsAppConversationStatus.OPEN,
+        db_index=True,
+        verbose_name="Status",
+    )
+    is_pinned = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="Pinned",
+    )
+    is_resolved = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="Resolved",
+    )
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_whatsapp_conversations",
+        verbose_name="Assigned to",
+    )
+    last_message_preview = models.CharField(
+        max_length=500,
+        blank=True,
+        verbose_name="Last message preview",
+    )
+    last_message_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Last message at",
+    )
+    unread_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Unread count",
+    )
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Metadata",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+    class Meta:
+        verbose_name = "WhatsApp conversation"
+        verbose_name_plural = "WhatsApp conversations"
+        indexes = [
+            models.Index(fields=["scope", "session_name", "status", "last_message_at"]),
+            models.Index(fields=["scope", "is_pinned", "last_message_at"]),
+            models.Index(fields=["scope", "is_resolved", "last_message_at"]),
+        ]
+    def __str__(self) -> str:
+        return f"{self.contact} — {self.status}"
+class WhatsAppConversationMessage(models.Model):
+    """
+    Message stored inside a WhatsApp inbox conversation.
+    """
+    conversation = models.ForeignKey(
+        WhatsAppConversation,
+        on_delete=models.CASCADE,
+        related_name="messages",
+        verbose_name="Conversation",
+    )
+    contact = models.ForeignKey(
+        WhatsAppContact,
+        on_delete=models.CASCADE,
+        related_name="messages",
+        verbose_name="Contact",
+    )
+    company = models.ForeignKey(
+        "companies.Company",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="whatsapp_inbox_messages",
+        verbose_name="Company",
+    )
+    scope = models.CharField(
+        max_length=30,
+        choices=WhatsAppInboxScope.choices,
+        default=WhatsAppInboxScope.SYSTEM,
+        db_index=True,
+        verbose_name="Inbox scope",
+    )
+    session_name = models.CharField(
+        max_length=120,
+        default="primeyacc-system-session",
+        db_index=True,
+        verbose_name="Session name",
+    )
+    direction = models.CharField(
+        max_length=30,
+        choices=WhatsAppMessageDirection.choices,
+        default=WhatsAppMessageDirection.INBOUND,
+        db_index=True,
+        verbose_name="Direction",
+    )
+    status = models.CharField(
+        max_length=30,
+        choices=WhatsAppConversationMessageStatus.choices,
+        default=WhatsAppConversationMessageStatus.RECEIVED,
+        db_index=True,
+        verbose_name="Status",
+    )
+    message_type = models.CharField(
+        max_length=30,
+        choices=WhatsAppConversationMessageType.choices,
+        default=WhatsAppConversationMessageType.TEXT,
+        db_index=True,
+        verbose_name="Message type",
+    )
+    body = models.TextField(
+        blank=True,
+        verbose_name="Body",
+    )
+    external_message_id = models.CharField(
+        max_length=255,
+        blank=True,
+        db_index=True,
+        verbose_name="External message ID",
+    )
+    provider = models.CharField(
+        max_length=80,
+        default="WHATSAPP_GATEWAY",
+        verbose_name="Provider",
+    )
+    provider_response = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Provider response",
+    )
+    sent_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sent_whatsapp_inbox_messages",
+        verbose_name="Sent by",
+    )
+    received_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Received at",
+    )
+    sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Sent at",
+    )
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Metadata",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Created at",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+    class Meta:
+        verbose_name = "WhatsApp conversation message"
+        verbose_name_plural = "WhatsApp conversation messages"
+        indexes = [
+            models.Index(fields=["scope", "session_name", "direction", "created_at"]),
+            models.Index(fields=["conversation", "created_at"]),
+            models.Index(fields=["external_message_id"]),
+        ]
+    def __str__(self) -> str:
+        return f"{self.direction} {self.status} — {self.body[:60]}"
+class WhatsAppWebhookEvent(models.Model):
+    """
+    Raw incoming gateway webhook event for idempotency and audit.
+    """
+    event_uid = models.CharField(
+        max_length=255,
+        unique=True,
+        verbose_name="Event UID",
+    )
+    session_name = models.CharField(
+        max_length=120,
+        default="primeyacc-system-session",
+        db_index=True,
+        verbose_name="Session name",
+    )
+    event_type = models.CharField(
+        max_length=80,
+        default="message.incoming",
+        db_index=True,
+        verbose_name="Event type",
+    )
+    status = models.CharField(
+        max_length=30,
+        choices=WhatsAppWebhookEventStatus.choices,
+        default=WhatsAppWebhookEventStatus.RECEIVED,
+        db_index=True,
+        verbose_name="Status",
+    )
+    external_message_id = models.CharField(
+        max_length=255,
+        blank=True,
+        db_index=True,
+        verbose_name="External message ID",
+    )
+    payload = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Payload",
+    )
+    error_message = models.TextField(
+        blank=True,
+        verbose_name="Error message",
+    )
+    received_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Received at",
+    )
+    processed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Processed at",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Created at",
+    )
+    class Meta:
+        verbose_name = "WhatsApp webhook event"
+        verbose_name_plural = "WhatsApp webhook events"
+        indexes = [
+            models.Index(fields=["session_name", "status", "created_at"]),
+            models.Index(fields=["external_message_id"]),
+        ]
+    def __str__(self) -> str:
+        return f"{self.event_type} — {self.status} — {self.event_uid}"

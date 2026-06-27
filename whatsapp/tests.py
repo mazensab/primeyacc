@@ -948,3 +948,73 @@ class SystemWhatsAppReadyTemplateSeedTests(TestCase):
         self.assertEqual(invoice_pdf.metadata["module"], "billing")
         self.assertEqual(invoice_pdf.metadata["i18n"]["ar"]["name"], "إرسال PDF الفاتورة")
         self.assertEqual(invoice_pdf.metadata["i18n"]["en"]["name"], "Invoice PDF ready")
+
+from django.test import TestCase as WhatsAppInboxDjangoTestCase
+class WhatsAppInboxFoundationTests(WhatsAppInboxDjangoTestCase):
+    def test_record_system_incoming_message_creates_contact_conversation_message_and_event(self):
+        from whatsapp.models import (
+            WhatsAppContact,
+            WhatsAppConversation,
+            WhatsAppConversationMessage,
+            WhatsAppWebhookEvent,
+        )
+        from whatsapp.services import record_system_whatsapp_incoming_message
+        payload = {
+            "session_name": "primeyacc-system-session",
+            "from_jid": "966501234567@s.whatsapp.net",
+            "from_phone": "0501234567",
+            "push_name": "زائر تجربة",
+            "message_id": "MSG-INBOX-TEST-001",
+            "body": "السلام عليكم، أحتاج تجربة محادثة واتساب من العائمة.",
+            "timestamp": "2026-06-27T18:30:00+03:00",
+            "metadata": {"source": "landing_widget"},
+        }
+        result = record_system_whatsapp_incoming_message(payload)
+        self.assertTrue(result["success"])
+        self.assertFalse(result["duplicate"])
+        self.assertEqual(WhatsAppContact.objects.count(), 1)
+        self.assertEqual(WhatsAppConversation.objects.count(), 1)
+        self.assertEqual(WhatsAppConversationMessage.objects.count(), 1)
+        self.assertEqual(WhatsAppWebhookEvent.objects.count(), 1)
+        contact = WhatsAppContact.objects.get()
+        conversation = WhatsAppConversation.objects.get()
+        message = WhatsAppConversationMessage.objects.get()
+        event = WhatsAppWebhookEvent.objects.get()
+        self.assertEqual(contact.scope, "SYSTEM")
+        self.assertIsNone(contact.company_id)
+        self.assertEqual(contact.normalized_phone, "966501234567")
+        self.assertEqual(contact.push_name, "زائر تجربة")
+        self.assertEqual(conversation.scope, "SYSTEM")
+        self.assertEqual(conversation.status, "OPEN")
+        self.assertEqual(conversation.unread_count, 1)
+        self.assertIn("السلام عليكم", conversation.last_message_preview)
+        self.assertEqual(message.direction, "INBOUND")
+        self.assertEqual(message.status, "RECEIVED")
+        self.assertEqual(message.external_message_id, "MSG-INBOX-TEST-001")
+        self.assertIn("تجربة محادثة", message.body)
+        self.assertEqual(event.status, "PROCESSED")
+        self.assertEqual(event.external_message_id, "MSG-INBOX-TEST-001")
+    def test_record_system_incoming_message_is_idempotent_by_message_id(self):
+        from whatsapp.models import (
+            WhatsAppContact,
+            WhatsAppConversation,
+            WhatsAppConversationMessage,
+            WhatsAppWebhookEvent,
+        )
+        from whatsapp.services import record_system_whatsapp_incoming_message
+        payload = {
+            "session_name": "primeyacc-system-session",
+            "from_jid": "966501234567@s.whatsapp.net",
+            "message_id": "MSG-INBOX-TEST-002",
+            "body": "رسالة مكررة للاختبار.",
+        }
+        first = record_system_whatsapp_incoming_message(payload)
+        second = record_system_whatsapp_incoming_message(payload)
+        self.assertTrue(first["success"])
+        self.assertTrue(second["success"])
+        self.assertFalse(first["duplicate"])
+        self.assertTrue(second["duplicate"])
+        self.assertEqual(WhatsAppContact.objects.count(), 1)
+        self.assertEqual(WhatsAppConversation.objects.count(), 1)
+        self.assertEqual(WhatsAppConversationMessage.objects.count(), 1)
+        self.assertEqual(WhatsAppWebhookEvent.objects.count(), 1)
