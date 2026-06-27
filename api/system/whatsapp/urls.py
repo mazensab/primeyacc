@@ -13,6 +13,7 @@ from .views import (
     system_whatsapp_connection_qr,
     system_whatsapp_connection_status,
     system_whatsapp_connection_test,
+    system_whatsapp_inbox_webhook,
     system_whatsapp_message_detail,
     system_whatsapp_messages_list,
     system_whatsapp_overview,
@@ -36,4 +37,5 @@ urlpatterns = [
     path("templates/<int:template_id>/status/", system_whatsapp_template_status, name="template-status"),
     path("messages/", system_whatsapp_messages_list, name="messages"),
     path("messages/<int:message_id>/", system_whatsapp_message_detail, name="message-detail"),
+    path("inbox/webhook/", system_whatsapp_inbox_webhook, name="inbox-webhook"),
 ]

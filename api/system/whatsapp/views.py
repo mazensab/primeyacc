@@ -581,3 +581,84 @@ def system_whatsapp_connection_test(request):
         )
     return Response(payload)
 
+# ============================================================
+# System WhatsApp Inbox Webhook API
+# ============================================================
+from django.views.decorators.csrf import csrf_exempt as _whatsapp_inbox_csrf_exempt
+from rest_framework.decorators import api_view as _whatsapp_inbox_api_view
+from rest_framework.decorators import permission_classes as _whatsapp_inbox_permission_classes
+from rest_framework.permissions import AllowAny as _WhatsAppInboxAllowAny
+@_whatsapp_inbox_csrf_exempt
+@_whatsapp_inbox_api_view(["POST"])
+@_whatsapp_inbox_permission_classes([_WhatsAppInboxAllowAny])
+def system_whatsapp_inbox_webhook(request):
+    """
+    Internal webhook used by the local WhatsApp Session Gateway.
+    Security model:
+    - In production, set WHATSAPP_INCOMING_WEBHOOK_TOKEN and send it in:
+      X-PrimeyAcc-Webhook-Token.
+    - In DEBUG development mode, the endpoint accepts local gateway calls
+      without a token to keep local testing simple.
+    """
+    import hmac
+    import os
+    from django.conf import settings
+    from rest_framework import status as drf_status
+    from rest_framework.response import Response as DRFResponse
+    from whatsapp.services import record_system_whatsapp_incoming_message
+    required_token = str(
+        getattr(settings, "WHATSAPP_INCOMING_WEBHOOK_TOKEN", "")
+        or os.environ.get("WHATSAPP_INCOMING_WEBHOOK_TOKEN", "")
+        or ""
+    ).strip()
+    provided_token = str(
+        request.headers.get("X-PrimeyAcc-Webhook-Token")
+        or request.headers.get("X-Webhook-Token")
+        or request.query_params.get("token")
+        or ""
+    ).strip()
+    if required_token and not hmac.compare_digest(provided_token, required_token):
+        return DRFResponse(
+            {
+                "ok": False,
+                "success": False,
+                "message": "Invalid WhatsApp incoming webhook token.",
+            },
+            status=drf_status.HTTP_403_FORBIDDEN,
+        )
+    if not required_token and not settings.DEBUG:
+        return DRFResponse(
+            {
+                "ok": False,
+                "success": False,
+                "message": "WhatsApp incoming webhook token is required in production.",
+            },
+            status=drf_status.HTTP_403_FORBIDDEN,
+        )
+    data = request.data if isinstance(request.data, dict) else {}
+    try:
+        payload = record_system_whatsapp_incoming_message(data)
+    except (ValueError, TypeError) as exc:
+        return DRFResponse(
+            {
+                "ok": False,
+                "success": False,
+                "message": "Invalid incoming WhatsApp webhook payload.",
+                "errors": {"detail": str(exc)},
+            },
+            status=drf_status.HTTP_400_BAD_REQUEST,
+        )
+    http_status = (
+        drf_status.HTTP_200_OK
+        if payload.get("duplicate")
+        else drf_status.HTTP_201_CREATED
+    )
+    return DRFResponse(
+        {
+            "ok": True,
+            "success": True,
+            "message": "Incoming WhatsApp message recorded successfully.",
+            **payload,
+        },
+        status=http_status,
+    )

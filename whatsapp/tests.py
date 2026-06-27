@@ -1018,3 +1018,75 @@ class WhatsAppInboxFoundationTests(WhatsAppInboxDjangoTestCase):
         self.assertEqual(WhatsAppConversation.objects.count(), 1)
         self.assertEqual(WhatsAppConversationMessage.objects.count(), 1)
         self.assertEqual(WhatsAppWebhookEvent.objects.count(), 1)
+
+from django.test import Client as SystemWhatsAppInboxWebhookClient
+from django.test import TestCase as SystemWhatsAppInboxWebhookDjangoTestCase
+from django.test import override_settings as system_whatsapp_inbox_override_settings
+class SystemWhatsAppInboxWebhookAPITests(SystemWhatsAppInboxWebhookDjangoTestCase):
+    @system_whatsapp_inbox_override_settings(DEBUG=True)
+    def test_system_whatsapp_inbox_webhook_records_incoming_message(self):
+        import json
+        from whatsapp.models import (
+            WhatsAppContact,
+            WhatsAppConversation,
+            WhatsAppConversationMessage,
+            WhatsAppWebhookEvent,
+        )
+        client = SystemWhatsAppInboxWebhookClient()
+        response = client.post(
+            "/api/system/whatsapp/inbox/webhook/",
+            data=json.dumps(
+                {
+                    "session_name": "primeyacc-system-session",
+                    "from_jid": "966502222333@s.whatsapp.net",
+                    "from_phone": "0502222333",
+                    "push_name": "زائر من الواتساب",
+                    "message_id": "WEBHOOK-INBOX-TEST-001",
+                    "body": "رسالة واردة من Gateway إلى Django.",
+                    "timestamp": "2026-06-27T19:00:00+03:00",
+                },
+                ensure_ascii=False,
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertTrue(payload["success"])
+        self.assertFalse(payload["duplicate"])
+        self.assertEqual(WhatsAppContact.objects.count(), 1)
+        self.assertEqual(WhatsAppConversation.objects.count(), 1)
+        self.assertEqual(WhatsAppConversationMessage.objects.count(), 1)
+        self.assertEqual(WhatsAppWebhookEvent.objects.count(), 1)
+        message = WhatsAppConversationMessage.objects.get()
+        self.assertEqual(message.direction, "INBOUND")
+        self.assertEqual(message.external_message_id, "WEBHOOK-INBOX-TEST-001")
+        self.assertIn("Gateway", message.body)
+    @system_whatsapp_inbox_override_settings(DEBUG=True)
+    def test_system_whatsapp_inbox_webhook_is_idempotent(self):
+        import json
+        from whatsapp.models import WhatsAppConversationMessage
+        client = SystemWhatsAppInboxWebhookClient()
+        body = json.dumps(
+            {
+                "session_name": "primeyacc-system-session",
+                "from_jid": "966502222333@s.whatsapp.net",
+                "message_id": "WEBHOOK-INBOX-TEST-002",
+                "body": "رسالة واردة مكررة.",
+            },
+            ensure_ascii=False,
+        )
+        first = client.post(
+            "/api/system/whatsapp/inbox/webhook/",
+            data=body,
+            content_type="application/json",
+        )
+        second = client.post(
+            "/api/system/whatsapp/inbox/webhook/",
+            data=body,
+            content_type="application/json",
+        )
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 200)
+        self.assertFalse(first.json()["duplicate"])
+        self.assertTrue(second.json()["duplicate"])
+        self.assertEqual(WhatsAppConversationMessage.objects.count(), 1)
