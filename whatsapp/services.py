@@ -466,6 +466,43 @@ def send_mock_whatsapp_message(
     return log
 
 
+def _get_system_whatsapp_message_log_company(*, user=None):
+    """
+    Resolve a backend-owned company record for system WhatsApp test logs.
+    WhatsAppMessageLog is company-scoped. For system test messages, use the
+    user's primary active company when available, otherwise use the first
+    active company. No company_id is accepted from the frontend.
+    """
+    try:
+        from django.apps import apps
+        Company = apps.get_model("companies", "Company")
+    except Exception:
+        Company = None
+    if user and getattr(user, "is_authenticated", False):
+        try:
+            for related_name in ("companymembership_set", "memberships", "company_memberships"):
+                manager = getattr(user, related_name, None)
+                if not manager:
+                    continue
+                membership = (
+                    manager.select_related("company")
+                    .filter(company__is_active=True)
+                    .order_by("-is_primary", "id")
+                    .first()
+                )
+                if membership and getattr(membership, "company_id", None):
+                    return membership.company
+        except Exception:
+            pass
+    if Company is not None:
+        company = Company.objects.filter(is_active=True).order_by("id").first()
+        if company:
+            return company
+        company = Company.objects.order_by("id").first()
+        if company:
+            return company
+    raise ValueError("At least one company is required to log system WhatsApp test messages.")
+
 def get_company_message_logs_queryset(
     *,
     company: Company,
@@ -935,8 +972,13 @@ def system_whatsapp_send_test_message(
 ) -> dict[str, Any]:
     connection = get_or_create_system_whatsapp_connection(user=user)
     if not connection.send_test_enabled:
-        raise ValueError("System WhatsApp test sending is disabled.")
-    normalized_phone = normalize_phone_number(
+        return {
+            "success": False,
+            "message": "System WhatsApp test messages are disabled.",
+            "connection": serialize_system_whatsapp_connection(connection),
+            "message_log": None,
+        }
+    phone = normalize_phone_number(
         phone_number=recipient_phone,
         default_country_code=connection.default_country_code,
     )
@@ -945,15 +987,53 @@ def system_whatsapp_send_test_message(
         path="/messages/send-text",
         payload={
             "session_name": connection.session_name,
-            "to_phone": normalized_phone,
+            "to_phone": phone,
             "body": body,
         },
     )
     connection = _sync_system_connection_from_gateway(connection, result)
+    provider_message_id = _system_safe_text(
+        result.get("message_id")
+        or result.get("external_message_id")
+        or result.get("provider_message_id")
+        or result.get("id")
+    )
+    log_company = _get_system_whatsapp_message_log_company(user=user)
+    now = timezone.now()
+    success = bool(result.get("success"))
+    message_log = WhatsAppMessageLog.objects.create(
+        company=log_company,
+        template=None,
+        direction="OUTBOUND",
+        status="SENT" if success else "FAILED",
+        source_type="SYSTEM",
+        source_id=f"system-whatsapp-test-{connection.id}",
+        recipient_name="System WhatsApp Test",
+        recipient_phone=phone,
+        message_body=body,
+        rendered_variables={
+            "system_connection_id": connection.id,
+            "session_name": connection.session_name,
+        },
+        provider=str(connection.provider or "WEB_SESSION"),
+        provider_message_id=provider_message_id if success else "",
+        provider_response=result,
+        error_message=""
+        if success
+        else _system_safe_text(
+            result.get("error_message")
+            or result.get("message")
+            or "System WhatsApp test message failed."
+        ),
+        queued_at=now,
+        sent_at=now if success else None,
+        failed_at=None if success else now,
+        created_by=user if getattr(user, "is_authenticated", False) else None,
+    )
     return {
-        "success": bool(result.get("success")),
+        "success": success,
         "message": _system_safe_text(result.get("message")),
         "result": result,
         "connection": serialize_system_whatsapp_connection(connection),
+        "message_log": serialize_whatsapp_message_log(message_log),
     }
-

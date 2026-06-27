@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIClient
@@ -737,13 +739,33 @@ class SystemWhatsAppConnectionTests(TestCase):
         self.assertTrue(response.data["connection"]["has_webhook_verify_token"])
         self.assertNotIn("access_token", response.data["connection"])
         self.assertNotIn("webhook_verify_token", response.data["connection"])
-    def test_system_whatsapp_connection_status_without_gateway_is_safe(self):
-        response = self.client.post("/api/system/whatsapp/connection/status/", {}, format="json")
+    @patch("whatsapp.services._system_gateway_request")
+    def test_system_whatsapp_connection_status_without_gateway_is_safe(self, mocked_gateway):
+        mocked_gateway.return_value = {
+            "success": False,
+            "message": "System WhatsApp gateway is not configured.",
+            "gateway_configured": False,
+            "provider_status": "gateway_not_configured",
+        }
+        response = self.client.post(
+            "/api/system/whatsapp/connection/status/",
+            {},
+            format="json",
+        )
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.data["success"])
         self.assertIn("connection", response.data)
-        self.assertFalse(response.data["connection"]["gateway_configured"])
-    def test_system_whatsapp_pairing_without_gateway_is_safe(self):
+        self.assertEqual(response.data["result"]["provider_status"], "gateway_not_configured")
+        mocked_gateway.assert_called_once()
+
+    @patch("whatsapp.services._system_gateway_request")
+    def test_system_whatsapp_pairing_without_gateway_is_safe(self, mocked_gateway):
+        mocked_gateway.return_value = {
+            "success": False,
+            "message": "System WhatsApp gateway is not configured.",
+            "gateway_configured": False,
+            "provider_status": "gateway_not_configured",
+        }
         response = self.client.post(
             "/api/system/whatsapp/connection/pairing/",
             {"phone_number": "0500000000"},
@@ -752,5 +774,72 @@ class SystemWhatsAppConnectionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.data["success"])
         self.assertIn("connection", response.data)
-        self.assertFalse(response.data["connection"]["gateway_configured"])
+        self.assertEqual(response.data["result"]["provider_status"], "gateway_not_configured")
+        mocked_gateway.assert_called_once()
+
+class SystemWhatsAppMessageLogTests(TestCase):
+    def setUp(self):
+        self.company = Company.objects.create(
+            name="System WhatsApp Log Company",
+            company_code="WA-SYS-LOG-001",
+            is_active=True,
+        )
+        self.user = User.objects.create_user(
+            username="system_whatsapp_log_user",
+            email="system_whatsapp_log_user@example.com",
+            password="StrongPass123!",
+            is_staff=True,
+        )
+    @patch("whatsapp.services._system_gateway_request")
+    def test_system_whatsapp_send_test_message_creates_message_log(self, mocked_gateway):
+        from whatsapp.services import system_whatsapp_send_test_message
+        mocked_gateway.return_value = {
+            "success": True,
+            "message": "Message accepted by WhatsApp server.",
+            "provider_status": "sent_to_whatsapp_server",
+            "session_status": "connected",
+            "connected": True,
+            "connected_phone": "966505263775",
+            "device_label": "Mazen",
+            "message_id": "wamid.system.test.001",
+            "external_message_id": "wamid.system.test.001",
+            "recipient_jid": "966551559556@s.whatsapp.net",
+            "remote_jid": "966551559556@s.whatsapp.net",
+        }
+        payload = system_whatsapp_send_test_message(
+            recipient_phone="0551559556",
+            message_body="System WhatsApp logged message.",
+            user=self.user,
+        )
+        self.assertTrue(payload["success"])
+        self.assertIn("message_log", payload)
+        log = WhatsAppMessageLog.objects.get(message_body="System WhatsApp logged message.")
+        self.assertEqual(log.company, self.company)
+        self.assertEqual(log.status, WhatsAppMessageStatus.SENT)
+        self.assertEqual(log.source_type, "SYSTEM")
+        self.assertEqual(log.recipient_phone, "+966551559556")
+        self.assertEqual(log.provider_message_id, "wamid.system.test.001")
+        self.assertEqual(log.provider_response["provider_status"], "sent_to_whatsapp_server")
+        self.assertEqual(payload["message_log"]["id"], log.id)
+    @patch("whatsapp.services._system_gateway_request")
+    def test_system_whatsapp_send_test_message_logs_gateway_failure(self, mocked_gateway):
+        from whatsapp.services import system_whatsapp_send_test_message
+        mocked_gateway.return_value = {
+            "success": False,
+            "message": "Gateway failed.",
+            "error_message": "Gateway failed.",
+            "provider_status": "gateway_failed",
+            "session_status": "connected",
+            "connected": True,
+        }
+        payload = system_whatsapp_send_test_message(
+            recipient_phone="0551559556",
+            message_body="System WhatsApp failed message.",
+            user=self.user,
+        )
+        self.assertFalse(payload["success"])
+        log = WhatsAppMessageLog.objects.get(message_body="System WhatsApp failed message.")
+        self.assertEqual(log.status, WhatsAppMessageStatus.FAILED)
+        self.assertEqual(log.error_message, "Gateway failed.")
+        self.assertEqual(log.provider_response["provider_status"], "gateway_failed")
 
