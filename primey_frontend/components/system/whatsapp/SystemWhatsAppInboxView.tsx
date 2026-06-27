@@ -7,7 +7,7 @@
 ✅ Approved Premium pattern matching system companies page
 ✅ Real API only: /api/system/whatsapp/inbox/
 ✅ Arabic/English via primey-locale
-✅ Arabic numerals in Arabic mode + English numerals in English mode
+✅ English digits always in Arabic and English, matching approved companies page
 ✅ Main /system/whatsapp page is Inbox, not dashboard quick-card page
 ✅ No "لوحة النظام / العودة إلى لوحة النظام الرئيسية" card
 ✅ System WhatsApp conversations + messages + reply
@@ -105,12 +105,6 @@ type InboxListPayload = {
     conversations?: InboxConversation[];
     results?: InboxConversation[];
   };
-  pagination?: {
-    page?: number;
-    page_size?: number;
-    total?: number;
-    has_next?: boolean;
-  };
 };
 type InboxMessagesPayload = {
   success?: boolean;
@@ -179,7 +173,6 @@ const translations = {
     outbound: "صادر",
     emptyMessages: "لا توجد رسائل في هذه المحادثة.",
     media: "رسالة وسائط",
-    status: "الحالة",
     latest: "آخر نشاط",
     fromLiveApi: "من واجهات النظام الحقيقية",
     actionsTitle: "صفحات واتساب النظام",
@@ -235,7 +228,6 @@ const translations = {
     outbound: "Outbound",
     emptyMessages: "No messages in this conversation.",
     media: "Media message",
-    status: "Status",
     latest: "Latest activity",
     fromLiveApi: "From real system APIs",
     actionsTitle: "System WhatsApp pages",
@@ -262,37 +254,25 @@ function getCookie(name: string): string {
   if (parts.length !== 2) return "";
   return parts.pop()?.split(";").shift() || "";
 }
-function localizeDigits(value: string, locale: Locale): string {
-  const easternArabicDigits = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
-  const persianDigits = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
-  if (locale === "ar") {
-    return value.replace(/[0-9]/g, (digit) => easternArabicDigits[Number(digit)] || digit);
-  }
-  return value
-    .replace(/[٠-٩]/g, (digit) => String(easternArabicDigits.indexOf(digit)))
-    .replace(/[۰-۹]/g, (digit) => String(persianDigits.indexOf(digit)));
+function formatInteger(value: number): string {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(
+    Math.round(Number.isFinite(value) ? value : 0),
+  );
 }
-function formatNumber(value: number, locale: Locale): string {
-  return new Intl.NumberFormat(
-    locale === "ar" ? "ar-SA-u-nu-arab" : "en-US",
-    { maximumFractionDigits: 0 },
-  ).format(value || 0);
-}
-function formatDate(value: string | null | undefined, locale: Locale): string {
+function formatDate(value?: string | null): string {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  const formatted = new Intl.DateTimeFormat(
-    locale === "ar" ? "ar-SA-u-ca-gregory-nu-arab" : "en-US",
-    {
-      dateStyle: "medium",
-      timeStyle: "short",
-    },
-  ).format(date);
-  return localizeDigits(formatted, locale);
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
-function localizedText(value: string | undefined | null, locale: Locale): string {
-  return localizeDigits(String(value || ""), locale);
+function safeText(value: string | undefined | null): string {
+  return String(value || "");
 }
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
@@ -329,23 +309,23 @@ function pickConversations(payload: InboxListPayload): InboxConversation[] {
 function pickMessages(payload: InboxMessagesPayload): InboxMessage[] {
   return payload.messages || payload.results || payload.data?.messages || payload.data?.results || [];
 }
-function displayName(conversation: InboxConversation | null | undefined, locale: Locale): string {
+function displayName(conversation?: InboxConversation | null): string {
   const contact = conversation?.contact;
-  const value =
+  return (
     contact?.display_name?.trim() ||
     contact?.push_name?.trim() ||
     contact?.phone_number?.trim() ||
     contact?.normalized_phone?.trim() ||
     contact?.whatsapp_jid?.trim() ||
-    `#${conversation?.id || ""}`;
-  return localizedText(value, locale);
+    `#${conversation?.id || ""}`
+  );
 }
-function displayPhone(conversation: InboxConversation | null | undefined, locale: Locale): string {
+function displayPhone(conversation?: InboxConversation | null): string {
   const contact = conversation?.contact;
-  return localizedText(contact?.phone_number || contact?.normalized_phone || "—", locale);
+  return contact?.phone_number || contact?.normalized_phone || "—";
 }
-function displayJid(conversation: InboxConversation | null | undefined, locale: Locale): string {
-  return localizedText(conversation?.contact?.whatsapp_jid || "—", locale);
+function displayJid(conversation?: InboxConversation | null): string {
+  return conversation?.contact?.whatsapp_jid || "—";
 }
 function messageTypeLabel(type: string | undefined, locale: Locale): string {
   const normalized = String(type || "").toUpperCase();
@@ -360,7 +340,7 @@ function messageTypeLabel(type: string | undefined, locale: Locale): string {
 }
 function messageText(message: InboxMessage, locale: Locale): string {
   const body = (message.body || "").trim();
-  if (body) return localizedText(body, locale);
+  if (body) return body;
   const type = (message.message_type || "").trim();
   if (type) return `[${messageTypeLabel(type, locale)}]`;
   return translations[locale].media;
@@ -389,7 +369,7 @@ function deliveryStatusLabel(status: string | undefined, locale: Locale): string
   if (value === "RECEIVED") return t.received;
   if (value === "SENT") return t.sent;
   if (value === "FAILED") return t.failed;
-  return value ? localizedText(value, locale) : "—";
+  return value || "—";
 }
 function directionLabel(direction: string | undefined, locale: Locale): string {
   return direction === "OUTBOUND" ? translations[locale].outbound : translations[locale].inbound;
@@ -407,13 +387,11 @@ function KpiCard({
   value,
   description,
   icon: Icon,
-  locale,
 }: {
   title: string;
   value: number;
   description: string;
   icon: React.ComponentType<{ className?: string }>;
-  locale: Locale;
 }) {
   return (
     <Card className="overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
@@ -421,7 +399,7 @@ function KpiCard({
         <div className="min-w-0">
           <CardDescription className="truncate text-sm">{title}</CardDescription>
           <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
-            {formatNumber(value, locale)}
+            {formatInteger(value)}
           </CardTitle>
         </div>
         <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
@@ -687,28 +665,24 @@ export default function SystemWhatsAppInboxView() {
             value={summary.total_conversations || conversations.length || 0}
             description={t.fromLiveApi}
             icon={Inbox}
-            locale={locale}
           />
           <KpiCard
             title={t.unread}
             value={summary.unread_conversations || 0}
             description={t.fromLiveApi}
             icon={AlertCircle}
-            locale={locale}
           />
           <KpiCard
             title={t.resolved}
             value={summary.resolved_conversations || 0}
             description={t.fromLiveApi}
             icon={CheckCircle2}
-            locale={locale}
           />
           <KpiCard
             title={t.openCount}
             value={summary.open_conversations || 0}
             description={t.fromLiveApi}
             icon={Wifi}
-            locale={locale}
           />
         </div>
         <Card className="rounded-2xl border-border/70 bg-card shadow-sm">
@@ -749,20 +723,20 @@ export default function SystemWhatsAppInboxView() {
                       </Badge>
                       <div>
                         <CardTitle className="text-2xl">
-                          {displayName(selectedConversation, locale)}
+                          {displayName(selectedConversation)}
                         </CardTitle>
                         <CardDescription className="mt-3 grid gap-1 text-xs md:grid-cols-2">
                           <span>
                             <span className="font-semibold text-foreground">{t.phone}: </span>
-                            {displayPhone(selectedConversation, locale)}
+                            {displayPhone(selectedConversation)}
                           </span>
                           <span>
                             <span className="font-semibold text-foreground">{t.latest}: </span>
-                            {formatDate(selectedConversation.last_message_at, locale)}
+                            {formatDate(selectedConversation.last_message_at)}
                           </span>
                           <span className="md:col-span-2">
                             <span className="font-semibold text-foreground">{t.jid}: </span>
-                            {displayJid(selectedConversation, locale)}
+                            {displayJid(selectedConversation)}
                           </span>
                         </CardDescription>
                       </div>
@@ -819,7 +793,7 @@ export default function SystemWhatsAppInboxView() {
                                 {messageText(message, locale)}
                               </p>
                               <p className="mt-3 text-[11px] opacity-70">
-                                {formatDate(message.sent_at || message.received_at || message.created_at, locale)}
+                                {formatDate(message.sent_at || message.received_at || message.created_at)}
                               </p>
                             </div>
                           </div>
@@ -863,7 +837,7 @@ export default function SystemWhatsAppInboxView() {
                 <div>
                   <CardTitle className="text-lg">{t.conversations}</CardTitle>
                   <CardDescription className="mt-1">
-                    {formatNumber(summary.total_conversations || conversations.length || 0, locale)} {t.conversationCount}
+                    {formatInteger(summary.total_conversations || conversations.length || 0)} {t.conversationCount}
                   </CardDescription>
                 </div>
                 <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
@@ -954,27 +928,27 @@ export default function SystemWhatsAppInboxView() {
                           <div className="min-w-0 flex-1">
                             <div className={cn("flex items-center gap-2", locale === "ar" ? "justify-end" : "justify-start")}>
                               <p className="truncate text-sm font-bold">
-                                {displayName(conversation, locale)}
+                                {displayName(conversation)}
                               </p>
                               <UserRound className="h-4 w-4 shrink-0 text-muted-foreground" />
                             </div>
                             <p className="mt-1 truncate text-xs text-muted-foreground">
-                              {displayPhone(conversation, locale)}
+                              {displayPhone(conversation)}
                             </p>
                           </div>
                           {unread > 0 ? (
                             <span className="rounded-full bg-primary px-2 py-1 text-xs font-bold text-primary-foreground">
-                              {formatNumber(unread, locale)}
+                              {formatInteger(unread)}
                             </span>
                           ) : null}
                         </div>
                         <p className="mt-4 line-clamp-2 text-sm leading-7 text-muted-foreground">
                           {conversation.last_message_preview
-                            ? localizedText(conversation.last_message_preview, locale)
+                            ? safeText(conversation.last_message_preview)
                             : t.media}
                         </p>
                         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                          <span>{formatDate(conversation.last_message_at || conversation.updated_at, locale)}</span>
+                          <span>{formatDate(conversation.last_message_at || conversation.updated_at)}</span>
                           <Badge variant="outline" className={cn("rounded-full px-2.5 py-1", statusClass(conversation.status))}>
                             {statusLabel(conversation.status, locale)}
                           </Badge>
