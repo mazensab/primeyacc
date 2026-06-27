@@ -18,14 +18,15 @@ try {
 }
 Write-Host "`n===== Port 3100 Listener =====" -ForegroundColor Cyan
 try {
-  Get-NetTCPConnection -LocalPort 3100 -State Listen -ErrorAction SilentlyContinue |
-    Select-Object LocalAddress, LocalPort, State, OwningProcess
+  $Listeners = Get-NetTCPConnection -LocalPort 3100 -State Listen -ErrorAction SilentlyContinue
+  $Listeners | Select-Object LocalAddress, LocalPort, State, OwningProcess
+  foreach ($Listener in $Listeners) {
+    Get-Process -Id $Listener.OwningProcess -ErrorAction SilentlyContinue |
+      Select-Object Id, ProcessName, Path
+  }
 } catch {
   Write-Host "Could not inspect port 3100: $($_.Exception.Message)" -ForegroundColor Yellow
 }
-Write-Host "`n===== Scheduled Tasks =====" -ForegroundColor Cyan
-schtasks.exe /Query /TN "PrimeyAcc WhatsApp Gateway" /V /FO LIST
-schtasks.exe /Query /TN "PrimeyAcc WhatsApp Gateway Startup" /V /FO LIST
 Write-Host "`n===== Launcher Log =====" -ForegroundColor Cyan
 if (Test-Path $LauncherLog) {
   Get-Content $LauncherLog -Tail 40
