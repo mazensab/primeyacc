@@ -280,6 +280,7 @@ function normalizeTemplate(value: unknown): TemplateRow {
     language: toStringValue(record.language || record.language_code || record.default_language_code, "ar"),
     body: toStringValue(record.body || record.content || record.message_body),
     variables: Array.isArray(variables) ? variables.map((item) => toStringValue(item)).filter(Boolean) : [],
+    metadata: asRecord(record.metadata),
     updatedAt: toStringValue(record.updated_at || record.updatedAt) || null,
   };
 }
