@@ -56,6 +56,7 @@ type TemplateRow = {
   language: string;
   body: string;
   variables: string[];
+  metadata: ApiRecord;
   updatedAt: string | null;
 };
 const ENDPOINT = "/api/system/whatsapp/templates/?limit=100";
@@ -295,6 +296,17 @@ function labelFor(value: string, locale: Locale): string {
   const dictionary = tr[locale] as Record<string, string>;
   return dictionary[value.toUpperCase()] || value || "—";
 }
+
+function localizedTemplateField(item: TemplateRow, locale: Locale, field: "name" | "body"): string {
+  const metadata = asRecord(item.metadata);
+  const i18n = asRecord(metadata.i18n);
+  const current = asRecord(i18n[locale]);
+  const fallback = asRecord(i18n.ar);
+  const localized = toStringValue(current[field]) || toStringValue(fallback[field]);
+  if (localized) return localized;
+  return field === "name" ? item.name : item.body;
+}
+
 function statusBadgeClass(value: string): string {
   const status = value.toUpperCase();
   if (status === "ACTIVE") return "border-emerald-500/30 text-emerald-700";
@@ -406,7 +418,7 @@ export default function SystemWhatsAppTemplatesPage() {
   const filteredTemplates = React.useMemo(() => {
     const filtered = templates.filter((item) => {
       if (lowerSearch) {
-        const haystack = [item.name, item.code, item.category, item.status, item.language, item.body, item.companyName, item.companyCode, ...item.variables]
+        const haystack = [localizedTemplateField(item, locale, "name"), localizedTemplateField(item, locale, "name"), item.code, item.category, item.status, item.language, localizedTemplateField(item, locale, "body"), item.body, item.companyName, item.companyCode, ...item.variables]
           .join(" ")
           .toLowerCase();
         if (!haystack.includes(lowerSearch)) return false;
@@ -417,12 +429,12 @@ export default function SystemWhatsAppTemplatesPage() {
     });
     return filtered.sort((a, b) => {
       if (sortKey === "oldest") return String(a.updatedAt || "").localeCompare(String(b.updatedAt || ""));
-      if (sortKey === "name") return a.name.localeCompare(b.name);
+      if (sortKey === "name") return localizedTemplateField(a, locale, "name").localeCompare(localizedTemplateField(b, locale, "name"));
       if (sortKey === "code") return a.code.localeCompare(b.code);
       if (sortKey === "status") return a.status.localeCompare(b.status);
       return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
     });
-  }, [categoryFilter, lowerSearch, sortKey, statusFilter, templates]);
+  }, [categoryFilter, locale, lowerSearch, sortKey, statusFilter, templates]);
   const hasFilters = Boolean(search || statusFilter !== "all" || categoryFilter !== "all" || sortKey !== "newest");
   function resetFilters() {
     setSearch("");

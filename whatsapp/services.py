@@ -558,184 +558,7 @@ def serialize_whatsapp_setting(setting: CompanyWhatsAppSetting) -> dict[str, Any
 
 
 SYSTEM_WHATSAPP_TEMPLATE_COMPANY_CODE = "SYSTEM-WHATSAPP-TEMPLATES"
-SYSTEM_WHATSAPP_READY_TEMPLATES: list[dict[str, Any]] = [
-    {
-        "code": "SYSTEM_COMPANY_CREATED",
-        "name": "????? ???? ?????",
-        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
-        "body": "?????? {{owner_name}}? ?? ????? ???? {{company_name}} ????? ?? PrimeyAcc. ????? ?????? ?? ??????: {{login_url}}",
-        "variables": ["owner_name", "company_name", "login_url"],
-        "metadata": {"scope": "SYSTEM", "event": "company.created", "module": "companies"},
-    },
-    {
-        "code": "SYSTEM_COMPANY_ACTIVATED",
-        "name": "????? ????",
-        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
-        "body": "?? ????? ???? {{company_name}} ?????. ???? ?????? ????: ????. ???? ??????: {{login_url}}",
-        "variables": ["company_name", "login_url"],
-        "metadata": {"scope": "SYSTEM", "event": "company.activated", "module": "companies"},
-    },
-    {
-        "code": "SYSTEM_COMPANY_DEACTIVATED",
-        "name": "????? ????",
-        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
-        "body": "?? ????? ???? {{company_name}} ??????. ???????? ?? ????? ??????? ???? ??????? ?? ?????. ?????: {{reason}}",
-        "variables": ["company_name", "reason"],
-        "metadata": {"scope": "SYSTEM", "event": "company.deactivated", "module": "companies"},
-    },
-    {
-        "code": "SYSTEM_USER_INVITED",
-        "name": "???? ??????",
-        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
-        "body": "?????? {{user_name}}? ??? ????? ???????? ??? ???? {{company_name}} ??? PrimeyAcc ???? {{role_name}}. ???? ??????: {{login_url}}",
-        "variables": ["user_name", "company_name", "role_name", "login_url"],
-        "metadata": {"scope": "SYSTEM", "event": "user.invited", "module": "users"},
-    },
-    {
-        "code": "SYSTEM_USER_ACTIVATED",
-        "name": "????? ??????",
-        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
-        "body": "?????? {{user_name}}? ?? ????? ????? ?? ???? {{company_name}} ?????? ???? ??????? ??????. ???? ??????: {{login_url}}",
-        "variables": ["user_name", "company_name", "login_url"],
-        "metadata": {"scope": "SYSTEM", "event": "user.activated", "module": "users"},
-    },
-    {
-        "code": "SYSTEM_USER_DEACTIVATED",
-        "name": "????? ??????",
-        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
-        "body": "?????? {{user_name}}? ?? ????? ????? ?? ???? {{company_name}}. ?????? ?? ???????? ???? ??????? ?? ????? ??????.",
-        "variables": ["user_name", "company_name"],
-        "metadata": {"scope": "SYSTEM", "event": "user.deactivated", "module": "users"},
-    },
-    {
-        "code": "SYSTEM_PASSWORD_RESET",
-        "name": "????? ????? ???? ??????",
-        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
-        "body": "?????? {{user_name}}? ????? ????? ????? ???? ?????? ?? ?????? ??????: {{reset_url}}. ????? ??????? ??? ?? ???? ???.",
-        "variables": ["user_name", "reset_url"],
-        "metadata": {"scope": "SYSTEM", "event": "user.password_reset", "module": "auth"},
-    },
-    {
-        "code": "SYSTEM_SUBSCRIPTION_CREATED",
-        "name": "????? ??????",
-        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
-        "body": "?? ????? ?????? ???? ????? {{company_name}} ??? ???? {{plan_name}}. ???? ?? {{start_date}} ?????? ?? {{end_date}}.",
-        "variables": ["company_name", "plan_name", "start_date", "end_date"],
-        "metadata": {"scope": "SYSTEM", "event": "subscription.created", "module": "subscriptions"},
-    },
-    {
-        "code": "SYSTEM_SUBSCRIPTION_ACTIVATED",
-        "name": "????? ??????",
-        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
-        "body": "?? ????? ?????? ???? {{company_name}} ??? ???? {{plan_name}} ?????. ????? ????????: {{end_date}}.",
-        "variables": ["company_name", "plan_name", "end_date"],
-        "metadata": {"scope": "SYSTEM", "event": "subscription.activated", "module": "subscriptions"},
-    },
-    {
-        "code": "SYSTEM_SUBSCRIPTION_RENEWED",
-        "name": "????? ??????",
-        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
-        "body": "?? ????? ?????? ???? {{company_name}} ??? ???? {{plan_name}} ??? ????? {{end_date}}. ????? ???????? PrimeyAcc.",
-        "variables": ["company_name", "plan_name", "end_date"],
-        "metadata": {"scope": "SYSTEM", "event": "subscription.renewed", "module": "subscriptions"},
-    },
-    {
-        "code": "SYSTEM_SUBSCRIPTION_UPGRADED",
-        "name": "????? ??????",
-        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
-        "body": "??? ????? ?????? ???? {{company_name}} ?? ???? {{old_plan_name}} ??? ???? {{new_plan_name}}. ???? ??????? ?? {{effective_date}}.",
-        "variables": ["company_name", "old_plan_name", "new_plan_name", "effective_date"],
-        "metadata": {"scope": "SYSTEM", "event": "subscription.upgraded", "module": "subscriptions"},
-    },
-    {
-        "code": "SYSTEM_SUBSCRIPTION_EXPIRING_SOON",
-        "name": "?????? ???? ????????",
-        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
-        "body": "?????: ?????? ???? {{company_name}} ??? ???? {{plan_name}} ?????? ?????? {{end_date}}. ???? ??????? ??? ???????? ????? ???????.",
-        "variables": ["company_name", "plan_name", "end_date"],
-        "metadata": {"scope": "SYSTEM", "event": "subscription.expiring_soon", "module": "subscriptions"},
-    },
-    {
-        "code": "SYSTEM_SUBSCRIPTION_EXPIRED",
-        "name": "?????? ??????",
-        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
-        "body": "????? ?????? ???? {{company_name}} ??? ???? {{plan_name}} ?????? {{end_date}}. ???? ??????? ???????? ??????.",
-        "variables": ["company_name", "plan_name", "end_date"],
-        "metadata": {"scope": "SYSTEM", "event": "subscription.expired", "module": "subscriptions"},
-    },
-    {
-        "code": "SYSTEM_SUBSCRIPTION_CANCELLED",
-        "name": "????? ??????",
-        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
-        "body": "?? ????? ?????? ???? {{company_name}} ??? ???? {{plan_name}}. ?????: {{reason}}.",
-        "variables": ["company_name", "plan_name", "reason"],
-        "metadata": {"scope": "SYSTEM", "event": "subscription.cancelled", "module": "subscriptions"},
-    },
-    {
-        "code": "SYSTEM_PAYMENT_CONFIRMED",
-        "name": "????? ???",
-        "category": WhatsAppTemplateCategory.TREASURY,
-        "body": "?? ????? ??? ???? {{amount}} {{currency}} ????? {{company_name}} ?????. ??? ???????: {{payment_reference}}.",
-        "variables": ["amount", "currency", "company_name", "payment_reference"],
-        "metadata": {"scope": "SYSTEM", "event": "payment.confirmed", "module": "payments"},
-    },
-    {
-        "code": "SYSTEM_PAYMENT_FAILED",
-        "name": "??? ???",
-        "category": WhatsAppTemplateCategory.TREASURY,
-        "body": "???? ????? ????? ????? ????? {{company_name}} ????? {{amount}} {{currency}}. ?????: {{failure_reason}}.",
-        "variables": ["company_name", "amount", "currency", "failure_reason"],
-        "metadata": {"scope": "SYSTEM", "event": "payment.failed", "module": "payments"},
-    },
-    {
-        "code": "SYSTEM_INVOICE_ISSUED",
-        "name": "????? ??????",
-        "category": WhatsAppTemplateCategory.ACCOUNTING,
-        "body": "?? ????? ?????? ??? {{invoice_number}} ????? {{company_name}} ????? {{amount}} {{currency}}. ????? ?????????: {{due_date}}.",
-        "variables": ["invoice_number", "company_name", "amount", "currency", "due_date"],
-        "metadata": {"scope": "SYSTEM", "event": "invoice.issued", "module": "billing"},
-    },
-    {
-        "code": "SYSTEM_INVOICE_PDF_READY",
-        "name": "????? PDF ????????",
-        "category": WhatsAppTemplateCategory.ACCOUNTING,
-        "body": "??????? ??? {{invoice_number}} ?????. ????? ????? ???? PDF ?? ??????: {{pdf_url}}",
-        "variables": ["invoice_number", "pdf_url"],
-        "metadata": {"scope": "SYSTEM", "event": "invoice.pdf_ready", "module": "billing", "attachment": "pdf"},
-    },
-    {
-        "code": "SYSTEM_INVOICE_PAYMENT_REMINDER",
-        "name": "????? ?????? ??? ??????",
-        "category": WhatsAppTemplateCategory.ACCOUNTING,
-        "body": "?????: ?????? ??? {{invoice_number}} ????? {{company_name}} ????? {{amount}} {{currency}} ?????? ?????? {{due_date}}.",
-        "variables": ["invoice_number", "company_name", "amount", "currency", "due_date"],
-        "metadata": {"scope": "SYSTEM", "event": "invoice.payment_reminder", "module": "billing"},
-    },
-    {
-        "code": "SYSTEM_GENERAL_ANNOUNCEMENT",
-        "name": "????? ???? ???",
-        "category": WhatsAppTemplateCategory.GENERAL,
-        "body": "????? ?? PrimeyAcc: {{announcement_title}}\n{{announcement_body}}",
-        "variables": ["announcement_title", "announcement_body"],
-        "metadata": {"scope": "SYSTEM", "event": "system.announcement", "module": "system"},
-    },
-    {
-        "code": "SYSTEM_SECURITY_ALERT",
-        "name": "????? ????",
-        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
-        "body": "????? ????: ?? ??? ????? {{security_event}} ??? ???? {{user_name}} ?? ???? {{company_name}} ?????? {{event_time}}.",
-        "variables": ["security_event", "user_name", "company_name", "event_time"],
-        "metadata": {"scope": "SYSTEM", "event": "security.alert", "module": "security"},
-    },
-    {
-        "code": "SYSTEM_SUPPORT_TICKET_CREATED",
-        "name": "??? ????? ???",
-        "category": WhatsAppTemplateCategory.CUSTOMER_SERVICE,
-        "body": "?? ??? ????? ??? ??? {{ticket_number}} ????? {{company_name}} ??????: {{ticket_title}}. ????? ????????? ??????.",
-        "variables": ["ticket_number", "company_name", "ticket_title"],
-        "metadata": {"scope": "SYSTEM", "event": "support.ticket_created", "module": "support"},
-    },
-]
+SYSTEM_WHATSAPP_READY_TEMPLATES: list[dict[str, Any]] = [{'code': 'SYSTEM_COMPANY_CREATED', 'name_ar': 'إنشاء شركة جديدة', 'name_en': 'New company created', 'category': 'CUSTOMER_SERVICE', 'body_ar': 'مرحبًا {{owner_name}}، تم إنشاء شركة {{company_name}} بنجاح في PrimeyAcc. يمكنك الدخول من الرابط: {{login_url}}', 'body_en': 'Hello {{owner_name}}, company {{company_name}} has been created successfully in PrimeyAcc. Sign in here: {{login_url}}', 'variables': ['owner_name', 'company_name', 'login_url'], 'metadata': {'scope': 'SYSTEM', 'event': 'company.created', 'module': 'companies', 'i18n': {'ar': {'name': 'إنشاء شركة جديدة', 'body': 'مرحبًا {{owner_name}}، تم إنشاء شركة {{company_name}} بنجاح في PrimeyAcc. يمكنك الدخول من الرابط: {{login_url}}'}, 'en': {'name': 'New company created', 'body': 'Hello {{owner_name}}, company {{company_name}} has been created successfully in PrimeyAcc. Sign in here: {{login_url}}'}}}}, {'code': 'SYSTEM_COMPANY_ACTIVATED', 'name_ar': 'تفعيل شركة', 'name_en': 'Company activated', 'category': 'CUSTOMER_SERVICE', 'body_ar': 'تم تفعيل شركة {{company_name}} بنجاح. حالة الشركة الآن: نشطة. رابط الدخول: {{login_url}}', 'body_en': 'Company {{company_name}} has been activated successfully. Sign in here: {{login_url}}', 'variables': ['company_name', 'login_url'], 'metadata': {'scope': 'SYSTEM', 'event': 'company.activated', 'module': 'companies', 'i18n': {'ar': {'name': 'تفعيل شركة', 'body': 'تم تفعيل شركة {{company_name}} بنجاح. حالة الشركة الآن: نشطة. رابط الدخول: {{login_url}}'}, 'en': {'name': 'Company activated', 'body': 'Company {{company_name}} has been activated successfully. Sign in here: {{login_url}}'}}}}, {'code': 'SYSTEM_COMPANY_DEACTIVATED', 'name_ar': 'تعطيل شركة', 'name_en': 'Company deactivated', 'category': 'CUSTOMER_SERVICE', 'body_ar': 'تم تعطيل شركة {{company_name}} مؤقتًا. للمراجعة أو إعادة التفعيل يرجى التواصل مع الدعم. السبب: {{reason}}', 'body_en': 'Company {{company_name}} has been temporarily deactivated. Reason: {{reason}}. Please contact support for review or reactivation.', 'variables': ['company_name', 'reason'], 'metadata': {'scope': 'SYSTEM', 'event': 'company.deactivated', 'module': 'companies', 'i18n': {'ar': {'name': 'تعطيل شركة', 'body': 'تم تعطيل شركة {{company_name}} مؤقتًا. للمراجعة أو إعادة التفعيل يرجى التواصل مع الدعم. السبب: {{reason}}'}, 'en': {'name': 'Company deactivated', 'body': 'Company {{company_name}} has been temporarily deactivated. Reason: {{reason}}. Please contact support for review or reactivation.'}}}}, {'code': 'SYSTEM_USER_INVITED', 'name_ar': 'دعوة مستخدم', 'name_en': 'User invitation', 'category': 'CUSTOMER_SERVICE', 'body_ar': 'مرحبًا {{user_name}}، تمت دعوتك للانضمام إلى شركة {{company_name}} على PrimeyAcc بدور {{role_name}}. رابط الدخول: {{login_url}}', 'body_en': 'Hello {{user_name}}, you have been invited to join {{company_name}} on PrimeyAcc as {{role_name}}. Sign in here: {{login_url}}', 'variables': ['user_name', 'company_name', 'role_name', 'login_url'], 'metadata': {'scope': 'SYSTEM', 'event': 'user.invited', 'module': 'users', 'i18n': {'ar': {'name': 'دعوة مستخدم', 'body': 'مرحبًا {{user_name}}، تمت دعوتك للانضمام إلى شركة {{company_name}} على PrimeyAcc بدور {{role_name}}. رابط الدخول: {{login_url}}'}, 'en': {'name': 'User invitation', 'body': 'Hello {{user_name}}, you have been invited to join {{company_name}} on PrimeyAcc as {{role_name}}. Sign in here: {{login_url}}'}}}}, {'code': 'SYSTEM_USER_ACTIVATED', 'name_ar': 'تفعيل مستخدم', 'name_en': 'User activated', 'category': 'CUSTOMER_SERVICE', 'body_ar': 'مرحبًا {{user_name}}، تم تفعيل حسابك في شركة {{company_name}} ويمكنك الآن استخدام النظام. رابط الدخول: {{login_url}}', 'body_en': 'Hello {{user_name}}, your account at {{company_name}} has been activated. You can now use the system: {{login_url}}', 'variables': ['user_name', 'company_name', 'login_url'], 'metadata': {'scope': 'SYSTEM', 'event': 'user.activated', 'module': 'users', 'i18n': {'ar': {'name': 'تفعيل مستخدم', 'body': 'مرحبًا {{user_name}}، تم تفعيل حسابك في شركة {{company_name}} ويمكنك الآن استخدام النظام. رابط الدخول: {{login_url}}'}, 'en': {'name': 'User activated', 'body': 'Hello {{user_name}}, your account at {{company_name}} has been activated. You can now use the system: {{login_url}}'}}}}, {'code': 'SYSTEM_USER_DEACTIVATED', 'name_ar': 'تعطيل مستخدم', 'name_en': 'User deactivated', 'category': 'CUSTOMER_SERVICE', 'body_ar': 'مرحبًا {{user_name}}، تم تعطيل حسابك في شركة {{company_name}}. للمزيد من التفاصيل يرجى التواصل مع مسؤول النظام.', 'body_en': 'Hello {{user_name}}, your account at {{company_name}} has been deactivated. Please contact the system administrator for details.', 'variables': ['user_name', 'company_name'], 'metadata': {'scope': 'SYSTEM', 'event': 'user.deactivated', 'module': 'users', 'i18n': {'ar': {'name': 'تعطيل مستخدم', 'body': 'مرحبًا {{user_name}}، تم تعطيل حسابك في شركة {{company_name}}. للمزيد من التفاصيل يرجى التواصل مع مسؤول النظام.'}, 'en': {'name': 'User deactivated', 'body': 'Hello {{user_name}}, your account at {{company_name}} has been deactivated. Please contact the system administrator for details.'}}}}, {'code': 'SYSTEM_PASSWORD_RESET', 'name_ar': 'إعادة تعيين كلمة المرور', 'name_en': 'Password reset', 'category': 'CUSTOMER_SERVICE', 'body_ar': 'مرحبًا {{user_name}}، يمكنك إعادة تعيين كلمة المرور من الرابط التالي: {{reset_url}}. تجاهل الرسالة إذا لم تطلب ذلك.', 'body_en': 'Hello {{user_name}}, reset your password using this link: {{reset_url}}. Ignore this message if you did not request it.', 'variables': ['user_name', 'reset_url'], 'metadata': {'scope': 'SYSTEM', 'event': 'user.password_reset', 'module': 'auth', 'i18n': {'ar': {'name': 'إعادة تعيين كلمة المرور', 'body': 'مرحبًا {{user_name}}، يمكنك إعادة تعيين كلمة المرور من الرابط التالي: {{reset_url}}. تجاهل الرسالة إذا لم تطلب ذلك.'}, 'en': {'name': 'Password reset', 'body': 'Hello {{user_name}}, reset your password using this link: {{reset_url}}. Ignore this message if you did not request it.'}}}}, {'code': 'SYSTEM_SUBSCRIPTION_CREATED', 'name_ar': 'إضافة اشتراك', 'name_en': 'Subscription created', 'category': 'CUSTOMER_SERVICE', 'body_ar': 'تم إنشاء اشتراك جديد لشركة {{company_name}} على باقة {{plan_name}}. يبدأ من {{start_date}} وينتهي في {{end_date}}.', 'body_en': 'A new subscription has been created for {{company_name}} on plan {{plan_name}}. It starts on {{start_date}} and ends on {{end_date}}.', 'variables': ['company_name', 'plan_name', 'start_date', 'end_date'], 'metadata': {'scope': 'SYSTEM', 'event': 'subscription.created', 'module': 'subscriptions', 'i18n': {'ar': {'name': 'إضافة اشتراك', 'body': 'تم إنشاء اشتراك جديد لشركة {{company_name}} على باقة {{plan_name}}. يبدأ من {{start_date}} وينتهي في {{end_date}}.'}, 'en': {'name': 'Subscription created', 'body': 'A new subscription has been created for {{company_name}} on plan {{plan_name}}. It starts on {{start_date}} and ends on {{end_date}}.'}}}}, {'code': 'SYSTEM_SUBSCRIPTION_ACTIVATED', 'name_ar': 'تفعيل اشتراك', 'name_en': 'Subscription activated', 'category': 'CUSTOMER_SERVICE', 'body_ar': 'تم تفعيل اشتراك شركة {{company_name}} على باقة {{plan_name}} بنجاح. تاريخ الانتهاء: {{end_date}}.', 'body_en': 'The subscription for {{company_name}} on plan {{plan_name}} has been activated. Expiry date: {{end_date}}.', 'variables': ['company_name', 'plan_name', 'end_date'], 'metadata': {'scope': 'SYSTEM', 'event': 'subscription.activated', 'module': 'subscriptions', 'i18n': {'ar': {'name': 'تفعيل اشتراك', 'body': 'تم تفعيل اشتراك شركة {{company_name}} على باقة {{plan_name}} بنجاح. تاريخ الانتهاء: {{end_date}}.'}, 'en': {'name': 'Subscription activated', 'body': 'The subscription for {{company_name}} on plan {{plan_name}} has been activated. Expiry date: {{end_date}}.'}}}}, {'code': 'SYSTEM_SUBSCRIPTION_RENEWED', 'name_ar': 'تجديد اشتراك', 'name_en': 'Subscription renewed', 'category': 'CUSTOMER_SERVICE', 'body_ar': 'تم تجديد اشتراك شركة {{company_name}} على باقة {{plan_name}} حتى تاريخ {{end_date}}. شكرًا لاستخدام PrimeyAcc.', 'body_en': 'The subscription for {{company_name}} on plan {{plan_name}} has been renewed until {{end_date}}. Thank you for using PrimeyAcc.', 'variables': ['company_name', 'plan_name', 'end_date'], 'metadata': {'scope': 'SYSTEM', 'event': 'subscription.renewed', 'module': 'subscriptions', 'i18n': {'ar': {'name': 'تجديد اشتراك', 'body': 'تم تجديد اشتراك شركة {{company_name}} على باقة {{plan_name}} حتى تاريخ {{end_date}}. شكرًا لاستخدام PrimeyAcc.'}, 'en': {'name': 'Subscription renewed', 'body': 'The subscription for {{company_name}} on plan {{plan_name}} has been renewed until {{end_date}}. Thank you for using PrimeyAcc.'}}}}, {'code': 'SYSTEM_SUBSCRIPTION_UPGRADED', 'name_ar': 'ترقية اشتراك', 'name_en': 'Subscription upgraded', 'category': 'CUSTOMER_SERVICE', 'body_ar': 'تمت ترقية اشتراك شركة {{company_name}} من باقة {{old_plan_name}} إلى باقة {{new_plan_name}}. يبدأ التحديث من {{effective_date}}.', 'body_en': 'The subscription for {{company_name}} has been upgraded from {{old_plan_name}} to {{new_plan_name}}. Effective date: {{effective_date}}.', 'variables': ['company_name', 'old_plan_name', 'new_plan_name', 'effective_date'], 'metadata': {'scope': 'SYSTEM', 'event': 'subscription.upgraded', 'module': 'subscriptions', 'i18n': {'ar': {'name': 'ترقية اشتراك', 'body': 'تمت ترقية اشتراك شركة {{company_name}} من باقة {{old_plan_name}} إلى باقة {{new_plan_name}}. يبدأ التحديث من {{effective_date}}.'}, 'en': {'name': 'Subscription upgraded', 'body': 'The subscription for {{company_name}} has been upgraded from {{old_plan_name}} to {{new_plan_name}}. Effective date: {{effective_date}}.'}}}}, {'code': 'SYSTEM_SUBSCRIPTION_EXPIRING_SOON', 'name_ar': 'اشتراك قريب الانتهاء', 'name_en': 'Subscription expiring soon', 'category': 'CUSTOMER_SERVICE', 'body_ar': 'تنبيه: اشتراك شركة {{company_name}} على باقة {{plan_name}} سينتهي بتاريخ {{end_date}}. يرجى التجديد قبل الانتهاء لتجنب الإيقاف.', 'body_en': 'Alert: {{company_name}} subscription on plan {{plan_name}} will expire on {{end_date}}. Please renew before expiry to avoid suspension.', 'variables': ['company_name', 'plan_name', 'end_date'], 'metadata': {'scope': 'SYSTEM', 'event': 'subscription.expiring_soon', 'module': 'subscriptions', 'i18n': {'ar': {'name': 'اشتراك قريب الانتهاء', 'body': 'تنبيه: اشتراك شركة {{company_name}} على باقة {{plan_name}} سينتهي بتاريخ {{end_date}}. يرجى التجديد قبل الانتهاء لتجنب الإيقاف.'}, 'en': {'name': 'Subscription expiring soon', 'body': 'Alert: {{company_name}} subscription on plan {{plan_name}} will expire on {{end_date}}. Please renew before expiry to avoid suspension.'}}}}, {'code': 'SYSTEM_SUBSCRIPTION_EXPIRED', 'name_ar': 'انتهاء اشتراك', 'name_en': 'Subscription expired', 'category': 'CUSTOMER_SERVICE', 'body_ar': 'انتهى اشتراك شركة {{company_name}} على باقة {{plan_name}} بتاريخ {{end_date}}. يرجى التجديد لاستمرار الخدمة.', 'body_en': 'The subscription for {{company_name}} on plan {{plan_name}} expired on {{end_date}}. Please renew to continue the service.', 'variables': ['company_name', 'plan_name', 'end_date'], 'metadata': {'scope': 'SYSTEM', 'event': 'subscription.expired', 'module': 'subscriptions', 'i18n': {'ar': {'name': 'انتهاء اشتراك', 'body': 'انتهى اشتراك شركة {{company_name}} على باقة {{plan_name}} بتاريخ {{end_date}}. يرجى التجديد لاستمرار الخدمة.'}, 'en': {'name': 'Subscription expired', 'body': 'The subscription for {{company_name}} on plan {{plan_name}} expired on {{end_date}}. Please renew to continue the service.'}}}}, {'code': 'SYSTEM_SUBSCRIPTION_CANCELLED', 'name_ar': 'إلغاء اشتراك', 'name_en': 'Subscription cancelled', 'category': 'CUSTOMER_SERVICE', 'body_ar': 'تم إلغاء اشتراك شركة {{company_name}} على باقة {{plan_name}}. السبب: {{reason}}.', 'body_en': 'The subscription for {{company_name}} on plan {{plan_name}} has been cancelled. Reason: {{reason}}.', 'variables': ['company_name', 'plan_name', 'reason'], 'metadata': {'scope': 'SYSTEM', 'event': 'subscription.cancelled', 'module': 'subscriptions', 'i18n': {'ar': {'name': 'إلغاء اشتراك', 'body': 'تم إلغاء اشتراك شركة {{company_name}} على باقة {{plan_name}}. السبب: {{reason}}.'}, 'en': {'name': 'Subscription cancelled', 'body': 'The subscription for {{company_name}} on plan {{plan_name}} has been cancelled. Reason: {{reason}}.'}}}}, {'code': 'SYSTEM_PAYMENT_CONFIRMED', 'name_ar': 'تأكيد دفع', 'name_en': 'Payment confirmed', 'category': 'TREASURY', 'body_ar': 'تم تأكيد دفع مبلغ {{amount}} {{currency}} لشركة {{company_name}} بنجاح. رقم العملية: {{payment_reference}}.', 'body_en': 'Payment of {{amount}} {{currency}} for {{company_name}} has been confirmed. Payment reference: {{payment_reference}}.', 'variables': ['amount', 'currency', 'company_name', 'payment_reference'], 'metadata': {'scope': 'SYSTEM', 'event': 'payment.confirmed', 'module': 'payments', 'i18n': {'ar': {'name': 'تأكيد دفع', 'body': 'تم تأكيد دفع مبلغ {{amount}} {{currency}} لشركة {{company_name}} بنجاح. رقم العملية: {{payment_reference}}.'}, 'en': {'name': 'Payment confirmed', 'body': 'Payment of {{amount}} {{currency}} for {{company_name}} has been confirmed. Payment reference: {{payment_reference}}.'}}}}, {'code': 'SYSTEM_PAYMENT_FAILED', 'name_ar': 'فشل دفع', 'name_en': 'Payment failed', 'category': 'TREASURY', 'body_ar': 'تعذر إتمام عملية الدفع لشركة {{company_name}} بمبلغ {{amount}} {{currency}}. السبب: {{failure_reason}}.', 'body_en': 'Payment for {{company_name}} amount {{amount}} {{currency}} could not be completed. Reason: {{failure_reason}}.', 'variables': ['company_name', 'amount', 'currency', 'failure_reason'], 'metadata': {'scope': 'SYSTEM', 'event': 'payment.failed', 'module': 'payments', 'i18n': {'ar': {'name': 'فشل دفع', 'body': 'تعذر إتمام عملية الدفع لشركة {{company_name}} بمبلغ {{amount}} {{currency}}. السبب: {{failure_reason}}.'}, 'en': {'name': 'Payment failed', 'body': 'Payment for {{company_name}} amount {{amount}} {{currency}} could not be completed. Reason: {{failure_reason}}.'}}}}, {'code': 'SYSTEM_INVOICE_ISSUED', 'name_ar': 'إصدار فاتورة', 'name_en': 'Invoice issued', 'category': 'ACCOUNTING', 'body_ar': 'تم إصدار فاتورة رقم {{invoice_number}} لشركة {{company_name}} بمبلغ {{amount}} {{currency}}. تاريخ الاستحقاق: {{due_date}}.', 'body_en': 'Invoice {{invoice_number}} has been issued for {{company_name}} for {{amount}} {{currency}}. Due date: {{due_date}}.', 'variables': ['invoice_number', 'company_name', 'amount', 'currency', 'due_date'], 'metadata': {'scope': 'SYSTEM', 'event': 'invoice.issued', 'module': 'billing', 'i18n': {'ar': {'name': 'إصدار فاتورة', 'body': 'تم إصدار فاتورة رقم {{invoice_number}} لشركة {{company_name}} بمبلغ {{amount}} {{currency}}. تاريخ الاستحقاق: {{due_date}}.'}, 'en': {'name': 'Invoice issued', 'body': 'Invoice {{invoice_number}} has been issued for {{company_name}} for {{amount}} {{currency}}. Due date: {{due_date}}.'}}}}, {'code': 'SYSTEM_INVOICE_PDF_READY', 'name_ar': 'إرسال PDF الفاتورة', 'name_en': 'Invoice PDF ready', 'category': 'ACCOUNTING', 'body_ar': 'فاتورتك رقم {{invoice_number}} جاهزة. يمكنك تحميل نسخة PDF من الرابط: {{pdf_url}}', 'body_en': 'Your invoice {{invoice_number}} is ready. Download the PDF copy here: {{pdf_url}}', 'variables': ['invoice_number', 'pdf_url'], 'metadata': {'scope': 'SYSTEM', 'event': 'invoice.pdf_ready', 'module': 'billing', 'attachment': 'pdf', 'i18n': {'ar': {'name': 'إرسال PDF الفاتورة', 'body': 'فاتورتك رقم {{invoice_number}} جاهزة. يمكنك تحميل نسخة PDF من الرابط: {{pdf_url}}'}, 'en': {'name': 'Invoice PDF ready', 'body': 'Your invoice {{invoice_number}} is ready. Download the PDF copy here: {{pdf_url}}'}}}}, {'code': 'SYSTEM_INVOICE_PAYMENT_REMINDER', 'name_ar': 'تذكير فاتورة غير مدفوعة', 'name_en': 'Unpaid invoice reminder', 'category': 'ACCOUNTING', 'body_ar': 'تذكير: فاتورة رقم {{invoice_number}} لشركة {{company_name}} بمبلغ {{amount}} {{currency}} مستحقة بتاريخ {{due_date}}.', 'body_en': 'Reminder: Invoice {{invoice_number}} for {{company_name}} amount {{amount}} {{currency}} is due on {{due_date}}.', 'variables': ['invoice_number', 'company_name', 'amount', 'currency', 'due_date'], 'metadata': {'scope': 'SYSTEM', 'event': 'invoice.payment_reminder', 'module': 'billing', 'i18n': {'ar': {'name': 'تذكير فاتورة غير مدفوعة', 'body': 'تذكير: فاتورة رقم {{invoice_number}} لشركة {{company_name}} بمبلغ {{amount}} {{currency}} مستحقة بتاريخ {{due_date}}.'}, 'en': {'name': 'Unpaid invoice reminder', 'body': 'Reminder: Invoice {{invoice_number}} for {{company_name}} amount {{amount}} {{currency}} is due on {{due_date}}.'}}}}, {'code': 'SYSTEM_GENERAL_ANNOUNCEMENT', 'name_ar': 'إشعار نظام عام', 'name_en': 'General system announcement', 'category': 'GENERAL', 'body_ar': 'إشعار من PrimeyAcc: {{announcement_title}}\n{{announcement_body}}', 'body_en': 'PrimeyAcc announcement: {{announcement_title}}\n{{announcement_body}}', 'variables': ['announcement_title', 'announcement_body'], 'metadata': {'scope': 'SYSTEM', 'event': 'system.announcement', 'module': 'system', 'i18n': {'ar': {'name': 'إشعار نظام عام', 'body': 'إشعار من PrimeyAcc: {{announcement_title}}\n{{announcement_body}}'}, 'en': {'name': 'General system announcement', 'body': 'PrimeyAcc announcement: {{announcement_title}}\n{{announcement_body}}'}}}}, {'code': 'SYSTEM_SECURITY_ALERT', 'name_ar': 'تنبيه أمني', 'name_en': 'Security alert', 'category': 'CUSTOMER_SERVICE', 'body_ar': 'تنبيه أمني: تم رصد عملية {{security_event}} على حساب {{user_name}} في شركة {{company_name}} بتاريخ {{event_time}}.', 'body_en': 'Security alert: {{security_event}} was detected for user {{user_name}} at {{company_name}} on {{event_time}}.', 'variables': ['security_event', 'user_name', 'company_name', 'event_time'], 'metadata': {'scope': 'SYSTEM', 'event': 'security.alert', 'module': 'security', 'i18n': {'ar': {'name': 'تنبيه أمني', 'body': 'تنبيه أمني: تم رصد عملية {{security_event}} على حساب {{user_name}} في شركة {{company_name}} بتاريخ {{event_time}}.'}, 'en': {'name': 'Security alert', 'body': 'Security alert: {{security_event}} was detected for user {{user_name}} at {{company_name}} on {{event_time}}.'}}}}, {'code': 'SYSTEM_SUPPORT_TICKET_CREATED', 'name_ar': 'فتح تذكرة دعم', 'name_en': 'Support ticket created', 'category': 'CUSTOMER_SERVICE', 'body_ar': 'تم فتح تذكرة دعم رقم {{ticket_number}} لشركة {{company_name}} بعنوان: {{ticket_title}}. سنقوم بالمتابعة قريبًا.', 'body_en': 'Support ticket {{ticket_number}} has been created for {{company_name}} with title: {{ticket_title}}. We will follow up soon.', 'variables': ['ticket_number', 'company_name', 'ticket_title'], 'metadata': {'scope': 'SYSTEM', 'event': 'support.ticket_created', 'module': 'support', 'i18n': {'ar': {'name': 'فتح تذكرة دعم', 'body': 'تم فتح تذكرة دعم رقم {{ticket_number}} لشركة {{company_name}} بعنوان: {{ticket_title}}. سنقوم بالمتابعة قريبًا.'}, 'en': {'name': 'Support ticket created', 'body': 'Support ticket {{ticket_number}} has been created for {{company_name}} with title: {{ticket_title}}. We will follow up soon.'}}}}]
 def get_or_create_system_whatsapp_templates_company(*, user=None) -> Company:
     """
     Return the backend-owned company used to host system WhatsApp templates.
@@ -755,6 +578,8 @@ def get_or_create_system_whatsapp_templates_company(*, user=None) -> Company:
 def seed_system_whatsapp_ready_templates(*, user=None) -> dict[str, Any]:
     """
     Create or update PrimeyAcc system WhatsApp ready templates.
+    Arabic is stored as the primary template content.
+    English content is stored in metadata.i18n.en for UI language switching.
     Idempotent behavior:
     - Existing template by company/code is updated in place.
     - Missing template is created.
@@ -766,13 +591,14 @@ def seed_system_whatsapp_ready_templates(*, user=None) -> dict[str, Any]:
     template_ids: list[int] = []
     for item in SYSTEM_WHATSAPP_READY_TEMPLATES:
         code = _system_safe_text(item["code"]).upper()
-        body = _system_safe_text(item["body"])
+        body = _system_safe_text(item["body_ar"])
         variables = item.get("variables") or extract_template_variables(body)
+        metadata = item.get("metadata") or {}
         template, created = WhatsAppTemplate.objects.get_or_create(
             company=company,
             code=code,
             defaults={
-                "name": _system_safe_text(item["name"]),
+                "name": _system_safe_text(item["name_ar"]),
                 "category": item.get("category") or WhatsAppTemplateCategory.GENERAL,
                 "status": WhatsAppTemplateStatus.ACTIVE,
                 "language": "ar",
@@ -780,7 +606,7 @@ def seed_system_whatsapp_ready_templates(*, user=None) -> dict[str, Any]:
                 "footer": "PrimeyAcc",
                 "external_template_name": code.lower(),
                 "variables": variables,
-                "metadata": item.get("metadata") or {},
+                "metadata": metadata,
                 "created_by": user if getattr(user, "is_authenticated", False) else None,
                 "updated_by": user if getattr(user, "is_authenticated", False) else None,
             },
@@ -788,7 +614,7 @@ def seed_system_whatsapp_ready_templates(*, user=None) -> dict[str, Any]:
         if created:
             created_count += 1
         else:
-            template.name = _system_safe_text(item["name"])
+            template.name = _system_safe_text(item["name_ar"])
             template.category = item.get("category") or WhatsAppTemplateCategory.GENERAL
             template.status = WhatsAppTemplateStatus.ACTIVE
             template.language = "ar"
@@ -796,7 +622,7 @@ def seed_system_whatsapp_ready_templates(*, user=None) -> dict[str, Any]:
             template.footer = "PrimeyAcc"
             template.external_template_name = code.lower()
             template.variables = variables
-            template.metadata = item.get("metadata") or {}
+            template.metadata = metadata
             if getattr(user, "is_authenticated", False):
                 template.updated_by = user
             template.save()

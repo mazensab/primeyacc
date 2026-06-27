@@ -909,6 +909,7 @@ class SystemWhatsAppPhoneNormalizationTests(TestCase):
         log = Log.objects.get(message_body="System WhatsApp normalized phone message.")
         self.assertEqual(log.recipient_phone, "+966503185950")
         self.assertNotEqual(log.recipient_phone, "+966966503185950")
+
 class SystemWhatsAppReadyTemplateSeedTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
@@ -917,7 +918,8 @@ class SystemWhatsAppReadyTemplateSeedTests(TestCase):
             password="StrongPass123!",
             is_staff=True,
         )
-    def test_seed_system_whatsapp_ready_templates_is_idempotent(self):
+    def test_seed_system_whatsapp_ready_templates_is_idempotent_and_bilingual(self):
+        from whatsapp.models import WhatsAppTemplate
         from whatsapp.services import (
             SYSTEM_WHATSAPP_READY_TEMPLATES,
             seed_system_whatsapp_ready_templates,
@@ -928,27 +930,21 @@ class SystemWhatsAppReadyTemplateSeedTests(TestCase):
         self.assertEqual(first["created_count"], len(SYSTEM_WHATSAPP_READY_TEMPLATES))
         self.assertEqual(second["created_count"], 0)
         self.assertEqual(second["updated_count"], len(SYSTEM_WHATSAPP_READY_TEMPLATES))
-        self.assertEqual(
-            WhatsAppTemplate.objects.filter(
-                metadata__scope="SYSTEM",
-                status=WhatsAppTemplateStatus.ACTIVE,
-            ).count(),
-            len(SYSTEM_WHATSAPP_READY_TEMPLATES),
+        queryset = WhatsAppTemplate.objects.filter(
+            metadata__scope="SYSTEM",
+            status=WhatsAppTemplateStatus.ACTIVE,
         )
-        codes = set(
-            WhatsAppTemplate.objects.filter(metadata__scope="SYSTEM").values_list(
-                "code",
-                flat=True,
-            )
-        )
-        self.assertIn("SYSTEM_COMPANY_ACTIVATED", codes)
-        self.assertIn("SYSTEM_USER_ACTIVATED", codes)
-        self.assertIn("SYSTEM_SUBSCRIPTION_RENEWED", codes)
-        self.assertIn("SYSTEM_INVOICE_PDF_READY", codes)
-        self.assertIn("SYSTEM_PAYMENT_CONFIRMED", codes)
+        self.assertEqual(queryset.count(), len(SYSTEM_WHATSAPP_READY_TEMPLATES))
+        company_activated = WhatsAppTemplate.objects.get(code="SYSTEM_COMPANY_ACTIVATED")
+        self.assertEqual(company_activated.name, "تفعيل شركة")
+        self.assertIn("تم تفعيل شركة", company_activated.body)
+        self.assertNotIn("????", company_activated.name)
+        self.assertNotIn("????", company_activated.body)
+        self.assertEqual(company_activated.metadata["i18n"]["en"]["name"], "Company activated")
         invoice_pdf = WhatsAppTemplate.objects.get(code="SYSTEM_INVOICE_PDF_READY")
         self.assertEqual(invoice_pdf.language, "ar")
         self.assertEqual(invoice_pdf.status, WhatsAppTemplateStatus.ACTIVE)
         self.assertIn("pdf_url", invoice_pdf.variables)
         self.assertEqual(invoice_pdf.metadata["module"], "billing")
-
+        self.assertEqual(invoice_pdf.metadata["i18n"]["ar"]["name"], "إرسال PDF الفاتورة")
+        self.assertEqual(invoice_pdf.metadata["i18n"]["en"]["name"], "Invoice PDF ready")
