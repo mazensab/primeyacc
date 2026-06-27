@@ -123,10 +123,12 @@ async function resolveRecipientJid(sock, toPhone) {
     }
   }
   return {
-    exists: false,
+    exists: true,
     jid: fallbackJid,
     phone: cleanPhone,
-    reason: "Recipient phone is not registered on WhatsApp or lookup failed.",
+    reason: "Recipient lookup did not confirm the phone; sending with fallback JID.",
+    unchecked: true,
+    lookup_failed: true,
   };
 }
 function getSession(sessionName) {
@@ -442,10 +444,14 @@ app.post("/messages/send-text", async (req, res) => {
   }
   const result = await state.sock.sendMessage(recipient.jid, { text: body });
   const normalizedResult = normalizeWhatsAppSendResult(result);
+  const unverifiedRecipient = Boolean(recipient.unchecked || recipient.lookup_failed);
   res.json(publicState(state, {
     success: true,
-    provider_status: "sent_to_whatsapp_server",
-    message: "Message accepted by WhatsApp server.",
+    provider_status: unverifiedRecipient ? "sent_to_whatsapp_server_unverified_recipient" : "sent_to_whatsapp_server",
+    message: unverifiedRecipient
+      ? "Message accepted by WhatsApp server using fallback recipient JID."
+      : "Message accepted by WhatsApp server.",
+    recipient_lookup_warning: unverifiedRecipient ? recipient.reason : "",
     ...normalizedResult,
     to_phone: recipient.phone,
     recipient_jid: recipient.jid,
