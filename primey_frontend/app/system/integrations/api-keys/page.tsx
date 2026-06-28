@@ -4,8 +4,10 @@
    🔑 Mhamcloud — System Integration API Keys
    ------------------------------------------------------------
    ✅ Approved /system/companies visual pattern
-   ✅ Real API only: GET /api/system/integration-api-keys/
+   ✅ Real API only: GET/POST /api/system/integration-api-keys/
    ✅ Header/actions + KPI cards + filters/table
+   ✅ Create API key modal
+   ✅ Secret key one-time reveal + copy
    ✅ Search, status filter, environment filter, sorting, reset
    ✅ Excel .xls export
    ✅ Web print + PDF through browser print dialog
@@ -20,11 +22,15 @@ import * as React from "react";
 import Link from "next/link";
 import {
   ArrowUpDown,
+  Building2,
+  Check,
+  Copy,
   FileSpreadsheet,
   FileText,
   KeyRound,
   Loader2,
   PlugZap,
+  Plus,
   Printer,
   RefreshCw,
   RotateCcw,
@@ -32,6 +38,7 @@ import {
   ShieldCheck,
   Sparkles,
   TriangleAlert,
+  X,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -67,6 +74,7 @@ type ApiRecord = Record<string, unknown>;
 type SortKey = "newest" | "oldest" | "name" | "environment";
 type StatusFilter = "all" | "active" | "disabled" | "revoked" | "expired";
 type EnvironmentFilter = "all" | "live" | "test";
+type CreateEnvironment = "TEST" | "LIVE";
 type ApiKeyRecord = {
   id: string;
   name: string;
@@ -79,8 +87,39 @@ type ApiKeyRecord = {
   createdAt: string | null;
   expiresAt: string | null;
 };
+type CompanyOption = {
+  id: string;
+  name: string;
+};
+type CreateForm = {
+  name: string;
+  companyId: string;
+  environment: CreateEnvironment;
+  scopes: string[];
+  expiresAt: string;
+};
 const statusFilters: StatusFilter[] = ["all", "active", "disabled", "revoked", "expired"];
 const environmentFilters: EnvironmentFilter[] = ["all", "live", "test"];
+const systemCompaniesPath = "/api/system/companies/";
+const scopeOptions = [
+  "company.read",
+  "customers.read",
+  "customers.write",
+  "products.read",
+  "products.write",
+  "sales_invoices.read",
+  "sales_invoices.write",
+  "payments.read",
+  "reports.read",
+  "webhooks.manage",
+];
+const emptyCreateForm: CreateForm = {
+  name: "",
+  companyId: "none",
+  environment: "TEST",
+  scopes: ["company.read"],
+  expiresAt: "",
+};
 const translations = {
   ar: {
     title: "مفاتيح API",
@@ -92,6 +131,7 @@ const translations = {
     print: "طباعة",
     pdf: "PDF",
     center: "مركز التكاملات",
+    createApiKey: "إنشاء مفتاح API",
     reset: "إعادة ضبط",
     searchPlaceholder: "ابحث باسم المفتاح أو الشركة أو prefix أو الصلاحيات...",
     all: "الكل",
@@ -141,6 +181,30 @@ const translations = {
     of: "من",
     rows: "صفوف",
     refreshed: "تم تحديث مفاتيح API.",
+    createTitle: "إنشاء مفتاح API",
+    createDesc:
+      "أنشئ مفتاح ربط جديد. سيتم عرض المفتاح السري مرة واحدة فقط بعد الإنشاء.",
+    nameLabel: "اسم المفتاح",
+    namePlaceholder: "مثال: تكامل المتجر الإلكتروني",
+    companyLabel: "الشركة",
+    noCompany: "اختر الشركة",
+    environmentLabel: "البيئة",
+    expiresAtLabel: "تاريخ الانتهاء اختياري",
+    scopesLabel: "الصلاحيات",
+    cancel: "إلغاء",
+    create: "إنشاء",
+    creating: "جاري الإنشاء...",
+    nameRequired: "اكتب اسم المفتاح أولًا.",
+    companyRequired: "اختر الشركة أولًا.",
+    scopeRequired: "اختر صلاحية واحدة على الأقل.",
+    created: "تم إنشاء مفتاح API.",
+    createFailed: "تعذر إنشاء مفتاح API.",
+    secretTitle: "تم إنشاء المفتاح السري",
+    secretDesc: "انسخ المفتاح الآن. لن يظهر مرة أخرى بعد إغلاق هذه النافذة.",
+    copySecret: "نسخ المفتاح",
+    copied: "تم نسخ المفتاح.",
+    close: "إغلاق",
+    secretMissing: "تم الإنشاء، لكن لم يرجع المفتاح السري من API.",
   },
   en: {
     title: "API Keys",
@@ -152,6 +216,7 @@ const translations = {
     print: "Print",
     pdf: "PDF",
     center: "Integrations Center",
+    createApiKey: "Create API key",
     reset: "Reset",
     searchPlaceholder: "Search by key name, company, prefix, or scopes...",
     all: "All",
@@ -201,6 +266,30 @@ const translations = {
     of: "of",
     rows: "rows",
     refreshed: "API keys refreshed.",
+    createTitle: "Create API key",
+    createDesc:
+      "Create a new integration key. The secret key will be shown only once after creation.",
+    nameLabel: "Key name",
+    namePlaceholder: "Example: E-commerce store integration",
+    companyLabel: "Company",
+    noCompany: "Select company",
+    environmentLabel: "Environment",
+    expiresAtLabel: "Expiry date optional",
+    scopesLabel: "Scopes",
+    cancel: "Cancel",
+    create: "Create",
+    creating: "Creating...",
+    nameRequired: "Enter the key name first.",
+    companyRequired: "Select a company first.",
+    scopeRequired: "Select at least one scope.",
+    created: "API key created.",
+    createFailed: "Could not create API key.",
+    secretTitle: "Secret key created",
+    secretDesc: "Copy the key now. It will not be shown again after closing this window.",
+    copySecret: "Copy key",
+    copied: "Key copied.",
+    close: "Close",
+    secretMissing: "Created, but the API did not return a secret key.",
   },
 } as const;
 function cn(...classes: Array<string | false | null | undefined>) {
@@ -261,16 +350,49 @@ function getApiBaseUrl() {
 function makeApiUrl(path: string) {
   return `${getApiBaseUrl()}${path}`;
 }
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, {
+function getCookie(name: string) {
+  if (typeof document === "undefined") return "";
+  const match = document.cookie
+    .split("; ")
+    .find((part) => part.startsWith(`${name}=`));
+  return match ? decodeURIComponent(match.split("=").slice(1).join("=")) : "";
+}
+async function ensureCsrf() {
+  if (getCookie("csrftoken")) return;
+  await fetch(makeApiUrl("/api/auth/csrf/"), {
     method: "GET",
+    credentials: "include",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+      "X-Requested-With": "XMLHttpRequest",
+    },
+  });
+}
+async function requestJson<T>(
+  url: string,
+  options: {
+    method?: "GET" | "POST";
+    body?: unknown;
+  } = {},
+): Promise<T> {
+  const method = options.method || "GET";
+  if (method !== "GET") {
+    await ensureCsrf();
+  }
+  const csrfToken = getCookie("csrftoken");
+  const response = await fetch(url, {
+    method,
     credentials: "include",
     cache: "no-store",
     redirect: "follow",
     headers: {
       Accept: "application/json",
+      "Content-Type": "application/json",
       "X-Requested-With": "XMLHttpRequest",
+      ...(csrfToken && method !== "GET" ? { "X-CSRFToken": csrfToken } : {}),
     },
+    body: method === "GET" ? undefined : JSON.stringify(options.body || {}),
   });
   const contentType = response.headers.get("content-type") || "";
   const rawText = await response.text();
@@ -288,6 +410,10 @@ async function fetchJson<T>(url: string): Promise<T> {
       normalizeText(record.message) ||
       normalizeText(record.detail) ||
       normalizeText(record.error) ||
+      Object.values(record)
+        .map((item) => (Array.isArray(item) ? item.join(" ") : normalizeText(item)))
+        .filter(Boolean)
+        .join(" ") ||
       `Request failed with status ${response.status}`;
     throw new Error(message);
   }
@@ -380,6 +506,33 @@ function normalizeApiKey(value: unknown): ApiKeyRecord {
     createdAt: normalizeText(record.created_at || record.created || record.inserted_at) || null,
     expiresAt: normalizeText(record.expires_at || record.expired_at || record.valid_until) || null,
   };
+}
+function normalizeCompany(value: unknown): CompanyOption {
+  const record = asRecord(value);
+  const id = normalizeText(record.id || record.pk || record.uuid);
+  const name =
+    normalizeText(record.name) ||
+    normalizeText(record.company_name) ||
+    normalizeText(record.legal_name) ||
+    normalizeText(record.title) ||
+    `#${id}`;
+  return { id, name };
+}
+function getSecretFromPayload(payload: unknown) {
+  const record = asRecord(payload);
+  const dataRecord = asRecord(record.data);
+  const keyRecord = asRecord(record.api_key || record.key || record.result);
+  return (
+    normalizeText(record.secret_key) ||
+    normalizeText(record.secret) ||
+    normalizeText(record.plain_key) ||
+    normalizeText(record.api_secret) ||
+    normalizeText(dataRecord.secret_key) ||
+    normalizeText(dataRecord.secret) ||
+    normalizeText(dataRecord.plain_key) ||
+    normalizeText(keyRecord.secret_key) ||
+    normalizeText(keyRecord.secret)
+  );
 }
 function getStatusLabel(value: string, locale: Locale) {
   const normalized = value.toLowerCase().replace(/[^a-z_]/g, "") as keyof (typeof translations)["ar"];
@@ -528,10 +681,16 @@ function EmptyState({
 export default function SystemIntegrationApiKeysPage() {
   const [locale, setLocale] = React.useState<Locale>("ar");
   const [keys, setKeys] = React.useState<ApiKeyRecord[]>([]);
+  const [companies, setCompanies] = React.useState<CompanyOption[]>([]);
   const [apiTotal, setApiTotal] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [creating, setCreating] = React.useState(false);
   const [apiWarning, setApiWarning] = React.useState("");
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const [createdSecret, setCreatedSecret] = React.useState("");
+  const [copied, setCopied] = React.useState(false);
+  const [createForm, setCreateForm] = React.useState<CreateForm>(emptyCreateForm);
   const [search, setSearch] = React.useState("");
   const [status, setStatus] = React.useState<StatusFilter>("all");
   const [environment, setEnvironment] = React.useState<EnvironmentFilter>("all");
@@ -555,13 +714,26 @@ export default function SystemIntegrationApiKeysPage() {
       window.removeEventListener("primey-locale-changed", applyLocale);
     };
   }, []);
+  const loadCompanies = React.useCallback(async () => {
+    try {
+      const payload = await requestJson<unknown>(
+        makeApiUrl(`${systemCompaniesPath}?page=1&page_size=100&ordering=name`),
+      );
+      const rows = extractArray(payload)
+        .map(normalizeCompany)
+        .filter((company) => company.id);
+      setCompanies(rows);
+    } catch {
+      setCompanies([]);
+    }
+  }, []);
   const loadApiKeys = React.useCallback(
     async ({ silent = false }: { silent?: boolean } = {}) => {
       try {
         if (!silent) setLoading(true);
         setRefreshing(true);
         setApiWarning("");
-        const payload = await fetchJson<unknown>(makeApiUrl(API_PATHS.systemIntegrationApiKeys.list));
+        const payload = await requestJson<unknown>(makeApiUrl(API_PATHS.systemIntegrationApiKeys.list));
         const rows = extractArray(payload).map(normalizeApiKey);
         setKeys(rows);
         setApiTotal(extractCount(payload));
@@ -580,14 +752,89 @@ export default function SystemIntegrationApiKeysPage() {
     [t.refreshed, t.warningDesc],
   );
   React.useEffect(() => {
+    void loadCompanies();
     void loadApiKeys();
-  }, [loadApiKeys]);
+  }, [loadApiKeys, loadCompanies]);
   const resetFilters = React.useCallback(() => {
     setSearch("");
     setStatus("all");
     setEnvironment("all");
     setSort("newest");
   }, []);
+  const resetCreateForm = React.useCallback(() => {
+    setCreateForm(emptyCreateForm);
+    setCreatedSecret("");
+    setCopied(false);
+  }, []);
+  const openCreateModal = React.useCallback(() => {
+    resetCreateForm();
+    setCreateOpen(true);
+  }, [resetCreateForm]);
+  const closeCreateModal = React.useCallback(() => {
+    setCreateOpen(false);
+    resetCreateForm();
+  }, [resetCreateForm]);
+  const toggleScope = React.useCallback((scope: string) => {
+    setCreateForm((current) => {
+      const exists = current.scopes.includes(scope);
+      return {
+        ...current,
+        scopes: exists
+          ? current.scopes.filter((item) => item !== scope)
+          : [...current.scopes, scope],
+      };
+    });
+  }, []);
+  const createApiKey = React.useCallback(async () => {
+    const name = createForm.name.trim();
+    if (!name) {
+      toast.error(t.nameRequired);
+      return;
+    }
+    if (createForm.companyId === "none") {
+      toast.error(t.companyRequired);
+      return;
+    }
+    if (!createForm.scopes.length) {
+      toast.error(t.scopeRequired);
+      return;
+    }
+    const payload: ApiRecord = {
+      name,
+      environment: createForm.environment,
+      scopes: createForm.scopes,
+    };
+    const numericCompanyId = Number(createForm.companyId);
+    payload.company_id = Number.isFinite(numericCompanyId) ? numericCompanyId : createForm.companyId;
+    if (createForm.expiresAt) {
+      payload.expires_at = new Date(`${createForm.expiresAt}T23:59:59`).toISOString();
+    }
+    try {
+      setCreating(true);
+      const createdPayload = await requestJson<unknown>(makeApiUrl(API_PATHS.systemIntegrationApiKeys.create), {
+        method: "POST",
+        body: payload,
+      });
+      const secret = getSecretFromPayload(createdPayload);
+      setCreatedSecret(secret);
+      toast.success(t.created);
+      if (!secret) {
+        toast.warning(t.secretMissing);
+      }
+      await loadApiKeys({ silent: false });
+    } catch (caughtError) {
+      const message = caughtError instanceof Error ? caughtError.message : t.createFailed;
+      toast.error(message);
+    } finally {
+      setCreating(false);
+    }
+  }, [createForm, loadApiKeys, t.createFailed, t.created, t.nameRequired, t.scopeRequired, t.secretMissing]);
+  const copySecret = React.useCallback(async () => {
+    if (!createdSecret) return;
+    await navigator.clipboard.writeText(createdSecret);
+    setCopied(true);
+    toast.success(t.copied);
+  }, [createdSecret, t.copied]);
   const filteredKeys = React.useMemo(() => {
     const needle = search.trim().toLowerCase();
     const rows = keys.filter((key) => {
@@ -770,7 +1017,11 @@ export default function SystemIntegrationApiKeysPage() {
                   <FileText className="h-4 w-4" />
                   {t.pdf}
                 </Button>
-                <Button asChild className="rounded-xl">
+                <Button className="rounded-xl" onClick={openCreateModal}>
+                  <Plus className="h-4 w-4" />
+                  {t.createApiKey}
+                </Button>
+                <Button asChild variant="outline" className="rounded-xl bg-background">
                   <Link href="/system/integrations">
                     <KeyRound className="h-4 w-4" />
                     {t.center}
@@ -997,6 +1248,150 @@ export default function SystemIntegrationApiKeysPage() {
           </CardContent>
         </Card>
       </div>
+      {createOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 px-4 py-6 backdrop-blur-sm">
+          <Card className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border bg-card shadow-2xl">
+            <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 border-b">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <span className="rounded-2xl bg-primary/10 p-2 text-primary">
+                    <Plus className="h-5 w-5" />
+                  </span>
+                  {createdSecret ? t.secretTitle : t.createTitle}
+                </CardTitle>
+                <CardDescription className="mt-2">
+                  {createdSecret ? t.secretDesc : t.createDesc}
+                </CardDescription>
+              </div>
+              <Button variant="ghost" size="icon" className="rounded-xl" onClick={closeCreateModal}>
+                <X className="h-4 w-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-5 p-6">
+              {createdSecret ? (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border bg-muted/40 p-4">
+                    <p className="mb-2 text-xs font-semibold text-muted-foreground">{t.secretTitle}</p>
+                    <code className="block break-all rounded-xl bg-background p-4 text-sm text-foreground shadow-inner">
+                      {createdSecret}
+                    </code>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <Button variant="outline" className="rounded-xl bg-background" onClick={copySecret}>
+                      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      {t.copySecret}
+                    </Button>
+                    <Button className="rounded-xl" onClick={closeCreateModal}>
+                      {t.close}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm font-medium text-foreground">{t.nameLabel}</label>
+                      <Input
+                        value={createForm.name}
+                        onChange={(event) =>
+                          setCreateForm((current) => ({ ...current, name: event.target.value }))
+                        }
+                        placeholder={t.namePlaceholder}
+                        className="h-11 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">{t.companyLabel}</label>
+                      <Select
+                        value={createForm.companyId}
+                        onValueChange={(value) =>
+                          setCreateForm((current) => ({ ...current, companyId: value }))
+                        }
+                      >
+                        <SelectTrigger className="h-11 rounded-xl bg-background">
+                          <Building2 className="h-4 w-4" />
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none" disabled>{t.noCompany}</SelectItem>
+                          {companies.map((company) => (
+                            <SelectItem key={company.id} value={company.id}>
+                              {company.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">{t.environmentLabel}</label>
+                      <Select
+                        value={createForm.environment}
+                        onValueChange={(value) =>
+                          setCreateForm((current) => ({
+                            ...current,
+                            environment: value as CreateEnvironment,
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="h-11 rounded-xl bg-background">
+                          <PlugZap className="h-4 w-4" />
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="TEST">{t.test}</SelectItem>
+                          <SelectItem value="LIVE">{t.live}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm font-medium text-foreground">{t.expiresAtLabel}</label>
+                      <Input
+                        type="date"
+                        value={createForm.expiresAt}
+                        onChange={(event) =>
+                          setCreateForm((current) => ({ ...current, expiresAt: event.target.value }))
+                        }
+                        className="h-11 rounded-xl"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium text-foreground">{t.scopesLabel}</label>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {scopeOptions.map((scope) => {
+                        const checked = createForm.scopes.includes(scope);
+                        return (
+                          <button
+                            key={scope}
+                            type="button"
+                            onClick={() => toggleScope(scope)}
+                            className={cn(
+                              "flex items-center justify-between rounded-xl border bg-background px-3 py-2 text-sm transition hover:bg-muted",
+                              checked && "border-primary bg-primary/5 text-primary",
+                            )}
+                          >
+                            <span className="font-mono text-xs">{scope}</span>
+                            {checked ? <Check className="h-4 w-4" /> : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-4">
+                    <Button variant="outline" className="rounded-xl bg-background" onClick={closeCreateModal}>
+                      {t.cancel}
+                    </Button>
+                    <Button className="rounded-xl" onClick={createApiKey} disabled={creating}>
+                      {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                      {creating ? t.creating : t.create}
+                    </Button>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
     </main>
   );
 }
