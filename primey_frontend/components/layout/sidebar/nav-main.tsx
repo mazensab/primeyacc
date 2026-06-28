@@ -2,7 +2,7 @@
 
 /* =====================================================
    📂 components/layout/sidebar/nav-main.tsx
-   🧠 PrimeyAcc — Main Sidebar Navigation
+   🧠 Mhamcloud — Main Sidebar Navigation
    Premium sidebar navigation items
 ===================================================== */
 
@@ -39,6 +39,7 @@ import {
   FileText,
   Gift,
   Home,
+  KeyRound,
   MessageCircle,
   Package,
   ReceiptText,
@@ -125,7 +126,7 @@ type SidebarAuthSession = Partial<AuthSession>;
 
 const systemNavItems: NavGroup[] = [
   {
-    title: { ar: "منصة PrimeyAcc", en: "PrimeyAcc Platform" },
+    title: { ar: "منصة Mhamcloud", en: "Mhamcloud Platform" },
     items: [
       {
         title: { ar: "لوحة النظام", en: "System Dashboard" },
@@ -205,17 +206,42 @@ const systemNavItems: NavGroup[] = [
             workspaces: ["system"],
           },
           {
+            title: { ar: "أنشطة الشركات", en: "Activity Profiles" },
+            href: "/system/activity-profiles",
+            icon: Stethoscope,
+            anyPermissions: [PERMISSIONS.SYSTEM_VIEW, PERMISSIONS.SYSTEM_SETTINGS],
+            workspaces: ["system"],
+            isNew: true,
+          },
+        ],
+      },
+      {
+        title: { ar: "التكاملات", en: "Integrations" },
+        href: "/system/integrations",
+        icon: Briefcase,
+        anyPermissions: [PERMISSIONS.SYSTEM_VIEW, PERMISSIONS.SYSTEM_INTEGRATION_API_KEYS_VIEW],
+        workspaces: ["system"],
+        items: [
+          {
+            title: { ar: "مركز التكاملات", en: "Integrations Center" },
+            href: "/system/integrations",
+            icon: Briefcase,
+            anyPermissions: [PERMISSIONS.SYSTEM_VIEW, PERMISSIONS.SYSTEM_INTEGRATION_API_KEYS_VIEW],
+            workspaces: ["system"],
+          },
+          {
             title: { ar: "عقود API", en: "API Contracts" },
-            href: "/system/api-contracts",
+            href: "/system/integrations/api-contracts",
+            aliases: ["/system/api-contracts"],
             icon: FileText,
             anyPermissions: [PERMISSIONS.SYSTEM_VIEW, PERMISSIONS.SYSTEM_SETTINGS],
             workspaces: ["system"],
           },
           {
-            title: { ar: "أنشطة الشركات", en: "Activity Profiles" },
-            href: "/system/activity-profiles",
-            icon: Stethoscope,
-            anyPermissions: [PERMISSIONS.SYSTEM_VIEW, PERMISSIONS.SYSTEM_SETTINGS],
+            title: { ar: "مفاتيح API", en: "API Keys" },
+            href: "/system/integrations/api-keys",
+            icon: KeyRound,
+            anyPermissions: [PERMISSIONS.SYSTEM_INTEGRATION_API_KEYS_VIEW, PERMISSIONS.SYSTEM_VIEW],
             workspaces: ["system"],
             isNew: true,
           },

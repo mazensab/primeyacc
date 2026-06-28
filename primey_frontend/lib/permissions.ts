@@ -1,6 +1,6 @@
 // ======================================================
 // 📂 الملف: lib/permissions.ts
-// 🧭 Primey Care — Frontend Roles & Permissions Core
+// 🧭 Mhamcloud — Frontend Roles & Permissions Core
 // 🚀 الإصدار: Permissions Frontend V2.2
 // ------------------------------------------------------
 // ✅ مصدر مركزي لصلاحيات الفرونت
@@ -199,6 +199,16 @@ export const PERMISSIONS = {
   SYSTEM_VIEW: "system.view",
   SYSTEM_SETTINGS: "system.settings",
 
+  // System Integrations
+  SYSTEM_INTEGRATIONS_VIEW: "system.integrations.view",
+  SYSTEM_INTEGRATION_API_KEYS_VIEW: "system.integration_api_keys.view",
+  SYSTEM_INTEGRATION_API_KEYS_CREATE: "system.integration_api_keys.create",
+  SYSTEM_INTEGRATION_API_KEYS_UPDATE: "system.integration_api_keys.update",
+  SYSTEM_INTEGRATION_API_KEYS_DISABLE: "system.integration_api_keys.disable",
+  SYSTEM_INTEGRATION_API_KEYS_ROTATE: "system.integration_api_keys.rotate",
+  SYSTEM_INTEGRATION_API_KEYS_REVOKE: "system.integration_api_keys.revoke",
+  SYSTEM_INTEGRATION_API_KEYS_USAGE: "system.integration_api_keys.usage",
+
   // Users
   USERS_VIEW: "users.view",
   USERS_CREATE: "users.create",
@@ -356,6 +366,14 @@ export const ROLE_PERMISSION_MATRIX: RolePermissionMatrix = {
   [ROLES.SYSTEM_ADMIN]: [
     PERMISSIONS.SYSTEM_VIEW,
     PERMISSIONS.SYSTEM_SETTINGS,
+    PERMISSIONS.SYSTEM_INTEGRATIONS_VIEW,
+    PERMISSIONS.SYSTEM_INTEGRATION_API_KEYS_VIEW,
+    PERMISSIONS.SYSTEM_INTEGRATION_API_KEYS_CREATE,
+    PERMISSIONS.SYSTEM_INTEGRATION_API_KEYS_UPDATE,
+    PERMISSIONS.SYSTEM_INTEGRATION_API_KEYS_DISABLE,
+    PERMISSIONS.SYSTEM_INTEGRATION_API_KEYS_ROTATE,
+    PERMISSIONS.SYSTEM_INTEGRATION_API_KEYS_REVOKE,
+    PERMISSIONS.SYSTEM_INTEGRATION_API_KEYS_USAGE,
 
     PERMISSIONS.USERS_VIEW,
     PERMISSIONS.USERS_CREATE,
@@ -691,6 +709,16 @@ export const PATH_ACCESS_RULES: PathAccessRule[] = [
   {
     prefix: "/system/settings",
     permissions: [PERMISSIONS.SYSTEM_SETTINGS],
+    workspaces: ["system"],
+  },
+  {
+    prefix: "/system/integrations/api-keys",
+    permissions: [PERMISSIONS.SYSTEM_INTEGRATION_API_KEYS_VIEW],
+    workspaces: ["system"],
+  },
+  {
+    prefix: "/system/integrations",
+    permissions: [PERMISSIONS.SYSTEM_VIEW],
     workspaces: ["system"],
   },
 

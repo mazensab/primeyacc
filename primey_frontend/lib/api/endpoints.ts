@@ -1,6 +1,6 @@
 /* ============================================================
    📂 lib/api/endpoints.ts
-   PrimeyAcc - API Contract Paths
+   Mhamcloud - API Contract Paths
    ------------------------------------------------------------
    ✅ Centralized API endpoints
    ✅ No hardcoded localhost
@@ -221,6 +221,17 @@ export const API_PATHS = {
     readAll: "/api/company/notifications/read-all/",
     detail: (id: ApiPathId) => `/api/company/notifications/${id}/`,
     markRead: (id: ApiPathId) => `/api/company/notifications/${id}/read/`,
+  },
+
+  systemIntegrationApiKeys: {
+    list: "/api/system/integration-api-keys/",
+    create: "/api/system/integration-api-keys/",
+    detail: (id: ApiPathId) => `/api/system/integration-api-keys/${id}/`,
+    disable: (id: ApiPathId) => `/api/system/integration-api-keys/${id}/disable/`,
+    enable: (id: ApiPathId) => `/api/system/integration-api-keys/${id}/enable/`,
+    revoke: (id: ApiPathId) => `/api/system/integration-api-keys/${id}/revoke/`,
+    rotate: (id: ApiPathId) => `/api/system/integration-api-keys/${id}/rotate/`,
+    usage: (id: ApiPathId) => `/api/system/integration-api-keys/${id}/usage/`,
   },
 
   systemNotifications: {
