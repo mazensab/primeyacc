@@ -1,6 +1,6 @@
 # ============================================================
 # ط·آ¸أ¢â‚¬آ¹ط·آ¹ط·â€؛ط£آ¢أ¢â€ڑآ¬ط¥â€œط£آ¢أ¢â€ڑآ¬ط¹â€ک api/system/urls.py
-# ط·آ¸أ¢â‚¬آ¹ط·آ¹ط·â€؛ط·آ¢ط¢آ§ط·آ¢ط¢آ  PrimeyAcc | System Workspace API URLs V1.5
+# ط·آ¸أ¢â‚¬آ¹ط·آ¹ط·â€؛ط·آ¢ط¢آ§ط·آ¢ط¢آ  Mhamcloud | System Workspace API URLs V1.5
 # ------------------------------------------------------------
 # ط·آ£ط¢آ¢ط·آ¥أ¢â‚¬إ“ط£آ¢أ¢â€ڑآ¬ط¢آ¦ Central routes for system workspace APIs
 # ط·آ£ط¢آ¢ط·آ¥أ¢â‚¬إ“ط£آ¢أ¢â€ڑآ¬ط¢آ¦ Includes system companies APIs
@@ -65,6 +65,10 @@ urlpatterns = [
     path(
         "activity-backends/",
         include("api.system.activity_backends.urls"),
+    ),
+    path(
+        "integration-api-keys/",
+        include("api.system.integration_api_keys.urls"),
     ),
     path(
         "business-controls/",

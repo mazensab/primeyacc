@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 accounts/models.py
-# 🧠 PrimeyAcc | Accounts Models V3.2
+# 🧠 Mhamcloud | Accounts Models V3.2
 # ------------------------------------------------------------
 # ✅ User Profile
 # ✅ Workspace Type Foundation
@@ -32,7 +32,7 @@
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - User هو حساب الدخول فقط
-# - UserProfile هو ملف المستخدم العام داخل PrimeyAcc
+# - UserProfile هو ملف المستخدم العام داخل Mhamcloud
 # - CompanyMembership هي علاقة المستخدم بالشركة ودوره داخلها
 # - /system لا يفتح إلا لمستخدم نظام مصرح
 # - /company لا يفتح إلا بعضوية شركة فعالة
@@ -161,6 +161,49 @@ SYSTEM_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "system.reports.view",
     ],
 }
+
+
+# ============================================================
+# Phase Integration API Keys Permissions
+# ============================================================
+
+SYSTEM_INTEGRATION_API_KEYS_PERMISSIONS = [
+    "system.integration_api_keys.view",
+    "system.integration_api_keys.create",
+    "system.integration_api_keys.update",
+    "system.integration_api_keys.disable",
+    "system.integration_api_keys.rotate",
+    "system.integration_api_keys.revoke",
+    "system.integration_api_keys.usage",
+]
+
+SYSTEM_ROLE_PERMISSIONS.setdefault(
+    SystemRole.SYSTEM_ADMIN,
+    [],
+).extend(
+    SYSTEM_INTEGRATION_API_KEYS_PERMISSIONS
+)
+
+SYSTEM_ROLE_PERMISSIONS.setdefault(
+    SystemRole.SUPPORT,
+    [],
+).extend(
+    [
+        "system.integration_api_keys.view",
+        "system.integration_api_keys.usage",
+    ]
+)
+
+SYSTEM_ROLE_PERMISSIONS.setdefault(
+    SystemRole.BILLING_MANAGER,
+    [],
+).append(
+    "system.integration_api_keys.view"
+)
+
+# End Phase Integration API Keys Permissions
+# ============================================================
+
 
 COMPANY_PERMISSION_ALL = "*"
 
@@ -1116,7 +1159,7 @@ def _normalize_permissions(permissions: list[str]) -> list[str]:
 
 class UserProfile(models.Model):
     """
-    Global PrimeyAcc user profile.
+    Global Mhamcloud user profile.
 
     Django User remains the authentication account.
     UserProfile stores workspace preferences and system-level access.
@@ -1126,7 +1169,7 @@ class UserProfile(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name="primeyacc_profile",
+        related_name="Mhamcloud_profile",
         verbose_name="User",
     )
 
