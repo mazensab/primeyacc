@@ -112,6 +112,15 @@ type Summary = {
 const API_ENDPOINT = "/api/system/business-controls/";
 const translations = {
   ar: {
+    shortcutsTitle: "اختصارات وحدة ضوابط الأعمال",
+    shortcutsDesc:
+      "تنقل سريع بين صفحات الحوكمة والمراجعة بنفس نمط إدارة المنصة.",
+    apiContractsDesc: "مراجعة عقود API المرتبطة بواجهات النظام.",
+    releaseReadinessDesc: "فحص جاهزية الإطلاق قبل النشر والتسليم.",
+    permissions: "الصلاحيات",
+    permissionsDesc: "مراجعة كتالوج صلاحيات النظام والشركات.",
+    systemDashboard: "لوحة النظام",
+    systemDashboardDesc: "العودة إلى لوحة تحكم النظام الرئيسية.",
     pageTitle: "ضوابط الأعمال",
     pageSubtitle:
       "مركز مراقبة أحداث التدقيق ومفاتيح منع التكرار وتسلسلات المراجع من API النظام الحقيقي.",
@@ -140,7 +149,7 @@ const translations = {
     company: "الشركة",
     typeSort: "النوع",
     statusSort: "الحالة",
-    businessControlsTable: "سجل ضوابط الأعمال",
+    businessControlsTable: "أحدث ضوابط الأعمال",
     businessControlsDesc:
       "آخر أحداث التدقيق ومفاتيح منع التكرار وتسلسلات المراجع المسجلة في النظام.",
     showing: "عرض",
@@ -167,7 +176,7 @@ const translations = {
     warning: "تحذير",
     critical: "حرج",
     emptyTitle: "لا توجد بيانات ضوابط",
-    emptyDesc: "لم يرجع API أي سجلات لضوابط الأعمال.",
+    emptyDesc: "لا توجد أحداث تدقيق أو مفاتيح منع تكرار أو تسلسلات مراجع مسجلة حتى الآن.",
     noResultsTitle: "لا توجد نتائج مطابقة",
     noResultsDesc: "غيّر البحث أو الفلاتر لعرض نتائج أخرى.",
     errorTitle: "تعذر تحميل ضوابط الأعمال",
@@ -183,6 +192,15 @@ const translations = {
     notAvailable: "—",
   },
   en: {
+    shortcutsTitle: "Business controls shortcuts",
+    shortcutsDesc:
+      "Quick navigation between governance and review pages using the platform management pattern.",
+    apiContractsDesc: "Review API contracts linked to system interfaces.",
+    releaseReadinessDesc: "Check release readiness before publishing and handover.",
+    permissions: "Permissions",
+    permissionsDesc: "Review the system and company permissions catalog.",
+    systemDashboard: "System dashboard",
+    systemDashboardDesc: "Return to the main system dashboard.",
     pageTitle: "Business Controls",
     pageSubtitle:
       "System monitoring center for audit events, idempotency keys, and reference sequences from the live system API.",
@@ -211,7 +229,7 @@ const translations = {
     company: "Company",
     typeSort: "Type",
     statusSort: "Status",
-    businessControlsTable: "Business controls log",
+    businessControlsTable: "Latest business controls",
     businessControlsDesc:
       "Latest audit events, idempotency keys, and reference sequences recorded in the system.",
     showing: "Showing",
@@ -238,7 +256,7 @@ const translations = {
     warning: "Warning",
     critical: "Critical",
     emptyTitle: "No business controls data",
-    emptyDesc: "The API returned no business control records.",
+    emptyDesc: "No audit events, idempotency keys, or reference sequences have been recorded yet.",
     noResultsTitle: "No matching results",
     noResultsDesc: "Change search or filters to show more results.",
     errorTitle: "Could not load business controls",
@@ -574,7 +592,7 @@ function KpiCard({
   icon: LucideIcon;
 }) {
   return (
-    <Card className="rounded-2xl border-border/70 bg-card shadow-sm">
+    <Card className="rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -842,26 +860,32 @@ export default function SystemBusinessControlsPage() {
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <Button asChild className="rounded-xl bg-foreground text-background hover:bg-foreground/90">
+                  <Link href="/system/release-readiness">
+                    {t.releaseReadiness}
+                    <Activity className="ms-2 h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("pdf")}>
+                  {t.pdf}
+                  <FileText className="ms-2 h-4 w-4" />
+                </Button>
+                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("print")}>
+                  {t.print}
+                  <Printer className="ms-2 h-4 w-4" />
+                </Button>
+                <Button variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
+                  {t.exportExcel}
+                  <FileSpreadsheet className="ms-2 h-4 w-4" />
+                </Button>
                 <Button
                   variant="outline"
                   className="rounded-xl bg-background"
                   onClick={() => void loadBusinessControls({ silent: true })}
                   disabled={refreshing}
                 >
-                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                   {t.refresh}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
-                  <FileSpreadsheet className="h-4 w-4" />
-                  {t.exportExcel}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("print")}>
-                  <Printer className="h-4 w-4" />
-                  {t.print}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("pdf")}>
-                  <FileText className="h-4 w-4" />
-                  {t.pdf}
+                  {refreshing ? <Loader2 className="ms-2 h-4 w-4 animate-spin" /> : <RefreshCw className="ms-2 h-4 w-4" />}
                 </Button>
               </div>
             </div>
@@ -873,41 +897,59 @@ export default function SystemBusinessControlsPage() {
           <KpiCard title={t.idempotencyKeys} value={summary.idempotencyKeysCount} description={`${t.succeeded}: ${formatInteger(summary.idempotencySucceededCount)} · ${t.failed}: ${formatInteger(summary.idempotencyFailedCount)}`} icon={Fingerprint} />
           <KpiCard title={t.referenceSequences} value={summary.referenceSequencesCount} description={`${t.active}: ${formatInteger(summary.activeReferenceSequencesCount)}`} icon={KeyRound} />
         </section>
-        <section className="grid gap-4 lg:grid-cols-3">
-          <Card className="rounded-2xl border-border/70 bg-card shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <ShieldCheck className="h-4 w-4 text-primary" />
-                {t.latestAudit}
-              </CardTitle>
-              <CardDescription>
-                {formatInteger(summary.companiesWithAuditEvents)} / {formatInteger(summary.companiesCount)} {t.company}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-          <Card className="rounded-2xl border-border/70 bg-card shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Clock3 className="h-4 w-4 text-primary" />
-                {t.latestKeys}
-              </CardTitle>
-              <CardDescription>
-                {t.started}: {formatInteger(summary.idempotencyStartedCount)} · {t.failed}: {formatInteger(summary.idempotencyFailedCount)}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-          <Card className="rounded-2xl border-border/70 bg-card shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Database className="h-4 w-4 text-primary" />
-                {t.latestRefs}
-              </CardTitle>
-              <CardDescription>
-                {formatInteger(summary.companiesWithReferenceSequences)} {t.company}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </section>
+        <Card className="rounded-2xl shadow-sm">
+          <CardHeader className="gap-1">
+            <CardTitle>{t.shortcutsTitle}</CardTitle>
+            <CardDescription>{t.shortcutsDesc}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {[
+                {
+                  href: "/system/api-contracts",
+                  title: t.apiContracts,
+                  description: t.apiContractsDesc,
+                  icon: TableProperties,
+                },
+                {
+                  href: "/system/release-readiness",
+                  title: t.releaseReadiness,
+                  description: t.releaseReadinessDesc,
+                  icon: Activity,
+                },
+                {
+                  href: "/system/permissions",
+                  title: t.permissions,
+                  description: t.permissionsDesc,
+                  icon: ShieldCheck,
+                },
+                {
+                  href: "/system",
+                  title: t.systemDashboard,
+                  description: t.systemDashboardDesc,
+                  icon: Building2,
+                },
+              ].map((action) => {
+                const Icon = action.icon;
+                return (
+                  <Link key={action.href} href={action.href}>
+                    <Card className="group h-full rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
+                        <div className="min-w-0">
+                          <CardTitle className="text-base">{action.title}</CardTitle>
+                          <CardDescription className="mt-2 line-clamp-2">{action.description}</CardDescription>
+                        </div>
+                        <span className="rounded-2xl bg-muted p-3 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+                          <Icon className="h-5 w-5" />
+                        </span>
+                      </CardHeader>
+                    </Card>
+                  </Link>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
         <Card className="w-full rounded-2xl shadow-sm">
           <CardHeader className="gap-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -971,17 +1013,9 @@ export default function SystemBusinessControlsPage() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={resetFilters}>
-                  <RotateCcw className="h-4 w-4" />
                   {t.reset}
+                  <RotateCcw className="ms-2 h-4 w-4" />
                 </Button>
-                <Link href="/system/api-contracts" className="inline-flex h-10 items-center gap-2 rounded-xl border bg-background px-4 text-sm font-medium hover:bg-muted">
-                  <TableProperties className="h-4 w-4" />
-                  {t.apiContracts}
-                </Link>
-                <Link href="/system/release-readiness" className="inline-flex h-10 items-center gap-2 rounded-xl border bg-background px-4 text-sm font-medium hover:bg-muted">
-                  <Activity className="h-4 w-4" />
-                  {t.releaseReadiness}
-                </Link>
               </div>
             </div>
             <div className="overflow-hidden rounded-2xl border bg-background">
