@@ -14,7 +14,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.http import require_GET
-from accounts.models import SystemRole, UserProfile, UserProfileStatus
+from accounts.models import CompanyMembership, SystemRole, UserProfile, UserProfileStatus
 from api.permissions import user_has_system_permission
 SYSTEM_USERS_VIEW_PERMISSION = "system.users.view"
 def _datetime_to_string(value: Any) -> str | None:
@@ -29,10 +29,75 @@ def _to_positive_int(value: Any, default: int, maximum: int | None = None) -> in
     if maximum is not None:
         parsed = min(parsed, maximum)
     return parsed
+
+def _system_user_company_payload(company: Any) -> dict[str, Any]:
+    return {
+        "id": company.id,
+        "name": getattr(company, "name", ""),
+        "display_name": (
+            getattr(company, "display_name", None)
+            or getattr(company, "name", "")
+        ),
+        "name_ar": getattr(company, "name_ar", ""),
+        "name_en": getattr(company, "name_en", ""),
+        "company_code": getattr(company, "company_code", "") or "",
+        "code": getattr(company, "company_code", "") or "",
+        "status": getattr(company, "status", ""),
+        "is_active": getattr(company, "is_active", True),
+    }
+def _system_user_membership_payload(
+    membership: CompanyMembership,
+) -> dict[str, Any]:
+    company = membership.company
+    return {
+        "id": membership.id,
+        "company": _system_user_company_payload(company),
+        "company_id": membership.company_id,
+        "company_name": getattr(company, "name", ""),
+        "company_display_name": (
+            getattr(company, "display_name", None)
+            or getattr(company, "name", "")
+        ),
+        "role": membership.role,
+        "status": membership.status,
+        "is_primary": membership.is_primary,
+        "is_active": membership.is_active_membership,
+        "job_title": membership.job_title,
+        "department": membership.department,
+    }
+def _system_user_default_membership_payload(user: Any) -> dict[str, Any] | None:
+    membership = (
+        CompanyMembership.objects
+        .filter(user=user)
+        .select_related("company")
+        .order_by("-is_primary", "-created_at", "-id")
+        .first()
+    )
+    if not membership:
+        return None
+    return _system_user_membership_payload(membership)
 def _profile_payload(profile: UserProfile) -> dict[str, Any]:
     user = profile.user
     full_name = user.get_full_name().strip()
     display_name = profile.display_name or full_name or user.get_username()
+    default_membership = _system_user_default_membership_payload(user)
+    company_role = ""
+    company_id = None
+    company_name = ""
+    if default_membership:
+        company_role = str(default_membership.get("role") or "")
+        company_id = default_membership.get("company_id")
+        company_name = str(
+            default_membership.get("company_display_name")
+            or default_membership.get("company_name")
+            or ""
+        )
+    access_type = "system" if profile.can_access_system else "company"
+    display_role = profile.system_role
+    api_system_role = profile.system_role
+    if not profile.can_access_system and company_role:
+        display_role = company_role
+        api_system_role = ""
     return {
         "id": user.id,
         "user_id": user.id,
@@ -52,11 +117,18 @@ def _profile_payload(profile: UserProfile) -> dict[str, Any]:
         "is_staff": user.is_staff,
         "is_superuser": user.is_superuser,
         "default_workspace": profile.default_workspace,
-        "system_role": profile.system_role,
-        "role": profile.system_role,
+        "system_role": api_system_role,
+        "raw_system_role": profile.system_role,
+        "role": display_role,
+        "company_role": company_role,
+        "membership_role": company_role,
+        "company_id": company_id,
+        "company_name": company_name,
+        "company_membership": default_membership,
+        "default_membership": default_membership,
         "is_system_user": profile.is_system_user,
         "can_access_system": profile.can_access_system,
-        "access_type": "system" if profile.can_access_system else "company",
+        "access_type": access_type,
         "system_permissions": profile.system_permissions,
         "default_company_id": profile.default_company_id,
         "last_seen_at": _datetime_to_string(profile.last_seen_at),

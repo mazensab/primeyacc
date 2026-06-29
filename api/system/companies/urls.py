@@ -34,6 +34,7 @@ urlpatterns = [
     path("", system_companies_list, name="list"),
     path("options/", system_company_options, name="options"),
     path("create/", system_company_create, name="create"),
+    path("<int:company_id>/users/create", system_company_user_create, name="user_create_no_slash"),
     path("<int:company_id>/users/create/", system_company_user_create, name="user_create"),
     path("<int:company_id>/", system_company_detail, name="detail"),
     path("<int:company_id>/update/", system_company_update, name="update"),
