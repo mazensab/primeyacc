@@ -28,6 +28,10 @@ import {
   ChevronLeft,
   CircleAlert,
   Copy,
+  Users,
+  ReceiptText,
+  ExternalLink,
+  CreditCard,
   FileText,
   Hash,
   LayoutDashboard,
@@ -75,6 +79,44 @@ type CompanyRecord = {
   updated_at: string | null;
 };
 
+type CompanyUserSummary = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  isActive: boolean;
+  isPrimary: boolean;
+  joinedAt: string | null;
+};
+type CompanySubscriptionSummary = {
+  id: string;
+  planName: string;
+  planCode: string;
+  status: string;
+  action: string;
+  billingCycle: string;
+  startDate: string | null;
+  endDate: string | null;
+  totalAmount: string;
+  isCurrent: boolean;
+};
+type CompanyBillingDocumentSummary = {
+  id: string;
+  documentType: string;
+  documentNumber: string;
+  status: string;
+  subscriptionId: string;
+  totalAmount: string;
+  paidAmount: string;
+  currencyCode: string;
+  paymentMethod: string;
+  transactionReference: string;
+  billingReference: string;
+  issueDate: string | null;
+  paidAt: string | null;
+};
+
 const API_ENDPOINT = "/api/system/companies/";
 
 const translations = {
@@ -106,6 +148,34 @@ const translations = {
     quickLinksDesc: "تنقل سريع داخل وحدة الشركات.",
     addCompanyUser: "\u0625\u0636\u0627\u0641\u0629 \u0645\u0633\u062a\u062e\u062f\u0645 \u0634\u0631\u0643\u0629",
     addCompanySubscription: "\u0625\u0636\u0627\u0641\u0629 \u0627\u0634\u062a\u0631\u0627\u0643 \u0644\u0644\u0634\u0631\u0643\u0629",
+    companyUsers: "\u0645\u0633\u062a\u062e\u062f\u0645\u0648 \u0627\u0644\u0634\u0631\u0643\u0629",
+    companyUsersDesc: "\u0643\u0644 \u0639\u0636\u0648\u064a\u0627\u062a \u0627\u0644\u0634\u0631\u0643\u0629 \u0648\u0623\u062f\u0648\u0627\u0631 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645\u064a\u0646.",
+    userName: "\u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645",
+    userEmail: "\u0627\u0644\u0628\u0631\u064a\u062f",
+    userRole: "\u0627\u0644\u062f\u0648\u0631",
+    membershipStatus: "\u062d\u0627\u0644\u0629 \u0627\u0644\u0639\u0636\u0648\u064a\u0629",
+    joinedAt: "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0627\u0646\u0636\u0645\u0627\u0645",
+    companySubscriptions: "\u0633\u062c\u0644 \u0627\u0644\u0627\u0634\u062a\u0631\u0627\u0643\u0627\u062a",
+    companySubscriptionsDesc: "\u0643\u0644 \u0627\u0634\u062a\u0631\u0627\u0643\u0627\u062a \u0627\u0644\u0634\u0631\u0643\u0629 \u0627\u0644\u0633\u0627\u0628\u0642\u0629 \u0648\u0627\u0644\u062d\u0627\u0644\u064a\u0629.",
+    plan: "\u0627\u0644\u0628\u0627\u0642\u0629",
+    billingCycle: "\u062f\u0648\u0631\u0629 \u0627\u0644\u0641\u0648\u062a\u0631\u0629",
+    amount: "\u0627\u0644\u0642\u064a\u0645\u0629",
+    startDate: "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0628\u062f\u0621",
+    endDate: "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0627\u0646\u062a\u0647\u0627\u0621",
+    actionType: "\u0646\u0648\u0639 \u0627\u0644\u062d\u0631\u0643\u0629",
+    companyBillingDocs: "\u0627\u0644\u0641\u0648\u0627\u062a\u064a\u0631 \u0648\u0627\u0644\u0625\u064a\u0635\u0627\u0644\u0627\u062a",
+    companyBillingDocsDesc: "\u0633\u062c\u0644 \u0645\u0633\u062a\u0646\u062f\u0627\u062a \u0627\u0644\u0641\u0648\u062a\u0631\u0629 \u0648\u0645\u062f\u0641\u0648\u0639\u0627\u062a \u0627\u0644\u0645\u0646\u0635\u0629 \u0644\u0647\u0630\u0647 \u0627\u0644\u0634\u0631\u0643\u0629.",
+    documentType: "\u0646\u0648\u0639 \u0627\u0644\u0645\u0633\u062a\u0646\u062f",
+    documentNumber: "\u0631\u0642\u0645 \u0627\u0644\u0645\u0633\u062a\u0646\u062f",
+    paymentMethod: "\u0637\u0631\u064a\u0642\u0629 \u0627\u0644\u062f\u0641\u0639",
+    reference: "\u0627\u0644\u0645\u0631\u062c\u0639",
+    issueDate: "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0625\u0635\u062f\u0627\u0631",
+    paidAt: "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u062f\u0641\u0639",
+    openDetails: "\u0641\u062a\u062d",
+    emptyUsers: "\u0644\u0627 \u064a\u0648\u062c\u062f \u0645\u0633\u062a\u062e\u062f\u0645\u0648\u0646 \u0644\u0647\u0630\u0647 \u0627\u0644\u0634\u0631\u0643\u0629.",
+    emptySubscriptions: "\u0644\u0627 \u064a\u0648\u062c\u062f \u0633\u062c\u0644 \u0627\u0634\u062a\u0631\u0627\u0643\u0627\u062a.",
+    emptyBillingDocs: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0641\u0648\u0627\u062a\u064a\u0631 \u0623\u0648 \u0625\u064a\u0635\u0627\u0644\u0627\u062a.",
+    loadingRelated: "\u062c\u0627\u0631\u064a \u062a\u062d\u0645\u064a\u0644 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0634\u0631\u0643\u0629 \u0627\u0644\u0645\u0631\u062a\u0628\u0637\u0629...",
 
     companyName: "اسم الشركة",
     companyCode: "كود الشركة",
@@ -168,6 +238,34 @@ const translations = {
     quickLinksDesc: "Quick navigation inside the companies module.",
     addCompanyUser: "Add company user",
     addCompanySubscription: "Add company subscription",
+    companyUsers: "Company users",
+    companyUsersDesc: "All company memberships and user roles.",
+    userName: "User",
+    userEmail: "Email",
+    userRole: "Role",
+    membershipStatus: "Membership status",
+    joinedAt: "Joined at",
+    companySubscriptions: "Subscription history",
+    companySubscriptionsDesc: "All previous and current subscriptions for this company.",
+    plan: "Plan",
+    billingCycle: "Billing cycle",
+    amount: "Amount",
+    startDate: "Start date",
+    endDate: "End date",
+    actionType: "Action",
+    companyBillingDocs: "Invoices and receipts",
+    companyBillingDocsDesc: "Platform billing documents and payment receipts for this company.",
+    documentType: "Document type",
+    documentNumber: "Document number",
+    paymentMethod: "Payment method",
+    reference: "Reference",
+    issueDate: "Issue date",
+    paidAt: "Paid at",
+    openDetails: "Open",
+    emptyUsers: "No users found for this company.",
+    emptySubscriptions: "No subscription history found.",
+    emptyBillingDocs: "No invoices or receipts found.",
+    loadingRelated: "Loading related company records...",
 
     companyName: "Company name",
     companyCode: "Company code",
@@ -338,6 +436,161 @@ function extractCompanyPayload(payload: unknown): ApiRecord {
 
   return record;
 }
+
+
+function dataRecord(payload: unknown): ApiRecord {
+  const root = asRecord(payload);
+  return asRecord(root.data || root.result || payload);
+}
+function extractCollectionItems(payload: unknown, keys: string[] = []): unknown[] {
+  if (Array.isArray(payload)) return payload;
+  const root = asRecord(payload);
+  const data = dataRecord(payload);
+  const result = asRecord(root.result);
+  const containers = [data, root, result];
+  const candidateKeys = [
+    ...keys,
+    "items",
+    "results",
+    "records",
+    "memberships",
+    "subscriptions",
+    "documents",
+    "billing_documents",
+    "payment_receipts",
+    "receipts",
+  ];
+  for (const container of containers) {
+    for (const key of candidateKeys) {
+      const value = container[key];
+      if (Array.isArray(value)) return value;
+      const nested = asRecord(value);
+      for (const nestedKey of candidateKeys) {
+        const nestedValue = nested[nestedKey];
+        if (Array.isArray(nestedValue)) return nestedValue;
+      }
+    }
+  }
+  return [];
+}
+function normalizeCompanyUserSummary(value: unknown): CompanyUserSummary {
+  const record = asRecord(value);
+  const user = asRecord(record.user);
+  const profile = asRecord(record.profile);
+  const name =
+    normalizeNestedName(user, ["name", "full_name", "email", "username"]) ||
+    normalizeNestedName(profile, ["display_name", "name"]) ||
+    normalizeText(user.email || user.username || record.email || record.username, "?");
+  return {
+    id: normalizeText(record.id || user.id),
+    name,
+    email: normalizeText(user.email || record.email, "?"),
+    role: normalizeText(record.role || record.company_role || record.system_role, "?"),
+    status: normalizeStatus(record.status ?? record.is_active ?? record.is_active_membership),
+    isActive: Boolean(record.is_active ?? record.is_active_membership ?? user.is_active),
+    isPrimary: Boolean(record.is_primary),
+    joinedAt: normalizeText(record.joined_at || record.created_at) || null,
+  };
+}
+function normalizeCompanySubscriptionSummary(value: unknown): CompanySubscriptionSummary {
+  const record = asRecord(value);
+  const plan = asRecord(record.plan);
+  return {
+    id: normalizeText(record.id),
+    planName: normalizeText(plan.name || record.plan_name || record.plan, "?"),
+    planCode: normalizeText(plan.code || record.plan_code),
+    status: normalizeStatus(record.status),
+    action: normalizeText(record.action, "?"),
+    billingCycle: normalizeText(record.billing_cycle || record.cycle, "?"),
+    startDate: normalizeText(record.start_date) || null,
+    endDate: normalizeText(record.end_date) || null,
+    totalAmount: normalizeText(record.total_amount || record.amount || record.price, "0.00"),
+    isCurrent: Boolean(record.is_current),
+  };
+}
+function normalizeCompanyBillingDocumentSummary(value: unknown): CompanyBillingDocumentSummary {
+  const record = asRecord(value);
+  const subscription = asRecord(record.subscription);
+  return {
+    id: normalizeText(record.id),
+    documentType: normalizeText(record.document_type || record.type, "?"),
+    documentNumber: normalizeText(record.document_number || record.number, "?"),
+    status: normalizeStatus(record.status),
+    subscriptionId: normalizeText(subscription.id || record.subscription_id),
+    totalAmount: normalizeText(record.total_amount || record.amount || record.gross_amount, "0.00"),
+    paidAmount: normalizeText(record.paid_amount || record.total_amount || record.amount, "0.00"),
+    currencyCode: normalizeText(record.currency_code || record.currency || "SAR", "SAR"),
+    paymentMethod: normalizeText(record.payment_method, "?"),
+    transactionReference: normalizeText(record.transaction_reference || record.reference),
+    billingReference: normalizeText(record.billing_reference),
+    issueDate: normalizeText(record.issue_date || record.issued_at || record.created_at) || null,
+    paidAt: normalizeText(record.paid_at) || null,
+  };
+}
+function formatMoneyValue(amount: string, currency = "SAR") {
+  return `${currency || "SAR"} ${amount || "0.00"}`;
+}
+
+function formatDocumentType(value: string, locale: Locale) {
+  const normalized = normalizeText(value).toUpperCase();
+  if (normalized.includes("RECEIPT")) {
+    return locale === "ar" ? "\u0625\u064a\u0635\u0627\u0644 \u062f\u0641\u0639" : "Payment receipt";
+  }
+  if (normalized.includes("INVOICE")) {
+    return locale === "ar" ? "\u0641\u0627\u062a\u0648\u0631\u0629 \u0627\u0634\u062a\u0631\u0627\u0643" : "Subscription invoice";
+  }
+  return value || "\u2014";
+}
+
+
+function formatBillingCycleValue(value: string, locale: Locale) {
+  const normalized = normalizeText(value).toUpperCase();
+  if (normalized.includes("MONTH")) {
+    return locale === "ar" ? "\u0634\u0647\u0631\u064a" : "Monthly";
+  }
+  if (normalized.includes("YEAR") || normalized.includes("ANNUAL")) {
+    return locale === "ar" ? "\u0633\u0646\u0648\u064a" : "Yearly";
+  }
+  return value || "\u2014";
+}
+
+function formatSubscriptionActionValue(value: string, locale: Locale) {
+  const normalized = normalizeText(value).toUpperCase();
+  if (!normalized || normalized === "?" || normalized === "UNKNOWN" || normalized === "NONE" || normalized === "\u2014") {
+    return "\u2014";
+  }
+  if (normalized.includes("RENEW")) {
+    return locale === "ar" ? "\u062a\u062c\u062f\u064a\u062f" : "Renewal";
+  }
+  if (normalized.includes("DOWNGRADE")) {
+    return locale === "ar" ? "\u062a\u062e\u0641\u064a\u0636 \u0628\u0627\u0642\u0629" : "Downgrade";
+  }
+  if (normalized.includes("UPGRADE") || normalized.includes("CHANGE")) {
+    return locale === "ar" ? "\u062a\u063a\u064a\u064a\u0631 \u0628\u0627\u0642\u0629" : "Plan change";
+  }
+  if (normalized.includes("CANCEL")) {
+    return locale === "ar" ? "\u0625\u0644\u063a\u0627\u0621" : "Cancellation";
+  }
+  if (normalized.includes("SUSPEND")) {
+    return locale === "ar" ? "\u062a\u0639\u0637\u064a\u0644 \u0645\u0624\u0642\u062a" : "Suspension";
+  }
+  if (normalized.includes("CREATE") || normalized.includes("NEW")) {
+    return locale === "ar" ? "\u0627\u0634\u062a\u0631\u0627\u0643 \u062c\u062f\u064a\u062f" : "New subscription";
+  }
+  return value || "\u2014";
+}
+
+function formatPaymentMethodValue(value: string, locale: Locale) {
+  const normalized = normalizeText(value).toUpperCase();
+  if (!normalized || normalized === "\u2014") return "\u2014";
+  if (normalized === "CASH") return locale === "ar" ? "\u0646\u0642\u062f\u064a" : "Cash";
+  if (normalized === "BANK_TRANSFER") return locale === "ar" ? "\u062a\u062d\u0648\u064a\u0644 \u0628\u0646\u0643\u064a" : "Bank transfer";
+  if (normalized === "CARD") return locale === "ar" ? "\u0628\u0637\u0627\u0642\u0629 / \u0645\u062f\u0649" : "Card / Mada";
+  if (normalized === "PAYMENT_GATEWAY") return locale === "ar" ? "\u0628\u0648\u0627\u0628\u0629 \u062f\u0641\u0639" : "Payment gateway";
+  return value;
+}
+
+
 
 function normalizeCompany(payload: unknown): CompanyRecord {
   const record = extractCompanyPayload(payload);
@@ -583,6 +836,10 @@ export default function SystemCompanyDetailPage() {
 
   const [locale, setLocale] = React.useState<Locale>("ar");
   const [company, setCompany] = React.useState<CompanyRecord | null>(null);
+  const [companyUsers, setCompanyUsers] = React.useState<CompanyUserSummary[]>([]);
+  const [companySubscriptions, setCompanySubscriptions] = React.useState<CompanySubscriptionSummary[]>([]);
+  const [companyBillingDocuments, setCompanyBillingDocuments] = React.useState<CompanyBillingDocumentSummary[]>([]);
+  const [relatedLoading, setRelatedLoading] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -652,6 +909,53 @@ export default function SystemCompanyDetailPage() {
   React.useEffect(() => {
     void loadCompany();
   }, [loadCompany]);
+  const loadCompanyRelations = React.useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!companyId) return;
+      setRelatedLoading(true);
+      try {
+        const companyPayload = await fetchJson<ApiRecord>(
+          makeApiUrl(`${API_ENDPOINT}${companyId}/`),
+        );
+        const companyData = dataRecord(companyPayload);
+        setCompanyUsers(
+          extractCollectionItems(companyData, ["memberships"])
+            .map(normalizeCompanyUserSummary)
+            .filter((item) => item.id || item.email),
+        );
+        setCompanySubscriptions(
+          extractCollectionItems(companyData, ["subscriptions"])
+            .map(normalizeCompanySubscriptionSummary)
+            .filter((item) => item.id),
+        );
+        try {
+          const documentsPayload = await fetchJson<ApiRecord>(
+            makeApiUrl(`/api/system/billing-documents/?company_id=${companyId}&page_size=100`),
+          );
+          setCompanyBillingDocuments(
+            extractCollectionItems(documentsPayload, ["items", "results", "documents"])
+              .map(normalizeCompanyBillingDocumentSummary)
+              .filter((item) => item.id),
+          );
+        } catch {
+          setCompanyBillingDocuments([]);
+        }
+      } catch (caughtError) {
+        setCompanyUsers([]);
+        setCompanySubscriptions([]);
+        setCompanyBillingDocuments([]);
+        if (!options?.silent) {
+          toast.error(caughtError instanceof Error ? caughtError.message : t.errorDesc);
+        }
+      } finally {
+        setRelatedLoading(false);
+      }
+    },
+    [companyId, t.errorDesc],
+  );
+  React.useEffect(() => {
+    void loadCompanyRelations({ silent: true });
+  }, [loadCompanyRelations]);
 
   function fallback(value: string | null | undefined) {
     return normalizeText(value, t.notAvailable);
@@ -762,7 +1066,7 @@ export default function SystemCompanyDetailPage() {
           </CardHeader>
           <CardContent className="space-y-4 text-center">
             <p className="rounded-2xl bg-muted px-4 py-3 text-sm text-muted-foreground">{error}</p>
-            <Button onClick={() => void loadCompany({ silent: true })} className="rounded-xl">
+            <Button onClick={() => { void loadCompany({ silent: true }); void loadCompanyRelations({ silent: true }); }} className="rounded-xl">
               <RefreshCw className="h-4 w-4" />
               {t.tryAgain}
             </Button>
@@ -829,7 +1133,7 @@ export default function SystemCompanyDetailPage() {
                 <Button
                   variant="outline"
                   className="rounded-xl bg-background"
-                  onClick={() => void loadCompany({ silent: true })}
+                  onClick={() => { void loadCompany({ silent: true }); void loadCompanyRelations({ silent: true }); }}
                   disabled={refreshing}
                 >
                   {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -918,6 +1222,179 @@ export default function SystemCompanyDetailPage() {
                 <div className="min-h-24 rounded-2xl border bg-background p-4 text-sm leading-7 text-muted-foreground">
                   {company.notes || t.notAvailable}
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-2xl shadow-sm">
+              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5 text-muted-foreground" />
+                    {t.companyUsers}
+                  </CardTitle>
+                  <CardDescription>{t.companyUsersDesc}</CardDescription>
+                </div>
+                <Badge variant="outline" className="w-fit rounded-full">{companyUsers.length}</Badge>
+              </CardHeader>
+              <CardContent>
+                {relatedLoading && !companyUsers.length ? (
+                  <p className="rounded-2xl border bg-background p-4 text-sm text-muted-foreground">{t.loadingRelated}</p>
+                ) : companyUsers.length ? (
+                  <div className="overflow-x-auto rounded-2xl border bg-background">
+                    <table className="w-full min-w-[760px] text-sm">
+                      <thead className="bg-muted/60 text-xs text-muted-foreground">
+                        <tr>
+                          <th className="px-4 py-3 text-start font-medium">{t.userName}</th>
+                          <th className="px-4 py-3 text-start font-medium">{t.userEmail}</th>
+                          <th className="px-4 py-3 text-start font-medium">{t.userRole}</th>
+                          <th className="px-4 py-3 text-start font-medium">{t.membershipStatus}</th>
+                          <th className="px-4 py-3 text-start font-medium">{t.joinedAt}</th>
+                          <th className="px-4 py-3 text-start font-medium">{t.openDetails}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {companyUsers.map((item) => (
+                          <tr key={item.id || item.email}>
+                            <td className="px-4 py-3 font-medium">{item.name || t.notAvailable}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{item.email || t.notAvailable}</td>
+                            <td className="px-4 py-3">{item.role || t.notAvailable}</td>
+                            <td className="px-4 py-3"><StatusBadge value={item.status} locale={locale} /></td>
+                            <td className="px-4 py-3 text-muted-foreground">{formatDateTime(item.joinedAt)}</td>
+                            <td className="px-4 py-3">
+                              <Button asChild size="sm" variant="outline" className="h-8 rounded-lg bg-background">
+                                <Link href={`/system/users/${item.id}`}>
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                  {t.openDetails}
+                                </Link>
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="rounded-2xl border bg-background p-4 text-sm text-muted-foreground">{t.emptyUsers}</p>
+                )}
+              </CardContent>
+            </Card>
+            <Card className="rounded-2xl shadow-sm">
+              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <ReceiptText className="h-5 w-5 text-muted-foreground" />
+                    {t.companySubscriptions}
+                  </CardTitle>
+                  <CardDescription>{t.companySubscriptionsDesc}</CardDescription>
+                </div>
+                <Badge variant="outline" className="w-fit rounded-full">{companySubscriptions.length}</Badge>
+              </CardHeader>
+              <CardContent>
+                {relatedLoading && !companySubscriptions.length ? (
+                  <p className="rounded-2xl border bg-background p-4 text-sm text-muted-foreground">{t.loadingRelated}</p>
+                ) : companySubscriptions.length ? (
+                  <div className="overflow-x-auto rounded-2xl border bg-background">
+                    <table className="w-full min-w-[860px] text-sm">
+                      <thead className="bg-muted/60 text-xs text-muted-foreground">
+                        <tr>
+                          <th className="px-4 py-3 text-start font-medium">#</th>
+                          <th className="px-4 py-3 text-start font-medium">{t.plan}</th>
+                          <th className="px-4 py-3 text-start font-medium">{t.status}</th>
+                          <th className="px-4 py-3 text-start font-medium">{t.actionType}</th>
+                          <th className="px-4 py-3 text-start font-medium">{t.billingCycle}</th>
+                          <th className="px-4 py-3 text-start font-medium">{t.amount}</th>
+                          <th className="px-4 py-3 text-start font-medium">{t.endDate}</th>
+                          <th className="px-4 py-3 text-start font-medium">{t.openDetails}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {companySubscriptions.map((item) => (
+                          <tr key={item.id}>
+                            <td className="px-4 py-3 font-mono text-xs">{item.id}</td>
+                            <td className="px-4 py-3 font-medium">
+                              {item.planName}
+                              {item.planCode ? <span className="ms-1 text-xs text-muted-foreground">({item.planCode})</span> : null}
+                            </td>
+                            <td className="px-4 py-3"><StatusBadge value={item.status} locale={locale} /></td>
+                            <td className="px-4 py-3 text-muted-foreground">{formatSubscriptionActionValue(item.action, locale)}</td>
+                            <td className="px-4 py-3">{formatBillingCycleValue(item.billingCycle, locale)}</td>
+                            <td className="px-4 py-3 font-medium">{formatMoneyValue(item.totalAmount, company.code ? "SAR" : "SAR")}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{formatDateTime(item.endDate)}</td>
+                            <td className="px-4 py-3">
+                              <Button asChild size="sm" variant="outline" className="h-8 rounded-lg bg-background">
+                                <Link href={`/system/subscriptions/${item.id}`}>
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                  {t.openDetails}
+                                </Link>
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="rounded-2xl border bg-background p-4 text-sm text-muted-foreground">{t.emptySubscriptions}</p>
+                )}
+              </CardContent>
+            </Card>
+            <Card className="rounded-2xl shadow-sm">
+              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <CreditCard className="h-5 w-5 text-muted-foreground" />
+                    {t.companyBillingDocs}
+                  </CardTitle>
+                  <CardDescription>{t.companyBillingDocsDesc}</CardDescription>
+                </div>
+                <Badge variant="outline" className="w-fit rounded-full">{companyBillingDocuments.length}</Badge>
+              </CardHeader>
+              <CardContent>
+                {relatedLoading && !companyBillingDocuments.length ? (
+                  <p className="rounded-2xl border bg-background p-4 text-sm text-muted-foreground">{t.loadingRelated}</p>
+                ) : companyBillingDocuments.length ? (
+                  <div className="overflow-x-auto rounded-2xl border bg-background">
+                    <table className="w-full min-w-[980px] text-sm">
+                      <thead className="bg-muted/60 text-xs text-muted-foreground">
+                        <tr>
+                          <th className="px-4 py-3 text-start font-medium">{t.documentNumber}</th>
+                          <th className="px-4 py-3 text-start font-medium">{t.documentType}</th>
+                          <th className="px-4 py-3 text-start font-medium">{t.status}</th>
+                          <th className="px-4 py-3 text-start font-medium">{t.subscription}</th>
+                          <th className="px-4 py-3 text-start font-medium">{t.amount}</th>
+                          <th className="px-4 py-3 text-start font-medium">{t.paymentMethod}</th>
+                          <th className="px-4 py-3 text-start font-medium">{t.reference}</th>
+                          <th className="px-4 py-3 text-start font-medium">{t.issueDate}</th>
+                          <th className="px-4 py-3 text-start font-medium">{t.openDetails}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {companyBillingDocuments.map((item) => (
+                          <tr key={item.id}>
+                            <td className="px-4 py-3 font-mono text-xs">{item.documentNumber}</td>
+                            <td className="px-4 py-3">{formatDocumentType(item.documentType, locale)}</td>
+                            <td className="px-4 py-3"><StatusBadge value={item.status} locale={locale} /></td>
+                            <td className="px-4 py-3 font-mono text-xs">{item.subscriptionId || t.notAvailable}</td>
+                            <td className="px-4 py-3 font-medium">{formatMoneyValue(item.totalAmount, item.currencyCode)}</td>
+                            <td className="px-4 py-3">{formatPaymentMethodValue(item.paymentMethod, locale)}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{item.transactionReference || item.billingReference || t.notAvailable}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{formatDateTime(item.issueDate)}</td>
+                            <td className="px-4 py-3">
+                              <Button asChild size="sm" variant="outline" className="h-8 rounded-lg bg-background">
+                                <Link href={`/system/platform-payments/${item.id}`}>
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                  {t.openDetails}
+                                </Link>
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="rounded-2xl border bg-background p-4 text-sm text-muted-foreground">{t.emptyBillingDocs}</p>
+                )}
               </CardContent>
             </Card>
           </div>

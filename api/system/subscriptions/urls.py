@@ -26,6 +26,8 @@ from .create import system_subscription_create
 from .detail import system_subscription_detail
 from .list import system_subscriptions_list
 from .renew import system_subscription_renew
+from .suspend import system_subscription_suspend
+from .reactivate import system_subscription_reactivate
 
 
 app_name = "system_subscriptions"
@@ -37,6 +39,8 @@ urlpatterns = [
     path("<int:subscription_id>/", system_subscription_detail, name="detail"),
     path("<int:subscription_id>/renew/", system_subscription_renew, name="renew"),
     path("<int:subscription_id>/cancel/", system_subscription_cancel, name="cancel"),
+    path("<int:subscription_id>/suspend/", system_subscription_suspend, name="suspend"),
+    path("<int:subscription_id>/reactivate/", system_subscription_reactivate, name="reactivate"),
     path(
         "<int:subscription_id>/change-plan/",
         system_subscription_change_plan,
