@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/treasury/supplier_payments/confirm.py
-# 🧠 PrimeyAcc | Company Treasury Supplier Payment Confirm API V1.1
+# 🧠 Mhamcloud | Company Treasury Supplier Payment Confirm API V1.1
 # ------------------------------------------------------------
 # ✅ Confirm supplier payment for current company only
 # ✅ Creates/posts OUTFLOW treasury transaction through services.py

@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 billing/tests.py
-# 🧠 PrimeyAcc | Platform Billing Documents Tests V1.2
+# 🧠 Mhamcloud | Platform Billing Documents Tests V1.2
 # ------------------------------------------------------------
 # ✅ Tests platform invoice and receipt numbering
 # ✅ Tests separate yearly document sequences
@@ -14,7 +14,7 @@
 # ✅ Tests invalid subscription pricing and payment protection
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
-# - هذه الاختبارات تخص فوترة مالك منصة PrimeyAcc فقط
+# - هذه الاختبارات تخص فوترة مالك منصة Mhamcloud فقط
 # - لا تستخدم مستندات أو طرق دفع الشركات
 # - لكل نوع مستند تسلسل سنوي مستقل
 # - كل اشتراك يملك فاتورة منصة واحدة فقط
@@ -397,13 +397,13 @@ class PlatformDocumentNumberingTests(TestCase):
 
 
 @override_settings(
-    PRIMEYACC_PLATFORM_BILLING_SELLER={
-        "name": "PrimeyAcc Platform Company",
+    Mhamcloud_PLATFORM_BILLING_SELLER={
+        "name": "Mhamcloud Platform Company",
         "name_ar": "شركة برايمي أك",
-        "name_en": "PrimeyAcc Platform Company",
+        "name_en": "Mhamcloud Platform Company",
         "commercial_registration": "1010101010",
         "tax_number": "310000000000003",
-        "email": "billing@primeyacc.test",
+        "email": "billing@Mhamcloud.test",
         "phone": "0110000000",
         "country": "Saudi Arabia",
         "city": "Riyadh",
@@ -419,7 +419,7 @@ class PlatformSubscriptionInvoiceTests(TestCase):
     def setUp(self) -> None:
         self.user = User.objects.create_user(
             username="billing-admin",
-            email="billing-admin@primeyacc.test",
+            email="billing-admin@Mhamcloud.test",
             password="StrongPass123!",
         )
 
@@ -430,7 +430,7 @@ class PlatformSubscriptionInvoiceTests(TestCase):
             company_code="BILLING-TEST",
             commercial_registration="4030000001",
             tax_number="310000000000111",
-            email="company@primeyacc.test",
+            email="company@Mhamcloud.test",
             phone="0120000000",
             mobile="0500000000",
             country="Saudi Arabia",
@@ -525,7 +525,7 @@ class PlatformSubscriptionInvoiceTests(TestCase):
             ):
                 if "email" in field_name:
                     data[field.name] = (
-                        f"{field.name}@primeyacc.test"
+                        f"{field.name}@Mhamcloud.test"
                     )
                 elif (
                     "phone" in field_name
@@ -578,7 +578,7 @@ class PlatformSubscriptionInvoiceTests(TestCase):
 
         self.assertEqual(
             snapshot["name"],
-            "PrimeyAcc Platform Company",
+            "Mhamcloud Platform Company",
         )
         self.assertEqual(
             snapshot["name_ar"],
@@ -748,7 +748,7 @@ class PlatformSubscriptionInvoiceTests(TestCase):
 
         self.assertEqual(
             payload["schema"],
-            "primeyacc.platform_billing_document.v1",
+            "Mhamcloud.platform_billing_document.v1",
         )
         self.assertEqual(
             payload["document"]["number"],
@@ -875,7 +875,7 @@ class PlatformSubscriptionInvoiceTests(TestCase):
 
         self.assertEqual(
             invoice.seller_snapshot["name"],
-            "PrimeyAcc Platform Company",
+            "Mhamcloud Platform Company",
         )
         self.assertEqual(
             invoice.buyer_snapshot["company_code"],
@@ -952,7 +952,7 @@ class PlatformSubscriptionInvoiceTests(TestCase):
             name="Second Billing Company",
             name_ar="شركة الفوترة الثانية",
             company_code="BILLING-SECOND",
-            email="second@primeyacc.test",
+            email="second@Mhamcloud.test",
         )
 
         second_subscription = create_pending_subscription(
@@ -1381,7 +1381,7 @@ class PlatformSubscriptionInvoiceTests(TestCase):
 
         self.assertEqual(
             payload["schema"],
-            "primeyacc.platform_billing_document.v1",
+            "Mhamcloud.platform_billing_document.v1",
         )
         self.assertEqual(
             payload["document"]["type"],

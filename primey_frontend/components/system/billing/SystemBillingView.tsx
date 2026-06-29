@@ -1,6 +1,6 @@
 ﻿/* ============================================================
    📂 components/system/billing/SystemBillingView.tsx
-   🧠 PrimeyAcc | Frontend Phase 5.4 — System Subscriptions + Platform Payments
+   🧠 Mhamcloud | Frontend Phase 5.4 — System Subscriptions + Platform Payments
 ===============================================================
    ✅ System company subscriptions pages
    ✅ Platform payments monitoring pages

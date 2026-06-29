@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/business_controls/audit_events/detail.py
-# 🧠 PrimeyAcc | Company Audit Event Detail API V1.0
+# 🧠 Mhamcloud | Company Audit Event Detail API V1.0
 # ============================================================
 
 from __future__ import annotations

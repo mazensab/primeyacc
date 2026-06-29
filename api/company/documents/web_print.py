@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/documents/web_print.py
-# 🧠 PrimeyAcc | Company Document Web Print API V1.0
+# 🧠 Mhamcloud | Company Document Web Print API V1.0
 # ------------------------------------------------------------
 # ✅ Print-ready HTML document response
 # ✅ A4/browser print foundation
@@ -64,7 +64,7 @@ def company_document_web_print(request: Request):
             result["html"],
             content_type="text/html; charset=utf-8",
         )
-        response["X-PrimeyAcc-Document-Filename"] = result["filename"]
+        response["X-Mhamcloud-Document-Filename"] = result["filename"]
         return response
 
     except CompanyDocumentsAPIError as exc:

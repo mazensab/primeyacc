@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 reports/financial.py
-# 🧠 PrimeyAcc | Financial Reports Services - Phase 16.2
+# 🧠 Mhamcloud | Financial Reports Services - Phase 16.2
 # ------------------------------------------------------------
 # ✅ Trial Balance report
 # ✅ Uses posted journal entries only

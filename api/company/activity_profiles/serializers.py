@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/activity_profiles/serializers.py
-# 🧠 PrimeyAcc | Activity Profiles Serializers
+# 🧠 Mhamcloud | Activity Profiles Serializers
 # ------------------------------------------------------------
 # ✅ ActivityProfile serializer
 # ✅ Current company activity serializer

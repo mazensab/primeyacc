@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/accounting/reports/trial_balance.py
-# 🧠 PrimeyAcc | Company Accounting Trial Balance API
+# 🧠 Mhamcloud | Company Accounting Trial Balance API
 # ------------------------------------------------------------
 # ✅ ميزان مراجعة للشركة الحالية
 # ✅ عزل كامل حسب CompanyMembership

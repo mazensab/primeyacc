@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/system/plans/list.py
-# 🧠 PrimeyAcc | System Subscription Plans List API V1.1
+# 🧠 Mhamcloud | System Subscription Plans List API V1.1
 # ------------------------------------------------------------
 # ✅ List SaaS subscription plans for system workspace
 # ✅ Supports search, status filters, public/internal filters

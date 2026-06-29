@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/system/plans/update.py
-# 🧠 PrimeyAcc | System Subscription Plan Update API V1.1
+# 🧠 Mhamcloud | System Subscription Plan Update API V1.1
 # ------------------------------------------------------------
 # ✅ Update SaaS subscription plans from system workspace
 # ✅ Supports partial updates using PATCH or POST

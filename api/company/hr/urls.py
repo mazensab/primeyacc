@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/hr/urls.py
-# 🧠 PrimeyAcc | Company HR URLs V1.2
+# 🧠 Mhamcloud | Company HR URLs V1.2
 # ------------------------------------------------------------
 # ✅ HR module routes
 # ✅ Employees routes include

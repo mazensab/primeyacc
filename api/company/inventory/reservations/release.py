@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ?? api/company/inventory/reservations/release.py
-# ?? PrimeyAcc | Reservation Allocation Release API V1.0
+# ?? Mhamcloud | Reservation Allocation Release API V1.0
 # ------------------------------------------------------------
 # ? Partial/full allocation release
 # ? Batch and serial lifecycle compatibility

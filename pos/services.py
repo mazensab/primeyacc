@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 pos/services.py
-# 🧠 PrimeyAcc | POS Services V1.1
+# 🧠 Mhamcloud | POS Services V1.1
 # ------------------------------------------------------------
 # ✅ POS Register Creation Service
 # ✅ POS Session Open / Close / Cancel Services

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/hr/leave_balances/list.py
-# 🧠 PrimeyAcc | Company HR Leave Balances List API V1.0
+# 🧠 Mhamcloud | Company HR Leave Balances List API V1.0
 # ============================================================
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 business_controls/admin.py
-# 🧠 PrimeyAcc | Business Controls Admin V1.0
+# 🧠 Mhamcloud | Business Controls Admin V1.0
 # ------------------------------------------------------------
 # ✅ Audit event admin
 # ✅ Idempotency key admin

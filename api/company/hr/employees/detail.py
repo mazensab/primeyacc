@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/hr/employees/detail.py
-# 🧠 PrimeyAcc | Company HR Employee Detail API V1.0
+# 🧠 Mhamcloud | Company HR Employee Detail API V1.0
 # ------------------------------------------------------------
 # ✅ Retrieve company-scoped employee detail
 # ✅ Tenant isolation through request.company

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/notifications/mark_read.py
-# 🧠 PrimeyAcc | Company Notifications Mark Read API V1.0
+# 🧠 Mhamcloud | Company Notifications Mark Read API V1.0
 # ------------------------------------------------------------
 # ✅ POST /api/company/notifications/<id>/read/
 # ✅ Tenant-isolated by request.company

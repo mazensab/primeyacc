@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 companies/admin.py
-# 🧠 PrimeyAcc | Companies Admin V1.3
+# 🧠 Mhamcloud | Companies Admin V1.3
 # ------------------------------------------------------------
 # ✅ Register ActivityProfile Model
 # ✅ Register Company Model

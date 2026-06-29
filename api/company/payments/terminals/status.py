@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/payments/terminals/status.py
-# 🧠 PrimeyAcc | Company Payment Terminal Status API V1.0
+# 🧠 Mhamcloud | Company Payment Terminal Status API V1.0
 # ------------------------------------------------------------
 # ✅ Activate payment terminal for current company only
 # ✅ Deactivate payment terminal for current company only

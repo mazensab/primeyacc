@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/treasury/customer_payments/detail.py
-# 🧠 PrimeyAcc | Company Treasury Customer Payment Detail API V1.1
+# 🧠 Mhamcloud | Company Treasury Customer Payment Detail API V1.1
 # ------------------------------------------------------------
 # ✅ Retrieve one customer payment for current company only
 # ✅ Update draft customer payment only

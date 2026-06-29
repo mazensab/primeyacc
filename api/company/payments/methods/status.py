@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/payments/methods/status.py
-# 🧠 PrimeyAcc | Company Payment Method Status API V1.0
+# 🧠 Mhamcloud | Company Payment Method Status API V1.0
 # ------------------------------------------------------------
 # ✅ Activate payment method for current company only
 # ✅ Deactivate payment method for current company only

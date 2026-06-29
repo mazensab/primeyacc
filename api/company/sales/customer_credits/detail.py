@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # api/company/sales/customer_credits/detail.py
-# PrimeyAcc | Customer Credit Allocation Detail API
+# Mhamcloud | Customer Credit Allocation Detail API
 # ============================================================
 
 from __future__ import annotations

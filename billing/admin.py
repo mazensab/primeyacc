@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 billing/admin.py
-# 🧠 PrimeyAcc | Platform Billing Documents Admin V1.0
+# 🧠 Mhamcloud | Platform Billing Documents Admin V1.0
 # ------------------------------------------------------------
 # ✅ Platform document sequences administration
 # ✅ Platform subscription invoices administration

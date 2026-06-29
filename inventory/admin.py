@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 inventory/admin.py
-# 🧠 PrimeyAcc | Company Inventory Admin V2.0
+# 🧠 Mhamcloud | Company Inventory Admin V2.0
 # ------------------------------------------------------------
 # ✅ Warehouse admin
 # ✅ Inventory locations and bins admin

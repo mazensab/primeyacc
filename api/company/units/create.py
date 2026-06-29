@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/units/create.py
-# 🧠 PrimeyAcc | Company Catalog Units Create API V1.1
+# 🧠 Mhamcloud | Company Catalog Units Create API V1.1
 # ------------------------------------------------------------
 # ✅ Create company-scoped catalog unit
 # ✅ Uses request.company from CompanyMembership context

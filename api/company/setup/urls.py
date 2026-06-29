@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/setup/urls.py
-# 🧠 PrimeyAcc | Company Setup API URLs V1.0
+# 🧠 Mhamcloud | Company Setup API URLs V1.0
 # ------------------------------------------------------------
 # ✅ Tenant-isolated company setup routes
 # ✅ Company setup overview endpoint

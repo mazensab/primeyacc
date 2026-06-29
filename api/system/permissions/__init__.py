@@ -1,1 +1,1 @@
-"""PrimeyAcc system permissions API package."""
+"""Mhamcloud system permissions API package."""

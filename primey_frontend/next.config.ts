@@ -33,7 +33,7 @@ const nextConfig: NextConfig = {
         // ======================================================
         // CURRENT WHATSAPP APIs - EXPLICIT DEV PROXY
         // ------------------------------------------------------
-        // PrimeyAcc current routes:
+        // Mhamcloud current routes:
         // - /api/system/whatsapp/
         // - /api/company/whatsapp/
         // Keeps trailing slash alignment with Django.
@@ -55,7 +55,7 @@ const nextConfig: NextConfig = {
           destination: `${djangoBaseUrl}/api/company/whatsapp/:path*/`,
         },
         // ======================================================
-        // 🏥 PRIMEY CARE PROVIDERS / CENTERS
+        // 🏥 Mhamcloud PROVIDERS / CENTERS
         // ======================================================
         {
           source: "/api/providers",

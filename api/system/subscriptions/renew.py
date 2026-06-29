@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/system/subscriptions/renew.py
-# 🧠 PrimeyAcc | System Company Subscription Renew API V1.2
+# 🧠 Mhamcloud | System Company Subscription Renew API V1.2
 # ------------------------------------------------------------
 # ✅ Renew company subscriptions from system workspace
 # ✅ Creates a new PENDING_PAYMENT subscription record

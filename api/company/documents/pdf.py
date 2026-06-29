@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/documents/pdf.py
-# 🧠 PrimeyAcc | Company Document PDF API V1.0
+# 🧠 Mhamcloud | Company Document PDF API V1.0
 # ------------------------------------------------------------
 # ✅ Minimal PDF document response
 # ✅ Dependency-free foundation
@@ -69,7 +69,7 @@ def company_document_pdf(request: Request):
             content_type="application/pdf",
         )
         response["Content-Disposition"] = f'inline; filename="{result["filename"]}"'
-        response["X-PrimeyAcc-Document-Filename"] = result["filename"]
+        response["X-Mhamcloud-Document-Filename"] = result["filename"]
         return response
 
     except CompanyDocumentsAPIError as exc:

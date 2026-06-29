@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/jewelry/views.py
-# 🧠 PrimeyAcc | Company Jewelry APIs — Phase 25.1
+# 🧠 Mhamcloud | Company Jewelry APIs — Phase 25.1
 # ============================================================
 # ✅ Company-scoped APIs for jewelry and gold foundation
 # ✅ Metals, karats, gold rates, items, pricing estimate and summary

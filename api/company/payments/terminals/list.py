@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/payments/terminals/list.py
-# 🧠 PrimeyAcc | Company Payment Terminals List/Create API V1.0
+# 🧠 Mhamcloud | Company Payment Terminals List/Create API V1.0
 # ------------------------------------------------------------
 # ✅ List payment terminals for current company only
 # ✅ Create payment terminals for current company only

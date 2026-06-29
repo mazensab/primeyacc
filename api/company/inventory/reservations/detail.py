@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ?? api/company/inventory/reservations/detail.py
-# ?? PrimeyAcc | Stock Reservation Detail API V1.0
+# ?? Mhamcloud | Stock Reservation Detail API V1.0
 # ------------------------------------------------------------
 # ? Current-company reservation detail
 # ? Allocation details

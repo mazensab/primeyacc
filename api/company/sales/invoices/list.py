@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/sales/invoices/list.py
-# 🧠 PrimeyAcc | Company Sales Invoices List API V1.0
+# 🧠 Mhamcloud | Company Sales Invoices List API V1.0
 # ------------------------------------------------------------
 # ✅ List company-scoped sales invoices
 # ✅ Search and filter invoices safely

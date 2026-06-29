@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 parties/models.py
-# 🧠 PrimeyAcc | Business Parties Models V1.0
+# 🧠 Mhamcloud | Business Parties Models V1.0
 # ------------------------------------------------------------
 # ✅ BusinessParty foundation for customers and suppliers
 # ✅ Company-scoped tenant isolation

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/units/list.py
-# 🧠 PrimeyAcc | Company Catalog Units List API V1.1
+# 🧠 Mhamcloud | Company Catalog Units List API V1.1
 # ------------------------------------------------------------
 # ✅ List company-scoped catalog units
 # ✅ Search and filter units safely

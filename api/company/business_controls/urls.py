@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/business_controls/urls.py
-# 🧠 PrimeyAcc | Company Business Controls URLs V1.0
+# 🧠 Mhamcloud | Company Business Controls URLs V1.0
 # ------------------------------------------------------------
 # ✅ Production hardening summary
 # ✅ Business audit event APIs

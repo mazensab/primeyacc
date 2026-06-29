@@ -1,9 +1,9 @@
 ﻿"use client";
 /* ============================================================
    📂 primey_frontend/app/system/api-contracts/page.tsx
-   🔗 PrimeyAcc — System API Contracts Registry
+   🔗 Mhamcloud — System API Contracts Registry
    ------------------------------------------------------------
-   ✅ Approved Premium PrimeyAcc system page pattern
+   ✅ Approved Premium Mhamcloud system page pattern
    ✅ Real API only: GET /api/system/release-readiness/
    ✅ Reads API contracts from data.contracts
    ✅ KPI cards + filters + contracts table
@@ -98,7 +98,7 @@ const translations = {
   ar: {
     title: "عقود API",
     subtitle:
-      "سجل عقود API المسجلة في PrimeyAcc للنظام والشركات من مصدر جاهزية الإصدار الحقيقي.",
+      "سجل عقود API المسجلة في Mhamcloud للنظام والشركات من مصدر جاهزية الإصدار الحقيقي.",
     badge: "الجاهزية والربط",
     refresh: "تحديث",
     exportExcel: "تصدير Excel",
@@ -154,7 +154,7 @@ const translations = {
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
     pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
-    reportTitle: "تقرير عقود API في PrimeyAcc",
+    reportTitle: "تقرير عقود API في Mhamcloud",
     generatedAt: "تاريخ الإنشاء",
     refreshed: "تم تحديث عقود API.",
     unknown: "غير معروف",
@@ -162,7 +162,7 @@ const translations = {
   en: {
     title: "API Contracts",
     subtitle:
-      "PrimeyAcc registered API contract registry for system and company endpoints from the live release-readiness source.",
+      "Mhamcloud registered API contract registry for system and company endpoints from the live release-readiness source.",
     badge: "Readiness & API",
     refresh: "Refresh",
     exportExcel: "Export Excel",
@@ -218,7 +218,7 @@ const translations = {
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
     pdfHint: "Choose Save as PDF from the print dialog.",
-    reportTitle: "PrimeyAcc API Contracts Report",
+    reportTitle: "Mhamcloud API Contracts Report",
     generatedAt: "Generated at",
     refreshed: "API contracts refreshed.",
     unknown: "Unknown",
@@ -611,7 +611,7 @@ export default function SystemApiContractsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `primeyacc-api-contracts-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-api-contracts-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();

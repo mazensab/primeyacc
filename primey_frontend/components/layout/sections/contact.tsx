@@ -51,7 +51,7 @@ function buildApiUrl(path: string): string {
    🧩 Types
 ========================================================= */
 const SUBJECT_OPTIONS = [
-  "Join Primey Care",
+  "Join Mhamcloud",
   "Ask About Benefits",
   "Healthcare Network",
   "Family Card",
@@ -129,7 +129,7 @@ const content: Record<AppLang, ContactContent> = {
       subTitle: "تواصل معنا",
       title: "هل تريد معرفة البطاقة أو البرنامج الأنسب لك؟",
       description:
-        "أرسل لنا استفسارك وسنساعدك في اختيار بطاقة أو برنامج Primey Care المناسب لك ولعائلتك، مع توضيح المزايا والشبكة الطبية المتاحة حسب احتياجك.",
+        "أرسل لنا استفسارك وسنساعدك في اختيار بطاقة أو برنامج Mhamcloud المناسب لك ولعائلتك، مع توضيح المزايا والشبكة الطبية المتاحة حسب احتياجك.",
     },
     contactInfo: {
       locationLabel: "الموقع:",
@@ -174,7 +174,7 @@ const content: Record<AppLang, ContactContent> = {
       sendFailed: "تعذر إرسال الاستفسار",
     },
     subjects: {
-      "Join Primey Care": "الاشتراك في Primey Care",
+      "Join Mhamcloud": "الاشتراك في Mhamcloud",
       "Ask About Benefits": "الاستفسار عن المزايا",
       "Healthcare Network": "الشبكة الطبية والمراكز المشاركة",
       "Family Card": "البطاقة العائلية",
@@ -187,7 +187,7 @@ const content: Record<AppLang, ContactContent> = {
       subTitle: "Contact",
       title: "Need help choosing the right card or program?",
       description:
-        "Send us your inquiry and we will help you choose the Primey Care card or program that fits you and your family, with clear details about benefits and available healthcare providers.",
+        "Send us your inquiry and we will help you choose the Mhamcloud card or program that fits you and your family, with clear details about benefits and available healthcare providers.",
     },
     contactInfo: {
       locationLabel: "Location:",
@@ -232,7 +232,7 @@ const content: Record<AppLang, ContactContent> = {
       sendFailed: "Failed to send inquiry",
     },
     subjects: {
-      "Join Primey Care": "Join Primey Care",
+      "Join Mhamcloud": "Join Mhamcloud",
       "Ask About Benefits": "Ask About Benefits",
       "Healthcare Network": "Healthcare Network",
       "Family Card": "Family Card",

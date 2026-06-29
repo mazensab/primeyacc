@@ -1,7 +1,7 @@
 ﻿"use client";
 /* ============================================================
    📂 primey_frontend/app/system/users/create/page.tsx
-   👤 PrimeyAcc — Create System User
+   👤 Mhamcloud — Create System User
    ------------------------------------------------------------
    ✅ Real API only: POST /api/users/
    ✅ CSRF/session auth with credentials include
@@ -41,7 +41,7 @@ const initialForm: FormState = {
 const translations = {
   ar: {
     title: "إضافة مستخدم نظام",
-    subtitle: "إنشاء مستخدم جديد داخل إدارة منصة PrimeyAcc باستخدام API الحقيقي فقط.",
+    subtitle: "إنشاء مستخدم جديد داخل إدارة منصة Mhamcloud باستخدام API الحقيقي فقط.",
     badge: "إدارة المنصة",
     back: "العودة للمستخدمين",
     list: "قائمة المستخدمين",
@@ -69,7 +69,7 @@ const translations = {
   },
   en: {
     title: "Add system user",
-    subtitle: "Create a new PrimeyAcc platform user using the real API only.",
+    subtitle: "Create a new Mhamcloud platform user using the real API only.",
     badge: "Platform management",
     back: "Back to users",
     list: "Users list",

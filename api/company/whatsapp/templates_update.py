@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/whatsapp/templates_update.py
-# 🧠 PrimeyAcc | Company WhatsApp Templates Update API V1.0
+# 🧠 Mhamcloud | Company WhatsApp Templates Update API V1.0
 # ------------------------------------------------------------
 # ✅ POST/PATCH /api/company/whatsapp/templates/<id>/update/
 # ✅ Tenant-isolated by request.company

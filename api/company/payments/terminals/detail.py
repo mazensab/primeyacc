@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/payments/terminals/detail.py
-# 🧠 PrimeyAcc | Company Payment Terminal Detail API V1.0
+# 🧠 Mhamcloud | Company Payment Terminal Detail API V1.0
 # ------------------------------------------------------------
 # ✅ Retrieve payment terminal for current company only
 # ✅ Update payment terminal for current company only

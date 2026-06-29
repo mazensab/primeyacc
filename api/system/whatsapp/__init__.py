@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/system/whatsapp/__init__.py
-# 🧠 PrimeyAcc | System WhatsApp API Package V1.0
+# 🧠 Mhamcloud | System WhatsApp API Package V1.0
 # ------------------------------------------------------------
 # ✅ System-level WhatsApp monitoring API
 # ✅ No model changes

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 payments/admin.py
-# 🧠 PrimeyAcc | Company Payments Admin
+# 🧠 Mhamcloud | Company Payments Admin
 # ------------------------------------------------------------
 # ✅ Admin management for company payment gateways
 # ✅ Admin management for company payment methods
@@ -148,7 +148,7 @@ class CompanyPaymentTerminalAdmin(admin.ModelAdmin):
 
 
 # ============================================================
-# 🧠 PrimeyAcc | Phase 23 Payment Integrations Admin
+# 🧠 Mhamcloud | Phase 23 Payment Integrations Admin
 # ============================================================
 
 from .models import (

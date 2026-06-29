@@ -1,6 +1,6 @@
 ﻿/* ============================================================
    📂 primey_frontend/app/system/notifications/page.tsx
-   🔔 PrimeyAcc — System Notifications Overview Route
+   🔔 Mhamcloud — System Notifications Overview Route
    ------------------------------------------------------------
    ✅ Uses shared SystemNotificationsCenter
    ✅ Overview mode

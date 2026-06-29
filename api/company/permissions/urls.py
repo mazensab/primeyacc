@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/permissions/urls.py
-# 🧠 PrimeyAcc | Company Permissions API URLs V1.0
+# 🧠 Mhamcloud | Company Permissions API URLs V1.0
 # ------------------------------------------------------------
 # ✅ Tenant-isolated company permissions routes
 # ✅ Company permissions snapshot endpoint

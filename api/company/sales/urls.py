@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/sales/urls.py
-# 🧠 PrimeyAcc | Company Sales URLs V1.2
+# 🧠 Mhamcloud | Company Sales URLs V1.2
 # ------------------------------------------------------------
 # ✅ Company sales module routes
 # ✅ Sales invoices routes

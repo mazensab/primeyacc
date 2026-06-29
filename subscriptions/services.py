@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 subscriptions/services.py
-# 🧠 PrimeyAcc | Platform Subscription Services V1.0
+# 🧠 Mhamcloud | Platform Subscription Services V1.0
 # ------------------------------------------------------------
 # ✅ Creates pending subscription payments
 # ✅ Renews subscriptions as new records

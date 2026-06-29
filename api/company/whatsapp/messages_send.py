@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/whatsapp/messages_send.py
-# 🧠 PrimeyAcc | Company WhatsApp Messages Send API V1.0
+# 🧠 Mhamcloud | Company WhatsApp Messages Send API V1.0
 # ------------------------------------------------------------
 # ✅ POST /api/company/whatsapp/messages/send/
 # ✅ Tenant-isolated by request.company

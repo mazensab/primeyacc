@@ -2,7 +2,7 @@
 
 /* =====================================================
    📂 components/layout/header/theme-switch.tsx
-   🧠 Primey Care — Premium Theme Switch
+   🧠 Mhamcloud — Premium Theme Switch
    -----------------------------------------------------
    ✅ متوافق مع الهيدر الجديد
    ✅ يدعم light / dark / system

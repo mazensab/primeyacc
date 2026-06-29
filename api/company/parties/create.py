@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/parties/create.py
-# 🧠 PrimeyAcc | Company Business Parties Create API V1.0
+# 🧠 Mhamcloud | Company Business Parties Create API V1.0
 # ------------------------------------------------------------
 # ✅ Create company-scoped business party
 # ✅ Supports customers, suppliers, both and other parties

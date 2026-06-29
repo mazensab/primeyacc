@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 release_readiness/management/commands/check_release_readiness.py
-# 🧠 PrimeyAcc | Release Readiness Management Command v1
+# 🧠 Mhamcloud | Release Readiness Management Command v1
 # ============================================================
 # ✅ Prints backend release readiness summary
 # ✅ Can fail CI only when hard blockers exist
@@ -17,7 +17,7 @@ from release_readiness.services import build_release_readiness_payload
 
 
 class Command(BaseCommand):
-    help = "Check PrimeyAcc backend release readiness and API contract registry."
+    help = "Check Mhamcloud backend release readiness and API contract registry."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -39,7 +39,7 @@ class Command(BaseCommand):
         if options["json"]:
             self.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
-            self.stdout.write(self.style.SUCCESS("PrimeyAcc Phase 27 Release Readiness"))
+            self.stdout.write(self.style.SUCCESS("Mhamcloud Phase 27 Release Readiness"))
             self.stdout.write(f"Status: {status}")
             self.stdout.write(f"Contracts: {data['summary']['contracts_count']}")
             self.stdout.write(f"Checks: {data['summary']['checks_count']}")

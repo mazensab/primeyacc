@@ -2,7 +2,7 @@
 /*
 ================================================================================
 📂 primey_frontend/components/system/whatsapp/SystemWhatsAppInboxView.tsx
-🟢 PrimeyAcc — System WhatsApp Inbox Premium View
+🟢 Mhamcloud — System WhatsApp Inbox Premium View
 ================================================================================
 ✅ Approved Premium pattern matching system companies page
 ✅ Real API only: /api/system/whatsapp/inbox/
@@ -135,7 +135,7 @@ const translations = {
   ar: {
     badge: "التواصل والإشعارات",
     title: "صندوق محادثات واتساب النظام",
-    desc: "متابعة المحادثات الواردة والرد عليها مباشرة من داخل PrimeyAcc باستخدام اتصال واتساب الرسمي للنظام.",
+    desc: "متابعة المحادثات الواردة والرد عليها مباشرة من داخل Mhamcloud باستخدام اتصال واتساب الرسمي للنظام.",
     settings: "إعدادات واتساب",
     settingsDesc: "إدارة الاتصال، QR، Pairing Code، وحالة الجلسة.",
     templates: "قوالب واتساب",
@@ -190,7 +190,7 @@ const translations = {
   en: {
     badge: "Communication & Notifications",
     title: "System WhatsApp Inbox",
-    desc: "Monitor inbound conversations and reply directly from PrimeyAcc using the official system WhatsApp connection.",
+    desc: "Monitor inbound conversations and reply directly from Mhamcloud using the official system WhatsApp connection.",
     settings: "WhatsApp Settings",
     settingsDesc: "Manage connection, QR, Pairing Code, and session status.",
     templates: "WhatsApp Templates",

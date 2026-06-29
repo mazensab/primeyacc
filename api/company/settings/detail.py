@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/settings/detail.py
-# 🧠 PrimeyAcc | Company Operational Settings API V1.0
+# 🧠 Mhamcloud | Company Operational Settings API V1.0
 # ------------------------------------------------------------
 # ✅ Tenant-isolated company settings detail
 # ✅ Tenant-isolated company settings update

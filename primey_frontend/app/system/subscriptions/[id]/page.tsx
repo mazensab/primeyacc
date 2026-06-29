@@ -2,9 +2,9 @@
 
 /* ============================================================
    📂 primey_frontend/app/system/subscriptions/[id]/page.tsx
-   💳 PrimeyAcc — System Subscription Detail
+   💳 Mhamcloud — System Subscription Detail
    ------------------------------------------------------------
-   ✅ Premium PrimeyCare detail pattern adapted for PrimeyAcc
+   ✅ Premium PrimeyCare detail pattern adapted for Mhamcloud
    ✅ Real API only: GET /api/system/subscriptions/{id}/
    ✅ Detail cards + printable report
    ✅ Refresh, print, PDF through browser print dialog
@@ -81,7 +81,7 @@ const translations = {
   ar: {
     title: "تفاصيل الاشتراك",
     subtitle:
-      "عرض تفاصيل اشتراك الشركة داخل إدارة منصة PrimeyAcc مع بيانات الشركة والخطة والحالة والدورة والقيمة والتواريخ.",
+      "عرض تفاصيل اشتراك الشركة داخل إدارة منصة Mhamcloud مع بيانات الشركة والخطة والحالة والدورة والقيمة والتواريخ.",
     badge: "إدارة المنصة",
     backToCompanies: "العودة للاشتراكات",
     companiesList: "قائمة الاشتراكات",
@@ -130,7 +130,7 @@ const translations = {
     unknown: "غير محدد",
     notAvailable: "غير متوفر",
 
-    reportTitle: "تقرير تفاصيل شركة PrimeyAcc",
+    reportTitle: "تقرير تفاصيل شركة Mhamcloud",
     generatedAt: "تاريخ الطباعة",
 
     errorTitle: "تعذر تحميل تفاصيل الاشتراك",
@@ -143,7 +143,7 @@ const translations = {
   en: {
     title: "Subscription details",
     subtitle:
-      "View the company subscription inside PrimeyAcc platform management with company, plan, status, billing cycle, value, and dates.",
+      "View the company subscription inside Mhamcloud platform management with company, plan, status, billing cycle, value, and dates.",
     badge: "Platform management",
     backToCompanies: "Back to subscriptions",
     companiesList: "Subscriptions list",
@@ -192,7 +192,7 @@ const translations = {
     unknown: "Unknown",
     notAvailable: "Not available",
 
-    reportTitle: "PrimeyAcc Subscription Details Report",
+    reportTitle: "Mhamcloud Subscription Details Report",
     generatedAt: "Generated at",
 
     errorTitle: "Could not load subscription details",

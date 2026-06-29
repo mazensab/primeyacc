@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/system/billing_documents/create_invoice.py
-# 🧠 PrimeyAcc | System Billing Document Create Invoice API V1.1
+# 🧠 Mhamcloud | System Billing Document Create Invoice API V1.1
 # ------------------------------------------------------------
 # ✅ Creates or returns a platform subscription invoice
 # ✅ Uses billing.services.create_or_get_subscription_invoice
@@ -12,7 +12,7 @@
 # ✅ Safely handles JSON dictionary payloads
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
-# - هذه الفاتورة تخص مالك منصة PrimeyAcc وليست فاتورة شركة
+# - هذه الفاتورة تخص مالك منصة Mhamcloud وليست فاتورة شركة
 # - لا نكرر منطق الفوترة الموجود داخل billing/services.py
 # - لكل اشتراك فاتورة منصة واحدة فقط
 # - عند وجود الفاتورة مسبقًا نعيدها ولا ننشئ مستندًا جديدًا

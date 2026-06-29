@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 hr/tests.py
-# 🧠 PrimeyAcc | HR Tests V1.3
+# 🧠 Mhamcloud | HR Tests V1.3
 # ------------------------------------------------------------
 # ✅ Employee model tests
 # ✅ Employee services tests

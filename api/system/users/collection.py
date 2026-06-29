@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # File: api/system/users/collection.py
-# Module: PrimeyAcc System Users Collection API
+# Module: Mhamcloud System Users Collection API
 # Endpoints:
 # - GET  /api/system/users/
 # - POST /api/system/users/

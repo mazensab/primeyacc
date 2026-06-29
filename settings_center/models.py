@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 settings_center/models.py
-# PrimeyAcc | System Settings Center Models
+# Mhamcloud | System Settings Center Models
 # ------------------------------------------------------------
 # ✅ Backend only
 # ✅ Global system settings

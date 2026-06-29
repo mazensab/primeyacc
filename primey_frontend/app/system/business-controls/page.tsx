@@ -1,9 +1,9 @@
 ﻿"use client";
 /* ============================================================
    📂 primey_frontend/app/system/business-controls/page.tsx
-   🧩 PrimeyAcc — System Business Controls Center
+   🧩 Mhamcloud — System Business Controls Center
    ------------------------------------------------------------
-   ✅ Premium PrimeyCare admin pattern adapted for PrimeyAcc
+   ✅ Premium PrimeyCare admin pattern adapted for Mhamcloud
    ✅ System business controls module center page
    ✅ Real API only: GET /api/system/business-controls/
    ✅ KPI cards + quick actions + business controls tables
@@ -185,7 +185,7 @@ const translations = {
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
     pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
-    reportTitle: "تقرير ضوابط الأعمال في PrimeyAcc",
+    reportTitle: "تقرير ضوابط الأعمال في Mhamcloud",
     generatedAt: "تاريخ الإنشاء",
     refreshed: "تم تحديث ضوابط الأعمال.",
     unknown: "غير معروف",
@@ -265,7 +265,7 @@ const translations = {
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
     pdfHint: "Choose Save as PDF from the print dialog.",
-    reportTitle: "PrimeyAcc Business Controls Report",
+    reportTitle: "Mhamcloud Business Controls Report",
     generatedAt: "Generated at",
     refreshed: "Business controls refreshed.",
     unknown: "Unknown",
@@ -773,7 +773,7 @@ export default function SystemBusinessControlsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `primeyacc-business-controls-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-business-controls-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();

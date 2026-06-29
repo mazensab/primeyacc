@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/hr/attendance/actions.py
-# 🧠 PrimeyAcc | Company HR Attendance Actions APIs V1.0
+# 🧠 Mhamcloud | Company HR Attendance Actions APIs V1.0
 # ------------------------------------------------------------
 # ✅ Check-in employee
 # ✅ Check-out attendance record

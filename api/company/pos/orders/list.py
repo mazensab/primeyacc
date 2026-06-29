@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/orders/list.py
-# 🧠 PrimeyAcc | Company POS Orders List API V1.1
+# 🧠 Mhamcloud | Company POS Orders List API V1.1
 # ------------------------------------------------------------
 # ✅ List POS orders for current company only
 # ✅ Tenant isolation through request.company

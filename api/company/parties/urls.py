@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/parties/urls.py
-# 🧠 PrimeyAcc | Company Business Parties API URLs V1.0
+# 🧠 Mhamcloud | Company Business Parties API URLs V1.0
 # ------------------------------------------------------------
 # ✅ Business parties list route
 # ✅ Business party create route

@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # api/company/sales/customer_credits/reverse.py
-# PrimeyAcc | Customer Credit Allocation Reverse API
+# Mhamcloud | Customer Credit Allocation Reverse API
 # ============================================================
 
 from __future__ import annotations

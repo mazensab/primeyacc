@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 release_readiness/contracts.py
-# 🧠 PrimeyAcc | API Contract Registry v1
+# 🧠 Mhamcloud | API Contract Registry v1
 # ============================================================
 # ✅ Central backend API contract registry
 # ✅ Release-readiness API map

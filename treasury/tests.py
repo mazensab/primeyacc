@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ًں“‚ treasury/tests.py
-# ًں§  PrimeyAcc | Treasury & Payments Tests V1.1
+# ًں§  Mhamcloud | Treasury & Payments Tests V1.1
 # ------------------------------------------------------------
 # âœ… Phase 11.1 Treasury Accounts Foundation tests
 # âœ… Phase 11.2 Treasury Transactions Foundation tests
@@ -65,9 +65,9 @@ from .services import (
 # ============================================================
 
 
-class PrimeyAccTestFactoryMixin:
+class MhamcloudTestFactoryMixin:
     """
-    Shared lightweight factory helpers for PrimeyAcc tests.
+    Shared lightweight factory helpers for Mhamcloud tests.
 
     ط§ظ„ظ‡ط¯ظپ:
     ط¨ظ†ط§ط، ط´ط±ظƒط§طھ ظˆظ…ط³طھط®ط¯ظ…ظٹظ† ظˆط¹ط¶ظˆظٹط§طھ ط¨ط·ط±ظٹظ‚ط© ظ…ط±ظ†ط© ظ„ط§ طھظƒط³ط± ط§ظ„ط§ط®طھط¨ط§ط±ط§طھ
@@ -190,7 +190,7 @@ class PrimeyAccTestFactoryMixin:
 # ============================================================
 
 
-class TreasuryServiceTests(PrimeyAccTestFactoryMixin, TestCase):
+class TreasuryServiceTests(MhamcloudTestFactoryMixin, TestCase):
     """
     Tests for the Phase 11 treasury foundation.
 
@@ -209,12 +209,12 @@ class TreasuryServiceTests(PrimeyAccTestFactoryMixin, TestCase):
         )
 
         cls.company_a = cls.create_company(
-            name="PrimeyAcc Company A",
+            name="Mhamcloud Company A",
             code="TST-A",
             email="company-a@example.com",
         )
         cls.company_b = cls.create_company(
-            name="PrimeyAcc Company B",
+            name="Mhamcloud Company B",
             code="TST-B",
             email="company-b@example.com",
         )
@@ -707,7 +707,7 @@ class TreasuryServiceTests(PrimeyAccTestFactoryMixin, TestCase):
 # ============================================================
 
 
-class TreasuryPaymentServiceTests(PrimeyAccTestFactoryMixin, TestCase):
+class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
     """
     Tests for CustomerPayment and SupplierPayment services.
 
@@ -726,12 +726,12 @@ class TreasuryPaymentServiceTests(PrimeyAccTestFactoryMixin, TestCase):
         )
 
         cls.company_a = cls.create_company(
-            name="PrimeyAcc Payment Company A",
+            name="Mhamcloud Payment Company A",
             code="PAY-A",
             email="payment-a@example.com",
         )
         cls.company_b = cls.create_company(
-            name="PrimeyAcc Payment Company B",
+            name="Mhamcloud Payment Company B",
             code="PAY-B",
             email="payment-b@example.com",
         )
@@ -1169,7 +1169,7 @@ class TreasuryPaymentServiceTests(PrimeyAccTestFactoryMixin, TestCase):
 # ============================================================
 
 
-class TreasuryPaymentAllocationServiceTests(PrimeyAccTestFactoryMixin, TestCase):
+class TreasuryPaymentAllocationServiceTests(MhamcloudTestFactoryMixin, TestCase):
     """
     Tests for linking confirmed payments to sales invoices and purchase bills.
 
@@ -1192,12 +1192,12 @@ class TreasuryPaymentAllocationServiceTests(PrimeyAccTestFactoryMixin, TestCase)
         )
 
         cls.company_a = cls.create_company(
-            name="PrimeyAcc Allocation Company A",
+            name="Mhamcloud Allocation Company A",
             code="ALLOC-A",
             email="allocation-a@example.com",
         )
         cls.company_b = cls.create_company(
-            name="PrimeyAcc Allocation Company B",
+            name="Mhamcloud Allocation Company B",
             code="ALLOC-B",
             email="allocation-b@example.com",
         )
@@ -1680,7 +1680,7 @@ class TreasuryPaymentAllocationServiceTests(PrimeyAccTestFactoryMixin, TestCase)
 # ============================================================
 
 
-class TreasuryAPITests(PrimeyAccTestFactoryMixin, TestCase):
+class TreasuryAPITests(MhamcloudTestFactoryMixin, TestCase):
     """
     API tests for Phase 11 treasury endpoints.
 
@@ -1691,12 +1691,12 @@ class TreasuryAPITests(PrimeyAccTestFactoryMixin, TestCase):
     @classmethod
     def setUpTestData(cls) -> None:
         cls.company = cls.create_company(
-            name="PrimeyAcc API Company",
+            name="Mhamcloud API Company",
             code="API-A",
             email="api-company@example.com",
         )
         cls.other_company = cls.create_company(
-            name="PrimeyAcc Other API Company",
+            name="Mhamcloud Other API Company",
             code="API-B",
             email="api-company-b@example.com",
         )

@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ?? api/company/inventory/reservations/allocate.py
-# ?? PrimeyAcc | Stock Reservation Allocation API V1.0
+# ?? Mhamcloud | Stock Reservation Allocation API V1.0
 # ------------------------------------------------------------
 # ? Standard stock allocation
 # ? Batch balance allocation

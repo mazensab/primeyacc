@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/warehouses/detail.py
-# 🧠 PrimeyAcc | Company Warehouse Detail API V1.0
+# 🧠 Mhamcloud | Company Warehouse Detail API V1.0
 # ------------------------------------------------------------
 # ✅ Retrieve one warehouse for current company only
 # ✅ Tenant isolation through request.company

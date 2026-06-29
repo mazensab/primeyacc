@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/returns/cancel.py
-# 🧠 PrimeyAcc | Company POS Return Cancel API V1.0
+# 🧠 Mhamcloud | Company POS Return Cancel API V1.0
 # ------------------------------------------------------------
 # ✅ Company-scoped POS Return Cancel
 # ✅ Uses pos.services.cancel_pos_return

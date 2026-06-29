@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/payments/urls.py
-# 🧠 PrimeyAcc | Company Payments URLs V1.2
+# 🧠 Mhamcloud | Company Payments URLs V1.2
 # ------------------------------------------------------------
 # ✅ Company payment methods routes
 # ✅ Company payment gateways routes
@@ -10,7 +10,7 @@
 # - كل endpoints تعمل داخل /company
 # - العزل الحقيقي يتم من request.company داخل views
 # - لا يتم قبول company_id من الواجهة كمصدر للشركة
-# - دفع اشتراكات PrimeyAcc للمنصة منفصل عن طرق دفع الشركات
+# - دفع اشتراكات Mhamcloud للمنصة منفصل عن طرق دفع الشركات
 # - طرق الدفع وبوابات الدفع وأجهزة الدفع هنا تخص عمليات الشركة مع عملائها
 # ============================================================
 

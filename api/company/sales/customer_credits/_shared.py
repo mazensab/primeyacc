@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # api/company/sales/customer_credits/_shared.py
-# PrimeyAcc | Customer Credit API Shared Helpers
+# Mhamcloud | Customer Credit API Shared Helpers
 # ============================================================
 
 from __future__ import annotations

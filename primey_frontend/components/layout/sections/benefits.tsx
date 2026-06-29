@@ -46,10 +46,10 @@ async function getPageLang(): Promise<AppLang> {
 ========================================================= */
 const benefitsContent: Record<AppLang, BenefitsContent> = {
   ar: {
-    subTitle: "لماذا Primey Care؟",
+    subTitle: "لماذا Mhamcloud؟",
     title: "مزايا صحية تساعدك أنت وعائلتك على التوفير",
     description:
-      "Primey Care تمنحك طريقة أسهل للاستفادة من خدمات طبية متنوعة بخصومات مختارة، عبر بطاقة وبرامج رعاية مصممة لتجعل الوصول إلى الرعاية الصحية أوضح وأقرب وأقل تكلفة.",
+      "Mhamcloud تمنحك طريقة أسهل للاستفادة من خدمات طبية متنوعة بخصومات مختارة، عبر بطاقة وبرامج رعاية مصممة لتجعل الوصول إلى الرعاية الصحية أوضح وأقرب وأقل تكلفة.",
     items: [
       {
         title: "وفّر في كل زيارة",
@@ -74,10 +74,10 @@ const benefitsContent: Record<AppLang, BenefitsContent> = {
     ],
   },
   en: {
-    subTitle: "Why Primey Care?",
+    subTitle: "Why Mhamcloud?",
     title: "Healthcare benefits that help you and your family save",
     description:
-      "Primey Care gives you an easier way to access a wide range of healthcare services with selected discounts through care cards and programs designed to make healthcare clearer, closer, and more affordable.",
+      "Mhamcloud gives you an easier way to access a wide range of healthcare services with selected discounts through care cards and programs designed to make healthcare clearer, closer, and more affordable.",
     items: [
       {
         title: "Save on Every Visit",
@@ -97,7 +97,7 @@ const benefitsContent: Record<AppLang, BenefitsContent> = {
       {
         title: "Options That Fit Your Needs",
         description:
-          "Whether you need an annual care card or a specific healthcare program for dental care, checkups, beauty, or maternity, Primey Care offers flexible options to choose from.",
+          "Whether you need an annual care card or a specific healthcare program for dental care, checkups, beauty, or maternity, Mhamcloud offers flexible options to choose from.",
       },
     ],
   },

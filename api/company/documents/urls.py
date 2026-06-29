@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/documents/urls.py
-# 🧠 PrimeyAcc | Company Documents URLs V1.1
+# 🧠 Mhamcloud | Company Documents URLs V1.1
 # ------------------------------------------------------------
 # ✅ Document templates routes
 # ✅ Document render payload endpoint

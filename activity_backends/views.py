@@ -1,1 +1,1 @@
-# PrimeyAcc activity_backends app uses company API views.
+# Mhamcloud activity_backends app uses company API views.

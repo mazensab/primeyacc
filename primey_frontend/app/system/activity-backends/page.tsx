@@ -1,6 +1,6 @@
 ﻿/* ============================================================
    📂 primey_frontend/app/system/activity-backends/page.tsx
-   🧩 PrimeyAcc — System Activity Backends
+   🧩 Mhamcloud — System Activity Backends
    ------------------------------------------------------------
    ✅ Real API only via SystemActivityBackendsCenter
 ============================================================ */

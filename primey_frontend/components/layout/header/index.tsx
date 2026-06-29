@@ -1,9 +1,9 @@
 "use client"
 
 // ======================================================
-// 🏛 Primey Care — SITE HEADER
+// 🏛 Mhamcloud — SITE HEADER
 // Premium rounded header for DashboardFrame shell
-// RTL/LTR ready — keeps Primey Care actions intact
+// RTL/LTR ready — keeps Mhamcloud actions intact
 // ======================================================
 
 import { useEffect, useMemo, useState } from "react"

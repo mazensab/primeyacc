@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/users/status.py
-# 🧠 PrimeyAcc | Company User Status API V1.0
+# 🧠 Mhamcloud | Company User Status API V1.0
 # ------------------------------------------------------------
 # ✅ Tenant-isolated company user status actions
 # ✅ Activate membership
@@ -79,7 +79,7 @@ def _profile_payload(user: Any) -> dict[str, Any] | None:
     يرجع ملف المستخدم العام إن وجد.
     """
 
-    profile = getattr(user, "primeyacc_profile", None)
+    profile = getattr(user, "Mhamcloud_profile", None)
 
     if not profile:
         return None
@@ -219,7 +219,7 @@ def _get_membership_or_404(company, membership_id: int) -> CompanyMembership | N
     return (
         CompanyMembership.objects.select_related(
             "user",
-            "user__primeyacc_profile",
+            "user__Mhamcloud_profile",
             "company",
         )
         .filter(

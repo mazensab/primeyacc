@@ -68,41 +68,41 @@ const content: Record<AppLang, TestimonialContent> = {
     subTitle: "تجارب العملاء",
     title: "عملاء استفادوا من رعاية أوضح وتوفير أفضل",
     description:
-      "آراء مختصرة تعكس كيف تساعد Primey Care العملاء على الوصول إلى مزايا صحية وخصومات طبية بطريقة أسهل لهم ولعائلاتهم.",
-    imageAlt: "صورة عميل Primey Care",
+      "آراء مختصرة تعكس كيف تساعد Mhamcloud العملاء على الوصول إلى مزايا صحية وخصومات طبية بطريقة أسهل لهم ولعائلاتهم.",
+    imageAlt: "صورة عميل Mhamcloud",
     reviews: [
       {
-        name: "عميل Primey Care",
+        name: "عميل Mhamcloud",
         role: "بطاقة فردية",
         comment:
           "أكثر ما أعجبني أن المزايا واضحة وسهلة الاستخدام. عرفت الخصم قبل الزيارة واستفدت منه بدون تعقيد.",
       },
       {
-        name: "مشتركة Primey Care",
+        name: "مشتركة Mhamcloud",
         role: "بطاقة عائلية",
         comment:
           "البطاقة مناسبة للعائلة، خصوصًا مع تكرار زيارات الأسنان والتحاليل. وجود خيارات متعددة ساعدنا على التوفير.",
       },
       {
-        name: "عميل Primey Care",
+        name: "عميل Mhamcloud",
         role: "برنامج الفحوصات",
         comment:
           "كنت أبحث عن طريقة أوضح لمتابعة الفحوصات الدورية. البرنامج سهّل علي معرفة الخدمات والمزايا المتاحة.",
       },
       {
-        name: "مشتركة Primey Care",
+        name: "مشتركة Mhamcloud",
         role: "برنامج الجلدية والتجميل",
         comment:
           "أعجبني تنوع الخدمات وإمكانية الاستفسار قبل الحجز. التجربة كانت مرتبة وواضحة من البداية.",
       },
       {
-        name: "عميل Primey Care",
+        name: "عميل Mhamcloud",
         role: "برنامج الأسنان",
         comment:
           "استفدت من خصومات الأسنان، وكانت التفاصيل واضحة قبل زيارة المركز. هذا أعطاني ثقة أكبر في الاختيار.",
       },
       {
-        name: "مشتركة Primey Care",
+        name: "مشتركة Mhamcloud",
         role: "استفسار ودعم",
         comment:
           "الدعم ساعدني في معرفة البطاقة الأنسب وشرح لي المزايا المتاحة حسب احتياجي والمدينة.",
@@ -113,41 +113,41 @@ const content: Record<AppLang, TestimonialContent> = {
     subTitle: "Testimonials",
     title: "Customers enjoying clearer care and better savings",
     description:
-      "Short experiences showing how Primey Care helps customers access healthcare benefits and selected medical discounts in an easier way for themselves and their families.",
-    imageAlt: "Primey Care customer avatar",
+      "Short experiences showing how Mhamcloud helps customers access healthcare benefits and selected medical discounts in an easier way for themselves and their families.",
+    imageAlt: "Mhamcloud customer avatar",
     reviews: [
       {
-        name: "Primey Care Customer",
+        name: "Mhamcloud Customer",
         role: "Individual Card",
         comment:
           "What I liked most is that the benefits are clear and easy to use. I knew the discount before my visit and used it without complications.",
       },
       {
-        name: "Primey Care Member",
+        name: "Mhamcloud Member",
         role: "Family Card",
         comment:
           "The card is helpful for the family, especially with repeated dental visits and lab tests. The flexible options helped us save more.",
       },
       {
-        name: "Primey Care Customer",
+        name: "Mhamcloud Customer",
         role: "Checkups Program",
         comment:
           "I was looking for a clearer way to manage routine checkups. The program made it easier to understand available services and benefits.",
       },
       {
-        name: "Primey Care Member",
+        name: "Mhamcloud Member",
         role: "Dermatology & Beauty Program",
         comment:
           "I liked the variety of services and the ability to ask before booking. The whole experience felt organized from the beginning.",
       },
       {
-        name: "Primey Care Customer",
+        name: "Mhamcloud Customer",
         role: "Dental Program",
         comment:
           "I used the dental benefits, and the details were clear before visiting the center. That gave me more confidence in my choice.",
       },
       {
-        name: "Primey Care Member",
+        name: "Mhamcloud Member",
         role: "Support Inquiry",
         comment:
           "The support team helped me understand the right card and explained available benefits based on my needs and city.",

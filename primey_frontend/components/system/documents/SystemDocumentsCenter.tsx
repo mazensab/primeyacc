@@ -1,9 +1,9 @@
 ﻿"use client";
 /* ============================================================
    📂 primey_frontend/components/system/documents/SystemDocumentsCenter.tsx
-   🧩 PrimeyAcc — System Documents Center
+   🧩 Mhamcloud — System Documents Center
    ------------------------------------------------------------
-   ✅ Premium PrimeyCare admin pattern adapted for PrimeyAcc
+   ✅ Premium PrimeyCare admin pattern adapted for Mhamcloud
    ✅ Shared system documents pages component
    ✅ Real API only: /api/system/documents/*
    ✅ KPI cards + quick actions + document tables
@@ -119,7 +119,7 @@ const translations = {
     thermalTitle: "الطباعة الحرارية",
     settingsTitle: "إعدادات الوثائق",
     overviewSubtitle:
-      "لوحة مراقبة وثائق PrimeyAcc من API النظام الحقيقي: القوالب، التوليد، PDF، الطباعة الحرارية، ومهام الطباعة.",
+      "لوحة مراقبة وثائق Mhamcloud من API النظام الحقيقي: القوالب، التوليد، PDF، الطباعة الحرارية، ومهام الطباعة.",
     templatesSubtitle:
       "مراقبة قوالب الوثائق المسجلة للشركات بدون تجاوز عزل الشركات أو إرسال company_id من الفرونت.",
     renderingSubtitle:
@@ -193,7 +193,7 @@ const translations = {
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
     pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
-    reportTitle: "تقرير وثائق النظام في PrimeyAcc",
+    reportTitle: "تقرير وثائق النظام في Mhamcloud",
     generatedAt: "تاريخ الإنشاء",
     refreshed: "تم تحديث وثائق النظام.",
     unknown: "غير معروف",
@@ -206,7 +206,7 @@ const translations = {
     thermalTitle: "Thermal Printing",
     settingsTitle: "Document Settings",
     overviewSubtitle:
-      "PrimeyAcc system documents monitoring from the live system API: templates, rendering, PDF, thermal printing, and print jobs.",
+      "Mhamcloud system documents monitoring from the live system API: templates, rendering, PDF, thermal printing, and print jobs.",
     templatesSubtitle:
       "Monitor company document templates without bypassing tenant isolation or sending company_id from the frontend.",
     renderingSubtitle:
@@ -280,7 +280,7 @@ const translations = {
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
     pdfHint: "Choose Save as PDF from the print dialog.",
-    reportTitle: "PrimeyAcc System Documents Report",
+    reportTitle: "Mhamcloud System Documents Report",
     generatedAt: "Generated at",
     refreshed: "System documents refreshed.",
     unknown: "Unknown",
@@ -855,7 +855,7 @@ export function SystemDocumentsCenter({ mode }: { mode: Mode }) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `primeyacc-system-documents-${mode}-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-system-documents-${mode}-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();

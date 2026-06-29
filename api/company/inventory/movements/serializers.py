@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/movements/serializers.py
-# 🧠 PrimeyAcc | Company Inventory Movements API Serializers V1.1
+# 🧠 Mhamcloud | Company Inventory Movements API Serializers V1.1
 # ------------------------------------------------------------
 # ✅ Serialize stock movements for /company APIs
 # ✅ Warehouse / item / reference snapshots

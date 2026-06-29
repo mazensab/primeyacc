@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/locations/create.py
-# 🧠 PrimeyAcc | Company Inventory Location Create API V1.0
+# 🧠 Mhamcloud | Company Inventory Location Create API V1.0
 # ------------------------------------------------------------
 # ✅ Create inventory location for current company
 # ✅ Resolve warehouse inside request.company only

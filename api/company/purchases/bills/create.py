@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/purchases/bills/create.py
-# 🧠 PrimeyAcc | Company Purchase Bill Create API V1.1
+# 🧠 Mhamcloud | Company Purchase Bill Create API V1.1
 # ------------------------------------------------------------
 # ✅ Create purchase bill for current company only
 # ✅ Tenant isolation through request.company

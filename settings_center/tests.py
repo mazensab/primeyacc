@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 settings_center/tests.py
-# PrimeyAcc | System Settings Center Tests
+# Mhamcloud | System Settings Center Tests
 # ------------------------------------------------------------
 # ✅ Backend only
 # ✅ Model/service/API tests

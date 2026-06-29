@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ?? api/company/inventory/reservations/urls.py
-# ?? PrimeyAcc | Company Stock Reservations URLs V1.0
+# ?? Mhamcloud | Company Stock Reservations URLs V1.0
 # ------------------------------------------------------------
 # ? List and create
 # ? Detail

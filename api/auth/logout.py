@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/auth/logout.py
-# 🧠 PrimeyAcc | Auth Logout API V2
+# 🧠 Mhamcloud | Auth Logout API V2
 # ------------------------------------------------------------
 # ✅ Session Logout
 # ✅ CSRF Protected

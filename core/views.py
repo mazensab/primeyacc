@@ -16,7 +16,7 @@ def health_check(request):
     return Response(
         {
             "status": "ok",
-            "project": "primeyacc",
+            "project": "Mhamcloud",
             "service": "api",
             "timestamp": timezone.now().isoformat(),
         }

@@ -1,9 +1,9 @@
 "use client";
 /* ============================================================
    📂 primey_frontend/components/chat-widget.tsx
-   💬 PrimeyAcc — Landing Floating WhatsApp Chat Widget V2.0
+   💬 Mhamcloud — Landing Floating WhatsApp Chat Widget V2.0
    ------------------------------------------------------------
-   ✅ Replaces Primey Care copy with PrimeyAcc / Mham Cloud
+   ✅ Replaces Mhamcloud copy with Mhamcloud / Mham Cloud
    ✅ Floating landing support widget
    ✅ Connects to system WhatsApp number via wa.me
    ✅ Uses sonner toast
@@ -60,11 +60,11 @@ const SYSTEM_WHATSAPP_NUMBER = (
 const copy: Record<AppLocale, WidgetCopy> = {
   ar: {
     assistantName: "مساعد Mham Cloud",
-    badge: "PrimeyAcc Support",
-    title: "دعم PrimeyAcc",
+    badge: "Mhamcloud Support",
+    title: "دعم Mhamcloud",
     subtitle: "تواصل معنا عبر واتساب النظام",
     greeting:
-      "مرحبًا 👋 يسعدنا مساعدتك في الاشتراك، الباقات، الدخول، أو أي استفسار عن نظام PrimeyAcc.",
+      "مرحبًا 👋 يسعدنا مساعدتك في الاشتراك، الباقات، الدخول، أو أي استفسار عن نظام Mhamcloud.",
     helper:
       "اكتب رسالتك أو اختر أحد الاختصارات، وسيتم فتح واتساب برسالة جاهزة لفريق الدعم.",
     inputPlaceholder: "اكتب استفسارك هنا...",
@@ -72,41 +72,41 @@ const copy: Record<AppLocale, WidgetCopy> = {
     contact: "تواصل معنا",
     close: "إغلاق",
     open: "فتح المحادثة",
-    emptyToast: "سيتم فتح واتساب برسالة افتراضية لفريق PrimeyAcc.",
+    emptyToast: "سيتم فتح واتساب برسالة افتراضية لفريق Mhamcloud.",
     openToast: "جاري فتح واتساب للتواصل مع فريق الدعم.",
     quickTitle: "اختصارات سريعة",
     defaultMessage:
-      "مرحبًا فريق Mham Cloud، أحتاج مساعدة بخصوص PrimeyAcc.",
+      "مرحبًا فريق Mham Cloud، أحتاج مساعدة بخصوص Mhamcloud.",
     quickReplies: [
       {
         label: "أريد الاشتراك",
         message:
-          "مرحبًا فريق Mham Cloud، أريد الاشتراك في PrimeyAcc ومعرفة الباقات المناسبة.",
+          "مرحبًا فريق Mham Cloud، أريد الاشتراك في Mhamcloud ومعرفة الباقات المناسبة.",
       },
       {
         label: "أحتاج دعم الدخول",
         message:
-          "مرحبًا فريق Mham Cloud، أحتاج مساعدة في تسجيل الدخول إلى PrimeyAcc.",
+          "مرحبًا فريق Mham Cloud، أحتاج مساعدة في تسجيل الدخول إلى Mhamcloud.",
       },
       {
         label: "أريد عرض الباقات",
         message:
-          "مرحبًا فريق Mham Cloud، أريد معرفة باقات PrimeyAcc والأسعار.",
+          "مرحبًا فريق Mham Cloud، أريد معرفة باقات Mhamcloud والأسعار.",
       },
       {
         label: "لدي استفسار تقني",
         message:
-          "مرحبًا فريق Mham Cloud، لدي استفسار تقني بخصوص PrimeyAcc.",
+          "مرحبًا فريق Mham Cloud، لدي استفسار تقني بخصوص Mhamcloud.",
       },
     ],
   },
   en: {
     assistantName: "Mham Cloud Assistant",
-    badge: "PrimeyAcc Support",
-    title: "PrimeyAcc Support",
+    badge: "Mhamcloud Support",
+    title: "Mhamcloud Support",
     subtitle: "Chat with the system WhatsApp support line",
     greeting:
-      "Hello 👋 We can help with subscriptions, plans, login, or any PrimeyAcc question.",
+      "Hello 👋 We can help with subscriptions, plans, login, or any Mhamcloud question.",
     helper:
       "Write your message or choose a shortcut. WhatsApp will open with a ready message for our support team.",
     inputPlaceholder: "Write your question here...",
@@ -114,31 +114,31 @@ const copy: Record<AppLocale, WidgetCopy> = {
     contact: "Contact us",
     close: "Close",
     open: "Open chat",
-    emptyToast: "WhatsApp will open with a default PrimeyAcc support message.",
+    emptyToast: "WhatsApp will open with a default Mhamcloud support message.",
     openToast: "Opening WhatsApp to contact support.",
     quickTitle: "Quick shortcuts",
     defaultMessage:
-      "Hello Mham Cloud team, I need help with PrimeyAcc.",
+      "Hello Mham Cloud team, I need help with Mhamcloud.",
     quickReplies: [
       {
         label: "I want to subscribe",
         message:
-          "Hello Mham Cloud team, I want to subscribe to PrimeyAcc and learn about the right plans.",
+          "Hello Mham Cloud team, I want to subscribe to Mhamcloud and learn about the right plans.",
       },
       {
         label: "Login support",
         message:
-          "Hello Mham Cloud team, I need help logging in to PrimeyAcc.",
+          "Hello Mham Cloud team, I need help logging in to Mhamcloud.",
       },
       {
         label: "Show plans",
         message:
-          "Hello Mham Cloud team, I want to learn about PrimeyAcc plans and pricing.",
+          "Hello Mham Cloud team, I want to learn about Mhamcloud plans and pricing.",
       },
       {
         label: "Technical question",
         message:
-          "Hello Mham Cloud team, I have a technical question about PrimeyAcc.",
+          "Hello Mham Cloud team, I have a technical question about Mhamcloud.",
       },
     ],
   },

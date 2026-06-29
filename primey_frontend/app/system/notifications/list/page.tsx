@@ -1,6 +1,6 @@
 ﻿/* ============================================================
    📂 primey_frontend/app/system/notifications/list/page.tsx
-   🔔 PrimeyAcc — System Notifications List Route
+   🔔 Mhamcloud — System Notifications List Route
    ------------------------------------------------------------
    ✅ عرض قائمة الإشعارات
    ✅ جدول إشعارات النظام مع الفلاتر والتصدير والطباعة

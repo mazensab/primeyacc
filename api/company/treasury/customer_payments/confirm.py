@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/treasury/customer_payments/confirm.py
-# 🧠 PrimeyAcc | Company Treasury Customer Payment Confirm API V1.1
+# 🧠 Mhamcloud | Company Treasury Customer Payment Confirm API V1.1
 # ------------------------------------------------------------
 # ✅ Confirm customer payment for current company only
 # ✅ Creates/posts INFLOW treasury transaction through services.py

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/accounting/journal_entries/post.py
-# 🧠 PrimeyAcc | Company Accounting Journal Entry Post API
+# 🧠 Mhamcloud | Company Accounting Journal Entry Post API
 # ------------------------------------------------------------
 # ✅ ترحيل قيد يومية داخل الشركة الحالية
 # ✅ عزل كامل حسب CompanyMembership

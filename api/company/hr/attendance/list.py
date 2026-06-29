@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/hr/attendance/list.py
-# 🧠 PrimeyAcc | Company HR Attendance List API V1.0
+# 🧠 Mhamcloud | Company HR Attendance List API V1.0
 # ------------------------------------------------------------
 # ✅ List company-scoped attendance records
 # ✅ Tenant isolation through request.company

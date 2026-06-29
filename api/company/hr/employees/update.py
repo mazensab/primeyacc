@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/hr/employees/update.py
-# 🧠 PrimeyAcc | Company HR Employee Update API V1.0
+# 🧠 Mhamcloud | Company HR Employee Update API V1.0
 # ------------------------------------------------------------
 # ✅ Update company-scoped employee
 # ✅ Tenant isolation through request.company

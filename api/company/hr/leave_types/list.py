@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/hr/leave_types/list.py
-# 🧠 PrimeyAcc | Company HR Leave Types List API V1.0
+# 🧠 Mhamcloud | Company HR Leave Types List API V1.0
 # ============================================================
 
 from __future__ import annotations

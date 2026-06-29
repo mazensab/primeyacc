@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/returns/create.py
-# 🧠 PrimeyAcc | Company POS Return Create API V1.0
+# 🧠 Mhamcloud | Company POS Return Create API V1.0
 # ------------------------------------------------------------
 # ✅ Company-scoped POS Return Create
 # ✅ Creates POSReturn Header

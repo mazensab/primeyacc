@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/sales/invoices/cancel.py
-# 🧠 PrimeyAcc | Company Sales Invoice Cancel API V1.0
+# 🧠 Mhamcloud | Company Sales Invoice Cancel API V1.0
 # ------------------------------------------------------------
 # ✅ Cancel company-scoped issued sales invoice
 # ✅ Uses request.company from CompanyMembership context

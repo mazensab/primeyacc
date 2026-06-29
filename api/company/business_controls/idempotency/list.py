@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/business_controls/idempotency/list.py
-# 🧠 PrimeyAcc | Company Idempotency Keys List API V1.0
+# 🧠 Mhamcloud | Company Idempotency Keys List API V1.0
 # ============================================================
 
 from __future__ import annotations

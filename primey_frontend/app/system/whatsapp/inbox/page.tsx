@@ -2,7 +2,7 @@
 /*
 ================================================================================
 📂 primey_frontend/app/system/whatsapp/inbox/page.tsx
-🟢 PrimeyAcc — System WhatsApp Inbox Route
+🟢 Mhamcloud — System WhatsApp Inbox Route
 ================================================================================
 ✅ Approved Premium pattern
 ✅ Real API only: /api/system/whatsapp/inbox/

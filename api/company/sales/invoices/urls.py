@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/sales/invoices/urls.py
-# 🧠 PrimeyAcc | Company Sales Invoices URLs V1.1
+# 🧠 Mhamcloud | Company Sales Invoices URLs V1.1
 # ------------------------------------------------------------
 # ✅ Sales invoices list
 # ✅ Sales invoices summary

@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/documents/templates/status.py
-# 🧠 PrimeyAcc | Company Document Templates Status API V1.0
+# 🧠 Mhamcloud | Company Document Templates Status API V1.0
 # ============================================================
 
 from __future__ import annotations

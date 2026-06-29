@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/suppliers/status.py
-# 🧠 PrimeyAcc | Company Suppliers Status API V1.0
+# 🧠 Mhamcloud | Company Suppliers Status API V1.0
 # ------------------------------------------------------------
 # ✅ Supplier status actions alias over BusinessParty
 # ✅ Activate / deactivate / block / archive supplier

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/locations/urls.py
-# 🧠 PrimeyAcc | Company Inventory Locations URLs V1.2
+# 🧠 Mhamcloud | Company Inventory Locations URLs V1.2
 # ------------------------------------------------------------
 # ✅ Inventory locations API routing
 # ✅ List, create, detail, update and status

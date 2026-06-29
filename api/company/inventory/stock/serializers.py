@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/stock/serializers.py
-# 🧠 PrimeyAcc | Company Inventory Stock API Serializers V1.1
+# 🧠 Mhamcloud | Company Inventory Stock API Serializers V1.1
 # ------------------------------------------------------------
 # ✅ Serialize stock balances for /company APIs
 # ✅ Warehouse / item / unit snapshots for UI

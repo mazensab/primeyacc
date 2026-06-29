@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/whatsapp/urls.py
-# 🧠 PrimeyAcc | Company WhatsApp URLs V1.0
+# 🧠 Mhamcloud | Company WhatsApp URLs V1.0
 # ------------------------------------------------------------
 # ✅ Settings endpoints
 # ✅ Templates endpoints

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/payments/checkout/detail.py
-# 🧠 PrimeyAcc | Company Payment Checkout Detail API V1.0
+# 🧠 Mhamcloud | Company Payment Checkout Detail API V1.0
 # ============================================================
 
 from __future__ import annotations

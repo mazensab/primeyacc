@@ -1,6 +1,6 @@
 /* ============================================================
    📂 lib/types/common.ts
-   Primey Care - Common Shared Types
+   Mhamcloud - Common Shared Types
 ============================================================ */
 
 export type ID = string | number;

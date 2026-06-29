@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/permissions.py
-# 🧠 PrimeyAcc | API Permissions & Tenant Access V1.3
+# 🧠 Mhamcloud | API Permissions & Tenant Access V1.3
 # ------------------------------------------------------------
 # ✅ System API Guard
 # ✅ Company API Guard
@@ -49,7 +49,7 @@ from companies.models import CompanyStatus
 
 def get_user_profile(user) -> UserProfile | None:
     """
-    Return the PrimeyAcc profile for an authenticated user.
+    Return the Mhamcloud profile for an authenticated user.
 
     This function does not auto-create profiles.
     Auto-creation remains in auth endpoints such as login/whoami.
@@ -58,7 +58,7 @@ def get_user_profile(user) -> UserProfile | None:
     if not user or isinstance(user, AnonymousUser) or not user.is_authenticated:
         return None
 
-    return getattr(user, "primeyacc_profile", None)
+    return getattr(user, "Mhamcloud_profile", None)
 
 
 def get_active_company_memberships(user) -> QuerySet[CompanyMembership]:
@@ -97,7 +97,7 @@ def _get_request_query_value(request: Request, key: str) -> Any:
     Django WSGIRequest:
         request.GET
 
-    Some existing PrimeyAcc company endpoints are regular Django function
+    Some existing Mhamcloud company endpoints are regular Django function
     views, so tests can pass WSGIRequest without query_params.
     """
     query_params = getattr(request, "query_params", None)
@@ -255,7 +255,7 @@ def attach_company_context(request: Request) -> CompanyMembership | None:
     Attach safe company context to request for use inside API views.
 
     Adds:
-    - request.primeyacc_profile
+    - request.Mhamcloud_profile
     - request.company_membership
     - request.company
 
@@ -264,7 +264,7 @@ def attach_company_context(request: Request) -> CompanyMembership | None:
     profile = get_user_profile(request.user)
     membership = get_current_company_membership(request)
 
-    setattr(request, "primeyacc_profile", profile)
+    setattr(request, "Mhamcloud_profile", profile)
     setattr(request, "company_membership", membership)
     setattr(request, "company", membership.company if membership else None)
 
@@ -364,9 +364,9 @@ def request_has_company_permission(
 
 class IsAuthenticatedPrimeyUser(BasePermission):
     """
-    Basic authenticated PrimeyAcc user guard.
+    Basic authenticated Mhamcloud user guard.
 
-    This guard requires UserProfile because it represents PrimeyAcc user
+    This guard requires UserProfile because it represents Mhamcloud user
     initialization, not tenant membership access.
     """
 

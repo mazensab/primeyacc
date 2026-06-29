@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/stock/list.py
-# 🧠 PrimeyAcc | Company Stock Items List API V1.1
+# 🧠 Mhamcloud | Company Stock Items List API V1.1
 # ------------------------------------------------------------
 # ✅ List stock balances for current company only
 # ✅ Tenant isolation through request.company

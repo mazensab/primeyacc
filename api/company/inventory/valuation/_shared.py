@@ -1,6 +1,6 @@
 # ============================================================
 # ?? api/company/inventory/valuation/_shared.py
-# ?? PrimeyAcc | Inventory Valuation API Helpers V1.0
+# ?? Mhamcloud | Inventory Valuation API Helpers V1.0
 # ------------------------------------------------------------
 # ? Request company resolution
 # ? Stable filter parsing

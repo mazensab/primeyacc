@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/sales/invoices/detail.py
-# 🧠 PrimeyAcc | Company Sales Invoice Detail API V1.0
+# 🧠 Mhamcloud | Company Sales Invoice Detail API V1.0
 # ------------------------------------------------------------
 # ✅ Retrieve one company-scoped sales invoice
 # ✅ Uses request.company from CompanyMembership context

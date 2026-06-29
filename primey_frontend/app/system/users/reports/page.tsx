@@ -2,9 +2,9 @@
 
 /* ============================================================
    📂 primey_frontend/app/system/users/reports/page.tsx
-   🏢 PrimeyAcc — System Users Reports
+   🏢 Mhamcloud — System Users Reports
    ------------------------------------------------------------
-   ✅ Premium PrimeyCare reports pattern adapted for PrimeyAcc
+   ✅ Premium PrimeyCare reports pattern adapted for Mhamcloud
    ✅ Real API only: GET /api/users/
    ✅ Summary KPIs + status/role/access-type distributions
    ✅ Analytical full-width table
@@ -130,7 +130,7 @@ const translations = {
   ar: {
     title: "تقارير المستخدمين",
     subtitle:
-      "تحليلات مستخدمي PrimeyAcc حسب الحالة والدور ونوع الوصول مبنية على بيانات API الحقيقية.",
+      "تحليلات مستخدمي Mhamcloud حسب الحالة والدور ونوع الوصول مبنية على بيانات API الحقيقية.",
     badge: "إدارة المنصة",
     refresh: "تحديث",
     exportExcel: "تصدير Excel",
@@ -212,14 +212,14 @@ const translations = {
     tryAgain: "إعادة المحاولة",
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
-    reportTitle: "تقرير مستخدمي PrimeyAcc",
+    reportTitle: "تقرير مستخدمي Mhamcloud",
     generatedAt: "تاريخ الإنشاء",
     refreshed: "تم تحديث تقارير المستخدمين.",
   },
   en: {
     title: "Users reports",
     subtitle:
-      "PrimeyAcc user analytics by status, role, access type, and permissions, based on real API data.",
+      "Mhamcloud user analytics by status, role, access type, and permissions, based on real API data.",
     badge: "Platform management",
     refresh: "Refresh",
     exportExcel: "Export Excel",
@@ -301,7 +301,7 @@ const translations = {
     tryAgain: "Try again",
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
-    reportTitle: "PrimeyAcc Users Report",
+    reportTitle: "Mhamcloud Users Report",
     generatedAt: "Generated at",
     refreshed: "Users reports refreshed.",
   },
@@ -1045,7 +1045,7 @@ export default function SystemUsersReportsPage() {
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = `primeyacc-system-users-report-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-system-users-report-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();

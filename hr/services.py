@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 hr/services.py
-# 🧠 PrimeyAcc | HR Services V1.4
+# 🧠 Mhamcloud | HR Services V1.4
 # ------------------------------------------------------------
 # ✅ Employee create/update services
 # ✅ Tenant-safe branch validation

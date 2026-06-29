@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 accounts/admin.py
-# 🧠 PrimeyAcc | Accounts Admin V1
+# 🧠 Mhamcloud | Accounts Admin V1
 # ------------------------------------------------------------
 # ✅ Register UserProfile
 # ✅ Register CompanyMembership
@@ -12,7 +12,7 @@
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - User = حساب دخول فقط
-# - UserProfile = ملف المستخدم العام داخل PrimeyAcc
+# - UserProfile = ملف المستخدم العام داخل Mhamcloud
 # - CompanyMembership = علاقة المستخدم بالشركة ودوره داخلها
 # - /system لا يفتح إلا لمستخدم نظام مصرح
 # - /company لا يفتح إلا بعضوية شركة فعالة

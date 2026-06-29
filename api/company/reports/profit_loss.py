@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/reports/profit_loss.py
-# 🧠 PrimeyAcc | Company Profit & Loss API - Phase 16.4
+# 🧠 Mhamcloud | Company Profit & Loss API - Phase 16.4
 # ------------------------------------------------------------
 # ✅ Profit & Loss report endpoint
 # ✅ Company tenant isolation via CompanyMembership

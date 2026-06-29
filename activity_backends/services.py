@@ -1,6 +1,6 @@
 # ============================================================
 # ًں“‚ activity_backends/services.py
-# ًں§  PrimeyAcc | Activity-Specific Backend Services â€” Phase 25.3
+# ًں§  Mhamcloud | Activity-Specific Backend Services â€” Phase 25.3
 # ============================================================
 # âœ… Restaurant summary, payloads and kitchen order creation
 # âœ… Clinic summary, payloads and appointment creation

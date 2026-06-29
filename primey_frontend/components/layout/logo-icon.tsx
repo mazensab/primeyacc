@@ -16,7 +16,7 @@ type LogoIconProps = {
 };
 
 /* =========================================================
-   🖼️ Primey Care Logo Icon
+   🖼️ Mhamcloud Logo Icon
 ========================================================= */
 export default function LogoIcon({
   href = "/",
@@ -27,7 +27,7 @@ export default function LogoIcon({
   return (
     <Link
       href={href}
-      aria-label="Primey Care"
+      aria-label="Mhamcloud"
       className={cn(
         "inline-flex items-center justify-center rounded-2xl transition hover:opacity-85",
         className
@@ -35,7 +35,7 @@ export default function LogoIcon({
     >
       <Image
         src="/logo/primey-icon.ico"
-        alt="Primey Care"
+        alt="Mhamcloud"
         width={40}
         height={40}
         priority={priority}

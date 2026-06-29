@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/documents/thermal.py
-# 🧠 PrimeyAcc | Company Thermal Document API V1.0
+# 🧠 Mhamcloud | Company Thermal Document API V1.0
 # ------------------------------------------------------------
 # ✅ Thermal receipt HTML response
 # ✅ 58mm / 80mm support
@@ -65,7 +65,7 @@ def company_document_thermal(request: Request):
             result["html"],
             content_type="text/html; charset=utf-8",
         )
-        response["X-PrimeyAcc-Document-Filename"] = result["filename"]
+        response["X-Mhamcloud-Document-Filename"] = result["filename"]
         return response
 
     except CompanyDocumentsAPIError as exc:

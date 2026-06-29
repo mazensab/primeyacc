@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 sales/services.py
-# 🧠 PrimeyAcc | Sales Services V1.5
+# 🧠 Mhamcloud | Sales Services V1.5
 # ------------------------------------------------------------
 # ✅ Company-scoped invoice helpers
 # ✅ Invoice number generation

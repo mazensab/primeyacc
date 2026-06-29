@@ -1,6 +1,6 @@
 # ============================================================
 # ?? api/company/inventory/valuation/stock_items.py
-# ?? PrimeyAcc | Inventory Valuation Stock Items API V1.0
+# ?? Mhamcloud | Inventory Valuation Stock Items API V1.0
 # ------------------------------------------------------------
 # ? Location-level stock valuation rows
 # ? Warehouse/location/item filters

@@ -1,6 +1,6 @@
 # ============================================================
 # ?? business_controls/integrations.py
-# ?? PrimeyAcc | Business Controls Safe Integrations V1.0
+# ?? Mhamcloud | Business Controls Safe Integrations V1.0
 # ------------------------------------------------------------
 # ? Safe audit integration wrapper
 # ? Safe idempotency integration wrapper

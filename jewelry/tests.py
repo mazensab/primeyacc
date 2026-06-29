@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 jewelry/tests.py
-# 🧠 PrimeyAcc | Jewelry and Gold Tests — Phase 25.1
+# 🧠 Mhamcloud | Jewelry and Gold Tests — Phase 25.1
 # ============================================================
 # ✅ Service tests for seed, rates, estimate and pricing snapshot
 # ✅ API-style tests for summary and pricing estimate

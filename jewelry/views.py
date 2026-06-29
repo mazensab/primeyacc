@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 jewelry/views.py
-# 🧠 PrimeyAcc | Jewelry Views Placeholder
+# 🧠 Mhamcloud | Jewelry Views Placeholder
 # ============================================================
 # API-first project: views are exposed under api/company/jewelry.
 # ============================================================

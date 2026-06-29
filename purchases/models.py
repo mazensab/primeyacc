@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 purchases/models.py
-# 🧠 PrimeyAcc | Company Purchases Models V1.1
+# 🧠 Mhamcloud | Company Purchases Models V1.1
 # ------------------------------------------------------------
 # ✅ Purchase bills foundation for suppliers
 # ✅ Company-scoped tenant isolation

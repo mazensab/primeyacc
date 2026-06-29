@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 purchases/services.py
-# 🧠 PrimeyAcc | Purchases Services V1.1
+# 🧠 Mhamcloud | Purchases Services V1.1
 # ------------------------------------------------------------
 # ✅ Backend-only service layer for supplier bills
 # ✅ Company-scoped tenant isolation

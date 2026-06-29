@@ -1,11 +1,11 @@
 ﻿"use client";
 
 // ======================================================
-// ًں”گ PrimeyAcc â€” Auth Provider
+// ًں”گ Mhamcloud â€” Auth Provider
 // ًںڑ€ ط§ظ„ط¥طµط¯ط§ط±: Auth Provider V2.2
 // ------------------------------------------------------
 // âœ… Session-based auth
-// âœ… ظٹط¯ط¹ظ… PrimeyAcc workspaces
+// âœ… ظٹط¯ط¹ظ… Mhamcloud workspaces
 // âœ… ظٹط¯ط¹ظ… role / workspace / user_type ظ…ظ† whoami
 // âœ… ظٹط¯ط¹ظ… permission_codes
 // âœ… ظٹط¯ط¹ظ… permissions.codes

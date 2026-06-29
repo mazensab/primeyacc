@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/returns/list.py
-# 🧠 PrimeyAcc | Company POS Returns List API V1.0
+# 🧠 Mhamcloud | Company POS Returns List API V1.0
 # ------------------------------------------------------------
 # ✅ Company-scoped POS Returns List
 # ✅ Search / Status / Order Filters

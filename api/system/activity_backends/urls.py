@@ -1,5 +1,5 @@
 ﻿# 📂 api/system/activity_backends/urls.py
-# 🧠 PrimeyAcc | System Activity Backends API URLs v1
+# 🧠 Mhamcloud | System Activity Backends API URLs v1
 # ============================================================
 # ✅ /api/system/activity-backends/
 # ============================================================

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/hr/leave_types/actions.py
-# 🧠 PrimeyAcc | Company HR Leave Types Actions APIs V1.0
+# 🧠 Mhamcloud | Company HR Leave Types Actions APIs V1.0
 # ============================================================
 
 from __future__ import annotations

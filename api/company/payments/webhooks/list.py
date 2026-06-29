@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/payments/webhooks/list.py
-# 🧠 PrimeyAcc | Company Payment Webhooks API V1.0
+# 🧠 Mhamcloud | Company Payment Webhooks API V1.0
 # ------------------------------------------------------------
 # ✅ Record gateway webhook events
 # ✅ Idempotency protection

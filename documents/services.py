@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ًں“‚ documents/services.py
-# ًں§  PrimeyAcc | Documents Templates Services V1.0
+# ًں§  Mhamcloud | Documents Templates Services V1.0
 # ------------------------------------------------------------
 # âœ… Tenant-safe document template services
 # âœ… Create / update / activate / deactivate

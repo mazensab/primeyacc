@@ -1,9 +1,9 @@
 "use client";
 /* ============================================================
    ?? primey_frontend/app/system/release-readiness/page.tsx
-   ?? PrimeyAcc ? System Release Readiness
+   ?? Mhamcloud ? System Release Readiness
    ------------------------------------------------------------
-   ? Approved Premium PrimeyCare admin pattern adapted for PrimeyAcc
+   ? Approved Premium PrimeyCare admin pattern adapted for Mhamcloud
    ? Real API only: GET /api/system/release-readiness/
    ? Backend release readiness summary + checks + API contracts
    ? Search, status filter, scope filter, sorting, reset
@@ -100,7 +100,7 @@ const translations = {
   ar: {
     title: "\u062c\u0627\u0647\u0632\u064a\u0629 \u0627\u0644\u0625\u0635\u062f\u0627\u0631",
     subtitle:
-      "\u0645\u0631\u0643\u0632 \u0645\u0631\u0627\u0642\u0628\u0629 \u062c\u0627\u0647\u0632\u064a\u0629 \u0628\u0627\u0643\u0646\u062f PrimeyAcc \u0648\u0639\u0642\u0648\u062f API \u0627\u0644\u0645\u0633\u062c\u0644\u0629 \u0645\u0646 \u0645\u0635\u062f\u0631 \u062d\u0642\u064a\u0642\u064a.",
+      "\u0645\u0631\u0643\u0632 \u0645\u0631\u0627\u0642\u0628\u0629 \u062c\u0627\u0647\u0632\u064a\u0629 \u0628\u0627\u0643\u0646\u062f Mhamcloud \u0648\u0639\u0642\u0648\u062f API \u0627\u0644\u0645\u0633\u062c\u0644\u0629 \u0645\u0646 \u0645\u0635\u062f\u0631 \u062d\u0642\u064a\u0642\u064a.",
     badge: "\u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u0645\u0646\u0635\u0629",
     refresh: "\u062a\u062d\u062f\u064a\u062b",
     exportExcel: "\u062a\u0635\u062f\u064a\u0631 Excel",
@@ -165,14 +165,14 @@ const translations = {
     exportEmpty: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0628\u064a\u0627\u0646\u0627\u062a \u0644\u0644\u062a\u0635\u062f\u064a\u0631.",
     printEmpty: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0628\u064a\u0627\u0646\u0627\u062a \u0644\u0644\u0637\u0628\u0627\u0639\u0629.",
     pdfHint: "\u0627\u062e\u062a\u0631 \u062d\u0641\u0638 \u0643\u0640 PDF \u0645\u0646 \u0646\u0627\u0641\u0630\u0629 \u0627\u0644\u0637\u0628\u0627\u0639\u0629.",
-    reportTitle: "\u062a\u0642\u0631\u064a\u0631 \u062c\u0627\u0647\u0632\u064a\u0629 \u0625\u0635\u062f\u0627\u0631 PrimeyAcc",
+    reportTitle: "\u062a\u0642\u0631\u064a\u0631 \u062c\u0627\u0647\u0632\u064a\u0629 \u0625\u0635\u062f\u0627\u0631 Mhamcloud",
     generatedAt: "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0625\u0646\u0634\u0627\u0621",
     refreshed: "\u062a\u0645 \u062a\u062d\u062f\u064a\u062b \u062c\u0627\u0647\u0632\u064a\u0629 \u0627\u0644\u0625\u0635\u062f\u0627\u0631.",
     unknown: "\u063a\u064a\u0631 \u0645\u062d\u062f\u062f",
   },
   en: {
     title: "Release Readiness",
-    subtitle: "Live PrimeyAcc backend readiness center and registered API contract registry.",
+    subtitle: "Live Mhamcloud backend readiness center and registered API contract registry.",
     badge: "Platform management",
     refresh: "Refresh",
     exportExcel: "Export Excel",
@@ -237,7 +237,7 @@ const translations = {
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
     pdfHint: "Choose Save as PDF from the print dialog.",
-    reportTitle: "PrimeyAcc Release Readiness Report",
+    reportTitle: "Mhamcloud Release Readiness Report",
     generatedAt: "Generated at",
     refreshed: "Release readiness refreshed.",
     unknown: "Unknown",
@@ -578,7 +578,7 @@ export default function SystemReleaseReadinessPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "primeyacc-release-readiness.xls";
+    link.download = "Mhamcloud-release-readiness.xls";
     link.click();
     URL.revokeObjectURL(url);
   }

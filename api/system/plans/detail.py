@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/system/plans/detail.py
-# 🧠 PrimeyAcc | System Subscription Plan Detail API V1.1
+# 🧠 Mhamcloud | System Subscription Plan Detail API V1.1
 # ------------------------------------------------------------
 # ✅ Retrieve one SaaS subscription plan by ID
 # ✅ Returns usage counters and recent company subscriptions

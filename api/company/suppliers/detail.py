@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/suppliers/detail.py
-# 🧠 PrimeyAcc | Company Suppliers Detail API V1.0
+# 🧠 Mhamcloud | Company Suppliers Detail API V1.0
 # ------------------------------------------------------------
 # ✅ Supplier detail alias over BusinessParty
 # ✅ Update supplier inside current company only

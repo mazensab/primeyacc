@@ -1,6 +1,6 @@
 # ============================================================
 # reports/exporters.py
-# PrimeyAcc | Reports Export Foundation - Phase 16.7
+# Mhamcloud | Reports Export Foundation - Phase 16.7
 # ------------------------------------------------------------
 # Backend export payload builder foundation
 # Supports JSON-ready export envelopes

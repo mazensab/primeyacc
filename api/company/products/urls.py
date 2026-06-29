@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/products/urls.py
-# 🧠 PrimeyAcc | Company Catalog Products URLs V1.0
+# 🧠 Mhamcloud | Company Catalog Products URLs V1.0
 # ------------------------------------------------------------
 # ✅ Company catalog products/services routes
 # ✅ List products/services

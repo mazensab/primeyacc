@@ -2,7 +2,7 @@
 
 /* =====================================================
    📂 components/layout/header/notifications.tsx
-   🧠 PrimeyAcc — Premium Header Notifications
+   🧠 Mhamcloud — Premium Header Notifications
    -----------------------------------------------------
    ✅ متوافق مع الهيدر الجديد
    ✅ يحافظ على API الإشعارات الحالي

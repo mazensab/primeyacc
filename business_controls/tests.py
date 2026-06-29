@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 business_controls/tests.py
-# 🧠 PrimeyAcc | Business Controls Tests V1.0
+# 🧠 Mhamcloud | Business Controls Tests V1.0
 # ------------------------------------------------------------
 # ✅ Audit event service test
 # ✅ Idempotency duplicate protection test

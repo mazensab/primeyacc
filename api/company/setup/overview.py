@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/setup/overview.py
-# 🧠 PrimeyAcc | Company Setup Overview API V1.0
+# 🧠 Mhamcloud | Company Setup Overview API V1.0
 # ------------------------------------------------------------
 # ✅ Tenant-isolated company setup overview
 # ✅ Reads company only from active CompanyMembership

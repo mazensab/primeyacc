@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 inventory/tests.py
-# 🧠 PrimeyAcc | Company Inventory Tests V2.8
+# 🧠 Mhamcloud | Company Inventory Tests V2.8
 # ------------------------------------------------------------
 # ✅ Warehouse model/service tests
 # ✅ Stock item balance tests

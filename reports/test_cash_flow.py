@@ -1,6 +1,6 @@
 # ============================================================
 # reports/test_cash_flow.py
-# PrimeyAcc | Cash Flow Report Tests - Phase 16.6
+# Mhamcloud | Cash Flow Report Tests - Phase 16.6
 # ============================================================
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ class CashFlowReportTests(TestCase):
 
         cls.owner = User.objects.create_user(
             username="cash_flow_owner",
-            email="cash-flow-owner@primeyacc.test",
+            email="cash-flow-owner@Mhamcloud.test",
             password="test-pass-12345",
         )
 

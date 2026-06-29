@@ -2,9 +2,9 @@
 
 /* ============================================================
    📂 primey_frontend/app/system/users/list/page.tsx
-   🏢 PrimeyAcc — System Users List
+   🏢 Mhamcloud — System Users List
    ------------------------------------------------------------
-   ✅ Premium PrimeyCare admin pattern adapted for PrimeyAcc
+   ✅ Premium PrimeyCare admin pattern adapted for Mhamcloud
    ✅ System users full list page
    ✅ Real API only: GET /api/users/
    ✅ KPI cards + full users table
@@ -122,7 +122,7 @@ const translations = {
   ar: {
     title: "مستخدمو النظام",
     subtitle:
-      "قائمة مستخدمي نظام PrimeyAcc لمتابعة الحسابات، الأدوار، حالة التفعيل، والصلاحيات من مكان واحد.",
+      "قائمة مستخدمي نظام Mhamcloud لمتابعة الحسابات، الأدوار، حالة التفعيل، والصلاحيات من مكان واحد.",
     badge: "إدارة المنصة",
     refresh: "تحديث",
     exportExcel: "تصدير Excel",
@@ -160,7 +160,7 @@ const translations = {
 
     tableTitle: "أحدث المستخدمين",
     tableDesc:
-      "نظرة سريعة على أحدث مستخدمي PrimeyAcc مع الحالة والدور والبريد والصلاحيات.",
+      "نظرة سريعة على أحدث مستخدمي Mhamcloud مع الحالة والدور والبريد والصلاحيات.",
     user: "المستخدم",
     code: "الكود",
     owner: "اسم المستخدم",
@@ -190,7 +190,7 @@ const translations = {
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
     pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
-    reportTitle: "تقرير مركز مستخدمين PrimeyAcc",
+    reportTitle: "تقرير مركز مستخدمين Mhamcloud",
     generatedAt: "تاريخ الإنشاء",
     showing: "عرض",
     of: "من",
@@ -200,7 +200,7 @@ const translations = {
   en: {
     title: "Users",
     subtitle:
-      "PrimeyAcc system users list for accounts, roles, activation status, and permissions in one place.",
+      "Mhamcloud system users list for accounts, roles, activation status, and permissions in one place.",
     badge: "Platform management",
     refresh: "Refresh",
     exportExcel: "Export Excel",
@@ -238,7 +238,7 @@ const translations = {
 
     tableTitle: "Latest users",
     tableDesc:
-      "A quick view of the newest PrimeyAcc users with status, role, email, and permissions.",
+      "A quick view of the newest Mhamcloud users with status, role, email, and permissions.",
     user: "User",
     code: "Code",
     owner: "Username",
@@ -268,7 +268,7 @@ const translations = {
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
     pdfHint: "Choose Save as PDF from the print dialog.",
-    reportTitle: "PrimeyAcc Users Center Report",
+    reportTitle: "Mhamcloud Users Center Report",
     generatedAt: "Generated at",
     showing: "Showing",
     of: "of",
@@ -920,7 +920,7 @@ export default function SystemUsersPage() {
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = `primeyacc-system-users-overview-${apiStatusNote}-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-system-users-overview-${apiStatusNote}-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();

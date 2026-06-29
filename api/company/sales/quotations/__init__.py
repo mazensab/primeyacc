@@ -1,1 +1,1 @@
-# PrimeyAcc company sales quotations API package.
+# Mhamcloud company sales quotations API package.

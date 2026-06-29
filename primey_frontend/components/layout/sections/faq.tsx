@@ -53,12 +53,12 @@ const faqContent: Record<AppLang, FAQContent> = {
     title: "كل ما تحتاج معرفته قبل الاشتراك",
     items: [
       {
-        question: "هل Primey Care تأمين طبي؟",
+        question: "هل Mhamcloud تأمين طبي؟",
         answer:
-          "لا، Primey Care ليست تأمينًا طبيًا ولا تغني عن التأمين الصحي. هي بطاقة وبرامج مزايا وخصومات طبية تساعدك على الاستفادة من عروض وأسعار مخفضة لدى مزودي خدمة مشاركين حسب الشروط المتاحة.",
+          "لا، Mhamcloud ليست تأمينًا طبيًا ولا تغني عن التأمين الصحي. هي بطاقة وبرامج مزايا وخصومات طبية تساعدك على الاستفادة من عروض وأسعار مخفضة لدى مزودي خدمة مشاركين حسب الشروط المتاحة.",
       },
       {
-        question: "كيف أستفيد من بطاقة Primey Care؟",
+        question: "كيف أستفيد من بطاقة Mhamcloud؟",
         answer:
           "بعد الاشتراك وتفعيل البطاقة أو البرنامج، يمكنك استخدام بيانات عضويتك لدى مقدم الخدمة المشارك للاستفادة من الخصم أو الميزة المتاحة حسب نوع الخدمة وشروط العرض.",
       },
@@ -70,7 +70,7 @@ const faqContent: Record<AppLang, FAQContent> = {
       {
         question: "هل البطاقة مناسبة للأفراد والعائلات؟",
         answer:
-          "نعم، Primey Care توفر خيارات مناسبة للأفراد والعائلات حسب نوع البطاقة أو البرنامج. بعض الخيارات قد تكون فردية، وبعضها قد يدعم أكثر من مستفيد وفق شروط الاشتراك.",
+          "نعم، Mhamcloud توفر خيارات مناسبة للأفراد والعائلات حسب نوع البطاقة أو البرنامج. بعض الخيارات قد تكون فردية، وبعضها قد يدعم أكثر من مستفيد وفق شروط الاشتراك.",
       },
       {
         question: "ما نوع الخدمات التي يمكن أن تشملها المزايا؟",
@@ -80,7 +80,7 @@ const faqContent: Record<AppLang, FAQContent> = {
       {
         question: "كيف أعرف المراكز أو مقدمي الخدمة المشاركين؟",
         answer:
-          "يمكنك معرفة الشبكة الطبية والمراكز المشاركة من خلال قنوات Primey Care المعتمدة، أو عبر التواصل معنا قبل الاشتراك للتأكد من توفر الخدمة أو العرض المناسب في مدينتك.",
+          "يمكنك معرفة الشبكة الطبية والمراكز المشاركة من خلال قنوات Mhamcloud المعتمدة، أو عبر التواصل معنا قبل الاشتراك للتأكد من توفر الخدمة أو العرض المناسب في مدينتك.",
       },
     ],
   },
@@ -89,12 +89,12 @@ const faqContent: Record<AppLang, FAQContent> = {
     title: "Everything You Need to Know Before Joining",
     items: [
       {
-        question: "Is Primey Care medical insurance?",
+        question: "Is Mhamcloud medical insurance?",
         answer:
-          "No. Primey Care is not medical insurance and does not replace health insurance. It is a healthcare benefits and discount card that helps you access selected offers and reduced prices through participating providers, subject to available terms.",
+          "No. Mhamcloud is not medical insurance and does not replace health insurance. It is a healthcare benefits and discount card that helps you access selected offers and reduced prices through participating providers, subject to available terms.",
       },
       {
-        question: "How do I use my Primey Care card?",
+        question: "How do I use my Mhamcloud card?",
         answer:
           "After subscribing and activating your card or program, you can use your membership details at a participating provider to access the available discount or benefit according to the service type and offer terms.",
       },
@@ -106,7 +106,7 @@ const faqContent: Record<AppLang, FAQContent> = {
       {
         question: "Is the card suitable for individuals and families?",
         answer:
-          "Yes. Primey Care offers options for individuals and families depending on the card or program type. Some options may be individual, while others may support more than one beneficiary according to subscription terms.",
+          "Yes. Mhamcloud offers options for individuals and families depending on the card or program type. Some options may be individual, while others may support more than one beneficiary according to subscription terms.",
       },
       {
         question: "What services can the benefits include?",
@@ -116,7 +116,7 @@ const faqContent: Record<AppLang, FAQContent> = {
       {
         question: "How can I know the participating providers?",
         answer:
-          "You can check the healthcare network and participating providers through Primey Care’s approved channels, or contact us before subscribing to confirm the right service or offer in your city.",
+          "You can check the healthcare network and participating providers through Mhamcloud’s approved channels, or contact us before subscribing to confirm the right service or offer in your city.",
       },
     ],
   },

@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 jewelry/apps.py
-# 🧠 PrimeyAcc | Jewelry App Configuration
+# 🧠 Mhamcloud | Jewelry App Configuration
 # ============================================================
 # ✅ Registers the jewelry and gold backend foundation
 # ✅ Keeps activity-specific logic isolated from inventory core

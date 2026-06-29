@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/registers/create.py
-# 🧠 PrimeyAcc | Company POS Registers Create API V1.0
+# 🧠 Mhamcloud | Company POS Registers Create API V1.0
 # ------------------------------------------------------------
 # ✅ Create POS register for current company only
 # ✅ Tenant isolation through request.company

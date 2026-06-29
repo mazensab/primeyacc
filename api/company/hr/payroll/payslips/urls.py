@@ -1,6 +1,6 @@
 # ============================================================
 # ?? api/company/hr/payroll/payslips/urls.py
-# ?? PrimeyAcc | Payroll Payslips API URLs
+# ?? Mhamcloud | Payroll Payslips API URLs
 # ============================================================
 
 from __future__ import annotations

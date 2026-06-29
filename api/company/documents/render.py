@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/documents/render.py
-# 🧠 PrimeyAcc | Company Document Render API V1.0
+# 🧠 Mhamcloud | Company Document Render API V1.0
 # ------------------------------------------------------------
 # ✅ Render normalized document payload
 # ✅ Supports preview and real source documents

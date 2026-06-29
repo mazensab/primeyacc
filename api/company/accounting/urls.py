@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/accounting/urls.py
-# 🧠 PrimeyAcc | Company Accounting API URLs
+# 🧠 Mhamcloud | Company Accounting API URLs
 # ------------------------------------------------------------
 # ✅ مسارات محاسبة الشركة
 # ✅ دليل الحسابات

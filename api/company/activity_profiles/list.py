@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/activity_profiles/list.py
-# 🧠 PrimeyAcc | Activity Profiles List API
+# 🧠 Mhamcloud | Activity Profiles List API
 # ------------------------------------------------------------
 # ✅ List system activity profiles
 # ✅ List current-company custom activity profiles

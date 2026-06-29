@@ -1,6 +1,6 @@
 /* ============================================================
    📂 app/auth/page.tsx
-   🧠 PrimeyAcc | Auth Redirect Page — Phase 5.1.2
+   🧠 Mhamcloud | Auth Redirect Page — Phase 5.1.2
 
    ✅ يحول /auth إلى /login
    ✅ يمنع بقاء مسارين مختلفين للدخول

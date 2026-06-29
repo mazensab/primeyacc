@@ -19,7 +19,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('scope', models.CharField(choices=[('SYSTEM', 'System'), ('COMPANY', 'Company')], db_index=True, default='SYSTEM', max_length=30, verbose_name='Inbox scope')),
-                ('session_name', models.CharField(db_index=True, default='primeyacc-system-session', max_length=120, verbose_name='Session name')),
+                ('session_name', models.CharField(db_index=True, default='Mhamcloud-system-session', max_length=120, verbose_name='Session name')),
                 ('phone_number', models.CharField(blank=True, db_index=True, max_length=50, verbose_name='Phone number')),
                 ('normalized_phone', models.CharField(blank=True, db_index=True, max_length=50, verbose_name='Normalized phone')),
                 ('whatsapp_jid', models.CharField(blank=True, db_index=True, max_length=180, verbose_name='WhatsApp JID')),
@@ -41,7 +41,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('scope', models.CharField(choices=[('SYSTEM', 'System'), ('COMPANY', 'Company')], db_index=True, default='SYSTEM', max_length=30, verbose_name='Inbox scope')),
-                ('session_name', models.CharField(db_index=True, default='primeyacc-system-session', max_length=120, verbose_name='Session name')),
+                ('session_name', models.CharField(db_index=True, default='Mhamcloud-system-session', max_length=120, verbose_name='Session name')),
                 ('status', models.CharField(choices=[('OPEN', 'Open'), ('CLOSED', 'Closed'), ('ARCHIVED', 'Archived'), ('SPAM', 'Spam')], db_index=True, default='OPEN', max_length=30, verbose_name='Status')),
                 ('is_pinned', models.BooleanField(db_index=True, default=False, verbose_name='Pinned')),
                 ('is_resolved', models.BooleanField(db_index=True, default=False, verbose_name='Resolved')),
@@ -65,7 +65,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('scope', models.CharField(choices=[('SYSTEM', 'System'), ('COMPANY', 'Company')], db_index=True, default='SYSTEM', max_length=30, verbose_name='Inbox scope')),
-                ('session_name', models.CharField(db_index=True, default='primeyacc-system-session', max_length=120, verbose_name='Session name')),
+                ('session_name', models.CharField(db_index=True, default='Mhamcloud-system-session', max_length=120, verbose_name='Session name')),
                 ('direction', models.CharField(choices=[('OUTBOUND', 'Outbound'), ('INBOUND', 'Inbound')], db_index=True, default='INBOUND', max_length=30, verbose_name='Direction')),
                 ('status', models.CharField(choices=[('RECEIVED', 'Received'), ('QUEUED', 'Queued'), ('SENT', 'Sent'), ('DELIVERED', 'Delivered'), ('READ', 'Read'), ('FAILED', 'Failed')], db_index=True, default='RECEIVED', max_length=30, verbose_name='Status')),
                 ('message_type', models.CharField(choices=[('TEXT', 'Text'), ('IMAGE', 'Image'), ('AUDIO', 'Audio'), ('VIDEO', 'Video'), ('DOCUMENT', 'Document'), ('STICKER', 'Sticker'), ('LOCATION', 'Location'), ('CONTACT', 'Contact'), ('UNKNOWN', 'Unknown')], db_index=True, default='TEXT', max_length=30, verbose_name='Message type')),
@@ -93,7 +93,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('event_uid', models.CharField(max_length=255, unique=True, verbose_name='Event UID')),
-                ('session_name', models.CharField(db_index=True, default='primeyacc-system-session', max_length=120, verbose_name='Session name')),
+                ('session_name', models.CharField(db_index=True, default='Mhamcloud-system-session', max_length=120, verbose_name='Session name')),
                 ('event_type', models.CharField(db_index=True, default='message.incoming', max_length=80, verbose_name='Event type')),
                 ('status', models.CharField(choices=[('RECEIVED', 'Received'), ('PROCESSED', 'Processed'), ('FAILED', 'Failed'), ('IGNORED', 'Ignored')], db_index=True, default='RECEIVED', max_length=30, verbose_name='Status')),
                 ('external_message_id', models.CharField(blank=True, db_index=True, max_length=255, verbose_name='External message ID')),

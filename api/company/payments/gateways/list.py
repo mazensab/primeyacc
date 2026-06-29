@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/payments/gateways/list.py
-# 🧠 PrimeyAcc | Company Payment Gateways List/Create API V1.0
+# 🧠 Mhamcloud | Company Payment Gateways List/Create API V1.0
 # ------------------------------------------------------------
 # ✅ List payment gateways for current company only
 # ✅ Create payment gateways for current company only

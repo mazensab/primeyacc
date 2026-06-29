@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/locations/list.py
-# 🧠 PrimeyAcc | Company Inventory Locations List API V1.0
+# 🧠 Mhamcloud | Company Inventory Locations List API V1.0
 # ------------------------------------------------------------
 # ✅ List inventory locations for current company only
 # ✅ Tenant isolation through request.company

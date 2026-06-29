@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 notifications/tests.py
-# 🧠 PrimeyAcc | Company Notifications Tests V1.4
+# 🧠 Mhamcloud | Company Notifications Tests V1.4
 # ------------------------------------------------------------
 # ✅ CompanyNotification model tests
 # ✅ Tenant isolation service tests

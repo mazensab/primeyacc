@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 documents/admin.py
-# 🧠 PrimeyAcc | Documents Admin V1.0
+# 🧠 Mhamcloud | Documents Admin V1.0
 # ------------------------------------------------------------
 # ✅ DocumentTemplate admin registration
 # ✅ Search / filters / readonly audit fields

@@ -1,5 +1,5 @@
 ﻿# 📂 api/system/activity_profiles/urls.py
-# 🧠 PrimeyAcc | System Activity Profiles API URLs v1
+# 🧠 Mhamcloud | System Activity Profiles API URLs v1
 # ============================================================
 # ✅ /api/system/activity-profiles/
 # ✅ /api/system/activity-profiles/list/

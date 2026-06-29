@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/products/list.py
-# 🧠 PrimeyAcc | Company Catalog Products List API V1.1
+# 🧠 Mhamcloud | Company Catalog Products List API V1.1
 # ------------------------------------------------------------
 # ✅ List company-scoped catalog products/services
 # ✅ Search and filter catalog items safely

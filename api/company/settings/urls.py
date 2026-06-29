@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/settings/urls.py
-# 🧠 PrimeyAcc | Company Settings API URLs V1.0
+# 🧠 Mhamcloud | Company Settings API URLs V1.0
 # ------------------------------------------------------------
 # ✅ Tenant-isolated company settings routes
 # ✅ Company settings detail/update endpoint

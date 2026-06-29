@@ -47,7 +47,7 @@ async function getPageLang(): Promise<AppLang> {
 ========================================================= */
 const content: Record<AppLang, HeroContent> = {
   ar: {
-    badgeNew: "Primey Care",
+    badgeNew: "Mhamcloud",
     badgeText: "بطاقة وبرامج رعاية صحية بخصومات مختارة",
     title: "رعاية صحية أذكى وخصومات طبية أقرب لك",
     description:
@@ -55,11 +55,11 @@ const content: Record<AppLang, HeroContent> = {
     primaryButton: "اشترك الآن",
     secondaryButton: "استعرض المزايا",
     benefits: ["اشتراك سهل", "خصومات طبية", "دعم عبر واتساب"],
-    imageAlt: "بطاقة Primey Care ومزايا الرعاية الصحية",
-    heroLogoAlt: "شعار Primey Care الرئيسي",
+    imageAlt: "بطاقة Mhamcloud ومزايا الرعاية الصحية",
+    heroLogoAlt: "شعار Mhamcloud الرئيسي",
   },
   en: {
-    badgeNew: "Primey Care",
+    badgeNew: "Mhamcloud",
     badgeText: "Healthcare cards and programs with selected discounts",
     title: "Smarter healthcare with medical savings closer to you",
     description:
@@ -67,8 +67,8 @@ const content: Record<AppLang, HeroContent> = {
     primaryButton: "Join Now",
     secondaryButton: "Explore Benefits",
     benefits: ["Easy subscription", "Medical discounts", "WhatsApp support"],
-    imageAlt: "Primey Care card and healthcare benefits",
-    heroLogoAlt: "Primey Care main hero logo",
+    imageAlt: "Mhamcloud card and healthcare benefits",
+    heroLogoAlt: "Mhamcloud main hero logo",
   },
 };
 
@@ -98,7 +98,7 @@ export const HeroSection = async () => {
             </Badge>
 
             {/* =========================================================
-                🖼️ شعار Primey Care الرئيسي
+                🖼️ شعار Mhamcloud الرئيسي
             ========================================================= */}
             <div className="mx-auto flex max-w-(--breakpoint-md) justify-center">
               <h1 className="sr-only">{t.title}</h1>

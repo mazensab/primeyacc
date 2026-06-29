@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/payments/methods/detail.py
-# 🧠 PrimeyAcc | Company Payment Method Detail API V1.0
+# 🧠 Mhamcloud | Company Payment Method Detail API V1.0
 # ------------------------------------------------------------
 # ✅ Retrieve payment method for current company only
 # ✅ Update payment method for current company only

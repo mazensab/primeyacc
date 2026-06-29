@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/orders/items.py
-# 🧠 PrimeyAcc | Company POS Order Items API V1.0
+# 🧠 Mhamcloud | Company POS Order Items API V1.0
 # ------------------------------------------------------------
 # ✅ List POS order items for current company only
 # ✅ Add POS order item for current company only

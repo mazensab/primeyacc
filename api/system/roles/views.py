@@ -1,5 +1,5 @@
 from __future__ import annotations
-"""PrimeyAcc System Roles API."""
+"""Mhamcloud System Roles API."""
 from typing import Any
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response

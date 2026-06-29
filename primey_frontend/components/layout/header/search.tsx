@@ -2,13 +2,13 @@
 
 /* =====================================================
    📂 components/layout/header/search.tsx
-   🧠 Primey Care — Premium Header Search
+   🧠 Mhamcloud — Premium Header Search
    -----------------------------------------------------
    ✅ متوافق مع الهيدر الجديد
    ✅ يدعم system / provider / customer / agent
    ✅ يدعم عربي/إنجليزي عبر primey-locale
    ✅ بدون hardcoded localhost
-   ✅ يحافظ على روابط Primey Care المعتمدة
+   ✅ يحافظ على روابط Mhamcloud المعتمدة
 ===================================================== */
 
 import { useEffect, useMemo, useState } from "react";

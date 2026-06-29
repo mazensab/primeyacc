@@ -1,6 +1,6 @@
 /* ============================================================
    📂 lib/api/http.ts
-   Primey Care - HTTP Helpers
+   Mhamcloud - HTTP Helpers
    ------------------------------------------------------------
    ✅ اختصارات HTTP موحدة فوق apiRequest
    ✅ إصلاح body unknown إلى ApiBody
@@ -92,7 +92,7 @@ export async function safeApiGet<T = unknown>(
   const result = await apiGet<T>(path, query);
 
   if (!result.ok) {
-    console.error("[Primey Care API Error]", {
+    console.error("[Mhamcloud API Error]", {
       path,
       status: result.status,
       message: result.message,

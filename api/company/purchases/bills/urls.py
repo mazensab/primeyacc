@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/purchases/bills/urls.py
-# 🧠 PrimeyAcc | Company Purchase Bills URLs V1.0
+# 🧠 Mhamcloud | Company Purchase Bills URLs V1.0
 # ------------------------------------------------------------
 # ✅ Purchase bills API routing
 # ✅ List, create, detail, update, post, cancel

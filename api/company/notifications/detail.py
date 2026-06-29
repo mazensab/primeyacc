@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/notifications/detail.py
-# 🧠 PrimeyAcc | Company Notifications Detail API V1.0
+# 🧠 Mhamcloud | Company Notifications Detail API V1.0
 # ------------------------------------------------------------
 # ✅ GET /api/company/notifications/<id>/
 # ✅ Tenant-isolated by request.company

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 settings_center/services.py
-# PrimeyAcc | System Settings Center Services
+# Mhamcloud | System Settings Center Services
 # ------------------------------------------------------------
 # ✅ Backend only
 # ✅ Type validation
@@ -27,11 +27,11 @@ SYSTEM_SETTING_DEFAULTS: list[dict[str, Any]] = [
         "key": "platform_name",
         "label_ar": "اسم المنصة",
         "label_en": "Platform Name",
-        "description_ar": "الاسم الظاهر لمنصة PrimeyAcc في إعدادات النظام.",
-        "description_en": "Visible PrimeyAcc platform name in system settings.",
+        "description_ar": "الاسم الظاهر لمنصة Mhamcloud في إعدادات النظام.",
+        "description_en": "Visible Mhamcloud platform name in system settings.",
         "value_type": SystemSetting.ValueType.STRING,
-        "value": "PrimeyAcc",
-        "default_value": "PrimeyAcc",
+        "value": "Mhamcloud",
+        "default_value": "Mhamcloud",
         "is_public": True,
         "is_required": True,
         "sort_order": 10,

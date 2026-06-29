@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/purchases/bills/update.py
-# 🧠 PrimeyAcc | Company Purchase Bill Update API V1.1
+# 🧠 Mhamcloud | Company Purchase Bill Update API V1.1
 # ------------------------------------------------------------
 # ✅ Update draft purchase bill for current company only
 # ✅ Tenant isolation through request.company

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/system/subscriptions/detail.py
-# 🧠 PrimeyAcc | System Company Subscription Detail API V1.2
+# 🧠 Mhamcloud | System Company Subscription Detail API V1.2
 # ------------------------------------------------------------
 # ✅ Retrieve one company subscription for system workspace
 # ✅ Returns company, plan, lifecycle, financial and audit summary

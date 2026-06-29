@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/sessions/urls.py
-# 🧠 PrimeyAcc | Company POS Sessions URLs V1.0
+# 🧠 Mhamcloud | Company POS Sessions URLs V1.0
 # ------------------------------------------------------------
 # ✅ POS Sessions List Route
 # ✅ POS Session Open Route

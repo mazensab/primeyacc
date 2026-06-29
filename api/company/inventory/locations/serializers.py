@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/locations/serializers.py
-# 🧠 PrimeyAcc | Company Inventory Locations API Serializers V1.0
+# 🧠 Mhamcloud | Company Inventory Locations API Serializers V1.0
 # ------------------------------------------------------------
 # ✅ Inventory location serialization
 # ✅ Warehouse and parent snapshots

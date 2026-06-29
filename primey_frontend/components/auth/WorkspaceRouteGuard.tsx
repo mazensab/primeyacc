@@ -1,6 +1,6 @@
 /* ============================================================
    📂 components/auth/WorkspaceRouteGuard.tsx
-   🧠 PrimeyAcc | Workspace Route Guard — Phase 5.1.2
+   🧠 Mhamcloud | Workspace Route Guard — Phase 5.1.2
 
    ✅ يحمي مداخل مساحات العمل
    ✅ يعتمد على AuthProvider الحالي بدون كسر المنجز السابق
@@ -197,7 +197,7 @@ export function WorkspaceRouteGuard({
     return (
       <main className="grid min-h-screen place-items-center bg-background text-foreground">
         <div className="rounded-3xl border bg-card p-8 text-center shadow-sm">
-          <p className="text-sm text-muted-foreground">PrimeyAcc</p>
+          <p className="text-sm text-muted-foreground">Mhamcloud</p>
           <h1 className="mt-2 text-xl font-bold">جاري التحقق من الجلسة...</h1>
         </div>
       </main>
@@ -208,7 +208,7 @@ export function WorkspaceRouteGuard({
     return (
       <main className="grid min-h-screen place-items-center bg-background text-foreground">
         <div className="rounded-3xl border bg-card p-8 text-center shadow-sm">
-          <p className="text-sm text-muted-foreground">PrimeyAcc</p>
+          <p className="text-sm text-muted-foreground">Mhamcloud</p>
           <h1 className="mt-2 text-xl font-bold">جاري تحويلك للمساحة المناسبة...</h1>
         </div>
       </main>

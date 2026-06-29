@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/activity_profiles/current.py
-# 🧠 PrimeyAcc | Current Company Activity Profile API
+# 🧠 Mhamcloud | Current Company Activity Profile API
 # ------------------------------------------------------------
 # ✅ Current company activity profile snapshot
 # ✅ Keeps legacy activity_profile visible

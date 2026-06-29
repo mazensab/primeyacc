@@ -1,6 +1,6 @@
 # ============================================================
 # ?? api/company/sales/credit_notes/cancel.py
-# ?? PrimeyAcc | Company Sales Credit Note Cancel API
+# ?? Mhamcloud | Company Sales Credit Note Cancel API
 # ============================================================
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/suppliers/list.py
-# 🧠 PrimeyAcc | Company Suppliers List API V1.0
+# 🧠 Mhamcloud | Company Suppliers List API V1.0
 # ------------------------------------------------------------
 # ✅ Suppliers alias over BusinessParty
 # ✅ Company-scoped supplier list

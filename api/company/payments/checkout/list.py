@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/payments/checkout/list.py
-# 🧠 PrimeyAcc | Company Payment Checkout List/Create API V1.0
+# 🧠 Mhamcloud | Company Payment Checkout List/Create API V1.0
 # ------------------------------------------------------------
 # ✅ Company-scoped checkout sessions
 # ✅ Generic real gateway checkout foundation

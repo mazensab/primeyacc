@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/auth/urls.py
-# 🧠 PrimeyAcc | Auth API URLs V1.1
+# 🧠 Mhamcloud | Auth API URLs V1.1
 # ------------------------------------------------------------
 # ✅ Auth Route Group
 # ✅ CSRF Endpoint

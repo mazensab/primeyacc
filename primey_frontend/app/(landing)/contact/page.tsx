@@ -1,10 +1,10 @@
 /* ============================================================
    📂 primey_frontend/app/(landing)/contact/page.tsx
-   🧠 PrimeyAcc — Landing Contact Page
+   🧠 Mhamcloud — Landing Contact Page
    ------------------------------------------------------------
    ✅ Approved Premium contact page pattern
    ✅ Approved landing layout/style preserved
-   ✅ Content changed only for PrimeyAcc
+   ✅ Content changed only for Mhamcloud
    ✅ ContactSection / FAQ / Newsletter / Footer preserved
    ✅ Arabic/English metadata and page content
    ✅ Images/social accounts kept temporarily until approved replacements
@@ -114,7 +114,7 @@ export async function generateMetadata(): Promise<Metadata> {
       type: "website",
       title,
       description,
-      siteName: "PrimeyAcc",
+      siteName: "Mhamcloud",
       locale: isArabic ? "ar_SA" : "en_US",
       images: [
         {

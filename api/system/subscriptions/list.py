@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/system/subscriptions/list.py
-# 🧠 PrimeyAcc | System Company Subscriptions List API V1.3
+# 🧠 Mhamcloud | System Company Subscriptions List API V1.3
 # ------------------------------------------------------------
 # ✅ List company subscriptions for system workspace
 # ✅ Supports search, status, action, billing cycle, plan, company filters

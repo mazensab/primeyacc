@@ -1,4 +1,4 @@
 ﻿# ============================================================
 # 📂 jewelry/__init__.py
-# 🧠 PrimeyAcc | Jewelry and Gold Activity Backend
+# 🧠 Mhamcloud | Jewelry and Gold Activity Backend
 # ============================================================

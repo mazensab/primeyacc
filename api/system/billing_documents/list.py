@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/system/billing_documents/list.py
-# 🧠 PrimeyAcc | System Billing Documents List API V1.0
+# 🧠 Mhamcloud | System Billing Documents List API V1.0
 # ------------------------------------------------------------
 # ✅ Lists platform subscription invoices and payment receipts
 # ✅ Supports document type, status, company, and subscription filters
@@ -10,7 +10,7 @@
 # ✅ Protected by system.billing_documents.view
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
-# - هذه القائمة تخص مستندات فوترة مالك منصة PrimeyAcc
+# - هذه القائمة تخص مستندات فوترة مالك منصة Mhamcloud
 # - لا تعرض مستندات الشركات الموجودة داخل documents
 # - جميع الإحصائيات تتأثر بالفلاتر المرسلة
 # - القائمة لا تعيد Snapshots أو printable_payload لتقليل الحجم

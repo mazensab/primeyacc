@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # api/company/sales/customer_credits/balances.py
-# PrimeyAcc | Customer Credit Balances API
+# Mhamcloud | Customer Credit Balances API
 # ============================================================
 
 from __future__ import annotations

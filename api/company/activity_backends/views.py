@@ -1,6 +1,6 @@
 # ============================================================
 # ًں“‚ api/company/activity_backends/views.py
-# ًں§  PrimeyAcc | Company Activity Backends APIs â€” Phase 25.3
+# ًں§  Mhamcloud | Company Activity Backends APIs â€” Phase 25.3
 # ============================================================
 # âœ… Company-scoped APIs for restaurant, clinic and project foundations
 # âœ… Lightweight JsonResponse views

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 accounting/management/commands/seed_company_chart_of_accounts.py
-# 🧠 PrimeyAcc | Seed Company Chart of Accounts
+# 🧠 Mhamcloud | Seed Company Chart of Accounts
 # ------------------------------------------------------------
 # ✅ يزرع شجرة الحسابات الافتراضية لشركة محددة
 # ✅ يستخدم نفس شجرة PrimeyCare المعتمدة

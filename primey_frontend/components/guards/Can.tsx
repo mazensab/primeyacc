@@ -2,7 +2,7 @@
 
 // ======================================================
 // 📂 الملف: components/guards/Can.tsx
-// 🧭 Primey Care — Action Permission Guard
+// 🧭 Mhamcloud — Action Permission Guard
 // 🚀 الإصدار: Can Guard V1.1
 // ------------------------------------------------------
 // ✅ إظهار/إخفاء الأزرار والأكشنز حسب الصلاحية

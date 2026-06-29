@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 catalog/services.py
-# 🧠 PrimeyAcc | Company Catalog Services V1.0
+# 🧠 Mhamcloud | Company Catalog Services V1.0
 # ------------------------------------------------------------
 # ✅ Company-scoped catalog query helpers
 # ✅ Safe create/update helpers for categories, units, and items

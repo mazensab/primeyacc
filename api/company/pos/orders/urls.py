@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/orders/urls.py
-# 🧠 PrimeyAcc | Company POS Orders URLs V1.2
+# 🧠 Mhamcloud | Company POS Orders URLs V1.2
 # ------------------------------------------------------------
 # ✅ Company POS orders URL routing
 # ✅ List, create, detail, preview, cancel, finalize and receipt endpoints

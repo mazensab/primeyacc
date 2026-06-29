@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/customers/status.py
-# 🧠 PrimeyAcc | Company Customers Status API V1.0
+# 🧠 Mhamcloud | Company Customers Status API V1.0
 # ------------------------------------------------------------
 # ✅ Customer status actions alias over BusinessParty
 # ✅ Activate / deactivate / block / archive customer

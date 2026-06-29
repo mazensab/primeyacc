@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/customers/urls.py
-# 🧠 PrimeyAcc | Company Customers API URLs V1.0
+# 🧠 Mhamcloud | Company Customers API URLs V1.0
 # ------------------------------------------------------------
 # ✅ Customer list route
 # ✅ Customer create route

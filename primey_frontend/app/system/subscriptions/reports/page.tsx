@@ -2,9 +2,9 @@
 
 /* ============================================================
    📂 primey_frontend/app/system/subscriptions/reports/page.tsx
-   🏢 PrimeyAcc — System Subscriptions Reports
+   🏢 Mhamcloud — System Subscriptions Reports
    ------------------------------------------------------------
-   ✅ Premium PrimeyCare reports pattern adapted for PrimeyAcc
+   ✅ Premium PrimeyCare reports pattern adapted for Mhamcloud
    ✅ Real API only: GET /api/system/subscriptions/
    ✅ Summary KPIs + status/activity/city distributions
    ✅ Analytical full-width table
@@ -130,7 +130,7 @@ const translations = {
   ar: {
     title: "تقارير الاشتراكات",
     subtitle:
-      "تحليلات اشتراكات شركات PrimeyAcc حسب الحالة والخطة ودورة الفوترة والقيمة والتواريخ مبنية على بيانات API الحقيقية.",
+      "تحليلات اشتراكات شركات Mhamcloud حسب الحالة والخطة ودورة الفوترة والقيمة والتواريخ مبنية على بيانات API الحقيقية.",
     badge: "إدارة الاشتراكات",
     refresh: "تحديث",
     exportExcel: "تصدير Excel",
@@ -214,14 +214,14 @@ const translations = {
     tryAgain: "إعادة المحاولة",
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
-    reportTitle: "تقرير اشتراكات PrimeyAcc",
+    reportTitle: "تقرير اشتراكات Mhamcloud",
     generatedAt: "تاريخ الإنشاء",
     refreshed: "تم تحديث تقارير الاشتراكات.",
   },
   en: {
     title: "Subscriptions reports",
     subtitle:
-      "PrimeyAcc company subscription analytics by status, plan, billing cycle, value, and dates, based on real API data.",
+      "Mhamcloud company subscription analytics by status, plan, billing cycle, value, and dates, based on real API data.",
     badge: "Subscription management",
     refresh: "Refresh",
     exportExcel: "Export Excel",
@@ -305,7 +305,7 @@ const translations = {
     tryAgain: "Try again",
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
-    reportTitle: "PrimeyAcc Subscriptions Report",
+    reportTitle: "Mhamcloud Subscriptions Report",
     generatedAt: "Generated at",
     refreshed: "Subscriptions reports refreshed.",
   },
@@ -1044,7 +1044,7 @@ export default function SystemSubscriptionsReportsPage() {
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = `primeyacc-system-companies-report-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-system-companies-report-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();

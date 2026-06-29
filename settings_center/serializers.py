@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 settings_center/serializers.py
-# PrimeyAcc | System Settings Center Serializers
+# Mhamcloud | System Settings Center Serializers
 # ------------------------------------------------------------
 # ✅ Backend only
 # ✅ DRF serializers

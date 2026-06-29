@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 accounting/models.py
-# 🧠 PrimeyAcc | Accounting & Automatic Journal Foundation
+# 🧠 Mhamcloud | Accounting & Automatic Journal Foundation
 # ------------------------------------------------------------
 # ✅ دليل حسابات مستقل لكل شركة
 # ✅ سنوات وفترات مالية لكل شركة
@@ -943,7 +943,7 @@ class JournalEntry(models.Model):
     posted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
-        related_name="posted_primeyacc_journal_entries",
+        related_name="posted_Mhamcloud_journal_entries",
         null=True,
         blank=True,
         verbose_name="رحل بواسطة",
@@ -953,7 +953,7 @@ class JournalEntry(models.Model):
     cancelled_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
-        related_name="cancelled_primeyacc_journal_entries",
+        related_name="cancelled_Mhamcloud_journal_entries",
         null=True,
         blank=True,
         verbose_name="ألغي بواسطة",
@@ -985,7 +985,7 @@ class JournalEntry(models.Model):
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
-        related_name="created_primeyacc_journal_entries",
+        related_name="created_Mhamcloud_journal_entries",
         null=True,
         blank=True,
         verbose_name="أنشئ بواسطة",
@@ -993,7 +993,7 @@ class JournalEntry(models.Model):
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
-        related_name="updated_primeyacc_journal_entries",
+        related_name="updated_Mhamcloud_journal_entries",
         null=True,
         blank=True,
         verbose_name="آخر تعديل بواسطة",

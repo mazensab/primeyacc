@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/locations/status.py
-# 🧠 PrimeyAcc | Company Inventory Location Status API V1.0
+# 🧠 Mhamcloud | Company Inventory Location Status API V1.0
 # ------------------------------------------------------------
 # ✅ Activate inventory location
 # ✅ Deactivate inventory location

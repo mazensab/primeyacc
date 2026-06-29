@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 notifications/admin.py
-# 🧠 PrimeyAcc | Company Notifications Admin V1.0
+# 🧠 Mhamcloud | Company Notifications Admin V1.0
 # ------------------------------------------------------------
 # ✅ Register CompanyNotification in Django Admin
 # ✅ Fast search and filters

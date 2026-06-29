@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ًں“‚ api/urls.py
-# ًں§  PrimeyAcc | Main API URLs V1.1
+# ًں§  Mhamcloud | Main API URLs V1.1
 # ------------------------------------------------------------
 # âœ… API Root Router
 # âœ… Auth Routes

@@ -1,6 +1,6 @@
 # ============================================================
 # api/company/reports/export.py
-# PrimeyAcc | Company Reports Export API - Phase 16.7
+# Mhamcloud | Company Reports Export API - Phase 16.7
 # ------------------------------------------------------------
 # Unified report export endpoint
 # JSON/CSV foundation

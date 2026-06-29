@@ -1,6 +1,6 @@
 # ============================================================
 # ?? api/company/inventory/valuation/locations.py
-# ?? PrimeyAcc | Inventory Valuation Locations API V1.0
+# ?? Mhamcloud | Inventory Valuation Locations API V1.0
 # ------------------------------------------------------------
 # ? Location-level inventory valuation summary
 # ? Tenant isolation through request.company

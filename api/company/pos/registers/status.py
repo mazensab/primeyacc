@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/registers/status.py
-# 🧠 PrimeyAcc | Company POS Registers Status API V1.0
+# 🧠 Mhamcloud | Company POS Registers Status API V1.0
 # ------------------------------------------------------------
 # ✅ Activate POS register for current company only
 # ✅ Deactivate POS register for current company only

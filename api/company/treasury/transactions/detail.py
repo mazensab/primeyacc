@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/treasury/transactions/detail.py
-# 🧠 PrimeyAcc | Company Treasury Transaction Detail API V1.1
+# 🧠 Mhamcloud | Company Treasury Transaction Detail API V1.1
 # ------------------------------------------------------------
 # ✅ Retrieve treasury transaction for current company only
 # ✅ Update draft treasury transaction for current company only

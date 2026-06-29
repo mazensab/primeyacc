@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/system/notifications/urls.py
-# 🧠 PrimeyAcc | System Notifications URLs V1.0
+# 🧠 Mhamcloud | System Notifications URLs V1.0
 # ------------------------------------------------------------
 # ✅ GET  /api/system/notifications/
 # ✅ GET  /api/system/notifications/unread-count/

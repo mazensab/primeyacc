@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/system/subscriptions/change_plan.py
-# 🧠 PrimeyAcc | System Company Subscription Change Plan API V1.2
+# 🧠 Mhamcloud | System Company Subscription Change Plan API V1.2
 # ------------------------------------------------------------
 # ✅ Change company subscription plan from system workspace
 # ✅ Creates a new PENDING_PAYMENT subscription record

@@ -1,6 +1,6 @@
 # ============================================================
 # reports/test_balance_sheet.py
-# PrimeyAcc | Balance Sheet Report Tests - Phase 16.5
+# Mhamcloud | Balance Sheet Report Tests - Phase 16.5
 # ============================================================
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ class BalanceSheetReportTests(TestCase):
 
         cls.owner = User.objects.create_user(
             username="balance_sheet_owner",
-            email="balance-sheet-owner@primeyacc.test",
+            email="balance-sheet-owner@Mhamcloud.test",
             password="test-pass-12345",
         )
 

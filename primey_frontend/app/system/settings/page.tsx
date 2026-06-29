@@ -2,9 +2,9 @@
 
 /* ============================================================
    📂 primey_frontend/app/system/settings/page.tsx
-   ⚙️ PrimeyAcc — System Settings Center
+   ⚙️ Mhamcloud — System Settings Center
    ------------------------------------------------------------
-   ✅ Approved Premium PrimeyCare admin pattern adapted for PrimeyAcc
+   ✅ Approved Premium PrimeyCare admin pattern adapted for Mhamcloud
    ✅ Real API only: /api/system/settings/
    ✅ Uses backend Settings Center API
    ✅ KPI cards from /api/system/settings/summary/
@@ -111,7 +111,7 @@ const translations = {
   ar: {
     title: "إعدادات النظام",
     subtitle:
-      "مركز إدارة إعدادات PrimeyAcc العامة، الفوترة، الاشتراكات، الأمان، الإشعارات، المستندات والتوطين من API حقيقي.",
+      "مركز إدارة إعدادات Mhamcloud العامة، الفوترة، الاشتراكات، الأمان، الإشعارات، المستندات والتوطين من API حقيقي.",
     badge: "إدارة المنصة",
     refresh: "تحديث",
     seedDefaults: "تهيئة الافتراضيات",
@@ -187,7 +187,7 @@ const translations = {
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
     pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
-    reportTitle: "تقرير إعدادات نظام PrimeyAcc",
+    reportTitle: "تقرير إعدادات نظام Mhamcloud",
     generatedAt: "تاريخ الإنشاء",
     showing: "عرض",
     of: "من",
@@ -200,7 +200,7 @@ const translations = {
   en: {
     title: "System settings",
     subtitle:
-      "PrimeyAcc system settings center for general, billing, subscriptions, security, notifications, documents, and localization settings from the real API.",
+      "Mhamcloud system settings center for general, billing, subscriptions, security, notifications, documents, and localization settings from the real API.",
     badge: "Platform management",
     refresh: "Refresh",
     seedDefaults: "Seed defaults",
@@ -276,7 +276,7 @@ const translations = {
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
     pdfHint: "Choose Save as PDF from the print dialog.",
-    reportTitle: "PrimeyAcc System Settings Report",
+    reportTitle: "Mhamcloud System Settings Report",
     generatedAt: "Generated at",
     showing: "Showing",
     of: "of",
@@ -1002,7 +1002,7 @@ export default function SystemSettingsPage() {
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = `primeyacc-system-settings-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-system-settings-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();

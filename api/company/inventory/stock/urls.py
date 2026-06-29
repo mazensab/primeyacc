@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/stock/urls.py
-# 🧠 PrimeyAcc | Company Inventory Stock URLs V1.1
+# 🧠 Mhamcloud | Company Inventory Stock URLs V1.1
 # ------------------------------------------------------------
 # ✅ Stock balances API routing
 # ✅ List and detail

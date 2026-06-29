@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/system/billing_documents/urls.py
-# 🧠 PrimeyAcc | System Billing Documents URLs V1.0
+# 🧠 Mhamcloud | System Billing Documents URLs V1.0
 # ------------------------------------------------------------
 # ✅ Platform billing documents list route
 # ✅ Platform billing document detail route

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 hr/models.py
-# 🧠 PrimeyAcc | HR Models V1.3
+# 🧠 Mhamcloud | HR Models V1.3
 # ------------------------------------------------------------
 # ✅ HR employees foundation
 # ✅ Company-level tenant isolation
@@ -68,7 +68,7 @@ class Employee(models.Model):
     """
     Company employee.
 
-    This model is the HR foundation for PrimeyAcc.
+    This model is the HR foundation for Mhamcloud.
     Every employee is scoped to one company and can optionally be linked
     to a branch and to a Django user account.
     """
@@ -344,7 +344,7 @@ class AttendanceRecord(models.Model):
     """
     Company employee attendance record.
 
-    This model is the attendance foundation for PrimeyAcc.
+    This model is the attendance foundation for Mhamcloud.
     Every attendance record is scoped to one company and one employee.
     Branch is optional, but if provided it must belong to the same company.
     """

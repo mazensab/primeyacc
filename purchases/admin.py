@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 purchases/admin.py
-# 🧠 PrimeyAcc | Purchases Admin V1.0
+# 🧠 Mhamcloud | Purchases Admin V1.0
 # ------------------------------------------------------------
 # ✅ Purchase bills admin registration
 # ✅ Purchase bill items inline

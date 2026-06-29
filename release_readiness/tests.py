@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 release_readiness/tests.py
-# 🧠 PrimeyAcc | Phase 27 Release Readiness Tests
+# 🧠 Mhamcloud | Phase 27 Release Readiness Tests
 # ============================================================
 # ✅ Contract registry smoke tests
 # ✅ Readiness payload tests
@@ -140,6 +140,6 @@ class ReleaseReadinessCommandTests(TestCase):
         call_command("check_release_readiness", stdout=output)
 
         value = output.getvalue()
-        self.assertIn("PrimeyAcc Phase 27 Release Readiness", value)
+        self.assertIn("Mhamcloud Phase 27 Release Readiness", value)
         self.assertIn("Contracts:", value)
         self.assertIn("Checks:", value)

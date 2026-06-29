@@ -4,10 +4,10 @@ import { cn } from "@/lib/utils";
 
 /* =====================================================
    📂 components/ui/card.tsx
-   🧩 PrimeyAcc — Premium Card
+   🧩 Mhamcloud — Premium Card
    -----------------------------------------------------
    ✅ Keeps the existing Card API without breaking pages.
-   ✅ Uses PrimeyAcc black/neutral accents instead of PrimeyCare purple.
+   ✅ Uses Mhamcloud black/neutral accents instead of PrimeyCare purple.
    ✅ Keeps a clean white premium workspace surface.
    ✅ Supports dark mode with neutral black/gray shadows.
 ===================================================== */

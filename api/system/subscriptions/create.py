@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/system/subscriptions/create.py
-# 🧠 PrimeyAcc | System Company Subscription Create API V1.2
+# 🧠 Mhamcloud | System Company Subscription Create API V1.2
 # ------------------------------------------------------------
 # ✅ Create pending company subscriptions from system workspace
 # ✅ Uses subscriptions.services.create_pending_subscription

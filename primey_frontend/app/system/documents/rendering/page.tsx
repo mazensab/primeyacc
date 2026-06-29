@@ -1,6 +1,6 @@
 ﻿/* ============================================================
    📂 primey_frontend/app/system/documents/rendering/page.tsx
-   🧩 PrimeyAcc — System Document Rendering
+   🧩 Mhamcloud — System Document Rendering
    ------------------------------------------------------------
    ✅ Real API only via SystemDocumentsCenter
 ============================================================ */

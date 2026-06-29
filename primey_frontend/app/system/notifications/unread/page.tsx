@@ -1,6 +1,6 @@
 ﻿/* ============================================================
    📂 primey_frontend/app/system/notifications/unread/page.tsx
-   🔔 PrimeyAcc — System Unread Notifications Route
+   🔔 Mhamcloud — System Unread Notifications Route
    ------------------------------------------------------------
    ✅ الإشعارات غير المقروءة
    ✅ متابعة الإشعارات التي لم يتم التعامل معها بعد

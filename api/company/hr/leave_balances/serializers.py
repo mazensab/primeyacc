@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/hr/leave_balances/serializers.py
-# 🧠 PrimeyAcc | Company HR Leave Balances Serializers V1.0
+# 🧠 Mhamcloud | Company HR Leave Balances Serializers V1.0
 # ------------------------------------------------------------
 # ✅ Serialize leave balances
 # ✅ Resolve employee inside current company only

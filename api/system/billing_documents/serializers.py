@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/system/billing_documents/serializers.py
-# 🧠 PrimeyAcc | System Billing Documents Serializers V1.0
+# 🧠 Mhamcloud | System Billing Documents Serializers V1.0
 # ------------------------------------------------------------
 # ✅ Shared platform billing document JSON payloads
 # ✅ Company, subscription, plan, user, and invoice summaries
@@ -10,7 +10,7 @@
 # ✅ Complete separation from company document serializers
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
-# - هذه الدوال تخص مستندات فوترة مالك منصة PrimeyAcc فقط
+# - هذه الدوال تخص مستندات فوترة مالك منصة Mhamcloud فقط
 # - القائمة تستخدم Payload مختصرًا لتقليل حجم الاستجابة
 # - التفاصيل تعرض Snapshots وبيانات الطباعة المحفوظة
 # - لا تعتمد الطباعة على بيانات الشركة أو الباقة الحية
@@ -74,7 +74,7 @@ def user_summary_payload(user) -> dict[str, Any] | None:
 
     profile = getattr(
         user,
-        "primeyacc_profile",
+        "Mhamcloud_profile",
         None,
     )
 

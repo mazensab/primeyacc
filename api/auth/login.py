@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/auth/login.py
-# 🧠 PrimeyAcc | Auth Login API V2
+# 🧠 Mhamcloud | Auth Login API V2
 # ------------------------------------------------------------
 # ✅ Session Login
 # ✅ CSRF Protected
@@ -14,7 +14,7 @@
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - User = حساب دخول فقط
-# - UserProfile = ملف المستخدم العام داخل PrimeyAcc
+# - UserProfile = ملف المستخدم العام داخل Mhamcloud
 # - تسجيل الدخول يستخدم Django Session + CSRF
 # - لا يتم تحديد صلاحيات الواجهة من الفرونت
 # - whoami هو مصدر معرفة مساحة المستخدم والشركة الافتراضية
@@ -65,9 +65,9 @@ def _get_username_from_identifier(identifier: str) -> str | None:
         User.objects.filter(
             Q(username__iexact=identifier)
             | Q(email__iexact=identifier)
-            | Q(primeyacc_profile__phone__iexact=identifier)
-            | Q(primeyacc_profile__mobile__iexact=identifier)
-            | Q(primeyacc_profile__whatsapp_number__iexact=identifier)
+            | Q(Mhamcloud_profile__phone__iexact=identifier)
+            | Q(Mhamcloud_profile__mobile__iexact=identifier)
+            | Q(Mhamcloud_profile__whatsapp_number__iexact=identifier)
         )
         .order_by("id")
         .first()

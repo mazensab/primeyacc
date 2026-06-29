@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 catalog/tests.py
-# 🧠 PrimeyAcc | Company Catalog Tests V1.4
+# 🧠 Mhamcloud | Company Catalog Tests V1.4
 # ------------------------------------------------------------
 # ✅ Catalog models validation tests
 # ✅ Catalog service tenant isolation tests

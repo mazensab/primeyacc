@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 jewelry/admin.py
-# 🧠 PrimeyAcc | Jewelry and Gold Admin — Phase 25.1
+# 🧠 Mhamcloud | Jewelry and Gold Admin — Phase 25.1
 # ============================================================
 # ✅ Admin registration for jewelry activity backend
 # ✅ Company-aware list display and filters

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/locations/update.py
-# 🧠 PrimeyAcc | Company Inventory Location Update API V1.0
+# 🧠 Mhamcloud | Company Inventory Location Update API V1.0
 # ------------------------------------------------------------
 # ✅ Update current-company inventory location
 # ✅ Tenant-isolated lookup

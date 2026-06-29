@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 inventory/models.py
-# 🧠 PrimeyAcc | Company Inventory & Stock Models V2.3
+# 🧠 Mhamcloud | Company Inventory & Stock Models V2.3
 # ------------------------------------------------------------
 # ✅ Company-scoped inventory foundation
 # ✅ Warehouses under company and optional branch

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/sales/invoices/summary.py
-# 🧠 PrimeyAcc | Company Sales Invoices Summary API V1.0
+# 🧠 Mhamcloud | Company Sales Invoices Summary API V1.0
 # ------------------------------------------------------------
 # ✅ Company-scoped sales invoices summary
 # ✅ Dashboard-ready invoice metrics

@@ -1,6 +1,6 @@
 # ============================================================
 # ًں“‚ activity_backends/admin.py
-# ًں§  PrimeyAcc | Activity-Specific Backends Admin â€” Phase 25.3
+# ًں§  Mhamcloud | Activity-Specific Backends Admin â€” Phase 25.3
 # ============================================================
 # âœ… Admin registration for restaurant, clinic and project foundations
 # ============================================================

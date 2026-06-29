@@ -2,7 +2,7 @@
 
 /* ============================================================
    📂 components/system/companies/SystemCompaniesView.tsx
-   🧠 PrimeyAcc | Frontend Phase 5.3 — System Companies Management
+   🧠 Mhamcloud | Frontend Phase 5.3 — System Companies Management
 ===============================================================
    ✅ System companies overview/list/create/detail/reports
    ✅ Uses ready backend APIs under /api/system/companies/

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 subscriptions/tests.py
-# 🧠 PrimeyAcc | Platform Subscription Services Tests
+# 🧠 Mhamcloud | Platform Subscription Services Tests
 # ------------------------------------------------------------
 # ✅ Tests subscription pricing
 # ✅ Tests pending subscription creation
@@ -40,11 +40,11 @@ class SubscriptionServiceTests(TestCase):
     def setUp(self) -> None:
         self.user = User.objects.create_user(
             username="subscription-admin",
-            email="subscription-admin@primeyacc.test",
+            email="subscription-admin@Mhamcloud.test",
             password="StrongPass123!",
         )
 
-        self.company = self.create_company(name="PrimeyAcc Test Company")
+        self.company = self.create_company(name="Mhamcloud Test Company")
 
         self.basic_plan = SubscriptionPlan.objects.create(
             name="Basic Plan",
@@ -85,7 +85,7 @@ class SubscriptionServiceTests(TestCase):
         Create a company safely without assuming all fields in companies.Company.
 
         السبب:
-        مراحل PrimeyAcc السابقة قد تحتوي حقول إلزامية مختلفة داخل Company.
+        مراحل Mhamcloud السابقة قد تحتوي حقول إلزامية مختلفة داخل Company.
         هذا المصنع يملأ الحقول الأساسية المطلوبة حسب نوع الحقل.
         """
 
@@ -114,7 +114,7 @@ class SubscriptionServiceTests(TestCase):
 
             if isinstance(field, (models.CharField, models.SlugField, models.TextField)):
                 if "email" in field_name:
-                    data[field.name] = f"{field.name}@primeyacc.test"
+                    data[field.name] = f"{field.name}@Mhamcloud.test"
                 elif "phone" in field_name or "mobile" in field_name:
                     data[field.name] = "0500000000"
                 elif "country" in field_name:
@@ -122,9 +122,9 @@ class SubscriptionServiceTests(TestCase):
                 elif "currency" in field_name:
                     data[field.name] = "SAR"
                 elif "slug" in field_name or "code" in field_name:
-                    data[field.name] = "primeyacc-test-company"
+                    data[field.name] = "Mhamcloud-test-company"
                 elif "name" in field_name or "title" in field_name:
-                    data[field.name] = overrides.get("name", "PrimeyAcc Test Company")
+                    data[field.name] = overrides.get("name", "Mhamcloud Test Company")
                 else:
                     data[field.name] = f"test-{field.name}"
 

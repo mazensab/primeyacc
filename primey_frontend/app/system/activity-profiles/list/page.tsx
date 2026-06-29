@@ -1,6 +1,6 @@
 ﻿/* ============================================================
    📂 primey_frontend/app/system/activity-profiles/list/page.tsx
-   🧩 PrimeyAcc — System Activity Profiles List
+   🧩 Mhamcloud — System Activity Profiles List
    ------------------------------------------------------------
    ✅ Real API only via SystemActivityProfilesCenter
 ============================================================ */

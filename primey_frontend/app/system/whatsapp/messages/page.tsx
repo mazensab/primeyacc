@@ -1,7 +1,7 @@
 ﻿"use client";
 /* ============================================================
    📂 primey_frontend/app/system/whatsapp/messages/page.tsx
-   💬 PrimeyAcc — System WhatsApp Message Logs Page
+   💬 Mhamcloud — System WhatsApp Message Logs Page
    ------------------------------------------------------------
    ✅ Standalone route page, no internal tabs
    ✅ Approved Premium system page pattern
@@ -456,7 +456,7 @@ export default function SystemWhatsAppMessagesPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "primeyacc-system-whatsapp-messages.csv";
+    link.download = "Mhamcloud-system-whatsapp-messages.csv";
     link.click();
     URL.revokeObjectURL(url);
   }

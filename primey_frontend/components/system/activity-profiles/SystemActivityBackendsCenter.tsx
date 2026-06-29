@@ -1,7 +1,7 @@
 ﻿"use client";
 /* ============================================================
    📂 primey_frontend/components/system/activity-profiles/SystemActivityBackendsCenter.tsx
-   🧩 PrimeyAcc — System Activity Backends Center
+   🧩 Mhamcloud — System Activity Backends Center
    ------------------------------------------------------------
    ✅ Real API only: GET /api/system/activity-backends/
    ✅ Activity-specific backend models + company summaries
@@ -109,7 +109,7 @@ const translations = {
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
     pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
-    reportTitle: "تقرير خلفيات الأنشطة في PrimeyAcc",
+    reportTitle: "تقرير خلفيات الأنشطة في Mhamcloud",
     generatedAt: "تاريخ الإنشاء",
     refreshed: "تم تحديث خلفيات الأنشطة.",
   },
@@ -157,7 +157,7 @@ const translations = {
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
     pdfHint: "Choose Save as PDF from the print dialog.",
-    reportTitle: "PrimeyAcc Activity Backends Report",
+    reportTitle: "Mhamcloud Activity Backends Report",
     generatedAt: "Generated at",
     refreshed: "Activity backends refreshed.",
   },
@@ -458,7 +458,7 @@ export function SystemActivityBackendsCenter() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `primeyacc-activity-backends-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-activity-backends-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/system/subscriptions/confirm_payment.py
-# 🧠 PrimeyAcc | System Subscription Confirm Payment API V1.0
+# 🧠 Mhamcloud | System Subscription Confirm Payment API V1.0
 # ------------------------------------------------------------
 # ✅ Confirms platform subscription payment from system workspace
 # ✅ Activates only PENDING_PAYMENT subscriptions

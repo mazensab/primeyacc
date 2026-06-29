@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/system/plans/status.py
-# 🧠 PrimeyAcc | System Subscription Plan Status API V1.1
+# 🧠 Mhamcloud | System Subscription Plan Status API V1.1
 # ------------------------------------------------------------
 # ✅ Activate / deactivate SaaS subscription plans
 # ✅ Publish / hide plans from public subscription

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/accounting/journal_entries/detail.py
-# 🧠 PrimeyAcc | Company Accounting Journal Entry Detail API
+# 🧠 Mhamcloud | Company Accounting Journal Entry Detail API
 # ------------------------------------------------------------
 # ✅ عرض تفاصيل قيد يومية داخل الشركة الحالية
 # ✅ عزل كامل حسب CompanyMembership

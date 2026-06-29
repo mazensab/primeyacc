@@ -1,6 +1,6 @@
 # ============================================================
 # ًں“‚ activity_backends/models.py
-# ًں§  PrimeyAcc | Activity-Specific Backend Models â€” Phase 25.3
+# ًں§  Mhamcloud | Activity-Specific Backend Models â€” Phase 25.3
 # ============================================================
 # âœ… Restaurant tables, menu categories/items, kitchen orders
 # âœ… Clinic patients, services and appointments

@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 sales/admin.py
-# 🧠 PrimeyAcc | Sales Admin V1.2
+# 🧠 Mhamcloud | Sales Admin V1.2
 # ------------------------------------------------------------
 # ✅ Sales invoices admin
 # ✅ Sales invoice items inline

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 release_readiness/services.py
-# 🧠 PrimeyAcc | Backend Release Readiness Services v1
+# 🧠 Mhamcloud | Backend Release Readiness Services v1
 # ============================================================
 # ✅ Release readiness payload builder
 # ✅ API contract validation
@@ -198,7 +198,7 @@ def build_release_readiness_payload() -> dict:
 
     data = {
         "status": status,
-        "phase": "PrimeyAcc Phase 27",
+        "phase": "Mhamcloud Phase 27",
         "title": "Backend Release Readiness and API Contract Final Closure",
         "summary": {
             "contracts_count": len(API_CONTRACTS),

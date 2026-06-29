@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/payments/settlements/items.py
-# 🧠 PrimeyAcc | Company Payment Settlement Items API V1.0
+# 🧠 Mhamcloud | Company Payment Settlement Items API V1.0
 # ============================================================
 
 from __future__ import annotations

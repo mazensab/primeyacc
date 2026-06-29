@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 catalog/models.py
-# 🧠 PrimeyAcc | Company Catalog Models V1.1
+# 🧠 Mhamcloud | Company Catalog Models V1.1
 # ------------------------------------------------------------
 # ✅ Company-scoped catalog foundation
 # ✅ Categories, units, products, and services

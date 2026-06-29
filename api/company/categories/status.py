@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/categories/status.py
-# 🧠 PrimeyAcc | Company Catalog Categories Status API V1.1
+# 🧠 Mhamcloud | Company Catalog Categories Status API V1.1
 # ------------------------------------------------------------
 # ✅ Change company-scoped catalog category status
 # ✅ Uses request.company from CompanyMembership context

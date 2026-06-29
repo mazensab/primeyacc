@@ -1,6 +1,6 @@
 # ============================================================
 # ًں“‚ activity_backends/tests.py
-# ًں§  PrimeyAcc | Activity-Specific Backend Tests â€” Phase 25.3
+# ًں§  Mhamcloud | Activity-Specific Backend Tests â€” Phase 25.3
 # ============================================================
 # âœ… Restaurant foundation tests
 # âœ… Clinic foundation tests

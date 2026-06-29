@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/system/whatsapp/views.py
-# 🧠 PrimeyAcc | System WhatsApp API Views V1.0
+# 🧠 Mhamcloud | System WhatsApp API Views V1.0
 # ------------------------------------------------------------
 # ✅ System overview for WhatsApp settings/templates/messages
 # ✅ Real DB only
@@ -84,7 +84,7 @@ def _user_is_system_member(user) -> bool:
         return False
     if getattr(user, "is_superuser", False) or getattr(user, "is_staff", False):
         return True
-    profile = getattr(user, "primeyacc_profile", None)
+    profile = getattr(user, "Mhamcloud_profile", None)
     if profile:
         role = str(getattr(profile, "system_role", "") or "").upper()
         if role in {"SUPER_ADMIN", "SYSTEM_ADMIN", "SUPPORT", "BILLING_MANAGER"}:
@@ -596,7 +596,7 @@ def system_whatsapp_inbox_webhook(request):
     Internal webhook used by the local WhatsApp Session Gateway.
     Security model:
     - In production, set WHATSAPP_INCOMING_WEBHOOK_TOKEN and send it in:
-      X-PrimeyAcc-Webhook-Token.
+      X-Mhamcloud-Webhook-Token.
     - In DEBUG development mode, the endpoint accepts local gateway calls
       without a token to keep local testing simple.
     """
@@ -612,7 +612,7 @@ def system_whatsapp_inbox_webhook(request):
         or ""
     ).strip()
     provided_token = str(
-        request.headers.get("X-PrimeyAcc-Webhook-Token")
+        request.headers.get("X-Mhamcloud-Webhook-Token")
         or request.headers.get("X-Webhook-Token")
         or request.query_params.get("token")
         or ""
@@ -746,7 +746,7 @@ def system_whatsapp_inbox_list(request):
         {
             "success": True,
             "message": "System WhatsApp inbox conversations loaded successfully.",
-            "summary": serialize_whatsapp_inbox_summary(scope="SYSTEM", session_name="primeyacc-system-session"),
+            "summary": serialize_whatsapp_inbox_summary(scope="SYSTEM", session_name="Mhamcloud-system-session"),
             "pagination": {
                 "page": page,
                 "page_size": page_size,

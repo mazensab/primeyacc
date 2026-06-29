@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/categories/detail.py
-# 🧠 PrimeyAcc | Company Catalog Categories Detail API V1.1
+# 🧠 Mhamcloud | Company Catalog Categories Detail API V1.1
 # ------------------------------------------------------------
 # ✅ Retrieve company-scoped catalog category details
 # ✅ Update company-scoped catalog category

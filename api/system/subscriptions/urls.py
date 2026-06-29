@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/system/subscriptions/urls.py
-# 🧠 PrimeyAcc | System Company Subscriptions URLs V1.2
+# 🧠 Mhamcloud | System Company Subscriptions URLs V1.2
 # ------------------------------------------------------------
 # ✅ Routes for system company subscriptions APIs
 # ✅ List, detail, create, renew, cancel, change plan, confirm payment

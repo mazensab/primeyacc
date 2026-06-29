@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/accounting/journal_entries/reverse.py
-# 🧠 PrimeyAcc | Company Accounting Journal Entry Reverse API
+# 🧠 Mhamcloud | Company Accounting Journal Entry Reverse API
 # ------------------------------------------------------------
 # ✅ عكس قيد يومية داخل الشركة الحالية
 # ✅ عزل كامل حسب CompanyMembership

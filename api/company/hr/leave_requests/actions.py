@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/hr/leave_requests/actions.py
-# 🧠 PrimeyAcc | Company HR Leave Requests Actions APIs V1.0
+# 🧠 Mhamcloud | Company HR Leave Requests Actions APIs V1.0
 # ============================================================
 
 from __future__ import annotations

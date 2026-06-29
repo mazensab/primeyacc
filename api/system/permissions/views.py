@@ -1,5 +1,5 @@
 from __future__ import annotations
-"""PrimeyAcc System Permissions API."""
+"""Mhamcloud System Permissions API."""
 import re
 from pathlib import Path
 from typing import Any

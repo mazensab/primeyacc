@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/treasury/transactions/list.py
-# 🧠 PrimeyAcc | Company Treasury Transactions List/Create API V1.1
+# 🧠 Mhamcloud | Company Treasury Transactions List/Create API V1.1
 # ------------------------------------------------------------
 # ✅ List treasury transactions for current company only
 # ✅ Create draft/posted treasury transactions for current company only

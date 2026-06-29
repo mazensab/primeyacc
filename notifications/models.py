@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 notifications/models.py
-# 🧠 PrimeyAcc | Company Notifications Models V1.0
+# 🧠 Mhamcloud | Company Notifications Models V1.0
 # ------------------------------------------------------------
 # ✅ Company Notification Foundation
 # ✅ Tenant-isolated notifications by company

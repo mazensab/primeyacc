@@ -1,10 +1,10 @@
 # ============================================================
-# PrimeyAcc WhatsApp Gateway Launcher
-# Path: scripts/start-primeyacc-whatsapp-gateway.ps1
+# Mhamcloud WhatsApp Gateway Launcher
+# Path: scripts/start-Mhamcloud-whatsapp-gateway.ps1
 # Purpose: Keep Gateway process alive. WhatsApp session may reconnect by QR later.
 # ============================================================
 $ErrorActionPreference = "Stop"
-$Root = "C:\Users\MHAMCLOUD\Documents\GitHub\primeyacc"
+$Root = "C:\Users\MHAMCLOUD\Documents\GitHub\Mhamcloud"
 $Gateway = Join-Path $Root "whatsapp_session_gateway"
 $LogDir = Join-Path $Gateway "logs"
 $LauncherLog = Join-Path $LogDir "launcher.log"
@@ -19,7 +19,7 @@ function Write-LauncherLog {
     $Line = "[{0}] {1}{2}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message, [Environment]::NewLine
     [System.IO.File]::AppendAllText($LauncherLog, $Line, [System.Text.Encoding]::UTF8)
   } catch {
-    Write-Host "[PrimeyAcc Gateway Launcher] log warning: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "[Mhamcloud Gateway Launcher] log warning: $($_.Exception.Message)" -ForegroundColor Yellow
   }
 }
 function Get-GatewayHealth {
@@ -59,7 +59,7 @@ function Wait-GatewayHealth {
   }
   return $false
 }
-Write-LauncherLog "PrimeyAcc WhatsApp Gateway launcher started."
+Write-LauncherLog "Mhamcloud WhatsApp Gateway launcher started."
 $Health = Get-GatewayHealth
 if ($Health -and $Health.success -eq $true) {
   Write-LauncherLog "Gateway already running. Session status does not block process startup."
@@ -92,4 +92,4 @@ if (Wait-GatewayHealth -Seconds 25) {
   exit 0
 }
 Write-LauncherLog "Gateway health failed after process start."
-throw "PrimeyAcc WhatsApp Gateway process did not become healthy on port 3100."
+throw "Mhamcloud WhatsApp Gateway process did not become healthy on port 3100."

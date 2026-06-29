@@ -1,4 +1,4 @@
 ﻿# ============================================================
 # 📂 api/company/jewelry/__init__.py
-# 🧠 PrimeyAcc | Company Jewelry API Package
+# 🧠 Mhamcloud | Company Jewelry API Package
 # ============================================================

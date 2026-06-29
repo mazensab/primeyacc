@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 documents/rendering.py
-# 🧠 PrimeyAcc | Document Rendering Services V1.0
+# 🧠 Mhamcloud | Document Rendering Services V1.0
 # ------------------------------------------------------------
 # ✅ Company-scoped document rendering foundation
 # ✅ Web print HTML generation

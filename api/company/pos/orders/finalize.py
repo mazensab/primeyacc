@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/orders/finalize.py
-# 🧠 PrimeyAcc | Company POS Orders Finalize API V1.0
+# 🧠 Mhamcloud | Company POS Orders Finalize API V1.0
 # ------------------------------------------------------------
 # ✅ Finalize POS order for current company only
 # ✅ Tenant isolation through request.company

@@ -1,6 +1,6 @@
 ﻿<!-- ============================================================
 📂 README.md
-🧠 PrimeyAcc | Project README Phase 0
+🧠 Mhamcloud | Project README Phase 0
 ------------------------------------------------------------
 ✅ Project Overview
 ✅ Local Development Environment
@@ -11,18 +11,18 @@
 ✅ Next Phase Direction
 ------------------------------------------------------------
 القاعدة المعتمدة:
-- PrimeyAcc = منصة SaaS لإدارة الأعمال متعددة الشركات
+- Mhamcloud = منصة SaaS لإدارة الأعمال متعددة الشركات
 - /system مخصص لمالك المنصة وإدارة الشركات والاشتراكات
 - /company مخصص للشركات المشتركة وبياناتها التشغيلية
 - Company = حدود العزل الأساسية للنظام
 - الباكند هو مصدر الحقيقة للعزل والصلاحيات
 ============================================================ -->
 
-# PrimeyAcc
+# Mhamcloud
 
-PrimeyAcc is a SaaS business management platform designed for multi-company operations.
+Mhamcloud is a SaaS business management platform designed for multi-company operations.
 
-The system is being built with the same approved Primey Care architecture spirit:
+The system is being built with the same approved Mhamcloud architecture spirit:
 
 * API-first backend
 * Strong multi-company isolation
@@ -80,7 +80,7 @@ Cookie-based browser session
 Current backend foundation:
 
 ```txt
-primeyacc/
+Mhamcloud/
 ├── accounts/
 ├── api/
 │   ├── auth/
@@ -103,7 +103,7 @@ primeyacc/
 
 ## Workspace Separation
 
-PrimeyAcc has two main workspaces.
+Mhamcloud has two main workspaces.
 
 ### `/system`
 
@@ -147,7 +147,7 @@ Payment methods
 
 ## Multi-company Isolation Rule
 
-This is the most important architectural rule in PrimeyAcc.
+This is the most important architectural rule in Mhamcloud.
 
 Every operational module must be scoped by company.
 
@@ -387,7 +387,7 @@ Expected response:
 ```json
 {
   "status": "ok",
-  "project": "primeyacc",
+  "project": "Mhamcloud",
   "service": "api",
   "timestamp": "..."
 }
@@ -479,7 +479,7 @@ Every file built or modified must start with a large header comment similar to:
 ```python
 # ============================================================
 # 📂 path/to/file.py
-# 🧠 PrimeyAcc | File Purpose Version
+# 🧠 Mhamcloud | File Purpose Version
 # ------------------------------------------------------------
 # ✅ Key capability 1
 # ✅ Key capability 2

@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ?? api/company/inventory/reservations/expire.py
-# ?? PrimeyAcc | Stock Reservation Expire API V1.0
+# ?? Mhamcloud | Stock Reservation Expire API V1.0
 # ------------------------------------------------------------
 # ? Expire reservation
 # ? Optional forced expiry

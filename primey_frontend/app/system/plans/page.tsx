@@ -2,9 +2,9 @@
 
 /* ============================================================
    📂 primey_frontend/app/system/plans/page.tsx
-   💼 PrimeyAcc — System Plans Management
+   💼 Mhamcloud — System Plans Management
    ------------------------------------------------------------
-   ✅ Approved Premium PrimeyAcc system page pattern
+   ✅ Approved Premium Mhamcloud system page pattern
    ✅ Same spirit as companies/subscriptions/platform-payments pages
    ✅ Real API only:
       - GET  /api/system/plans/
@@ -143,7 +143,7 @@ const translations = {
   ar: {
     title: "باقات المنصة",
     subtitle:
-      "إدارة باقات PrimeyAcc من مكان واحد: الأسعار الحدود الظهور التفعيل وعلاقة الباقة باشتراكات الشركات.",
+      "إدارة باقات Mhamcloud من مكان واحد: الأسعار الحدود الظهور التفعيل وعلاقة الباقة باشتراكات الشركات.",
     badge: "إدارة المنصة",
     refresh: "تحديث",
     exportExcel: "تصدير Excel",
@@ -201,7 +201,7 @@ const translations = {
     dashboardDesc: "تحليل الباقات حسب الحالة والظهور والأسعار وحدود الاستخدام.",
     tableTitle: "قائمة الباقات",
     tableDesc:
-      "جدول إدارة باقات PrimeyAcc مع الأسعار والحدود والحالة والظهور وإجراءات الإدارة.",
+      "جدول إدارة باقات Mhamcloud مع الأسعار والحدود والحالة والظهور وإجراءات الإدارة.",
     plan: "الباقة",
     code: "الكود",
     prices: "الأسعار",
@@ -232,7 +232,7 @@ const translations = {
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
     pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
-    reportTitle: "تقرير باقات PrimeyAcc",
+    reportTitle: "تقرير باقات Mhamcloud",
     generatedAt: "تاريخ الإنشاء",
     showing: "عرض",
     of: "من",
@@ -242,7 +242,7 @@ const translations = {
   en: {
     title: "Platform Plans",
     subtitle:
-      "Manage PrimeyAcc plans in one place: prices, limits, visibility, activation, and company subscription usage.",
+      "Manage Mhamcloud plans in one place: prices, limits, visibility, activation, and company subscription usage.",
     badge: "Platform management",
     refresh: "Refresh",
     exportExcel: "Export Excel",
@@ -300,7 +300,7 @@ const translations = {
     dashboardDesc: "Analyze plans by status, visibility, pricing, and usage limits.",
     tableTitle: "Plans list",
     tableDesc:
-      "A management table for PrimeyAcc plans with prices, limits, status, visibility, and actions.",
+      "A management table for Mhamcloud plans with prices, limits, status, visibility, and actions.",
     plan: "Plan",
     code: "Code",
     prices: "Prices",
@@ -331,7 +331,7 @@ const translations = {
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
     pdfHint: "Choose Save as PDF from the print dialog.",
-    reportTitle: "PrimeyAcc Platform Plans Report",
+    reportTitle: "Mhamcloud Platform Plans Report",
     generatedAt: "Generated at",
     showing: "Showing",
     of: "of",
@@ -1103,7 +1103,7 @@ export default function SystemPlansPage() {
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = `primeyacc-system-plans-management-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-system-plans-management-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();

@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # File: api/system/users/create.py
-# Module: PrimeyAcc System Users Create API
+# Module: Mhamcloud System Users Create API
 # Endpoint:
 # - POST /api/system/users/
 # - POST /api/system/users/create/
@@ -112,7 +112,7 @@ def _set_profile_field(profile: UserProfile, field_name: str, value: Any) -> Non
 @require_POST
 def system_user_create(request: HttpRequest) -> JsonResponse:
     """
-    Create a PrimeyAcc system user.
+    Create a Mhamcloud system user.
 
     Expected frontend payload:
     {

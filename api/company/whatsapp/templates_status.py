@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/whatsapp/templates_status.py
-# 🧠 PrimeyAcc | Company WhatsApp Templates Status API V1.0
+# 🧠 Mhamcloud | Company WhatsApp Templates Status API V1.0
 # ------------------------------------------------------------
 # ✅ POST /api/company/whatsapp/templates/<id>/status/
 # ✅ Tenant-isolated by request.company

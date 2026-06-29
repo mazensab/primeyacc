@@ -1,6 +1,6 @@
 ﻿/* ============================================================
    📂 primey_frontend/app/system/documents/thermal/page.tsx
-   🧩 PrimeyAcc — System Thermal Documents
+   🧩 Mhamcloud — System Thermal Documents
    ------------------------------------------------------------
    ✅ Real API only via SystemDocumentsCenter
 ============================================================ */

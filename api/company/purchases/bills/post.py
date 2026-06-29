@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/purchases/bills/post.py
-# 🧠 PrimeyAcc | Company Purchase Bill Post API V1.1
+# 🧠 Mhamcloud | Company Purchase Bill Post API V1.1
 # ------------------------------------------------------------
 # ✅ Post draft purchase bill for current company only
 # ✅ Tenant isolation through request.company

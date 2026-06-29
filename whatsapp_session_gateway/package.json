@@ -1,9 +1,9 @@
 ﻿{
-  "name": "primeyacc-whatsapp-session-gateway",
+  "name": "Mhamcloud-whatsapp-session-gateway",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "PrimeyAcc persistent WhatsApp Web session gateway",
+  "description": "Mhamcloud persistent WhatsApp Web session gateway",
   "scripts": {
     "start": "node src/server.mjs",
     "dev": "node --watch src/server.mjs",

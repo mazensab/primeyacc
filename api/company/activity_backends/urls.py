@@ -1,6 +1,6 @@
 # ============================================================
 # ًں“‚ api/company/activity_backends/urls.py
-# ًں§  PrimeyAcc | Company Activity Backends API Routes â€” Phase 25.3
+# ًں§  Mhamcloud | Company Activity Backends API Routes â€” Phase 25.3
 # ============================================================
 
 from django.urls import path

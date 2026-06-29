@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ?? api/company/inventory/reservations/cancel.py
-# ?? PrimeyAcc | Stock Reservation Cancel API V1.0
+# ?? Mhamcloud | Stock Reservation Cancel API V1.0
 # ------------------------------------------------------------
 # ? Cancel reservation
 # ? Release outstanding allocations

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 companies/models.py
-# 🧠 PrimeyAcc | Companies Models V1.2
+# 🧠 Mhamcloud | Companies Models V1.2
 # ------------------------------------------------------------
 # ✅ Company Tenant Model
 # ✅ Multi-company Isolation Foundation
@@ -242,7 +242,7 @@ class DefaultLanguage(models.TextChoices):
 
 class Company(models.Model):
     """
-    PrimeyAcc company tenant.
+    Mhamcloud company tenant.
 
     This model is the main tenant boundary for the whole system.
     Every operational module such as products, customers, suppliers,
@@ -276,7 +276,7 @@ class Company(models.Model):
         unique=True,
         db_index=True,
         verbose_name="Company code",
-        help_text="Unique internal code used by PrimeyAcc.",
+        help_text="Unique internal code used by Mhamcloud.",
     )
 
     activity_profile = models.CharField(
@@ -442,7 +442,7 @@ class Company(models.Model):
         on_delete=models.SET_NULL,
         blank=True,
         null=True,
-        related_name="owned_primeyacc_companies",
+        related_name="owned_Mhamcloud_companies",
         verbose_name="Owner",
     )
     created_by = models.ForeignKey(
@@ -450,7 +450,7 @@ class Company(models.Model):
         on_delete=models.SET_NULL,
         blank=True,
         null=True,
-        related_name="created_primeyacc_companies",
+        related_name="created_Mhamcloud_companies",
         verbose_name="Created by",
     )
     updated_by = models.ForeignKey(
@@ -458,7 +458,7 @@ class Company(models.Model):
         on_delete=models.SET_NULL,
         blank=True,
         null=True,
-        related_name="updated_primeyacc_companies",
+        related_name="updated_Mhamcloud_companies",
         verbose_name="Updated by",
     )
 

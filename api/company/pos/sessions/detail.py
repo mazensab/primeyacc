@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/sessions/detail.py
-# 🧠 PrimeyAcc | Company POS Sessions Detail API V1.1
+# 🧠 Mhamcloud | Company POS Sessions Detail API V1.1
 # ------------------------------------------------------------
 # ✅ Retrieve POS session details for current company only
 # ✅ Tenant isolation through request.company

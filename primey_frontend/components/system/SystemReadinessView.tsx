@@ -1,6 +1,6 @@
 /* ============================================================
    📂 components/system/SystemReadinessView.tsx
-   🧠 PrimeyAcc | System Dashboard + Release Readiness — Phase 5.2.2
+   🧠 Mhamcloud | System Dashboard + Release Readiness — Phase 5.2.2
 
    ✅ لوحة النظام الحقيقية
    ✅ صفحة Release Readiness
@@ -227,7 +227,7 @@ export function SystemReadinessView({ mode }: { mode: ViewMode }) {
 
   const copy = {
     dashboard: {
-      eyebrow: "PrimeyAcc System",
+      eyebrow: "Mhamcloud System",
       title: "لوحة النظام",
       description:
         "لوحة تشغيل حقيقية مبنية فوق Release Readiness و API Contracts القادمة من الباكند.",

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/warehouses/create.py
-# 🧠 PrimeyAcc | Company Warehouse Create API V1.0
+# 🧠 Mhamcloud | Company Warehouse Create API V1.0
 # ------------------------------------------------------------
 # ✅ Create warehouse for current company only
 # ✅ Tenant isolation through request.company

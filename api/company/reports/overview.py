@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/reports/overview.py
-# 🧠 PrimeyAcc | Company Reports Overview API - Phase 16.1
+# 🧠 Mhamcloud | Company Reports Overview API - Phase 16.1
 # ------------------------------------------------------------
 # ✅ Reports module readiness endpoint
 # ✅ Company tenant isolation via CompanyMembership

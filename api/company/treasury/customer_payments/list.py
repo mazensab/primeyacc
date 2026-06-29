@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/treasury/customer_payments/list.py
-# 🧠 PrimeyAcc | Company Treasury Customer Payments List/Create API V1.1
+# 🧠 Mhamcloud | Company Treasury Customer Payments List/Create API V1.1
 # ------------------------------------------------------------
 # ✅ List customer payments for current company only
 # ✅ Create draft/confirmed customer payments

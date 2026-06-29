@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/treasury/accounts/detail.py
-# 🧠 PrimeyAcc | Company Treasury Account Detail API V1.0
+# 🧠 Mhamcloud | Company Treasury Account Detail API V1.0
 # ------------------------------------------------------------
 # ✅ Retrieve treasury account for current company only
 # ✅ Update treasury account for current company only

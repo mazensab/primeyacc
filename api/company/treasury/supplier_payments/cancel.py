@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/treasury/supplier_payments/cancel.py
-# 🧠 PrimeyAcc | Company Treasury Supplier Payment Cancel API V1.1
+# 🧠 Mhamcloud | Company Treasury Supplier Payment Cancel API V1.1
 # ------------------------------------------------------------
 # ✅ Cancel supplier payment for current company only
 # ✅ Cancels linked treasury transaction and reverses balance through services.py

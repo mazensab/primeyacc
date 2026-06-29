@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/payments/checkout/urls.py
-# 🧠 PrimeyAcc | Company Payment Checkout URLs V1.0
+# 🧠 Mhamcloud | Company Payment Checkout URLs V1.0
 # ------------------------------------------------------------
 # ✅ List/create checkout sessions
 # ✅ Retrieve checkout session

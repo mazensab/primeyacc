@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/hr/employees/list.py
-# 🧠 PrimeyAcc | Company HR Employees List API V1.0
+# 🧠 Mhamcloud | Company HR Employees List API V1.0
 # ------------------------------------------------------------
 # ✅ List company-scoped employees
 # ✅ Search and safe filters

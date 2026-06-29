@@ -1,6 +1,6 @@
 # ============================================================
 # ?? api/company/sales/credit_notes/issue.py
-# ?? PrimeyAcc | Company Sales Credit Note Issue API
+# ?? Mhamcloud | Company Sales Credit Note Issue API
 # ============================================================
 
 from __future__ import annotations

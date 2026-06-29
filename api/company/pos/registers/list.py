@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/registers/list.py
-# 🧠 PrimeyAcc | Company POS Registers List API V1.0
+# 🧠 Mhamcloud | Company POS Registers List API V1.0
 # ------------------------------------------------------------
 # ✅ List POS registers for current company only
 # ✅ Tenant isolation through request.company

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/returns/detail.py
-# 🧠 PrimeyAcc | Company POS Return Detail API V1.0
+# 🧠 Mhamcloud | Company POS Return Detail API V1.0
 # ------------------------------------------------------------
 # ✅ Company-scoped POS Return Detail
 # ✅ Safe Tenant Isolation

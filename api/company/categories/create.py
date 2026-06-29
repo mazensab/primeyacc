@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/categories/create.py
-# 🧠 PrimeyAcc | Company Catalog Categories Create API V1.1
+# 🧠 Mhamcloud | Company Catalog Categories Create API V1.1
 # ------------------------------------------------------------
 # ✅ Create company-scoped catalog category
 # ✅ Uses request.company from CompanyMembership context

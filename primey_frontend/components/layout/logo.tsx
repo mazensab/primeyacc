@@ -15,7 +15,7 @@ type LogoProps = {
 };
 
 /* =========================================================
-   🖼️ Primey Care Logo
+   🖼️ Mhamcloud Logo
 ========================================================= */
 export default function Logo({
   href = "/",
@@ -26,7 +26,7 @@ export default function Logo({
   return (
     <Link
       href={href}
-      aria-label="Primey Care"
+      aria-label="Mhamcloud"
       className={cn(
         "inline-flex items-center rounded-2xl px-2 py-1 transition hover:opacity-85",
         className
@@ -34,7 +34,7 @@ export default function Logo({
     >
       <Image
         src="/hero logo.png"
-        alt="Primey Care"
+        alt="Mhamcloud"
         width={1200}
         height={420}
         priority={priority}

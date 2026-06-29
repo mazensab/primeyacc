@@ -115,7 +115,7 @@ export {
 };
 
 /* ============================================================
-   Primey Care Dashboard Compatibility Components
+   Mhamcloud Dashboard Compatibility Components
    ------------------------------------------------------------
    âœ… app/system/page.tsx ظٹط¨ظ‚ظ‰ ظƒظ…ط§ ظ‡ظˆ
    âœ… ط§ظ„طھطµظ…ظٹظ… ظٹط¨ظ‚ظ‰ CRM / LTR

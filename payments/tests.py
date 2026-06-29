@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 payments/tests.py
-# 🧠 PrimeyAcc | Company Payments Foundation & API Tests V1.1
+# 🧠 Mhamcloud | Company Payments Foundation & API Tests V1.1
 # ------------------------------------------------------------
 # ✅ Payment gateways model/service foundation tests
 # ✅ Payment methods model/service foundation tests
@@ -16,7 +16,7 @@
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - طرق الدفع هنا تخص عمليات الشركة داخل /company
-# - دفع اشتراكات PrimeyAcc للمنصة منفصل عن طرق دفع الشركات
+# - دفع اشتراكات Mhamcloud للمنصة منفصل عن طرق دفع الشركات
 # - لا يتم الاعتماد على company_id القادم من الواجهة
 # - CompanyMembership هو حد العزل الرسمي للشركات
 # - أي branch/gateway/payment_method يجب أن يكون داخل نفس الشركة
@@ -380,12 +380,12 @@ class CompanyPaymentsAPITests(CompanyPaymentsAPITestFactoryMixin, TestCase):
     @classmethod
     def setUpTestData(cls) -> None:
         cls.company = cls.create_company(
-            name="PrimeyAcc Payments Company",
+            name="Mhamcloud Payments Company",
             code="PAYMENTS-A",
             city="Jeddah",
         )
         cls.other_company = cls.create_company(
-            name="PrimeyAcc Other Payments Company",
+            name="Mhamcloud Other Payments Company",
             code="PAYMENTS-B",
             city="Riyadh",
         )
@@ -959,12 +959,12 @@ class CompanyPaymentsPhase23FoundationTests(CompanyPaymentsAPITestFactoryMixin, 
     @classmethod
     def setUpTestData(cls) -> None:
         cls.company = cls.create_company(
-            name="PrimeyAcc Phase 23 Company",
+            name="Mhamcloud Phase 23 Company",
             code="PAY-PH23-A",
             city="Jeddah",
         )
         cls.other_company = cls.create_company(
-            name="PrimeyAcc Phase 23 Other",
+            name="Mhamcloud Phase 23 Other",
             code="PAY-PH23-B",
             city="Riyadh",
         )

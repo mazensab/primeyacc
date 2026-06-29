@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/stock/summary.py
-# 🧠 PrimeyAcc | Company Inventory Stock Summary API V1.0
+# 🧠 Mhamcloud | Company Inventory Stock Summary API V1.0
 # ------------------------------------------------------------
 # ✅ Company-wide stock summary
 # ✅ Item-level aggregation across warehouses and locations

@@ -1,6 +1,6 @@
 # ============================================================
 # reports/test_exporters.py
-# PrimeyAcc | Reports Export Tests - Phase 16.7
+# Mhamcloud | Reports Export Tests - Phase 16.7
 # ============================================================
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ class ReportsExportFoundationTests(TestCase):
 
         cls.owner = User.objects.create_user(
             username="reports_export_owner",
-            email="reports-export-owner@primeyacc.test",
+            email="reports-export-owner@Mhamcloud.test",
             password="test-pass-12345",
         )
 

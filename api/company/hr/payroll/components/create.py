@@ -1,6 +1,6 @@
 # ============================================================
 # ?? api/company/hr/payroll/components/create.py
-# ?? PrimeyAcc | Salary Component Create API
+# ?? Mhamcloud | Salary Component Create API
 # ============================================================
 
 from __future__ import annotations

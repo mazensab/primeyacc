@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 accounting/tests.py
-# 🧠 PrimeyAcc | Accounting Tests
+# 🧠 Mhamcloud | Accounting Tests
 # ------------------------------------------------------------
 # ✅ اختبارات شجرة الحسابات لكل شركة
 # ✅ اختبارات عزل الشركات
@@ -119,7 +119,7 @@ def _required_model_defaults(model, *, suffix: str, user=None) -> dict[str, Any]
             continue
 
         if field_name == "email":
-            data[field_name] = f"accounting-{suffix.lower()}@primeyacc.test"
+            data[field_name] = f"accounting-{suffix.lower()}@Mhamcloud.test"
             continue
 
         if field_name in {"phone", "mobile", "whatsapp_number"}:
@@ -195,7 +195,7 @@ def _required_model_defaults(model, *, suffix: str, user=None) -> dict[str, Any]
             if internal_type in {"CharField", "TextField", "SlugField"}:
                 data[field_name] = f"test-{suffix}"
             elif internal_type == "EmailField":
-                data[field_name] = f"fallback-{suffix.lower()}@primeyacc.test"
+                data[field_name] = f"fallback-{suffix.lower()}@Mhamcloud.test"
             elif internal_type == "BooleanField":
                 data[field_name] = True
             elif internal_type in {
@@ -260,12 +260,12 @@ class AccountingCoreTests(TestCase):
 
         cls.owner_one = User.objects.create_user(
             username="accounting_owner_one",
-            email="accounting-owner-one@primeyacc.test",
+            email="accounting-owner-one@Mhamcloud.test",
             password="test-pass-12345",
         )
         cls.owner_two = User.objects.create_user(
             username="accounting_owner_two",
-            email="accounting-owner-two@primeyacc.test",
+            email="accounting-owner-two@Mhamcloud.test",
             password="test-pass-12345",
         )
 
@@ -607,12 +607,12 @@ class AccountingCompanyApiTests(TestCase):
 
         cls.user_one = User.objects.create_user(
             username="accounting_api_owner_one",
-            email="accounting-api-owner-one@primeyacc.test",
+            email="accounting-api-owner-one@Mhamcloud.test",
             password="test-pass-12345",
         )
         cls.user_two = User.objects.create_user(
             username="accounting_api_owner_two",
-            email="accounting-api-owner-two@primeyacc.test",
+            email="accounting-api-owner-two@Mhamcloud.test",
             password="test-pass-12345",
         )
 

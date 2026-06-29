@@ -1,6 +1,6 @@
 /* ============================================================
    📂 lib/api.ts
-   PrimeyAcc - Frontend API Client (Enhanced)
+   Mhamcloud - Frontend API Client (Enhanced)
 ============================================================ */
 
 import { toast } from "sonner";

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/users/create.py
-# 🧠 PrimeyAcc | Company User Create API V1.0
+# 🧠 Mhamcloud | Company User Create API V1.0
 # ------------------------------------------------------------
 # ✅ Tenant-isolated company user creation
 # ✅ Creates or links a user to current company only
@@ -128,7 +128,7 @@ def _profile_payload(user: Any) -> dict[str, Any] | None:
     يرجع ملف المستخدم العام إن وجد.
     """
 
-    profile = getattr(user, "primeyacc_profile", None)
+    profile = getattr(user, "Mhamcloud_profile", None)
 
     if not profile:
         return None

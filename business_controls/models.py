@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 business_controls/models.py
-# 🧠 PrimeyAcc | Production Business Controls Models V1.0
+# 🧠 Mhamcloud | Production Business Controls Models V1.0
 # ------------------------------------------------------------
 # ✅ Business audit event ledger
 # ✅ Company-scoped idempotency keys

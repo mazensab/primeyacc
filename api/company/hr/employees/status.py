@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/hr/employees/status.py
-# 🧠 PrimeyAcc | Company HR Employee Status APIs V1.0
+# 🧠 Mhamcloud | Company HR Employee Status APIs V1.0
 # ------------------------------------------------------------
 # ✅ Activate company-scoped employee
 # ✅ Deactivate company-scoped employee

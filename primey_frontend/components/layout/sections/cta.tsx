@@ -31,19 +31,19 @@ const content: Record<AppLang, PricingCtaContent> = {
     eyebrow: "ابدأ الآن",
     title: "رعاية صحية أوفر وأسهل لك ولعائلتك",
     description:
-      "اختر بطاقة أو برنامج Primey Care المناسب لك، واستفد من مزايا وخصومات طبية مختارة لدى مزودي خدمة مشاركين بطريقة سهلة وواضحة.",
+      "اختر بطاقة أو برنامج Mhamcloud المناسب لك، واستفد من مزايا وخصومات طبية مختارة لدى مزودي خدمة مشاركين بطريقة سهلة وواضحة.",
     askButton: "استفسر عن المزايا",
     joinButton: "اشترك الآن",
-    imageAlt: "بطاقة Primey Care ومزايا الرعاية الصحية",
+    imageAlt: "بطاقة Mhamcloud ومزايا الرعاية الصحية",
   },
   en: {
     eyebrow: "Get Started",
     title: "Smarter and more affordable care for you and your family",
     description:
-      "Choose the Primey Care card or program that fits your needs and enjoy selected healthcare benefits and discounts through participating providers with a clear and easy experience.",
+      "Choose the Mhamcloud card or program that fits your needs and enjoy selected healthcare benefits and discounts through participating providers with a clear and easy experience.",
     askButton: "Ask About Benefits",
     joinButton: "Join Now",
-    imageAlt: "Primey Care card and healthcare benefits",
+    imageAlt: "Mhamcloud card and healthcare benefits",
   },
 };
 

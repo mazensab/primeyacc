@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ًں“‚ pos/tests.py
-# ًں§  PrimeyAcc | POS Tests V1.5
+# ًں§  Mhamcloud | POS Tests V1.5
 # ------------------------------------------------------------
 # âœ… Phase 13.1 POS Foundation Service Tests
 # âœ… Phase 13.2 POS Registers API Tests

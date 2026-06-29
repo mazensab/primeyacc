@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/accounting/accounts/detail.py
-# 🧠 PrimeyAcc | Company Accounting Account Detail API
+# 🧠 Mhamcloud | Company Accounting Account Detail API
 # ------------------------------------------------------------
 # ✅ عرض تفاصيل حساب محاسبي داخل الشركة الحالية
 # ✅ عزل كامل حسب CompanyMembership

@@ -88,9 +88,9 @@ const SOCIAL_LINKS = {
 const content: Record<AppLang, FooterContent> = {
   ar: {
     description:
-      "Primey Care بطاقة وبرامج رعاية صحية تمنحك مزايا وخصومات طبية مختارة على خدمات متنوعة لدى مزودي خدمة مشاركين، بطريقة سهلة وواضحة لك ولعائلتك.",
+      "Mhamcloud بطاقة وبرامج رعاية صحية تمنحك مزايا وخصومات طبية مختارة على خدمات متنوعة لدى مزودي خدمة مشاركين، بطريقة سهلة وواضحة لك ولعائلتك.",
     disclaimer:
-      "تنبيه: Primey Care ليست تأمينًا طبيًا ولا تغني عن التأمين الصحي. تختلف المزايا والخصومات حسب مقدم الخدمة، المدينة، نوع البرنامج، وشروط العرض المتاحة.",
+      "تنبيه: Mhamcloud ليست تأمينًا طبيًا ولا تغني عن التأمين الصحي. تختلف المزايا والخصومات حسب مقدم الخدمة، المدينة، نوع البرنامج، وشروط العرض المتاحة.",
     groups: {
       explore: "استكشف",
       programs: "البرامج",
@@ -117,13 +117,13 @@ const content: Record<AppLang, FooterContent> = {
       linkedin: "لينكدإن",
     },
     copyright: "جميع الحقوق محفوظة",
-    logoAlt: "شعار Primey Care",
+    logoAlt: "شعار Mhamcloud",
   },
   en: {
     description:
-      "Primey Care offers healthcare cards and programs with selected medical benefits and discounts across participating providers, giving you and your family a clearer and easier way to access care.",
+      "Mhamcloud offers healthcare cards and programs with selected medical benefits and discounts across participating providers, giving you and your family a clearer and easier way to access care.",
     disclaimer:
-      "Notice: Primey Care is not medical insurance and does not replace health insurance. Benefits and discounts may vary by provider, city, program type, and available offer terms.",
+      "Notice: Mhamcloud is not medical insurance and does not replace health insurance. Benefits and discounts may vary by provider, city, program type, and available offer terms.",
     groups: {
       explore: "Explore",
       programs: "Programs",
@@ -150,7 +150,7 @@ const content: Record<AppLang, FooterContent> = {
       linkedin: "LinkedIn",
     },
     copyright: "All rights reserved",
-    logoAlt: "Primey Care logo",
+    logoAlt: "Mhamcloud logo",
   },
 };
 
@@ -398,7 +398,7 @@ export const FooterSection = () => {
         >
           <span>&copy; {new Date().getFullYear()}</span>
           <span>|</span>
-          <span className="font-medium">Primey Care</span>
+          <span className="font-medium">Mhamcloud</span>
           <span>|</span>
           <span>{t.copyright}</span>
         </div>

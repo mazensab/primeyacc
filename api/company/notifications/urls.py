@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/notifications/urls.py
-# 🧠 PrimeyAcc | Company Notifications URLs V1.0
+# 🧠 Mhamcloud | Company Notifications URLs V1.0
 # ------------------------------------------------------------
 # ✅ GET  /api/company/notifications/
 # ✅ GET  /api/company/notifications/<id>/

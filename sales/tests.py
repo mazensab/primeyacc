@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 sales/tests.py
-# 🧠 PrimeyAcc | Sales Tests V1.6
+# 🧠 Mhamcloud | Sales Tests V1.6
 # ------------------------------------------------------------
 # ✅ Sales invoice model tests
 # ✅ Sales invoice services tests

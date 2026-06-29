@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 sales/models.py
-# 🧠 PrimeyAcc | Sales Models V1.3
+# 🧠 Mhamcloud | Sales Models V1.3
 # ------------------------------------------------------------
 # ✅ Company-scoped sales invoices foundation
 # ✅ SalesInvoice header model

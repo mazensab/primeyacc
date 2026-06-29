@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/reports/trial_balance.py
-# 🧠 PrimeyAcc | Company Trial Balance API - Phase 16.2
+# 🧠 Mhamcloud | Company Trial Balance API - Phase 16.2
 # ------------------------------------------------------------
 # ✅ Trial balance report endpoint
 # ✅ Company tenant isolation via CompanyMembership

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/sessions/close.py
-# 🧠 PrimeyAcc | Company POS Sessions Close API V1.0
+# 🧠 Mhamcloud | Company POS Sessions Close API V1.0
 # ------------------------------------------------------------
 # ✅ Close POS session for current company only
 # ✅ Tenant isolation through request.company

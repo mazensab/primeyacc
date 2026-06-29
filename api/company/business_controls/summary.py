@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/business_controls/summary.py
-# 🧠 PrimeyAcc | Company Business Controls Summary API V1.0
+# 🧠 Mhamcloud | Company Business Controls Summary API V1.0
 # ============================================================
 
 from __future__ import annotations

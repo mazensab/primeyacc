@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/purchases/bills/detail.py
-# 🧠 PrimeyAcc | Company Purchase Bill Detail API V1.1
+# 🧠 Mhamcloud | Company Purchase Bill Detail API V1.1
 # ------------------------------------------------------------
 # ✅ Retrieve one purchase bill for current company only
 # ✅ Tenant isolation through request.company

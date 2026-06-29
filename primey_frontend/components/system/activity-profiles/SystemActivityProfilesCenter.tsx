@@ -1,9 +1,9 @@
 ﻿"use client";
 /* ============================================================
    📂 primey_frontend/components/system/activity-profiles/SystemActivityProfilesCenter.tsx
-   🧩 PrimeyAcc — System Activity Profiles Center
+   🧩 Mhamcloud — System Activity Profiles Center
    ------------------------------------------------------------
-   ✅ Approved Premium PrimeyAcc system page pattern
+   ✅ Approved Premium Mhamcloud system page pattern
    ✅ Real API only:
       - GET /api/system/activity-profiles/
       - GET /api/system/activity-profiles/list/
@@ -159,7 +159,7 @@ const translations = {
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
     pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
-    reportTitle: "تقرير أنشطة الشركات في PrimeyAcc",
+    reportTitle: "تقرير أنشطة الشركات في Mhamcloud",
     generatedAt: "تاريخ الإنشاء",
     refreshed: "تم تحديث أنشطة الشركات.",
     unknown: "غير معروف",
@@ -221,7 +221,7 @@ const translations = {
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
     pdfHint: "Choose Save as PDF from the print dialog.",
-    reportTitle: "PrimeyAcc Activity Profiles Report",
+    reportTitle: "Mhamcloud Activity Profiles Report",
     generatedAt: "Generated at",
     refreshed: "Activity profiles refreshed.",
     unknown: "Unknown",
@@ -608,7 +608,7 @@ export function SystemActivityProfilesCenter({ mode = "overview" }: { mode?: Pag
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `primeyacc-activity-profiles-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-activity-profiles-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();

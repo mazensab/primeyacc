@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/locations/detail.py
-# 🧠 PrimeyAcc | Company Inventory Location Detail API V1.0
+# 🧠 Mhamcloud | Company Inventory Location Detail API V1.0
 # ------------------------------------------------------------
 # ✅ Retrieve one inventory location for current company only
 # ✅ Tenant isolation through request.company

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 whatsapp/tests.py
-# 🧠 PrimeyAcc | Company WhatsApp Tests V1.0
+# 🧠 Mhamcloud | Company WhatsApp Tests V1.0
 # ------------------------------------------------------------
 # ✅ CompanyWhatsAppSetting tests
 # ✅ WhatsAppTemplate tests
@@ -287,13 +287,13 @@ class CompanyWhatsAppFoundationTests(TestCase):
             company=self.company,
             recipient_name="Ahmed",
             recipient_phone="0500000000",
-            message_body="Hello from PrimeyAcc.",
+            message_body="Hello from Mhamcloud.",
             created_by=self.user,
         )
 
         self.assertEqual(log.company, self.company)
         self.assertEqual(log.recipient_phone, "+966500000000")
-        self.assertEqual(log.message_body, "Hello from PrimeyAcc.")
+        self.assertEqual(log.message_body, "Hello from Mhamcloud.")
         self.assertEqual(log.status, WhatsAppMessageStatus.DRAFT)
 
     def test_create_message_log_requires_message_body(self):
@@ -615,7 +615,7 @@ class CompanyWhatsAppAPITests(TestCase):
             {
                 "recipient_name": "Ahmed",
                 "recipient_phone": "0500000000",
-                "message_body": "Hello from PrimeyAcc.",
+                "message_body": "Hello from Mhamcloud.",
             },
             format="json",
         )
@@ -722,11 +722,11 @@ class SystemWhatsAppConnectionTests(TestCase):
                 "is_enabled": True,
                 "is_active": True,
                 "provider": "WEB_SESSION",
-                "business_name": "PrimeyAcc Support",
+                "business_name": "Mhamcloud Support",
                 "phone_number": "+966500000000",
                 "access_token": "secret-token",
                 "webhook_verify_token": "secret-webhook-token",
-                "session_name": "primeyacc-system-session",
+                "session_name": "Mhamcloud-system-session",
                 "default_country_code": "+966",
             },
             format="json",
@@ -960,7 +960,7 @@ class WhatsAppInboxFoundationTests(WhatsAppInboxDjangoTestCase):
         )
         from whatsapp.services import record_system_whatsapp_incoming_message
         payload = {
-            "session_name": "primeyacc-system-session",
+            "session_name": "Mhamcloud-system-session",
             "from_jid": "966501234567@s.whatsapp.net",
             "from_phone": "0501234567",
             "push_name": "زائر تجربة",
@@ -1003,7 +1003,7 @@ class WhatsAppInboxFoundationTests(WhatsAppInboxDjangoTestCase):
         )
         from whatsapp.services import record_system_whatsapp_incoming_message
         payload = {
-            "session_name": "primeyacc-system-session",
+            "session_name": "Mhamcloud-system-session",
             "from_jid": "966501234567@s.whatsapp.net",
             "message_id": "MSG-INBOX-TEST-002",
             "body": "رسالة مكررة للاختبار.",
@@ -1037,7 +1037,7 @@ class SystemWhatsAppInboxWebhookAPITests(SystemWhatsAppInboxWebhookDjangoTestCas
             "/api/system/whatsapp/inbox/webhook/",
             data=json.dumps(
                 {
-                    "session_name": "primeyacc-system-session",
+                    "session_name": "Mhamcloud-system-session",
                     "from_jid": "966502222333@s.whatsapp.net",
                     "from_phone": "0502222333",
                     "push_name": "زائر من الواتساب",
@@ -1068,7 +1068,7 @@ class SystemWhatsAppInboxWebhookAPITests(SystemWhatsAppInboxWebhookDjangoTestCas
         client = SystemWhatsAppInboxWebhookClient()
         body = json.dumps(
             {
-                "session_name": "primeyacc-system-session",
+                "session_name": "Mhamcloud-system-session",
                 "from_jid": "966502222333@s.whatsapp.net",
                 "message_id": "WEBHOOK-INBOX-TEST-002",
                 "body": "رسالة واردة مكررة.",
@@ -1111,7 +1111,7 @@ class WhatsAppInboxReplyServiceTests(WhatsAppInboxReplyDjangoTestCase):
         )
         incoming = record_system_whatsapp_incoming_message(
             {
-                "session_name": "primeyacc-system-session",
+                "session_name": "Mhamcloud-system-session",
                 "from_jid": "267829899169938@lid",
                 "from_phone": "267829899169938",
                 "push_name": "M.s💙",

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/treasury/supplier_payments/list.py
-# 🧠 PrimeyAcc | Company Treasury Supplier Payments List/Create API V1.1
+# 🧠 Mhamcloud | Company Treasury Supplier Payments List/Create API V1.1
 # ------------------------------------------------------------
 # ✅ List supplier payments for current company only
 # ✅ Create draft/confirmed supplier payments

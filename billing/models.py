@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 billing/models.py
-# 🧠 PrimeyAcc | Platform Billing Documents Models V1.1
+# 🧠 Mhamcloud | Platform Billing Documents Models V1.1
 # ------------------------------------------------------------
 # ✅ Platform subscription invoices
 # ✅ Platform subscription payment receipts
@@ -12,7 +12,7 @@
 # ✅ Database-safe constraint and index names
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
-# - billing يخص فوترة مالك منصة PrimeyAcc داخل /system فقط
+# - billing يخص فوترة مالك منصة Mhamcloud داخل /system فقط
 # - لا يستخدم payments/models.py لأنها تخص مدفوعات الشركات
 # - لا يستخدم documents/models.py لأنها تخص قوالب مستندات الشركات
 # - Company هنا هي الجهة المشتركة المستفيدة وليست مالك المستند

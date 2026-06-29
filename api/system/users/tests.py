@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # File: api/system/users/tests.py
-# Module: PrimeyAcc System Users API Tests
+# Module: Mhamcloud System Users API Tests
 # Purpose:
 # - Verify system users API routes.
 # - Verify system permission guard.
@@ -112,8 +112,8 @@ class SystemUsersAPITests(TestCase):
         created_user = UserModel.objects.get(username="created-support")
         self.assertEqual(created_user.email, "created-support@example.com")
         self.assertTrue(created_user.check_password("StrongPass123!"))
-        self.assertEqual(created_user.primeyacc_profile.system_role, SystemRole.SUPPORT)
-        self.assertTrue(created_user.primeyacc_profile.is_system_user)
+        self.assertEqual(created_user.Mhamcloud_profile.system_role, SystemRole.SUPPORT)
+        self.assertTrue(created_user.Mhamcloud_profile.is_system_user)
     def test_system_user_create_explicit_route_creates_profile(self) -> None:
         import json
         self.client.force_login(self.system_user)

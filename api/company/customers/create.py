@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/customers/create.py
-# 🧠 PrimeyAcc | Company Customers Create API V1.0
+# 🧠 Mhamcloud | Company Customers Create API V1.0
 # ------------------------------------------------------------
 # ✅ Create customer alias over BusinessParty
 # ✅ Forces party_type CUSTOMER unless explicitly BOTH is allowed later

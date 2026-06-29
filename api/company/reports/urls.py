@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/reports/urls.py
-# 🧠 PrimeyAcc | Company Reports URLs
+# 🧠 Mhamcloud | Company Reports URLs
 # ============================================================
 
 from django.urls import path

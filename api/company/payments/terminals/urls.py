@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/payments/terminals/urls.py
-# 🧠 PrimeyAcc | Company Payment Terminals URLs V1.0
+# 🧠 Mhamcloud | Company Payment Terminals URLs V1.0
 # ------------------------------------------------------------
 # ✅ List/create company payment terminals
 # ✅ Retrieve/update company payment terminal

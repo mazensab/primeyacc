@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/purchases/urls.py
-# 🧠 PrimeyAcc | Company Purchases URLs V1.0
+# 🧠 Mhamcloud | Company Purchases URLs V1.0
 # ------------------------------------------------------------
 # ✅ Purchases API routing under /api/company/purchases/
 # ✅ Supplier bills routes

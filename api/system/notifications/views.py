@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/system/notifications/views.py
-# 🧠 PrimeyAcc | System Notifications API V1.0
+# 🧠 Mhamcloud | System Notifications API V1.0
 # ------------------------------------------------------------
 # ✅ GET  /api/system/notifications/
 # ✅ GET  /api/system/notifications/unread-count/
@@ -45,7 +45,7 @@ def _user_is_system_member(user) -> bool:
         return False
     if getattr(user, "is_superuser", False):
         return True
-    profile = getattr(user, "primeyacc_profile", None)
+    profile = getattr(user, "Mhamcloud_profile", None)
     if not profile:
         return bool(getattr(user, "is_staff", False))
     role = (

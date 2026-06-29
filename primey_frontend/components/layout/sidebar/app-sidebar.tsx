@@ -1,9 +1,9 @@
 "use client"
 
 // ======================================================
-// 🏛 PrimeyAcc — APP SIDEBAR
+// 🏛 Mhamcloud — APP SIDEBAR
 // Premium workspace sidebar
-// RTL/LTR ready — keeps PrimeyAcc navigation intact
+// RTL/LTR ready — keeps Mhamcloud navigation intact
 // ======================================================
 
 import * as React from "react"
@@ -126,7 +126,7 @@ function getWorkspaceCopy(
   if (workspace === "system") {
     return {
       workspaceLabel: isArabic ? "مساحة عمل النظام" : "System Workspace",
-      workspaceBadge: "PrimeyAcc",
+      workspaceBadge: "Mhamcloud",
       firstItemTitle: isArabic ? "لوحة النظام" : "System Dashboard",
       firstItemStatus: isArabic ? "نشط" : "Active",
       secondItemTitle: isArabic ? "إدارة المنصة" : "Platform Management",
@@ -148,7 +148,7 @@ function getWorkspaceCopy(
   if (workspace === "customer") {
     return {
       workspaceLabel: isArabic ? "بوابة العميل" : "Customer Portal",
-      workspaceBadge: "PrimeyAcc",
+      workspaceBadge: "Mhamcloud",
       firstItemTitle: isArabic ? "لوحة العميل" : "Customer Dashboard",
       firstItemStatus: isArabic ? "نشط" : "Active",
       secondItemTitle: isArabic ? "الفواتير والمدفوعات" : "Invoices & Payments",
@@ -158,7 +158,7 @@ function getWorkspaceCopy(
 
   return {
     workspaceLabel: isArabic ? "مساحة المندوب" : "Agent Workspace",
-    workspaceBadge: "PrimeyAcc",
+    workspaceBadge: "Mhamcloud",
     firstItemTitle: isArabic ? "لوحة المندوب" : "Agent Dashboard",
     firstItemStatus: isArabic ? "نشط" : "Active",
     secondItemTitle: isArabic ? "العملاء والعمولات" : "Customers & Commissions",

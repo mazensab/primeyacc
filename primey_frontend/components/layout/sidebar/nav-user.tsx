@@ -2,7 +2,7 @@
 
 /* =====================================================
    📂 components/layout/sidebar/nav-user.tsx
-   🧠 PrimeyAcc — Premium Sidebar User Menu
+   🧠 Mhamcloud — Premium Sidebar User Menu
    -----------------------------------------------------
    ✅ يدعم النظام / العميل / المندوب / مقدم الخدمة
    ✅ يوجه روابط القائمة حسب المساحة الحالية

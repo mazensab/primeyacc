@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 reports/tests.py
-# 🧠 PrimeyAcc | Reports Tests - Phase 16.2
+# 🧠 Mhamcloud | Reports Tests - Phase 16.2
 # ------------------------------------------------------------
 # ✅ Reports overview service test
 # ✅ Reports overview API test
@@ -104,7 +104,7 @@ def _required_model_defaults(model, *, suffix: str, user=None) -> dict[str, Any]
             continue
 
         if field_name == "email":
-            data[field_name] = f"reports-{suffix.lower()}@primeyacc.test"
+            data[field_name] = f"reports-{suffix.lower()}@Mhamcloud.test"
             continue
 
         if field_name in {"phone", "mobile", "whatsapp_number"}:
@@ -180,7 +180,7 @@ def _required_model_defaults(model, *, suffix: str, user=None) -> dict[str, Any]
             if internal_type in {"CharField", "TextField", "SlugField"}:
                 data[field_name] = f"test-{suffix}"
             elif internal_type == "EmailField":
-                data[field_name] = f"fallback-{suffix.lower()}@primeyacc.test"
+                data[field_name] = f"fallback-{suffix.lower()}@Mhamcloud.test"
             elif internal_type == "BooleanField":
                 data[field_name] = True
             elif internal_type in {
@@ -245,7 +245,7 @@ class ReportsFoundationTests(TestCase):
 
         cls.owner = User.objects.create_user(
             username="reports_owner",
-            email="reports-owner@primeyacc.test",
+            email="reports-owner@Mhamcloud.test",
             password="test-pass-12345",
         )
 

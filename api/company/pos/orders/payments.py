@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/orders/payments.py
-# 🧠 PrimeyAcc | Company POS Order Payments API V1.0
+# 🧠 Mhamcloud | Company POS Order Payments API V1.0
 # ------------------------------------------------------------
 # ✅ List POS order payment lines for current company only
 # ✅ Add POS payment line for current company only

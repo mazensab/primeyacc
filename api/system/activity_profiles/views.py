@@ -1,5 +1,5 @@
 ﻿# 📂 api/system/activity_profiles/views.py
-# 🧠 PrimeyAcc | System Activity Profiles API Views v1
+# 🧠 Mhamcloud | System Activity Profiles API Views v1
 # ============================================================
 # ✅ Read-only system overview for company activity profiles
 # ✅ Dynamic model-safe serializers
@@ -70,7 +70,7 @@ def _user_is_system_member(user) -> bool:
         return False
     if getattr(user, "is_superuser", False) or getattr(user, "is_staff", False):
         return True
-    profile = getattr(user, "primeyacc_profile", None)
+    profile = getattr(user, "Mhamcloud_profile", None)
     if profile:
         role = _text(getattr(profile, "system_role", "")).upper()
         if role in {"SUPER_ADMIN", "SYSTEM_ADMIN", "SUPPORT", "BILLING_MANAGER"}:

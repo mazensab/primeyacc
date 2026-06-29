@@ -1,6 +1,6 @@
 // ======================================================
 // 📂 الملف: hooks/use-permissions.ts
-// 🧭 Primey Care — Permissions Hook
+// 🧭 Mhamcloud — Permissions Hook
 // 🚀 الإصدار: Permissions Hook V1.0
 // ------------------------------------------------------
 // ✅ Hook مركزي لاستخدام الصلاحيات داخل الصفحات والمكونات

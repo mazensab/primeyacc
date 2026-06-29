@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 notifications/services.py
-# 🧠 PrimeyAcc | Company Notifications Services V1.0
+# 🧠 Mhamcloud | Company Notifications Services V1.0
 # ------------------------------------------------------------
 # ✅ Tenant-isolated notification helpers
 # ✅ Create single recipient notification

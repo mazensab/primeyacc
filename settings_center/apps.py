@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 settings_center/apps.py
-# PrimeyAcc | Settings Center App Config
+# Mhamcloud | Settings Center App Config
 # ------------------------------------------------------------
 # ✅ Backend only
 # ✅ System settings center foundation

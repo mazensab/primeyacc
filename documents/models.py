@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 documents/models.py
-# 🧠 PrimeyAcc | Documents Templates Models V1.0
+# 🧠 Mhamcloud | Documents Templates Models V1.0
 # ------------------------------------------------------------
 # ✅ Company document templates foundation
 # ✅ Tenant-isolated templates by company

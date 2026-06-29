@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ?? api/company/inventory/reservations/create.py
-# ?? PrimeyAcc | Stock Reservation Create API V1.0
+# ?? Mhamcloud | Stock Reservation Create API V1.0
 # ------------------------------------------------------------
 # ? Create reservation from confirmed sales order
 # ? Company-scoped sales order lookup

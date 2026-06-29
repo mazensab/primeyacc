@@ -1,6 +1,6 @@
 /* ============================================================
    📂 lib/api/client.ts
-   Primey Care - Frontend API Client Core
+   Mhamcloud - Frontend API Client Core
    ------------------------------------------------------------
    ✅ Fetch wrapper موحد
    ✅ يدعم query و params

@@ -2,9 +2,9 @@
 
 /* ============================================================
    📂 primey_frontend/app/system/platform-payments/list/page.tsx
-   💳 PrimeyAcc — System Platform Payments List
+   💳 Mhamcloud — System Platform Payments List
    ------------------------------------------------------------
-   ✅ Approved PrimeyCare premium table pattern adapted for PrimeyAcc
+   ✅ Approved PrimeyCare premium table pattern adapted for Mhamcloud
    ✅ Full-width table layout
    ✅ Real API only: GET /api/system/billing-documents/?document_type=PAYMENT_RECEIPT
    ✅ Search, status filter, date range, sorting, reset
@@ -120,7 +120,7 @@ const translations = {
   ar: {
     title: "قائمة مدفوعات المنصة",
     subtitle:
-      "إدارة ومراجعة إيصالات دفع المنصة في PrimeyAcc مع البحث والفلاتر والتصدير والطباعة وملف PDF.",
+      "إدارة ومراجعة إيصالات دفع المنصة في Mhamcloud مع البحث والفلاتر والتصدير والطباعة وملف PDF.",
     refresh: "تحديث",
     exportExcel: "تصدير Excel",
     print: "طباعة",
@@ -180,7 +180,7 @@ const translations = {
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
     pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
-    reportTitle: "تقرير شركات PrimeyAcc",
+    reportTitle: "تقرير شركات Mhamcloud",
     generatedAt: "تاريخ الإنشاء",
     showing: "عرض",
     of: "من",
@@ -190,7 +190,7 @@ const translations = {
   en: {
     title: "Platform payments list",
     subtitle:
-      "Manage and review companies registered in PrimeyAcc with search, filters, export, print, and PDF output.",
+      "Manage and review companies registered in Mhamcloud with search, filters, export, print, and PDF output.",
     refresh: "Refresh",
     exportExcel: "Export Excel",
     print: "Print",
@@ -250,7 +250,7 @@ const translations = {
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
     pdfHint: "Choose Save as PDF from the print dialog.",
-    reportTitle: "PrimeyAcc Companies Report",
+    reportTitle: "Mhamcloud Companies Report",
     generatedAt: "Generated at",
     showing: "Showing",
     of: "of",
@@ -864,7 +864,7 @@ export default function SystemPlatformPaymentsListPage() {
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = `primeyacc-system-companies-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-system-companies-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -953,7 +953,7 @@ export default function SystemPlatformPaymentsListPage() {
               <div className="max-w-4xl">
                 <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
                   <Building2 className="h-3.5 w-3.5 text-primary" />
-                  PrimeyAcc System
+                  Mhamcloud System
                 </div>
                 <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{t.title}</h1>
                 <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">{t.subtitle}</p>

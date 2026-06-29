@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/system/plans/create.py
-# 🧠 PrimeyAcc | System Subscription Plan Create API V1.1
+# 🧠 Mhamcloud | System Subscription Plan Create API V1.1
 # ------------------------------------------------------------
 # ✅ Create SaaS subscription plans from system workspace
 # ✅ Validates required fields and financial values

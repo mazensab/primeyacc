@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/whatsapp/messages_detail.py
-# 🧠 PrimeyAcc | Company WhatsApp Messages Detail API V1.0
+# 🧠 Mhamcloud | Company WhatsApp Messages Detail API V1.0
 # ------------------------------------------------------------
 # ✅ GET /api/company/whatsapp/messages/<id>/
 # ✅ Tenant-isolated by request.company

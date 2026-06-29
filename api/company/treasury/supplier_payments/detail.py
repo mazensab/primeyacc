@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/treasury/supplier_payments/detail.py
-# 🧠 PrimeyAcc | Company Treasury Supplier Payment Detail API V1.1
+# 🧠 Mhamcloud | Company Treasury Supplier Payment Detail API V1.1
 # ------------------------------------------------------------
 # ✅ Retrieve one supplier payment for current company only
 # ✅ Update draft supplier payment only

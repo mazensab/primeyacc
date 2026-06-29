@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ?? api/company/inventory/reservations/list.py
-# ?? PrimeyAcc | Stock Reservations List API V1.0
+# ?? Mhamcloud | Stock Reservations List API V1.0
 # ------------------------------------------------------------
 # ? Current-company reservation list
 # ? Search, status, source, and sales order filters

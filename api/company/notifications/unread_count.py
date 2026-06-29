@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/notifications/unread_count.py
-# 🧠 PrimeyAcc | Company Notifications Unread Count API V1.0
+# 🧠 Mhamcloud | Company Notifications Unread Count API V1.0
 # ------------------------------------------------------------
 # ✅ GET /api/company/notifications/unread-count/
 # ✅ Tenant-isolated by request.company

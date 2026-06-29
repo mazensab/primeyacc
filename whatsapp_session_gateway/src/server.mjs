@@ -1,6 +1,6 @@
 ﻿/* ============================================================
    📂 whatsapp_session_gateway/src/server.mjs
-   💬 PrimeyAcc — Persistent WhatsApp Session Gateway
+   💬 Mhamcloud — Persistent WhatsApp Session Gateway
    ------------------------------------------------------------
    ✅ Express gateway for Django system WhatsApp APIs
    ✅ Persistent Baileys auth storage
@@ -58,8 +58,8 @@ function safeText(value, fallback = "") {
   return text || fallback;
 }
 function sanitizeSessionName(value) {
-  const text = safeText(value, "primeyacc-system-session");
-  return text.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || "primeyacc-system-session";
+  const text = safeText(value, "Mhamcloud-system-session");
+  return text.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || "Mhamcloud-system-session";
 }
 function sessionDir(sessionName) {
   return path.join(STORAGE_ROOT, sanitizeSessionName(sessionName));
@@ -149,7 +149,7 @@ function getSession(sessionName) {
       status: hasSavedAuth(name) ? "reconnecting" : "disconnected",
       connected: false,
       connected_phone: "",
-      device_label: "PrimeyAcc WhatsApp Gateway",
+      device_label: "Mhamcloud WhatsApp Gateway",
       qr: "",
       qr_code: "",
       pairing_code: "",
@@ -174,8 +174,8 @@ function publicState(state, extra = {}) {
     connected: Boolean(state.connected),
     connected_phone: state.connected_phone || "",
     phone_number: state.connected_phone || "",
-    device_label: state.device_label || "PrimeyAcc WhatsApp Gateway",
-    browser: state.device_label || "PrimeyAcc WhatsApp Gateway",
+    device_label: state.device_label || "Mhamcloud WhatsApp Gateway",
+    browser: state.device_label || "Mhamcloud WhatsApp Gateway",
     qr: state.qr || "",
     qr_code: state.qr_code || "",
     qrDataUrl: state.qr_code || "",
@@ -276,7 +276,7 @@ async function forwardIncomingMessageToDjango(state, message) {
     "Content-Type": "application/json",
   };
   if (INCOMING_WEBHOOK_TOKEN) {
-    headers["X-PrimeyAcc-Webhook-Token"] = INCOMING_WEBHOOK_TOKEN;
+    headers["X-Mhamcloud-Webhook-Token"] = INCOMING_WEBHOOK_TOKEN;
   }
   const response = await fetch(INCOMING_WEBHOOK_URL, {
     method: "POST",
@@ -374,7 +374,7 @@ async function startSocket(state, options = {}) {
   const socketOptions = {
     auth: authState,
     logger,
-    browser: Browsers?.ubuntu ? Browsers.ubuntu("PrimeyAcc") : ["PrimeyAcc", "Chrome", "1.0.0"],
+    browser: Browsers?.ubuntu ? Browsers.ubuntu("Mhamcloud") : ["Mhamcloud", "Chrome", "1.0.0"],
     markOnlineOnConnect: false,
     syncFullHistory: false,
     printQRInTerminal: false,
@@ -422,7 +422,7 @@ async function startSocket(state, options = {}) {
       state.pairing_code = "";
       state.error_message = "";
       state.connected_phone = normalizePhone(sock.user?.id || sock.user?.jid || "");
-      state.device_label = sock.user?.name || sock.user?.verifiedName || "PrimeyAcc WhatsApp Gateway";
+      state.device_label = sock.user?.name || sock.user?.verifiedName || "Mhamcloud WhatsApp Gateway";
       state.last_update_at = nowIso();
       logger.info({ session: state.session_name }, "WhatsApp session connected");
     }
@@ -503,7 +503,7 @@ async function warmStartSavedSessions() {
 app.get("/health", async (_req, res) => {
   res.json({
     success: true,
-    message: "PrimeyAcc WhatsApp Session Gateway is running.",
+    message: "Mhamcloud WhatsApp Session Gateway is running.",
     gateway_configured: true,
     storage_root: STORAGE_ROOT,
     sessions: Array.from(sessions.values()).map((state) => publicState(state)),
@@ -568,7 +568,7 @@ app.post("/messages/send-text", async (req, res) => {
   const state = getSession(req.body?.session_name);
   const toJid = safeText(req.body?.to_jid || req.body?.recipient_jid || req.body?.jid, "");
   const toPhone = normalizePhone(req.body?.to_phone || req.body?.phone_number || req.body?.to);
-  const body = safeText(req.body?.body || req.body?.message || req.body?.text, "PrimeyAcc system WhatsApp test message.");
+  const body = safeText(req.body?.body || req.body?.message || req.body?.text, "Mhamcloud system WhatsApp test message.");
   if (!toPhone && !toJid) {
     res.json(publicState(state, {
       success: false,
@@ -646,6 +646,6 @@ app.listen(PORT, HOST, () => {
       storage_root: STORAGE_ROOT,
       token_enabled: Boolean(TOKEN),
     },
-    "PrimeyAcc WhatsApp Session Gateway started",
+    "Mhamcloud WhatsApp Session Gateway started",
   );
 });

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/movements/create.py
-# 🧠 PrimeyAcc | Company Stock Movement Create API V1.0
+# 🧠 Mhamcloud | Company Stock Movement Create API V1.0
 # ------------------------------------------------------------
 # ✅ Create and post stock movement for current company only
 # ✅ Tenant isolation through request.company

@@ -2,9 +2,9 @@
 
 /* ============================================================
    📂 primey_frontend/app/system/users/[id]/page.tsx
-   🏢 PrimeyAcc — System User Detail
+   🏢 Mhamcloud — System User Detail
    ------------------------------------------------------------
-   ✅ Premium PrimeyCare detail pattern adapted for PrimeyAcc
+   ✅ Premium PrimeyCare detail pattern adapted for Mhamcloud
    ✅ Real API only: GET /api/users/{id}/
    ✅ Detail cards + printable report
    ✅ Refresh, print, PDF through browser print dialog
@@ -81,7 +81,7 @@ const translations = {
   ar: {
     title: "تفاصيل المستخدم",
     subtitle:
-      "عرض ملف المستخدم داخل إدارة منصة PrimeyAcc مع بيانات التعريف والحالة والدور ونوع الوصول والتواصل.",
+      "عرض ملف المستخدم داخل إدارة منصة Mhamcloud مع بيانات التعريف والحالة والدور ونوع الوصول والتواصل.",
     badge: "إدارة المنصة",
     backToUsers: "العودة للمستخدمين",
     usersList: "قائمة المستخدمين",
@@ -128,7 +128,7 @@ const translations = {
     unknown: "غير محدد",
     notAvailable: "غير متوفر",
 
-    reportTitle: "تقرير تفاصيل مستخدم PrimeyAcc",
+    reportTitle: "تقرير تفاصيل مستخدم Mhamcloud",
     generatedAt: "تاريخ الطباعة",
 
     errorTitle: "تعذر تحميل تفاصيل المستخدم",
@@ -141,7 +141,7 @@ const translations = {
   en: {
     title: "User details",
     subtitle:
-      "View the user profile inside PrimeyAcc platform management with identity, status, activity, subscription, and contact data.",
+      "View the user profile inside Mhamcloud platform management with identity, status, activity, subscription, and contact data.",
     badge: "Platform management",
     backToUsers: "Back to users",
     usersList: "Users list",
@@ -188,7 +188,7 @@ const translations = {
     unknown: "Unknown",
     notAvailable: "Not available",
 
-    reportTitle: "PrimeyAcc User Details Report",
+    reportTitle: "Mhamcloud User Details Report",
     generatedAt: "Generated at",
 
     errorTitle: "Could not load user details",

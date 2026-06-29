@@ -1,6 +1,6 @@
 # ============================================================
 # ?? api/company/inventory/valuation/summary.py
-# ?? PrimeyAcc | Inventory Valuation Summary API V1.0
+# ?? Mhamcloud | Inventory Valuation Summary API V1.0
 # ------------------------------------------------------------
 # ? Company-wide inventory valuation summary
 # ? Current quantity, reserved, available, and value totals

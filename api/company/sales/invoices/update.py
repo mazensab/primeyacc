@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/sales/invoices/update.py
-# 🧠 PrimeyAcc | Company Sales Invoice Update API V1.0
+# 🧠 Mhamcloud | Company Sales Invoice Update API V1.0
 # ------------------------------------------------------------
 # ✅ Update company-scoped draft sales invoice
 # ✅ Uses request.company from CompanyMembership context

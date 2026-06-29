@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/documents/templates/default.py
-# 🧠 PrimeyAcc | Company Default Document Template API V1.0
+# 🧠 Mhamcloud | Company Default Document Template API V1.0
 # ============================================================
 
 from __future__ import annotations

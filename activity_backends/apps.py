@@ -1,6 +1,6 @@
 # ============================================================
 # ًں“‚ activity_backends/apps.py
-# ًں§  PrimeyAcc | Activity-Specific Backends App â€” Phase 25.3
+# ًں§  Mhamcloud | Activity-Specific Backends App â€” Phase 25.3
 # ============================================================
 # âœ… Restaurant / food activity backend foundation
 # âœ… Clinic / medical activity backend foundation
@@ -19,4 +19,4 @@ from django.apps import AppConfig
 class ActivityBackendsConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "activity_backends"
-    verbose_name = "PrimeyAcc Activity Backends"
+    verbose_name = "Mhamcloud Activity Backends"

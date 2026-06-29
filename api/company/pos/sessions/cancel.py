@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/sessions/cancel.py
-# 🧠 PrimeyAcc | Company POS Sessions Cancel API V1.1
+# 🧠 Mhamcloud | Company POS Sessions Cancel API V1.1
 # ------------------------------------------------------------
 # ✅ Cancel POS session for current company only
 # ✅ Tenant isolation through request.company

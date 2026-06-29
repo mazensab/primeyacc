@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/branches/detail.py
-# 🧠 PrimeyAcc | Company Branch Detail API V1.0
+# 🧠 Mhamcloud | Company Branch Detail API V1.0
 # ------------------------------------------------------------
 # ✅ Tenant-isolated branch detail
 # ✅ Tenant-isolated branch update

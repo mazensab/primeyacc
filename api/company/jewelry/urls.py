@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/jewelry/urls.py
-# 🧠 PrimeyAcc | Company Jewelry API Routes — Phase 25.1
+# 🧠 Mhamcloud | Company Jewelry API Routes — Phase 25.1
 # ============================================================
 
 from django.urls import path

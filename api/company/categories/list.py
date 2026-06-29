@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/categories/list.py
-# 🧠 PrimeyAcc | Company Catalog Categories List API V1.1
+# 🧠 Mhamcloud | Company Catalog Categories List API V1.1
 # ------------------------------------------------------------
 # ✅ List company-scoped catalog categories
 # ✅ Search and filter categories safely

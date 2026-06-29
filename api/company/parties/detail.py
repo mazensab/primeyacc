@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/parties/detail.py
-# 🧠 PrimeyAcc | Company Business Party Detail API V1.0
+# 🧠 Mhamcloud | Company Business Party Detail API V1.0
 # ------------------------------------------------------------
 # ✅ Retrieve one company-scoped business party
 # ✅ Update one company-scoped business party

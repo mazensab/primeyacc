@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/business_controls/audit_events/urls.py
-# 🧠 PrimeyAcc | Company Audit Events URLs V1.0
+# 🧠 Mhamcloud | Company Audit Events URLs V1.0
 # ============================================================
 
 from __future__ import annotations

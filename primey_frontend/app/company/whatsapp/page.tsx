@@ -1,7 +1,7 @@
 "use client";
 /* ============================================================
    ?? primey_frontend/app/company/whatsapp/page.tsx
-   ?? PrimeyAcc ? Company WhatsApp Workspace Page V1.0
+   ?? Mhamcloud ? Company WhatsApp Workspace Page V1.0
    ------------------------------------------------------------
    ? Company workspace route: /company/whatsapp
    ? Real company API only: /api/company/whatsapp/*

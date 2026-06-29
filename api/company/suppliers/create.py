@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/suppliers/create.py
-# 🧠 PrimeyAcc | Company Suppliers Create API V1.0
+# 🧠 Mhamcloud | Company Suppliers Create API V1.0
 # ------------------------------------------------------------
 # ✅ Create supplier alias over BusinessParty
 # ✅ Forces party_type SUPPLIER

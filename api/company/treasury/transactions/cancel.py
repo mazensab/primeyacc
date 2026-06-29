@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/treasury/transactions/cancel.py
-# 🧠 PrimeyAcc | Company Treasury Transaction Cancel API V1.1
+# 🧠 Mhamcloud | Company Treasury Transaction Cancel API V1.1
 # ------------------------------------------------------------
 # ✅ Cancel treasury transaction for current company only
 # ✅ Reverses balance effect for posted transactions safely through services.py

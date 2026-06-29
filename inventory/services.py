@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 inventory/services.py
-# 🧠 PrimeyAcc | Company Inventory Services V2.3
+# 🧠 Mhamcloud | Company Inventory Services V2.3
 # ------------------------------------------------------------
 # ✅ Company-scoped warehouse services
 # ✅ Company-scoped stock balance services

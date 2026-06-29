@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/treasury/supplier_payments/urls.py
-# 🧠 PrimeyAcc | Company Treasury Supplier Payments URLs V1.0
+# 🧠 Mhamcloud | Company Treasury Supplier Payments URLs V1.0
 # ------------------------------------------------------------
 # ✅ Supplier payments list/create route
 # ✅ Supplier payment detail/update route

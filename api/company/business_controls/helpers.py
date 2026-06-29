@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/business_controls/helpers.py
-# 🧠 PrimeyAcc | Company Business Controls API Helpers V1.0
+# 🧠 Mhamcloud | Company Business Controls API Helpers V1.0
 # ------------------------------------------------------------
 # ✅ Safe company resolver
 # ✅ JSON response helpers

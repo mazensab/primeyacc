@@ -1,9 +1,9 @@
 ﻿# ============================================================
 # File: api/system/users/list.py
-# Module: PrimeyAcc System Users List API
+# Module: Mhamcloud System Users List API
 # Endpoint: GET /api/system/users/ and /api/users/
 # Purpose:
-# - List PrimeyAcc user profiles for the system workspace.
+# - List Mhamcloud user profiles for the system workspace.
 # - Supports search, status, role, access and pagination filters.
 # - Protected by system permission: system.users.view.
 # - Returns real database records only.

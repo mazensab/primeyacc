@@ -1,1 +1,1 @@
-﻿# PrimeyAcc company sales orders API package.
+﻿# Mhamcloud company sales orders API package.

@@ -1,4 +1,4 @@
 ﻿# ============================================================
 # 📂 jewelry/migrations/__init__.py
-# 🧠 PrimeyAcc | Jewelry Migrations Package
+# 🧠 Mhamcloud | Jewelry Migrations Package
 # ============================================================

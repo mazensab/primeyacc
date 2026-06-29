@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/treasury/customer_payments/cancel.py
-# 🧠 PrimeyAcc | Company Treasury Customer Payment Cancel API V1.1
+# 🧠 Mhamcloud | Company Treasury Customer Payment Cancel API V1.1
 # ------------------------------------------------------------
 # ✅ Cancel customer payment for current company only
 # ✅ Cancels linked treasury transaction and reverses balance through services.py

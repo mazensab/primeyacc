@@ -2,9 +2,9 @@
 
 /* ============================================================
    📂 primey_frontend/app/system/platform-payments/reports/page.tsx
-   💳 PrimeyAcc — System Platform Payments Reports
+   💳 Mhamcloud — System Platform Payments Reports
    ------------------------------------------------------------
-   ✅ Premium PrimeyCare reports pattern adapted for PrimeyAcc
+   ✅ Premium PrimeyCare reports pattern adapted for Mhamcloud
    ✅ Real API only: GET /api/system/billing-documents/?document_type=PAYMENT_RECEIPT
    ✅ Summary KPIs + status/payment method/reference distributions
    ✅ Analytical full-width table
@@ -130,7 +130,7 @@ const translations = {
   ar: {
     title: "تقارير المدفوعات",
     subtitle:
-      "تحليلات إيصالات مدفوعات منصة PrimeyAcc حسب الحالة وطريقة الدفع والمبلغ المدفوع والمراجع والتواريخ، مبنية على بيانات API الحقيقية.",
+      "تحليلات إيصالات مدفوعات منصة Mhamcloud حسب الحالة وطريقة الدفع والمبلغ المدفوع والمراجع والتواريخ، مبنية على بيانات API الحقيقية.",
     badge: "إدارة الاشتراكات",
     refresh: "تحديث",
     exportExcel: "تصدير Excel",
@@ -214,14 +214,14 @@ const translations = {
     tryAgain: "إعادة المحاولة",
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
-    reportTitle: "تقرير مدفوعات منصة PrimeyAcc",
+    reportTitle: "تقرير مدفوعات منصة Mhamcloud",
     generatedAt: "تاريخ الإنشاء",
     refreshed: "تم تحديث تقارير المدفوعات.",
   },
   en: {
     title: "Platform payments reports",
     subtitle:
-      "PrimeyAcc platform payment receipt analytics by status, payment method, paid amount, references, and dates, based on real API data.",
+      "Mhamcloud platform payment receipt analytics by status, payment method, paid amount, references, and dates, based on real API data.",
     badge: "Subscription management",
     refresh: "Refresh",
     exportExcel: "Export Excel",
@@ -305,7 +305,7 @@ const translations = {
     tryAgain: "Try again",
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
-    reportTitle: "PrimeyAcc Platform Payments Report",
+    reportTitle: "Mhamcloud Platform Payments Report",
     generatedAt: "Generated at",
     refreshed: "Platform payments reports refreshed.",
   },
@@ -1066,7 +1066,7 @@ export default function SystemPlatformPaymentsReportsPage() {
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = `primeyacc-system-companies-report-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-system-companies-report-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();

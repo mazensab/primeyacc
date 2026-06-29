@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/orders/detail.py
-# 🧠 PrimeyAcc | Company POS Orders Detail API V1.0
+# 🧠 Mhamcloud | Company POS Orders Detail API V1.0
 # ------------------------------------------------------------
 # ✅ Retrieve POS order details for current company only
 # ✅ Tenant isolation through request.company

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 release_readiness/checks.py
-# 🧠 PrimeyAcc | Safe Django System Checks
+# 🧠 Mhamcloud | Safe Django System Checks
 # ============================================================
 # ✅ Validates internal release readiness contract registry
 # ✅ Keeps manage.py check clean unless a real registry error exists

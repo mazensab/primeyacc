@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # File: api/system/users/urls.py
-# Module: PrimeyAcc System Users API URLs
+# Module: Mhamcloud System Users API URLs
 # Routes:
 # - GET  /api/system/users/
 # - POST /api/system/users/

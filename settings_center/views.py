@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 settings_center/views.py
-# PrimeyAcc | System Settings Center API Views
+# Mhamcloud | System Settings Center API Views
 # ------------------------------------------------------------
 # ✅ Backend only
 # ✅ System workspace endpoints

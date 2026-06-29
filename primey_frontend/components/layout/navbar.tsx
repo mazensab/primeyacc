@@ -255,12 +255,12 @@ export const Navbar = ({ initialLocale = "ar" }: NavbarProps) => {
   const ArrowIcon = isArabic ? ChevronLeftIcon : ChevronRightIcon;
 
   const text = {
-    logoAlt: isArabic ? "Primey Care" : "Primey Care",
+    logoAlt: isArabic ? "Mhamcloud" : "Mhamcloud",
     programs: isArabic ? "البرامج والبطاقات" : "Cards & Programs",
     login: isArabic ? "تسجيل الدخول" : "Log in",
     register: isArabic ? "اشترك الآن" : "Join Now",
     switchLanguage: isArabic ? "التبديل إلى الإنجليزية" : "Switch to Arabic",
-    mobileMenu: isArabic ? "قائمة Primey Care" : "Primey Care Menu",
+    mobileMenu: isArabic ? "قائمة Mhamcloud" : "Mhamcloud Menu",
   };
 
   const toggleLanguage = () => {

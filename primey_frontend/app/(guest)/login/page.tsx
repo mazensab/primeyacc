@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 /* =========================================================
-   📌 PrimeyAcc - Unified Login Page
+   📌 Mhamcloud - Unified Login Page
    Path: primey_frontend/app/(guest)/login/page.tsx
 
    ✅ صفحة دخول موحدة للنظام والشركات
@@ -349,7 +349,7 @@ export default function Page() {
     try {
       const savedLocale =
         typeof window !== "undefined"
-          ? ((window.localStorage.getItem("primeyacc-locale") ||
+          ? ((window.localStorage.getItem("Mhamcloud-locale") ||
               window.localStorage.getItem("primey-locale")) as AppLocale | null)
           : null;
 
@@ -372,7 +372,7 @@ export default function Page() {
       setLocale(nextLocale);
 
       if (typeof window !== "undefined") {
-        window.localStorage.setItem("primeyacc-locale", nextLocale);
+        window.localStorage.setItem("Mhamcloud-locale", nextLocale);
       }
 
       if (typeof document !== "undefined") {
@@ -410,7 +410,7 @@ export default function Page() {
   };
 
   /* =========================================================
-     🚀 PrimeyAcc Login Handler
+     🚀 Mhamcloud Login Handler
   ========================================================= */
   const handleLoginSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -462,7 +462,7 @@ export default function Page() {
 
       setError(message);
       toast.error(message);
-      console.error("PrimeyAcc login error:", err);
+      console.error("Mhamcloud login error:", err);
     } finally {
       setLoading(false);
     }
@@ -500,7 +500,7 @@ export default function Page() {
                     {content.welcomeBadge}
                   </p>
                   <h1 className="text-2xl font-bold tracking-tight">
-                    PrimeyAcc
+                    Mhamcloud
                   </h1>
                 </div>
               </div>
@@ -624,7 +624,7 @@ export default function Page() {
                 <div className="flex items-center gap-3">
                   <Image
                     src="/logo/primey.svg"
-                    alt="PrimeyAcc"
+                    alt="Mhamcloud"
                     width={132}
                     height={44}
                     priority

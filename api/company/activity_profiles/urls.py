@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/activity_profiles/urls.py
-# 🧠 PrimeyAcc | Company Activity Profiles URLs
+# 🧠 Mhamcloud | Company Activity Profiles URLs
 # ------------------------------------------------------------
 # ✅ /api/company/activity-profiles/
 # ✅ /api/company/activity-profiles/current/

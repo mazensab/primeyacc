@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/treasury/accounts/urls.py
-# 🧠 PrimeyAcc | Company Treasury Accounts URLs V1.0
+# 🧠 Mhamcloud | Company Treasury Accounts URLs V1.0
 # ------------------------------------------------------------
 # ✅ Treasury accounts list/create route
 # ✅ Treasury account detail/update/deactivate route

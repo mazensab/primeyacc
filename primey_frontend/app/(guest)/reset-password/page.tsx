@@ -23,11 +23,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 /* =========================================================
-   📌 PrimeyAcc - Guest Reset Password Page
+   📌 Mhamcloud - Guest Reset Password Page
    Path: primey_frontend/app/(guest)/reset-password/page.tsx
 
    ✅ صفحة إعادة تعيين كلمة المرور
-   ✅ متوافقة مع هوية PrimeyAcc
+   ✅ متوافقة مع هوية Mhamcloud
    ✅ يدعم العربية والإنجليزية
    ✅ يدعم RTL / LTR
    ✅ CSRF + Cookies Session
@@ -225,7 +225,7 @@ export default function ResetPasswordPage() {
     try {
       const savedLocale =
         typeof window !== "undefined"
-          ? ((window.localStorage.getItem("primeyacc-locale") ||
+          ? ((window.localStorage.getItem("Mhamcloud-locale") ||
               window.localStorage.getItem("primey-locale")) as AppLocale | null)
           : null;
 
@@ -248,7 +248,7 @@ export default function ResetPasswordPage() {
       setLocale(nextLocale);
 
       if (typeof window !== "undefined") {
-        window.localStorage.setItem("primeyacc-locale", nextLocale);
+        window.localStorage.setItem("Mhamcloud-locale", nextLocale);
       }
 
       if (typeof document !== "undefined") {
@@ -339,7 +339,7 @@ export default function ResetPasswordPage() {
 
       setError(message);
       toast.error(message);
-      console.error("PrimeyAcc reset password error:", err);
+      console.error("Mhamcloud reset password error:", err);
     } finally {
       setLoading(false);
     }
@@ -377,7 +377,7 @@ export default function ResetPasswordPage() {
                     {content.badge}
                   </p>
                   <h1 className="text-2xl font-bold tracking-tight">
-                    PrimeyAcc
+                    Mhamcloud
                   </h1>
                 </div>
               </div>
@@ -465,7 +465,7 @@ export default function ResetPasswordPage() {
                 <div className="flex items-center gap-3">
                   <Image
                     src="/logo/primey.svg"
-                    alt="PrimeyAcc"
+                    alt="Mhamcloud"
                     width={132}
                     height={44}
                     priority

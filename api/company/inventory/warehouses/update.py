@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/warehouses/update.py
-# 🧠 PrimeyAcc | Company Warehouse Update API V1.0
+# 🧠 Mhamcloud | Company Warehouse Update API V1.0
 # ------------------------------------------------------------
 # ✅ Update warehouse for current company only
 # ✅ Tenant isolation through request.company

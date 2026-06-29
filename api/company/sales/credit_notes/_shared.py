@@ -1,6 +1,6 @@
 # ============================================================
 # ?? api/company/sales/credit_notes/_shared.py
-# ?? PrimeyAcc | Sales Credit Notes API Shared Helpers
+# ?? Mhamcloud | Sales Credit Notes API Shared Helpers
 # ============================================================
 
 from __future__ import annotations

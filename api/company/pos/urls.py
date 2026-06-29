@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/urls.py
-# 🧠 PrimeyAcc | Company POS URLs V1.3
+# 🧠 Mhamcloud | Company POS URLs V1.3
 # ------------------------------------------------------------
 # ✅ Company POS API Root Routing
 # ✅ POS Registers Routes Include

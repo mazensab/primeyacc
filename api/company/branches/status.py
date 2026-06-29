@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/branches/status.py
-# 🧠 PrimeyAcc | Company Branch Status API V1.0
+# 🧠 Mhamcloud | Company Branch Status API V1.0
 # ------------------------------------------------------------
 # ✅ Tenant-isolated branch status actions
 # ✅ Activate branch

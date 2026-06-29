@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ًں“‚ api/system/billing_documents/create_receipt.py
-# ًں§  PrimeyAcc | System Billing Document Create Receipt API V1.0
+# ًں§  Mhamcloud | System Billing Document Create Receipt API V1.0
 # ------------------------------------------------------------
 # âœ… Creates or returns a platform subscription payment receipt
 # âœ… Uses billing.services.create_or_get_subscription_payment_receipt
@@ -12,7 +12,7 @@
 # âœ… Protected by system.billing_documents.create_receipt
 # ------------------------------------------------------------
 # ط§ظ„ظ‚ط§ط¹ط¯ط© ط§ظ„ظ…ط¹طھظ…ط¯ط©:
-# - ظ‡ط°ط§ ط§ظ„ط¥ظٹطµط§ظ„ ظٹط®طµ ط¯ظپط¹ ط§ط´طھط±ط§ظƒ ظ…ظ†طµط© PrimeyAcc
+# - ظ‡ط°ط§ ط§ظ„ط¥ظٹطµط§ظ„ ظٹط®طµ ط¯ظپط¹ ط§ط´طھط±ط§ظƒ ظ…ظ†طµط© Mhamcloud
 # - ظ„ط§ ظٹط³طھط®ط¯ظ… payments ط§ظ„ط®ط§طµط© ط¨ط§ظ„ط´ط±ظƒط§طھ
 # - ظ„ط§ ظ†ظƒط±ط± ظ…ظ†ط·ظ‚ ط§ظ„ط¯ظپط¹ ط§ظ„ظ…ظˆط¬ظˆط¯ ط¯ط§ط®ظ„ billing/services.py
 # - ظ„ظƒظ„ ط§ط´طھط±ط§ظƒ ط¥ظٹطµط§ظ„ ط¯ظپط¹ ظ…ظ†طµط© ظˆط§ط­ط¯ ظپظ‚ط·

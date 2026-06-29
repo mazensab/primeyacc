@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # api/company/sales/customer_credits/urls.py
-# PrimeyAcc | Customer Credit URLs
+# Mhamcloud | Customer Credit URLs
 # ============================================================
 
 from __future__ import annotations

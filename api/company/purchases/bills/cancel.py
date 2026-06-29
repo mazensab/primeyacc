@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/purchases/bills/cancel.py
-# 🧠 PrimeyAcc | Company Purchase Bill Cancel API V1.1
+# 🧠 Mhamcloud | Company Purchase Bill Cancel API V1.1
 # ------------------------------------------------------------
 # ✅ Cancel purchase bill for current company only
 # ✅ Tenant isolation through request.company

@@ -2,9 +2,9 @@
 
 /* ============================================================
    📂 primey_frontend/app/system/subscriptions/page.tsx
-   💳 PrimeyAcc — System Subscriptions Overview
+   💳 Mhamcloud — System Subscriptions Overview
    ------------------------------------------------------------
-   ✅ Premium PrimeyCare admin pattern adapted for PrimeyAcc
+   ✅ Premium PrimeyCare admin pattern adapted for Mhamcloud
    ✅ System subscriptions module center page
    ✅ Real API only: GET /api/system/subscriptions/
    ✅ KPI cards + quick actions + recent subscriptions table
@@ -123,7 +123,7 @@ const translations = {
   ar: {
     title: "اشتراكات الشركات",
     subtitle:
-      "مركز إدارة اشتراكات شركات PrimeyAcc لمتابعة الخطط والحالات والدورات والتواريخ من مكان واحد.",
+      "مركز إدارة اشتراكات شركات Mhamcloud لمتابعة الخطط والحالات والدورات والتواريخ من مكان واحد.",
     badge: "إدارة المنصة",
     refresh: "تحديث",
     exportExcel: "تصدير Excel",
@@ -161,7 +161,7 @@ const translations = {
 
     tableTitle: "أحدث الاشتراكات",
     tableDesc:
-      "نظرة سريعة على أحدث اشتراكات الشركات في PrimeyAcc مع الحالة والخطة والدورة والقيمة.",
+      "نظرة سريعة على أحدث اشتراكات الشركات في Mhamcloud مع الحالة والخطة والدورة والقيمة.",
     company: "الشركة",
     code: "الكود",
     owner: "الخطة",
@@ -193,7 +193,7 @@ const translations = {
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
     pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
-    reportTitle: "تقرير مركز اشتراكات PrimeyAcc",
+    reportTitle: "تقرير مركز اشتراكات Mhamcloud",
     generatedAt: "تاريخ الإنشاء",
     showing: "عرض",
     of: "من",
@@ -203,7 +203,7 @@ const translations = {
   en: {
     title: "Company subscriptions",
     subtitle:
-      "PrimeyAcc subscriptions center for registered companies, activity status, subscriptions, and reports in one place.",
+      "Mhamcloud subscriptions center for registered companies, activity status, subscriptions, and reports in one place.",
     badge: "Platform management",
     refresh: "Refresh",
     exportExcel: "Export Excel",
@@ -241,7 +241,7 @@ const translations = {
 
     tableTitle: "Latest subscriptions",
     tableDesc:
-      "A quick view of the newest companies registered in PrimeyAcc with status, activity, and subscription.",
+      "A quick view of the newest companies registered in Mhamcloud with status, activity, and subscription.",
     company: "Company",
     code: "Code",
     owner: "Plan",
@@ -273,7 +273,7 @@ const translations = {
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
     pdfHint: "Choose Save as PDF from the print dialog.",
-    reportTitle: "PrimeyAcc Companies Center Report",
+    reportTitle: "Mhamcloud Companies Center Report",
     generatedAt: "Generated at",
     showing: "Showing",
     of: "of",
@@ -896,7 +896,7 @@ export default function SystemSubscriptionsPage() {
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = `primeyacc-system-companies-overview-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-system-companies-overview-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();

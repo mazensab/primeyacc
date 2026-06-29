@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 subscriptions/models.py
-# 🧠 PrimeyAcc | SaaS Subscription Core Models V1.1
+# 🧠 Mhamcloud | SaaS Subscription Core Models V1.1
 # ------------------------------------------------------------
 # ✅ Subscription plans for SaaS packages
 # ✅ Company subscriptions linked to tenant companies

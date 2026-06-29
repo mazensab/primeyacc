@@ -1,9 +1,9 @@
 # ============================================================
 # File: api/system/release_readiness/views.py
-# Module: PrimeyAcc System Release Readiness API Views v1
+# Module: Mhamcloud System Release Readiness API Views v1
 # ============================================================
 # Read-only backend release readiness endpoint.
-# Protected by PrimeyAcc system permissions, not Django staff flags.
+# Protected by Mhamcloud system permissions, not Django staff flags.
 # ============================================================
 from __future__ import annotations
 from django.http import JsonResponse

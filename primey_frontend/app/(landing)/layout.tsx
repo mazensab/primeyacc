@@ -1,6 +1,6 @@
 /* ============================================================
    primey_frontend/app/(landing)/layout.tsx
-   PrimeyAcc — Landing Layout
+   Mhamcloud — Landing Layout
    ------------------------------------------------------------
    Approved landing layout wrapper.
    Preserves Navbar locale initialization.

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/whatsapp/messages_list.py
-# 🧠 PrimeyAcc | Company WhatsApp Messages List API V1.0
+# 🧠 Mhamcloud | Company WhatsApp Messages List API V1.0
 # ------------------------------------------------------------
 # ✅ GET /api/company/whatsapp/messages/
 # ✅ Tenant-isolated by request.company

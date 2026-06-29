@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/profile.py
-# 🧠 PrimeyAcc | Company Profile API V1.2
+# 🧠 Mhamcloud | Company Profile API V1.2
 # ------------------------------------------------------------
 # ✅ Current company profile endpoint
 # ✅ Reads company only from active CompanyMembership

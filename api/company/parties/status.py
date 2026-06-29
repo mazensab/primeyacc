@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/parties/status.py
-# 🧠 PrimeyAcc | Company Business Party Status API V1.0
+# 🧠 Mhamcloud | Company Business Party Status API V1.0
 # ------------------------------------------------------------
 # ✅ Activate company-scoped business party
 # ✅ Deactivate company-scoped business party

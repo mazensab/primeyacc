@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/users/urls.py
-# 🧠 PrimeyAcc | Company Users API URLs V1.3
+# 🧠 Mhamcloud | Company Users API URLs V1.3
 # ------------------------------------------------------------
 # ✅ Tenant-isolated company users routes
 # ✅ Company users list endpoint

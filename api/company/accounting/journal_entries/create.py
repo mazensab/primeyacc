@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/accounting/journal_entries/create.py
-# 🧠 PrimeyAcc | Company Accounting Journal Entry Create API
+# 🧠 Mhamcloud | Company Accounting Journal Entry Create API
 # ------------------------------------------------------------
 # ✅ إنشاء قيد يومية يدوي للشركة الحالية
 # ✅ عزل كامل حسب CompanyMembership

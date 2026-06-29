@@ -2,7 +2,7 @@
 
 /* =====================================================
    📂 components/layout/header/user-menu.tsx
-   🧠 Primey Care — Premium Header User Menu
+   🧠 Mhamcloud — Premium Header User Menu
    -----------------------------------------------------
    ✅ متوافق مع الهيدر الجديد
    ✅ يدعم system / provider / customer / agent

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/payments/gateways/detail.py
-# 🧠 PrimeyAcc | Company Payment Gateway Detail API V1.0
+# 🧠 Mhamcloud | Company Payment Gateway Detail API V1.0
 # ------------------------------------------------------------
 # ✅ Retrieve payment gateway for current company only
 # ✅ Update payment gateway for current company only

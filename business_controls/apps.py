@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 business_controls/apps.py
-# 🧠 PrimeyAcc | Business Controls App Configuration V1.0
+# 🧠 Mhamcloud | Business Controls App Configuration V1.0
 # ------------------------------------------------------------
 # ✅ Production hardening foundation
 # ✅ Business audit events

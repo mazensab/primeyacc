@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 whatsapp/models.py
-# 🧠 PrimeyAcc | Company WhatsApp Models V1.0
+# 🧠 Mhamcloud | Company WhatsApp Models V1.0
 # ------------------------------------------------------------
 # ✅ Company WhatsApp Settings Foundation
 # ✅ WhatsApp Templates Foundation
@@ -185,7 +185,7 @@ class SystemWhatsAppConnection(models.Model):
     )
     session_name = models.CharField(
         max_length=150,
-        default="primeyacc-system-session",
+        default="Mhamcloud-system-session",
         db_index=True,
         verbose_name="Session name",
     )
@@ -860,7 +860,7 @@ class WhatsAppContact(models.Model):
     )
     session_name = models.CharField(
         max_length=120,
-        default="primeyacc-system-session",
+        default="Mhamcloud-system-session",
         db_index=True,
         verbose_name="Session name",
     )
@@ -946,7 +946,7 @@ class WhatsAppConversation(models.Model):
     )
     session_name = models.CharField(
         max_length=120,
-        default="primeyacc-system-session",
+        default="Mhamcloud-system-session",
         db_index=True,
         verbose_name="Session name",
     )
@@ -1046,7 +1046,7 @@ class WhatsAppConversationMessage(models.Model):
     )
     session_name = models.CharField(
         max_length=120,
-        default="primeyacc-system-session",
+        default="Mhamcloud-system-session",
         db_index=True,
         verbose_name="Session name",
     )
@@ -1145,7 +1145,7 @@ class WhatsAppWebhookEvent(models.Model):
     )
     session_name = models.CharField(
         max_length=120,
-        default="primeyacc-system-session",
+        default="Mhamcloud-system-session",
         db_index=True,
         verbose_name="Session name",
     )

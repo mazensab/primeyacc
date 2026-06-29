@@ -2,7 +2,7 @@
 
 // ======================================================
 // 📂 الملف: components/guards/PermissionGuard.tsx
-// 🧭 Primey Care — Page Permission Guard
+// 🧭 Mhamcloud — Page Permission Guard
 // 🚀 الإصدار: Permission Guard V1.1
 // ------------------------------------------------------
 // ✅ حماية الصفحات حسب الصلاحية

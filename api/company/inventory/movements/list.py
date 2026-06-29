@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/movements/list.py
-# 🧠 PrimeyAcc | Company Stock Movements List API V1.0
+# 🧠 Mhamcloud | Company Stock Movements List API V1.0
 # ------------------------------------------------------------
 # ✅ List stock movements for current company only
 # ✅ Tenant isolation through request.company

@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 purchases/tests.py
-# 🧠 PrimeyAcc | Purchases Tests V1.4
+# 🧠 Mhamcloud | Purchases Tests V1.4
 # ------------------------------------------------------------
 # ✅ Purchase bill model tests
 # ✅ Purchase bill services tests

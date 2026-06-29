@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/treasury/customer_payments/urls.py
-# 🧠 PrimeyAcc | Company Treasury Customer Payments URLs V1.0
+# 🧠 Mhamcloud | Company Treasury Customer Payments URLs V1.0
 # ------------------------------------------------------------
 # ✅ Customer payments list/create route
 # ✅ Customer payment detail/update route

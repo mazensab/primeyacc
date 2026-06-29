@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/sessions/open.py
-# 🧠 PrimeyAcc | Company POS Sessions Open API V1.0
+# 🧠 Mhamcloud | Company POS Sessions Open API V1.0
 # ------------------------------------------------------------
 # ✅ Open POS session for current company only
 # ✅ Tenant isolation through request.company

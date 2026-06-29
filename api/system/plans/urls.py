@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/system/plans/urls.py
-# 🧠 PrimeyAcc | System Subscription Plans URLs V1.1
+# 🧠 Mhamcloud | System Subscription Plans URLs V1.1
 # ------------------------------------------------------------
 # ✅ Routes for system SaaS subscription plans
 # ✅ List, detail, create, update, and status actions

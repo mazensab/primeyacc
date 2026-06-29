@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/sales/invoices/issue.py
-# 🧠 PrimeyAcc | Company Sales Invoice Issue API V1.0
+# 🧠 Mhamcloud | Company Sales Invoice Issue API V1.0
 # ------------------------------------------------------------
 # ✅ Issue company-scoped draft sales invoice
 # ✅ Uses request.company from CompanyMembership context

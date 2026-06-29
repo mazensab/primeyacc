@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/users/list.py
-# 🧠 PrimeyAcc | Company Users List API V1.0
+# 🧠 Mhamcloud | Company Users List API V1.0
 # ------------------------------------------------------------
 # ✅ Tenant-isolated company users list
 # ✅ Reads company only from active CompanyMembership
@@ -56,7 +56,7 @@ def _profile_payload(user: Any) -> dict[str, Any] | None:
     يرجع ملف المستخدم العام إن وجد.
     """
 
-    profile = getattr(user, "primeyacc_profile", None)
+    profile = getattr(user, "Mhamcloud_profile", None)
 
     if not profile:
         return None
@@ -167,9 +167,9 @@ def _apply_filters(
             | Q(user__email__icontains=search)
             | Q(user__first_name__icontains=search)
             | Q(user__last_name__icontains=search)
-            | Q(user__primeyacc_profile__display_name__icontains=search)
-            | Q(user__primeyacc_profile__phone__icontains=search)
-            | Q(user__primeyacc_profile__mobile__icontains=search)
+            | Q(user__Mhamcloud_profile__display_name__icontains=search)
+            | Q(user__Mhamcloud_profile__phone__icontains=search)
+            | Q(user__Mhamcloud_profile__mobile__icontains=search)
             | Q(job_title__icontains=search)
             | Q(department__icontains=search)
         )
@@ -303,7 +303,7 @@ def company_users_list(request: HttpRequest) -> JsonResponse:
     base_queryset = (
         CompanyMembership.objects.select_related(
             "user",
-            "user__primeyacc_profile",
+            "user__Mhamcloud_profile",
             "company",
         )
         .filter(company=company)

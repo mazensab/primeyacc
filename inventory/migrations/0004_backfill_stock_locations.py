@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 inventory/migrations/0004_backfill_stock_locations.py
-# 🧠 PrimeyAcc | Existing Stock Locations Data Migration V1.0
+# 🧠 Mhamcloud | Existing Stock Locations Data Migration V1.0
 # ------------------------------------------------------------
 # ✅ Create/reuse one default stock location per used warehouse
 # ✅ Backfill existing StockItem.location values

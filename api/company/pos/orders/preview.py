@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/orders/preview.py
-# 🧠 PrimeyAcc | Company POS Order Preview API V1.0
+# 🧠 Mhamcloud | Company POS Order Preview API V1.0
 # ------------------------------------------------------------
 # ✅ Preview POS order totals before creating/updating order
 # ✅ Tenant isolation through request.company

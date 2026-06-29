@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 parties/services.py
-# 🧠 PrimeyAcc | Business Parties Services V1.0
+# 🧠 Mhamcloud | Business Parties Services V1.0
 # ------------------------------------------------------------
 # ✅ Company-scoped BusinessParty query helpers
 # ✅ Safe create/update helpers for customers and suppliers

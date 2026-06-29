@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ?? api/company/purchases/debit_notes/post.py
-# ?? PrimeyAcc | Supplier Debit Note Post API
+# ?? Mhamcloud | Supplier Debit Note Post API
 # ------------------------------------------------------------
 # ? Company-scoped tenant isolation
 # ? Uses purchases service layer as source of truth

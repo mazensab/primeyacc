@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/system/billing_documents/detail.py
-# 🧠 PrimeyAcc | System Billing Document Detail API V1.0
+# 🧠 Mhamcloud | System Billing Document Detail API V1.0
 # ------------------------------------------------------------
 # ✅ Returns one platform billing document by ID
 # ✅ Includes company, subscription, plan, and user summaries
@@ -11,7 +11,7 @@
 # ✅ Protected by system.billing_documents.view
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
-# - هذا الـAPI يخص مستندات فوترة مالك منصة PrimeyAcc
+# - هذا الـAPI يخص مستندات فوترة مالك منصة Mhamcloud
 # - الطباعة تعتمد على printable_payload المحفوظ
 # - لا نعيد بناء Snapshot من البيانات الحية
 # - الفاتورة تعرض إيصالات الدفع المرتبطة بها

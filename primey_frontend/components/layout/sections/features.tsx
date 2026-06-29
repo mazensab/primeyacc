@@ -55,7 +55,7 @@ const content: Record<AppLang, FeaturesContent> = {
     subTitle: "مزايا البطاقة",
     title: "خدمات صحية متنوعة بخصومات أقرب لك",
     description:
-      "تمنحك Primey Care مزايا مختارة على مجموعة واسعة من الخدمات الطبية اليومية والمتخصصة، لتجعل الوصول إلى الرعاية الصحية أسهل وأوضح لك ولعائلتك.",
+      "تمنحك Mhamcloud مزايا مختارة على مجموعة واسعة من الخدمات الطبية اليومية والمتخصصة، لتجعل الوصول إلى الرعاية الصحية أسهل وأوضح لك ولعائلتك.",
     items: [
       {
         title: "الكشف والاستشارات",
@@ -93,7 +93,7 @@ const content: Record<AppLang, FeaturesContent> = {
     subTitle: "Card Benefits",
     title: "Healthcare services with savings closer to you",
     description:
-      "Primey Care gives you selected benefits across everyday and specialized healthcare services, making access to care easier and clearer for you and your family.",
+      "Mhamcloud gives you selected benefits across everyday and specialized healthcare services, making access to care easier and clearer for you and your family.",
     items: [
       {
         title: "Consultations & Checkups",

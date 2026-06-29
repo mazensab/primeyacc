@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/returns/complete.py
-# 🧠 PrimeyAcc | Company POS Return Complete API V1.0
+# 🧠 Mhamcloud | Company POS Return Complete API V1.0
 # ------------------------------------------------------------
 # ✅ Company-scoped POS Return Complete
 # ✅ Uses pos.services.complete_pos_return

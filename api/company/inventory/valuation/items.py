@@ -1,6 +1,6 @@
 # ============================================================
 # ?? api/company/inventory/valuation/items.py
-# ?? PrimeyAcc | Inventory Valuation Items API V1.0
+# ?? Mhamcloud | Inventory Valuation Items API V1.0
 # ------------------------------------------------------------
 # ? Item-level inventory valuation
 # ? Aggregates warehouses and locations

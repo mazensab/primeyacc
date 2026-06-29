@@ -1,4 +1,4 @@
-﻿# PrimeyAcc WhatsApp Session Gateway
+﻿# Mhamcloud WhatsApp Session Gateway
 This service keeps the WhatsApp Web session outside Django memory.
 Important:
 - Restarting Django does not disconnect WhatsApp.

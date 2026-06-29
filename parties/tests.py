@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 parties/tests.py
-# 🧠 PrimeyAcc | Business Parties Tests V1.2
+# 🧠 Mhamcloud | Business Parties Tests V1.2
 # ------------------------------------------------------------
 # ✅ Guest protection test for /api/company/parties/
 # ✅ Company tenant isolation tests

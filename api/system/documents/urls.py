@@ -1,5 +1,5 @@
 # 📂 api/system/documents/urls.py
-# 🧠 PrimeyAcc | System Documents API URLs v1
+# 🧠 Mhamcloud | System Documents API URLs v1
 # ============================================================
 # ✅ /api/system/documents/
 # ✅ /api/system/documents/templates/

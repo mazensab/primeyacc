@@ -1,6 +1,6 @@
 /* ============================================================
    📂 lib/api/errors.ts
-   Primey Care - API Error Handling
+   Mhamcloud - API Error Handling
 ============================================================ */
 
 export const DEFAULT_ERROR_MESSAGE = "تعذر الاتصال بالخادم. حاول مرة أخرى.";

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/returns/urls.py
-# 🧠 PrimeyAcc | Company POS Returns URLs V1.3
+# 🧠 Mhamcloud | Company POS Returns URLs V1.3
 # ------------------------------------------------------------
 # ✅ POS Returns List Route
 # ✅ POS Returns Create Route

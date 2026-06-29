@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/payments/webhooks/urls.py
-# 🧠 PrimeyAcc | Company Payment Webhooks URLs V1.0
+# 🧠 Mhamcloud | Company Payment Webhooks URLs V1.0
 # ============================================================
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/payments/methods/list.py
-# 🧠 PrimeyAcc | Company Payment Methods List/Create API V1.0
+# 🧠 Mhamcloud | Company Payment Methods List/Create API V1.0
 # ------------------------------------------------------------
 # ✅ List payment methods for current company only
 # ✅ Create payment methods for current company only

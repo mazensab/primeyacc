@@ -1,4 +1,4 @@
 ﻿# ============================================================
 # 📂 api/system/notifications/__init__.py
-# 🧠 PrimeyAcc | System Notifications API Package
+# 🧠 Mhamcloud | System Notifications API Package
 # ============================================================

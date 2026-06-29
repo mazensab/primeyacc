@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 payments/services.py
-# 🧠 PrimeyAcc | Company Payments Domain Services
+# 🧠 Mhamcloud | Company Payments Domain Services
 # ------------------------------------------------------------
 # ✅ Creates and updates company payment methods
 # ✅ Creates and updates company payment gateways
@@ -476,7 +476,7 @@ def set_payment_terminal_status(
 
 
 # ============================================================
-# 🧠 PrimeyAcc | Phase 23 Real Payment Integrations & Settlements Services
+# 🧠 Mhamcloud | Phase 23 Real Payment Integrations & Settlements Services
 # ------------------------------------------------------------
 # ✅ Create checkout sessions
 # ✅ Record and process payment webhooks

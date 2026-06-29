@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/registers/update.py
-# 🧠 PrimeyAcc | Company POS Registers Update API V1.0
+# 🧠 Mhamcloud | Company POS Registers Update API V1.0
 # ------------------------------------------------------------
 # ✅ Update POS register for current company only
 # ✅ Tenant isolation through request.company

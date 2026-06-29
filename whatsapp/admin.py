@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 whatsapp/admin.py
-# 🧠 PrimeyAcc | Company WhatsApp Admin V1.0
+# 🧠 Mhamcloud | Company WhatsApp Admin V1.0
 # ------------------------------------------------------------
 # ✅ Register CompanyWhatsAppSetting
 # ✅ Register WhatsAppTemplate

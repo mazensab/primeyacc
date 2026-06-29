@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/warehouses/status.py
-# 🧠 PrimeyAcc | Company Warehouse Status API V1.0
+# 🧠 Mhamcloud | Company Warehouse Status API V1.0
 # ------------------------------------------------------------
 # ✅ Change warehouse status for current company only
 # ✅ Tenant isolation through request.company

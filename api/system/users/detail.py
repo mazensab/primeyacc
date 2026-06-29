@@ -1,9 +1,9 @@
 ﻿# ============================================================
 # File: api/system/users/detail.py
-# Module: PrimeyAcc System User Detail API
+# Module: Mhamcloud System User Detail API
 # Endpoint: GET /api/system/users/<user_id>/ and /api/users/<user_id>/
 # Purpose:
-# - Return one PrimeyAcc user profile for the system workspace.
+# - Return one Mhamcloud user profile for the system workspace.
 # - Includes company memberships for detail pages.
 # - Protected by system permission: system.users.view.
 # ============================================================
@@ -52,7 +52,7 @@ def system_user_detail(request: HttpRequest, user_id: int) -> JsonResponse:
         )
     user = (
         UserModel.objects.filter(id=user_id)
-        .select_related("primeyacc_profile")
+        .select_related("Mhamcloud_profile")
         .first()
     )
     if not user:
@@ -60,7 +60,7 @@ def system_user_detail(request: HttpRequest, user_id: int) -> JsonResponse:
             {"detail": "User was not found.", "code": "system_user_not_found"},
             status=404,
         )
-    profile = getattr(user, "primeyacc_profile", None)
+    profile = getattr(user, "Mhamcloud_profile", None)
     if not profile:
         return JsonResponse(
             {

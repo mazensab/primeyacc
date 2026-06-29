@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/auth/csrf.py
-# 🧠 PrimeyAcc | Auth CSRF API V2
+# 🧠 Mhamcloud | Auth CSRF API V2
 # ------------------------------------------------------------
 # ✅ CSRF Cookie Endpoint
 # ✅ Session Auth Compatible

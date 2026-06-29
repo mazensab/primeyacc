@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ?? api/company/inventory/reservations/serializers.py
-# ?? PrimeyAcc | Stock Reservation API Serializers V1.0
+# ?? Mhamcloud | Stock Reservation API Serializers V1.0
 # ------------------------------------------------------------
 # ? Reservation serialization
 # ? Allocation serialization

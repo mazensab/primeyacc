@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 pos/admin.py
-# 🧠 PrimeyAcc | POS Admin V1.1
+# 🧠 Mhamcloud | POS Admin V1.1
 # ------------------------------------------------------------
 # ✅ POS Registers Admin
 # ✅ POS Cashier Sessions Admin

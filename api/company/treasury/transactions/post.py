@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/treasury/transactions/post.py
-# 🧠 PrimeyAcc | Company Treasury Transaction Post API V1.1
+# 🧠 Mhamcloud | Company Treasury Transaction Post API V1.1
 # ------------------------------------------------------------
 # ✅ Post treasury transaction for current company only
 # ✅ Updates treasury account balance safely through services.py

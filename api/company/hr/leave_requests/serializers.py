@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/hr/leave_requests/serializers.py
-# 🧠 PrimeyAcc | Company HR Leave Requests Serializers V1.0
+# 🧠 Mhamcloud | Company HR Leave Requests Serializers V1.0
 # ------------------------------------------------------------
 # ✅ Serialize leave requests
 # ✅ Resolve employee inside current company only

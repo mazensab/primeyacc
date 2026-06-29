@@ -1,6 +1,6 @@
 /* ============================================================
    📂 primey_frontend/app/(landing)/pricing/page.tsx
-   🧠 PrimeyAcc — Landing Pricing Page
+   🧠 Mhamcloud — Landing Pricing Page
    ------------------------------------------------------------
    ✅ Approved Premium pricing page wrapper
    ✅ Same landing layout pattern preserved
@@ -72,7 +72,7 @@ export async function generateMetadata(): Promise<Metadata> {
       type: "website",
       title,
       description,
-      siteName: "PrimeyAcc",
+      siteName: "Mhamcloud",
       locale: isArabic ? "ar_SA" : "en_US",
       images: [
         {

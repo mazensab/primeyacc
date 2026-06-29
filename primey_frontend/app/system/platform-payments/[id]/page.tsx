@@ -2,9 +2,9 @@
 
 /* ============================================================
    📂 primey_frontend/app/system/platform-payments/[id]/page.tsx
-   💳 PrimeyAcc — System Platform Payment Detail
+   💳 Mhamcloud — System Platform Payment Detail
    ------------------------------------------------------------
-   ✅ Premium PrimeyCare detail pattern adapted for PrimeyAcc
+   ✅ Premium PrimeyCare detail pattern adapted for Mhamcloud
    ✅ Real API only: GET /api/system/billing-documents/{id}/?document_type=PAYMENT_RECEIPT
    ✅ Detail cards + printable report
    ✅ Refresh, print, PDF through browser print dialog
@@ -81,7 +81,7 @@ const translations = {
   ar: {
     title: "تفاصيل مدفوعة المنصة",
     subtitle:
-      "عرض تفاصيل إيصال دفع المنصة داخل PrimeyAcc مع الشركة والمبلغ وطريقة الدفع والمراجع والحالة والتواريخ.",
+      "عرض تفاصيل إيصال دفع المنصة داخل Mhamcloud مع الشركة والمبلغ وطريقة الدفع والمراجع والحالة والتواريخ.",
     badge: "مدفوعات المنصة",
     backToCompanies: "العودة للمدفوعات",
     companiesList: "قائمة المدفوعات",
@@ -130,7 +130,7 @@ const translations = {
     unknown: "غير محدد",
     notAvailable: "غير متوفر",
 
-    reportTitle: "تقرير تفاصيل مدفوعة منصة PrimeyAcc",
+    reportTitle: "تقرير تفاصيل مدفوعة منصة Mhamcloud",
     generatedAt: "تاريخ الطباعة",
 
     errorTitle: "تعذر تحميل تفاصيل مدفوعة المنصة",
@@ -143,7 +143,7 @@ const translations = {
   en: {
     title: "Platform payment details",
     subtitle:
-      "View the PrimeyAcc platform payment receipt with company, paid amount, payment method, references, status, and dates.",
+      "View the Mhamcloud platform payment receipt with company, paid amount, payment method, references, status, and dates.",
     badge: "Platform payments",
     backToCompanies: "Back to payments",
     companiesList: "Payments list",
@@ -192,7 +192,7 @@ const translations = {
     unknown: "Unknown",
     notAvailable: "Not available",
 
-    reportTitle: "PrimeyAcc Platform Payment Details Report",
+    reportTitle: "Mhamcloud Platform Payment Details Report",
     generatedAt: "Generated at",
 
     errorTitle: "Could not load platform payment details",

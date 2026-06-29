@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/payments/methods/urls.py
-# 🧠 PrimeyAcc | Company Payment Methods URLs V1.0
+# 🧠 Mhamcloud | Company Payment Methods URLs V1.0
 # ------------------------------------------------------------
 # ✅ List/create company payment methods
 # ✅ Retrieve/update company payment method

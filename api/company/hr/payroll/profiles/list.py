@@ -1,6 +1,6 @@
 # ============================================================
 # ?? api/company/hr/payroll/profiles/list.py
-# ?? PrimeyAcc | Employee Salary Profiles List API
+# ?? Mhamcloud | Employee Salary Profiles List API
 # ============================================================
 
 from __future__ import annotations

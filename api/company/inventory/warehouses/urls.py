@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/warehouses/urls.py
-# 🧠 PrimeyAcc | Company Inventory Warehouses URLs V1.0
+# 🧠 Mhamcloud | Company Inventory Warehouses URLs V1.0
 # ------------------------------------------------------------
 # ✅ Warehouses API routing
 # ✅ List, create, detail, update, status

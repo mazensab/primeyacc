@@ -44,7 +44,7 @@ const content: Record<AppLang, NewsletterContent> = {
     titleStart: "كن أول من يعرف",
     titleHighlight: "عروض الرعاية الصحية",
     description:
-      "اشترك ليصلك جديد مزايا Primey Care، والعروض الطبية، والبرامج الصحية المختارة للأفراد والعائلات.",
+      "اشترك ليصلك جديد مزايا Mhamcloud، والعروض الطبية، والبرامج الصحية المختارة للأفراد والعائلات.",
     emailPlaceholder: "name@example.com",
     emailAriaLabel: "البريد الإلكتروني",
     buttonText: "اشترك الآن",
@@ -53,7 +53,7 @@ const content: Record<AppLang, NewsletterContent> = {
     titleStart: "Be the first to know about",
     titleHighlight: "healthcare offers",
     description:
-      "Subscribe to receive Primey Care updates, medical offers, and selected healthcare programs for individuals and families.",
+      "Subscribe to receive Mhamcloud updates, medical offers, and selected healthcare programs for individuals and families.",
     emailPlaceholder: "name@example.com",
     emailAriaLabel: "Email address",
     buttonText: "Subscribe",

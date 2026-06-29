@@ -1,6 +1,6 @@
 # ============================================================
 # ?? api/company/inventory/valuation/urls.py
-# ?? PrimeyAcc | Inventory Valuation URLs V1.0
+# ?? Mhamcloud | Inventory Valuation URLs V1.0
 # ------------------------------------------------------------
 # ? Valuation summary endpoint
 # ? Stock item valuation rows

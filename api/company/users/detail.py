@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/users/detail.py
-# 🧠 PrimeyAcc | Company User Detail API V1.0
+# 🧠 Mhamcloud | Company User Detail API V1.0
 # ------------------------------------------------------------
 # ✅ Tenant-isolated company user detail
 # ✅ Tenant-isolated membership update
@@ -125,7 +125,7 @@ def _profile_payload(user: Any) -> dict[str, Any] | None:
     يرجع ملف المستخدم العام إن وجد.
     """
 
-    profile = getattr(user, "primeyacc_profile", None)
+    profile = getattr(user, "Mhamcloud_profile", None)
 
     if not profile:
         return None
@@ -281,7 +281,7 @@ def _get_membership_or_404(company, membership_id: int) -> CompanyMembership | N
     return (
         CompanyMembership.objects.select_related(
             "user",
-            "user__primeyacc_profile",
+            "user__Mhamcloud_profile",
             "company",
         )
         .filter(
@@ -334,7 +334,7 @@ def _update_profile(user: Any, request: HttpRequest, payload: dict[str, Any]) ->
     يحدث بيانات UserProfile الأساسية إن وجدت.
     """
 
-    profile = getattr(user, "primeyacc_profile", None)
+    profile = getattr(user, "Mhamcloud_profile", None)
 
     if not profile:
         profile = UserProfile.objects.create(

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/treasury/summary.py
-# 🧠 PrimeyAcc | Company Treasury Summary API V1.1
+# 🧠 Mhamcloud | Company Treasury Summary API V1.1
 # ------------------------------------------------------------
 # ✅ Treasury summary for current company only
 # ✅ Tenant isolation through request.company

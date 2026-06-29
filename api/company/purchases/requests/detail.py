@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ?? api/company/purchases/requests/detail.py
-# ?? PrimeyAcc | Purchase Request Detail API
+# ?? Mhamcloud | Purchase Request Detail API
 # ============================================================
 
 from __future__ import annotations

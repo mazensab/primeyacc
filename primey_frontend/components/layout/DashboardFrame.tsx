@@ -1,5 +1,5 @@
 // ======================================================
-// 🏛 Primey Care — DASHBOARD FRAME
+// 🏛 Mhamcloud — DASHBOARD FRAME
 // Premium reusable visual frame with sidebar variant
 // RTL/LTR ready layout frame
 // ======================================================

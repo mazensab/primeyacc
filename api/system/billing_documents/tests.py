@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ًں“‚ api/system/billing_documents/tests.py
-# ًں§  PrimeyAcc | System Billing Documents API Tests V1.0
+# ًں§  Mhamcloud | System Billing Documents API Tests V1.0
 # ------------------------------------------------------------
 # âœ… Tests authentication and system permissions
 # âœ… Tests platform invoice creation and idempotency
@@ -11,7 +11,7 @@
 # âœ… Tests invalid payment and missing document protection
 # ------------------------------------------------------------
 # ط§ظ„ظ‚ط§ط¹ط¯ط© ط§ظ„ظ…ط¹طھظ…ط¯ط©:
-# - ظ‡ط°ظ‡ ط§ظ„ط§ط®طھط¨ط§ط±ط§طھ طھط®طµ APIs ظپظˆطھط±ط© ظ…ط§ظ„ظƒ ظ…ظ†طµط© PrimeyAcc
+# - ظ‡ط°ظ‡ ط§ظ„ط§ط®طھط¨ط§ط±ط§طھ طھط®طµ APIs ظپظˆطھط±ط© ظ…ط§ظ„ظƒ ظ…ظ†طµط© Mhamcloud
 # - ظ„ط§ طھط³طھط®ط¯ظ… payments ط£ظˆ documents ط§ظ„ط®ط§طµط© ط¨ط§ظ„ط´ط±ظƒط§طھ
 # - BILLING_MANAGER ظٹط³طھط·ظٹط¹ ط§ظ„ط¹ط±ط¶ ظˆط¥ظ†ط´ط§ط، ط§ظ„ظپط§طھظˆط±ط© ظˆط§ظ„ط¥ظٹطµط§ظ„
 # - SUPPORT ظٹط³طھط·ظٹط¹ ط§ظ„ط¹ط±ط¶ ظپظ‚ط·
@@ -52,13 +52,13 @@ User = get_user_model()
 
 
 @override_settings(
-    PRIMEYACC_PLATFORM_BILLING_SELLER={
-        "name": "PrimeyAcc Platform Company",
+    Mhamcloud_PLATFORM_BILLING_SELLER={
+        "name": "Mhamcloud Platform Company",
         "name_ar": "ط´ط±ظƒط© ط¨ط±ط§ظٹظ…ظٹ ط£ظƒ",
-        "name_en": "PrimeyAcc Platform Company",
+        "name_en": "Mhamcloud Platform Company",
         "commercial_registration": "1010101010",
         "tax_number": "310000000000003",
-        "email": "billing@primeyacc.test",
+        "email": "billing@Mhamcloud.test",
         "phone": "0110000000",
         "country": "Saudi Arabia",
         "city": "Riyadh",
@@ -82,7 +82,7 @@ class SystemBillingDocumentsAPITests(TestCase):
         )
         self.regular_user = User.objects.create_user(
             username="regular-user",
-            email="regular-user@primeyacc.test",
+            email="regular-user@Mhamcloud.test",
             password="StrongPass123!",
         )
 
@@ -104,7 +104,7 @@ class SystemBillingDocumentsAPITests(TestCase):
             company_code="BILLING-API",
             commercial_registration="4030000001",
             tax_number="310000000000111",
-            email="company-api@primeyacc.test",
+            email="company-api@Mhamcloud.test",
             phone="0120000000",
             mobile="0500000000",
             country="Saudi Arabia",
@@ -178,7 +178,7 @@ class SystemBillingDocumentsAPITests(TestCase):
 
         user = User.objects.create_user(
             username=username,
-            email=f"{username}@primeyacc.test",
+            email=f"{username}@Mhamcloud.test",
             password="StrongPass123!",
         )
 
@@ -240,7 +240,7 @@ class SystemBillingDocumentsAPITests(TestCase):
             ):
                 if "email" in field_name:
                     data[field.name] = (
-                        f"{field.name}@primeyacc.test"
+                        f"{field.name}@Mhamcloud.test"
                     )
                 elif (
                     "phone" in field_name

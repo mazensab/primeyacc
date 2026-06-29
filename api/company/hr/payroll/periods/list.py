@@ -1,6 +1,6 @@
 # ============================================================
 # ?? api/company/hr/payroll/periods/list.py
-# ?? PrimeyAcc | Payroll Periods List API
+# ?? Mhamcloud | Payroll Periods List API
 # ============================================================
 
 from __future__ import annotations

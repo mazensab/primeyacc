@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 payments/apps.py
-# 🧠 PrimeyAcc | Company Payments App Configuration
+# 🧠 Mhamcloud | Company Payments App Configuration
 # ------------------------------------------------------------
 # ✅ Registers company payment methods foundation app
 # ✅ Prepares gateways, terminals, and settlement configuration
@@ -8,7 +8,7 @@
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذا التطبيق خاص بطرق دفع الشركات داخل /company
-# - لا يتم استخدامه لدفع اشتراكات PrimeyAcc الخاصة بالمنصة
+# - لا يتم استخدامه لدفع اشتراكات Mhamcloud الخاصة بالمنصة
 # ============================================================
 
 from django.apps import AppConfig

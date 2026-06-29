@@ -1,7 +1,7 @@
 ﻿"use client";
 /* ============================================================
    📂 primey_frontend/app/system/activity-profiles/[id]/page.tsx
-   🧩 PrimeyAcc — System Activity Profile Detail
+   🧩 Mhamcloud — System Activity Profile Detail
    ------------------------------------------------------------
    ✅ Real API only via SystemActivityProfileDetail
 ============================================================ */

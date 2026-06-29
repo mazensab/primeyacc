@@ -1,7 +1,7 @@
 # ============================================================
 # ============================================================
 # 📂 api/company/pos/registers/urls.py
-# 🧠 PrimeyAcc | Company POS Registers URLs V1.0
+# 🧠 Mhamcloud | Company POS Registers URLs V1.0
 # ------------------------------------------------------------
 # ✅ POS Registers List Route
 # ✅ POS Register Create Route

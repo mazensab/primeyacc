@@ -1,6 +1,6 @@
 ﻿/* ============================================================
    📂 primey_frontend/app/system/documents/settings/page.tsx
-   🧩 PrimeyAcc — System Document Settings
+   🧩 Mhamcloud — System Document Settings
    ------------------------------------------------------------
    ✅ Real API only via SystemDocumentsCenter
 ============================================================ */

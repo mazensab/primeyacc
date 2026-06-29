@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/orders/cancel.py
-# 🧠 PrimeyAcc | Company POS Orders Cancel API V1.0
+# 🧠 Mhamcloud | Company POS Orders Cancel API V1.0
 # ------------------------------------------------------------
 # ✅ Cancel POS order for current company only
 # ✅ Tenant isolation through request.company

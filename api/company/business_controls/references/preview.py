@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/business_controls/references/preview.py
-# 🧠 PrimeyAcc | Company Reference Preview API V1.0
+# 🧠 Mhamcloud | Company Reference Preview API V1.0
 # ============================================================
 
 from __future__ import annotations

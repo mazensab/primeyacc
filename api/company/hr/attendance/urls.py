@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/hr/attendance/urls.py
-# 🧠 PrimeyAcc | Company HR Attendance URLs V1.4
+# 🧠 Mhamcloud | Company HR Attendance URLs V1.4
 # ------------------------------------------------------------
 # ✅ Attendance list route
 # ✅ Attendance create route

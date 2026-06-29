@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/activity_profiles/update.py
-# 🧠 PrimeyAcc | Update Company Activity Profile API
+# 🧠 Mhamcloud | Update Company Activity Profile API
 # ------------------------------------------------------------
 # ✅ Update current company's activity_profile_ref
 # ✅ Allows only system active profiles or own custom profiles

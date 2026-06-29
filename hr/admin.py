@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 hr/admin.py
-# 🧠 PrimeyAcc | HR Admin V1.4
+# 🧠 Mhamcloud | HR Admin V1.4
 # ------------------------------------------------------------
 # ✅ Employee admin registration
 # ✅ AttendanceRecord admin registration

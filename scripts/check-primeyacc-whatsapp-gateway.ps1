@@ -1,9 +1,9 @@
 # ============================================================
-# PrimeyAcc WhatsApp Gateway Checker
-# Path: scripts/check-primeyacc-whatsapp-gateway.ps1
+# Mhamcloud WhatsApp Gateway Checker
+# Path: scripts/check-Mhamcloud-whatsapp-gateway.ps1
 # ============================================================
 $ErrorActionPreference = "Continue"
-$Root = "C:\Users\MHAMCLOUD\Documents\GitHub\primeyacc"
+$Root = "C:\Users\MHAMCLOUD\Documents\GitHub\Mhamcloud"
 $Gateway = Join-Path $Root "whatsapp_session_gateway"
 $HealthUrl = "http://127.0.0.1:3100/health"
 $LauncherLog = Join-Path $Gateway "logs\launcher.log"

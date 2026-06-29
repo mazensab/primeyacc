@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ًں“‚ pos/models.py
-# ًں§  PrimeyAcc | POS Models V1.0
+# ًں§  Mhamcloud | POS Models V1.0
 # ------------------------------------------------------------
 # âœ… POS Registers Foundation
 # âœ… POS Cashier Sessions Foundation

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 catalog/admin.py
-# 🧠 PrimeyAcc | Company Catalog Admin V1.0
+# 🧠 Mhamcloud | Company Catalog Admin V1.0
 # ------------------------------------------------------------
 # ✅ Django Admin registration for company-scoped catalog
 # ✅ Manage categories, units, products, and services

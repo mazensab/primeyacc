@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/orders/receipt.py
-# 🧠 PrimeyAcc | Company POS Order Receipt API V1.0
+# 🧠 Mhamcloud | Company POS Order Receipt API V1.0
 # ------------------------------------------------------------
 # ✅ Build POS receipt payload for current company only
 # ✅ Tenant isolation through request.company

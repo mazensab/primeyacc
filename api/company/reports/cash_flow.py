@@ -1,6 +1,6 @@
 # ============================================================
 # api/company/reports/cash_flow.py
-# PrimeyAcc | Company Cash Flow API - Phase 16.6
+# Mhamcloud | Company Cash Flow API - Phase 16.6
 # ------------------------------------------------------------
 # Cash flow report endpoint
 # Company tenant isolation via CompanyMembership

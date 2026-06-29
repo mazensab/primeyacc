@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/categories/urls.py
-# 🧠 PrimeyAcc | Company Catalog Categories URLs V1.0
+# 🧠 Mhamcloud | Company Catalog Categories URLs V1.0
 # ------------------------------------------------------------
 # ✅ Company catalog categories routes
 # ✅ List categories

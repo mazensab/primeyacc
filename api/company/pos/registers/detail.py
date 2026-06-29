@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/registers/detail.py
-# 🧠 PrimeyAcc | Company POS Registers Detail API V1.0
+# 🧠 Mhamcloud | Company POS Registers Detail API V1.0
 # ------------------------------------------------------------
 # ✅ Retrieve POS register details for current company only
 # ✅ Tenant isolation through request.company

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/branches/create.py
-# 🧠 PrimeyAcc | Company Branch Create API V1.0
+# 🧠 Mhamcloud | Company Branch Create API V1.0
 # ------------------------------------------------------------
 # ✅ Tenant-isolated branch creation
 # ✅ Creates branch only under current CompanyMembership company

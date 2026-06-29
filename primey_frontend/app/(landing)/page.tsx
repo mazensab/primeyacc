@@ -1,10 +1,10 @@
 /* ============================================================
    📂 primey_frontend/app/(landing)/page.tsx
-   🧠 PrimeyAcc — Landing Home Page
+   🧠 Mhamcloud — Landing Home Page
    ------------------------------------------------------------
    ✅ Approved Premium landing pattern
    ✅ Approved landing layout/style preserved
-   ✅ Content changed only for PrimeyAcc
+   ✅ Content changed only for Mhamcloud
    ✅ Arabic/English metadata and structured data
    ✅ Images/social accounts kept temporarily until approved replacements
    ✅ No localhost / no fake data
@@ -150,7 +150,7 @@ function buildStructuredData(lang: AppLang) {
   return {
     "@context": "https://schema.org",
     "@type": "Organization",
-    name: "PrimeyAcc",
+    name: "Mhamcloud",
     url: "/",
     logo: "/hero logo.png",
     description: isArabic

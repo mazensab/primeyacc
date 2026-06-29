@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ًں“‚ treasury/services.py
-# ًں§  PrimeyAcc | Treasury & Payments Services V1.4
+# ًں§  Mhamcloud | Treasury & Payments Services V1.4
 # ------------------------------------------------------------
 # âœ… Phase 11.1 Treasury Accounts Foundation services
 # âœ… Phase 11.2 Treasury Transactions Foundation services

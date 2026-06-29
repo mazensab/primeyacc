@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/branches/urls.py
-# 🧠 PrimeyAcc | Company Branches API URLs V1.3
+# 🧠 Mhamcloud | Company Branches API URLs V1.3
 # ------------------------------------------------------------
 # ✅ Tenant-isolated company branches routes
 # ✅ Branches list endpoint

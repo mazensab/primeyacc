@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 treasury/admin.py
-# 🧠 PrimeyAcc | Treasury Admin V1.1
+# 🧠 Mhamcloud | Treasury Admin V1.1
 # ------------------------------------------------------------
 # ✅ TreasuryAccount admin registration
 # ✅ TreasuryTransaction admin registration

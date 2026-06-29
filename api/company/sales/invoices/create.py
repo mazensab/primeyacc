@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/sales/invoices/create.py
-# 🧠 PrimeyAcc | Company Sales Invoices Create API V1.0
+# 🧠 Mhamcloud | Company Sales Invoices Create API V1.0
 # ------------------------------------------------------------
 # ✅ Create company-scoped sales invoice
 # ✅ Uses request.company from CompanyMembership context

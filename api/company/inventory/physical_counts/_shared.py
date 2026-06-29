@@ -1,6 +1,6 @@
 # ============================================================
 # ?? api/company/inventory/physical_counts/_shared.py
-# ?? PrimeyAcc | Physical Inventory Count API Helpers V1.0
+# ?? Mhamcloud | Physical Inventory Count API Helpers V1.0
 # ------------------------------------------------------------
 # ? Request company resolution
 # ? Request user resolution

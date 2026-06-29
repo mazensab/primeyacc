@@ -67,7 +67,7 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='Created at')),
                 ('updated_at', models.DateTimeField(auto_now=True, verbose_name='Updated at')),
                 ('default_company', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='default_users', to='companies.company', verbose_name='Default company')),
-                ('user', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='primeyacc_profile', to=settings.AUTH_USER_MODEL, verbose_name='User')),
+                ('user', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='Mhamcloud_profile', to=settings.AUTH_USER_MODEL, verbose_name='User')),
             ],
             options={
                 'verbose_name': 'User profile',

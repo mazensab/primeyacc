@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/business_controls/references/urls.py
-# 🧠 PrimeyAcc | Company Reference Sequences URLs V1.0
+# 🧠 Mhamcloud | Company Reference Sequences URLs V1.0
 # ============================================================
 
 from __future__ import annotations

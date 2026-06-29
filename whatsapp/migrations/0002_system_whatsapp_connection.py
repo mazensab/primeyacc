@@ -35,7 +35,7 @@ class Migration(migrations.Migration):
                 ('allow_broadcasts', models.BooleanField(default=True, verbose_name='Allow broadcasts')),
                 ('send_test_enabled', models.BooleanField(default=True, verbose_name='Send test enabled')),
                 ('default_test_recipient', models.CharField(blank=True, max_length=50, verbose_name='Default test recipient')),
-                ('session_name', models.CharField(db_index=True, default='primeyacc-system-session', max_length=150, verbose_name='Session name')),
+                ('session_name', models.CharField(db_index=True, default='Mhamcloud-system-session', max_length=150, verbose_name='Session name')),
                 ('session_mode', models.CharField(choices=[('qr', 'QR'), ('pairing_code', 'Pairing Code')], default='qr', max_length=30, verbose_name='Session mode')),
                 ('session_status', models.CharField(choices=[('disconnected', 'Disconnected'), ('connecting', 'Connecting'), ('qr_pending', 'QR Pending'), ('pair_pending', 'Pair Pending'), ('connected', 'Connected'), ('reconnecting', 'Reconnecting'), ('failed', 'Failed')], db_index=True, default='disconnected', max_length=30, verbose_name='Session status')),
                 ('session_connected_phone', models.CharField(blank=True, max_length=50, verbose_name='Connected phone')),

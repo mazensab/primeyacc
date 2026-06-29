@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/whatsapp/settings.py
-# 🧠 PrimeyAcc | Company WhatsApp Settings API V1.1
+# 🧠 Mhamcloud | Company WhatsApp Settings API V1.1
 # ------------------------------------------------------------
 # ✅ GET  /api/company/whatsapp/settings/
 # ✅ POST /api/company/whatsapp/settings/

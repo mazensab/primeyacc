@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 settings_center/admin.py
-# PrimeyAcc | System Settings Center Admin
+# Mhamcloud | System Settings Center Admin
 # ------------------------------------------------------------
 # ✅ Backend only
 # ✅ Admin visibility for global system settings

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/treasury/accounts/list.py
-# 🧠 PrimeyAcc | Company Treasury Accounts List/Create API V1.0
+# 🧠 Mhamcloud | Company Treasury Accounts List/Create API V1.0
 # ------------------------------------------------------------
 # ✅ List treasury accounts for current company only
 # ✅ Create treasury accounts for current company only

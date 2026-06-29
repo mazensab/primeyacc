@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 payments/models.py
-# 🧠 PrimeyAcc | Company Payment Methods Foundation Models V1.1
+# 🧠 Mhamcloud | Company Payment Methods Foundation Models V1.1
 # ------------------------------------------------------------
 # ✅ Defines company-level payment methods
 # ✅ Defines company-level payment gateways
@@ -12,7 +12,7 @@
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - هذه النماذج تخص طرق دفع الشركة داخل /company فقط
-# - لا تستخدم هذه النماذج لدفع اشتراكات PrimeyAcc الخاصة بمالك المنصة
+# - لا تستخدم هذه النماذج لدفع اشتراكات Mhamcloud الخاصة بمالك المنصة
 # - Phase 19 سيستخدم نماذج/خدمات Platform Billing مستقلة
 # - الربط المحاسبي هنا مبدئي عبر أكواد حسابات آمنة حتى نراجع accounting/models.py
 # ============================================================
@@ -503,7 +503,7 @@ class CompanyPaymentTerminal(models.Model):
 
 
 # ============================================================
-# 🧠 PrimeyAcc | Phase 23 Real Payment Integrations & Settlements Models
+# 🧠 Mhamcloud | Phase 23 Real Payment Integrations & Settlements Models
 # ------------------------------------------------------------
 # ✅ Checkout sessions for real gateway payment attempts
 # ✅ Webhook event ledger with idempotency protection

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/branches/list.py
-# 🧠 PrimeyAcc | Company Branches List API V1.0
+# 🧠 Mhamcloud | Company Branches List API V1.0
 # ------------------------------------------------------------
 # ✅ Tenant-isolated branches list
 # ✅ Reads company only from active CompanyMembership

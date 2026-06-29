@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 jewelry/models.py
-# 🧠 PrimeyAcc | Jewelry and Gold Backend Models — Phase 25.1
+# 🧠 Mhamcloud | Jewelry and Gold Backend Models — Phase 25.1
 # ============================================================
 # ✅ Company-scoped jewelry and gold foundation
 # ✅ Metal, karat, gold-rate, jewelry item and pricing snapshot

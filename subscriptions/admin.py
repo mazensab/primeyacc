@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 subscriptions/admin.py
-# 🧠 PrimeyAcc | SaaS Subscriptions Admin V1.0
+# 🧠 Mhamcloud | SaaS Subscriptions Admin V1.0
 # ------------------------------------------------------------
 # ✅ Manage SaaS subscription plans from Django Admin
 # ✅ Manage company subscriptions with clear filters/search

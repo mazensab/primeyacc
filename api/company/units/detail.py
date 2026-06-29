@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/units/detail.py
-# 🧠 PrimeyAcc | Company Catalog Units Detail API V1.1
+# 🧠 Mhamcloud | Company Catalog Units Detail API V1.1
 # ------------------------------------------------------------
 # ✅ Retrieve company-scoped catalog unit details
 # ✅ Update company-scoped catalog unit

@@ -1,6 +1,6 @@
 # ============================================================
 # ?? api/system/whatsapp/urls.py
-# ?? PrimeyAcc | System WhatsApp API URLs V1.1
+# ?? Mhamcloud | System WhatsApp API URLs V1.1
 # ------------------------------------------------------------
 # ? Existing settings/templates/messages routes
 # ? System connection routes: settings/status/QR/pairing/disconnect/test

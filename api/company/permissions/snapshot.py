@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/permissions/snapshot.py
-# 🧠 PrimeyAcc | Company Permissions Snapshot API V1.0
+# 🧠 Mhamcloud | Company Permissions Snapshot API V1.0
 # ------------------------------------------------------------
 # ✅ Tenant-isolated company permissions snapshot
 # ✅ Reads company only from active CompanyMembership

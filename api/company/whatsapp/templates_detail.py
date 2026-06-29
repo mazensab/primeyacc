@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/whatsapp/templates_detail.py
-# 🧠 PrimeyAcc | Company WhatsApp Templates Detail API V1.0
+# 🧠 Mhamcloud | Company WhatsApp Templates Detail API V1.0
 # ------------------------------------------------------------
 # ✅ GET /api/company/whatsapp/templates/<id>/
 # ✅ Tenant-isolated by request.company

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/payments/gateways/status.py
-# 🧠 PrimeyAcc | Company Payment Gateway Status API V1.0
+# 🧠 Mhamcloud | Company Payment Gateway Status API V1.0
 # ------------------------------------------------------------
 # ✅ Activate payment gateway for current company only
 # ✅ Deactivate payment gateway for current company only

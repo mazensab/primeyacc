@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 treasury/models.py
-# 🧠 PrimeyAcc | Treasury & Payments Models V1.1
+# 🧠 Mhamcloud | Treasury & Payments Models V1.1
 # ------------------------------------------------------------
 # ✅ Phase 11.1 Treasury Accounts Foundation
 # ✅ Phase 11.2 Treasury Transactions Foundation

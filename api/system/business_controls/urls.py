@@ -1,5 +1,5 @@
 ﻿# 📂 api/system/business_controls/urls.py
-# 🧠 PrimeyAcc | System Business Controls API URLs v1
+# 🧠 Mhamcloud | System Business Controls API URLs v1
 # ============================================================
 # ✅ /api/system/business-controls/
 # ✅ /api/system/business-controls/audit-events/

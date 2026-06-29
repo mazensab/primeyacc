@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/me.py
-# 🧠 PrimeyAcc | Company Current Tenant API V1.1
+# 🧠 Mhamcloud | Company Current Tenant API V1.1
 # ------------------------------------------------------------
 # ✅ Current company workspace snapshot
 # ✅ Uses active CompanyMembership only

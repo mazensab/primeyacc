@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 settings_center/urls.py
-# PrimeyAcc | System Settings Center URLs
+# Mhamcloud | System Settings Center URLs
 # ------------------------------------------------------------
 # ✅ Backend only
 # ✅ Mounted under /api/system/settings/

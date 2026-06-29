@@ -2,10 +2,10 @@
 
 /* ============================================================
    📂 primey_frontend/app/system/page.tsx
-   🧠 PrimeyAcc — System Dashboard
+   🧠 Mhamcloud — System Dashboard
    ------------------------------------------------------------
    ✅ Adapted from approved PrimeyCare system dashboard pattern
-   ✅ PrimeyAcc SaaS/system operations focus
+   ✅ Mhamcloud SaaS/system operations focus
    ✅ Clickable KPI cards instead of shortcuts
    ✅ Separate full-width tables:
       - Latest companies
@@ -153,7 +153,7 @@ const translations = {
   ar: {
     title: "لوحة تحكم النظام",
     subtitle:
-      "مركز تشغيل PrimeyAcc لإدارة الشركات، الاشتراكات، مدفوعات المنصة، جاهزية الإصدار، وعقود واجهات API من مكان واحد.",
+      "مركز تشغيل Mhamcloud لإدارة الشركات، الاشتراكات، مدفوعات المنصة، جاهزية الإصدار، وعقود واجهات API من مكان واحد.",
     refresh: "تحديث",
     export: "تصدير Excel",
     print: "طباعة",
@@ -192,11 +192,11 @@ const translations = {
     subscriptions: "الاشتراكات",
     payments: "المدفوعات",
     latestCompanies: "آخر الشركات",
-    latestCompaniesDesc: "أحدث الشركات المسجلة في PrimeyAcc مع الحالة والنشاط والاشتراك.",
+    latestCompaniesDesc: "أحدث الشركات المسجلة في Mhamcloud مع الحالة والنشاط والاشتراك.",
     latestSubscriptions: "آخر الاشتراكات",
     latestSubscriptionsDesc: "آخر اشتراكات الشركات وخططها ودورتها المالية.",
     latestPayments: "آخر مدفوعات المنصة",
-    latestPaymentsDesc: "أحدث عمليات التحصيل الخاصة باشتراكات وخدمات PrimeyAcc.",
+    latestPaymentsDesc: "أحدث عمليات التحصيل الخاصة باشتراكات وخدمات Mhamcloud.",
 
     companySearchPlaceholder: "ابحث باسم الشركة أو الكود أو المالك أو النشاط...",
     subscriptionSearchPlaceholder: "ابحث باسم الشركة أو الخطة أو دورة الفوترة...",
@@ -240,14 +240,14 @@ const translations = {
     tryAgain: "إعادة المحاولة",
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
-    printTitle: "تقرير لوحة تحكم PrimeyAcc",
+    printTitle: "تقرير لوحة تحكم Mhamcloud",
     generatedAt: "تاريخ الطباعة",
     refreshed: "تم تحديث لوحة النظام.",
   },
   en: {
     title: "System Dashboard",
     subtitle:
-      "PrimeyAcc operations center for companies, subscriptions, platform payments, release readiness, and API contracts.",
+      "Mhamcloud operations center for companies, subscriptions, platform payments, release readiness, and API contracts.",
     refresh: "Refresh",
     export: "Export Excel",
     print: "Print",
@@ -286,11 +286,11 @@ const translations = {
     subscriptions: "Subscriptions",
     payments: "Payments",
     latestCompanies: "Latest companies",
-    latestCompaniesDesc: "Newest companies registered in PrimeyAcc with status, activity, and subscription.",
+    latestCompaniesDesc: "Newest companies registered in Mhamcloud with status, activity, and subscription.",
     latestSubscriptions: "Latest subscriptions",
     latestSubscriptionsDesc: "Newest company subscriptions, plans, and billing cycles.",
     latestPayments: "Latest platform payments",
-    latestPaymentsDesc: "Newest collected platform payments for PrimeyAcc services.",
+    latestPaymentsDesc: "Newest collected platform payments for Mhamcloud services.",
 
     companySearchPlaceholder: "Search by company, code, owner, or activity...",
     subscriptionSearchPlaceholder: "Search by company, plan, or billing cycle...",
@@ -334,7 +334,7 @@ const translations = {
     tryAgain: "Try again",
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
-    printTitle: "PrimeyAcc System Dashboard Report",
+    printTitle: "Mhamcloud System Dashboard Report",
     generatedAt: "Generated at",
     refreshed: "System dashboard refreshed.",
   },
@@ -1380,7 +1380,7 @@ export default function SystemDashboardPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `primeyacc-system-dashboard-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-system-dashboard-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/pos/orders/create.py
-# 🧠 PrimeyAcc | Company POS Orders Create API V1.1
+# 🧠 Mhamcloud | Company POS Orders Create API V1.1
 # ------------------------------------------------------------
 # ✅ Create POS order for current company only
 # ✅ Tenant isolation through request.company

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 jewelry/services.py
-# 🧠 PrimeyAcc | Jewelry and Gold Backend Services — Phase 25.1
+# 🧠 Mhamcloud | Jewelry and Gold Backend Services — Phase 25.1
 # ============================================================
 # ✅ Seed default jewelry metals and karats
 # ✅ Create daily gold rates safely per company

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 parties/admin.py
-# 🧠 PrimeyAcc | Business Parties Admin V1.0
+# 🧠 Mhamcloud | Business Parties Admin V1.0
 # ------------------------------------------------------------
 # ✅ Register BusinessParty in Django Admin
 # ✅ Organized list display for customers and suppliers

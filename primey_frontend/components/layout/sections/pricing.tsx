@@ -71,9 +71,9 @@ const content: Record<AppLang, PricingContent> = {
   ar: {
     section: {
       subTitle: "الباقات",
-      title: "اختر باقة PrimeyAcc المناسبة لشركتك",
+      title: "اختر باقة Mhamcloud المناسبة لشركتك",
       description:
-        "ابدأ مع PrimeyAcc بباقات مرنة للمحاسبة والمبيعات والمشتريات والمخزون والخزينة والتقارير وإدارة العمليات.",
+        "ابدأ مع Mhamcloud بباقات مرنة للمحاسبة والمبيعات والمشتريات والمخزون والخزينة والتقارير وإدارة العمليات.",
     },
     periods: {
       monthly: "شهري",
@@ -87,14 +87,14 @@ const content: Record<AppLang, PricingContent> = {
     includedModules: "الوحدات المتضمنة",
     getStarted: "ابدأ الآن",
     askForDetails: "استفسر عن الباقة",
-    toastMessage: "سيتم تحويلك إلى صفحة طلب تجربة PrimeyAcc",
+    toastMessage: "سيتم تحويلك إلى صفحة طلب تجربة Mhamcloud",
   },
   en: {
     section: {
       subTitle: "Plans",
-      title: "Choose a PrimeyAcc plan that fits your company",
+      title: "Choose a Mhamcloud plan that fits your company",
       description:
-        "Start with PrimeyAcc through flexible plans for accounting, sales, purchases, inventory, treasury, reports, and business operations.",
+        "Start with Mhamcloud through flexible plans for accounting, sales, purchases, inventory, treasury, reports, and business operations.",
     },
     periods: {
       monthly: "Monthly",
@@ -108,7 +108,7 @@ const content: Record<AppLang, PricingContent> = {
     includedModules: "Included Modules",
     getStarted: "Start Now",
     askForDetails: "Ask for Details",
-    toastMessage: "You will be redirected to the PrimeyAcc trial request page",
+    toastMessage: "You will be redirected to the Mhamcloud trial request page",
   },
 };
 

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/system/subscriptions/cancel.py
-# 🧠 PrimeyAcc | System Company Subscription Cancel API V1.2
+# 🧠 Mhamcloud | System Company Subscription Cancel API V1.2
 # ------------------------------------------------------------
 # ✅ Cancel company subscriptions from system workspace
 # ✅ Supports PENDING_PAYMENT cancellation without touching old subscription

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/customers/detail.py
-# 🧠 PrimeyAcc | Company Customers Detail API V1.0
+# 🧠 Mhamcloud | Company Customers Detail API V1.0
 # ------------------------------------------------------------
 # ✅ Customer detail alias over BusinessParty
 # ✅ Update customer inside current company only

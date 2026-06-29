@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/system/release_readiness/urls.py
-# 🧠 PrimeyAcc | System Release Readiness API URLs v1
+# 🧠 Mhamcloud | System Release Readiness API URLs v1
 # ============================================================
 # ✅ /api/system/release-readiness/
 # ✅ Read-only release readiness payload

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/movements/urls.py
-# 🧠 PrimeyAcc | Company Inventory Movements URLs V1.0
+# 🧠 Mhamcloud | Company Inventory Movements URLs V1.0
 # ------------------------------------------------------------
 # ✅ Stock movements API routing
 # ✅ List, create, detail

@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ًں“‚ billing/services.py
-# ًں§  PrimeyAcc | Platform Billing Documents Services V1.2
+# ًں§  Mhamcloud | Platform Billing Documents Services V1.2
 # ------------------------------------------------------------
 # âœ… Safe yearly platform document numbering
 # âœ… Subscription invoice creation
@@ -316,7 +316,7 @@ def generate_platform_document_number(
 def get_platform_seller_settings() -> dict[str, Any]:
     configured = getattr(
         settings,
-        "PRIMEYACC_PLATFORM_BILLING_SELLER",
+        "Mhamcloud_PLATFORM_BILLING_SELLER",
         {},
     )
 
@@ -351,7 +351,7 @@ def build_platform_seller_snapshot(
         _clean_text(source.get("name"))
         or _clean_text(source.get("name_ar"))
         or _clean_text(source.get("name_en"))
-        or "PrimeyAcc"
+        or "Mhamcloud"
     )
 
     return {
@@ -668,7 +668,7 @@ def build_subscription_invoice_printable_payload(
 ) -> dict[str, Any]:
     return {
         "schema": (
-            "primeyacc.platform_billing_document.v1"
+            "Mhamcloud.platform_billing_document.v1"
         ),
         "document": {
             "type": (
@@ -701,10 +701,10 @@ def build_subscription_invoice_printable_payload(
                     _clean_text(
                         plan_snapshot.get("name")
                     )
-                    or "PrimeyAcc subscription"
+                    or "Mhamcloud subscription"
                 ),
                 "description_ar": (
-                    "ط§ط´طھط±ط§ظƒ ظ…ظ†طµط© PrimeyAcc"
+                    "ط§ط´طھط±ط§ظƒ ظ…ظ†طµط© Mhamcloud"
                 ),
                 "quantity": "1.00",
                 "unit_price": _money_to_string(
@@ -866,7 +866,7 @@ def build_subscription_receipt_printable_payload(
 
     return {
         "schema": (
-            "primeyacc.platform_billing_document.v1"
+            "Mhamcloud.platform_billing_document.v1"
         ),
         "document": {
             "type": (

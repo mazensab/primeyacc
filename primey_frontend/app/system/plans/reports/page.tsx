@@ -2,9 +2,9 @@
 
 /* ============================================================
    📂 primey_frontend/app/system/plans/reports/page.tsx
-   💼 PrimeyAcc — System Plans Reports
+   💼 Mhamcloud — System Plans Reports
    ------------------------------------------------------------
-   ✅ Approved PrimeyAcc reports pattern
+   ✅ Approved Mhamcloud reports pattern
    ✅ Real API only: GET /api/system/plans/
    ✅ Summary KPIs + status/visibility/pricing distributions
    ✅ Analytical full-width table
@@ -143,7 +143,7 @@ const translations = {
   ar: {
     title: "تقارير الباقات",
     subtitle:
-      "تحليلات باقات PrimeyAcc حسب الحالة والظهور والأسعار والحدود وعدد الشركات المرتبطة من بيانات API الحقيقية.",
+      "تحليلات باقات Mhamcloud حسب الحالة والظهور والأسعار والحدود وعدد الشركات المرتبطة من بيانات API الحقيقية.",
     badge: "إدارة المنصة",
     refresh: "تحديث",
     exportExcel: "تصدير Excel",
@@ -241,14 +241,14 @@ const translations = {
     tryAgain: "إعادة المحاولة",
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
-    reportTitle: "تقرير باقات PrimeyAcc",
+    reportTitle: "تقرير باقات Mhamcloud",
     generatedAt: "تاريخ الإنشاء",
     refreshed: "تم تحديث تقارير الباقات.",
   },
   en: {
     title: "Plans reports",
     subtitle:
-      "Analyze PrimeyAcc plans by status, visibility, pricing, limits, and linked companies using real API data.",
+      "Analyze Mhamcloud plans by status, visibility, pricing, limits, and linked companies using real API data.",
     badge: "Platform management",
     refresh: "Refresh",
     exportExcel: "Export Excel",
@@ -346,7 +346,7 @@ const translations = {
     tryAgain: "Try again",
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
-    reportTitle: "PrimeyAcc Plans Report",
+    reportTitle: "Mhamcloud Plans Report",
     generatedAt: "Generated at",
     refreshed: "Plans reports refreshed.",
   },
@@ -1048,7 +1048,7 @@ export default function SystemPlansReportsPage() {
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = `primeyacc-system-plans-reports-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-system-plans-reports-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();

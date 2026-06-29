@@ -1,7 +1,7 @@
 ﻿"use client";
 /* ============================================================
    📂 primey_frontend/app/system/whatsapp/templates/page.tsx
-   💬 PrimeyAcc — System WhatsApp Templates Page
+   💬 Mhamcloud — System WhatsApp Templates Page
    ------------------------------------------------------------
    ✅ Standalone route page, no internal tabs
    ✅ Approved Premium system page pattern
@@ -462,7 +462,7 @@ export default function SystemWhatsAppTemplatesPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "primeyacc-system-whatsapp-templates.csv";
+    link.download = "Mhamcloud-system-whatsapp-templates.csv";
     link.click();
     URL.revokeObjectURL(url);
   }

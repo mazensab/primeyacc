@@ -1,9 +1,9 @@
 ﻿"use client";
 /* ============================================================
    📂 primey_frontend/components/system/notifications/SystemNotificationsCenter.tsx
-   🔔 PrimeyAcc — System Notifications Overview
+   🔔 Mhamcloud — System Notifications Overview
    ------------------------------------------------------------
-   ✅ Premium PrimeyCare admin pattern adapted for PrimeyAcc
+   ✅ Premium PrimeyCare admin pattern adapted for Mhamcloud
    ✅ System notifications module center page
    ✅ Real API only: GET /api/system/notifications/
    ✅ KPI cards + quick actions + notifications table
@@ -109,7 +109,7 @@ const translations = {
   ar: {
     title: "الإشعارات",
     subtitle:
-      "مركز إشعارات PrimeyAcc لمتابعة إشعارات الشركات والمستخدمين والقنوات من مكان واحد.",
+      "مركز إشعارات Mhamcloud لمتابعة إشعارات الشركات والمستخدمين والقنوات من مكان واحد.",
     badge: "التواصل والإشعارات",
     refresh: "تحديث",
     exportExcel: "تصدير Excel",
@@ -180,7 +180,7 @@ const translations = {
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
     pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
-    reportTitle: "تقرير مركز إشعارات PrimeyAcc",
+    reportTitle: "تقرير مركز إشعارات Mhamcloud",
     generatedAt: "تاريخ الإنشاء",
     showing: "عرض",
     of: "من",
@@ -191,7 +191,7 @@ const translations = {
   en: {
     title: "Notifications",
     subtitle:
-      "PrimeyAcc notifications center for monitoring company, user, and channel notifications in one place.",
+      "Mhamcloud notifications center for monitoring company, user, and channel notifications in one place.",
     badge: "Communications & Notifications",
     refresh: "Refresh",
     exportExcel: "Export Excel",
@@ -262,7 +262,7 @@ const translations = {
     exportEmpty: "No data to export.",
     printEmpty: "No data to print.",
     pdfHint: "Choose Save as PDF from the print dialog.",
-    reportTitle: "PrimeyAcc System Notifications Report",
+    reportTitle: "Mhamcloud System Notifications Report",
     generatedAt: "Generated at",
     showing: "Showing",
     of: "of",
@@ -812,7 +812,7 @@ export function SystemNotificationsCenter({ mode = "overview" }: { mode?: Notifi
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `primeyacc-system-notifications-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-system-notifications-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();

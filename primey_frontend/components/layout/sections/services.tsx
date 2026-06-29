@@ -50,7 +50,7 @@ const content: Record<AppLang, ServicesContent> = {
     subTitle: "البرامج والبطاقات",
     title: "اختر الرعاية التي تناسب احتياجك",
     description:
-      "سواء كنت تبحث عن بطاقة رعاية صحية طوال العام أو برنامج طبي محدد، تمنحك Primey Care خيارات مرنة تساعدك على الاستفادة من خصومات ومزايا مختارة لدى مزودي خدمة مشاركين.",
+      "سواء كنت تبحث عن بطاقة رعاية صحية طوال العام أو برنامج طبي محدد، تمنحك Mhamcloud خيارات مرنة تساعدك على الاستفادة من خصومات ومزايا مختارة لدى مزودي خدمة مشاركين.",
     proLabel: "مميز",
     items: [
       {
@@ -79,7 +79,7 @@ const content: Record<AppLang, ServicesContent> = {
     subTitle: "Cards & Programs",
     title: "Choose the care that fits your needs",
     description:
-      "Whether you need an annual healthcare card or a specific medical program, Primey Care gives you flexible options to access selected benefits and discounts through participating providers.",
+      "Whether you need an annual healthcare card or a specific medical program, Mhamcloud gives you flexible options to access selected benefits and discounts through participating providers.",
     proLabel: "Popular",
     items: [
       {

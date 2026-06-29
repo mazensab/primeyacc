@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/inventory/stock/detail.py
-# 🧠 PrimeyAcc | Company Stock Item Detail API V1.1
+# 🧠 Mhamcloud | Company Stock Item Detail API V1.1
 # ------------------------------------------------------------
 # ✅ Retrieve one stock balance for current company only
 # ✅ Include inventory location details

@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/documents/print_jobs.py
-# 🧠 PrimeyAcc | Company Print Jobs Foundation API V1.0
+# 🧠 Mhamcloud | Company Print Jobs Foundation API V1.0
 # ------------------------------------------------------------
 # ✅ Print options endpoint
 # ✅ Foundation for future stored print jobs

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/reports/general_ledger.py
-# 🧠 PrimeyAcc | Company General Ledger API - Phase 16.3
+# 🧠 Mhamcloud | Company General Ledger API - Phase 16.3
 # ------------------------------------------------------------
 # ✅ General ledger report endpoint
 # ✅ Company tenant isolation via CompanyMembership

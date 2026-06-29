@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/auth/whoami.py
-# 🧠 PrimeyAcc | Auth Whoami API V2
+# 🧠 Mhamcloud | Auth Whoami API V2
 # ------------------------------------------------------------
 # ✅ Current User Session Snapshot
 # ✅ System Access Detection
@@ -15,7 +15,7 @@
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
 # - User = حساب دخول فقط
-# - UserProfile = ملف المستخدم العام داخل PrimeyAcc
+# - UserProfile = ملف المستخدم العام داخل Mhamcloud
 # - CompanyMembership = علاقة المستخدم بالشركة ودوره داخلها
 # - /system لا يفتح إلا لمستخدم نظام مصرح
 # - /company لا يفتح إلا بعضوية شركة فعالة

@@ -1,1 +1,1 @@
-# PrimeyAcc company sales credit notes APIs.
+# Mhamcloud company sales credit notes APIs.

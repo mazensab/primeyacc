@@ -1,7 +1,7 @@
 ﻿"use client";
 /* ============================================================
    📂 primey_frontend/app/system/whatsapp/settings/page.tsx
-   💬 PrimeyAcc — System WhatsApp Settings Page
+   💬 Mhamcloud — System WhatsApp Settings Page
    ------------------------------------------------------------
    ✅ Standalone route page, no internal tabs
    ✅ Approved Premium system page pattern
@@ -115,7 +115,7 @@ type QuickLink = {
   icon: React.ComponentType<{ className?: string }>;
 };
 const API_ENDPOINT = "/api/system/whatsapp/connection/";
-const DEFAULT_TEST_BODY = "PrimeyAcc system WhatsApp test message.";
+const DEFAULT_TEST_BODY = "Mhamcloud system WhatsApp test message.";
 const translations = {
   ar: {
     title: "إعدادات واتساب النظام",
@@ -424,7 +424,7 @@ function normalizeConnection(value: unknown): SystemConnection {
     allowBroadcasts: toBool(record.allow_broadcasts),
     sendTestEnabled: toBool(record.send_test_enabled),
     defaultTestRecipient: toStringValue(record.default_test_recipient),
-    sessionName: toStringValue(record.session_name) || "primeyacc-system-session",
+    sessionName: toStringValue(record.session_name) || "Mhamcloud-system-session",
     sessionMode: toStringValue(record.session_mode) || "qr",
     sessionStatus: toStringValue(record.session_status) || "disconnected",
     sessionConnectedPhone: toStringValue(record.session_connected_phone),
@@ -443,7 +443,7 @@ function buildForm(connection: SystemConnection | null): ConnectionForm {
     provider: connection?.provider || "WEB_SESSION",
     is_enabled: connection?.isEnabled ?? false,
     is_active: connection?.isActive ?? false,
-    business_name: connection?.businessName || "PrimeyAcc Support",
+    business_name: connection?.businessName || "Mhamcloud Support",
     phone_number: connection?.phoneNumber || "",
     phone_number_id: connection?.phoneNumberId || "",
     business_account_id: connection?.businessAccountId || "",
@@ -458,7 +458,7 @@ function buildForm(connection: SystemConnection | null): ConnectionForm {
     allow_broadcasts: connection?.allowBroadcasts ?? true,
     send_test_enabled: connection?.sendTestEnabled ?? true,
     default_test_recipient: connection?.defaultTestRecipient || "",
-    session_name: connection?.sessionName || "primeyacc-system-session",
+    session_name: connection?.sessionName || "Mhamcloud-system-session",
     session_mode: connection?.sessionMode || "qr",
   };
 }

@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/reports/balance_sheet.py
-# 🧠 PrimeyAcc | Company Balance Sheet API - Phase 16.5
+# 🧠 Mhamcloud | Company Balance Sheet API - Phase 16.5
 # ------------------------------------------------------------
 # ✅ Balance Sheet report endpoint
 # ✅ Company tenant isolation via CompanyMembership

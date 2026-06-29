@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/suppliers/urls.py
-# 🧠 PrimeyAcc | Company Suppliers API URLs V1.0
+# 🧠 Mhamcloud | Company Suppliers API URLs V1.0
 # ------------------------------------------------------------
 # ✅ Supplier list route
 # ✅ Supplier create route

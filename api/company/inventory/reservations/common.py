@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ?? api/company/inventory/reservations/common.py
-# ?? PrimeyAcc | Stock Reservation API Helpers V1.0
+# ?? Mhamcloud | Stock Reservation API Helpers V1.0
 # ------------------------------------------------------------
 # ? Request company resolution
 # ? Stable validation error payloads

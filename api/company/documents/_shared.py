@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 api/company/documents/_shared.py
-# 🧠 PrimeyAcc | Company Documents API Shared Helpers V1.0
+# 🧠 Mhamcloud | Company Documents API Shared Helpers V1.0
 # ------------------------------------------------------------
 # ✅ Shared company context helper
 # ✅ Shared payload normalization

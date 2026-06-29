@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/parties/list.py
-# 🧠 PrimeyAcc | Company Business Parties List API V1.1
+# 🧠 Mhamcloud | Company Business Parties List API V1.1
 # ------------------------------------------------------------
 # ✅ List company-scoped business parties
 # ✅ Search and filter customers / suppliers / both

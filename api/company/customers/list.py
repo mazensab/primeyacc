@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 api/company/customers/list.py
-# 🧠 PrimeyAcc | Company Customers List API V1.0
+# 🧠 Mhamcloud | Company Customers List API V1.0
 # ------------------------------------------------------------
 # ✅ Customers alias over BusinessParty
 # ✅ Company-scoped customer list

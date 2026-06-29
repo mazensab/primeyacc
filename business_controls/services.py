@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # 📂 business_controls/services.py
-# 🧠 PrimeyAcc | Business Controls Services V1.0
+# 🧠 Mhamcloud | Business Controls Services V1.0
 # ------------------------------------------------------------
 # ✅ Audit event creation service
 # ✅ Idempotency registration and completion helpers

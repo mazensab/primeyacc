@@ -1,6 +1,6 @@
 # ============================================================
 # 📂 accounting/management/commands/test_accounting_core.py
-# 🧠 PrimeyAcc | Test Accounting Core
+# 🧠 Mhamcloud | Test Accounting Core
 # ------------------------------------------------------------
 # ✅ يختبر نواة المحاسبة عمليًا
 # ✅ يتأكد من زرع شجرة الحسابات للشركة
@@ -37,7 +37,7 @@ from companies.models import Company
 
 
 class Command(BaseCommand):
-    help = "Test PrimeyAcc accounting core: seed chart, create, post, and reverse a journal entry."
+    help = "Test Mhamcloud accounting core: seed chart, create, post, and reverse a journal entry."
 
     def add_arguments(self, parser):
         parser.add_argument(

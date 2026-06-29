@@ -1,6 +1,6 @@
 ﻿# ============================================================
 # ?? api/company/purchases/requests/approve.py
-# ?? PrimeyAcc | Purchase Request Approve API
+# ?? Mhamcloud | Purchase Request Approve API
 # ============================================================
 
 from __future__ import annotations
