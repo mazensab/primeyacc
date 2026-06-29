@@ -1,21 +1,20 @@
 # ============================================================
 # 📂 api/system/companies/status.py
-# 🧠 PrimeyAcc | System Company Status API V1.3
+# 🧠 Mhamcloud | System Company Status API V1.4
 # ------------------------------------------------------------
 # ✅ Activate / deactivate tenant companies from system workspace
 # ✅ Suspend / restore companies safely without deleting records
 # ✅ Updates company status and suspension metadata
-# ✅ Safe payload fields based on the current Company model
+# ✅ Returns ActivityProfile reference snapshot
+# ✅ Returns legal/tax and Saudi National Address fields
 # ✅ Protected by system permission: system.companies.status
 # ✅ Uses central api/permissions.py guard
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
-# - هذا الملف جزء من المرحلة 1: نواة SaaS
-# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
 # - Company هي حدود العزل الأساسية للنظام
-# - إيقاف الشركة لا يحذف بياناتها ولا يلغي اشتراكاتها تلقائيًا
-# - جميع APIs داخل /api/system/ تتطلب can_access_system=True
+# - إيقاف الشركة لا يحذف بياناتها ولا يلغي اشتراكاتها تلقائيا
 # - تغيير حالة الشركة لا يسمح لمستخدم company فقط
+# - response يجب أن يبقى متوافقا مع list/detail/create/update
 # ============================================================
 
 from __future__ import annotations
@@ -33,7 +32,7 @@ from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
 from api.permissions import user_has_system_permission
-from companies.models import Company, CompanyStatus
+from companies.models import ActivityProfile, Company, CompanyStatus
 
 
 def _json_body(request: HttpRequest) -> dict[str, Any]:
@@ -127,7 +126,7 @@ def _set_company_field(
     update_fields: set[str],
 ) -> None:
     """
-    يعدل الحقل فقط إذا كان موجودًا في موديل Company.
+    يعدل الحقل فقط إذا كان موجودا في موديل Company.
     """
 
     if _company_has_field(field_name):
@@ -172,12 +171,33 @@ def _owner_payload(company: Company) -> dict[str, Any] | None:
     }
 
 
+def _activity_profile_payload(profile: ActivityProfile | None) -> dict[str, Any] | None:
+    """
+    يرجع بيانات بروفايل النشاط المرتبط بالشركة.
+    """
+
+    if not profile:
+        return None
+
+    return {
+        "id": profile.id,
+        "code": profile.code,
+        "name": profile.name,
+        "name_ar": profile.name_ar,
+        "name_en": profile.name_en,
+        "display_name": profile.display_name,
+        "description": profile.description,
+        "is_system": profile.is_system,
+        "is_active": profile.is_active,
+    }
+
+
 def _company_payload(company: Company) -> dict[str, Any]:
     """
     يحول كائن الشركة إلى JSON نظيف للواجهة.
-
-    يستخدم getattr لأن بعض الحقول قد لا تكون موجودة في نسخة الموديل الحالية.
     """
+
+    activity_profile_ref = getattr(company, "activity_profile_ref", None)
 
     return {
         "id": company.id,
@@ -187,6 +207,13 @@ def _company_payload(company: Company) -> dict[str, Any]:
         "name_en": getattr(company, "name_en", ""),
         "company_code": getattr(company, "company_code", ""),
         "activity_profile": getattr(company, "activity_profile", ""),
+        "activity_profile_ref_id": getattr(company, "activity_profile_ref_id", None),
+        "activity_profile_ref": _activity_profile_payload(activity_profile_ref),
+        "activity_profile_display": (
+            activity_profile_ref.display_name
+            if activity_profile_ref
+            else getattr(company, "activity_profile", "")
+        ),
         "status": getattr(company, "status", ""),
         "is_active": getattr(company, "is_active", True),
         "commercial_registration": getattr(company, "commercial_registration", ""),
@@ -247,7 +274,13 @@ def system_company_status(request: HttpRequest, company_id: int) -> JsonResponse
             status=403,
         )
 
-    company = get_object_or_404(Company, id=company_id)
+    company = get_object_or_404(
+        Company.objects.select_related(
+            "owner",
+            "activity_profile_ref",
+        ),
+        id=company_id,
+    )
     payload = _json_body(request)
 
     action = _clean_text(_get_value(request, payload, "action")).lower()
@@ -367,6 +400,8 @@ def system_company_status(request: HttpRequest, company_id: int) -> JsonResponse
             },
             status=400,
         )
+
+    company.refresh_from_db()
 
     return JsonResponse(
         {

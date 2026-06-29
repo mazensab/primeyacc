@@ -1,20 +1,21 @@
 # ============================================================
 # 📂 api/system/companies/list.py
-# 🧠 PrimeyAcc | System Companies List API V1.1
+# 🧠 Mhamcloud | System Companies List API V1.2
 # ------------------------------------------------------------
 # ✅ List tenant companies for system workspace
-# ✅ Supports search, status, activity, city, region, and active filters
+# ✅ Supports search, status, legacy activity, ActivityProfile ref, city, region, and active filters
+# ✅ Returns legal/tax and Saudi National Address fields
+# ✅ Returns ActivityProfile reference snapshot
 # ✅ Returns subscription summary for each company
 # ✅ Protected by system permission: system.companies.view
 # ✅ Uses central api/permissions.py guard
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
-# - هذا الملف جزء من المرحلة 1: نواة SaaS
-# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
 # - Company هي حدود العزل الأساسية للنظام
-# - جميع APIs داخل /api/system/ تتطلب can_access_system=True
-# - قائمة كل الشركات لا تظهر لمستخدم company فقط
-# - البيانات حقيقية من قاعدة البيانات فقط بدون mock data
+# - قائمة الشركات تعرض بيانات حقيقية فقط بدون mock data
+# - activity_profile legacy يبقى للتوافق
+# - activity_profile_ref هو مرجع النشاط القابل للتوسع
+# - جميع APIs داخل /api/system/ تتطلب صلاحيات النظام
 # ============================================================
 
 from __future__ import annotations
@@ -28,7 +29,12 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.http import require_GET
 
 from api.permissions import user_has_system_permission
-from companies.models import Company, CompanyActivityProfile, CompanyStatus
+from companies.models import (
+    ActivityProfile,
+    Company,
+    CompanyActivityProfile,
+    CompanyStatus,
+)
 from subscriptions.models import CompanySubscription
 
 
@@ -59,7 +65,7 @@ def _owner_payload(company: Company) -> dict[str, Any] | None:
     يرجع بيانات مالك الشركة إن وجد.
     """
 
-    owner = company.owner
+    owner = getattr(company, "owner", None)
 
     if not owner:
         return None
@@ -72,6 +78,27 @@ def _owner_payload(company: Company) -> dict[str, Any] | None:
         "email": owner.email,
         "name": full_name or owner.username,
         "is_active": owner.is_active,
+    }
+
+
+def _activity_profile_payload(profile: ActivityProfile | None) -> dict[str, Any] | None:
+    """
+    يرجع بيانات بروفايل النشاط المرتبط بالشركة.
+    """
+
+    if not profile:
+        return None
+
+    return {
+        "id": profile.id,
+        "code": profile.code,
+        "name": profile.name,
+        "name_ar": profile.name_ar,
+        "name_en": profile.name_en,
+        "display_name": profile.display_name,
+        "description": profile.description,
+        "is_system": profile.is_system,
+        "is_active": profile.is_active,
     }
 
 
@@ -108,6 +135,22 @@ def _subscription_payload(subscription: CompanySubscription | None) -> dict[str,
     }
 
 
+def _logo_url(company: Company) -> str | None:
+    """
+    يرجع رابط شعار الشركة بشكل آمن.
+    """
+
+    logo = getattr(company, "logo", None)
+
+    if not logo:
+        return None
+
+    try:
+        return logo.url
+    except ValueError:
+        return None
+
+
 def _company_payload(company: Company) -> dict[str, Any]:
     """
     يحول كائن الشركة إلى JSON نظيف للواجهة.
@@ -118,52 +161,66 @@ def _company_payload(company: Company) -> dict[str, Any]:
     if isinstance(current_subscription, list):
         current_subscription = current_subscription[0] if current_subscription else None
 
-    logo_url = None
-    if company.logo:
-        try:
-            logo_url = company.logo.url
-        except ValueError:
-            logo_url = None
+    activity_profile_ref = getattr(company, "activity_profile_ref", None)
 
     return {
         "id": company.id,
-        "name": company.name,
-        "display_name": company.display_name,
-        "name_ar": company.name_ar,
-        "name_en": company.name_en,
-        "company_code": company.company_code,
-        "activity_profile": company.activity_profile,
-        "status": company.status,
-        "is_active": company.is_active,
-        "commercial_registration": company.commercial_registration,
-        "tax_number": company.tax_number,
-        "email": company.email,
-        "phone": company.phone,
-        "mobile": company.mobile,
-        "whatsapp_number": company.whatsapp_number,
-        "country": company.country,
-        "building_number": company.building_number,
-        "street_name": company.street_name,
-        "district": company.district,
-        "city": company.city,
-        "region": company.region,
-        "postal_code": company.postal_code,
-        "short_address": company.short_address,
-        "address": company.address,
-        "national_address_line": company.national_address_line,
-        "logo_url": logo_url,
-        "currency_code": company.currency_code,
-        "vat_percentage": _money_to_string(company.vat_percentage),
-        "trial_ends_at": _datetime_to_string(company.trial_ends_at),
-        "suspended_at": _datetime_to_string(company.suspended_at),
-        "suspended_reason": company.suspended_reason,
+        "name": getattr(company, "name", ""),
+        "display_name": getattr(company, "display_name", getattr(company, "name", "")),
+        "name_ar": getattr(company, "name_ar", ""),
+        "name_en": getattr(company, "name_en", ""),
+        "company_code": getattr(company, "company_code", ""),
+        "activity_profile": getattr(company, "activity_profile", ""),
+        "activity_profile_ref_id": getattr(company, "activity_profile_ref_id", None),
+        "activity_profile_ref": _activity_profile_payload(activity_profile_ref),
+        "activity_profile_display": (
+            activity_profile_ref.display_name
+            if activity_profile_ref
+            else getattr(company, "activity_profile", "")
+        ),
+        "status": getattr(company, "status", ""),
+        "is_active": getattr(company, "is_active", True),
+        "commercial_registration": getattr(company, "commercial_registration", ""),
+        "tax_number": getattr(company, "tax_number", ""),
+        "email": getattr(company, "email", ""),
+        "phone": getattr(company, "phone", ""),
+        "mobile": getattr(company, "mobile", ""),
+        "whatsapp_number": getattr(company, "whatsapp_number", ""),
+        "website": getattr(company, "website", ""),
+        "country": getattr(company, "country", ""),
+        "building_number": getattr(company, "building_number", ""),
+        "street_name": getattr(company, "street_name", ""),
+        "district": getattr(company, "district", ""),
+        "city": getattr(company, "city", ""),
+        "region": getattr(company, "region", ""),
+        "postal_code": getattr(company, "postal_code", ""),
+        "short_address": getattr(company, "short_address", ""),
+        "address": getattr(company, "address", ""),
+        "national_address_line": getattr(company, "national_address_line", ""),
+        "logo_url": _logo_url(company),
+        "currency_code": getattr(company, "currency_code", "SAR"),
+        "vat_percentage": _money_to_string(getattr(company, "vat_percentage", None)),
+        "trial_ends_at": _datetime_to_string(getattr(company, "trial_ends_at", None)),
+        "suspended_at": _datetime_to_string(getattr(company, "suspended_at", None)),
+        "suspended_reason": getattr(company, "suspended_reason", ""),
         "owner": _owner_payload(company),
         "subscriptions_count": getattr(company, "subscriptions_count", 0),
         "current_subscription": _subscription_payload(current_subscription),
-        "notes": company.notes,
-        "created_at": _datetime_to_string(company.created_at),
-        "updated_at": _datetime_to_string(company.updated_at),
+        "notes": getattr(company, "notes", ""),
+        "created_at": _datetime_to_string(getattr(company, "created_at", None)),
+        "updated_at": _datetime_to_string(getattr(company, "updated_at", None)),
     }
+
+
+def _safe_int(value: Any) -> int | None:
+    """
+    يحول القيمة إلى int عند الإمكان.
+    """
+
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _apply_filters(request: HttpRequest, queryset: QuerySet[Company]) -> QuerySet[Company]:
@@ -174,6 +231,11 @@ def _apply_filters(request: HttpRequest, queryset: QuerySet[Company]) -> QuerySe
     search = (request.GET.get("search") or request.GET.get("q") or "").strip()
     status = (request.GET.get("status") or "").strip().upper()
     activity_profile = (request.GET.get("activity_profile") or "").strip().upper()
+    activity_profile_id = (
+        request.GET.get("activity_profile_id")
+        or request.GET.get("activity_profile_ref_id")
+        or ""
+    )
     city = (request.GET.get("city") or "").strip()
     region = (request.GET.get("region") or "").strip()
     active = (request.GET.get("active") or "").strip().lower()
@@ -196,11 +258,19 @@ def _apply_filters(request: HttpRequest, queryset: QuerySet[Company]) -> QuerySe
             | Q(district__icontains=search)
             | Q(short_address__icontains=search)
             | Q(notes__icontains=search)
+            | Q(activity_profile_ref__code__icontains=search)
+            | Q(activity_profile_ref__name__icontains=search)
+            | Q(activity_profile_ref__name_ar__icontains=search)
+            | Q(activity_profile_ref__name_en__icontains=search)
         )
 
     valid_statuses = {choice[0] for choice in CompanyStatus.choices}
     if status in valid_statuses:
         queryset = queryset.filter(status=status)
+
+    profile_id = _safe_int(activity_profile_id)
+    if profile_id:
+        queryset = queryset.filter(activity_profile_ref_id=profile_id)
 
     valid_activities = {choice[0] for choice in CompanyActivityProfile.choices}
     if activity_profile in valid_activities:
@@ -248,6 +318,14 @@ def _build_stats(queryset: QuerySet[Company]) -> dict[str, Any]:
             "id",
             filter=Q(activity_profile=CompanyActivityProfile.PETROL_STATION),
         ),
+        with_activity_profile_ref_count=Count(
+            "id",
+            filter=Q(activity_profile_ref__isnull=False),
+        ),
+        without_activity_profile_ref_count=Count(
+            "id",
+            filter=Q(activity_profile_ref__isnull=True),
+        ),
     )
 
     total_count = queryset.count()
@@ -267,6 +345,8 @@ def _build_stats(queryset: QuerySet[Company]) -> dict[str, Any]:
             "wholesale": aggregate.get("wholesale_count") or 0,
             "jewelry": aggregate.get("jewelry_count") or 0,
             "petrol_station": aggregate.get("petrol_station_count") or 0,
+            "with_ref": aggregate.get("with_activity_profile_ref_count") or 0,
+            "without_ref": aggregate.get("without_activity_profile_ref_count") or 0,
         },
     }
 
@@ -308,6 +388,7 @@ def system_companies_list(request: HttpRequest) -> JsonResponse:
             "owner",
             "created_by",
             "updated_by",
+            "activity_profile_ref",
         )
         .prefetch_related(current_subscription_prefetch)
         .annotate(subscriptions_count=Count("subscriptions", distinct=True))

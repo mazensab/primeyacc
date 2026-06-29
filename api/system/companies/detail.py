@@ -1,20 +1,20 @@
 # ============================================================
 # 📂 api/system/companies/detail.py
-# 🧠 PrimeyAcc | System Company Detail API V1.3
+# 🧠 Mhamcloud | System Company Detail API V1.4
 # ------------------------------------------------------------
 # ✅ Retrieve one tenant company for system workspace
+# ✅ Returns company legal/tax and Saudi National Address fields
+# ✅ Returns ActivityProfile reference snapshot
 # ✅ Returns company profile, owner, subscriptions and memberships
 # ✅ Includes current subscription and subscription history
-# ✅ Safe field access based on the current Company model
 # ✅ Protected by system permission: system.companies.view
 # ✅ Uses central api/permissions.py guard
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
-# - هذا الملف جزء من المرحلة 1: نواة SaaS
-# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
 # - Company هي حدود العزل الأساسية للنظام
-# - جميع APIs داخل /api/system/ تتطلب can_access_system=True
-# - تفاصيل الشركات لا تظهر لمستخدم company فقط
+# - تفاصيل الشركة يجب أن تكون جاهزة للفوترة والاشتراكات والإيصالات
+# - activity_profile legacy يبقى للتوافق
+# - activity_profile_ref هو مرجع النشاط القابل للتوسع
 # - البيانات حقيقية من قاعدة البيانات فقط بدون mock data
 # ============================================================
 
@@ -29,7 +29,7 @@ from django.views.decorators.http import require_GET
 
 from accounts.models import CompanyMembership
 from api.permissions import user_has_system_permission
-from companies.models import Company
+from companies.models import ActivityProfile, Company
 from subscriptions.models import CompanySubscription
 
 
@@ -90,6 +90,27 @@ def _user_payload(user: Any) -> dict[str, Any] | None:
     }
 
 
+def _activity_profile_payload(profile: ActivityProfile | None) -> dict[str, Any] | None:
+    """
+    يرجع بيانات بروفايل النشاط المرتبط بالشركة.
+    """
+
+    if not profile:
+        return None
+
+    return {
+        "id": profile.id,
+        "code": profile.code,
+        "name": profile.name,
+        "name_ar": profile.name_ar,
+        "name_en": profile.name_en,
+        "display_name": profile.display_name,
+        "description": profile.description,
+        "is_system": profile.is_system,
+        "is_active": profile.is_active,
+    }
+
+
 def _logo_url(company: Company) -> str | None:
     """
     يرجع رابط شعار الشركة بشكل آمن.
@@ -108,7 +129,7 @@ def _logo_url(company: Company) -> str | None:
 
 def _membership_is_active(membership: CompanyMembership) -> bool:
     """
-    يحسب هل عضوية المستخدم فعالة اعتمادًا على منطق الموديل الرسمي.
+    يحسب هل عضوية المستخدم فعالة اعتمادا على منطق الموديل الرسمي.
     """
 
     return bool(getattr(membership, "is_active_membership", False))
@@ -164,8 +185,6 @@ def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
 def _membership_payload(membership: CompanyMembership) -> dict[str, Any]:
     """
     يرجع عضوية مستخدم داخل شركة.
-
-    CompanyMembership يستخدم status وليس is_active.
     """
 
     return {
@@ -192,19 +211,25 @@ def _membership_payload(membership: CompanyMembership) -> dict[str, Any]:
 def _company_payload(company: Company) -> dict[str, Any]:
     """
     يحول كائن الشركة إلى JSON كامل للواجهة.
-
-    تم استخدام getattr للحقول الاختيارية حتى لا يتعطل API إذا لم يكن الحقل موجودًا
-    في نسخة الموديل الحالية.
     """
+
+    activity_profile_ref = getattr(company, "activity_profile_ref", None)
 
     return {
         "id": company.id,
-        "name": company.name,
-        "display_name": getattr(company, "display_name", company.name),
+        "name": getattr(company, "name", ""),
+        "display_name": getattr(company, "display_name", getattr(company, "name", "")),
         "name_ar": getattr(company, "name_ar", ""),
         "name_en": getattr(company, "name_en", ""),
         "company_code": getattr(company, "company_code", ""),
         "activity_profile": getattr(company, "activity_profile", ""),
+        "activity_profile_ref_id": getattr(company, "activity_profile_ref_id", None),
+        "activity_profile_ref": _activity_profile_payload(activity_profile_ref),
+        "activity_profile_display": (
+            activity_profile_ref.display_name
+            if activity_profile_ref
+            else getattr(company, "activity_profile", "")
+        ),
         "status": getattr(company, "status", ""),
         "is_active": getattr(company, "is_active", True),
         "commercial_registration": getattr(company, "commercial_registration", ""),
@@ -263,6 +288,7 @@ def system_company_detail(request: HttpRequest, company_id: int) -> JsonResponse
             "owner",
             "created_by",
             "updated_by",
+            "activity_profile_ref",
         ),
         id=company_id,
     )

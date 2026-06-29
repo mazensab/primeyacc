@@ -1,21 +1,23 @@
 # ============================================================
 # 📂 api/system/companies/create.py
-# 🧠 PrimeyAcc | System Company Create API V1.2
+# 🧠 Mhamcloud | System Company Create API V1.3
 # ------------------------------------------------------------
 # ✅ Create tenant companies from system workspace
-# ✅ Validates company identity, contact, Saudi address, and status
+# ✅ Backend-generated company_code
+# ✅ Ignores frontend code/company_code on create
+# ✅ Validates legal/tax data needed for platform billing
+# ✅ Validates Saudi National Address required fields
+# ✅ Supports ActivityProfile reference selection
+# ✅ Keeps legacy activity_profile for backward compatibility
 # ✅ Supports optional owner assignment
 # ✅ Creates owner CompanyMembership when owner_id is provided
-# ✅ Safe fields based on the current Company model
 # ✅ Protected by system permission: system.companies.create
 # ✅ Uses central api/permissions.py guard
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
-# - هذا الملف جزء من المرحلة 1: نواة SaaS
-# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
 # - Company هي حدود العزل الأساسية للنظام
-# - جميع APIs داخل /api/system/ تتطلب can_access_system=True
-# - إنشاء الشركات لا يسمح لمستخدم company فقط
+# - كود الشركة يولد من الباكند فقط ولا يكتب من الواجهة
+# - بيانات الشركة القانونية والعنوان الوطني مطلوبة للفوترة والاشتراكات والإيصالات
 # - إنشاء الاشتراك للشركة يتم عبر subscriptions APIs وليس هنا
 # - عند تحديد owner_id يتم إنشاء عضوية OWNER للمالك داخل الشركة
 # ============================================================
@@ -23,6 +25,7 @@
 from __future__ import annotations
 
 import json
+import re
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -31,6 +34,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest, JsonResponse
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
@@ -42,7 +46,12 @@ from accounts.models import (
     WorkspaceType,
 )
 from api.permissions import user_has_system_permission
-from companies.models import Company, CompanyActivityProfile, CompanyStatus
+from companies.models import (
+    ActivityProfile,
+    Company,
+    CompanyActivityProfile,
+    CompanyStatus,
+)
 
 
 User = get_user_model()
@@ -189,11 +198,29 @@ def _owner_payload(company: Company) -> dict[str, Any] | None:
     }
 
 
+def _activity_profile_payload(profile: ActivityProfile | None) -> dict[str, Any] | None:
+    """
+    يرجع بيانات بروفايل النشاط المرتبط بالشركة.
+    """
+
+    if not profile:
+        return None
+
+    return {
+        "id": profile.id,
+        "code": profile.code,
+        "name": profile.name,
+        "name_ar": profile.name_ar,
+        "name_en": profile.name_en,
+        "display_name": profile.display_name,
+        "is_system": profile.is_system,
+        "is_active": profile.is_active,
+    }
+
+
 def _company_payload(company: Company) -> dict[str, Any]:
     """
     يحول كائن الشركة إلى JSON نظيف للواجهة.
-
-    يستخدم getattr لأن بعض الحقول قد لا تكون موجودة في نسخة الموديل الحالية.
     """
 
     return {
@@ -204,6 +231,10 @@ def _company_payload(company: Company) -> dict[str, Any]:
         "name_en": getattr(company, "name_en", ""),
         "company_code": getattr(company, "company_code", ""),
         "activity_profile": getattr(company, "activity_profile", ""),
+        "activity_profile_ref": _activity_profile_payload(
+            getattr(company, "activity_profile_ref", None)
+        ),
+        "activity_profile_ref_id": getattr(company, "activity_profile_ref_id", None),
         "status": getattr(company, "status", ""),
         "is_active": getattr(company, "is_active", True),
         "commercial_registration": getattr(company, "commercial_registration", ""),
@@ -239,12 +270,172 @@ def _company_payload(company: Company) -> dict[str, Any]:
 def _filter_company_fields(data: dict[str, Any]) -> dict[str, Any]:
     """
     يمنع تمرير حقول غير موجودة إلى Company.
-
-    هذا يجعل الملف آمنًا مع أي اختلاف بسيط في موديل Company الحالي.
     """
 
     valid_fields = {field.name for field in Company._meta.fields}
     return {key: value for key, value in data.items() if key in valid_fields}
+
+
+def _generate_company_code() -> str:
+    """
+    يولد كود شركة داخلي آمن من الباكند.
+
+    النمط:
+    CMP-2026-000001
+    """
+
+    current_year = timezone.now().year
+    prefix = f"CMP-{current_year}-"
+    pattern = re.compile(rf"^{re.escape(prefix)}(\d+)$")
+
+    existing_codes = (
+        Company.objects.select_for_update()
+        .filter(company_code__startswith=prefix)
+        .values_list("company_code", flat=True)
+    )
+
+    max_sequence = 0
+
+    for code in existing_codes:
+        match = pattern.match(str(code or ""))
+        if match:
+            max_sequence = max(max_sequence, int(match.group(1)))
+
+    next_sequence = max_sequence + 1
+
+    while True:
+        candidate = f"{prefix}{next_sequence:06d}"
+        if not Company.objects.filter(company_code__iexact=candidate).exists():
+            return candidate
+
+        next_sequence += 1
+
+
+def _resolve_activity_profile_ref(
+    request: HttpRequest,
+    payload: dict[str, Any],
+) -> ActivityProfile | None:
+    """
+    يقرأ activity_profile_id أو activity_profile_ref_id ويرجع ActivityProfile فعالا.
+
+    في إنشاء شركة جديدة لا نقبل custom profiles لأنها تحتاج شركة موجودة مسبقا.
+    لذلك نقبل system-level profiles فقط.
+    """
+
+    raw_profile_id = _get_value(request, payload, "activity_profile_id")
+
+    if raw_profile_id in {None, ""}:
+        raw_profile_id = _get_value(request, payload, "activity_profile_ref_id")
+
+    if raw_profile_id in {None, ""}:
+        return None
+
+    try:
+        profile_id = int(raw_profile_id)
+    except (TypeError, ValueError):
+        raise ValidationError({"activity_profile_id": "النشاط غير صحيح."})
+
+    profile = (
+        ActivityProfile.objects.filter(
+            id=profile_id,
+            is_active=True,
+            company__isnull=True,
+        )
+        .order_by("id")
+        .first()
+    )
+
+    if not profile:
+        raise ValidationError({"activity_profile_id": "النشاط غير موجود أو غير فعال."})
+
+    return profile
+
+
+def _resolve_legacy_activity_profile(
+    *,
+    request: HttpRequest,
+    payload: dict[str, Any],
+    activity_profile_ref: ActivityProfile | None,
+) -> str:
+    """
+    يحافظ على حقل activity_profile القديم للتوافق مع الصفحات والتقارير الحالية.
+    """
+
+    valid_activities = {choice[0] for choice in CompanyActivityProfile.choices}
+
+    raw_activity = _clean_text(
+        _get_value(request, payload, "activity_profile", "")
+    ).upper()
+
+    if raw_activity:
+        if raw_activity not in valid_activities:
+            raise ValidationError({"activity_profile": "نوع نشاط الشركة غير صحيح."})
+        return raw_activity
+
+    if activity_profile_ref and activity_profile_ref.code in valid_activities:
+        return activity_profile_ref.code
+
+    return CompanyActivityProfile.GENERAL
+
+
+def _validate_required_company_data(
+    *,
+    commercial_registration: str,
+    tax_number: str,
+    building_number: str,
+    street_name: str,
+    district: str,
+    city: str,
+    region: str,
+    postal_code: str,
+) -> dict[str, str]:
+    """
+    يتحقق من البيانات المطلوبة لإنشاء شركة قابلة للفوترة.
+    """
+
+    errors: dict[str, str] = {}
+
+    required_fields = {
+        "commercial_registration": (
+            commercial_registration,
+            "السجل التجاري مطلوب.",
+        ),
+        "tax_number": (
+            tax_number,
+            "الرقم الضريبي مطلوب.",
+        ),
+        "building_number": (
+            building_number,
+            "رقم المبنى مطلوب.",
+        ),
+        "street_name": (
+            street_name,
+            "اسم الشارع مطلوب.",
+        ),
+        "district": (
+            district,
+            "الحي مطلوب.",
+        ),
+        "city": (
+            city,
+            "المدينة مطلوبة.",
+        ),
+        "region": (
+            region,
+            "المنطقة مطلوبة.",
+        ),
+        "postal_code": (
+            postal_code,
+            "الرمز البريدي مطلوب.",
+        ),
+    }
+
+    for field_name, field_data in required_fields.items():
+        value, message = field_data
+        if not value:
+            errors[field_name] = message
+
+    return errors
 
 
 def _ensure_owner_membership(
@@ -255,8 +446,6 @@ def _ensure_owner_membership(
 ) -> None:
     """
     ينشئ عضوية OWNER للمالك إذا تم تحديد owner_id.
-
-    هذه خطوة مهمة للمرحلة 2 حتى يستطيع مالك الشركة الدخول إلى /company.
     """
 
     if not owner:
@@ -339,7 +528,6 @@ def system_company_create(request: HttpRequest) -> JsonResponse:
     name = _clean_text(_get_value(request, payload, "name"))
     name_ar = _clean_text(_get_value(request, payload, "name_ar"))
     name_en = _clean_text(_get_value(request, payload, "name_en"))
-    company_code = _clean_text(_get_value(request, payload, "company_code"))
 
     if not name:
         return JsonResponse(
@@ -351,42 +539,19 @@ def system_company_create(request: HttpRequest) -> JsonResponse:
             status=400,
         )
 
-    if not company_code:
+    try:
+        activity_profile_ref = _resolve_activity_profile_ref(request, payload)
+        activity_profile = _resolve_legacy_activity_profile(
+            request=request,
+            payload=payload,
+            activity_profile_ref=activity_profile_ref,
+        )
+    except ValidationError as exc:
         return JsonResponse(
             {
                 "ok": False,
-                "message": "كود الشركة مطلوب.",
-                "errors": {"company_code": "كود الشركة مطلوب."},
-            },
-            status=400,
-        )
-
-    if Company.objects.filter(company_code__iexact=company_code).exists():
-        return JsonResponse(
-            {
-                "ok": False,
-                "message": "كود الشركة مستخدم من قبل.",
-                "errors": {"company_code": "كود الشركة مستخدم من قبل."},
-            },
-            status=400,
-        )
-
-    activity_profile = _clean_text(
-        _get_value(
-            request,
-            payload,
-            "activity_profile",
-            CompanyActivityProfile.GENERAL,
-        )
-    ).upper()
-
-    valid_activities = {choice[0] for choice in CompanyActivityProfile.choices}
-    if activity_profile not in valid_activities:
-        return JsonResponse(
-            {
-                "ok": False,
-                "message": "نوع نشاط الشركة غير صحيح.",
-                "errors": {"activity_profile": "نوع نشاط الشركة غير صحيح."},
+                "message": "بيانات النشاط غير صحيحة.",
+                "errors": exc.message_dict if hasattr(exc, "message_dict") else exc.messages,
             },
             status=400,
         )
@@ -438,23 +603,56 @@ def system_company_create(request: HttpRequest) -> JsonResponse:
             status=400,
         )
 
+    commercial_registration = _clean_text(
+        _get_value(request, payload, "commercial_registration")
+    )
+    tax_number = _clean_text(_get_value(request, payload, "tax_number"))
+    building_number = _clean_text(_get_value(request, payload, "building_number"))
+    street_name = _clean_text(_get_value(request, payload, "street_name"))
+    district = _clean_text(_get_value(request, payload, "district"))
+    city = _clean_text(_get_value(request, payload, "city"))
+    region = _clean_text(_get_value(request, payload, "region"))
+    postal_code = _clean_text(_get_value(request, payload, "postal_code"))
+
+    required_errors = _validate_required_company_data(
+        commercial_registration=commercial_registration,
+        tax_number=tax_number,
+        building_number=building_number,
+        street_name=street_name,
+        district=district,
+        city=city,
+        region=region,
+        postal_code=postal_code,
+    )
+
+    if required_errors:
+        return JsonResponse(
+            {
+                "ok": False,
+                "message": "بيانات الشركة القانونية والعنوان الوطني مطلوبة.",
+                "errors": required_errors,
+            },
+            status=400,
+        )
+
     try:
         with transaction.atomic():
+            company_code = _generate_company_code()
+
             company_data = {
                 "name": name,
                 "name_ar": name_ar,
                 "name_en": name_en,
                 "company_code": company_code,
                 "activity_profile": activity_profile,
+                "activity_profile_ref": activity_profile_ref,
                 "status": status,
                 "is_active": _to_bool(
                     _get_value(request, payload, "is_active", True),
                     default=True,
                 ),
-                "commercial_registration": _clean_text(
-                    _get_value(request, payload, "commercial_registration")
-                ),
-                "tax_number": _clean_text(_get_value(request, payload, "tax_number")),
+                "commercial_registration": commercial_registration,
+                "tax_number": tax_number,
                 "email": _clean_text(_get_value(request, payload, "email")),
                 "phone": _clean_text(_get_value(request, payload, "phone")),
                 "mobile": _clean_text(_get_value(request, payload, "mobile")),
@@ -466,14 +664,12 @@ def system_company_create(request: HttpRequest) -> JsonResponse:
                     _get_value(request, payload, "country", "Saudi Arabia")
                 )
                 or "Saudi Arabia",
-                "building_number": _clean_text(
-                    _get_value(request, payload, "building_number")
-                ),
-                "street_name": _clean_text(_get_value(request, payload, "street_name")),
-                "district": _clean_text(_get_value(request, payload, "district")),
-                "city": _clean_text(_get_value(request, payload, "city")),
-                "region": _clean_text(_get_value(request, payload, "region")),
-                "postal_code": _clean_text(_get_value(request, payload, "postal_code")),
+                "building_number": building_number,
+                "street_name": street_name,
+                "district": district,
+                "city": city,
+                "region": region,
+                "postal_code": postal_code,
                 "short_address": _clean_text(
                     _get_value(request, payload, "short_address")
                 ),

@@ -1,10 +1,10 @@
-﻿"use client";
+"use client";
 
 /* ============================================================
    📂 primey_frontend/app/system/companies/list/page.tsx
-   🏢 PrimeyAcc — System Companies List
+   🏢 Mhamcloud — System Companies List
    ------------------------------------------------------------
-   ✅ Approved PrimeyCare premium table pattern adapted for PrimeyAcc
+   ✅ Approved PrimeyCare premium table pattern adapted for Mhamcloud
    ✅ Full-width table layout
    ✅ Real API only: GET /api/system/companies/
    ✅ Search, status filter, date range, sorting, reset
@@ -118,7 +118,7 @@ const translations = {
   ar: {
     title: "الشركات",
     subtitle:
-      "إدارة ومراجعة الشركات المسجلة في منصة PrimeyAcc مع البحث الفلاتر التصدير الطباعة وملف PDF.",
+      "إدارة ومراجعة الشركات المسجلة في منصة Mhamcloud مع البحث الفلاتر التصدير الطباعة وملف PDF.",
     refresh: "تحديث",
     exportExcel: "تصدير Excel",
     print: "طباعة",
@@ -176,7 +176,7 @@ const translations = {
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
     pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
-    reportTitle: "تقرير شركات PrimeyAcc",
+    reportTitle: "تقرير شركات Mhamcloud",
     generatedAt: "تاريخ الإنشاء",
     showing: "عرض",
     of: "من",
@@ -186,7 +186,7 @@ const translations = {
   en: {
     title: "Companies",
     subtitle:
-      "Manage and review companies registered in PrimeyAcc with search, filters, export, print, and PDF output.",
+      "Manage and review companies registered in Mhamcloud with search, filters, export, print, and PDF output.",
     refresh: "Refresh",
     exportExcel: "Export Excel",
     print: "Print",
@@ -244,7 +244,7 @@ const translations = {
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
     pdfHint: "Choose Save as PDF from the print dialog.",
-    reportTitle: "PrimeyAcc Companies Report",
+    reportTitle: "Mhamcloud Companies Report",
     generatedAt: "Generated at",
     showing: "Showing",
     of: "of",
@@ -422,6 +422,24 @@ function normalizeNestedName(value: unknown, keys: string[] = ["name", "title", 
   return "";
 }
 
+function normalizeActivityName(value: unknown, fallbackValues: unknown[] = []) {
+  if (typeof value === "string") return normalizeText(value);
+
+  const record = asRecord(value);
+  const keys = ["display_name", "name_ar", "name_en", "name", "title", "code"];
+
+  for (const key of keys) {
+    const text = normalizeText(record[key]);
+    if (text) return text;
+  }
+
+  for (const fallbackValue of fallbackValues) {
+    const text = normalizeText(fallbackValue);
+    if (text) return text;
+  }
+
+  return "";
+}
 function normalizeStatus(value: unknown) {
   if (typeof value === "boolean") return value ? "active" : "inactive";
 
@@ -460,7 +478,12 @@ function normalizeCompany(value: unknown): CompanyRecord {
     ),
     status: normalizeStatus(record.status ?? record.state ?? record.is_active),
     owner: normalizeNestedName(owner, ["name", "full_name", "email", "username"]) || "—",
-    activity: normalizeNestedName(activity, ["name", "code", "title"]) || "—",
+    activity:
+      normalizeActivityName(activity, [
+        record.activity_profile_display,
+        record.activity_profile_name,
+        record.activity_profile_code,
+      ]) || "—",
     subscription:
       normalizeText(record.subscription_status) ||
       normalizeNestedName(subscription, ["plan_name", "name", "title", "status"]) ||
@@ -817,7 +840,7 @@ export default function SystemCompaniesListPage() {
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = `primeyacc-system-companies-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-system-companies-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -906,7 +929,7 @@ export default function SystemCompaniesListPage() {
               <div className="max-w-4xl">
                 <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
                   <Building2 className="h-3.5 w-3.5 text-primary" />
-                  PrimeyAcc System
+                  Mhamcloud System
                 </div>
                 <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{t.title}</h1>
                 <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">{t.subtitle}</p>

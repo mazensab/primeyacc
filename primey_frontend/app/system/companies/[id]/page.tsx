@@ -1,10 +1,10 @@
-﻿"use client";
+"use client";
 
 /* ============================================================
    📂 primey_frontend/app/system/companies/[id]/page.tsx
-   🏢 PrimeyAcc — System Company Detail
+   🏢 Mhamcloud — System Company Detail
    ------------------------------------------------------------
-   ✅ Premium PrimeyCare detail pattern adapted for PrimeyAcc
+   ✅ Premium PrimeyCare detail pattern adapted for Mhamcloud
    ✅ Real API only: GET /api/system/companies/{id}/
    ✅ Detail cards + printable report
    ✅ Refresh, print, PDF through browser print dialog
@@ -81,7 +81,7 @@ const translations = {
   ar: {
     title: "تفاصيل الشركة",
     subtitle:
-      "عرض ملف الشركة داخل إدارة منصة PrimeyAcc مع بيانات التعريف والحالة والنشاط والاشتراك والتواصل.",
+      "عرض ملف الشركة داخل إدارة منصة Mhamcloud مع بيانات التعريف والحالة والنشاط والاشتراك والتواصل.",
     badge: "إدارة المنصة",
     backToCompanies: "العودة للشركات",
     companiesList: "قائمة الشركات",
@@ -128,7 +128,7 @@ const translations = {
     unknown: "غير محدد",
     notAvailable: "غير متوفر",
 
-    reportTitle: "تقرير تفاصيل شركة PrimeyAcc",
+    reportTitle: "تقرير تفاصيل شركة Mhamcloud",
     generatedAt: "تاريخ الطباعة",
 
     errorTitle: "تعذر تحميل تفاصيل الشركة",
@@ -141,7 +141,7 @@ const translations = {
   en: {
     title: "Company details",
     subtitle:
-      "View the company profile inside PrimeyAcc platform management with identity, status, activity, subscription, and contact data.",
+      "View the company profile inside Mhamcloud platform management with identity, status, activity, subscription, and contact data.",
     badge: "Platform management",
     backToCompanies: "Back to companies",
     companiesList: "Companies list",
@@ -188,7 +188,7 @@ const translations = {
     unknown: "Unknown",
     notAvailable: "Not available",
 
-    reportTitle: "PrimeyAcc Company Details Report",
+    reportTitle: "Mhamcloud Company Details Report",
     generatedAt: "Generated at",
 
     errorTitle: "Could not load company details",
@@ -275,6 +275,24 @@ function normalizeNestedName(
   return "";
 }
 
+function normalizeActivityName(value: unknown, fallbackValues: unknown[] = []) {
+  if (typeof value === "string") return normalizeText(value);
+
+  const record = asRecord(value);
+  const keys = ["display_name", "name_ar", "name_en", "name", "title", "code"];
+
+  for (const key of keys) {
+    const text = normalizeText(record[key]);
+    if (text) return text;
+  }
+
+  for (const fallbackValue of fallbackValues) {
+    const text = normalizeText(fallbackValue);
+    if (text) return text;
+  }
+
+  return "";
+}
 function normalizeStatus(value: unknown) {
   if (value === null || value === undefined || value === "") return "unknown";
   if (typeof value === "boolean") return value ? "active" : "inactive";
@@ -355,9 +373,12 @@ function normalizeCompany(payload: unknown): CompanyRecord {
     status: normalizeStatus(record.status ?? record.state ?? record.is_active),
     owner: normalizeNestedName(owner, ["name", "full_name", "email", "username"]) || "—",
     activity:
-      normalizeNestedName(activity, ["name", "code", "title"]) ||
-      normalizeText(record.activity_profile_code || record.activity_profile_name || settings.activity_profile) ||
-      "—",
+      normalizeActivityName(activity, [
+        record.activity_profile_display,
+        record.activity_profile_name,
+        record.activity_profile_code,
+        settings.activity_profile,
+      ]) || "—",
     subscription:
       normalizeText(record.subscription_status) ||
       normalizeNestedName(subscription, ["plan_name", "name", "title", "status"]) ||

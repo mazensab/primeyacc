@@ -1,10 +1,10 @@
-﻿"use client";
+"use client";
 
 /* ============================================================
    📂 primey_frontend/app/system/companies/reports/page.tsx
-   🏢 PrimeyAcc — System Companies Reports
+   🏢 Mhamcloud — System Companies Reports
    ------------------------------------------------------------
-   ✅ Premium PrimeyCare reports pattern adapted for PrimeyAcc
+   ✅ Premium PrimeyCare reports pattern adapted for Mhamcloud
    ✅ Real API only: GET /api/system/companies/
    ✅ Summary KPIs + status/activity/city distributions
    ✅ Analytical full-width table
@@ -130,7 +130,7 @@ const translations = {
   ar: {
     title: "تقارير الشركات",
     subtitle:
-      "تحليلات شركات PrimeyAcc حسب الحالة والنشاط والمدينة والاشتراك مبنية على بيانات API الحقيقية.",
+      "تحليلات شركات Mhamcloud حسب الحالة والنشاط والمدينة والاشتراك مبنية على بيانات API الحقيقية.",
     badge: "إدارة المنصة",
     refresh: "تحديث",
     exportExcel: "تصدير Excel",
@@ -212,14 +212,14 @@ const translations = {
     tryAgain: "إعادة المحاولة",
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
-    reportTitle: "تقرير شركات PrimeyAcc",
+    reportTitle: "تقرير شركات Mhamcloud",
     generatedAt: "تاريخ الإنشاء",
     refreshed: "تم تحديث تقارير الشركات.",
   },
   en: {
     title: "Companies reports",
     subtitle:
-      "PrimeyAcc company analytics by status, activity, city, and subscription, based on real API data.",
+      "Mhamcloud company analytics by status, activity, city, and subscription, based on real API data.",
     badge: "Platform management",
     refresh: "Refresh",
     exportExcel: "Export Excel",
@@ -301,7 +301,7 @@ const translations = {
     tryAgain: "Try again",
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
-    reportTitle: "PrimeyAcc Companies Report",
+    reportTitle: "Mhamcloud Companies Report",
     generatedAt: "Generated at",
     refreshed: "Companies reports refreshed.",
   },
@@ -488,6 +488,24 @@ function normalizeNestedName(value: unknown, keys: string[] = ["name", "title", 
   return "";
 }
 
+function normalizeActivityName(value: unknown, fallbackValues: unknown[] = []) {
+  if (typeof value === "string") return normalizeText(value);
+
+  const record = asRecord(value);
+  const keys = ["display_name", "name_ar", "name_en", "name", "title", "code"];
+
+  for (const key of keys) {
+    const text = normalizeText(record[key]);
+    if (text) return text;
+  }
+
+  for (const fallbackValue of fallbackValues) {
+    const text = normalizeText(fallbackValue);
+    if (text) return text;
+  }
+
+  return "";
+}
 function normalizeStatus(value: unknown) {
   if (value === null || value === undefined || value === "") return "unknown";
   if (typeof value === "boolean") return value ? "active" : "inactive";
@@ -541,9 +559,12 @@ function normalizeCompany(value: unknown): CompanyRecord {
     status: normalizeStatus(record.status ?? record.state ?? record.is_active),
     owner: normalizeNestedName(owner, ["name", "full_name", "email", "username"]) || "—",
     activity:
-      normalizeNestedName(activity, ["name", "code", "title"]) ||
-      normalizeText(record.activity_profile_code || record.activity_profile_name || settings.activity_profile) ||
-      "—",
+      normalizeActivityName(activity, [
+        record.activity_profile_display,
+        record.activity_profile_name,
+        record.activity_profile_code,
+        settings.activity_profile,
+      ]) || "—",
     subscription:
       normalizeText(record.subscription_status) ||
       normalizeNestedName(subscription, ["plan_name", "name", "title", "status"]) ||
@@ -1028,7 +1049,7 @@ export default function SystemCompaniesReportsPage() {
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = `primeyacc-system-companies-report-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-system-companies-report-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();

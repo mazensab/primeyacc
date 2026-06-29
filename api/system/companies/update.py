@@ -1,22 +1,23 @@
 # ============================================================
 # 📂 api/system/companies/update.py
-# 🧠 PrimeyAcc | System Company Update API V1.2
+# 🧠 Mhamcloud | System Company Update API V1.3
 # ------------------------------------------------------------
 # ✅ Update tenant company data from system workspace
 # ✅ Supports partial updates using POST or PATCH
-# ✅ Validates company identity, contact, Saudi address, and status
-# ✅ Safe payload fields based on the current Company model
+# ✅ Keeps company_code immutable after backend generation
+# ✅ Supports ActivityProfile reference selection
+# ✅ Keeps legacy activity_profile for backward compatibility
+# ✅ Validates legal/tax data when billing fields are edited
+# ✅ Validates Saudi National Address when address fields are edited
 # ✅ Updates owner CompanyMembership when owner_id is provided
 # ✅ Protected by system permission: system.companies.update
 # ✅ Uses central api/permissions.py guard
 # ------------------------------------------------------------
 # القاعدة المعتمدة:
-# - هذا الملف جزء من المرحلة 1: نواة SaaS
-# - تم تحديثه في المرحلة 2 لاستخدام حارس الصلاحيات المركزي
 # - Company هي حدود العزل الأساسية للنظام
-# - جميع APIs داخل /api/system/ تتطلب can_access_system=True
-# - تعديل الشركات لا يسمح لمستخدم company فقط
-# - تعديل الاشتراك لا يتم هنا؛ الاشتراك له APIs مستقلة
+# - company_code يولد من الباكند ولا يعدل من الواجهة
+# - بيانات الشركة القانونية والعنوان الوطني مهمة للفوترة والاشتراكات والإيصالات
+# - تعديل الاشتراك لا يتم هنا الاشتراك له APIs مستقلة
 # ============================================================
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.http import HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_protect
@@ -42,7 +44,12 @@ from accounts.models import (
     WorkspaceType,
 )
 from api.permissions import user_has_system_permission
-from companies.models import Company, CompanyActivityProfile, CompanyStatus
+from companies.models import (
+    ActivityProfile,
+    Company,
+    CompanyActivityProfile,
+    CompanyStatus,
+)
 
 
 User = get_user_model()
@@ -66,7 +73,7 @@ def _json_body(request: HttpRequest) -> dict[str, Any]:
 
 def _has_value(request: HttpRequest, payload: dict[str, Any], key: str) -> bool:
     """
-    يتحقق هل الحقل أُرسل في JSON أو form-data.
+    يتحقق هل الحقل أرسل في JSON أو form-data.
     """
 
     return key in payload or key in request.POST
@@ -197,12 +204,29 @@ def _owner_payload(company: Company) -> dict[str, Any] | None:
     }
 
 
+def _activity_profile_payload(profile: ActivityProfile | None) -> dict[str, Any] | None:
+    """
+    يرجع بيانات بروفايل النشاط المرتبط بالشركة.
+    """
+
+    if not profile:
+        return None
+
+    return {
+        "id": profile.id,
+        "code": profile.code,
+        "name": profile.name,
+        "name_ar": profile.name_ar,
+        "name_en": profile.name_en,
+        "display_name": profile.display_name,
+        "is_system": profile.is_system,
+        "is_active": profile.is_active,
+    }
+
+
 def _company_payload(company: Company) -> dict[str, Any]:
     """
     يحول كائن الشركة إلى JSON نظيف للواجهة.
-
-    تم استخدام getattr للحقول الاختيارية حتى لا يتعطل API إذا لم يكن الحقل موجودًا
-    في نسخة الموديل الحالية.
     """
 
     return {
@@ -213,6 +237,10 @@ def _company_payload(company: Company) -> dict[str, Any]:
         "name_en": getattr(company, "name_en", ""),
         "company_code": getattr(company, "company_code", ""),
         "activity_profile": getattr(company, "activity_profile", ""),
+        "activity_profile_ref": _activity_profile_payload(
+            getattr(company, "activity_profile_ref", None)
+        ),
+        "activity_profile_ref_id": getattr(company, "activity_profile_ref_id", None),
         "status": getattr(company, "status", ""),
         "is_active": getattr(company, "is_active", True),
         "commercial_registration": getattr(company, "commercial_registration", ""),
@@ -255,11 +283,163 @@ def _company_has_field(field_name: str) -> bool:
 
 def _set_company_field(company: Company, field_name: str, value: Any) -> None:
     """
-    يعدل الحقل فقط إذا كان موجودًا في موديل Company.
+    يعدل الحقل فقط إذا كان موجودا في موديل Company.
     """
 
     if _company_has_field(field_name):
         setattr(company, field_name, value)
+
+
+def _activity_profile_ref_was_sent(
+    request: HttpRequest,
+    payload: dict[str, Any],
+) -> bool:
+    """
+    يتحقق هل أرسل مرجع النشاط الجديد.
+    """
+
+    return _has_value(request, payload, "activity_profile_id") or _has_value(
+        request,
+        payload,
+        "activity_profile_ref_id",
+    )
+
+
+def _resolve_activity_profile_ref(
+    *,
+    company: Company,
+    request: HttpRequest,
+    payload: dict[str, Any],
+) -> ActivityProfile | None:
+    """
+    يرجع ActivityProfile فعالا ومتاحا للشركة.
+
+    المسموح:
+    - system-level profiles
+    - custom profiles الخاصة بنفس الشركة
+    """
+
+    raw_profile_id = _get_value(request, payload, "activity_profile_id")
+
+    if raw_profile_id in {None, ""} and _has_value(request, payload, "activity_profile_ref_id"):
+        raw_profile_id = _get_value(request, payload, "activity_profile_ref_id")
+
+    if raw_profile_id in {None, ""}:
+        return None
+
+    try:
+        profile_id = int(raw_profile_id)
+    except (TypeError, ValueError):
+        raise ValidationError({"activity_profile_id": "النشاط غير صحيح."})
+
+    profile = (
+        ActivityProfile.objects.filter(
+            Q(company__isnull=True) | Q(company=company),
+            id=profile_id,
+            is_active=True,
+        )
+        .order_by("id")
+        .first()
+    )
+
+    if not profile:
+        raise ValidationError({"activity_profile_id": "النشاط غير موجود أو غير متاح لهذه الشركة."})
+
+    return profile
+
+
+def _legacy_activity_profile_from_ref(
+    *,
+    current_value: str,
+    activity_profile_ref: ActivityProfile | None,
+) -> str:
+    """
+    يحافظ على حقل activity_profile القديم للتوافق.
+    """
+
+    valid_activities = {choice[0] for choice in CompanyActivityProfile.choices}
+
+    if activity_profile_ref and activity_profile_ref.code in valid_activities:
+        return activity_profile_ref.code
+
+    if current_value in valid_activities:
+        return current_value
+
+    return CompanyActivityProfile.GENERAL
+
+
+def _validate_required_company_data(company: Company) -> dict[str, str]:
+    """
+    يتحقق من اكتمال بيانات الشركة المطلوبة للفوترة.
+    """
+
+    errors: dict[str, str] = {}
+
+    required_fields = {
+        "commercial_registration": (
+            getattr(company, "commercial_registration", ""),
+            "السجل التجاري مطلوب.",
+        ),
+        "tax_number": (
+            getattr(company, "tax_number", ""),
+            "الرقم الضريبي مطلوب.",
+        ),
+        "building_number": (
+            getattr(company, "building_number", ""),
+            "رقم المبنى مطلوب.",
+        ),
+        "street_name": (
+            getattr(company, "street_name", ""),
+            "اسم الشارع مطلوب.",
+        ),
+        "district": (
+            getattr(company, "district", ""),
+            "الحي مطلوب.",
+        ),
+        "city": (
+            getattr(company, "city", ""),
+            "المدينة مطلوبة.",
+        ),
+        "region": (
+            getattr(company, "region", ""),
+            "المنطقة مطلوبة.",
+        ),
+        "postal_code": (
+            getattr(company, "postal_code", ""),
+            "الرمز البريدي مطلوب.",
+        ),
+    }
+
+    for field_name, field_data in required_fields.items():
+        value, message = field_data
+        if not _clean_text(value):
+            errors[field_name] = message
+
+    return errors
+
+
+def _billing_identity_fields_were_sent(
+    request: HttpRequest,
+    payload: dict[str, Any],
+) -> bool:
+    """
+    يتحقق هل أرسلت حقول تؤثر على جاهزية الشركة للفوترة.
+    """
+
+    fields = [
+        "commercial_registration",
+        "tax_number",
+        "building_number",
+        "street_name",
+        "district",
+        "city",
+        "region",
+        "postal_code",
+        "short_address",
+        "address",
+    ]
+
+    return any(_has_value(request, payload, field_name) for field_name in fields)
 
 
 def _ensure_owner_membership(
@@ -270,8 +450,6 @@ def _ensure_owner_membership(
 ) -> None:
     """
     ينشئ أو يحدث عضوية OWNER للمالك إذا تم تحديد owner_id.
-
-    هذه خطوة مهمة حتى يستطيع مالك الشركة الدخول إلى /company.
     """
 
     if not owner:
@@ -354,6 +532,28 @@ def system_company_update(request: HttpRequest, company_id: int) -> JsonResponse
 
     try:
         with transaction.atomic():
+            if _has_value(request, payload, "company_code") or _has_value(request, payload, "code"):
+                requested_code = _clean_text(_get_value(request, payload, "company_code"))
+
+                if not requested_code:
+                    requested_code = _clean_text(_get_value(request, payload, "code"))
+
+                current_code = _clean_text(getattr(company, "company_code", ""))
+
+                if requested_code and requested_code.upper() == current_code.upper():
+                    pass
+                else:
+                    return JsonResponse(
+                        {
+                            "ok": False,
+                            "message": "كود الشركة يولد من النظام ولا يمكن تعديله.",
+                            "errors": {
+                                "company_code": "كود الشركة يولد من النظام ولا يمكن تعديله."
+                            },
+                        },
+                        status=400,
+                    )
+
             if _has_value(request, payload, "name"):
                 name = _clean_text(_get_value(request, payload, "name"))
                 if not name:
@@ -381,36 +581,24 @@ def system_company_update(request: HttpRequest, company_id: int) -> JsonResponse
                     _clean_text(_get_value(request, payload, "name_en")),
                 )
 
-            if _has_value(request, payload, "company_code"):
-                company_code = _clean_text(_get_value(request, payload, "company_code"))
+            if _activity_profile_ref_was_sent(request, payload):
+                activity_profile_ref = _resolve_activity_profile_ref(
+                    company=company,
+                    request=request,
+                    payload=payload,
+                )
 
-                if not company_code:
-                    return JsonResponse(
-                        {
-                            "ok": False,
-                            "message": "كود الشركة مطلوب.",
-                            "errors": {"company_code": "كود الشركة مطلوب."},
-                        },
-                        status=400,
-                    )
+                _set_company_field(company, "activity_profile_ref", activity_profile_ref)
+                _set_company_field(
+                    company,
+                    "activity_profile",
+                    _legacy_activity_profile_from_ref(
+                        current_value=getattr(company, "activity_profile", ""),
+                        activity_profile_ref=activity_profile_ref,
+                    ),
+                )
 
-                if (
-                    Company.objects.exclude(id=company.id)
-                    .filter(company_code__iexact=company_code)
-                    .exists()
-                ):
-                    return JsonResponse(
-                        {
-                            "ok": False,
-                            "message": "كود الشركة مستخدم من قبل.",
-                            "errors": {"company_code": "كود الشركة مستخدم من قبل."},
-                        },
-                        status=400,
-                    )
-
-                company.company_code = company_code
-
-            if _has_value(request, payload, "activity_profile"):
+            elif _has_value(request, payload, "activity_profile"):
                 activity_profile = _clean_text(
                     _get_value(request, payload, "activity_profile")
                 ).upper()
@@ -487,7 +675,6 @@ def system_company_update(request: HttpRequest, company_id: int) -> JsonResponse
                 "postal_code",
                 "short_address",
                 "address",
-                "national_address_line",
                 "currency_code",
                 "notes",
             ]
@@ -508,6 +695,18 @@ def system_company_update(request: HttpRequest, company_id: int) -> JsonResponse
                         default=str(getattr(company, "vat_percentage", "15.00")),
                     ),
                 )
+
+            if _billing_identity_fields_were_sent(request, payload):
+                required_errors = _validate_required_company_data(company)
+                if required_errors:
+                    return JsonResponse(
+                        {
+                            "ok": False,
+                            "message": "بيانات الشركة القانونية والعنوان الوطني مطلوبة.",
+                            "errors": required_errors,
+                        },
+                        status=400,
+                    )
 
             _set_company_field(company, "updated_by", request.user)
 

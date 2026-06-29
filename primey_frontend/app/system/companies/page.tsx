@@ -1,10 +1,10 @@
-﻿"use client";
+"use client";
 
 /* ============================================================
    📂 primey_frontend/app/system/companies/page.tsx
-   🏢 PrimeyAcc — System Companies Overview
+   🏢 Mhamcloud — System Companies Overview
    ------------------------------------------------------------
-   ✅ Premium PrimeyCare admin pattern adapted for PrimeyAcc
+   ✅ Premium PrimeyCare admin pattern adapted for Mhamcloud
    ✅ System companies module center page
    ✅ Real API only: GET /api/system/companies/
    ✅ KPI cards + quick actions + recent companies table
@@ -122,7 +122,7 @@ const translations = {
   ar: {
     title: "الشركات",
     subtitle:
-      "مركز إدارة شركات PrimeyAcc لمتابعة الشركات المسجلة حالة النشاط الاشتراكات والتقارير من مكان واحد.",
+      "مركز إدارة شركات Mhamcloud لمتابعة الشركات المسجلة حالة النشاط الاشتراكات والتقارير من مكان واحد.",
     badge: "إدارة المنصة",
     refresh: "تحديث",
     exportExcel: "تصدير Excel",
@@ -160,7 +160,7 @@ const translations = {
 
     tableTitle: "أحدث الشركات",
     tableDesc:
-      "نظرة سريعة على أحدث الشركات المسجلة في PrimeyAcc مع الحالة والنشاط والاشتراك.",
+      "نظرة سريعة على أحدث الشركات المسجلة في Mhamcloud مع الحالة والنشاط والاشتراك.",
     company: "الشركة",
     code: "الكود",
     owner: "المالك",
@@ -190,7 +190,7 @@ const translations = {
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
     pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
-    reportTitle: "تقرير مركز شركات PrimeyAcc",
+    reportTitle: "تقرير مركز شركات Mhamcloud",
     generatedAt: "تاريخ الإنشاء",
     showing: "عرض",
     of: "من",
@@ -200,7 +200,7 @@ const translations = {
   en: {
     title: "Companies",
     subtitle:
-      "PrimeyAcc companies center for registered companies, activity status, subscriptions, and reports in one place.",
+      "Mhamcloud companies center for registered companies, activity status, subscriptions, and reports in one place.",
     badge: "Platform management",
     refresh: "Refresh",
     exportExcel: "Export Excel",
@@ -238,7 +238,7 @@ const translations = {
 
     tableTitle: "Latest companies",
     tableDesc:
-      "A quick view of the newest companies registered in PrimeyAcc with status, activity, and subscription.",
+      "A quick view of the newest companies registered in Mhamcloud with status, activity, and subscription.",
     company: "Company",
     code: "Code",
     owner: "Owner",
@@ -268,7 +268,7 @@ const translations = {
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
     pdfHint: "Choose Save as PDF from the print dialog.",
-    reportTitle: "PrimeyAcc Companies Center Report",
+    reportTitle: "Mhamcloud Companies Center Report",
     generatedAt: "Generated at",
     showing: "Showing",
     of: "of",
@@ -437,6 +437,24 @@ function normalizeNestedName(value: unknown, keys: string[] = ["name", "title", 
   return "";
 }
 
+function normalizeActivityName(value: unknown, fallbackValues: unknown[] = []) {
+  if (typeof value === "string") return normalizeText(value);
+
+  const record = asRecord(value);
+  const keys = ["display_name", "name_ar", "name_en", "name", "title", "code"];
+
+  for (const key of keys) {
+    const text = normalizeText(record[key]);
+    if (text) return text;
+  }
+
+  for (const fallbackValue of fallbackValues) {
+    const text = normalizeText(fallbackValue);
+    if (text) return text;
+  }
+
+  return "";
+}
 function normalizeStatus(value: unknown) {
   if (typeof value === "boolean") return value ? "active" : "inactive";
 
@@ -475,7 +493,12 @@ function normalizeCompany(value: unknown): CompanyRecord {
     ),
     status: normalizeStatus(record.status ?? record.state ?? record.is_active),
     owner: normalizeNestedName(owner, ["name", "full_name", "email", "username"]) || "—",
-    activity: normalizeNestedName(activity, ["name", "code", "title"]) || "—",
+    activity:
+      normalizeActivityName(activity, [
+        record.activity_profile_display,
+        record.activity_profile_name,
+        record.activity_profile_code,
+      ]) || "—",
     subscription:
       normalizeText(record.subscription_status) ||
       normalizeNestedName(subscription, ["plan_name", "name", "title", "status"]) ||
@@ -865,7 +888,7 @@ export default function SystemCompaniesPage() {
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = `primeyacc-system-companies-overview-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-system-companies-overview-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();

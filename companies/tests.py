@@ -1,34 +1,34 @@
 # ============================================================
-# 📂 companies/tests.py
-# 🧠 PrimeyAcc | Companies Tests V1.4
+# ظ‹ع؛â€œâ€ڑ companies/tests.py
+# ظ‹ع؛آ§آ  Mhamcloud | Companies Tests V1.4
 # ------------------------------------------------------------
-# ✅ CompanySettings tests
-# ✅ Company settings API tests
-# ✅ Company permissions snapshot API tests
-# ✅ Company setup/readiness API tests
-# ✅ Company users/memberships API tests
-# ✅ Branch tenant-isolation tests
-# ✅ Activity Profiles tests
-# ✅ /api/company/me/ snapshot tests
-# ✅ /api/company/profile/ snapshot tests
-# ✅ /api/company/permissions/ snapshot tests
-# ✅ /api/company/setup/ readiness snapshot tests
-# ✅ /api/company/settings/ detail/update tests
-# ✅ /api/company/users/ list/create/detail/status tests
-# ✅ /api/company/branches/ list/detail/create tests
-# ✅ Ensures unauthenticated APIs return JSON 401
+# أ¢إ“â€¦ CompanySettings tests
+# أ¢إ“â€¦ Company settings API tests
+# أ¢إ“â€¦ Company permissions snapshot API tests
+# أ¢إ“â€¦ Company setup/readiness API tests
+# أ¢إ“â€¦ Company users/memberships API tests
+# أ¢إ“â€¦ Branch tenant-isolation tests
+# أ¢إ“â€¦ Activity Profiles tests
+# أ¢إ“â€¦ /api/company/me/ snapshot tests
+# أ¢إ“â€¦ /api/company/profile/ snapshot tests
+# أ¢إ“â€¦ /api/company/permissions/ snapshot tests
+# أ¢إ“â€¦ /api/company/setup/ readiness snapshot tests
+# أ¢إ“â€¦ /api/company/settings/ detail/update tests
+# أ¢إ“â€¦ /api/company/users/ list/create/detail/status tests
+# أ¢إ“â€¦ /api/company/branches/ list/detail/create tests
+# أ¢إ“â€¦ Ensures unauthenticated APIs return JSON 401
 # ------------------------------------------------------------
-# القاعدة المعتمدة:
-# - Company = حدود العزل الأساسية للنظام
-# - CompanyMembership = حد الوصول الرسمي لمساحة /company
-# - /api/company لا يقبل company_id من الواجهة كمصدر ثقة
-# - CompanySettings تخص الشركة الحالية فقط
-# - ActivityProfile يدعم الأنشطة العامة والمخصصة للشركات
-# - مستخدمو الشركة لا يظهرون إلا لأعضاء نفس الشركة
-# - فروع الشركة لا تظهر إلا لأعضاء نفس الشركة
-# - الصلاحيات والأدوار مصدرها الباكند
-# - تهيئة الشركة وجاهزيتها التشغيلية مصدرها الباكند
-# - الباكند هو مصدر الحقيقة للصلاحيات وعزل الشركات
+# ط·آ§ط¸â€‍ط¸â€ڑط·آ§ط·آ¹ط·آ¯ط·آ© ط·آ§ط¸â€‍ط¸â€¦ط·آ¹ط·ع¾ط¸â€¦ط·آ¯ط·آ©:
+# - Company = ط·آ­ط·آ¯ط¸ث†ط·آ¯ ط·آ§ط¸â€‍ط·آ¹ط·آ²ط¸â€‍ ط·آ§ط¸â€‍ط·آ£ط·آ³ط·آ§ط·آ³ط¸ظ¹ط·آ© ط¸â€‍ط¸â€‍ط¸â€ ط·آ¸ط·آ§ط¸â€¦
+# - CompanyMembership = ط·آ­ط·آ¯ ط·آ§ط¸â€‍ط¸ث†ط·آµط¸ث†ط¸â€‍ ط·آ§ط¸â€‍ط·آ±ط·آ³ط¸â€¦ط¸ظ¹ ط¸â€‍ط¸â€¦ط·آ³ط·آ§ط·آ­ط·آ© /company
+# - /api/company ط¸â€‍ط·آ§ ط¸ظ¹ط¸â€ڑط·آ¨ط¸â€‍ company_id ط¸â€¦ط¸â€  ط·آ§ط¸â€‍ط¸ث†ط·آ§ط·آ¬ط¸â€،ط·آ© ط¸ئ’ط¸â€¦ط·آµط·آ¯ط·آ± ط·آ«ط¸â€ڑط·آ©
+# - CompanySettings ط·ع¾ط·آ®ط·آµ ط·آ§ط¸â€‍ط·آ´ط·آ±ط¸ئ’ط·آ© ط·آ§ط¸â€‍ط·آ­ط·آ§ط¸â€‍ط¸ظ¹ط·آ© ط¸ظ¾ط¸â€ڑط·آ·
+# - ActivityProfile ط¸ظ¹ط·آ¯ط·آ¹ط¸â€¦ ط·آ§ط¸â€‍ط·آ£ط¸â€ ط·آ´ط·آ·ط·آ© ط·آ§ط¸â€‍ط·آ¹ط·آ§ط¸â€¦ط·آ© ط¸ث†ط·آ§ط¸â€‍ط¸â€¦ط·آ®ط·آµط·آµط·آ© ط¸â€‍ط¸â€‍ط·آ´ط·آ±ط¸ئ’ط·آ§ط·ع¾
+# - ط¸â€¦ط·آ³ط·ع¾ط·آ®ط·آ¯ط¸â€¦ط¸ث† ط·آ§ط¸â€‍ط·آ´ط·آ±ط¸ئ’ط·آ© ط¸â€‍ط·آ§ ط¸ظ¹ط·آ¸ط¸â€،ط·آ±ط¸ث†ط¸â€  ط·آ¥ط¸â€‍ط·آ§ ط¸â€‍ط·آ£ط·آ¹ط·آ¶ط·آ§ط·طŒ ط¸â€ ط¸ظ¾ط·آ³ ط·آ§ط¸â€‍ط·آ´ط·آ±ط¸ئ’ط·آ©
+# - ط¸ظ¾ط·آ±ط¸ث†ط·آ¹ ط·آ§ط¸â€‍ط·آ´ط·آ±ط¸ئ’ط·آ© ط¸â€‍ط·آ§ ط·ع¾ط·آ¸ط¸â€،ط·آ± ط·آ¥ط¸â€‍ط·آ§ ط¸â€‍ط·آ£ط·آ¹ط·آ¶ط·آ§ط·طŒ ط¸â€ ط¸ظ¾ط·آ³ ط·آ§ط¸â€‍ط·آ´ط·آ±ط¸ئ’ط·آ©
+# - ط·آ§ط¸â€‍ط·آµط¸â€‍ط·آ§ط·آ­ط¸ظ¹ط·آ§ط·ع¾ ط¸ث†ط·آ§ط¸â€‍ط·آ£ط·آ¯ط¸ث†ط·آ§ط·آ± ط¸â€¦ط·آµط·آ¯ط·آ±ط¸â€،ط·آ§ ط·آ§ط¸â€‍ط·آ¨ط·آ§ط¸ئ’ط¸â€ ط·آ¯
+# - ط·ع¾ط¸â€،ط¸ظ¹ط·آ¦ط·آ© ط·آ§ط¸â€‍ط·آ´ط·آ±ط¸ئ’ط·آ© ط¸ث†ط·آ¬ط·آ§ط¸â€،ط·آ²ط¸ظ¹ط·ع¾ط¸â€،ط·آ§ ط·آ§ط¸â€‍ط·ع¾ط·آ´ط·ط›ط¸ظ¹ط¸â€‍ط¸ظ¹ط·آ© ط¸â€¦ط·آµط·آ¯ط·آ±ط¸â€،ط·آ§ ط·آ§ط¸â€‍ط·آ¨ط·آ§ط¸ئ’ط¸â€ ط·آ¯
+# - ط·آ§ط¸â€‍ط·آ¨ط·آ§ط¸ئ’ط¸â€ ط·آ¯ ط¸â€،ط¸ث† ط¸â€¦ط·آµط·آ¯ط·آ± ط·آ§ط¸â€‍ط·آ­ط¸â€ڑط¸ظ¹ط¸â€ڑط·آ© ط¸â€‍ط¸â€‍ط·آµط¸â€‍ط·آ§ط·آ­ط¸ظ¹ط·آ§ط·ع¾ ط¸ث†ط·آ¹ط·آ²ط¸â€‍ ط·آ§ط¸â€‍ط·آ´ط·آ±ط¸ئ’ط·آ§ط·ع¾
 # ============================================================
 
 from __future__ import annotations
@@ -44,6 +44,7 @@ from companies.models import (
     Branch,
     BranchType,
     Company,
+    CompanyActivityProfile,
     CompanySettings,
     CompanyStatus,
 )
@@ -78,7 +79,7 @@ class CompanyWorkspacePhase3Tests(TestCase):
 
         self.company = Company.objects.create(
             name="Primey Test Company",
-            name_ar="شركة برايمي التجريبية",
+            name_ar="ط·آ´ط·آ±ط¸ئ’ط·آ© ط·آ¨ط·آ±ط·آ§ط¸ظ¹ط¸â€¦ط¸ظ¹ ط·آ§ط¸â€‍ط·ع¾ط·آ¬ط·آ±ط¸ظ¹ط·آ¨ط¸ظ¹ط·آ©",
             name_en="Primey Test Company",
             company_code="TEST-COMPANY-A",
             status=CompanyStatus.ACTIVE,
@@ -89,7 +90,7 @@ class CompanyWorkspacePhase3Tests(TestCase):
 
         self.other_company = Company.objects.create(
             name="Other Test Company",
-            name_ar="شركة أخرى",
+            name_ar="ط·آ´ط·آ±ط¸ئ’ط·آ© ط·آ£ط·آ®ط·آ±ط¸â€°",
             name_en="Other Test Company",
             company_code="TEST-COMPANY-B",
             status=CompanyStatus.ACTIVE,
@@ -157,7 +158,7 @@ class CompanyWorkspacePhase3Tests(TestCase):
         self.default_branch = Branch.objects.create(
             company=self.company,
             name="Main Branch",
-            name_ar="الفرع الرئيسي",
+            name_ar="ط·آ§ط¸â€‍ط¸ظ¾ط·آ±ط·آ¹ ط·آ§ط¸â€‍ط·آ±ط·آ¦ط¸ظ¹ط·آ³ط¸ظ¹",
             name_en="Main Branch",
             branch_code="MAIN",
             branch_type=BranchType.HEAD_OFFICE,
@@ -170,7 +171,7 @@ class CompanyWorkspacePhase3Tests(TestCase):
         self.other_company_branch = Branch.objects.create(
             company=self.other_company,
             name="Other Branch",
-            name_ar="فرع شركة أخرى",
+            name_ar="ط¸ظ¾ط·آ±ط·آ¹ ط·آ´ط·آ±ط¸ئ’ط·آ© ط·آ£ط·آ®ط·آ±ط¸â€°",
             name_en="Other Branch",
             branch_code="OTHER",
             branch_type=BranchType.BRANCH,
@@ -188,7 +189,7 @@ class CompanyWorkspacePhase3Tests(TestCase):
         profile = ActivityProfile.objects.create(
             code="retail",
             name="Retail",
-            name_ar="تجارة تجزئة",
+            name_ar="ط·ع¾ط·آ¬ط·آ§ط·آ±ط·آ© ط·ع¾ط·آ¬ط·آ²ط·آ¦ط·آ©",
             name_en="Retail",
             is_system=True,
             is_active=True,
@@ -207,7 +208,7 @@ class CompanyWorkspacePhase3Tests(TestCase):
         self.assertEqual(profile.code, "RETAIL")
         self.assertTrue(profile.is_system)
         self.assertIsNone(profile.company_id)
-        self.assertEqual(profile.display_name, "تجارة تجزئة")
+        self.assertEqual(profile.display_name, "ط·ع¾ط·آ¬ط·آ§ط·آ±ط·آ© ط·ع¾ط·آ¬ط·آ²ط·آ¦ط·آ©")
         self.assertTrue(profile.default_settings["inventory"]["enabled"])
 
     def test_can_create_company_custom_activity_profile(self) -> None:
@@ -219,7 +220,7 @@ class CompanyWorkspacePhase3Tests(TestCase):
             company=self.company,
             code="custom-services",
             name="Custom Services",
-            name_ar="خدمات مخصصة",
+            name_ar="ط·آ®ط·آ¯ط¸â€¦ط·آ§ط·ع¾ ط¸â€¦ط·آ®ط·آµط·آµط·آ©",
             name_en="Custom Services",
             is_system=False,
             is_active=True,
@@ -235,7 +236,7 @@ class CompanyWorkspacePhase3Tests(TestCase):
         self.assertEqual(profile.code, "CUSTOM-SERVICES")
         self.assertFalse(profile.is_system)
         self.assertEqual(profile.company_id, self.company.id)
-        self.assertEqual(profile.display_name, "خدمات مخصصة")
+        self.assertEqual(profile.display_name, "ط·آ®ط·آ¯ط¸â€¦ط·آ§ط·ع¾ ط¸â€¦ط·آ®ط·آµط·آµط·آ©")
         self.assertTrue(profile.default_settings["sales"]["require_customer"])
 
     def test_company_can_reference_activity_profile_without_breaking_legacy_field(self) -> None:
@@ -246,7 +247,7 @@ class CompanyWorkspacePhase3Tests(TestCase):
         profile = ActivityProfile.objects.create(
             code="wholesale",
             name="Wholesale",
-            name_ar="تجارة جملة",
+            name_ar="ط·ع¾ط·آ¬ط·آ§ط·آ±ط·آ© ط·آ¬ط¸â€¦ط¸â€‍ط·آ©",
             name_en="Wholesale",
             is_system=True,
             is_active=True,
@@ -966,7 +967,7 @@ class CompanyWorkspacePhase3Tests(TestCase):
         payload = {
             "company_id": self.other_company.id,
             "name": "North Branch",
-            "name_ar": "فرع الشمال",
+            "name_ar": "ط¸ظ¾ط·آ±ط·آ¹ ط·آ§ط¸â€‍ط·آ´ط¸â€¦ط·آ§ط¸â€‍",
             "name_en": "North Branch",
             "branch_code": "NORTH",
             "branch_type": "BRANCH",
@@ -1029,7 +1030,7 @@ class CompanyWorkspacePhase3Tests(TestCase):
         second_branch = Branch.objects.create(
             company=self.company,
             name="Second Branch",
-            name_ar="الفرع الثاني",
+            name_ar="ط·آ§ط¸â€‍ط¸ظ¾ط·آ±ط·آ¹ ط·آ§ط¸â€‍ط·آ«ط·آ§ط¸â€ ط¸ظ¹",
             name_en="Second Branch",
             branch_code="SECOND",
             branch_type=BranchType.BRANCH,
@@ -1053,3 +1054,264 @@ class CompanyWorkspacePhase3Tests(TestCase):
         self.assertFalse(self.default_branch.is_default)
         self.assertTrue(second_branch.is_default)
         self.assertTrue(second_branch.is_active)
+# ==== SYSTEM COMPANY MANAGEMENT API TESTS START ====
+
+from django.utils import timezone
+from unittest.mock import patch
+
+
+class SystemCompanyManagementApiTests(TestCase):
+    """
+    Tests for system workspace company create/update/options contract.
+
+    These tests protect:
+    - backend-generated company_code
+    - billing/legal required fields
+    - Saudi National Address required fields
+    - ActivityProfile reference flow
+    - immutable company_code after creation
+    """
+
+    def setUp(self) -> None:
+        self.client = Client()
+
+        self.system_user = User.objects.create_superuser(
+            username="system_company_admin",
+            email="system-company-admin@example.com",
+            password="StrongPass123!",
+            first_name="System",
+            last_name="Admin",
+        )
+
+        self.client.force_login(self.system_user)
+
+        self.permission_patchers = [
+            patch("api.system.companies.create.user_has_system_permission", return_value=True),
+            patch("api.system.companies.update.user_has_system_permission", return_value=True),
+            patch("api.system.companies.options.user_has_system_permission", return_value=True),
+        ]
+
+        for permission_patcher in self.permission_patchers:
+            permission_patcher.start()
+            self.addCleanup(permission_patcher.stop)
+
+        self.activity_profile = ActivityProfile.objects.create(
+            code="retail",
+            name="Retail",
+            name_ar="ط·ع¾ط·آ¬ط·آ§ط·آ±ط·آ© ط·آ§ط¸â€‍ط·ع¾ط·آ¬ط·آ²ط·آ¦ط·آ©",
+            name_en="Retail",
+            is_system=True,
+            is_active=True,
+            created_by=self.system_user,
+            updated_by=self.system_user,
+        )
+
+        self.second_activity_profile = ActivityProfile.objects.create(
+            code="wholesale",
+            name="Wholesale",
+            name_ar="ط·ع¾ط·آ¬ط·آ§ط·آ±ط·آ© ط·آ§ط¸â€‍ط·آ¬ط¸â€¦ط¸â€‍ط·آ©",
+            name_en="Wholesale",
+            is_system=True,
+            is_active=True,
+            created_by=self.system_user,
+            updated_by=self.system_user,
+        )
+
+        self.inactive_activity_profile = ActivityProfile.objects.create(
+            code="inactive-system-profile",
+            name="Inactive System Profile",
+            name_ar="ط¸â€ ط·آ´ط·آ§ط·آ· ط·ط›ط¸ظ¹ط·آ± ط¸ظ¾ط·آ¹ط·آ§ط¸â€‍",
+            name_en="Inactive System Profile",
+            is_system=True,
+            is_active=False,
+            created_by=self.system_user,
+            updated_by=self.system_user,
+        )
+
+        self.company = Company.objects.create(
+            name="Existing System Company",
+            name_ar="ط·آ´ط·آ±ط¸ئ’ط·آ© ط¸â€ ط·آ¸ط·آ§ط¸â€¦ ط¸â€ڑط·آ§ط·آ¦ط¸â€¦ط·آ©",
+            name_en="Existing System Company",
+            company_code="CMP-TEST-000001",
+            activity_profile=CompanyActivityProfile.RETAIL,
+            activity_profile_ref=self.activity_profile,
+            status=CompanyStatus.TRIAL,
+            is_active=True,
+            commercial_registration="1010000001",
+            tax_number="300000000000001",
+            building_number="1234",
+            street_name="King Fahd Road",
+            district="Al Olaya",
+            city="Riyadh",
+            region="Riyadh",
+            postal_code="12345",
+            short_address="RRRD1234",
+            country="Saudi Arabia",
+            currency_code="SAR",
+            created_by=self.system_user,
+            updated_by=self.system_user,
+        )
+
+    def _valid_create_payload(self) -> dict:
+        """
+        Returns a complete company create payload.
+        """
+
+        return {
+            "name": "System Created Company",
+            "name_ar": "ط·آ´ط·آ±ط¸ئ’ط·آ© ط¸â€¦ط¸â€ ط·آ´ط·آ£ط·آ© ط¸â€¦ط¸â€  ط·آ§ط¸â€‍ط¸â€ ط·آ¸ط·آ§ط¸â€¦",
+            "name_en": "System Created Company",
+            "code": "FRONTEND-SHOULD-BE-IGNORED",
+            "company_code": "FRONTEND-SHOULD-BE-IGNORED",
+            "activity_profile_id": self.activity_profile.id,
+            "status": CompanyStatus.TRIAL,
+            "is_active": True,
+            "commercial_registration": "1010000002",
+            "tax_number": "300000000000002",
+            "email": "created-company@example.com",
+            "phone": "0110000000",
+            "mobile": "0500000000",
+            "whatsapp_number": "0500000000",
+            "country": "Saudi Arabia",
+            "building_number": "5678",
+            "street_name": "Prince Mohammed Road",
+            "district": "Al Yasmin",
+            "city": "Riyadh",
+            "region": "Riyadh",
+            "postal_code": "13321",
+            "short_address": "RRYA5678",
+            "address": "Additional test address",
+            "currency_code": "SAR",
+            "vat_percentage": "15.00",
+            "notes": "Created from system API test.",
+        }
+
+    def test_system_company_options_returns_activity_profiles_and_contract(self) -> None:
+        """
+        /api/system/companies/options/ should return active system activity profiles
+        and the company_code contract.
+        """
+
+        response = self.client.get("/api/system/companies/options/")
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        data = payload["data"]
+
+        profile_ids = {item["id"] for item in data["activity_profiles"]}
+
+        self.assertTrue(payload["ok"])
+        self.assertTrue(data["company_code"]["auto_generated"])
+        self.assertFalse(data["company_code"]["editable"])
+        self.assertIn(self.activity_profile.id, profile_ids)
+        self.assertIn(self.second_activity_profile.id, profile_ids)
+        self.assertNotIn(self.inactive_activity_profile.id, profile_ids)
+        self.assertIn("commercial_registration", data["required_fields"])
+        self.assertIn("tax_number", data["required_fields"])
+        self.assertIn("building_number", data["required_fields"])
+        self.assertIn("postal_code", data["required_fields"])
+
+    def test_system_company_create_generates_company_code_and_ignores_frontend_code(self) -> None:
+        """
+        System create endpoint should generate company_code from backend
+        and ignore code/company_code sent by frontend.
+        """
+
+        payload = self._valid_create_payload()
+
+        response = self.client.post(
+            "/api/system/companies/create/",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+
+        response_payload = response.json()
+        company_data = response_payload["data"]["company"]
+        expected_prefix = f"CMP-{timezone.now().year}-"
+
+        self.assertTrue(response_payload["ok"])
+        self.assertTrue(company_data["company_code"].startswith(expected_prefix))
+        self.assertNotEqual(company_data["company_code"], payload["code"])
+        self.assertNotEqual(company_data["company_code"], payload["company_code"])
+        self.assertEqual(company_data["activity_profile_ref_id"], self.activity_profile.id)
+
+        created_company = Company.objects.get(id=company_data["id"])
+        self.assertEqual(created_company.activity_profile_ref_id, self.activity_profile.id)
+        self.assertTrue(created_company.company_code.startswith(expected_prefix))
+        self.assertNotEqual(created_company.company_code, "FRONTEND-SHOULD-BE-IGNORED")
+
+    def test_system_company_create_requires_billing_identity_and_national_address(self) -> None:
+        """
+        System create endpoint should reject missing billing/legal and national address fields.
+        """
+
+        payload = self._valid_create_payload()
+        payload["commercial_registration"] = ""
+        payload["tax_number"] = ""
+        payload["building_number"] = ""
+        payload["postal_code"] = ""
+
+        response = self.client.post(
+            "/api/system/companies/create/",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+        response_payload = response.json()
+        errors = response_payload["errors"]
+
+        self.assertFalse(response_payload["ok"])
+        self.assertIn("commercial_registration", errors)
+        self.assertIn("tax_number", errors)
+        self.assertIn("building_number", errors)
+        self.assertIn("postal_code", errors)
+
+    def test_system_company_update_rejects_company_code_change(self) -> None:
+        """
+        company_code should be immutable after backend generation.
+        """
+
+        response = self.client.patch(
+            f"/api/system/companies/{self.company.id}/update/",
+            data=json.dumps({"company_code": "CMP-CHANGED-000001"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+        response_payload = response.json()
+        self.company.refresh_from_db()
+
+        self.assertFalse(response_payload["ok"])
+        self.assertIn("company_code", response_payload["errors"])
+        self.assertEqual(self.company.company_code, "CMP-TEST-000001")
+
+    def test_system_company_update_can_change_activity_profile_ref(self) -> None:
+        """
+        System update endpoint should update activity_profile_ref using ActivityProfile id.
+        """
+
+        response = self.client.patch(
+            f"/api/system/companies/{self.company.id}/update/",
+            data=json.dumps({"activity_profile_id": self.second_activity_profile.id}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        response_payload = response.json()
+        company_data = response_payload["data"]["company"]
+
+        self.company.refresh_from_db()
+
+        self.assertTrue(response_payload["ok"])
+        self.assertEqual(company_data["activity_profile_ref_id"], self.second_activity_profile.id)
+        self.assertEqual(self.company.activity_profile_ref_id, self.second_activity_profile.id)
+        self.assertEqual(self.company.activity_profile, CompanyActivityProfile.WHOLESALE)
+
+
+# ==== SYSTEM COMPANY MANAGEMENT API TESTS END ====
