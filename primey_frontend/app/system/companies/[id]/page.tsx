@@ -105,6 +105,7 @@ const translations = {
     quickLinks: "روابط سريعة",
     quickLinksDesc: "تنقل سريع داخل وحدة الشركات.",
     addCompanyUser: "\u0625\u0636\u0627\u0641\u0629 \u0645\u0633\u062a\u062e\u062f\u0645 \u0634\u0631\u0643\u0629",
+    addCompanySubscription: "\u0625\u0636\u0627\u0641\u0629 \u0627\u0634\u062a\u0631\u0627\u0643 \u0644\u0644\u0634\u0631\u0643\u0629",
 
     companyName: "اسم الشركة",
     companyCode: "كود الشركة",
@@ -166,6 +167,7 @@ const translations = {
     quickLinks: "Quick links",
     quickLinksDesc: "Quick navigation inside the companies module.",
     addCompanyUser: "Add company user",
+    addCompanySubscription: "Add company subscription",
 
     companyName: "Company name",
     companyCode: "Company code",
@@ -937,6 +939,12 @@ export default function SystemCompanyDetailPage() {
                   <Link href={`/system/companies/${company.id}/users/create`}>
                     <UserRound className="h-4 w-4" />
                     {t.addCompanyUser}
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="justify-start rounded-xl bg-background">
+                  <Link href={`/system/companies/${company.id}/subscriptions/create`}>
+                    <Sparkles className="h-4 w-4" />
+                    {t.addCompanySubscription}
                   </Link>
                 </Button>
                 <Button asChild variant="outline" className="justify-start rounded-xl bg-background">

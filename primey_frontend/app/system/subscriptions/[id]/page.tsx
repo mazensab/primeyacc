@@ -58,6 +58,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 type Locale = "ar" | "en";
 type ApiRecord = Record<string, unknown>;
+type SubscriptionAction = "invoice" | "receipt" | "confirm";
 
 type CompanyRecord = {
   id: string;
@@ -93,6 +94,16 @@ const translations = {
     copied: "تم النسخ.",
     pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
     refreshed: "تم تحديث تفاصيل الاشتراك.",
+    billingActions: "\u0625\u062c\u0631\u0627\u0621\u0627\u062a \u0627\u0644\u0641\u0648\u062a\u0631\u0629 \u0648\u0627\u0644\u062f\u0641\u0639",
+    billingActionsDesc: "\u0623\u0643\u0645\u0644 \u0641\u0627\u062a\u0648\u0631\u0629 \u0627\u0644\u0627\u0634\u062a\u0631\u0627\u0643 \u0648\u0625\u064a\u0635\u0627\u0644 \u0627\u0644\u062f\u0641\u0639 \u062b\u0645 \u0641\u0639\u0651\u0644 \u0627\u0644\u0627\u0634\u062a\u0631\u0627\u0643.",
+    createInvoice: "\u0625\u0646\u0634\u0627\u0621 \u0641\u0627\u062a\u0648\u0631\u0629",
+    createReceipt: "\u0625\u0646\u0634\u0627\u0621 \u0625\u064a\u0635\u0627\u0644 \u062f\u0641\u0639",
+    confirmPayment: "\u062a\u0623\u0643\u064a\u062f \u0627\u0644\u062f\u0641\u0639 \u0648\u062a\u0641\u0639\u064a\u0644 \u0627\u0644\u0627\u0634\u062a\u0631\u0627\u0643",
+    invoiceCreated: "\u062a\u0645 \u0625\u0646\u0634\u0627\u0621 \u0641\u0627\u062a\u0648\u0631\u0629 \u0627\u0644\u0627\u0634\u062a\u0631\u0627\u0643.",
+    receiptCreated: "\u062a\u0645 \u0625\u0646\u0634\u0627\u0621 \u0625\u064a\u0635\u0627\u0644 \u0627\u0644\u062f\u0641\u0639.",
+    paymentConfirmed: "\u062a\u0645 \u062a\u0623\u0643\u064a\u062f \u0627\u0644\u062f\u0641\u0639 \u0648\u062a\u0641\u0639\u064a\u0644 \u0627\u0644\u0627\u0634\u062a\u0631\u0627\u0643.",
+    processing: "\u062c\u0627\u0631\u064a \u0627\u0644\u0645\u0639\u0627\u0644\u062c\u0629...",
+    pendingPaymentOnly: "\u062a\u0638\u0647\u0631 \u0647\u0630\u0647 \u0627\u0644\u0625\u062c\u0631\u0627\u0621\u0627\u062a \u0644\u0627\u0634\u062a\u0631\u0627\u0643\u0627\u062a \u0627\u0646\u062a\u0638\u0627\u0631 \u0627\u0644\u062f\u0641\u0639 \u0641\u0642\u0637.",
 
     identity: "بيانات التعريف",
     identityDesc: "اسم الشركة والكود والمعرف الداخلي.",
@@ -155,6 +166,16 @@ const translations = {
     copied: "Copied.",
     pdfHint: "Choose Save as PDF from the print dialog.",
     refreshed: "Subscription details refreshed.",
+    billingActions: "Billing and payment actions",
+    billingActionsDesc: "Complete the invoice, payment receipt, then activate the subscription.",
+    createInvoice: "Create invoice",
+    createReceipt: "Create payment receipt",
+    confirmPayment: "Confirm payment and activate",
+    invoiceCreated: "Subscription invoice created.",
+    receiptCreated: "Payment receipt created.",
+    paymentConfirmed: "Payment confirmed and subscription activated.",
+    processing: "Processing...",
+    pendingPaymentOnly: "These actions appear only for pending payment subscriptions.",
 
     identity: "Identity",
     identityDesc: "Company name, code, and internal identifier.",
@@ -415,6 +436,50 @@ async function fetchJson<T>(url: string): Promise<T> {
   return (payload || {}) as T;
 }
 
+
+function getCookie(name: string) {
+  if (typeof document === "undefined") return "";
+  const match = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
+  if (!match) return "";
+  return decodeURIComponent(match.slice(name.length + 1));
+}
+async function postJson<T>(url: string, body: ApiRecord = {}): Promise<T> {
+  const csrfToken = getCookie("csrftoken");
+  const response = await fetch(url, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  const raw = await response.text();
+  let payload: unknown = {};
+  if (raw) {
+    try {
+      payload = JSON.parse(raw) as unknown;
+    } catch {
+      payload = { message: raw };
+    }
+  }
+  const record = asRecord(payload);
+  if (!response.ok || record.ok === false) {
+    const errors = asRecord(record.errors);
+    const firstError = Object.values(errors)[0];
+    const message =
+      normalizeText(record.message) ||
+      normalizeText(record.detail) ||
+      (Array.isArray(firstError) ? normalizeText(firstError[0]) : normalizeText(firstError)) ||
+      `Request failed with status ${response.status}`;
+    throw new Error(message);
+  }
+  return (payload || {}) as T;
+}
 function getStatusLabel(value: string, locale: Locale) {
   const normalized = value.toLowerCase();
 
@@ -567,6 +632,7 @@ export default function SystemSubscriptionDetailPage() {
   const [company, setCompany] = React.useState<CompanyRecord | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [actionLoading, setActionLoading] = React.useState<SubscriptionAction | null>(null);
   const [error, setError] = React.useState("");
 
   const t = translations[locale];
@@ -650,6 +716,44 @@ export default function SystemSubscriptionDetailPage() {
     }
   }
 
+  async function handleSubscriptionAction(action: SubscriptionAction) {
+    if (!companyId || !company) return;
+    const actionConfig: Record<SubscriptionAction, { endpoint: string; message: string }> = {
+      invoice: {
+        endpoint: `/api/system/billing-documents/subscriptions/${companyId}/invoice/`,
+        message: t.invoiceCreated,
+      },
+      receipt: {
+        endpoint: `/api/system/billing-documents/subscriptions/${companyId}/receipt/`,
+        message: t.receiptCreated,
+      },
+      confirm: {
+        endpoint: `/api/system/subscriptions/${companyId}/confirm-payment/`,
+        message: t.paymentConfirmed,
+      },
+    };
+    setActionLoading(action);
+    try {
+      const actionBody: Record<SubscriptionAction, ApiRecord> = {
+        invoice: {},
+        receipt: {
+          payment_method: "BANK_TRANSFER",
+          transaction_reference: `SUB-${companyId}-${Date.now()}`,
+          billing_reference: company.code || company.id || String(companyId),
+          issue_date: new Date().toISOString().slice(0, 10),
+          notes: "Platform subscription payment receipt",
+        },
+        confirm: {},
+      };
+      await postJson<ApiRecord>(makeApiUrl(actionConfig[action].endpoint), actionBody[action]);
+      toast.success(actionConfig[action].message);
+      await loadCompany({ silent: true });
+    } catch (caughtError) {
+      toast.error(caughtError instanceof Error ? caughtError.message : t.errorDesc);
+    } finally {
+      setActionLoading(null);
+    }
+  }
   function buildPrintableHtml() {
     if (!company) return "";
 
@@ -778,6 +882,11 @@ export default function SystemSubscriptionDetailPage() {
     );
   }
 
+  const normalizedStatusForActions = company.status.toLowerCase().replace(/\s+/g, "_");
+  const canProcessPendingPayment =
+    normalizedStatusForActions === "pending_payment" ||
+    normalizedStatusForActions === "pending";
+  const canProcessBillingActions = canProcessPendingPayment;
   return (
     <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
@@ -905,6 +1014,48 @@ export default function SystemSubscriptionDetailPage() {
           </div>
 
           <aside className="space-y-6">
+            {canProcessBillingActions ? (
+              <Card className="rounded-2xl border-primary/20 bg-primary/5 shadow-sm">
+                <CardHeader>
+                  <CardTitle>{t.billingActions}</CardTitle>
+                  <CardDescription>{t.billingActionsDesc}</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="justify-start rounded-xl bg-background"
+                    disabled={Boolean(actionLoading)}
+                    onClick={() => void handleSubscriptionAction("invoice")}
+                  >
+                    {actionLoading === "invoice" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                    {actionLoading === "invoice" ? t.processing : t.createInvoice}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="justify-start rounded-xl bg-background"
+                    disabled={Boolean(actionLoading)}
+                    onClick={() => void handleSubscriptionAction("receipt")}
+                  >
+                    {actionLoading === "receipt" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                    {actionLoading === "receipt" ? t.processing : t.createReceipt}
+                  </Button>
+                  {canProcessPendingPayment ? (
+                    <Button
+                      type="button"
+                      className="justify-start rounded-xl"
+                      disabled={Boolean(actionLoading)}
+                      onClick={() => void handleSubscriptionAction("confirm")}
+                    >
+                      {actionLoading === "confirm" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                      {actionLoading === "confirm" ? t.processing : t.confirmPayment}
+                    </Button>
+                  ) : null}
+                  <p className="pt-1 text-xs leading-6 text-muted-foreground">{t.pendingPaymentOnly}</p>
+                </CardContent>
+              </Card>
+            ) : null}
             <Card className="rounded-2xl shadow-sm xl:sticky xl:top-6">
               <CardHeader>
                 <CardTitle>{t.quickLinks}</CardTitle>
