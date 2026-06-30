@@ -109,6 +109,7 @@ const translations = {
       "متابعة إشعارات الشركة الحالية تنبيهات المستخدم والإشعارات العامة داخل نفس الشركة فقط.",
     refresh: "تحديث",
     markAllRead: "تعليم الكل كمقروء",
+    createTest: "إنشاء إشعار اختبار",
     exportExcel: "تصدير Excel",
     print: "طباعة",
     reset: "إعادة ضبط",
@@ -156,6 +157,7 @@ const translations = {
     loaded: "تم تحديث إشعارات الشركة.",
     markedRead: "تم تعليم الإشعار كمقروء.",
     markedAllRead: "تم تعليم كل الإشعارات كمقروءة.",
+    testCreated: "تم إنشاء إشعار اختبار.",
     exportEmpty: "لا توجد إشعارات للتصدير.",
     printEmpty: "لا توجد إشعارات للطباعة.",
     printTitle: "تقرير إشعارات الشركة",
@@ -183,6 +185,7 @@ const translations = {
       "Track current-company notifications, user alerts, and company-wide notifications only.",
     refresh: "Refresh",
     markAllRead: "Mark all read",
+    createTest: "Create test notification",
     exportExcel: "Export Excel",
     print: "Print",
     reset: "Reset",
@@ -230,6 +233,7 @@ const translations = {
     loaded: "Company notifications refreshed.",
     markedRead: "Notification marked as read.",
     markedAllRead: "All notifications marked as read.",
+    testCreated: "Test notification created.",
     exportEmpty: "There are no notifications to export.",
     printEmpty: "There are no notifications to print.",
     printTitle: "Company Notifications Report",
@@ -699,20 +703,11 @@ export default function CompanyNotificationsPage() {
           offset: "0",
         });
 
-        if (readFilter === "read") params.set("is_read", "true");
-        if (readFilter === "unread") params.set("is_read", "false");
-        if (channelFilter !== "all") params.set("channel", channelFilter);
-        if (typeFilter !== "all") params.set("notification_type", typeFilter);
-        if (priorityFilter !== "all") params.set("priority", priorityFilter);
-        if (sourceFilter.trim()) params.set("source_type", sourceFilter.trim());
-
-        const [listPayload, unreadPayload] = await Promise.all([
-          fetchJson<ApiRecord>(makeApiUrl("/api/company/notifications/", params)),
-          fetchJson<ApiRecord>(makeApiUrl("/api/company/notifications/unread-count/")),
-        ]);
-
+        const listPayload = await fetchJson<ApiRecord>(
+          makeApiUrl("/api/company/notifications/", params),
+        );
         const rows = extractArray(listPayload).map(normalizeNotification);
-        const unreadCount = toNumber(unreadPayload.unread_count, 0);
+        const unreadCount = rows.filter((row) => !row.isRead).length;
 
         setState({
           count: extractCount(listPayload, rows),
@@ -734,16 +729,7 @@ export default function CompanyNotificationsPage() {
         setRefreshing(false);
       }
     },
-    [
-      channelFilter,
-      priorityFilter,
-      readFilter,
-      selected,
-      sourceFilter,
-      t.errorDesc,
-      t.loaded,
-      typeFilter,
-    ],
+    [t.errorDesc, t.loaded],
   );
 
   React.useEffect(() => {
@@ -776,7 +762,20 @@ export default function CompanyNotificationsPage() {
         .join(" ")
         .toLowerCase();
 
-      return !needle || haystack.includes(needle);
+      if (needle && !haystack.includes(needle)) return false;
+      if (readFilter === "read" && !notification.isRead) return false;
+      if (readFilter === "unread" && notification.isRead) return false;
+      if (channelFilter !== "all" && notification.channel !== channelFilter) return false;
+      if (typeFilter !== "all" && notification.notificationType !== typeFilter) return false;
+      if (priorityFilter !== "all" && notification.priority !== priorityFilter) return false;
+      if (sourceFilter.trim()) {
+        const sourceNeedle = sourceFilter.trim().toLowerCase();
+        const sourceHaystack = [notification.sourceType, notification.sourceId]
+          .join(" ")
+          .toLowerCase();
+        if (!sourceHaystack.includes(sourceNeedle)) return false;
+      }
+      return true;
     });
 
     return [...rows].sort((a, b) => {
@@ -837,8 +836,34 @@ export default function CompanyNotificationsPage() {
       setActionLoading(false);
     }
   }
-
-  function exportExcel() {
+  async function createTestNotification() {
+    try {
+      setActionLoading(true);
+      const payload = await fetchJson<ApiRecord>(
+        makeApiUrl("/api/company/notifications/test/"),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({}),
+        },
+      );
+      const notificationPayload =
+        payload.notification || payload.data || payload.result || payload;
+      const notification = normalizeNotification(notificationPayload);
+      toast.success(t.testCreated);
+      if (notification.id) {
+        setSelected(notification);
+      }
+      await loadNotifications({ silent: false });
+    } catch (caughtError) {
+      const message = caughtError instanceof Error ? caughtError.message : t.errorDesc;
+      toast.error(message);
+    } finally {
+      setActionLoading(false);
+    }
+  }  function exportExcel() {
     if (!filteredRows.length) {
       toast.error(t.exportEmpty);
       return;
@@ -967,7 +992,15 @@ export default function CompanyNotificationsPage() {
                   {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
                   {t.markAllRead}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
+                <Button
+                  variant="outline"
+                  className="rounded-xl bg-background"
+                  onClick={() => void createTestNotification()}
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  {t.createTest}
+                </Button>                <Button variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
                   <FileSpreadsheet className="h-4 w-4" />
                   {t.exportExcel}
                 </Button>

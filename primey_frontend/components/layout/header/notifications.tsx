@@ -208,10 +208,9 @@ function extractNotifications(payload: NotificationsApiResponse): {
   };
 }
 function resolveWebSocketUrl(): string {
+  const enabled = process.env.NEXT_PUBLIC_ENABLE_NOTIFICATIONS_WS === "true";
   const envWs = process.env.NEXT_PUBLIC_WS_URL?.trim();
-
-  if (!envWs) return "";
-
+  if (!enabled || !envWs) return "";
   return `${envWs.replace(/\/+$/, "")}/ws/system/notifications/`;
 }
 
@@ -265,6 +264,8 @@ const Notifications = () => {
   const socketRef = useRef<WebSocket | null>(null);
   const didLoadRef = useRef(false);
 
+
+  const lastLoadedAtRef = useRef<number>(0);
   const isArabic = locale === "ar";
 
   const isCompanyScope = useMemo(() => {
@@ -317,7 +318,9 @@ const Notifications = () => {
     try {
       setLoading(true);
 
-      const searchParams = new URLSearchParams({
+
+      lastLoadedAtRef.current = Date.now();
+const searchParams = new URLSearchParams({
         limit: "8",
       });
 
@@ -363,17 +366,16 @@ const Notifications = () => {
   useEffect(() => {
     if (!didLoadRef.current) {
       didLoadRef.current = true;
+      void loadNotifications();
     }
-    void loadNotifications();
-    const intervalId = window.setInterval(() => {
-      void loadNotifications();
-    }, 30000);
     const handleFocus = () => {
-      void loadNotifications();
+      const now = Date.now();
+      if (now - lastLoadedAtRef.current >= 60000) {
+        void loadNotifications();
+      }
     };
     window.addEventListener("focus", handleFocus);
     return () => {
-      window.clearInterval(intervalId);
       window.removeEventListener("focus", handleFocus);
     };
   }, [notificationsEndpoint]);
