@@ -1,5 +1,14 @@
 "use client";
 
+const BILLING_DOCUMENT_API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://127.0.0.1:8000"
+).replace(/\/$/, "");
+function buildBillingDocumentPdfUrl(documentId: string | number) {
+  return `${BILLING_DOCUMENT_API_BASE_URL}/api/system/billing-documents/${encodeURIComponent(String(documentId))}/pdf/`;
+}
+
 /* ============================================================
    📂 primey_frontend/app/system/companies/[id]/page.tsx
    🏢 Mhamcloud — System Company Detail
@@ -81,6 +90,8 @@ type CompanyRecord = {
 
 type CompanyUserSummary = {
   id: string;
+  userId: string;
+  membershipId: string;
   name: string;
   email: string;
   role: string;
@@ -473,16 +484,32 @@ function extractCollectionItems(payload: unknown, keys: string[] = []): unknown[
   }
   return [];
 }
+
 function normalizeCompanyUserSummary(value: unknown): CompanyUserSummary {
   const record = asRecord(value);
   const user = asRecord(record.user);
   const profile = asRecord(record.profile);
+  const userId = normalizeText(
+    user.id ||
+      record.user_id ||
+      record.userId ||
+      record.account_id ||
+      record.accountId ||
+      record.id,
+  );
+  const membershipId = normalizeText(
+    record.membership_id ||
+      record.membershipId ||
+      record.id,
+  );
   const name =
     normalizeNestedName(user, ["name", "full_name", "email", "username"]) ||
     normalizeNestedName(profile, ["display_name", "name"]) ||
     normalizeText(user.email || user.username || record.email || record.username, "?");
   return {
-    id: normalizeText(record.id || user.id),
+    id: userId,
+    userId,
+    membershipId,
     name,
     email: normalizeText(user.email || record.email, "?"),
     role: normalizeText(record.role || record.company_role || record.system_role, "?"),
@@ -492,6 +519,7 @@ function normalizeCompanyUserSummary(value: unknown): CompanyUserSummary {
     joinedAt: normalizeText(record.joined_at || record.created_at) || null,
   };
 }
+
 function normalizeCompanySubscriptionSummary(value: unknown): CompanySubscriptionSummary {
   const record = asRecord(value);
   const plan = asRecord(record.plan);
@@ -1254,7 +1282,7 @@ export default function SystemCompanyDetailPage() {
                       </thead>
                       <tbody className="divide-y">
                         {companyUsers.map((item) => (
-                          <tr key={item.id || item.email}>
+                          <tr key={item.membershipId || item.userId || item.email}>
                             <td className="px-4 py-3 font-medium">{item.name || t.notAvailable}</td>
                             <td className="px-4 py-3 text-muted-foreground">{item.email || t.notAvailable}</td>
                             <td className="px-4 py-3">{item.role || t.notAvailable}</td>
@@ -1262,7 +1290,7 @@ export default function SystemCompanyDetailPage() {
                             <td className="px-4 py-3 text-muted-foreground">{formatDateTime(item.joinedAt)}</td>
                             <td className="px-4 py-3">
                               <Button asChild size="sm" variant="outline" className="h-8 rounded-lg bg-background">
-                                <Link href={`/system/users/${item.id}`}>
+                                <Link href={`/system/users/${item.userId || item.id}`}>
                                   <ExternalLink className="h-3.5 w-3.5" />
                                   {t.openDetails}
                                 </Link>
@@ -1371,7 +1399,17 @@ export default function SystemCompanyDetailPage() {
                       <tbody className="divide-y">
                         {companyBillingDocuments.map((item) => (
                           <tr key={item.id}>
-                            <td className="px-4 py-3 font-mono text-xs">{item.documentNumber}</td>
+                            <td className="px-4 py-3 font-mono text-xs">
+                              <Link
+                                href={buildBillingDocumentPdfUrl(item.id)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 rounded-lg border bg-background px-2 py-1 text-xs font-medium hover:bg-muted"
+                              >
+                                {item.documentNumber}
+                                <ExternalLink className="h-3 w-3" />
+                              </Link>
+                            </td>
                             <td className="px-4 py-3">{formatDocumentType(item.documentType, locale)}</td>
                             <td className="px-4 py-3"><StatusBadge value={item.status} locale={locale} /></td>
                             <td className="px-4 py-3 font-mono text-xs">{item.subscriptionId || t.notAvailable}</td>

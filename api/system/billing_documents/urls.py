@@ -28,6 +28,7 @@ from .create_receipt import (
 )
 from .detail import system_billing_document_detail
 from .list import system_billing_documents_list
+from .render import system_billing_document_pdf, system_billing_document_print
 
 
 app_name = "system_billing_documents"
@@ -48,6 +49,16 @@ urlpatterns = [
         "subscriptions/<int:subscription_id>/receipt/",
         system_billing_document_create_receipt,
         name="create_receipt",
+    ),
+    path(
+        "<int:document_id>/print/",
+        system_billing_document_print,
+        name="billing-document-print",
+    ),
+    path(
+        "<int:document_id>/pdf/",
+        system_billing_document_pdf,
+        name="billing-document-pdf",
     ),
     path(
         "<int:document_id>/",

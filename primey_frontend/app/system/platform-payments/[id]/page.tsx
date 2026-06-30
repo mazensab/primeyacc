@@ -1,5 +1,14 @@
 ﻿"use client";
 
+const BILLING_DOCUMENT_API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://127.0.0.1:8000"
+).replace(/\/$/, "");
+function buildBillingDocumentPdfUrl(documentId: string | number) {
+  return `${BILLING_DOCUMENT_API_BASE_URL}/api/system/billing-documents/${encodeURIComponent(String(documentId))}/pdf/`;
+}
+
 /* ============================================================
    📂 primey_frontend/app/system/platform-payments/[id]/page.tsx
    💳 Mhamcloud — System Platform Payment Detail
