@@ -410,6 +410,15 @@ function formatMoney(value: string) {
   }).format(parsed);
 }
 
+function buildPlanSlug(value: string) {
+  const fallback = "custom-plan";
+  const slug = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || fallback;
+}
 function featuresToList(value: string) {
   return value
     .split(/\r?\n/)
@@ -680,7 +689,7 @@ export default function SystemPlanCreatePage() {
       const payload = {
         name: form.name.trim(),
         code: form.code.trim().toUpperCase(),
-        slug: form.slug.trim(),
+        slug: buildPlanSlug(form.slug || form.code || form.name),
         description: form.description.trim(),
         monthly_price: String(toSafeNumber(form.monthly_price) ?? 0),
         yearly_price: String(toSafeNumber(form.yearly_price) ?? 0),
