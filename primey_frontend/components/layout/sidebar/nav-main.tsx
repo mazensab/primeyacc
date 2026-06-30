@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 /* =====================================================
    📂 components/layout/sidebar/nav-main.tsx
@@ -303,7 +303,7 @@ const systemNavItems: NavGroup[] = [
 
 const companyNavItems: NavGroup[] = [
   {
-    title: { ar: "مساحة الشركة", en: "Company Workspace" },
+    title: { ar: "وحدات الشركة", en: "Company Modules" },
     items: [
       {
         title: { ar: "لوحة الشركة", en: "Company Dashboard" },
@@ -314,7 +314,630 @@ const companyNavItems: NavGroup[] = [
         workspaces: ["company"],
       },
       {
-        title: { ar: "التهيئة والإدارة", en: "Setup & Administration" },
+        title: { ar: "الحسابات العامة", en: "General Accounting" },
+        href: "/company/accounting",
+        icon: Calculator,
+        anyPermissions: [
+          PERMISSIONS.PROVIDER_WORKSPACE_VIEW,
+          PERMISSIONS.ACCOUNTING_VIEW,
+          PERMISSIONS.ACCOUNTING_REPORTS_VIEW,
+        ],
+        workspaces: ["company"],
+        items: [
+          {
+            title: { ar: "لوحة الحسابات", en: "Accounting Dashboard" },
+            href: "/company/accounting",
+            icon: Calculator,
+            permission: PERMISSIONS.ACCOUNTING_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "دليل الحسابات", en: "Chart of Accounts" },
+            href: "/company/accounting/chart-of-accounts",
+            icon: FileText,
+            permission: PERMISSIONS.ACCOUNTING_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "القيود اليومية", en: "Journal Entries" },
+            href: "/company/accounting/journal-entries",
+            icon: ReceiptText,
+            permission: PERMISSIONS.ACCOUNTING_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "دفتر الأستاذ", en: "General Ledger" },
+            href: "/company/accounting/ledger",
+            icon: FileText,
+            permission: PERMISSIONS.ACCOUNTING_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "ميزان المراجعة", en: "Trial Balance" },
+            href: "/company/accounting/trial-balance",
+            icon: BarChart3,
+            anyPermissions: [PERMISSIONS.REPORTS_VIEW, PERMISSIONS.ACCOUNTING_REPORTS_VIEW],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "الأرباح والخسائر", en: "Profit & Loss" },
+            href: "/company/accounting/profit-loss",
+            icon: BarChart3,
+            anyPermissions: [PERMISSIONS.REPORTS_VIEW, PERMISSIONS.ACCOUNTING_REPORTS_VIEW],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "الميزانية العمومية", en: "Balance Sheet" },
+            href: "/company/accounting/balance-sheet",
+            icon: BarChart3,
+            anyPermissions: [PERMISSIONS.REPORTS_VIEW, PERMISSIONS.ACCOUNTING_REPORTS_VIEW],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "التدفقات النقدية", en: "Cash Flow" },
+            href: "/company/accounting/cash-flow",
+            icon: Wallet,
+            anyPermissions: [PERMISSIONS.REPORTS_VIEW, PERMISSIONS.ACCOUNTING_REPORTS_VIEW],
+            workspaces: ["company"],
+          },
+        ],
+      },
+      {
+        title: { ar: "الخزينة والمدفوعات", en: "Treasury & Payments" },
+        href: "/company/treasury",
+        icon: Wallet,
+        anyPermissions: [
+          PERMISSIONS.PROVIDER_WORKSPACE_VIEW,
+          PERMISSIONS.TREASURY_VIEW,
+          PERMISSIONS.PAYMENTS_VIEW,
+        ],
+        workspaces: ["company"],
+        items: [
+          {
+            title: { ar: "الخزينة", en: "Treasury" },
+            href: "/company/treasury",
+            icon: Wallet,
+            permission: PERMISSIONS.TREASURY_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "الصناديق", en: "Cashboxes" },
+            href: "/company/treasury/cashboxes",
+            icon: Wallet,
+            permission: PERMISSIONS.TREASURY_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "الحسابات البنكية", en: "Bank Accounts" },
+            href: "/company/treasury/bank-accounts",
+            icon: CreditCard,
+            permission: PERMISSIONS.TREASURY_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "سندات القبض", en: "Receipt Vouchers" },
+            href: "/company/treasury/receipt-vouchers",
+            icon: ReceiptText,
+            permission: PERMISSIONS.TREASURY_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "سندات الصرف", en: "Payment Vouchers" },
+            href: "/company/treasury/payment-vouchers",
+            icon: FileText,
+            permission: PERMISSIONS.TREASURY_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "المدفوعات", en: "Payments" },
+            href: "/company/payments",
+            aliases: ["/center/payments", "/provider/payments"],
+            icon: CreditCard,
+            permission: PERMISSIONS.PAYMENTS_VIEW,
+            workspaces: ["company"],
+          },
+        ],
+      },
+      {
+        title: { ar: "العملاء والموردون", en: "Customers & Suppliers" },
+        href: "/company/parties",
+        icon: Users,
+        anyPermissions: [
+          PERMISSIONS.PROVIDER_WORKSPACE_VIEW,
+          PERMISSIONS.CUSTOMERS_VIEW,
+          "suppliers.view",
+          "parties.view",
+        ],
+        workspaces: ["company"],
+        items: [
+          {
+            title: { ar: "لوحة الأطراف", en: "Parties Dashboard" },
+            href: "/company/parties",
+            icon: Users,
+            anyPermissions: [PERMISSIONS.PROVIDER_WORKSPACE_VIEW, PERMISSIONS.CUSTOMERS_VIEW, "suppliers.view", "parties.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "العملاء", en: "Customers" },
+            href: "/company/customers",
+            aliases: ["/center/customers", "/provider/customers"],
+            icon: Users,
+            permission: PERMISSIONS.CUSTOMERS_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "الموردون", en: "Suppliers" },
+            href: "/company/suppliers",
+            icon: Briefcase,
+            anyPermissions: [PERMISSIONS.CUSTOMERS_VIEW, "suppliers.view"],
+            workspaces: ["company"],
+          },
+        ],
+      },
+      {
+        title: { ar: "المبيعات ونقاط البيع", en: "Sales & POS" },
+        href: "/company/sales",
+        icon: ShoppingCart,
+        anyPermissions: [
+          PERMISSIONS.PROVIDER_WORKSPACE_VIEW,
+          PERMISSIONS.ORDERS_VIEW,
+          PERMISSIONS.INVOICES_VIEW,
+          PERMISSIONS.PAYMENTS_VIEW,
+          "pos.view",
+        ],
+        workspaces: ["company"],
+        items: [
+          {
+            title: { ar: "لوحة المبيعات", en: "Sales Dashboard" },
+            href: "/company/sales",
+            icon: ShoppingCart,
+            anyPermissions: [PERMISSIONS.ORDERS_VIEW, PERMISSIONS.INVOICES_VIEW],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "عروض الأسعار", en: "Quotations" },
+            href: "/company/sales/quotations",
+            icon: FileText,
+            anyPermissions: [PERMISSIONS.ORDERS_VIEW, PERMISSIONS.INVOICES_VIEW],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "أوامر البيع", en: "Sales Orders" },
+            href: "/company/sales/orders",
+            icon: ShoppingCart,
+            permission: PERMISSIONS.ORDERS_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "فواتير المبيعات", en: "Sales Invoices" },
+            href: "/company/sales/invoices",
+            aliases: ["/company/invoices", "/center/invoices", "/provider/invoices"],
+            icon: ReceiptText,
+            permission: PERMISSIONS.INVOICES_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "مرتجعات المبيعات", en: "Sales Returns" },
+            href: "/company/sales/returns",
+            icon: FileText,
+            anyPermissions: [PERMISSIONS.INVOICES_VIEW, "sales_returns.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "الإشعارات الدائنة", en: "Credit Notes" },
+            href: "/company/sales/credit-notes",
+            icon: ReceiptText,
+            anyPermissions: [PERMISSIONS.INVOICES_VIEW, "credit_notes.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "نقاط البيع", en: "POS" },
+            href: "/company/pos",
+            icon: CreditCard,
+            anyPermissions: ["pos.view", PERMISSIONS.ORDERS_VIEW, PERMISSIONS.PAYMENTS_VIEW],
+            workspaces: ["company"],
+          },
+        ],
+      },
+      {
+        title: { ar: "المشتريات والموردين", en: "Purchases & Suppliers" },
+        href: "/company/purchases",
+        icon: Briefcase,
+        anyPermissions: [
+          PERMISSIONS.PROVIDER_WORKSPACE_VIEW,
+          "purchases.view",
+          "supplier_bills.view",
+          "suppliers.view",
+        ],
+        workspaces: ["company"],
+        items: [
+          {
+            title: { ar: "لوحة المشتريات", en: "Purchases Dashboard" },
+            href: "/company/purchases",
+            icon: Briefcase,
+            anyPermissions: ["purchases.view", "supplier_bills.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "أوامر الشراء", en: "Purchase Orders" },
+            href: "/company/purchases/orders",
+            icon: ShoppingCart,
+            anyPermissions: ["purchases.view", "purchase_orders.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "فواتير الموردين", en: "Supplier Bills" },
+            href: "/company/purchases/bills",
+            icon: FileText,
+            anyPermissions: ["purchases.view", "supplier_bills.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "مرتجعات المشتريات", en: "Purchase Returns" },
+            href: "/company/purchases/returns",
+            icon: ReceiptText,
+            anyPermissions: ["purchases.view", "purchase_returns.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "مدفوعات الموردين", en: "Supplier Payments" },
+            href: "/company/purchases/payments",
+            icon: CreditCard,
+            anyPermissions: [PERMISSIONS.PAYMENTS_VIEW, "supplier_payments.view"],
+            workspaces: ["company"],
+          },
+        ],
+      },
+      {
+        title: { ar: "المنتجات والخدمات", en: "Products & Services" },
+        href: "/company/catalog",
+        icon: Boxes,
+        anyPermissions: [
+          PERMISSIONS.PROVIDER_WORKSPACE_VIEW,
+          PERMISSIONS.PRODUCTS_VIEW,
+          "catalog.view",
+        ],
+        workspaces: ["company"],
+        items: [
+          {
+            title: { ar: "لوحة الكتالوج", en: "Catalog Dashboard" },
+            href: "/company/catalog",
+            icon: Package,
+            anyPermissions: [PERMISSIONS.PROVIDER_WORKSPACE_VIEW, PERMISSIONS.PRODUCTS_VIEW, "catalog.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "المنتجات والخدمات", en: "Products & Services" },
+            href: "/company/products",
+            aliases: ["/center/products", "/provider/products"],
+            icon: Boxes,
+            anyPermissions: [PERMISSIONS.PRODUCTS_VIEW, "catalog.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "التصنيفات", en: "Categories" },
+            href: "/company/catalog/categories",
+            icon: Package,
+            anyPermissions: [PERMISSIONS.PRODUCTS_VIEW, "catalog.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "الوحدات", en: "Units" },
+            href: "/company/catalog/units",
+            icon: Calculator,
+            anyPermissions: [PERMISSIONS.PRODUCTS_VIEW, "catalog.view"],
+            workspaces: ["company"],
+          },
+        ],
+      },
+      {
+        title: { ar: "المخزون والمستودعات", en: "Inventory & Warehouses" },
+        href: "/company/inventory",
+        icon: Package,
+        anyPermissions: [
+          PERMISSIONS.PROVIDER_WORKSPACE_VIEW,
+          PERMISSIONS.PRODUCTS_VIEW,
+          "inventory.view",
+          "warehouses.view",
+        ],
+        workspaces: ["company"],
+        items: [
+          {
+            title: { ar: "لوحة المخزون", en: "Inventory Dashboard" },
+            href: "/company/inventory",
+            icon: Package,
+            anyPermissions: ["inventory.view", PERMISSIONS.PRODUCTS_VIEW],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "المستودعات", en: "Warehouses" },
+            href: "/company/inventory/warehouses",
+            icon: Boxes,
+            anyPermissions: ["warehouses.view", "inventory.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "المواقع والبِن", en: "Locations & Bins" },
+            href: "/company/inventory/locations",
+            icon: Boxes,
+            anyPermissions: ["warehouses.view", "inventory.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "حركات المخزون", en: "Stock Movements" },
+            href: "/company/inventory/movements",
+            icon: FileText,
+            anyPermissions: ["stock_movements.view", "inventory.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "الجرد", en: "Physical Counts" },
+            href: "/company/inventory/counts",
+            icon: ReceiptText,
+            anyPermissions: ["inventory.view", "physical_counts.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "الحجز والتخصيص", en: "Reservations & Allocation" },
+            href: "/company/inventory/reservations",
+            icon: ShieldCheck,
+            anyPermissions: ["inventory.view", "reservations.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "الدُفعات والسيريالات", en: "Batches & Serials" },
+            href: "/company/inventory/tracking",
+            icon: KeyRound,
+            anyPermissions: ["inventory.view", "tracking.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "تقييم المخزون", en: "Inventory Valuation" },
+            href: "/company/inventory/valuation",
+            icon: BarChart3,
+            anyPermissions: ["inventory.view", PERMISSIONS.REPORTS_VIEW],
+            workspaces: ["company"],
+          },
+        ],
+      },
+      {
+        title: { ar: "الموارد البشرية", en: "Human Resources" },
+        href: "/company/hr",
+        icon: Users,
+        anyPermissions: [
+          PERMISSIONS.PROVIDER_WORKSPACE_VIEW,
+          PERMISSIONS.USERS_VIEW,
+          "hr.view",
+          "employees.view",
+        ],
+        workspaces: ["company"],
+        items: [
+          {
+            title: { ar: "لوحة الموارد البشرية", en: "HR Dashboard" },
+            href: "/company/hr",
+            icon: Users,
+            anyPermissions: ["hr.view", "employees.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "الموظفون", en: "Employees" },
+            href: "/company/hr/employees",
+            icon: Users,
+            anyPermissions: ["employees.view", "hr.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "الحضور والانصراف", en: "Attendance" },
+            href: "/company/hr/attendance",
+            icon: BellRing,
+            anyPermissions: ["attendance.view", "hr.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "الإجازات", en: "Leave" },
+            href: "/company/hr/leave",
+            icon: FileText,
+            anyPermissions: ["leave.view", "hr.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "الرواتب", en: "Payroll" },
+            href: "/company/hr/payroll",
+            icon: Wallet,
+            anyPermissions: ["payroll.view", "hr.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "الأداء", en: "Performance" },
+            href: "/company/hr/performance",
+            icon: BarChart3,
+            anyPermissions: ["performance.view", "hr.view"],
+            workspaces: ["company"],
+          },
+        ],
+      },
+      {
+        title: { ar: "التقارير والتحليلات", en: "Reports & Analytics" },
+        href: "/company/reports",
+        icon: BarChart3,
+        anyPermissions: [
+          PERMISSIONS.PROVIDER_WORKSPACE_VIEW,
+          PERMISSIONS.REPORTS_VIEW,
+          PERMISSIONS.ACCOUNTING_REPORTS_VIEW,
+        ],
+        workspaces: ["company"],
+        items: [
+          {
+            title: { ar: "لوحة التقارير", en: "Reports Dashboard" },
+            href: "/company/reports",
+            icon: BarChart3,
+            permission: PERMISSIONS.REPORTS_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "التقارير المالية", en: "Financial Reports" },
+            href: "/company/reports/financial",
+            icon: Calculator,
+            anyPermissions: [PERMISSIONS.REPORTS_VIEW, PERMISSIONS.ACCOUNTING_REPORTS_VIEW],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "تقارير المبيعات", en: "Sales Reports" },
+            href: "/company/reports/sales",
+            icon: ShoppingCart,
+            permission: PERMISSIONS.REPORTS_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "تقارير المشتريات", en: "Purchase Reports" },
+            href: "/company/reports/purchases",
+            icon: Briefcase,
+            permission: PERMISSIONS.REPORTS_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "تقارير المخزون", en: "Inventory Reports" },
+            href: "/company/reports/inventory",
+            icon: Package,
+            permission: PERMISSIONS.REPORTS_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "تقارير العملاء والموردين", en: "Parties Reports" },
+            href: "/company/reports/parties",
+            icon: Users,
+            permission: PERMISSIONS.REPORTS_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "تقارير نقاط البيع", en: "POS Reports" },
+            href: "/company/reports/pos",
+            icon: CreditCard,
+            permission: PERMISSIONS.REPORTS_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "تقارير الضريبة", en: "VAT Reports" },
+            href: "/company/reports/vat",
+            icon: ReceiptText,
+            permission: PERMISSIONS.REPORTS_VIEW,
+            workspaces: ["company"],
+          },
+        ],
+      },
+      {
+        title: { ar: "المستندات والطباعة", en: "Documents & Printing" },
+        href: "/company/documents",
+        icon: FileText,
+        anyPermissions: [
+          PERMISSIONS.PROVIDER_WORKSPACE_VIEW,
+          PERMISSIONS.INVOICES_VIEW,
+          "documents.view",
+        ],
+        workspaces: ["company"],
+        items: [
+          {
+            title: { ar: "مركز المستندات", en: "Documents Center" },
+            href: "/company/documents",
+            icon: FileText,
+            anyPermissions: [PERMISSIONS.PROVIDER_WORKSPACE_VIEW, "documents.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "قوالب المستندات", en: "Document Templates" },
+            href: "/company/documents/templates",
+            icon: FileText,
+            anyPermissions: ["documents.view", "document_templates.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "تصيير المستندات", en: "Document Rendering" },
+            href: "/company/documents/rendering",
+            icon: ReceiptText,
+            anyPermissions: ["documents.view", "document_rendering.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "الطباعة الحرارية", en: "Thermal Printing" },
+            href: "/company/documents/thermal",
+            icon: ReceiptText,
+            anyPermissions: ["documents.view", "thermal_printing.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "مهام الطباعة", en: "Print Jobs" },
+            href: "/company/documents/print-jobs",
+            icon: FileText,
+            anyPermissions: ["documents.view", "print_jobs.view"],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "إعدادات المستندات", en: "Document Settings" },
+            href: "/company/documents/settings",
+            icon: Settings,
+            anyPermissions: ["documents.view", "document_settings.view"],
+            workspaces: ["company"],
+          },
+        ],
+      },
+      {
+        title: { ar: "التواصل والإشعارات", en: "Messaging & Notifications" },
+        href: "/company/notifications",
+        icon: MessageCircle,
+        anyPermissions: [
+          PERMISSIONS.PROVIDER_WORKSPACE_VIEW,
+          PERMISSIONS.NOTIFICATIONS_VIEW,
+          PERMISSIONS.WHATSAPP_VIEW,
+        ],
+        workspaces: ["company"],
+        items: [
+          {
+            title: { ar: "مركز الإشعارات", en: "Notifications Center" },
+            href: "/company/notifications",
+            icon: BellRing,
+            anyPermissions: [PERMISSIONS.NOTIFICATIONS_VIEW, PERMISSIONS.PROVIDER_WORKSPACE_VIEW],
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "واتساب الشركة", en: "Company WhatsApp" },
+            href: "/company/whatsapp",
+            aliases: ["/center/whatsapp", "/provider/whatsapp"],
+            icon: MessageCircle,
+            permission: PERMISSIONS.WHATSAPP_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "صندوق وارد واتساب", en: "WhatsApp Inbox" },
+            href: "/company/whatsapp/inbox",
+            icon: MessageCircle,
+            permission: PERMISSIONS.WHATSAPP_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "رسائل واتساب", en: "WhatsApp Messages" },
+            href: "/company/whatsapp/messages",
+            icon: MessageCircle,
+            permission: PERMISSIONS.WHATSAPP_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "قوالب واتساب", en: "WhatsApp Templates" },
+            href: "/company/whatsapp/templates",
+            icon: FileText,
+            permission: PERMISSIONS.WHATSAPP_VIEW,
+            workspaces: ["company"],
+          },
+          {
+            title: { ar: "إعدادات واتساب", en: "WhatsApp Settings" },
+            href: "/company/whatsapp/settings",
+            icon: Settings,
+            permission: PERMISSIONS.WHATSAPP_VIEW,
+            workspaces: ["company"],
+          },
+        ],
+      },
+      {
+        title: { ar: "إعدادات الشركة", en: "Company Settings" },
         href: "/company/settings",
         icon: Settings,
         anyPermissions: [
@@ -332,7 +955,7 @@ const companyNavItems: NavGroup[] = [
             workspaces: ["company"],
           },
           {
-            title: { ar: "الإعدادات", en: "Settings" },
+            title: { ar: "الإعدادات العامة", en: "General Settings" },
             href: "/company/settings",
             aliases: ["/center/settings", "/provider/settings"],
             icon: Settings,
@@ -347,7 +970,7 @@ const companyNavItems: NavGroup[] = [
             workspaces: ["company"],
           },
           {
-            title: { ar: "المستخدمون", en: "Users" },
+            title: { ar: "مستخدمو الشركة", en: "Company Users" },
             href: "/company/users",
             aliases: ["/center/users", "/provider/users"],
             icon: UserCog,
@@ -355,246 +978,24 @@ const companyNavItems: NavGroup[] = [
             workspaces: ["company"],
           },
           {
-            title: { ar: "الصلاحيات", en: "Permissions" },
+            title: { ar: "صلاحيات الشركة", en: "Company Permissions" },
             href: "/company/permissions",
             icon: ShieldCheck,
             anyPermissions: [PERMISSIONS.PROVIDER_USERS_VIEW, PERMISSIONS.USERS_VIEW],
             workspaces: ["company"],
           },
-        ],
-      },
-      {
-        title: { ar: "الأطراف والكتالوج", en: "Parties & Catalog" },
-        href: "/company/customers",
-        icon: Boxes,
-        anyPermissions: [
-          PERMISSIONS.CUSTOMERS_VIEW,
-          PERMISSIONS.PRODUCTS_VIEW,
-          "suppliers.view",
-          "catalog.view",
-        ],
-        workspaces: ["company"],
-        items: [
           {
-            title: { ar: "العملاء", en: "Customers" },
-            href: "/company/customers",
-            aliases: ["/center/customers", "/provider/customers"],
-            icon: Users,
-            permission: PERMISSIONS.CUSTOMERS_VIEW,
-            workspaces: ["company"],
-          },
-          {
-            title: { ar: "الموردون", en: "Suppliers" },
-            href: "/company/suppliers",
-            icon: Briefcase,
-            anyPermissions: [PERMISSIONS.CUSTOMERS_VIEW, "suppliers.view"],
-            workspaces: ["company"],
-          },
-          {
-            title: { ar: "المنتجات والخدمات", en: "Products & Services" },
-            href: "/company/products",
-            aliases: ["/center/products", "/provider/products"],
-            icon: Boxes,
-            anyPermissions: [PERMISSIONS.PRODUCTS_VIEW, "catalog.view"],
-            workspaces: ["company"],
-          },
-          {
-            title: { ar: "التصنيفات والوحدات", en: "Categories & Units" },
-            href: "/company/catalog",
-            icon: Package,
-            anyPermissions: [PERMISSIONS.PRODUCTS_VIEW, "catalog.view"],
-            workspaces: ["company"],
-          },
-        ],
-      },
-      {
-        title: { ar: "المبيعات والمشتريات", en: "Sales & Purchases" },
-        href: "/company/sales",
-        icon: ShoppingCart,
-        anyPermissions: [
-          PERMISSIONS.ORDERS_VIEW,
-          PERMISSIONS.INVOICES_VIEW,
-          "purchases.view",
-        ],
-        workspaces: ["company"],
-        items: [
-          {
-            title: { ar: "المبيعات", en: "Sales" },
-            href: "/company/sales",
-            icon: ShoppingCart,
-            anyPermissions: [PERMISSIONS.ORDERS_VIEW, PERMISSIONS.INVOICES_VIEW],
-            workspaces: ["company"],
-          },
-          {
-            title: { ar: "فواتير المبيعات", en: "Sales Invoices" },
-            href: "/company/invoices",
-            aliases: ["/center/invoices", "/provider/invoices", "/company/sales/invoices"],
+            title: { ar: "إعدادات الضريبة", en: "Tax Settings" },
+            href: "/company/settings/tax",
             icon: ReceiptText,
-            permission: PERMISSIONS.INVOICES_VIEW,
+            permission: PERMISSIONS.PROVIDER_WORKSPACE_VIEW,
             workspaces: ["company"],
           },
           {
-            title: { ar: "المشتريات", en: "Purchases" },
-            href: "/company/purchases",
-            icon: Briefcase,
-            anyPermissions: ["purchases.view", "supplier_bills.view"],
-            workspaces: ["company"],
-          },
-          {
-            title: { ar: "فواتير الموردين", en: "Supplier Bills" },
-            href: "/company/purchases/bills",
-            icon: FileText,
-            anyPermissions: ["purchases.view", "supplier_bills.view"],
-            workspaces: ["company"],
-          },
-        ],
-      },
-      {
-        title: { ar: "المخزون ونقاط البيع", en: "Inventory & POS" },
-        href: "/company/inventory",
-        icon: Package,
-        anyPermissions: [
-          "inventory.view",
-          "warehouses.view",
-          "pos.view",
-          PERMISSIONS.PRODUCTS_VIEW,
-          PERMISSIONS.ORDERS_VIEW,
-        ],
-        workspaces: ["company"],
-        items: [
-          {
-            title: { ar: "المخزون", en: "Inventory" },
-            href: "/company/inventory",
-            icon: Package,
-            anyPermissions: ["inventory.view", PERMISSIONS.PRODUCTS_VIEW],
-            workspaces: ["company"],
-          },
-          {
-            title: { ar: "المستودعات", en: "Warehouses" },
-            href: "/company/inventory/warehouses",
-            icon: Boxes,
-            anyPermissions: ["warehouses.view", "inventory.view"],
-            workspaces: ["company"],
-          },
-          {
-            title: { ar: "حركات المخزون", en: "Stock Movements" },
-            href: "/company/inventory/movements",
-            icon: FileText,
-            anyPermissions: ["stock_movements.view", "inventory.view"],
-            workspaces: ["company"],
-          },
-          {
-            title: { ar: "نقاط البيع", en: "POS" },
-            href: "/company/pos",
+            title: { ar: "طرق الدفع", en: "Payment Methods" },
+            href: "/company/settings/payment-methods",
             icon: CreditCard,
-            anyPermissions: ["pos.view", PERMISSIONS.ORDERS_VIEW, PERMISSIONS.PAYMENTS_VIEW],
-            workspaces: ["company"],
-          },
-        ],
-      },
-      {
-        title: { ar: "المالية", en: "Finance" },
-        href: "/company/accounting",
-        icon: Calculator,
-        anyPermissions: [
-          PERMISSIONS.ACCOUNTING_VIEW,
-          PERMISSIONS.TREASURY_VIEW,
-          PERMISSIONS.PAYMENTS_VIEW,
-        ],
-        workspaces: ["company"],
-        items: [
-          {
-            title: { ar: "المحاسبة", en: "Accounting" },
-            href: "/company/accounting",
-            icon: Calculator,
-            permission: PERMISSIONS.ACCOUNTING_VIEW,
-            workspaces: ["company"],
-          },
-          {
-            title: { ar: "الخزينة", en: "Treasury" },
-            href: "/company/treasury",
-            icon: Wallet,
-            permission: PERMISSIONS.TREASURY_VIEW,
-            workspaces: ["company"],
-          },
-          {
-            title: { ar: "المدفوعات", en: "Payments" },
-            href: "/company/payments",
-            aliases: ["/center/payments", "/provider/payments"],
-            icon: CreditCard,
-            permission: PERMISSIONS.PAYMENTS_VIEW,
-            workspaces: ["company"],
-          },
-          {
-            title: { ar: "التقارير المالية", en: "Financial Reports" },
-            href: "/company/reports",
-            icon: BarChart3,
-            anyPermissions: [PERMISSIONS.REPORTS_VIEW, PERMISSIONS.ACCOUNTING_REPORTS_VIEW],
-            workspaces: ["company"],
-          },
-        ],
-      },
-      {
-        title: { ar: "الموارد البشرية", en: "Human Resources" },
-        href: "/company/hr",
-        icon: Users,
-        anyPermissions: ["hr.view", "employees.view", PERMISSIONS.USERS_VIEW],
-        workspaces: ["company"],
-        items: [
-          {
-            title: { ar: "الموظفون", en: "Employees" },
-            href: "/company/hr/employees",
-            icon: Users,
-            anyPermissions: ["employees.view", "hr.view"],
-            workspaces: ["company"],
-          },
-          {
-            title: { ar: "الحضور والإجازات", en: "Attendance & Leave" },
-            href: "/company/hr/attendance",
-            icon: BellRing,
-            anyPermissions: ["attendance.view", "leave.view", "hr.view"],
-            workspaces: ["company"],
-          },
-          {
-            title: { ar: "الرواتب", en: "Payroll" },
-            href: "/company/hr/payroll",
-            icon: Wallet,
-            anyPermissions: ["payroll.view", "hr.view"],
-            workspaces: ["company"],
-          },
-        ],
-      },
-      {
-        title: { ar: "التواصل والتقارير", en: "Messaging & Reports" },
-        href: "/company/reports",
-        icon: MessageCircle,
-        anyPermissions: [
-          PERMISSIONS.REPORTS_VIEW,
-          PERMISSIONS.WHATSAPP_VIEW,
-          PERMISSIONS.NOTIFICATIONS_VIEW,
-        ],
-        workspaces: ["company"],
-        items: [
-          {
-            title: { ar: "التقارير", en: "Reports" },
-            href: "/company/reports",
-            icon: BarChart3,
-            permission: PERMISSIONS.REPORTS_VIEW,
-            workspaces: ["company"],
-          },
-          {
-            title: { ar: "واتساب", en: "WhatsApp" },
-            href: "/company/whatsapp",
-            aliases: ["/center/whatsapp", "/provider/whatsapp"],
-            icon: MessageCircle,
-            permission: PERMISSIONS.WHATSAPP_VIEW,
-            workspaces: ["company"],
-          },
-          {
-            title: { ar: "الإشعارات", en: "Notifications" },
-            href: "/company/notifications",
-            icon: BellRing,
-            anyPermissions: [PERMISSIONS.NOTIFICATIONS_VIEW, PERMISSIONS.PROVIDER_WORKSPACE_VIEW],
+            permission: PERMISSIONS.PROVIDER_WORKSPACE_VIEW,
             workspaces: ["company"],
           },
         ],
@@ -1169,9 +1570,25 @@ export function NavMain({ type }: NavMainProps) {
     }
 
     const normalizedRole = currentRole.trim().toLowerCase();
+    const authRecord = authSession as Record<string, unknown>;
+    const workspaceHint = String(
+      authRecord.workspace ||
+        authRecord.workspace_type ||
+        authRecord.active_workspace ||
+        "",
+    )
+      .trim()
+      .toLowerCase();
+    const hasAuthenticatedUser = Boolean(
+      authSession.user ||
+        authRecord.user ||
+        authRecord.email ||
+        authRecord.id ||
+        authRecord.user_id,
+    );
     const canUseSystemFallback =
       type === "system" &&
-      Boolean(authSession.user) &&
+      hasAuthenticatedUser &&
       (authSession.is_superuser === true ||
         authSession.is_staff === true ||
         authSession.is_system_user === true ||
@@ -1179,13 +1596,38 @@ export function NavMain({ type }: NavMainProps) {
         normalizedRole === "system_admin" ||
         normalizedRole === "admin" ||
         normalizedRole === "staff");
-
-    if (canUseSystemFallback) {
+    const companyFallbackRoles = [
+      "owner",
+      "admin",
+      "manager",
+      "accountant",
+      "cashier",
+      "sales",
+      "inventory",
+      "hr",
+      "employee",
+      "viewer",
+      "retail",
+    ];
+    const canUseCompanyFallback =
+      (type === "company" || type === "center" || type === "provider") &&
+      hasAuthenticatedUser &&
+      (workspaceHint === "company" ||
+        workspaceHint === "center" ||
+        workspaceHint === "provider" ||
+        authRecord.is_company_user === true ||
+        authRecord.is_company_admin === true ||
+        Boolean(
+          authRecord.company ||
+            authRecord.company_id ||
+            authRecord.current_company ||
+            authRecord.active_company,
+        ) ||
+        companyFallbackRoles.includes(normalizedRole));
+    if (canUseSystemFallback || canUseCompanyFallback) {
       return sourceGroups;
     }
-
-    return filteredGroups;
-  }, [type, authSession, currentRole, enabledApps]);
+    return filteredGroups;}, [type, authSession, currentRole, enabledApps]);
 
   const getRowClassName = (level: number) =>
     cn(
