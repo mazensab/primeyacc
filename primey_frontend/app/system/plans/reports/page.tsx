@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 /* ============================================================
    📂 primey_frontend/app/system/plans/reports/page.tsx
@@ -120,7 +120,40 @@ type PlanRecord = {
   companies_count: number;
   created_at: string | null;
   updated_at: string | null;
-};
+};type FeatureGroupKey =
+  | "general_accounting"
+  | "sales_pos"
+  | "purchases_suppliers"
+  | "inventory_warehouses"
+  | "hr"
+  | "whatsapp_communications"
+  | "advanced_reports"
+  | "api_integrations";
+const FEATURE_LABELS: Record<"ar" | "en", Record<FeatureGroupKey, string>> = {
+  ar: {
+    general_accounting: "\u0627\u0644\u062d\u0633\u0627\u0628\u0627\u062a \u0627\u0644\u0639\u0627\u0645\u0629",
+    sales_pos: "\u0627\u0644\u0645\u0628\u064a\u0639\u0627\u062a \u0648\u0646\u0642\u0627\u0637 \u0627\u0644\u0628\u064a\u0639",
+    purchases_suppliers: "\u0627\u0644\u0645\u0634\u062a\u0631\u064a\u0627\u062a \u0648\u0627\u0644\u0645\u0648\u0631\u062f\u064a\u0646",
+    inventory_warehouses: "\u0627\u0644\u0645\u062e\u0632\u0648\u0646 \u0648\u0627\u0644\u0645\u0633\u062a\u0648\u062f\u0639\u0627\u062a",
+    hr: "\u0627\u0644\u0645\u0648\u0627\u0631\u062f \u0627\u0644\u0628\u0634\u0631\u064a\u0629",
+    whatsapp_communications: "\u0627\u0644\u062a\u0648\u0627\u0635\u0644 \u0648\u0627\u0644\u0648\u0627\u062a\u0633\u0627\u0628",
+    advanced_reports: "\u0627\u0644\u062a\u0642\u0627\u0631\u064a\u0631 \u0627\u0644\u0645\u062a\u0642\u062f\u0645\u0629",
+    api_integrations: "\u0627\u0644\u062a\u0643\u0627\u0645\u0644\u0627\u062a \u0648 API",
+  },
+  en: {
+    general_accounting: "General accounting",
+    sales_pos: "Sales and POS",
+    purchases_suppliers: "Purchases and suppliers",
+    inventory_warehouses: "Inventory and warehouses",
+    hr: "Human resources",
+    whatsapp_communications: "Communications and WhatsApp",
+    advanced_reports: "Advanced reports",
+    api_integrations: "Integrations and API",
+  },
+} as const;
+function getFeatureLabel(feature: string, locale: "ar" | "en") {
+  return FEATURE_LABELS[locale][feature as FeatureGroupKey] || feature;
+}
 
 type DistributionRow = {
   key: string;
@@ -155,7 +188,7 @@ const translations = {
     systemDashboard: "لوحة النظام",
     reset: "إعادة ضبط",
 
-    searchPlaceholder: "ابحث باسم الباقة أو الكود أو المعرف أو الوصف أو المميزات...",
+    searchPlaceholder: "\u0627\u0628\u062d\u062b \u0628\u0627\u0633\u0645 \u0627\u0644\u0628\u0627\u0642\u0629 \u0623\u0648 \u0627\u0644\u0643\u0648\u062f \u0623\u0648 \u0627\u0644\u0645\u0639\u0631\u0641 \u0623\u0648 \u0627\u0644\u0648\u0635\u0641 \u0623\u0648 \u0645\u062c\u0645\u0648\u0639\u0627\u062a \u0627\u0644\u0645\u064a\u0632\u0627\u062a...",
     statusFilter: "الحالة",
     visibilityFilter: "الظهور",
     codeFilter: "الكود",
@@ -214,7 +247,7 @@ const translations = {
     warehouses: "مخزن",
     pos: "نقطة بيع",
     companies: "الشركات",
-    features: "المميزات",
+    features: "\u0645\u062c\u0645\u0648\u0639\u0627\u062a \u0627\u0644\u0645\u064a\u0632\u0627\u062a",
     status: "الحالة",
     visibility: "الظهور",
     updatedAt: "آخر تحديث",
@@ -260,7 +293,7 @@ const translations = {
     systemDashboard: "System dashboard",
     reset: "Reset",
 
-    searchPlaceholder: "Search by plan name, code, slug, description, or features...",
+    searchPlaceholder: "Search by plan name, code, slug, description, or feature groups...",
     statusFilter: "Status",
     visibilityFilter: "Visibility",
     codeFilter: "Code",
@@ -319,7 +352,7 @@ const translations = {
     warehouses: "warehouses",
     pos: "POS",
     companies: "Companies",
-    features: "Features",
+    features: "Feature groups",
     status: "Status",
     visibility: "Visibility",
     updatedAt: "Updated at",
@@ -884,6 +917,7 @@ export default function SystemPlansReportsPage() {
         plan.slug,
         plan.description,
         plan.features.join(" "),
+        plan.features.map((feature) => getFeatureLabel(feature, locale)).join(" "),
         plan.is_active ? "active" : "inactive",
         plan.is_public ? "public" : "internal",
       ]
@@ -982,7 +1016,7 @@ export default function SystemPlansReportsPage() {
       plan.max_warehouses,
       plan.max_pos,
       plan.companies_count,
-      plan.features.join(", "),
+      plan.features.map((feature) => getFeatureLabel(feature, locale)).join(", "),
       plan.is_active ? t.active : t.inactive,
       plan.is_public ? t.public : t.internal,
       formatDate(plan.updated_at || plan.created_at),
@@ -1491,7 +1525,7 @@ export default function SystemPlansReportsPage() {
                             <div className="flex max-w-[160px] flex-wrap gap-1">
                               {plan.features.slice(0, 2).map((feature) => (
                                 <Badge key={feature} variant="secondary" className="rounded-full text-[11px]">
-                                  {feature}
+                                  {getFeatureLabel(feature, locale)}
                                 </Badge>
                               ))}
                               {plan.features.length > 2 ? (
