@@ -1,4 +1,4 @@
-﻿# 📂 api/system/activity_profiles/views.py
+# 📂 api/system/activity_profiles/views.py
 # 🧠 Mhamcloud | System Activity Profiles API Views v1
 # ============================================================
 # ✅ Read-only system overview for company activity profiles
@@ -139,6 +139,21 @@ def _field_names(model) -> set[str]:
     return {field.name for field in model._meta.fields}
 def _has_field(model, field_name: str) -> bool:
     return field_name in _field_names(model)
+
+def _field_is_text(model, field_name: str) -> bool:
+    if not model:
+        return False
+    try:
+        field = model._meta.get_field(field_name)
+    except Exception:
+        return False
+    return field.get_internal_type() in {
+        "CharField",
+        "TextField",
+        "EmailField",
+        "SlugField",
+        "URLField",
+    }
 def _get(obj, *field_names: str, default: Any = None) -> Any:
     fields = _field_names(obj.__class__)
     for field_name in field_names:
@@ -207,7 +222,7 @@ def _companies_queryset_for_profile(profile):
         "activity_type",
     )
     for field_name in string_fields:
-        if _has_field(Company, field_name):
+        if _field_is_text(Company, field_name):
             for identifier in profile_identifiers:
                 conditions |= Q(**{f"{field_name}__iexact": identifier})
     return Company.objects.filter(conditions).distinct()
