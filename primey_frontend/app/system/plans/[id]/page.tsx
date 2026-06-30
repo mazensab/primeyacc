@@ -162,100 +162,52 @@ const CSRF_ENDPOINT = "/api/auth/csrf";
 
 const FEATURE_SUGGESTIONS = {
   ar: [
-    "الحسابات العامة",
-    "دليل الحسابات",
-    "القيود اليومية",
-    "فواتير مبيعات",
-    "أوامر البيع",
-    "مرتجعات المبيعات",
-    "إشعارات دائنة",
-    "فواتير مشتريات",
-    "إدارة المخزون",
-    "المواقع والمخازن",
-    "الأصناف والتسعير",
-    "الأرقام التسلسلية والدفعات",
-    "الحجوزات والتخصيص",
-    "الجرد والتقييم",
-    "نقاط البيع",
-    "الخزينة والمدفوعات",
-    "طرق الدفع والأجهزة",
-    "التقارير المالية",
-    "المستندات والقوالب",
-    "PDF والطباعة",
-    "الطباعة الحرارية",
-    "إشعارات النظام",
-    "مركز الإشعارات",
-    "إشعارات المستخدمين والشركات",
-    "واتساب للشركات",
-    "صندوق وارد واتساب",
-    "رسائل واتساب",
-    "قوالب واتساب",
-    "إعدادات واتساب",
-    "إدارة العملاء",
-    "إدارة الموردين",
-    "الموارد البشرية",
-    "الحضور والانصراف",
-    "الإجازات",
-    "الرواتب",
-    "تقييم الأداء",
-    "المستخدمون والصلاحيات",
-    "الفروع",
-    "المخازن",
-    "الدعم الفني",
-    "التكاملات",
-    "مفاتيح API",
-    "الأنشطة المتخصصة",
-    "المجوهرات",
-    "المطاعم",
+    "general_accounting",
+    "sales_pos",
+    "purchases_suppliers",
+    "inventory_warehouses",
+    "hr",
+    "whatsapp_communications",
+    "advanced_reports",
+    "api_integrations",
   ],
   en: [
-    "General accounting",
-    "Chart of accounts",
-    "Journal entries",
-    "Sales invoices",
-    "Sales orders",
-    "Sales returns",
-    "Credit notes",
-    "Purchase bills",
-    "Inventory management",
-    "Locations and warehouses",
-    "Items and pricing",
-    "Serials, batches, and expiry",
-    "Reservations and allocation",
-    "Physical counts and valuation",
-    "Point of sale",
-    "Treasury and payments",
-    "Payment methods and devices",
-    "Financial reports",
-    "Documents and templates",
-    "PDF and printing",
-    "Thermal printing",
-    "System notifications",
-    "Notifications center",
-    "Company and user notifications",
-    "Company WhatsApp",
-    "WhatsApp inbox",
-    "WhatsApp messages",
-    "WhatsApp templates",
-    "WhatsApp settings",
-    "Customer management",
-    "Supplier management",
-    "Human resources",
-    "Attendance",
-    "Leaves",
-    "Payroll",
-    "Performance reviews",
-    "Users and permissions",
-    "Branches",
-    "Warehouses",
-    "Support",
-    "Integrations",
-    "API keys",
-    "Activity-specific modules",
-    "Jewelry",
-    "Restaurants",
+    "general_accounting",
+    "sales_pos",
+    "purchases_suppliers",
+    "inventory_warehouses",
+    "hr",
+    "whatsapp_communications",
+    "advanced_reports",
+    "api_integrations",
   ],
 } as const;
+type FeatureKey = (typeof FEATURE_SUGGESTIONS)["ar"][number];
+const FEATURE_LABELS: Record<Locale, Record<FeatureKey, string>> = {
+  ar: {
+    general_accounting: "\u0627\u0644\u062d\u0633\u0627\u0628\u0627\u062a \u0627\u0644\u0639\u0627\u0645\u0629",
+    sales_pos: "\u0627\u0644\u0645\u0628\u064a\u0639\u0627\u062a \u0648\u0646\u0642\u0627\u0637 \u0627\u0644\u0628\u064a\u0639",
+    purchases_suppliers: "\u0627\u0644\u0645\u0634\u062a\u0631\u064a\u0627\u062a \u0648\u0627\u0644\u0645\u0648\u0631\u062f\u064a\u0646",
+    inventory_warehouses: "\u0627\u0644\u0645\u062e\u0632\u0648\u0646 \u0648\u0627\u0644\u0645\u0633\u062a\u0648\u062f\u0639\u0627\u062a",
+    hr: "\u0627\u0644\u0645\u0648\u0627\u0631\u062f \u0627\u0644\u0628\u0634\u0631\u064a\u0629",
+    whatsapp_communications: "\u0627\u0644\u062a\u0648\u0627\u0635\u0644 \u0648\u0627\u0644\u0648\u0627\u062a\u0633\u0627\u0628",
+    advanced_reports: "\u0627\u0644\u062a\u0642\u0627\u0631\u064a\u0631 \u0627\u0644\u0645\u062a\u0642\u062f\u0645\u0629",
+    api_integrations: "\u0627\u0644\u062a\u0643\u0627\u0645\u0644\u0627\u062a \u0648 API",
+  },
+  en: {
+    general_accounting: "General accounting",
+    sales_pos: "Sales and POS",
+    purchases_suppliers: "Purchases and suppliers",
+    inventory_warehouses: "Inventory and warehouses",
+    hr: "Human resources",
+    whatsapp_communications: "Communications and WhatsApp",
+    advanced_reports: "Advanced reports",
+    api_integrations: "Integrations and API",
+  },
+} as const;
+function getFeatureLabel(feature: string, locale: Locale) {
+  return FEATURE_LABELS[locale][feature as FeatureKey] || feature;
+}
 
 const translations = {
   ar: {
@@ -289,8 +241,8 @@ const translations = {
     planInfo: "بيانات الباقة",
     pricing: "الأسعار",
     limits: "الحدود التشغيلية",
-    features: "المميزات",
-    noFeatures: "لا توجد مميزات مسجلة.",
+    features: "\u0645\u062c\u0645\u0648\u0639\u0627\u062a \u0627\u0644\u0645\u064a\u0632\u0627\u062a",
+    noFeatures: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0645\u062c\u0645\u0648\u0639\u0627\u062a \u0645\u064a\u0632\u0627\u062a \u0645\u0633\u062c\u0644\u0629.",
     monthly: "شهري",
     yearly: "سنوي",
     users: "مستخدم",
@@ -314,9 +266,9 @@ const translations = {
     sortOrder: "ترتيب العرض",
     statusVisibility: "الحالة والظهور",
     addFeature: "إضافة",
-    featureInputPlaceholder: "اكتب ميزة ثم اضغط إضافة...",
-    suggestedFeatures: "اقتراحات جاهزة",
-    selectedFeatures: "المميزات المختارة",
+    featureInputPlaceholder: "\u0627\u0643\u062a\u0628 \u0643\u0648\u062f \u0645\u064a\u0632\u0629 \u0645\u062e\u0635\u0635 \u0639\u0646\u062f \u0627\u0644\u062d\u0627\u062c\u0629 \u062b\u0645 \u0627\u0636\u063a\u0637 \u0625\u0636\u0627\u0641\u0629...",
+    suggestedFeatures: "\u0645\u062c\u0645\u0648\u0639\u0627\u062a \u0627\u0644\u0645\u064a\u0632\u0627\u062a \u0627\u0644\u062c\u0627\u0647\u0632\u0629",
+    selectedFeatures: "\u0645\u062c\u0645\u0648\u0639\u0627\u062a \u0627\u0644\u0645\u064a\u0632\u0627\u062a \u0627\u0644\u0645\u062e\u062a\u0627\u0631\u0629",
     recentSubscriptions: "آخر اشتراكات مرتبطة",
     recentSubscriptionsDesc: "آخر الشركات التي تستخدم هذه الباقة حسب API التفاصيل.",
     company: "الشركة",
@@ -370,8 +322,8 @@ const translations = {
     planInfo: "Plan information",
     pricing: "Pricing",
     limits: "Operational limits",
-    features: "Features",
-    noFeatures: "No features recorded.",
+    features: "Feature groups",
+    noFeatures: "No feature groups recorded.",
     monthly: "Monthly",
     yearly: "Yearly",
     users: "users",
@@ -395,9 +347,9 @@ const translations = {
     sortOrder: "Sort order",
     statusVisibility: "Status and visibility",
     addFeature: "Add",
-    featureInputPlaceholder: "Write a feature then click Add...",
-    suggestedFeatures: "Suggested features",
-    selectedFeatures: "Selected features",
+    featureInputPlaceholder: "Write a custom feature code if needed, then click Add...",
+    suggestedFeatures: "Suggested feature groups",
+    selectedFeatures: "Selected feature groups",
     recentSubscriptions: "Recent linked subscriptions",
     recentSubscriptionsDesc: "Latest companies using this plan from the detail API.",
     company: "Company",
@@ -1104,8 +1056,8 @@ export default function SystemPlanDetailPage() {
           yearly_price: String(toSafeNumber(editForm.yearly_price) ?? 0),
           max_users: Math.trunc(toSafeNumber(editForm.max_users) ?? 1),
           max_branches: Math.trunc(toSafeNumber(editForm.max_branches) ?? 1),
-          max_warehouses: Math.trunc(toSafeNumber(editForm.max_warehouses) ?? 0),
-          max_pos: Math.trunc(toSafeNumber(editForm.max_pos) ?? 0),
+          max_warehouses: Math.trunc(toSafeNumber(editForm.max_warehouses) ?? 1),
+          max_pos: Math.trunc(toSafeNumber(editForm.max_pos) ?? 1),
           features: featuresToList(editForm.features),
           is_active: editForm.is_active,
           is_public: editForm.is_public,
@@ -1569,7 +1521,7 @@ export default function SystemPlanDetailPage() {
                           }
                           disabled={saving}
                         >
-                          {feature}
+                          {getFeatureLabel(feature, locale)}
                         </Button>
                       );
                     })}
@@ -1586,13 +1538,13 @@ export default function SystemPlanDetailPage() {
                           variant="secondary"
                           className="gap-2 rounded-full px-3 py-1.5"
                         >
-                          {feature}
+                          {getFeatureLabel(feature, locale)}
                           <button
                             type="button"
                             className="rounded-full text-muted-foreground transition hover:text-foreground"
                             onClick={() => removeFeature(feature)}
                             disabled={saving}
-                            aria-label={feature}
+                            aria-label={getFeatureLabel(feature, locale)}
                           >
                             <X className="h-3.5 w-3.5" />
                           </button>
@@ -1866,7 +1818,7 @@ export default function SystemPlanDetailPage() {
                   <div className="flex flex-wrap gap-2">
                     {plan.features.map((feature) => (
                       <Badge key={feature} variant="secondary" className="rounded-full px-3 py-1.5">
-                        {feature}
+                        {getFeatureLabel(feature, locale)}
                       </Badge>
                     ))}
                   </div>
