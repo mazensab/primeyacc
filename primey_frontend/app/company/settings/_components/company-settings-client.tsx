@@ -1777,9 +1777,13 @@ export function BranchesPage() {
     </PageShell>
   );
 }
+
+type CompanyUserStatusFilter = "all" | "active" | "inactive";
+type CompanyUserSortKey = "newest" | "oldest" | "name" | "role";
 type UserForm = {
   full_name: string;
   email: string;
+  phone: string;
   role: string;
   branch_id: string;
   is_active: boolean;
@@ -1787,32 +1791,272 @@ type UserForm = {
 const emptyUserForm: UserForm = {
   full_name: "",
   email: "",
+  phone: "",
   role: "VIEWER",
   branch_id: "",
   is_active: true,
 };
+const companyUsersAr = {
+  title: "\u0645\u0633\u062a\u062e\u062f\u0645\u0648 \u0627\u0644\u0634\u0631\u0643\u0629",
+  description: "\u0625\u062f\u0627\u0631\u0629 \u0645\u0633\u062a\u062e\u062f\u0645\u064a \u0627\u0644\u0634\u0631\u0643\u0629\u060c \u0627\u0644\u0623\u062f\u0648\u0627\u0631\u060c \u0627\u0644\u0641\u0631\u0648\u0639\u060c \u0648\u062d\u0627\u0644\u0629 \u0627\u0644\u062a\u0641\u0639\u064a\u0644 \u0628\u0646\u0641\u0633 \u0646\u0645\u0637 \u0645\u0633\u062a\u062e\u062f\u0645\u064a \u0627\u0644\u0646\u0638\u0627\u0645.",
+  refresh: "\u062a\u062d\u062f\u064a\u062b",
+  exportExcel: "\u062a\u0635\u062f\u064a\u0631 Excel",
+  print: "\u0637\u0628\u0627\u0639\u0629",
+  addUser: "\u0625\u0636\u0627\u0641\u0629 \u0645\u0633\u062a\u062e\u062f\u0645",
+  editUser: "\u062a\u0639\u062f\u064a\u0644 \u0645\u0633\u062a\u062e\u062f\u0645",
+  formDescription: "\u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0648\u062f\u0648\u0631\u0647 \u0648\u0627\u0631\u062a\u0628\u0627\u0637\u0647 \u0628\u0627\u0644\u0641\u0631\u0639.",
+  usersList: "\u0642\u0627\u0626\u0645\u0629 \u0645\u0633\u062a\u062e\u062f\u0645\u064a \u0627\u0644\u0634\u0631\u0643\u0629",
+  usersListDescription: "\u0639\u0631\u0636 \u0648\u0645\u062a\u0627\u0628\u0639\u0629 \u0645\u0633\u062a\u062e\u062f\u0645\u064a \u0627\u0644\u0634\u0631\u0643\u0629 \u0645\u0639 \u0627\u0644\u0628\u062d\u062b \u0648\u0627\u0644\u062a\u0635\u0641\u064a\u0629 \u0648\u0627\u0644\u062a\u0635\u062f\u064a\u0631.",
+  filters: "\u0627\u0644\u0628\u062d\u062b \u0648\u0627\u0644\u062a\u0635\u0641\u064a\u0629",
+  filtersDescription: "\u0627\u0628\u062d\u062b \u0628\u0627\u0644\u0627\u0633\u0645\u060c \u0627\u0644\u0628\u0631\u064a\u062f\u060c \u0627\u0644\u062f\u0648\u0631\u060c \u0623\u0648 \u0627\u0644\u0641\u0631\u0639.",
+  totalUsers: "\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645\u064a\u0646",
+  activeUsers: "\u0645\u0633\u062a\u062e\u062f\u0645\u0648\u0646 \u0646\u0634\u0637\u0648\u0646",
+  inactiveUsers: "\u0645\u0633\u062a\u062e\u062f\u0645\u0648\u0646 \u0645\u0639\u0637\u0644\u0648\u0646",
+  adminUsers: "\u0625\u062f\u0627\u0631\u064a\u0648\u0646 \u0648\u0645\u0634\u0631\u0641\u0648\u0646",
+  totalHint: "\u0645\u0633\u062a\u062e\u062f\u0645\u0648\u0646 \u062f\u0627\u062e\u0644 \u0627\u0644\u0634\u0631\u0643\u0629",
+  activeHint: "\u0645\u062a\u0627\u062d\u0648\u0646 \u0644\u0644\u062f\u062e\u0648\u0644 \u0648\u0627\u0644\u0639\u0645\u0644",
+  inactiveHint: "\u062a\u0645 \u062a\u0639\u0637\u064a\u0644 \u0648\u0635\u0648\u0644\u0647\u0645",
+  adminHint: "\u0623\u062f\u0648\u0627\u0631 \u0625\u062f\u0627\u0631\u064a\u0629 \u0623\u0648 \u0625\u0634\u0631\u0627\u0641\u064a\u0629",
+  searchPlaceholder: "\u0627\u0628\u062d\u062b \u0628\u0627\u0644\u0627\u0633\u0645 \u0623\u0648 \u0627\u0644\u0628\u0631\u064a\u062f \u0623\u0648 \u0627\u0644\u062f\u0648\u0631 \u0623\u0648 \u0627\u0644\u0641\u0631\u0639...",
+  statusFilter: "\u0627\u0644\u062d\u0627\u0644\u0629",
+  sortBy: "\u0627\u0644\u062a\u0631\u062a\u064a\u0628",
+  all: "\u0627\u0644\u0643\u0644",
+  active: "\u0646\u0634\u0637",
+  inactive: "\u063a\u064a\u0631 \u0646\u0634\u0637",
+  newest: "\u0627\u0644\u0623\u062d\u062f\u062b",
+  oldest: "\u0627\u0644\u0623\u0642\u062f\u0645",
+  nameSort: "\u0627\u0644\u0627\u0633\u0645",
+  roleSort: "\u0627\u0644\u062f\u0648\u0631",
+  reset: "\u0625\u0639\u0627\u062f\u0629 \u0636\u0628\u0637",
+  fullName: "\u0627\u0644\u0627\u0633\u0645",
+  email: "\u0627\u0644\u0628\u0631\u064a\u062f \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a",
+  phone: "\u0631\u0642\u0645 \u0627\u0644\u062a\u0648\u0627\u0635\u0644",
+  role: "\u0627\u0644\u062f\u0648\u0631",
+  branch: "\u0627\u0644\u0641\u0631\u0639",
+  noBranch: "\u0628\u062f\u0648\u0646 \u0641\u0631\u0639 \u0645\u062d\u062f\u062f",
+  activeUser: "\u0645\u0633\u062a\u062e\u062f\u0645 \u0646\u0634\u0637",
+  activeUserDescription: "\u064a\u0633\u062a\u0637\u064a\u0639 \u0627\u0644\u062f\u062e\u0648\u0644 \u0648\u0627\u0644\u0627\u0633\u062a\u062e\u062f\u0627\u0645 \u062d\u0633\u0628 \u0635\u0644\u0627\u062d\u064a\u0627\u062a\u0647.",
+  save: "\u062d\u0641\u0638",
+  cancel: "\u0625\u0644\u063a\u0627\u0621",
+  edit: "\u062a\u0639\u062f\u064a\u0644",
+  activate: "\u062a\u0641\u0639\u064a\u0644",
+  deactivate: "\u062a\u0639\u0637\u064a\u0644",
+  user: "\u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645",
+  contact: "\u0627\u0644\u062a\u0648\u0627\u0635\u0644",
+  status: "\u0627\u0644\u062d\u0627\u0644\u0629",
+  createdAt: "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0625\u0636\u0627\u0641\u0629",
+  actions: "\u0625\u062c\u0631\u0627\u0621\u0627\u062a",
+  noUsers: "\u0644\u0627 \u064a\u0648\u062c\u062f \u0645\u0633\u062a\u062e\u062f\u0645\u0648\u0646",
+  noUsersDescription: "\u0633\u062a\u0638\u0647\u0631 \u0645\u0633\u062a\u062e\u062f\u0645\u0648 \u0627\u0644\u0634\u0631\u0643\u0629 \u0647\u0646\u0627 \u0639\u0646\u062f \u062a\u0648\u0641\u0631\u0647\u0645 \u0645\u0646 \u0627\u0644\u0640 API \u0623\u0648 \u0639\u0646\u062f \u0625\u0636\u0627\u0641\u062a\u0647\u0645.",
+  noResults: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0646\u062a\u0627\u0626\u062c",
+  noResultsDescription: "\u063a\u064a\u0631 \u0645\u0637\u0627\u0628\u0642 \u0644\u0644\u0628\u062d\u062b \u0623\u0648 \u0627\u0644\u062a\u0635\u0641\u064a\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629.",
+  owner: "\u0645\u0627\u0644\u0643",
+  admin: "\u0645\u062f\u064a\u0631",
+  manager: "\u0645\u0634\u0631\u0641",
+  accountant: "\u0645\u062d\u0627\u0633\u0628",
+  cashier: "\u0643\u0627\u0634\u064a\u0631",
+  sales: "\u0645\u0628\u064a\u0639\u0627\u062a",
+  inventory: "\u0645\u062e\u0632\u0648\u0646",
+  hr: "\u0645\u0648\u0627\u0631\u062f \u0628\u0634\u0631\u064a\u0629",
+  employee: "\u0645\u0648\u0638\u0641",
+  viewer: "\u0645\u0634\u0627\u0647\u062f",
+  emailRequired: "\u0627\u0644\u0628\u0631\u064a\u062f \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a \u0645\u0637\u0644\u0648\u0628",
+  emailInvalid: "\u0627\u0644\u0628\u0631\u064a\u062f \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a \u063a\u064a\u0631 \u0635\u062d\u064a\u062d",
+  loadError: "\u062a\u0639\u0630\u0631 \u062a\u062d\u0645\u064a\u0644 \u0645\u0633\u062a\u062e\u062f\u0645\u064a \u0627\u0644\u0634\u0631\u0643\u0629",
+  saveError: "\u062a\u0639\u0630\u0631 \u062d\u0641\u0638 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645",
+  statusError: "\u062a\u0639\u0630\u0631 \u062a\u062d\u062f\u064a\u062b \u062d\u0627\u0644\u0629 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645",
+  created: "\u062a\u0645 \u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645",
+  updated: "\u062a\u0645 \u062a\u062d\u062f\u064a\u062b \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645",
+  activated: "\u062a\u0645 \u062a\u0641\u0639\u064a\u0644 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645",
+  deactivated: "\u062a\u0645 \u062a\u0639\u0637\u064a\u0644 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645",
+  exported: "\u062a\u0645 \u062a\u0635\u062f\u064a\u0631 \u0645\u0633\u062a\u062e\u062f\u0645\u064a \u0627\u0644\u0634\u0631\u0643\u0629",
+};
+const companyUsersEn = {
+  title: "Company users",
+  description: "Manage company users, roles, branches, and activation status using the same system users pattern.",
+  refresh: "Refresh",
+  exportExcel: "Export Excel",
+  print: "Print",
+  addUser: "Add user",
+  editUser: "Edit user",
+  formDescription: "User identity, role, branch, and access status.",
+  usersList: "Company users list",
+  usersListDescription: "View and manage company users with search, filters, and export.",
+  filters: "Search and filters",
+  filtersDescription: "Search by name, email, role, or branch.",
+  totalUsers: "Total users",
+  activeUsers: "Active users",
+  inactiveUsers: "Inactive users",
+  adminUsers: "Admins and managers",
+  totalHint: "Users inside the company",
+  activeHint: "Can sign in and work",
+  inactiveHint: "Access is disabled",
+  adminHint: "Administrative or management roles",
+  searchPlaceholder: "Search name, email, role, or branch...",
+  statusFilter: "Status",
+  sortBy: "Sort by",
+  all: "All",
+  active: "Active",
+  inactive: "Inactive",
+  newest: "Newest",
+  oldest: "Oldest",
+  nameSort: "Name",
+  roleSort: "Role",
+  reset: "Reset",
+  fullName: "Name",
+  email: "Email",
+  phone: "Phone",
+  role: "Role",
+  branch: "Branch",
+  noBranch: "No specific branch",
+  activeUser: "Active user",
+  activeUserDescription: "Can sign in and use features according to permissions.",
+  save: "Save",
+  cancel: "Cancel",
+  edit: "Edit",
+  activate: "Activate",
+  deactivate: "Deactivate",
+  user: "User",
+  contact: "Contact",
+  status: "Status",
+  createdAt: "Created at",
+  actions: "Actions",
+  noUsers: "No users",
+  noUsersDescription: "Company users will appear here when returned by the API or after adding them.",
+  noResults: "No results",
+  noResultsDescription: "No users match the current search or filters.",
+  owner: "Owner",
+  admin: "Admin",
+  manager: "Manager",
+  accountant: "Accountant",
+  cashier: "Cashier",
+  sales: "Sales",
+  inventory: "Inventory",
+  hr: "HR",
+  employee: "Employee",
+  viewer: "Viewer",
+  emailRequired: "Email is required",
+  emailInvalid: "Invalid email address",
+  loadError: "Could not load company users",
+  saveError: "Could not save user",
+  statusError: "Could not update user status",
+  created: "User added",
+  updated: "User updated",
+  activated: "User activated",
+  deactivated: "User deactivated",
+  exported: "Company users exported",
+};
+function getCompanyUserName(row: ApiRecord): string {
+  const user = asRecord(row.user);
+  return (
+    getText(row, ["full_name", "name", "display_name"]) ||
+    getText(user, ["full_name", "name", "display_name", "username"]) ||
+    getText(row, ["username"], "-")
+  );
+}
+function getCompanyUserEmail(row: ApiRecord): string {
+  const user = asRecord(row.user);
+  return getText(row, ["email"]) || getText(user, ["email"], "-");
+}
+function getCompanyUserPhone(row: ApiRecord): string {
+  const user = asRecord(row.user);
+  return getText(row, ["phone", "mobile", "contact_phone"]) || getText(user, ["phone", "mobile"], "-");
+}
+function getCompanyUserRole(row: ApiRecord): string {
+  return getText(row, ["role", "company_role", "membership_role", "access_role"], "VIEWER").toUpperCase();
+}
+function getCompanyUserBranchName(row: ApiRecord, branches: ApiRecord[]): string {
+  const branchRecord = asRecord(row.branch);
+  const direct = getText(row, ["branch_name", "branch"]);
+  const nested = getText(branchRecord, ["name", "branch_name", "title"]);
+  if (direct && direct !== "[object Object]") return direct;
+  if (nested) return nested;
+  const branchId = getText(row, ["branch_id"]);
+  const matched = branches.find((branch) => getRowId(branch) === branchId);
+  return matched ? getText(matched, ["name", "branch_name", "title"], branchId) : "";
+}
+function getCompanyUserActive(row: ApiRecord): boolean {
+  const user = asRecord(row.user);
+  if (Object.keys(user).length > 0) {
+    return getBool(user, ["is_active", "active", "enabled"], getBool(row, ["is_active", "active", "enabled"], true));
+  }
+  return getBool(row, ["is_active", "active", "enabled"], true);
+}
+function getCompanyUserCreatedAt(row: ApiRecord): string {
+  const user = asRecord(row.user);
+  return (
+    getText(row, ["created_at", "created", "date_joined", "joined_at"]) ||
+    getText(user, ["created_at", "created", "date_joined", "joined_at"])
+  );
+}
+function formatCompanyUsersDate(value: string): string {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return formatEnglishDateTime(parsed);
+}
+function getCompanyUserRoleLabel(role: string, t: typeof companyUsersEn): string {
+  const normalized = role.toUpperCase();
+  const labels: Record<string, string> = {
+    OWNER: t.owner,
+    ADMIN: t.admin,
+    MANAGER: t.manager,
+    ACCOUNTANT: t.accountant,
+    CASHIER: t.cashier,
+    SALES: t.sales,
+    INVENTORY: t.inventory,
+    HR: t.hr,
+    EMPLOYEE: t.employee,
+    VIEWER: t.viewer,
+  };
+  return labels[normalized] || role || "-";
+}
+function buildCompanyUsersExcel(rows: ApiRecord[], branches: ApiRecord[], t: typeof companyUsersEn): string {
+  const headers = [t.user, t.email, t.phone, t.role, t.branch, t.status, t.createdAt];
+  const body = rows.map((row) => {
+    const active = getCompanyUserActive(row);
+    return [
+      getCompanyUserName(row),
+      getCompanyUserEmail(row),
+      getCompanyUserPhone(row),
+      getCompanyUserRoleLabel(getCompanyUserRole(row), t),
+      getCompanyUserBranchName(row, branches) || t.noBranch,
+      active ? t.active : t.inactive,
+      formatCompanyUsersDate(getCompanyUserCreatedAt(row)),
+    ];
+  });
+  return [headers, ...body]
+    .map((line) => line.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join("\t"))
+    .join("\n");
+}
 export function CompanyUsersPage() {
   const locale = useLocale();
   const rtl = locale === "ar";
+  const t = rtl ? companyUsersAr : companyUsersEn;
   const [rows, setRows] = useState<ApiRecord[]>([]);
   const [branches, setBranches] = useState<ApiRecord[]>([]);
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<CompanyUserStatusFilter>("all");
+  const [sortKey, setSortKey] = useState<CompanyUserSortKey>("newest");
   const [form, setForm] = useState<UserForm>(emptyUserForm);
   const [editingId, setEditingId] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const roleOptions = [
-    { value: "OWNER", label: rtl ? "مالك" : "Owner" },
-    { value: "ADMIN", label: rtl ? "مدير" : "Admin" },
-    { value: "MANAGER", label: rtl ? "مشرف" : "Manager" },
-    { value: "ACCOUNTANT", label: rtl ? "محاسب" : "Accountant" },
-    { value: "CASHIER", label: rtl ? "كاشير" : "Cashier" },
-    { value: "SALES", label: rtl ? "مبيعات" : "Sales" },
-    { value: "INVENTORY", label: rtl ? "مخزون" : "Inventory" },
-    { value: "HR", label: rtl ? "موارد بشرية" : "HR" },
-    { value: "EMPLOYEE", label: rtl ? "موظف" : "Employee" },
-    { value: "VIEWER", label: rtl ? "مشاهد" : "Viewer" },
-  ];
+  const roleOptions = useMemo(
+    () => [
+      { value: "OWNER", label: t.owner },
+      { value: "ADMIN", label: t.admin },
+      { value: "MANAGER", label: t.manager },
+      { value: "ACCOUNTANT", label: t.accountant },
+      { value: "CASHIER", label: t.cashier },
+      { value: "SALES", label: t.sales },
+      { value: "INVENTORY", label: t.inventory },
+      { value: "HR", label: t.hr },
+      { value: "EMPLOYEE", label: t.employee },
+      { value: "VIEWER", label: t.viewer },
+    ],
+    [t],
+  );
   const setField = <K extends keyof UserForm>(key: K, value: UserForm[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
@@ -1826,39 +2070,63 @@ export function CompanyUsersPage() {
       setRows(normalizeList(usersPayload));
       setBranches(normalizeList(branchesPayload));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : rtl ? "تعذر تحميل المستخدمين" : "Could not load users");
+      toast.error(error instanceof Error ? error.message : t.loadError);
     } finally {
       setLoading(false);
     }
-  }, [rtl]);
+  }, [t.loadError]);
   useEffect(() => {
     void load();
   }, [load]);
+  const userStats = useMemo(() => {
+    const active = rows.filter((row) => getCompanyUserActive(row)).length;
+    const adminRoles = ["OWNER", "ADMIN", "MANAGER"];
+    const admins = rows.filter((row) => adminRoles.includes(getCompanyUserRole(row))).length;
+    return {
+      total: rows.length,
+      active,
+      inactive: Math.max(rows.length - active, 0),
+      admins,
+    };
+  }, [rows]);
   const resetForm = () => {
     setEditingId("");
     setForm(emptyUserForm);
   };
+  const resetFilters = () => {
+    setQuery("");
+    setStatusFilter("all");
+    setSortKey("newest");
+  };
   const edit = (row: ApiRecord) => {
+    const user = asRecord(row.user);
+    const branchRecord = asRecord(row.branch);
     setEditingId(getRowId(row));
     setForm({
-      full_name: getText(row, ["full_name", "name", "display_name"]),
-      email: getText(row, ["email"]),
-      role: getText(row, ["role", "company_role"], "VIEWER"),
-      branch_id: getText(row, ["branch_id"]),
-      is_active: getBool(row, ["is_active", "active"], true),
+      full_name: getCompanyUserName(row) === "-" ? "" : getCompanyUserName(row),
+      email: getCompanyUserEmail(row) === "-" ? "" : getCompanyUserEmail(row),
+      phone: getCompanyUserPhone(row) === "-" ? "" : getCompanyUserPhone(row),
+      role: getCompanyUserRole(row) || "VIEWER",
+      branch_id: getText(row, ["branch_id"]) || getRowId(branchRecord),
+      is_active: getBool(user, ["is_active", "active", "enabled"], getCompanyUserActive(row)),
     });
   };
   const save = async () => {
     if (!form.email.trim()) {
-      toast.error(rtl ? "البريد الإلكتروني مطلوب" : "Email is required");
+      toast.error(t.emailRequired);
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      toast.error(t.emailInvalid);
       return;
     }
     const payload: ApiRecord = {
-      full_name: form.full_name,
-      email: form.email,
+      full_name: form.full_name.trim(),
+      email: form.email.trim(),
       role: form.role,
       is_active: form.is_active,
     };
+    if (form.phone.trim()) payload.phone = form.phone.trim();
     if (form.branch_id) payload.branch_id = form.branch_id;
     try {
       setSaving(true);
@@ -1866,11 +2134,11 @@ export function CompanyUsersPage() {
         method: editingId ? "PATCH" : "POST",
         body: JSON.stringify(payload),
       });
-      toast.success(editingId ? (rtl ? "تم تحديث المستخدم" : "User updated") : rtl ? "تم إضافة المستخدم" : "User added");
+      toast.success(editingId ? t.updated : t.created);
       resetForm();
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : rtl ? "تعذر حفظ المستخدم" : "Could not save user");
+      toast.error(error instanceof Error ? error.message : t.saveError);
     } finally {
       setSaving(false);
     }
@@ -1890,310 +2158,285 @@ export function CompanyUsersPage() {
           body: JSON.stringify({ is_active: nextActive }),
         });
       }
-      toast.success(nextActive ? (rtl ? "تم تفعيل المستخدم" : "User activated") : rtl ? "تم تعطيل المستخدم" : "User deactivated");
+      toast.success(nextActive ? t.activated : t.deactivated);
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : rtl ? "تعذر تحديث حالة المستخدم" : "Could not update user status");
+      toast.error(error instanceof Error ? error.message : t.statusError);
     }
   };
-  const filteredRows = rows.filter((row) => {
-    const haystack = [
-      getText(row, ["full_name", "name", "display_name"]),
-      getText(row, ["email"]),
-      getText(row, ["role", "company_role"]),
-    ]
-      .join(" ")
-      .toLowerCase();
-    return haystack.includes(query.toLowerCase());
-  });
+  const filteredRows = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return rows
+      .filter((row) => {
+        const active = getCompanyUserActive(row);
+        if (statusFilter === "active" && !active) return false;
+        if (statusFilter === "inactive" && active) return false;
+        const haystack = [
+          getCompanyUserName(row),
+          getCompanyUserEmail(row),
+          getCompanyUserPhone(row),
+          getCompanyUserRole(row),
+          getCompanyUserRoleLabel(getCompanyUserRole(row), t),
+          getCompanyUserBranchName(row, branches),
+        ]
+          .join(" ")
+          .toLowerCase();
+        return !normalizedQuery || haystack.includes(normalizedQuery);
+      })
+      .sort((a, b) => {
+        if (sortKey === "name") {
+          return getCompanyUserName(a).localeCompare(getCompanyUserName(b), "en");
+        }
+        if (sortKey === "role") {
+          return getCompanyUserRole(a).localeCompare(getCompanyUserRole(b), "en");
+        }
+        const dateA = new Date(getCompanyUserCreatedAt(a)).getTime() || 0;
+        const dateB = new Date(getCompanyUserCreatedAt(b)).getTime() || 0;
+        return sortKey === "oldest" ? dateA - dateB : dateB - dateA;
+      });
+  }, [branches, query, rows, sortKey, statusFilter, t]);
+  const exportExcel = () => {
+    const content = buildCompanyUsersExcel(filteredRows, branches, t);
+    const blob = new Blob(["\ufeff", content], {
+      type: "application/vnd.ms-excel;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `company-users-${formatEnglishDateTime(new Date()).replace(/[: ]/g, "-")}.xls`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    toast.success(t.exported);
+  };
   return (
     <PageShell
-      title={rtl ? "مستخدمو الشركة" : "Company users"}
-      description={rtl ? "إدارة مستخدمي الشركة الحالية وأدوارهم وفروعهم." : "Manage current company users, roles, and branches."}
+      title={t.title}
+      description={t.description}
       icon={UsersRound}
       actions={
-        <SecondaryButton onClick={() => void load()} disabled={loading}>
-          <RefreshCcw className="h-4 w-4" />
-          {rtl ? "تحديث" : "Refresh"}
-        </SecondaryButton>
+        <>
+          <SecondaryButton onClick={() => void load()} disabled={loading}>
+            <RefreshCcw className="h-4 w-4" />
+            {t.refresh}
+          </SecondaryButton>
+          <SecondaryButton onClick={exportExcel} disabled={filteredRows.length === 0}>
+            <FileText className="h-4 w-4" />
+            {t.exportExcel}
+          </SecondaryButton>
+          <SecondaryButton onClick={() => window.print()}>
+            <FileText className="h-4 w-4" />
+            {t.print}
+          </SecondaryButton>
+        </>
       }
     >
-      <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
-        <Card title={editingId ? (rtl ? "تعديل مستخدم" : "Edit user") : rtl ? "إضافة مستخدم" : "Add user"} icon={UserRoundCog}>
-          <div className="grid gap-4">
-            <TextInput label={rtl ? "الاسم" : "Name"} value={form.full_name} onChange={(value) => setField("full_name", value)} />
-            <TextInput label={rtl ? "البريد الإلكتروني" : "Email"} value={form.email} onChange={(value) => setField("email", value)} type="email" required />
-            <SelectInput label={rtl ? "الدور" : "Role"} value={form.role} onChange={(value) => setField("role", value)} options={roleOptions} />
-            <SelectInput
-              label={rtl ? "الفرع" : "Branch"}
-              value={form.branch_id}
-              onChange={(value) => setField("branch_id", value)}
-              options={[
-                { value: "", label: rtl ? "بدون فرع محدد" : "No specific branch" },
-                ...branches.map((branch) => ({ value: getRowId(branch), label: getText(branch, ["name"], getRowId(branch)) })),
-              ]}
-            />
-            <ToggleInput label={rtl ? "مستخدم نشط" : "Active user"} checked={form.is_active} onChange={(value) => setField("is_active", value)} />
-            <div className="flex flex-wrap gap-2">
-              <PrimaryButton onClick={() => void save()} disabled={saving}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                {rtl ? "حفظ" : "Save"}
-              </PrimaryButton>
-              {editingId ? <SecondaryButton onClick={resetForm}>{rtl ? "إلغاء" : "Cancel"}</SecondaryButton> : null}
+      {loading ? (
+        <LoadingBlock />
+      ) : (
+        <div className="space-y-6">
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <StatCard label={t.totalUsers} value={userStats.total} hint={t.totalHint} icon={UsersRound} />
+            <StatCard label={t.activeUsers} value={userStats.active} hint={t.activeHint} icon={CheckCircle2} />
+            <StatCard label={t.inactiveUsers} value={userStats.inactive} hint={t.inactiveHint} icon={XCircle} />
+            <StatCard label={t.adminUsers} value={userStats.admins} hint={t.adminHint} icon={ShieldCheck} />
+          </section>
+          <ProfileSectionCard title={t.filters} description={t.filtersDescription} icon={Search}>
+            <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px_auto]">
+              <SearchBox value={query} onChange={setQuery} placeholder={t.searchPlaceholder} />
+              <SelectInput
+                label={t.statusFilter}
+                value={statusFilter}
+                onChange={(value) => setStatusFilter(value as CompanyUserStatusFilter)}
+                options={[
+                  { value: "all", label: t.all },
+                  { value: "active", label: t.active },
+                  { value: "inactive", label: t.inactive },
+                ]}
+              />
+              <SelectInput
+                label={t.sortBy}
+                value={sortKey}
+                onChange={(value) => setSortKey(value as CompanyUserSortKey)}
+                options={[
+                  { value: "newest", label: t.newest },
+                  { value: "oldest", label: t.oldest },
+                  { value: "name", label: t.nameSort },
+                  { value: "role", label: t.roleSort },
+                ]}
+              />
+              <div className="flex items-end">
+                <SecondaryButton onClick={resetFilters}>
+                  <RefreshCcw className="h-4 w-4" />
+                  {t.reset}
+                </SecondaryButton>
+              </div>
             </div>
-          </div>
-        </Card>
-        <Card title={rtl ? "قائمة المستخدمين" : "Users list"} description={`${rtl ? "الإجمالي" : "Total"}: ${formatInteger(rows.length)}`} icon={UsersRound}>
-          <div className="mb-4">
-            <SearchBox value={query} onChange={setQuery} placeholder={rtl ? "ابحث بالاسم أو البريد أو الدور..." : "Search name, email, or role..."} />
-          </div>
-          {loading ? (
-            <LoadingBlock />
-          ) : filteredRows.length === 0 ? (
-            <EmptyState title={rtl ? "لا يوجد مستخدمون" : "No users"} description={rtl ? "ستظهر بيانات المستخدمين هنا عند توفرها من API." : "Users will appear here when returned by the API."} />
-          ) : (
-            <div className="overflow-hidden rounded-3xl border border-neutral-200">
-              <table className="w-full min-w-[760px] text-sm">
-                <thead className="bg-neutral-50 text-neutral-500">
-                  <tr>
-                    <th className="px-4 py-3 text-start font-semibold">{rtl ? "المستخدم" : "User"}</th>
-                    <th className="px-4 py-3 text-start font-semibold">{rtl ? "الدور" : "Role"}</th>
-                    <th className="px-4 py-3 text-start font-semibold">{rtl ? "الحالة" : "Status"}</th>
-                    <th className="px-4 py-3 text-start font-semibold">{rtl ? "إجراءات" : "Actions"}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100 bg-white">
-                  {filteredRows.map((row, index) => {
-                    const active = getBool(row, ["is_active", "active"], true);
-                    return (
-                      <tr key={getRowId(row) || index}>
-                        <td className="px-4 py-4">
-                          <p className="font-semibold text-neutral-900">{getText(row, ["full_name", "name", "display_name"], "-")}</p>
-                          <p className="mt-1 text-xs text-neutral-500">{getText(row, ["email"], "-")}</p>
-                        </td>
-                        <td className="px-4 py-4 text-neutral-600">{getText(row, ["role", "company_role"], "-")}</td>
-                        <td className="px-4 py-4"><StatusPill active={active} /></td>
-                        <td className="px-4 py-4">
-                          <div className="flex flex-wrap gap-2">
-                            <SecondaryButton onClick={() => edit(row)}>{rtl ? "تعديل" : "Edit"}</SecondaryButton>
-                            <SecondaryButton onClick={() => void toggleActive(row, !active)}>
-                              {active ? (rtl ? "تعطيل" : "Deactivate") : rtl ? "تفعيل" : "Activate"}
-                            </SecondaryButton>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-      </div>
+          </ProfileSectionCard>
+          <section className="grid gap-6 xl:grid-cols-[420px_1fr]">
+            <ProfileSectionCard
+              title={editingId ? t.editUser : t.addUser}
+              description={t.formDescription}
+              icon={editingId ? UserRoundCog : Plus}
+            >
+              <div className="grid gap-4">
+                <TextInput label={t.fullName} value={form.full_name} onChange={(value) => setField("full_name", value)} />
+                <TextInput label={t.email} value={form.email} onChange={(value) => setField("email", value)} type="email" required />
+                <TextInput label={t.phone} value={form.phone} onChange={(value) => setField("phone", value)} />
+                <SelectInput label={t.role} value={form.role} onChange={(value) => setField("role", value)} options={roleOptions} />
+                <SelectInput
+                  label={t.branch}
+                  value={form.branch_id}
+                  onChange={(value) => setField("branch_id", value)}
+                  options={[
+                    { value: "", label: t.noBranch },
+                    ...branches.map((branch) => ({
+                      value: getRowId(branch),
+                      label: getText(branch, ["name", "branch_name", "title"], getRowId(branch)),
+                    })),
+                  ]}
+                />
+                <ToggleInput
+                  label={t.activeUser}
+                  description={t.activeUserDescription}
+                  checked={form.is_active}
+                  onChange={(value) => setField("is_active", value)}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <PrimaryButton onClick={() => void save()} disabled={saving}>
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    {t.save}
+                  </PrimaryButton>
+                  {editingId ? <SecondaryButton onClick={resetForm}>{t.cancel}</SecondaryButton> : null}
+                </div>
+              </div>
+            </ProfileSectionCard>
+            <ProfileSectionCard
+              title={t.usersList}
+              description={`${t.usersListDescription} ? ${formatInteger(filteredRows.length)} / ${formatInteger(rows.length)}`}
+              icon={UsersRound}
+            >
+              {filteredRows.length === 0 ? (
+                <EmptyState
+                  title={rows.length === 0 ? t.noUsers : t.noResults}
+                  description={rows.length === 0 ? t.noUsersDescription : t.noResultsDescription}
+                />
+              ) : (
+                <div className="overflow-hidden rounded-2xl border bg-card">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[980px] text-sm">
+                      <thead className="border-b bg-muted/40 text-muted-foreground">
+                        <tr>
+                          <th className="px-4 py-3 text-start font-semibold">{t.user}</th>
+                          <th className="px-4 py-3 text-start font-semibold">{t.contact}</th>
+                          <th className="px-4 py-3 text-start font-semibold">{t.role}</th>
+                          <th className="px-4 py-3 text-start font-semibold">{t.branch}</th>
+                          <th className="px-4 py-3 text-start font-semibold">{t.status}</th>
+                          <th className="px-4 py-3 text-start font-semibold">{t.createdAt}</th>
+                          <th className="px-4 py-3 text-start font-semibold">{t.actions}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {filteredRows.map((row, index) => {
+                          const active = getCompanyUserActive(row);
+                          const role = getCompanyUserRole(row);
+                          const branchName = getCompanyUserBranchName(row, branches);
+                          return (
+                            <tr key={getRowId(row) || index} className="bg-card transition hover:bg-muted/30">
+                              <td className="px-4 py-4">
+                                <p className="font-semibold text-foreground">{getCompanyUserName(row)}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">{getRowId(row) || "-"}</p>
+                              </td>
+                              <td className="px-4 py-4 text-muted-foreground">
+                                <p>{getCompanyUserEmail(row)}</p>
+                                <p className="mt-1 text-xs">{getCompanyUserPhone(row)}</p>
+                              </td>
+                              <td className="px-4 py-4">
+                                <Badge variant="outline" className="rounded-full bg-background px-2.5 py-1 text-xs">
+                                  {getCompanyUserRoleLabel(role, t)}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-4 text-muted-foreground">{branchName || t.noBranch}</td>
+                              <td className="px-4 py-4">
+                                <StatusPill active={active} />
+                              </td>
+                              <td className="px-4 py-4 text-muted-foreground">
+                                {formatCompanyUsersDate(getCompanyUserCreatedAt(row))}
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="flex flex-wrap gap-2">
+                                  <SecondaryButton onClick={() => edit(row)}>{t.edit}</SecondaryButton>
+                                  <SecondaryButton onClick={() => void toggleActive(row, !active)}>
+                                    {active ? t.deactivate : t.activate}
+                                  </SecondaryButton>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </ProfileSectionCard>
+          </section>
+        </div>
+      )}
     </PageShell>
   );
-}
-type PermissionItem = {
-  key: string;
-  label: string;
-  category: string;
-};
-type PermissionRole = {
-  key: string;
-  label: string;
-  permissions: string[];
-};
-function normalizePermissionItems(value: unknown): PermissionItem[] {
-  return normalizeList(value)
-    .map((item) => {
-      const key = getText(item, ["key", "code", "codename", "name", "id"]);
-      if (!key) return null;
-      return {
-        key,
-        label: getText(item, ["label", "name", "title", "description"], key),
-        category: getText(item, ["category", "module", "group", "app"], "General"),
-      };
-    })
-    .filter((item): item is PermissionItem => Boolean(item));
-}
-function normalizePermissionKeys(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => {
-      if (typeof item === "string") return item;
-      if (typeof item === "number") return String(item);
-      return getText(asRecord(item), ["key", "code", "codename", "name", "id"]);
-    })
-    .filter(Boolean);
-}
-function normalizePermissionPayload(payload: unknown): { permissions: PermissionItem[]; roles: PermissionRole[] } {
-  const root = asRecord(payload);
-  const permissions = normalizePermissionItems(root.permissions ?? root.available_permissions ?? root.items ?? root.data);
-  let roleSource = normalizeList(root.roles ?? root.company_roles ?? root.role_permissions);
-  if (roleSource.length === 0) {
-    const list = normalizeList(payload);
-    const looksLikeRoles = list.some((row) => Array.isArray(row.permissions) || Array.isArray(row.permission_keys));
-    if (looksLikeRoles) roleSource = list;
-  }
-  const roles = roleSource
-    .map((row) => {
-      const key = getText(row, ["key", "code", "role", "name", "id"]);
-      if (!key) return null;
-      return {
-        key,
-        label: getText(row, ["label", "display_name", "name", "role"], key),
-        permissions: normalizePermissionKeys(row.permissions ?? row.permission_keys ?? row.allowed_permissions),
-      };
-    })
-    .filter((role): role is PermissionRole => Boolean(role));
-  return { permissions, roles };
 }
 export function CompanyPermissionsPage() {
   const locale = useLocale();
   const rtl = locale === "ar";
-  const [permissions, setPermissions] = useState<PermissionItem[]>([]);
-  const [roles, setRoles] = useState<PermissionRole[]>([]);
-  const [selectedRole, setSelectedRole] = useState("");
-  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
-  const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
-      const payload = await apiRequest<unknown>("/api/company/permissions/");
-      const normalized = normalizePermissionPayload(payload);
-      setPermissions(normalized.permissions);
-      setRoles(normalized.roles);
-      const firstRole = normalized.roles[0];
-      if (firstRole) {
-        setSelectedRole(firstRole.key);
-        setSelectedPermissions(firstRole.permissions);
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : rtl ? "تعذر تحميل الصلاحيات" : "Could not load permissions");
-    } finally {
-      setLoading(false);
-    }
-  }, [rtl]);
-  useEffect(() => {
-    void load();
-  }, [load]);
-  const changeRole = (roleKey: string) => {
-    setSelectedRole(roleKey);
-    const role = roles.find((item) => item.key === roleKey);
-    setSelectedPermissions(role?.permissions ?? []);
-  };
-  const togglePermission = (permissionKey: string) => {
-    setSelectedPermissions((current) =>
-      current.includes(permissionKey)
-        ? current.filter((key) => key !== permissionKey)
-        : [...current, permissionKey],
-    );
-  };
-  const save = async () => {
-    if (!selectedRole) {
-      toast.error(rtl ? "اختر الدور أولاً" : "Select a role first");
-      return;
-    }
-    try {
-      setSaving(true);
-      await apiRequest("/api/company/permissions/", {
-        method: "PATCH",
-        body: JSON.stringify({
-          role: selectedRole,
-          permissions: selectedPermissions,
-        }),
-      });
-      toast.success(rtl ? "تم حفظ صلاحيات الدور" : "Role permissions saved");
-      await load();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : rtl ? "تعذر حفظ الصلاحيات" : "Could not save permissions");
-    } finally {
-      setSaving(false);
-    }
-  };
-  const filteredPermissions = permissions.filter((permission) => {
-    const haystack = `${permission.key} ${permission.label} ${permission.category}`.toLowerCase();
-    return haystack.includes(query.toLowerCase());
-  });
-  const groupedPermissions = filteredPermissions.reduce<Record<string, PermissionItem[]>>((acc, permission) => {
-    acc[permission.category] = [...(acc[permission.category] ?? []), permission];
-    return acc;
-  }, {});
+  const roles = [
+    "OWNER",
+    "ADMIN",
+    "MANAGER",
+    "ACCOUNTANT",
+    "CASHIER",
+    "SALES",
+    "INVENTORY",
+    "HR",
+    "EMPLOYEE",
+    "VIEWER",
+  ];
   return (
     <PageShell
-      title={rtl ? "صلاحيات الشركة" : "Company permissions"}
-      description={rtl ? "مراجعة وتحديث صلاحيات الأدوار داخل الشركة الحالية." : "Review and update role permissions inside the current company."}
-      icon={LockKeyhole}
-      actions={
-        <PrimaryButton onClick={() => void save()} disabled={saving || loading || !selectedRole}>
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-          {rtl ? "حفظ الصلاحيات" : "Save permissions"}
-        </PrimaryButton>
+      title={rtl ? "\u0635\u0644\u0627\u062d\u064a\u0627\u062a \u0627\u0644\u0634\u0631\u0643\u0629" : "Company permissions"}
+      description={
+        rtl
+          ? "\u0645\u0631\u0627\u062c\u0639\u0629 \u0623\u062f\u0648\u0627\u0631 \u0648\u0635\u0644\u0627\u062d\u064a\u0627\u062a \u0645\u0633\u062a\u062e\u062f\u0645\u064a \u0627\u0644\u0634\u0631\u0643\u0629."
+          : "Review company user roles and permissions."
       }
+      icon={ShieldCheck}
     >
-      <Card title={rtl ? "الأدوار والصلاحيات" : "Roles and permissions"} icon={ShieldCheck}>
-        {loading ? (
-          <LoadingBlock />
-        ) : roles.length === 0 || permissions.length === 0 ? (
-          <EmptyState
-            title={rtl ? "لا توجد صلاحيات" : "No permissions"}
-            description={rtl ? "ستظهر الأدوار والصلاحيات هنا عند توفرها من API." : "Roles and permissions will appear here when returned by the API."}
-          />
-        ) : (
-          <div className="grid gap-6 xl:grid-cols-[320px_1fr]">
-            <div className="space-y-3">
-              {roles.map((role) => (
-                <button
-                  key={role.key}
-                  type="button"
-                  onClick={() => changeRole(role.key)}
-                  className={`w-full rounded-2xl border p-4 text-start transition ${
-                    selectedRole === role.key
-                      ? "border-neutral-950 bg-neutral-950 text-white"
-                      : "border-neutral-200 bg-white text-neutral-800 hover:bg-neutral-50"
-                  }`}
-                >
-                  <p className="font-bold">{role.label}</p>
-                  <p className={`mt-1 text-xs ${selectedRole === role.key ? "text-white/70" : "text-neutral-500"}`}>
-                    {role.permissions.length} {rtl ? "صلاحية" : "permissions"}
-                  </p>
-                </button>
-              ))}
-            </div>
-            <div className="space-y-4">
-              <SearchBox value={query} onChange={setQuery} placeholder={rtl ? "ابحث في الصلاحيات..." : "Search permissions..."} />
-              <div className="space-y-4">
-                {Object.entries(groupedPermissions).map(([category, items]) => (
-                  <div key={category} className="rounded-3xl border border-neutral-200 bg-neutral-50/40 p-4">
-                    <h3 className="mb-3 text-sm font-bold text-neutral-900">{category}</h3>
-                    <div className="grid gap-2 md:grid-cols-2">
-                      {items.map((permission) => (
-                        <label key={permission.key} className="flex cursor-pointer items-start gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-neutral-100">
-                          <input
-                            type="checkbox"
-                            checked={selectedPermissions.includes(permission.key)}
-                            onChange={() => togglePermission(permission.key)}
-                            className="mt-1 h-4 w-4 rounded border-neutral-300 text-neutral-950 focus:ring-neutral-950"
-                          />
-                          <span>
-                            <span className="block text-sm font-semibold text-neutral-800">{permission.label}</span>
-                            <span className="mt-1 block text-xs text-neutral-400">{permission.key}</span>
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+      <ProfileSectionCard
+        title={rtl ? "\u0623\u062f\u0648\u0627\u0631 \u0627\u0644\u0634\u0631\u0643\u0629" : "Company roles"}
+        description={
+          rtl
+            ? "\u0639\u0631\u0636 \u0623\u062f\u0648\u0627\u0631 \u0627\u0644\u0634\u0631\u0643\u0629 \u0627\u0644\u0645\u0639\u062a\u0645\u062f\u0629. \u0633\u0646\u0631\u0627\u062c\u0639 \u062a\u0641\u0627\u0635\u064a\u0644 \u0647\u0630\u0647 \u0627\u0644\u0635\u0641\u062d\u0629 \u0641\u064a \u062e\u0637\u0648\u062a\u0647\u0627."
+            : "Shows approved company roles. This page will be reviewed in its own step."
+        }
+        icon={ShieldCheck}
+      >
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          {roles.map((role) => (
+            <div key={role} className="rounded-2xl border bg-card p-4 shadow-sm">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <ShieldCheck className="h-5 w-5" />
               </div>
+              <p className="text-sm font-bold text-foreground">{role}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {rtl ? "\u062f\u0648\u0631 \u0634\u0631\u0643\u0629" : "Company role"}
+              </p>
             </div>
-          </div>
-        )}
-      </Card>
+          ))}
+        </div>
+      </ProfileSectionCard>
     </PageShell>
   );
 }
+
 type TaxSettingsForm = {
   is_vat_registered: boolean;
   tax_number: string;
