@@ -141,7 +141,8 @@ function getErrorMessage(payload: unknown): string {
 async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
-  if (options.body && !headers.has("Content-Type")) {
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+  if (options.body && !isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
   const method = (options.method ?? "GET").toUpperCase();
@@ -692,9 +693,16 @@ type CompanyProfileForm = {
   phone: string;
   email: string;
   website: string;
+  logo_url: string;
   city: string;
+  district: string;
+  street: string;
+  building_number: string;
+  postal_code: string;
+  additional_number: string;
+  unit_number: string;
+  short_address: string;
   country: string;
-  address: string;
 };
 const emptyCompanyProfile: CompanyProfileForm = {
   name: "",
@@ -703,14 +711,123 @@ const emptyCompanyProfile: CompanyProfileForm = {
   phone: "",
   email: "",
   website: "",
+  logo_url: "",
   city: "",
+  district: "",
+  street: "",
+  building_number: "",
+  postal_code: "",
+  additional_number: "",
+  unit_number: "",
+  short_address: "",
   country: "SA",
-  address: "",
 };
+function getFirstText(records: ApiRecord[], keys: string[], fallback = ""): string {
+  for (const record of records) {
+    const value = getText(record, keys);
+    if (value) return value;
+  }
+  return fallback;
+}
+function getNestedRecord(record: ApiRecord, keys: string[]): ApiRecord {
+  for (const key of keys) {
+    const nested = asRecord(record[key]);
+    if (Object.keys(nested).length > 0) return nested;
+  }
+  return {};
+}
+function getCompanyLogoUrl(records: ApiRecord[]): string {
+  for (const source of records) {
+    const logo = source.logo;
+    if (typeof logo === "string" && logo.trim()) return logo;
+    const logoRecord = asRecord(logo);
+    const logoFromRecord = getText(logoRecord, ["url", "file", "path", "logo_url"]);
+    if (logoFromRecord) return logoFromRecord;
+    const directLogo = getText(source, ["logo_url", "logo_path", "company_logo", "image", "avatar"]);
+    if (directLogo) return directLogo;
+  }
+  return "";
+}
+function getProfileSourceRecords(profilePayload: unknown, whoamiPayload: unknown): ApiRecord[] {
+  const root = asRecord(profilePayload);
+  const data = asRecord(root.data);
+  const whoami = asRecord(whoamiPayload);
+  const whoamiData = asRecord(whoami.data);
+  const membership = asRecord(whoami.membership ?? whoamiData.membership);
+  const candidates = [
+    getNestedRecord(root, ["company", "current_company", "currentCompany"]),
+    getNestedRecord(data, ["company", "current_company", "currentCompany"]),
+    getNestedRecord(root, ["profile", "company_profile", "companyProfile"]),
+    getNestedRecord(data, ["profile", "company_profile", "companyProfile"]),
+    getNestedRecord(membership, ["company"]),
+    getNestedRecord(whoami, ["company", "current_company", "currentCompany"]),
+    getNestedRecord(whoamiData, ["company", "current_company", "currentCompany"]),
+    data,
+    root,
+    whoamiData,
+    whoami,
+  ];
+  return candidates.filter((record) => Object.keys(record).length > 0);
+}
+function getNationalAddressRecords(records: ApiRecord[]): ApiRecord[] {
+  const nestedKeys = [
+    "national_address",
+    "nationalAddress",
+    "address_details",
+    "address_detail",
+    "addressComponents",
+    "address_components",
+  ];
+  const nested = records.flatMap((record) => nestedKeys.map((key) => asRecord(record[key])));
+  return [...nested, ...records].filter((record) => Object.keys(record).length > 0);
+}
+function buildNationalAddressLine(form: CompanyProfileForm): string {
+  return [
+    form.short_address,
+    form.street,
+    form.district,
+    form.building_number ? `Building ${form.building_number}` : "",
+    form.unit_number ? `Unit ${form.unit_number}` : "",
+    form.postal_code,
+    form.additional_number,
+    form.city,
+    form.country,
+  ]
+    .filter(Boolean)
+    .join(" - ");
+}
+function ProfileSectionCard({
+  title,
+  description,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  description?: string;
+  icon: LucideIcon;
+  children: ReactNode;
+}) {
+  return (
+    <UiCard className="group h-full overflow-hidden rounded-2xl border bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-4">
+        <div className="min-w-0">
+          <CardTitle className="text-base font-bold tracking-tight">{title}</CardTitle>
+          {description ? <CardDescription className="mt-1 text-sm leading-6">{description}</CardDescription> : null}
+        </div>
+        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+          <Icon className="h-5 w-5" />
+        </span>
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </UiCard>
+  );
+}
 export function CompanyProfilePage() {
   const locale = useLocale();
   const rtl = locale === "ar";
   const [form, setForm] = useState<CompanyProfileForm>(emptyCompanyProfile);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const setField = (key: keyof CompanyProfileForm, value: string) => {
@@ -719,19 +836,38 @@ export function CompanyProfilePage() {
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const payload = await apiRequest<unknown>("/api/company/profile/");
-      const root = asRecord(payload);
-      const source = Object.keys(asRecord(root.company)).length > 0 ? asRecord(root.company) : root;
+      const [profilePayload, whoamiPayload] = await Promise.all([
+        apiRequest<unknown>("/api/company/profile/"),
+        apiRequest<unknown>("/api/auth/whoami/").catch(() => null),
+      ]);
+      const profileRecords = getProfileSourceRecords(profilePayload, whoamiPayload);
+      const addressRecords = getNationalAddressRecords(profileRecords);
+      const logoUrl = getCompanyLogoUrl(profileRecords);
+      setLogoFile(null);
+      setLogoPreview(logoUrl);
       setForm({
-        name: getText(source, ["name", "company_name"]),
-        commercial_registration: getText(source, ["commercial_registration", "commercial_registration_number", "cr_number"]),
-        tax_number: getText(source, ["tax_number", "vat_number"]),
-        phone: getText(source, ["phone", "mobile"]),
-        email: getText(source, ["email"]),
-        website: getText(source, ["website"]),
-        city: getText(source, ["city"]),
-        country: getText(source, ["country"], "SA"),
-        address: getText(source, ["address", "full_address"]),
+        name: getFirstText(profileRecords, ["name", "company_name", "legal_name", "display_name", "title"]),
+        commercial_registration: getFirstText(profileRecords, [
+          "commercial_registration",
+          "commercial_registration_number",
+          "cr_number",
+          "registration_number",
+          "commercial_register",
+        ]),
+        tax_number: getFirstText(profileRecords, ["tax_number", "vat_number", "tax_id", "vat_registration_number"]),
+        phone: getFirstText(profileRecords, ["phone", "mobile", "contact_phone", "phone_number"]),
+        email: getFirstText(profileRecords, ["email", "contact_email"]),
+        website: getFirstText(profileRecords, ["website", "website_url", "url"]),
+        logo_url: logoUrl,
+        city: getFirstText(addressRecords, ["city", "city_name"]),
+        district: getFirstText(addressRecords, ["district", "neighborhood", "area"]),
+        street: getFirstText(addressRecords, ["street", "street_name"]),
+        building_number: getFirstText(addressRecords, ["building_number", "building_no", "building"]),
+        postal_code: getFirstText(addressRecords, ["postal_code", "zip_code", "postcode"]),
+        additional_number: getFirstText(addressRecords, ["additional_number", "secondary_number", "additional_no"]),
+        unit_number: getFirstText(addressRecords, ["unit_number", "unit_no", "unit"]),
+        short_address: getFirstText(addressRecords, ["short_address", "national_short_address", "short_code"]),
+        country: getFirstText(addressRecords, ["country", "country_code"], "SA"),
       });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : rtl ? "تعذر تحميل ملف الشركة" : "Could not load company profile");
@@ -742,13 +878,91 @@ export function CompanyProfilePage() {
   useEffect(() => {
     void load();
   }, [load]);
+  const onLogoChange = (file: File | undefined) => {
+    if (!file) return;
+    const allowedTypes = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error(rtl ? "صيغة الشعار غير مدعومة" : "Unsupported logo format");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error(rtl ? "حجم الشعار يجب ألا يتجاوز 2MB" : "Logo size must not exceed 2MB");
+      return;
+    }
+    if (logoPreview.startsWith("blob:")) {
+      URL.revokeObjectURL(logoPreview);
+    }
+    setLogoFile(file);
+    setLogoPreview(URL.createObjectURL(file));
+  };
+  const resetLogoChange = () => {
+    if (logoPreview.startsWith("blob:")) {
+      URL.revokeObjectURL(logoPreview);
+    }
+    setLogoFile(null);
+    setLogoPreview(form.logo_url);
+  };
   const save = async () => {
+    if (!form.name.trim()) {
+      toast.error(rtl ? "اسم الشركة مطلوب" : "Company name is required");
+      return;
+    }
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      toast.error(rtl ? "البريد الإلكتروني غير صحيح" : "Invalid email address");
+      return;
+    }
+    const nationalAddress = {
+      city: form.city.trim(),
+      district: form.district.trim(),
+      street: form.street.trim(),
+      building_number: form.building_number.trim(),
+      postal_code: form.postal_code.trim(),
+      additional_number: form.additional_number.trim(),
+      unit_number: form.unit_number.trim(),
+      short_address: form.short_address.trim(),
+      country: form.country.trim() || "SA",
+    };
+    const payload = {
+      name: form.name.trim(),
+      commercial_registration: form.commercial_registration.trim(),
+      tax_number: form.tax_number.trim(),
+      phone: form.phone.trim(),
+      email: form.email.trim(),
+      website: form.website.trim(),
+      city: nationalAddress.city,
+      district: nationalAddress.district,
+      street: nationalAddress.street,
+      building_number: nationalAddress.building_number,
+      postal_code: nationalAddress.postal_code,
+      additional_number: nationalAddress.additional_number,
+      unit_number: nationalAddress.unit_number,
+      short_address: nationalAddress.short_address,
+      country: nationalAddress.country,
+      address: buildNationalAddressLine({ ...form, ...nationalAddress }),
+      national_address: nationalAddress,
+    };
     try {
       setSaving(true);
-      await apiRequest("/api/company/profile/", {
-        method: "PATCH",
-        body: JSON.stringify(form),
-      });
+      if (logoFile) {
+        const formData = new FormData();
+        Object.entries(payload).forEach(([key, value]) => {
+          if (typeof value === "object") {
+            formData.append(key, JSON.stringify(value));
+          } else {
+            formData.append(key, value);
+          }
+        });
+        formData.append("logo", logoFile);
+        await apiRequest("/api/company/profile/", {
+          method: "PATCH",
+          body: formData,
+        });
+      } else {
+        await apiRequest("/api/company/profile/", {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+      }
       toast.success(rtl ? "تم حفظ ملف الشركة" : "Company profile saved");
       await load();
     } catch (error) {
@@ -760,7 +974,7 @@ export function CompanyProfilePage() {
   return (
     <PageShell
       title={rtl ? "ملف الشركة" : "Company profile"}
-      description={rtl ? "تحديث بيانات الشركة الحالية بدون إرسال company_id من الواجهة." : "Update the current company profile without sending company_id from the frontend."}
+      description={rtl ? "تحديث بيانات الشركة، الشعار، والعنوان الوطني." : "Update company details, logo, and national address."}
       icon={Building2}
       actions={
         <PrimaryButton onClick={() => void save()} disabled={saving}>
@@ -772,24 +986,85 @@ export function CompanyProfilePage() {
       {loading ? (
         <LoadingBlock />
       ) : (
-        <Card title={rtl ? "بيانات الشركة" : "Company information"} icon={Building2}>
-          <div className="grid gap-4 md:grid-cols-2">
-            <TextInput label={rtl ? "اسم الشركة" : "Company name"} value={form.name} onChange={(value) => setField("name", value)} required />
-            <TextInput label={rtl ? "السجل التجاري" : "Commercial registration"} value={form.commercial_registration} onChange={(value) => setField("commercial_registration", value)} />
-            <TextInput label={rtl ? "الرقم الضريبي" : "Tax number"} value={form.tax_number} onChange={(value) => setField("tax_number", value)} />
-            <TextInput label={rtl ? "رقم التواصل" : "Phone"} value={form.phone} onChange={(value) => setField("phone", value)} />
-            <TextInput label={rtl ? "البريد الإلكتروني" : "Email"} value={form.email} onChange={(value) => setField("email", value)} type="email" />
-            <TextInput label={rtl ? "الموقع الإلكتروني" : "Website"} value={form.website} onChange={(value) => setField("website", value)} />
-            <TextInput label={rtl ? "المدينة" : "City"} value={form.city} onChange={(value) => setField("city", value)} />
-            <TextInput label={rtl ? "الدولة" : "Country"} value={form.country} onChange={(value) => setField("country", value)} />
-            <TextArea label={rtl ? "العنوان" : "Address"} value={form.address} onChange={(value) => setField("address", value)} />
-          </div>
-        </Card>
+        <div className="space-y-6">
+          <section className="grid gap-6 xl:grid-cols-[1fr_340px]">
+            <ProfileSectionCard title={rtl ? "بيانات الشركة" : "Company information"} icon={Building2}>
+              <div className="grid gap-4 md:grid-cols-2">
+                <TextInput label={rtl ? "اسم الشركة" : "Company name"} value={form.name} onChange={(value) => setField("name", value)} required />
+                <TextInput label={rtl ? "السجل التجاري" : "Commercial registration"} value={form.commercial_registration} onChange={(value) => setField("commercial_registration", value)} />
+                <TextInput label={rtl ? "الرقم الضريبي" : "Tax number"} value={form.tax_number} onChange={(value) => setField("tax_number", value)} />
+                <TextInput label={rtl ? "رقم التواصل" : "Phone"} value={form.phone} onChange={(value) => setField("phone", value)} />
+                <TextInput label={rtl ? "البريد الإلكتروني" : "Email"} value={form.email} onChange={(value) => setField("email", value)} type="email" />
+                <TextInput label={rtl ? "الموقع الإلكتروني" : "Website"} value={form.website} onChange={(value) => setField("website", value)} />
+              </div>
+            </ProfileSectionCard>
+            <ProfileSectionCard
+              title={rtl ? "شعار الشركة" : "Company logo"}
+              description={rtl ? "يظهر في المستندات وصفحات الشركة." : "Shown in documents and company pages."}
+              icon={Building2}
+            >
+              <div className="flex min-h-[250px] flex-col items-center justify-center gap-4 text-center">
+                <div
+                  className="flex h-32 w-32 items-center justify-center rounded-3xl border bg-muted/30 bg-contain bg-center bg-no-repeat shadow-sm"
+                  style={logoPreview ? { backgroundImage: `url(${logoPreview})` } : undefined}
+                >
+                  {!logoPreview ? <Building2 className="h-11 w-11 text-muted-foreground" /> : null}
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <input
+                    id="company-logo-upload"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                    className="hidden"
+                    onChange={(event) => onLogoChange(event.target.files?.[0])}
+                  />
+                  <label
+                    htmlFor="company-logo-upload"
+                    className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl border bg-background px-4 text-sm font-semibold shadow-sm transition hover:bg-muted"
+                  >
+                    <Plus className="h-4 w-4" />
+                    {rtl ? "تغيير الشعار" : "Change logo"}
+                  </label>
+                  {logoFile ? (
+                    <Button type="button" variant="ghost" className="h-10 rounded-xl" onClick={resetLogoChange}>
+                      {rtl ? "إلغاء" : "Cancel"}
+                    </Button>
+                  ) : null}
+                </div>
+                <p className="max-w-xs text-xs leading-6 text-muted-foreground">
+                  {rtl ? "PNG, JPG, WebP, SVG — الحد الأعلى 2MB." : "PNG, JPG, WebP, SVG — max 2MB."}
+                </p>
+              </div>
+            </ProfileSectionCard>
+          </section>
+          <ProfileSectionCard
+            title={rtl ? "العنوان الوطني" : "National address"}
+            description={rtl ? "يستخدم في المستندات والفواتير الرسمية." : "Used in official documents and invoices."}
+            icon={Landmark}
+          >
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <TextInput label={rtl ? "المدينة" : "City"} value={form.city} onChange={(value) => setField("city", value)} />
+              <TextInput label={rtl ? "الحي" : "District"} value={form.district} onChange={(value) => setField("district", value)} />
+              <TextInput label={rtl ? "الشارع" : "Street"} value={form.street} onChange={(value) => setField("street", value)} />
+              <TextInput label={rtl ? "رقم المبنى" : "Building number"} value={form.building_number} onChange={(value) => setField("building_number", value)} />
+              <TextInput label={rtl ? "الرمز البريدي" : "Postal code"} value={form.postal_code} onChange={(value) => setField("postal_code", value)} />
+              <TextInput label={rtl ? "الرقم الإضافي" : "Additional number"} value={form.additional_number} onChange={(value) => setField("additional_number", value)} />
+              <TextInput label={rtl ? "رقم الوحدة" : "Unit number"} value={form.unit_number} onChange={(value) => setField("unit_number", value)} />
+              <TextInput label={rtl ? "الدولة" : "Country"} value={form.country} onChange={(value) => setField("country", value)} />
+              <TextInput label={rtl ? "العنوان المختصر" : "Short address"} value={form.short_address} onChange={(value) => setField("short_address", value)} />
+            </div>
+            <div className="mt-5 rounded-2xl border bg-muted/30 p-4">
+              <p className="text-xs font-semibold text-muted-foreground">{rtl ? "معاينة العنوان" : "Address preview"}</p>
+              <p className="mt-2 text-sm font-medium text-foreground">
+                {buildNationalAddressLine(form) || (rtl ? "لم يتم إدخال العنوان الوطني بعد." : "No national address entered yet.")}
+              </p>
+            </div>
+          </ProfileSectionCard>
+        </div>
       )}
     </PageShell>
   );
-}
-type GeneralSettingsForm = {
+}type GeneralSettingsForm = {
   default_currency: string;
   language: string;
   timezone: string;
