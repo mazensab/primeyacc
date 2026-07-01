@@ -1382,14 +1382,17 @@ export function GeneralSettingsPage() {
     </PageShell>
   );
 }
+
 type BranchForm = {
   name: string;
   code: string;
   phone: string;
   email: string;
   city: string;
+  district: string;
   address: string;
   is_active: boolean;
+  is_main: boolean;
 };
 const emptyBranchForm: BranchForm = {
   name: "",
@@ -1397,12 +1400,135 @@ const emptyBranchForm: BranchForm = {
   phone: "",
   email: "",
   city: "",
+  district: "",
   address: "",
   is_active: true,
+  is_main: false,
 };
+const branchesAr = {
+  title: "\u0627\u0644\u0641\u0631\u0648\u0639",
+  description: "\u0625\u062f\u0627\u0631\u0629 \u0641\u0631\u0648\u0639 \u0627\u0644\u0634\u0631\u0643\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629 \u0648\u0627\u0633\u062a\u062e\u062f\u0627\u0645\u0647\u0627 \u062f\u0627\u062e\u0644 \u0627\u0644\u0639\u0645\u0644\u064a\u0627\u062a.",
+  refresh: "\u062a\u062d\u062f\u064a\u062b",
+  addBranch: "\u0625\u0636\u0627\u0641\u0629 \u0641\u0631\u0639",
+  editBranch: "\u062a\u0639\u062f\u064a\u0644 \u0641\u0631\u0639",
+  formDescription: "\u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0641\u0631\u0639 \u0627\u0644\u0623\u0633\u0627\u0633\u064a\u0629 \u0648\u062d\u0627\u0644\u062a\u0647 \u0627\u0644\u062a\u0634\u063a\u064a\u0644\u064a\u0629.",
+  listTitle: "\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0641\u0631\u0648\u0639",
+  listDescription: "\u0639\u0631\u0636 \u0648\u0625\u062f\u0627\u0631\u0629 \u0641\u0631\u0648\u0639 \u0627\u0644\u0634\u0631\u0643\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629.",
+  totalBranches: "\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0641\u0631\u0648\u0639",
+  activeBranches: "\u0641\u0631\u0648\u0639 \u0646\u0634\u0637\u0629",
+  inactiveBranches: "\u0641\u0631\u0648\u0639 \u0645\u0639\u0637\u0644\u0629",
+  mainBranches: "\u0641\u0631\u0648\u0639 \u0631\u0626\u064a\u0633\u064a\u0629",
+  totalHint: "\u0641\u0631\u0648\u0639 \u0645\u0633\u062c\u0644\u0629 \u0644\u0644\u0634\u0631\u0643\u0629",
+  activeHint: "\u0645\u062a\u0627\u062d\u0629 \u0644\u0644\u0639\u0645\u0644\u064a\u0627\u062a",
+  inactiveHint: "\u063a\u064a\u0631 \u0645\u062a\u0627\u062d\u0629 \u062d\u0627\u0644\u064a\u0627\u064b",
+  mainHint: "\u0641\u0631\u0639 \u0623\u0633\u0627\u0633\u064a \u0623\u0648 \u0631\u0626\u064a\u0633\u064a",
+  searchPlaceholder: "\u0627\u0628\u062d\u062b \u0628\u0627\u0633\u0645 \u0627\u0644\u0641\u0631\u0639 \u0623\u0648 \u0627\u0644\u0643\u0648\u062f \u0623\u0648 \u0627\u0644\u0645\u062f\u064a\u0646\u0629...",
+  noBranches: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0641\u0631\u0648\u0639",
+  noBranchesDescription: "\u0633\u062a\u0638\u0647\u0631 \u0627\u0644\u0641\u0631\u0648\u0639 \u0647\u0646\u0627 \u0639\u0646\u062f \u0625\u0646\u0634\u0627\u0626\u0647\u0627 \u0623\u0648 \u0639\u0646\u062f \u062a\u0648\u0641\u0631\u0647\u0627 \u0645\u0646 \u0627\u0644\u0640 API.",
+  name: "\u0627\u0633\u0645 \u0627\u0644\u0641\u0631\u0639",
+  code: "\u0643\u0648\u062f \u0627\u0644\u0641\u0631\u0639",
+  phone: "\u0631\u0642\u0645 \u0627\u0644\u062a\u0648\u0627\u0635\u0644",
+  email: "\u0627\u0644\u0628\u0631\u064a\u062f \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a",
+  city: "\u0627\u0644\u0645\u062f\u064a\u0646\u0629",
+  district: "\u0627\u0644\u062d\u064a",
+  address: "\u0627\u0644\u0639\u0646\u0648\u0627\u0646",
+  activeBranch: "\u0641\u0631\u0639 \u0646\u0634\u0637",
+  activeBranchDescription: "\u064a\u0645\u0643\u0646 \u0627\u0633\u062a\u062e\u062f\u0627\u0645\u0647 \u0641\u064a \u0627\u0644\u0645\u0628\u064a\u0639\u0627\u062a \u0648\u0627\u0644\u0645\u062e\u0632\u0648\u0646 \u0648\u0627\u0644\u0639\u0645\u0644\u064a\u0627\u062a.",
+  mainBranch: "\u0641\u0631\u0639 \u0631\u0626\u064a\u0633\u064a",
+  mainBranchDescription: "\u064a\u0633\u062a\u062e\u062f\u0645 \u0643\u0641\u0631\u0639 \u0627\u0641\u062a\u0631\u0627\u0636\u064a \u0639\u0646\u062f \u0627\u0644\u062d\u0627\u062c\u0629.",
+  save: "\u062d\u0641\u0638",
+  cancel: "\u0625\u0644\u063a\u0627\u0621",
+  edit: "\u062a\u0639\u062f\u064a\u0644",
+  activate: "\u062a\u0641\u0639\u064a\u0644",
+  deactivate: "\u062a\u0639\u0637\u064a\u0644",
+  branch: "\u0627\u0644\u0641\u0631\u0639",
+  contact: "\u0627\u0644\u062a\u0648\u0627\u0635\u0644",
+  location: "\u0627\u0644\u0645\u0648\u0642\u0639",
+  status: "\u0627\u0644\u062d\u0627\u0644\u0629",
+  actions: "\u0625\u062c\u0631\u0627\u0621\u0627\u062a",
+  active: "\u0646\u0634\u0637",
+  inactive: "\u063a\u064a\u0631 \u0646\u0634\u0637",
+  main: "\u0631\u0626\u064a\u0633\u064a",
+  nameRequired: "\u0627\u0633\u0645 \u0627\u0644\u0641\u0631\u0639 \u0645\u0637\u0644\u0648\u0628",
+  emailInvalid: "\u0627\u0644\u0628\u0631\u064a\u062f \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a \u063a\u064a\u0631 \u0635\u062d\u064a\u062d",
+  loadError: "\u062a\u0639\u0630\u0631 \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0641\u0631\u0648\u0639",
+  saveError: "\u062a\u0639\u0630\u0631 \u062d\u0641\u0638 \u0627\u0644\u0641\u0631\u0639",
+  statusError: "\u062a\u0639\u0630\u0631 \u062a\u062d\u062f\u064a\u062b \u062d\u0627\u0644\u0629 \u0627\u0644\u0641\u0631\u0639",
+  created: "\u062a\u0645 \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u0641\u0631\u0639",
+  updated: "\u062a\u0645 \u062a\u062d\u062f\u064a\u062b \u0627\u0644\u0641\u0631\u0639",
+  activated: "\u062a\u0645 \u062a\u0641\u0639\u064a\u0644 \u0627\u0644\u0641\u0631\u0639",
+  deactivated: "\u062a\u0645 \u062a\u0639\u0637\u064a\u0644 \u0627\u0644\u0641\u0631\u0639",
+};
+const branchesEn = {
+  title: "Branches",
+  description: "Manage current company branches and use them across operations.",
+  refresh: "Refresh",
+  addBranch: "Add branch",
+  editBranch: "Edit branch",
+  formDescription: "Branch core details and operational status.",
+  listTitle: "Branches list",
+  listDescription: "View and manage current company branches.",
+  totalBranches: "Total branches",
+  activeBranches: "Active branches",
+  inactiveBranches: "Inactive branches",
+  mainBranches: "Main branches",
+  totalHint: "Registered company branches",
+  activeHint: "Available for operations",
+  inactiveHint: "Currently unavailable",
+  mainHint: "Default or primary branch",
+  searchPlaceholder: "Search branch name, code, or city...",
+  noBranches: "No branches",
+  noBranchesDescription: "Branches will appear here when created or returned by the API.",
+  name: "Branch name",
+  code: "Branch code",
+  phone: "Phone",
+  email: "Email",
+  city: "City",
+  district: "District",
+  address: "Address",
+  activeBranch: "Active branch",
+  activeBranchDescription: "Can be used in sales, inventory, and operations.",
+  mainBranch: "Main branch",
+  mainBranchDescription: "Used as the default branch when needed.",
+  save: "Save",
+  cancel: "Cancel",
+  edit: "Edit",
+  activate: "Activate",
+  deactivate: "Deactivate",
+  branch: "Branch",
+  contact: "Contact",
+  location: "Location",
+  status: "Status",
+  actions: "Actions",
+  active: "Active",
+  inactive: "Inactive",
+  main: "Main",
+  nameRequired: "Branch name is required",
+  emailInvalid: "Invalid email address",
+  loadError: "Could not load branches",
+  saveError: "Could not save branch",
+  statusError: "Could not update branch status",
+  created: "Branch created",
+  updated: "Branch updated",
+  activated: "Branch activated",
+  deactivated: "Branch deactivated",
+};
+function getBranchName(row: ApiRecord): string {
+  return getText(row, ["name", "branch_name", "title"], "-");
+}
+function getBranchCode(row: ApiRecord): string {
+  return getText(row, ["code", "branch_code", "reference"], "-");
+}
+function getBranchActive(row: ApiRecord): boolean {
+  return getBool(row, ["is_active", "active", "enabled"], true);
+}
+function getBranchMain(row: ApiRecord): boolean {
+  return getBool(row, ["is_main", "main", "is_default", "default"], false);
+}
 export function BranchesPage() {
   const locale = useLocale();
   const rtl = locale === "ar";
+  const t = rtl ? branchesAr : branchesEn;
   const [rows, setRows] = useState<ApiRecord[]>([]);
   const [query, setQuery] = useState("");
   const [form, setForm] = useState<BranchForm>(emptyBranchForm);
@@ -1412,17 +1538,27 @@ export function BranchesPage() {
   const setField = <K extends keyof BranchForm>(key: K, value: BranchForm[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
+  const branchStats = useMemo(() => {
+    const active = rows.filter((row) => getBranchActive(row)).length;
+    const main = rows.filter((row) => getBranchMain(row)).length;
+    return {
+      total: rows.length,
+      active,
+      inactive: Math.max(rows.length - active, 0),
+      main,
+    };
+  }, [rows]);
   const load = useCallback(async () => {
     try {
       setLoading(true);
       const payload = await apiRequest<unknown>("/api/company/branches/");
       setRows(normalizeList(payload));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : rtl ? "تعذر تحميل الفروع" : "Could not load branches");
+      toast.error(error instanceof Error ? error.message : t.loadError);
     } finally {
       setLoading(false);
     }
-  }, [rtl]);
+  }, [t.loadError]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -1433,31 +1569,48 @@ export function BranchesPage() {
   const edit = (row: ApiRecord) => {
     setEditingId(getRowId(row));
     setForm({
-      name: getText(row, ["name"]),
-      code: getText(row, ["code", "branch_code"]),
-      phone: getText(row, ["phone"]),
-      email: getText(row, ["email"]),
-      city: getText(row, ["city"]),
-      address: getText(row, ["address"]),
-      is_active: getBool(row, ["is_active", "active"], true),
+      name: getText(row, ["name", "branch_name", "title"]),
+      code: getText(row, ["code", "branch_code", "reference"]),
+      phone: getText(row, ["phone", "mobile", "contact_phone"]),
+      email: getText(row, ["email", "contact_email"]),
+      city: getText(row, ["city", "city_name"]),
+      district: getText(row, ["district", "neighborhood", "area"]),
+      address: getText(row, ["address", "full_address"]),
+      is_active: getBranchActive(row),
+      is_main: getBranchMain(row),
     });
   };
   const save = async () => {
     if (!form.name.trim()) {
-      toast.error(rtl ? "اسم الفرع مطلوب" : "Branch name is required");
+      toast.error(t.nameRequired);
       return;
     }
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      toast.error(t.emailInvalid);
+      return;
+    }
+    const payload = {
+      name: form.name.trim(),
+      code: form.code.trim(),
+      phone: form.phone.trim(),
+      email: form.email.trim(),
+      city: form.city.trim(),
+      district: form.district.trim(),
+      address: form.address.trim(),
+      is_active: form.is_active,
+      is_main: form.is_main,
+    };
     try {
       setSaving(true);
       await apiRequest(editingId ? `/api/company/branches/${editingId}/` : "/api/company/branches/", {
         method: editingId ? "PATCH" : "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
-      toast.success(editingId ? (rtl ? "تم تحديث الفرع" : "Branch updated") : rtl ? "تم إنشاء الفرع" : "Branch created");
+      toast.success(editingId ? t.updated : t.created);
       resetForm();
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : rtl ? "تعذر حفظ الفرع" : "Could not save branch");
+      toast.error(error instanceof Error ? error.message : t.saveError);
     } finally {
       setSaving(false);
     }
@@ -1477,18 +1630,21 @@ export function BranchesPage() {
           body: JSON.stringify({ is_active: nextActive }),
         });
       }
-      toast.success(nextActive ? (rtl ? "تم تفعيل الفرع" : "Branch activated") : rtl ? "تم تعطيل الفرع" : "Branch deactivated");
+      toast.success(nextActive ? t.activated : t.deactivated);
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : rtl ? "تعذر تحديث حالة الفرع" : "Could not update branch status");
+      toast.error(error instanceof Error ? error.message : t.statusError);
     }
   };
   const filteredRows = rows.filter((row) => {
     const haystack = [
-      getText(row, ["name"]),
-      getText(row, ["code", "branch_code"]),
-      getText(row, ["phone"]),
-      getText(row, ["city"]),
+      getBranchName(row),
+      getBranchCode(row),
+      getText(row, ["phone", "mobile", "contact_phone"]),
+      getText(row, ["email", "contact_email"]),
+      getText(row, ["city", "city_name"]),
+      getText(row, ["district", "neighborhood", "area"]),
+      getText(row, ["address", "full_address"]),
     ]
       .join(" ")
       .toLowerCase();
@@ -1496,81 +1652,128 @@ export function BranchesPage() {
   });
   return (
     <PageShell
-      title={rtl ? "الفروع" : "Branches"}
-      description={rtl ? "إدارة فروع الشركة الحالية وإتاحتها للعمليات." : "Manage current company branches for operational use."}
+      title={t.title}
+      description={t.description}
       icon={Store}
       actions={
         <SecondaryButton onClick={() => void load()} disabled={loading}>
           <RefreshCcw className="h-4 w-4" />
-          {rtl ? "تحديث" : "Refresh"}
+          {t.refresh}
         </SecondaryButton>
       }
     >
-      <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
-        <Card title={editingId ? (rtl ? "تعديل فرع" : "Edit branch") : rtl ? "إضافة فرع" : "Add branch"} icon={Plus}>
-          <div className="grid gap-4">
-            <TextInput label={rtl ? "اسم الفرع" : "Branch name"} value={form.name} onChange={(value) => setField("name", value)} required />
-            <TextInput label={rtl ? "كود الفرع" : "Branch code"} value={form.code} onChange={(value) => setField("code", value)} />
-            <TextInput label={rtl ? "الهاتف" : "Phone"} value={form.phone} onChange={(value) => setField("phone", value)} />
-            <TextInput label={rtl ? "البريد الإلكتروني" : "Email"} value={form.email} onChange={(value) => setField("email", value)} type="email" />
-            <TextInput label={rtl ? "المدينة" : "City"} value={form.city} onChange={(value) => setField("city", value)} />
-            <TextArea label={rtl ? "العنوان" : "Address"} value={form.address} onChange={(value) => setField("address", value)} />
-            <ToggleInput label={rtl ? "فرع نشط" : "Active branch"} checked={form.is_active} onChange={(value) => setField("is_active", value)} />
-            <div className="flex flex-wrap gap-2">
-              <PrimaryButton onClick={() => void save()} disabled={saving}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                {rtl ? "حفظ" : "Save"}
-              </PrimaryButton>
-              {editingId ? <SecondaryButton onClick={resetForm}>{rtl ? "إلغاء" : "Cancel"}</SecondaryButton> : null}
-            </div>
-          </div>
-        </Card>
-        <Card title={rtl ? "قائمة الفروع" : "Branches list"} description={`${rtl ? "الإجمالي" : "Total"}: ${formatInteger(rows.length)}`} icon={Store}>
-          <div className="mb-4">
-            <SearchBox value={query} onChange={setQuery} placeholder={rtl ? "ابحث باسم الفرع أو الكود أو المدينة..." : "Search branch name, code, or city..."} />
-          </div>
-          {loading ? (
-            <LoadingBlock />
-          ) : filteredRows.length === 0 ? (
-            <EmptyState title={rtl ? "لا توجد فروع" : "No branches"} description={rtl ? "ستظهر الفروع هنا عند توفرها من API." : "Branches will appear here when returned by the API."} />
-          ) : (
-            <div className="overflow-hidden rounded-3xl border border-neutral-200">
-              <table className="w-full min-w-[760px] text-sm">
-                <thead className="bg-neutral-50 text-neutral-500">
-                  <tr>
-                    <th className="px-4 py-3 text-start font-semibold">{rtl ? "الفرع" : "Branch"}</th>
-                    <th className="px-4 py-3 text-start font-semibold">{rtl ? "الكود" : "Code"}</th>
-                    <th className="px-4 py-3 text-start font-semibold">{rtl ? "المدينة" : "City"}</th>
-                    <th className="px-4 py-3 text-start font-semibold">{rtl ? "الحالة" : "Status"}</th>
-                    <th className="px-4 py-3 text-start font-semibold">{rtl ? "إجراءات" : "Actions"}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100 bg-white">
-                  {filteredRows.map((row, index) => {
-                    const active = getBool(row, ["is_active", "active"], true);
-                    return (
-                      <tr key={getRowId(row) || index}>
-                        <td className="px-4 py-4 font-semibold text-neutral-900">{getText(row, ["name"], "-")}</td>
-                        <td className="px-4 py-4 text-neutral-600">{getText(row, ["code", "branch_code"], "-")}</td>
-                        <td className="px-4 py-4 text-neutral-600">{getText(row, ["city"], "-")}</td>
-                        <td className="px-4 py-4"><StatusPill active={active} /></td>
-                        <td className="px-4 py-4">
-                          <div className="flex flex-wrap gap-2">
-                            <SecondaryButton onClick={() => edit(row)}>{rtl ? "تعديل" : "Edit"}</SecondaryButton>
-                            <SecondaryButton onClick={() => void toggleActive(row, !active)}>
-                              {active ? (rtl ? "تعطيل" : "Deactivate") : rtl ? "تفعيل" : "Activate"}
-                            </SecondaryButton>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-      </div>
+      {loading ? (
+        <LoadingBlock />
+      ) : (
+        <div className="space-y-6">
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <StatCard label={t.totalBranches} value={branchStats.total} hint={t.totalHint} icon={Store} />
+            <StatCard label={t.activeBranches} value={branchStats.active} hint={t.activeHint} icon={CheckCircle2} />
+            <StatCard label={t.inactiveBranches} value={branchStats.inactive} hint={t.inactiveHint} icon={XCircle} />
+            <StatCard label={t.mainBranches} value={branchStats.main} hint={t.mainHint} icon={Building2} />
+          </section>
+          <section className="grid gap-6 xl:grid-cols-[420px_1fr]">
+            <ProfileSectionCard
+              title={editingId ? t.editBranch : t.addBranch}
+              description={t.formDescription}
+              icon={editingId ? Store : Plus}
+            >
+              <div className="grid gap-4">
+                <TextInput label={t.name} value={form.name} onChange={(value) => setField("name", value)} required />
+                <TextInput label={t.code} value={form.code} onChange={(value) => setField("code", value)} />
+                <TextInput label={t.phone} value={form.phone} onChange={(value) => setField("phone", value)} />
+                <TextInput label={t.email} value={form.email} onChange={(value) => setField("email", value)} type="email" />
+                <TextInput label={t.city} value={form.city} onChange={(value) => setField("city", value)} />
+                <TextInput label={t.district} value={form.district} onChange={(value) => setField("district", value)} />
+                <TextArea label={t.address} value={form.address} onChange={(value) => setField("address", value)} />
+                <ToggleInput
+                  label={t.activeBranch}
+                  description={t.activeBranchDescription}
+                  checked={form.is_active}
+                  onChange={(value) => setField("is_active", value)}
+                />
+                <ToggleInput
+                  label={t.mainBranch}
+                  description={t.mainBranchDescription}
+                  checked={form.is_main}
+                  onChange={(value) => setField("is_main", value)}
+                />
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <PrimaryButton onClick={() => void save()} disabled={saving}>
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    {t.save}
+                  </PrimaryButton>
+                  {editingId ? <SecondaryButton onClick={resetForm}>{t.cancel}</SecondaryButton> : null}
+                </div>
+              </div>
+            </ProfileSectionCard>
+            <ProfileSectionCard title={t.listTitle} description={t.listDescription} icon={Store}>
+              <div className="mb-4">
+                <SearchBox value={query} onChange={setQuery} placeholder={t.searchPlaceholder} />
+              </div>
+              {filteredRows.length === 0 ? (
+                <EmptyState title={t.noBranches} description={t.noBranchesDescription} />
+              ) : (
+                <div className="overflow-hidden rounded-2xl border bg-card">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[880px] text-sm">
+                      <thead className="border-b bg-muted/40 text-muted-foreground">
+                        <tr>
+                          <th className="px-4 py-3 text-start font-semibold">{t.branch}</th>
+                          <th className="px-4 py-3 text-start font-semibold">{t.contact}</th>
+                          <th className="px-4 py-3 text-start font-semibold">{t.location}</th>
+                          <th className="px-4 py-3 text-start font-semibold">{t.status}</th>
+                          <th className="px-4 py-3 text-start font-semibold">{t.actions}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {filteredRows.map((row, index) => {
+                          const active = getBranchActive(row);
+                          const main = getBranchMain(row);
+                          return (
+                            <tr key={getRowId(row) || index} className="bg-card transition hover:bg-muted/30">
+                              <td className="px-4 py-4">
+                                <p className="font-semibold text-foreground">{getBranchName(row)}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">{getBranchCode(row)}</p>
+                              </td>
+                              <td className="px-4 py-4 text-muted-foreground">
+                                <p>{getText(row, ["phone", "mobile", "contact_phone"], "-")}</p>
+                                <p className="mt-1 text-xs">{getText(row, ["email", "contact_email"], "-")}</p>
+                              </td>
+                              <td className="px-4 py-4 text-muted-foreground">
+                                <p>{getText(row, ["city", "city_name"], "-")}</p>
+                                <p className="mt-1 text-xs">{getText(row, ["district", "neighborhood", "area"], "-")}</p>
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="flex flex-wrap gap-2">
+                                  <StatusPill active={active} />
+                                  {main ? (
+                                    <Badge variant="outline" className="rounded-full bg-muted px-2.5 py-1 text-xs">
+                                      {t.main}
+                                    </Badge>
+                                  ) : null}
+                                </div>
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="flex flex-wrap gap-2">
+                                  <SecondaryButton onClick={() => edit(row)}>{t.edit}</SecondaryButton>
+                                  <SecondaryButton onClick={() => void toggleActive(row, !active)}>
+                                    {active ? t.deactivate : t.activate}
+                                  </SecondaryButton>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </ProfileSectionCard>
+          </section>
+        </div>
+      )}
     </PageShell>
   );
 }
