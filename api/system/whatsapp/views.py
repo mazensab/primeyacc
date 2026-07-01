@@ -605,7 +605,7 @@ def system_whatsapp_inbox_webhook(request):
     from django.conf import settings
     from rest_framework import status as drf_status
     from rest_framework.response import Response as DRFResponse
-    from whatsapp.services import record_system_whatsapp_incoming_message
+    from whatsapp.services import record_whatsapp_incoming_message
     required_token = str(
         getattr(settings, "WHATSAPP_INCOMING_WEBHOOK_TOKEN", "")
         or os.environ.get("WHATSAPP_INCOMING_WEBHOOK_TOKEN", "")
@@ -637,7 +637,7 @@ def system_whatsapp_inbox_webhook(request):
         )
     data = request.data if isinstance(request.data, dict) else {}
     try:
-        payload = record_system_whatsapp_incoming_message(data)
+        payload = record_whatsapp_incoming_message(data)
     except (ValueError, TypeError) as exc:
         return DRFResponse(
             {

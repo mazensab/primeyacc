@@ -1319,6 +1319,276 @@ def serialize_whatsapp_inbox_summary(*, scope: str = "SYSTEM", company=None, ses
         "resolved_conversations": queryset.filter(is_resolved=True).count(),
         "pinned_conversations": queryset.filter(is_pinned=True).count(),
     }
+
+def _resolve_company_whatsapp_setting_by_session_name(session_name: str):
+    """
+    Resolve backend-owned company WhatsApp session name to its company setting.
+    Example:
+    - company-5-whatsapp -> CompanyWhatsAppSetting(company_id=5)
+    """
+    import re
+    from django.apps import apps
+    Setting = apps.get_model("whatsapp", "CompanyWhatsAppSetting")
+    session_name = str(session_name or "").strip()
+    if not session_name:
+        return None
+    for setting in Setting.objects.select_related("company").filter(company__isnull=False):
+        config = dict(setting.provider_config or {})
+        owned_session = str(
+            config.get("session_name") or f"company-{setting.company_id}-whatsapp"
+        ).strip()
+        if owned_session == session_name:
+            return setting
+    match = re.fullmatch(r"company-(\d+)-whatsapp", session_name)
+    if not match:
+        return None
+    return (
+        Setting.objects
+        .select_related("company")
+        .filter(company_id=int(match.group(1)))
+        .first()
+    )
+def record_company_whatsapp_incoming_message(payload: dict, *, setting=None) -> dict:
+    """
+    Record inbound WhatsApp Gateway message into the matching company inbox.
+    Idempotent by company + session_name + message_id.
+    """
+    from django.apps import apps
+    from django.db import transaction
+    from django.utils import timezone
+    if not isinstance(payload, dict):
+        raise ValueError("Incoming WhatsApp payload must be a dictionary.")
+    Contact = apps.get_model("whatsapp", "WhatsAppContact")
+    Conversation = apps.get_model("whatsapp", "WhatsAppConversation")
+    Message = apps.get_model("whatsapp", "WhatsAppConversationMessage")
+    WebhookEvent = apps.get_model("whatsapp", "WhatsAppWebhookEvent")
+    session_name = str(payload.get("session_name") or "").strip()
+    setting = setting or _resolve_company_whatsapp_setting_by_session_name(session_name)
+    if setting is None or not getattr(setting, "company_id", None):
+        raise ValueError("Company WhatsApp session could not be resolved.")
+    company = setting.company
+    config = dict(setting.provider_config or {})
+    session_name = str(
+        session_name
+        or config.get("session_name")
+        or f"company-{company.id}-whatsapp"
+    ).strip()
+    from_jid = str(
+        payload.get("from_jid")
+        or payload.get("remote_jid")
+        or payload.get("jid")
+        or payload.get("from")
+        or ""
+    ).strip()
+    from_phone = str(
+        payload.get("from_phone")
+        or payload.get("phone_number")
+        or payload.get("sender_phone")
+        or ""
+    ).strip()
+    normalized_phone = _normalize_whatsapp_inbox_phone(from_phone or from_jid)
+    if not normalized_phone and from_jid:
+        normalized_phone = "".join(ch for ch in from_jid if ch.isdigit())
+    if not normalized_phone:
+        raise ValueError("Incoming WhatsApp phone/JID could not be resolved.")
+    message_id = str(
+        payload.get("message_id")
+        or payload.get("external_message_id")
+        or payload.get("id")
+        or ""
+    ).strip()
+    body = str(
+        payload.get("body")
+        or payload.get("message")
+        or payload.get("text")
+        or payload.get("message_body")
+        or ""
+    )
+    push_name = str(payload.get("push_name") or payload.get("pushName") or "").strip()
+    display_name = str(
+        payload.get("display_name")
+        or payload.get("name")
+        or push_name
+        or normalized_phone
+    ).strip()
+    event_uid = str(payload.get("event_uid") or _whatsapp_inbox_event_uid(payload)).strip()
+    message_at = (
+        _parse_whatsapp_inbox_datetime(payload.get("timestamp"))
+        or _parse_whatsapp_inbox_datetime(payload.get("messageTimestamp"))
+        or timezone.now()
+    )
+    with transaction.atomic():
+        webhook_event, _ = WebhookEvent.objects.get_or_create(
+            event_uid=event_uid,
+            defaults={
+                "session_name": session_name,
+                "event_type": str(payload.get("event_type") or "message.incoming"),
+                "status": "RECEIVED",
+                "external_message_id": message_id,
+                "payload": payload,
+            },
+        )
+        existing_message = None
+        if message_id:
+            existing_message = (
+                Message.objects
+                .filter(
+                    scope="COMPANY",
+                    company=company,
+                    session_name=session_name,
+                    external_message_id=message_id,
+                )
+                .select_related("conversation", "contact")
+                .first()
+            )
+        if existing_message:
+            webhook_event.status = "PROCESSED"
+            webhook_event.processed_at = timezone.now()
+            webhook_event.save(update_fields=["status", "processed_at"])
+            return {
+                "success": True,
+                "duplicate": True,
+                "scope": "COMPANY",
+                "company_id": company.id,
+                "conversation": serialize_whatsapp_inbox_conversation(existing_message.conversation),
+                "message_record": serialize_whatsapp_inbox_message(existing_message),
+                "webhook_event_id": webhook_event.id,
+            }
+        contact = (
+            Contact.objects
+            .filter(
+                scope="COMPANY",
+                company=company,
+                session_name=session_name,
+                whatsapp_jid=from_jid,
+            )
+            .first()
+        )
+        if contact is None:
+            contact = (
+                Contact.objects
+                .filter(
+                    scope="COMPANY",
+                    company=company,
+                    session_name=session_name,
+                    normalized_phone=normalized_phone,
+                )
+                .first()
+            )
+        if contact is None:
+            contact = Contact.objects.create(
+                scope="COMPANY",
+                company=company,
+                session_name=session_name,
+                phone_number=from_phone or normalized_phone,
+                normalized_phone=normalized_phone,
+                whatsapp_jid=from_jid,
+                display_name=display_name,
+                push_name=push_name,
+                metadata={"source": "company_incoming_webhook"},
+            )
+        else:
+            changed_fields = []
+            if from_phone and contact.phone_number != from_phone:
+                contact.phone_number = from_phone
+                changed_fields.append("phone_number")
+            if normalized_phone and contact.normalized_phone != normalized_phone:
+                contact.normalized_phone = normalized_phone
+                changed_fields.append("normalized_phone")
+            if from_jid and contact.whatsapp_jid != from_jid:
+                contact.whatsapp_jid = from_jid
+                changed_fields.append("whatsapp_jid")
+            if display_name and contact.display_name != display_name:
+                contact.display_name = display_name
+                changed_fields.append("display_name")
+            if push_name and contact.push_name != push_name:
+                contact.push_name = push_name
+                changed_fields.append("push_name")
+            if changed_fields:
+                changed_fields.append("updated_at")
+                contact.save(update_fields=changed_fields)
+        conversation = (
+            Conversation.objects
+            .filter(
+                scope="COMPANY",
+                company=company,
+                session_name=session_name,
+                contact=contact,
+            )
+            .first()
+        )
+        if conversation is None:
+            conversation = Conversation.objects.create(
+                scope="COMPANY",
+                company=company,
+                contact=contact,
+                session_name=session_name,
+                status="OPEN",
+                is_resolved=False,
+                unread_count=0,
+                metadata={"source": "company_incoming_webhook"},
+            )
+        message = Message.objects.create(
+            conversation=conversation,
+            contact=contact,
+            company=company,
+            scope="COMPANY",
+            session_name=session_name,
+            direction="INBOUND",
+            status="RECEIVED",
+            message_type="TEXT",
+            body=body,
+            external_message_id=message_id,
+            provider="WHATSAPP_GATEWAY",
+            provider_response=payload,
+            received_at=message_at,
+            metadata={
+                "source": "company_incoming_webhook",
+                "webhook_event_id": webhook_event.id,
+                "from_jid": from_jid,
+                "normalized_phone": normalized_phone,
+            },
+        )
+        conversation.last_message_preview = body[:500]
+        conversation.last_message_at = message_at
+        conversation.status = "OPEN"
+        conversation.is_resolved = False
+        conversation.unread_count = (conversation.unread_count or 0) + 1
+        conversation.save(
+            update_fields=[
+                "last_message_preview",
+                "last_message_at",
+                "status",
+                "is_resolved",
+                "unread_count",
+                "updated_at",
+            ]
+        )
+        webhook_event.status = "PROCESSED"
+        webhook_event.processed_at = timezone.now()
+        webhook_event.save(update_fields=["status", "processed_at"])
+    return {
+        "success": True,
+        "duplicate": False,
+        "scope": "COMPANY",
+        "company_id": company.id,
+        "conversation": serialize_whatsapp_inbox_conversation(conversation),
+        "message_record": serialize_whatsapp_inbox_message(message),
+        "webhook_event_id": webhook_event.id,
+    }
+def record_whatsapp_incoming_message(payload: dict) -> dict:
+    """
+    Dispatch inbound Gateway webhook to company inbox when session_name belongs
+    to a company session, otherwise keep existing system inbox behavior.
+    """
+    if not isinstance(payload, dict):
+        raise ValueError("Incoming WhatsApp payload must be a dictionary.")
+    session_name = str(payload.get("session_name") or "").strip()
+    setting = _resolve_company_whatsapp_setting_by_session_name(session_name)
+    if setting is not None:
+        return record_company_whatsapp_incoming_message(payload, setting=setting)
+    return record_system_whatsapp_incoming_message(payload)
+
 def record_system_whatsapp_incoming_message(payload: dict) -> dict:
     """
     Record an inbound WhatsApp Gateway message into the system inbox.

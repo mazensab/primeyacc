@@ -1417,3 +1417,68 @@ class CompanyWhatsAppInboxAPITests(TestCase):
         self.assertEqual(response.data["reply"]["company_id"], self.company.id)
         call_kwargs = mocked_gateway.call_args.kwargs
         self.assertEqual(call_kwargs["session_name"], f"company-{self.company.id}-whatsapp")
+
+class CompanyWhatsAppIncomingWebhookRoutingTests(TestCase):
+    def test_company_session_incoming_webhook_routes_to_company_inbox(self):
+        from companies.models import Company
+        from whatsapp.models import (
+            WhatsAppContact,
+            WhatsAppConversation,
+            WhatsAppConversationMessage,
+            WhatsAppInboxScope,
+            WhatsAppWebhookEvent,
+        )
+        from whatsapp.services import (
+            get_or_create_company_whatsapp_connection,
+            record_whatsapp_incoming_message,
+        )
+        company = Company.objects.create(
+            name="Incoming WhatsApp Company",
+            company_code="WA-INCOMING-001",
+            is_active=True,
+        )
+        get_or_create_company_whatsapp_connection(company=company)
+        payload = {
+            "session_name": f"company-{company.id}-whatsapp",
+            "from_jid": "160885213536366@lid",
+            "from_phone": "966500111222",
+            "push_name": "Incoming Customer",
+            "message_id": "COMPANY-INCOMING-WEBHOOK-001",
+            "body": "????? ????? ??? ????? ??????.",
+            "timestamp": "2026-07-01T20:00:00+03:00",
+        }
+        result = record_whatsapp_incoming_message(payload)
+        self.assertTrue(result["success"])
+        self.assertFalse(result["duplicate"])
+        self.assertEqual(result["scope"], "COMPANY")
+        self.assertEqual(result["company_id"], company.id)
+        contact = WhatsAppContact.objects.get()
+        conversation = WhatsAppConversation.objects.get()
+        message = WhatsAppConversationMessage.objects.get()
+        event = WhatsAppWebhookEvent.objects.get()
+        self.assertEqual(contact.scope, WhatsAppInboxScope.COMPANY)
+        self.assertEqual(contact.company_id, company.id)
+        self.assertEqual(conversation.scope, WhatsAppInboxScope.COMPANY)
+        self.assertEqual(conversation.company_id, company.id)
+        self.assertEqual(conversation.session_name, f"company-{company.id}-whatsapp")
+        self.assertEqual(conversation.unread_count, 1)
+        self.assertEqual(message.direction, "INBOUND")
+        self.assertEqual(message.status, "RECEIVED")
+        self.assertEqual(message.company_id, company.id)
+        self.assertEqual(message.external_message_id, "COMPANY-INCOMING-WEBHOOK-001")
+        self.assertEqual(event.status, "PROCESSED")
+    def test_system_session_incoming_webhook_stays_system_inbox(self):
+        from whatsapp.models import WhatsAppConversationMessage
+        from whatsapp.services import record_whatsapp_incoming_message
+        result = record_whatsapp_incoming_message(
+            {
+                "session_name": "Mhamcloud-system-session",
+                "from_jid": "966501234567@s.whatsapp.net",
+                "message_id": "SYSTEM-INCOMING-WEBHOOK-001",
+                "body": "????? ????? ??????.",
+            }
+        )
+        self.assertTrue(result["success"])
+        message = WhatsAppConversationMessage.objects.get()
+        self.assertEqual(message.scope, "SYSTEM")
+        self.assertIsNone(message.company_id)
