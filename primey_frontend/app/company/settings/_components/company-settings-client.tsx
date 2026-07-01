@@ -1,4 +1,4 @@
-﻿/*
+/*
  * 📂 path: primey_frontend/app/company/settings/_components/company-settings-client.tsx
  * 🧩 Company settings shared client UI
  * ✅ Approved Premium pattern
@@ -10,7 +10,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import {
-  ArrowLeft,
   Building2,
   CheckCircle2,
   CreditCard,
@@ -32,7 +31,17 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card as UiCard,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 type Locale = "ar" | "en";
 type ApiRecord = Record<string, unknown>;
 const API_BASE = (
@@ -161,6 +170,19 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T
   }
   return payload as T;
 }
+function formatInteger(value: string | number) {
+  const parsed = typeof value === "number" ? value : Number(String(value).replace(/,/g, ""));
+  if (!Number.isFinite(parsed)) return String(value);
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(parsed);
+}
+function formatEnglishDateTime(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  const hours = String(value.getHours()).padStart(2, "0");
+  const minutes = String(value.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
 function PageShell({
   title,
   description,
@@ -177,35 +199,41 @@ function PageShell({
   const locale = useLocale();
   const rtl = locale === "ar";
   return (
-    <main dir={rtl ? "rtl" : "ltr"} className="min-h-screen bg-neutral-50/70 px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="overflow-hidden rounded-[2rem] border border-neutral-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-6 p-6 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-start gap-4">
-              <div className="flex h-13 w-13 items-center justify-center rounded-2xl bg-neutral-950 text-white shadow-sm">
-                <Icon className="h-6 w-6" />
-              </div>
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500">
-                  <Link href="/company" className="rounded-full border border-neutral-200 px-3 py-1 hover:bg-neutral-50">
-                    {rtl ? "مساحة الشركة" : "Company"}
-                  </Link>
-                  <ArrowLeft className="h-3.5 w-3.5 opacity-60" />
-                  <Link href="/company/settings" className="rounded-full border border-neutral-200 px-3 py-1 hover:bg-neutral-50">
-                    {rtl ? "إعدادات الشركة" : "Company settings"}
-                  </Link>
+    <main dir={rtl ? "rtl" : "ltr"} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1500px] space-y-6">
+        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+          <div className="relative p-6 sm:p-8">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="max-w-3xl">
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
+                  <Icon className="h-3.5 w-3.5 text-primary" />
+                  {rtl ? "إعدادات الشركة" : "Company settings"}
                 </div>
-                <h1 className="text-2xl font-bold tracking-tight text-neutral-950">{title}</h1>
-                <p className="max-w-3xl text-sm leading-6 text-neutral-500">{description}</p>
+                <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{title}</h1>
+                <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">{description}</p>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  <span className="rounded-full border bg-background px-3 py-1">
+                    {rtl ? "مساحة الشركة" : "Company workspace"}
+                  </span>
+                  <span className="rounded-full border bg-background px-3 py-1">
+                    {rtl ? "جاهزة للتشغيل" : "Ready for operations"}
+                  </span>
+                </div>
               </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <SarBadge />
-              {actions}
+              <div className="flex flex-wrap items-center gap-2">
+                {actions}
+                <Button asChild variant="outline" className="rounded-xl bg-background">
+                  <Link href="/company">
+                    <Building2 className="h-4 w-4" />
+                    {rtl ? "لوحة الشركة" : "Dashboard"}
+                  </Link>
+                </Button>
+                <SarBadge />
+              </div>
             </div>
           </div>
         </section>
-        <ApiNotice />
         {children}
       </div>
     </main>
@@ -213,21 +241,10 @@ function PageShell({
 }
 function SarBadge() {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 shadow-sm">
-      <Image src="/currency/sar.svg" alt="SAR" width={16} height={16} />
+    <span className="inline-flex h-10 items-center gap-1.5 rounded-xl border bg-background px-3 text-xs font-semibold text-foreground shadow-sm">
+      <Image src="/currency/sar.svg" alt="SAR" width={14} height={14} className="h-3.5 w-3.5" />
       SAR
     </span>
-  );
-}
-function ApiNotice() {
-  const locale = useLocale();
-  const rtl = locale === "ar";
-  return (
-    <div className="rounded-3xl border border-neutral-200 bg-white/80 px-4 py-3 text-xs leading-6 text-neutral-500 shadow-sm">
-      {rtl
-        ? "تنبيه أمان: هذه الصفحات لا ترسل company_id من الواجهة. يجب أن يحدد الباكند الشركة الحالية من جلسة المستخدم وعضويته فقط."
-        : "Security note: these pages never send company_id from the frontend. The backend must resolve the current company from the authenticated session and membership only."}
-    </div>
   );
 }
 function PrimaryButton({
@@ -242,14 +259,14 @@ function PrimaryButton({
   type?: "button" | "submit";
 }) {
   return (
-    <button
+    <Button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-neutral-950 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+      className="rounded-xl shadow-sm disabled:cursor-not-allowed"
     >
       {children}
-    </button>
+    </Button>
   );
 }
 function SecondaryButton({
@@ -264,30 +281,32 @@ function SecondaryButton({
   type?: "button" | "submit";
 }) {
   return (
-    <button
+    <Button
       type={type}
+      variant="outline"
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-800 shadow-sm transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60"
+      className="rounded-xl bg-background shadow-sm disabled:cursor-not-allowed"
     >
       {children}
-    </button>
+    </Button>
   );
 }
 function StatusPill({ active }: { active: boolean }) {
   const locale = useLocale();
   const rtl = locale === "ar";
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
+    <Badge
+      variant="outline"
+      className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs ${
         active
-          ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
-          : "bg-neutral-100 text-neutral-600 ring-1 ring-neutral-200"
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : "border-rose-200 bg-rose-50 text-rose-700"
       }`}
     >
       {active ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
       {active ? (rtl ? "نشط" : "Active") : rtl ? "غير نشط" : "Inactive"}
-    </span>
+    </Badge>
   );
 }
 function Card({
@@ -302,20 +321,20 @@ function Card({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-[2rem] border border-neutral-200 bg-white p-5 shadow-sm">
-      <div className="mb-5 flex items-start gap-3">
-        {Icon ? (
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-700">
-            <Icon className="h-5 w-5" />
-          </div>
-        ) : null}
-        <div>
-          <h2 className="text-base font-bold text-neutral-950">{title}</h2>
-          {description ? <p className="mt-1 text-sm leading-6 text-neutral-500">{description}</p> : null}
+    <UiCard className="overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm">
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-3">
+        <div className="min-w-0">
+          <CardTitle className="text-base font-bold tracking-tight">{title}</CardTitle>
+          {description ? <CardDescription className="mt-1 text-sm leading-6">{description}</CardDescription> : null}
         </div>
-      </div>
-      {children}
-    </section>
+        {Icon ? (
+          <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
+            <Icon className="h-5 w-5" />
+          </span>
+        ) : null}
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </UiCard>
   );
 }
 function StatCard({
@@ -329,34 +348,46 @@ function StatCard({
   hint: string;
   icon: LucideIcon;
 }) {
+  const renderedValue = typeof value === "number" ? formatInteger(value) : value;
   return (
-    <div className="rounded-[1.5rem] border border-neutral-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-2">
-          <p className="text-sm text-neutral-500">{label}</p>
-          <p className="text-3xl font-bold text-neutral-950">{value}</p>
-          <p className="text-xs text-neutral-400">{hint}</p>
+    <UiCard className="group h-full min-h-[128px] overflow-hidden rounded-2xl border bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
+        <div className="min-w-0">
+          <CardDescription className="truncate text-sm">{label}</CardDescription>
+          <CardTitle className="mt-2 truncate text-2xl font-bold tracking-tight tabular-nums">
+            {renderedValue}
+          </CardTitle>
         </div>
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-700">
+        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
           <Icon className="h-5 w-5" />
-        </div>
-      </div>
-    </div>
+        </span>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <p className="line-clamp-2 text-xs text-muted-foreground">{hint}</p>
+      </CardContent>
+    </UiCard>
   );
 }
 function EmptyState({ title, description }: { title: string; description: string }) {
   return (
-    <div className="flex min-h-64 flex-col items-center justify-center rounded-3xl border border-dashed border-neutral-200 bg-neutral-50/60 p-8 text-center">
-      <Search className="mb-3 h-8 w-8 text-neutral-400" />
-      <h3 className="text-sm font-bold text-neutral-800">{title}</h3>
-      <p className="mt-2 max-w-md text-sm leading-6 text-neutral-500">{description}</p>
+    <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed bg-muted/30 p-8 text-center">
+      <div className="mb-3 rounded-2xl bg-primary/10 p-3 text-primary">
+        <Search className="h-6 w-6" />
+      </div>
+      <h3 className="text-sm font-bold text-foreground">{title}</h3>
+      <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">{description}</p>
     </div>
   );
 }
 function LoadingBlock() {
   return (
-    <div className="flex min-h-48 items-center justify-center rounded-3xl border border-neutral-200 bg-white">
-      <Loader2 className="h-7 w-7 animate-spin text-neutral-500" />
+    <div className="rounded-2xl border bg-card p-6 shadow-sm">
+      <div className="space-y-4">
+        <Skeleton className="h-5 w-40" />
+        <Skeleton className="h-11 w-full rounded-xl" />
+        <Skeleton className="h-11 w-full rounded-xl" />
+        <Skeleton className="h-11 w-2/3 rounded-xl" />
+      </div>
     </div>
   );
 }
@@ -377,17 +408,17 @@ function TextInput({
 }) {
   return (
     <label className="space-y-2">
-      <span className="text-sm font-semibold text-neutral-700">
+      <span className="text-sm font-semibold text-foreground">
         {label}
-        {required ? <span className="text-red-500"> *</span> : null}
+        {required ? <span className="text-destructive"> *</span> : null}
       </span>
-      <input
+      <Input
         type={type}
         value={value}
         placeholder={placeholder}
         required={required}
         onChange={(event) => onChange(event.target.value)}
-        className="h-12 w-full rounded-2xl border border-neutral-200 bg-white px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-neutral-950 focus:ring-4 focus:ring-neutral-950/10"
+        className="h-11 rounded-xl bg-background text-sm"
       />
     </label>
   );
@@ -405,13 +436,13 @@ function TextArea({
 }) {
   return (
     <label className="space-y-2 md:col-span-2">
-      <span className="text-sm font-semibold text-neutral-700">{label}</span>
+      <span className="text-sm font-semibold text-foreground">{label}</span>
       <textarea
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
         rows={4}
-        className="w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-neutral-400 focus:border-neutral-950 focus:ring-4 focus:ring-neutral-950/10"
+        className="w-full rounded-xl border bg-background px-4 py-3 text-sm outline-none transition placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
       />
     </label>
   );
@@ -429,14 +460,14 @@ function SelectInput({
 }) {
   return (
     <label className="space-y-2">
-      <span className="text-sm font-semibold text-neutral-700">{label}</span>
+      <span className="text-sm font-semibold text-foreground">{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-12 w-full rounded-2xl border border-neutral-200 bg-white px-4 text-sm outline-none transition focus:border-neutral-950 focus:ring-4 focus:ring-neutral-950/10"
+        className="h-11 w-full rounded-xl border bg-background px-4 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
       >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
+        {options.map((option, index) => (
+          <option key={option.value || `empty-${index}`} value={option.value}>
             {option.label}
           </option>
         ))}
@@ -456,16 +487,16 @@ function ToggleInput({
   onChange: (value: boolean) => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-neutral-200 bg-white p-4">
+    <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border bg-background p-4 transition hover:bg-muted/40">
       <span>
-        <span className="block text-sm font-semibold text-neutral-800">{label}</span>
-        {description ? <span className="mt-1 block text-xs leading-5 text-neutral-500">{description}</span> : null}
+        <span className="block text-sm font-semibold text-foreground">{label}</span>
+        {description ? <span className="mt-1 block text-xs leading-5 text-muted-foreground">{description}</span> : null}
       </span>
       <input
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="h-5 w-5 rounded border-neutral-300 text-neutral-950 focus:ring-neutral-950"
+        className="h-5 w-5 rounded border-input text-primary focus:ring-ring"
       />
     </label>
   );
@@ -479,25 +510,27 @@ function SearchBox({
   onChange: (value: string) => void;
   placeholder: string;
 }) {
+  const locale = useLocale();
+  const rtl = locale === "ar";
   return (
     <div className="relative">
-      <Search className="pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400 ltr:left-4 rtl:right-4" />
-      <input
+      <Search className={`pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground ${rtl ? "right-4" : "left-4"}`} />
+      <Input
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="h-12 w-full rounded-2xl border border-neutral-200 bg-white px-11 text-sm outline-none transition placeholder:text-neutral-400 focus:border-neutral-950 focus:ring-4 focus:ring-neutral-950/10"
+        className={`h-11 rounded-xl bg-background text-sm ${rtl ? "pr-11" : "pl-11"}`}
       />
     </div>
   );
-}
-export function CompanySettingsHome() {
+}export function CompanySettingsHome() {
   const locale = useLocale();
   const rtl = locale === "ar";
   const [loading, setLoading] = useState(true);
   const [lastSync, setLastSync] = useState("");
   const [stats, setStats] = useState({
     profileReady: false,
+    generalSettingsReady: false,
     branches: 0,
     users: 0,
     paymentMethods: 0,
@@ -507,6 +540,7 @@ export function CompanySettingsHome() {
     setLoading(true);
     const results = await Promise.allSettled([
       apiRequest<unknown>("/api/company/profile/"),
+      apiRequest<unknown>("/api/company/settings/"),
       apiRequest<unknown>("/api/company/branches/"),
       apiRequest<unknown>("/api/company/users/"),
       apiRequest<unknown>("/api/company/payment-methods/"),
@@ -514,12 +548,13 @@ export function CompanySettingsHome() {
     ]);
     setStats({
       profileReady: results[0].status === "fulfilled" && Object.keys(asRecord(results[0].value)).length > 0,
-      branches: results[1].status === "fulfilled" ? normalizeList(results[1].value).length : 0,
-      users: results[2].status === "fulfilled" ? normalizeList(results[2].value).length : 0,
-      paymentMethods: results[3].status === "fulfilled" ? normalizeList(results[3].value).length : 0,
-      taxReady: results[4].status === "fulfilled" && Object.keys(asRecord(results[4].value)).length > 0,
+      generalSettingsReady: results[1].status === "fulfilled" && Object.keys(asRecord(results[1].value)).length > 0,
+      branches: results[2].status === "fulfilled" ? normalizeList(results[2].value).length : 0,
+      users: results[3].status === "fulfilled" ? normalizeList(results[3].value).length : 0,
+      paymentMethods: results[4].status === "fulfilled" ? normalizeList(results[4].value).length : 0,
+      taxReady: results[5].status === "fulfilled" && Object.keys(asRecord(results[5].value)).length > 0,
     });
-    setLastSync(new Date().toLocaleTimeString(rtl ? "ar-SA" : "en-US"));
+    setLastSync(formatEnglishDateTime(new Date()));
     setLoading(false);
   }, [rtl]);
   useEffect(() => {
@@ -569,6 +604,18 @@ export function CompanySettingsHome() {
         description: rtl ? "إدارة طرق الدفع المتاحة في الفواتير ونقاط البيع." : "Manage payment methods for invoices and POS.",
         icon: CreditCard,
       },
+      {
+        href: "/company/notifications",
+        title: rtl ? "إشعارات الشركة" : "Company notifications",
+        description: rtl ? "متابعة إشعارات الشركة والتنبيهات التشغيلية." : "Review company notifications and operational alerts.",
+        icon: ShieldCheck,
+      },
+      {
+        href: "/company/whatsapp/settings",
+        title: rtl ? "إعدادات واتساب" : "WhatsApp settings",
+        description: rtl ? "إعداد اتصال واتساب الخاص بالشركة الحالية." : "Configure WhatsApp connection for the current company.",
+        icon: Settings2,
+      },
     ],
     [rtl],
   );
@@ -588,12 +635,18 @@ export function CompanySettingsHome() {
         </SecondaryButton>
       }
     >
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <StatCard
           label={rtl ? "ملف الشركة" : "Profile"}
           value={stats.profileReady ? (rtl ? "جاهز" : "Ready") : (rtl ? "غير مكتمل" : "Pending")}
           hint={rtl ? "من API الشركة الحالية" : "From current company API"}
           icon={Building2}
+        />
+        <StatCard
+          label={rtl ? "الإعدادات العامة" : "General settings"}
+          value={stats.generalSettingsReady ? (rtl ? "جاهزة" : "Ready") : (rtl ? "غير مكتملة" : "Pending")}
+          hint={rtl ? "إعدادات التشغيل" : "Operating settings"}
+          icon={SlidersHorizontal}
         />
         <StatCard label={rtl ? "الفروع" : "Branches"} value={stats.branches} hint={rtl ? "فرع مسجل" : "Registered branches"} icon={Store} />
         <StatCard label={rtl ? "المستخدمون" : "Users"} value={stats.users} hint={rtl ? "مستخدم داخل الشركة" : "Company users"} icon={UsersRound} />
@@ -616,13 +669,13 @@ export function CompanySettingsHome() {
                 <Link
                   key={page.href}
                   href={page.href}
-                  className="group rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-neutral-950 hover:shadow-md"
+                  className="group flex h-full min-h-[160px] flex-col justify-between rounded-2xl border bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                 >
-                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-700 transition group-hover:bg-neutral-950 group-hover:text-white">
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
                     <Icon className="h-5 w-5" />
                   </div>
-                  <h3 className="text-base font-bold text-neutral-950">{page.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-neutral-500">{page.description}</p>
+                  <h3 className="text-base font-bold text-foreground">{page.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{page.description}</p>
                 </Link>
               );
             })}
@@ -992,7 +1045,7 @@ export function BranchesPage() {
             </div>
           </div>
         </Card>
-        <Card title={rtl ? "قائمة الفروع" : "Branches list"} description={`${rtl ? "الإجمالي" : "Total"}: ${rows.length}`} icon={Store}>
+        <Card title={rtl ? "قائمة الفروع" : "Branches list"} description={`${rtl ? "الإجمالي" : "Total"}: ${formatInteger(rows.length)}`} icon={Store}>
           <div className="mb-4">
             <SearchBox value={query} onChange={setQuery} placeholder={rtl ? "ابحث باسم الفرع أو الكود أو المدينة..." : "Search branch name, code, or city..."} />
           </div>
@@ -1207,7 +1260,7 @@ export function CompanyUsersPage() {
             </div>
           </div>
         </Card>
-        <Card title={rtl ? "قائمة المستخدمين" : "Users list"} description={`${rtl ? "الإجمالي" : "Total"}: ${rows.length}`} icon={UsersRound}>
+        <Card title={rtl ? "قائمة المستخدمين" : "Users list"} description={`${rtl ? "الإجمالي" : "Total"}: ${formatInteger(rows.length)}`} icon={UsersRound}>
           <div className="mb-4">
             <SearchBox value={query} onChange={setQuery} placeholder={rtl ? "ابحث بالاسم أو البريد أو الدور..." : "Search name, email, or role..."} />
           </div>
@@ -1714,7 +1767,7 @@ export function PaymentMethodsPage() {
             </div>
           </div>
         </Card>
-        <Card title={rtl ? "قائمة طرق الدفع" : "Payment methods list"} description={`${rtl ? "الإجمالي" : "Total"}: ${rows.length}`} icon={CreditCard}>
+        <Card title={rtl ? "قائمة طرق الدفع" : "Payment methods list"} description={`${rtl ? "الإجمالي" : "Total"}: ${formatInteger(rows.length)}`} icon={CreditCard}>
           <div className="mb-4">
             <SearchBox value={query} onChange={setQuery} placeholder={rtl ? "ابحث باسم طريقة الدفع أو الكود..." : "Search payment method name or code..."} />
           </div>
