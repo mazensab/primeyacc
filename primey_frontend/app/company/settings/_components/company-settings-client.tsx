@@ -2385,58 +2385,682 @@ export function CompanyUsersPage() {
     </PageShell>
   );
 }
+
+type CompanyPermissionFilter = "all" | "granted" | "missing";
+type CompanyPermissionSortKey = "code" | "group" | "name";
+type CompanyPermissionItem = {
+  key: string;
+  label: string;
+  group: string;
+  description: string;
+  scope: string;
+};
+type CompanyPermissionRole = {
+  key: string;
+  label: string;
+  permissions: string[];
+};
+const companyPermissionsEn = {
+  title: "Company permissions",
+  description: "Review and update company role permissions using the same permissions catalog pattern.",
+  refresh: "Refresh",
+  exportExcel: "Export Excel",
+  print: "Print",
+  savePermissions: "Save permissions",
+  totalPermissions: "Total permissions",
+  grantedPermissions: "Granted permissions",
+  missingPermissions: "Missing permissions",
+  rolesCount: "Roles",
+  totalHint: "Available company permissions",
+  grantedHint: "Enabled for selected role",
+  missingHint: "Not enabled for selected role",
+  rolesHint: "Company roles returned by API",
+  rolesTitle: "Company roles",
+  rolesDescription: "Select a role to review and update its permissions.",
+  catalogTitle: "Permissions catalog",
+  catalogDescription: "Search, filter, and update permissions for the selected role.",
+  filtersTitle: "Search and filters",
+  searchPlaceholder: "Search by permission code, name, group, or description...",
+  statusFilter: "Status",
+  sortBy: "Sort by",
+  all: "All",
+  granted: "Granted",
+  missing: "Missing",
+  code: "Code",
+  group: "Group",
+  name: "Name",
+  reset: "Reset",
+  permission: "Permission",
+  descriptionLabel: "Description",
+  status: "Status",
+  enabled: "Enabled",
+  disabled: "Disabled",
+  noPermissions: "No permissions",
+  noPermissionsDescription: "Company permissions will appear here when returned by the API.",
+  noResults: "No results",
+  noResultsDescription: "No permissions match the current search or filters.",
+  noRoles: "No roles",
+  noRolesDescription: "Company roles will appear here when returned by the API.",
+  selectRole: "Select a role first",
+  loadError: "Could not load company permissions",
+  saveError: "Could not save role permissions",
+  saved: "Role permissions saved",
+  exported: "Company permissions exported",
+};
+const companyPermissionsAr: typeof companyPermissionsEn = {
+  title: "\u0635\u0644\u0627\u062d\u064a\u0627\u062a \u0627\u0644\u0634\u0631\u0643\u0629",
+  description: "\u0645\u0631\u0627\u062c\u0639\u0629 \u0648\u062a\u062d\u062f\u064a\u062b \u0635\u0644\u0627\u062d\u064a\u0627\u062a \u0623\u062f\u0648\u0627\u0631 \u0627\u0644\u0634\u0631\u0643\u0629 \u0628\u0646\u0641\u0633 \u0646\u0645\u0637 \u0643\u062a\u0627\u0644\u0648\u062c \u0627\u0644\u0635\u0644\u0627\u062d\u064a\u0627\u062a.",
+  refresh: "\u062a\u062d\u062f\u064a\u062b",
+  exportExcel: "\u062a\u0635\u062f\u064a\u0631 Excel",
+  print: "\u0637\u0628\u0627\u0639\u0629",
+  savePermissions: "\u062d\u0641\u0638 \u0627\u0644\u0635\u0644\u0627\u062d\u064a\u0627\u062a",
+  totalPermissions: "\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0635\u0644\u0627\u062d\u064a\u0627\u062a",
+  grantedPermissions: "\u0635\u0644\u0627\u062d\u064a\u0627\u062a \u0645\u0641\u0639\u0644\u0629",
+  missingPermissions: "\u0635\u0644\u0627\u062d\u064a\u0627\u062a \u063a\u064a\u0631 \u0645\u0641\u0639\u0644\u0629",
+  rolesCount: "\u0627\u0644\u0623\u062f\u0648\u0627\u0631",
+  totalHint: "\u0635\u0644\u0627\u062d\u064a\u0627\u062a \u0627\u0644\u0634\u0631\u0643\u0629 \u0627\u0644\u0645\u062a\u0627\u062d\u0629",
+  grantedHint: "\u0645\u0641\u0639\u0644\u0629 \u0644\u0644\u062f\u0648\u0631 \u0627\u0644\u0645\u062d\u062f\u062f",
+  missingHint: "\u063a\u064a\u0631 \u0645\u0641\u0639\u0644\u0629 \u0644\u0644\u062f\u0648\u0631 \u0627\u0644\u0645\u062d\u062f\u062f",
+  rolesHint: "\u0623\u062f\u0648\u0627\u0631 \u0627\u0644\u0634\u0631\u0643\u0629 \u0645\u0646 API",
+  rolesTitle: "\u0623\u062f\u0648\u0627\u0631 \u0627\u0644\u0634\u0631\u0643\u0629",
+  rolesDescription: "\u0627\u062e\u062a\u0631 \u062f\u0648\u0631\u0627\u064b \u0644\u0645\u0631\u0627\u062c\u0639\u0629 \u0635\u0644\u0627\u062d\u064a\u0627\u062a\u0647 \u0648\u062a\u062d\u062f\u064a\u062b\u0647\u0627.",
+  catalogTitle: "\u0643\u062a\u0627\u0644\u0648\u062c \u0627\u0644\u0635\u0644\u0627\u062d\u064a\u0627\u062a",
+  catalogDescription: "\u0628\u062d\u062b \u0648\u062a\u0635\u0641\u064a\u0629 \u0648\u062a\u062d\u062f\u064a\u062b \u0635\u0644\u0627\u062d\u064a\u0627\u062a \u0627\u0644\u062f\u0648\u0631 \u0627\u0644\u0645\u062d\u062f\u062f.",
+  filtersTitle: "\u0627\u0644\u0628\u062d\u062b \u0648\u0627\u0644\u062a\u0635\u0641\u064a\u0629",
+  searchPlaceholder: "\u0627\u0628\u062d\u062b \u0628\u0643\u0648\u062f \u0627\u0644\u0635\u0644\u0627\u062d\u064a\u0629 \u0623\u0648 \u0627\u0644\u0627\u0633\u0645 \u0623\u0648 \u0627\u0644\u0645\u062c\u0645\u0648\u0639\u0629 \u0623\u0648 \u0627\u0644\u0648\u0635\u0641...",
+  statusFilter: "\u0627\u0644\u062d\u0627\u0644\u0629",
+  sortBy: "\u0627\u0644\u062a\u0631\u062a\u064a\u0628",
+  all: "\u0627\u0644\u0643\u0644",
+  granted: "\u0645\u0641\u0639\u0644\u0629",
+  missing: "\u063a\u064a\u0631 \u0645\u0641\u0639\u0644\u0629",
+  code: "\u0627\u0644\u0643\u0648\u062f",
+  group: "\u0627\u0644\u0645\u062c\u0645\u0648\u0639\u0629",
+  name: "\u0627\u0644\u0627\u0633\u0645",
+  reset: "\u0625\u0639\u0627\u062f\u0629 \u0636\u0628\u0637",
+  permission: "\u0627\u0644\u0635\u0644\u0627\u062d\u064a\u0629",
+  descriptionLabel: "\u0627\u0644\u0648\u0635\u0641",
+  status: "\u0627\u0644\u062d\u0627\u0644\u0629",
+  enabled: "\u0645\u0641\u0639\u0644\u0629",
+  disabled: "\u063a\u064a\u0631 \u0645\u0641\u0639\u0644\u0629",
+  noPermissions: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0635\u0644\u0627\u062d\u064a\u0627\u062a",
+  noPermissionsDescription: "\u0633\u062a\u0638\u0647\u0631 \u0635\u0644\u0627\u062d\u064a\u0627\u062a \u0627\u0644\u0634\u0631\u0643\u0629 \u0647\u0646\u0627 \u0639\u0646\u062f \u062a\u0648\u0641\u0631\u0647\u0627 \u0645\u0646 API.",
+  noResults: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0646\u062a\u0627\u0626\u062c",
+  noResultsDescription: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0635\u0644\u0627\u062d\u064a\u0627\u062a \u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0644\u0628\u062d\u062b \u0623\u0648 \u0627\u0644\u062a\u0635\u0641\u064a\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629.",
+  noRoles: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0623\u062f\u0648\u0627\u0631",
+  noRolesDescription: "\u0633\u062a\u0638\u0647\u0631 \u0623\u062f\u0648\u0627\u0631 \u0627\u0644\u0634\u0631\u0643\u0629 \u0647\u0646\u0627 \u0639\u0646\u062f \u062a\u0648\u0641\u0631\u0647\u0627 \u0645\u0646 API.",
+  selectRole: "\u0627\u062e\u062a\u0631 \u0627\u0644\u062f\u0648\u0631 \u0623\u0648\u0644\u0627\u064b",
+  loadError: "\u062a\u0639\u0630\u0631 \u062a\u062d\u0645\u064a\u0644 \u0635\u0644\u0627\u062d\u064a\u0627\u062a \u0627\u0644\u0634\u0631\u0643\u0629",
+  saveError: "\u062a\u0639\u0630\u0631 \u062d\u0641\u0638 \u0635\u0644\u0627\u062d\u064a\u0627\u062a \u0627\u0644\u062f\u0648\u0631",
+  saved: "\u062a\u0645 \u062d\u0641\u0638 \u0635\u0644\u0627\u062d\u064a\u0627\u062a \u0627\u0644\u062f\u0648\u0631",
+  exported: "\u062a\u0645 \u062a\u0635\u062f\u064a\u0631 \u0635\u0644\u0627\u062d\u064a\u0627\u062a \u0627\u0644\u0634\u0631\u0643\u0629",
+};
+function normalizeCompanyPermissionKeys(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (typeof item === "number") return String(item);
+      const record = asRecord(item);
+      return getText(record, ["key", "code", "codename", "permission", "id"]);
+    })
+    .filter(Boolean);
+}
+function normalizeCompanyPermissionItems(value: unknown): CompanyPermissionItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const row = asRecord(item);
+      const key = getText(row, ["key", "code", "codename", "permission", "id"]);
+      if (!key) return null;
+      return {
+        key,
+        label: getText(row, ["label", "name_ar", "name", "display_name", "title"], key),
+        group: getText(row, ["group", "category", "module", "section"], "general"),
+        description: getText(row, ["description", "help_text", "summary"]),
+        scope: getText(row, ["scope"], "company"),
+      };
+    })
+    .filter((item): item is CompanyPermissionItem => Boolean(item));
+}
+function normalizeCompanyPermissionRoles(value: unknown): CompanyPermissionRole[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const row = asRecord(item);
+      const key = getText(row, ["key", "code", "role", "name", "id"]);
+      if (!key) return null;
+      return {
+        key,
+        label: getText(row, ["label", "display_name", "name", "role"], key),
+        permissions: normalizeCompanyPermissionKeys(
+          row.permissions ?? row.permission_keys ?? row.allowed_permissions ?? row.granted_permissions,
+        ),
+      };
+    })
+    .filter((item): item is CompanyPermissionRole => Boolean(item));
+}
+function normalizeCompanyPermissionsPayload(payload: unknown): {
+  permissions: CompanyPermissionItem[];
+  roles: CompanyPermissionRole[];
+} {
+  const root = asRecord(payload);
+  const data = asRecord(root.data);
+  const source = Object.keys(data).length > 0 ? data : root;
+  const permissionCandidates = [
+    source.permissions,
+    source.available_permissions,
+    source.company_permissions,
+    source.items,
+    data.permissions,
+    data.available_permissions,
+    data.company_permissions,
+  ];
+  const roleCandidates = [
+    source.roles,
+    source.company_roles,
+    source.role_permissions,
+    source.rolePermissions,
+    data.roles,
+    data.company_roles,
+    data.role_permissions,
+  ];
+  let permissions: CompanyPermissionItem[] = [];
+  for (const candidate of permissionCandidates) {
+    permissions = normalizeCompanyPermissionItems(candidate);
+    if (permissions.length > 0) break;
+  }
+  if (permissions.length === 0) {
+    permissions = normalizeCompanyPermissionItems(normalizeList(payload));
+  }
+  let roles: CompanyPermissionRole[] = [];
+  for (const candidate of roleCandidates) {
+    roles = normalizeCompanyPermissionRoles(candidate);
+    if (roles.length > 0) break;
+  }
+  if (roles.length === 0) {
+    const list = normalizeList(payload);
+    const looksLikeRoles = list.some((row) => Array.isArray(row.permissions) || Array.isArray(row.permission_keys));
+    if (looksLikeRoles) {
+      roles = normalizeCompanyPermissionRoles(list);
+    }
+  }
+  return { permissions, roles };
+}
+
+const companyPermissionRoleLabelsAr: Record<string, string> = {
+  OWNER: "\u0645\u0627\u0644\u0643",
+  ADMIN: "\u0645\u062f\u064a\u0631",
+  MANAGER: "\u0645\u0634\u0631\u0641",
+  ACCOUNTANT: "\u0645\u062d\u0627\u0633\u0628",
+  CASHIER: "\u0643\u0627\u0634\u064a\u0631",
+  SALES: "\u0645\u0628\u064a\u0639\u0627\u062a",
+  INVENTORY: "\u0645\u062e\u0632\u0648\u0646",
+  HR: "\u0645\u0648\u0627\u0631\u062f \u0628\u0634\u0631\u064a\u0629",
+  EMPLOYEE: "\u0645\u0648\u0638\u0641",
+  VIEWER: "\u0645\u0634\u0627\u0647\u062f",
+};
+const companyPermissionGroupLabelsAr: Record<string, string> = {
+  general: "\u0639\u0627\u0645",
+  accounting: "\u0627\u0644\u0645\u062d\u0627\u0633\u0628\u0629",
+  branches: "\u0627\u0644\u0641\u0631\u0648\u0639",
+  customers: "\u0627\u0644\u0639\u0645\u0644\u0627\u0621",
+  sales: "\u0627\u0644\u0645\u0628\u064a\u0639\u0627\u062a",
+  purchases: "\u0627\u0644\u0645\u0634\u062a\u0631\u064a\u0627\u062a",
+  inventory: "\u0627\u0644\u0645\u062e\u0632\u0648\u0646",
+  products: "\u0627\u0644\u0645\u0646\u062a\u062c\u0627\u062a",
+  payments: "\u0627\u0644\u0645\u062f\u0641\u0648\u0639\u0627\u062a",
+  hr: "\u0627\u0644\u0645\u0648\u0627\u0631\u062f \u0627\u0644\u0628\u0634\u0631\u064a\u0629",
+  documents: "\u0627\u0644\u0645\u0633\u062a\u0646\u062f\u0627\u062a",
+  whatsapp: "\u0648\u0627\u062a\u0633\u0627\u0628",
+  settings: "\u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0634\u0631\u0643\u0629",
+};
+const companyPermissionEntityLabelsAr: Record<string, string> = {
+  accounting: "\u0627\u0644\u0645\u062d\u0627\u0633\u0628\u0629",
+  "accounting.accounts": "\u0627\u0644\u062d\u0633\u0627\u0628\u0627\u062a",
+  "accounting.journals": "\u0627\u0644\u0642\u064a\u0648\u062f \u0627\u0644\u0645\u062d\u0627\u0633\u0628\u064a\u0629",
+  "accounting.reports": "\u0627\u0644\u062a\u0642\u0627\u0631\u064a\u0631 \u0627\u0644\u0645\u062d\u0627\u0633\u0628\u064a\u0629",
+  activity_profiles: "\u0623\u0646\u0634\u0637\u0629 \u0627\u0644\u0634\u0631\u0643\u0629",
+  branches: "\u0627\u0644\u0641\u0631\u0648\u0639",
+  categories: "\u0627\u0644\u062a\u0635\u0646\u064a\u0641\u0627\u062a",
+  customers: "\u0627\u0644\u0639\u0645\u0644\u0627\u0621",
+  dashboard: "\u0644\u0648\u062d\u0629 \u0627\u0644\u0634\u0631\u0643\u0629",
+  documents: "\u0627\u0644\u0645\u0633\u062a\u0646\u062f\u0627\u062a",
+  "documents.templates": "\u0642\u0648\u0627\u0644\u0628 \u0627\u0644\u0645\u0633\u062a\u0646\u062f\u0627\u062a",
+  hr: "\u0627\u0644\u0645\u0648\u0627\u0631\u062f \u0627\u0644\u0628\u0634\u0631\u064a\u0629",
+  "hr.attendance": "\u0627\u0644\u062d\u0636\u0648\u0631 \u0648\u0627\u0644\u0627\u0646\u0635\u0631\u0627\u0641",
+  "hr.employees": "\u0627\u0644\u0645\u0648\u0638\u0641\u064a\u0646",
+  "hr.leave_balances": "\u0623\u0631\u0635\u062f\u0629 \u0627\u0644\u0625\u062c\u0627\u0632\u0627\u062a",
+  "hr.leave_requests": "\u0637\u0644\u0628\u0627\u062a \u0627\u0644\u0625\u062c\u0627\u0632\u0629",
+  inventory: "\u0627\u0644\u0645\u062e\u0632\u0648\u0646",
+  payments: "\u0627\u0644\u0645\u062f\u0641\u0648\u0639\u0627\u062a",
+  "payments.terminals": "\u0623\u062c\u0647\u0632\u0629 \u0627\u0644\u062f\u0641\u0639",
+  products: "\u0627\u0644\u0645\u0646\u062a\u062c\u0627\u062a",
+  purchases: "\u0627\u0644\u0645\u0634\u062a\u0631\u064a\u0627\u062a",
+  "purchases.bills": "\u0641\u0648\u0627\u062a\u064a\u0631 \u0627\u0644\u0645\u0634\u062a\u0631\u064a\u0627\u062a",
+  "purchases.debit_notes": "\u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062a \u0627\u0644\u0645\u062f\u064a\u0646\u0629",
+  sales: "\u0627\u0644\u0645\u0628\u064a\u0639\u0627\u062a",
+  "sales.invoices": "\u0641\u0648\u0627\u062a\u064a\u0631 \u0627\u0644\u0628\u064a\u0639",
+  "sales.quotations": "\u0639\u0631\u0648\u0636 \u0627\u0644\u0623\u0633\u0639\u0627\u0631",
+  "sales.orders": "\u0623\u0648\u0627\u0645\u0631 \u0627\u0644\u0628\u064a\u0639",
+  "sales.returns": "\u0645\u0631\u062a\u062c\u0639\u0627\u062a \u0627\u0644\u0628\u064a\u0639",
+  "sales.credit_notes": "\u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062a \u0627\u0644\u062f\u0627\u0626\u0646\u0629",
+  pos: "\u0646\u0642\u0627\u0637 \u0627\u0644\u0628\u064a\u0639",
+  reports: "\u0627\u0644\u062a\u0642\u0627\u0631\u064a\u0631",
+  settings: "\u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0634\u0631\u0643\u0629",
+  users: "\u0645\u0633\u062a\u062e\u062f\u0645\u064a \u0627\u0644\u0634\u0631\u0643\u0629",
+  permissions: "\u0627\u0644\u0635\u0644\u0627\u062d\u064a\u0627\u062a",
+  tax: "\u0627\u0644\u0636\u0631\u064a\u0628\u0629",
+  whatsapp: "\u0648\u0627\u062a\u0633\u0627\u0628",
+};
+const companyPermissionActionLabelsAr: Record<string, string> = {
+  create: "\u0625\u0646\u0634\u0627\u0621",
+  update: "\u062a\u0639\u062f\u064a\u0644",
+  view: "\u0639\u0631\u0636",
+  delete: "\u062d\u0630\u0641",
+  cancel: "\u0625\u0644\u063a\u0627\u0621",
+  post: "\u062a\u0631\u062d\u064a\u0644",
+  approve: "\u0627\u0639\u062a\u0645\u0627\u062f",
+  reject: "\u0631\u0641\u0636",
+  reverse: "\u0639\u0643\u0633",
+  activate: "\u062a\u0641\u0639\u064a\u0644",
+  deactivate: "\u062a\u0639\u0637\u064a\u0644",
+  status: "\u0645\u062a\u0627\u0628\u0639\u0629",
+  check_in: "\u062a\u0633\u062c\u064a\u0644 \u062d\u0636\u0648\u0631",
+  check_out: "\u062a\u0633\u062c\u064a\u0644 \u0627\u0646\u0635\u0631\u0627\u0641",
+  submit: "\u0625\u0631\u0633\u0627\u0644",
+  send: "\u0625\u0631\u0633\u0627\u0644",
+  print: "\u0637\u0628\u0627\u0639\u0629",
+  export: "\u062a\u0635\u062f\u064a\u0631",
+  manage: "\u0625\u062f\u0627\u0631\u0629",
+  confirm: "\u062a\u0623\u0643\u064a\u062f",
+  complete: "\u0625\u0643\u0645\u0627\u0644",
+};
+function hasArabicText(value: string): boolean {
+  return /[\u0600-\u06ff]/.test(value);
+}
+function getCompanyPermissionRoleDisplayLabel(role: CompanyPermissionRole, rtl: boolean): string {
+  if (!rtl) return role.label || role.key;
+  return companyPermissionRoleLabelsAr[role.key.toUpperCase()] || role.label || role.key;
+}
+function getCompanyPermissionGroupDisplayLabel(group: string, rtl: boolean): string {
+  if (!rtl) return group || "general";
+  const normalized = (group || "general").toLowerCase();
+  return companyPermissionGroupLabelsAr[normalized] || "\u0639\u0627\u0645";
+}
+function getCompanyPermissionEntityKey(permissionKey: string): string {
+  const parts = permissionKey.replace(/^company\./, "").split(".");
+  const action = parts[parts.length - 1];
+  if (companyPermissionActionLabelsAr[action]) {
+    parts.pop();
+  }
+  return parts.join(".");
+}
+function getCompanyPermissionActionKey(permissionKey: string): string {
+  const parts = permissionKey.split(".");
+  return parts[parts.length - 1] || "view";
+}
+function getCompanyPermissionEntityLabelAr(permissionKey: string): string {
+  const entityKey = getCompanyPermissionEntityKey(permissionKey);
+  if (companyPermissionEntityLabelsAr[entityKey]) {
+    return companyPermissionEntityLabelsAr[entityKey];
+  }
+  const parts = entityKey.split(".");
+  while (parts.length > 0) {
+    const candidate = parts.join(".");
+    if (companyPermissionEntityLabelsAr[candidate]) {
+      return companyPermissionEntityLabelsAr[candidate];
+    }
+    parts.shift();
+  }
+  return "\u0627\u0644\u0635\u0644\u0627\u062d\u064a\u0629";
+}
+function getCompanyPermissionDisplayLabel(permission: CompanyPermissionItem, rtl: boolean): string {
+  if (!rtl) return permission.label || permission.key;
+  if (permission.label && hasArabicText(permission.label) && !permission.label.includes("company.")) {
+    return permission.label;
+  }
+  const actionKey = getCompanyPermissionActionKey(permission.key);
+  const actionLabel = companyPermissionActionLabelsAr[actionKey] || "\u0625\u062f\u0627\u0631\u0629";
+  const entityLabel = getCompanyPermissionEntityLabelAr(permission.key);
+  return `${actionLabel} ${entityLabel}`;
+}
+function getCompanyPermissionDescriptionDisplay(permission: CompanyPermissionItem, rtl: boolean): string {
+  if (!rtl) return permission.description;
+  if (permission.description && hasArabicText(permission.description)) {
+    return permission.description;
+  }
+  return `\u064a\u0633\u0645\u062d \u0628\u0640 ${getCompanyPermissionDisplayLabel(permission, true)} \u062f\u0627\u062e\u0644 \u0627\u0644\u0634\u0631\u0643\u0629.`;
+}
+function expandCompanyRolePermissionKeys(
+  rolePermissions: string[],
+  availablePermissions: CompanyPermissionItem[],
+): string[] {
+  const hasWildcard = rolePermissions.some((key) => ["*", "all", "__all__", "ALL"].includes(String(key).toLowerCase()));
+  return hasWildcard ? availablePermissions.map((permission) => permission.key) : rolePermissions;
+}
+function buildCompanyPermissionsExcel(
+  rows: CompanyPermissionItem[],
+  selectedPermissions: string[],
+  t: typeof companyPermissionsEn,
+  rtl = false,
+): string {
+  const headers = [t.code, t.group, t.name, t.descriptionLabel, t.status];
+  const body = rows.map((permission) => [
+    permission.key,
+    getCompanyPermissionGroupDisplayLabel(permission.group, rtl),
+    getCompanyPermissionDisplayLabel(permission, rtl),
+    getCompanyPermissionDescriptionDisplay(permission, rtl),
+    selectedPermissions.includes(permission.key) ? t.enabled : t.disabled,
+  ]);
+  return [headers, ...body]
+    .map((line) => line.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join("\t"))
+    .join("\n");
+}
 export function CompanyPermissionsPage() {
   const locale = useLocale();
   const rtl = locale === "ar";
-  const roles = [
-    "OWNER",
-    "ADMIN",
-    "MANAGER",
-    "ACCOUNTANT",
-    "CASHIER",
-    "SALES",
-    "INVENTORY",
-    "HR",
-    "EMPLOYEE",
-    "VIEWER",
-  ];
+  const t = rtl ? companyPermissionsAr : companyPermissionsEn;
+  const [permissions, setPermissions] = useState<CompanyPermissionItem[]>([]);
+  const [roles, setRoles] = useState<CompanyPermissionRole[]>([]);
+  const [selectedRole, setSelectedRole] = useState("");
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
+  const [permissionFilter, setPermissionFilter] = useState<CompanyPermissionFilter>("all");
+  const [sortKey, setSortKey] = useState<CompanyPermissionSortKey>("code");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const groups = useMemo(() => {
+    return Array.from(new Set(permissions.map((permission) => permission.group))).filter(Boolean).sort();
+  }, [permissions]);
+  const selectedRoleRecord = useMemo(() => {
+    return roles.find((role) => role.key === selectedRole);
+  }, [roles, selectedRole]);
+  const permissionStats = useMemo(() => {
+    const granted = permissions.filter((permission) => selectedPermissions.includes(permission.key)).length;
+    return {
+      total: permissions.length,
+      granted,
+      missing: Math.max(permissions.length - granted, 0),
+      roles: roles.length,
+    };
+  }, [permissions, roles.length, selectedPermissions]);
+  const filteredPermissions = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return permissions
+      .filter((permission) => {
+        const granted = selectedPermissions.includes(permission.key);
+        if (permissionFilter === "granted" && !granted) return false;
+        if (permissionFilter === "missing" && granted) return false;
+        const haystack = [
+          permission.key,
+          permission.label,
+          getCompanyPermissionDisplayLabel(permission, rtl),
+          permission.group,
+          getCompanyPermissionGroupDisplayLabel(permission.group, rtl),
+          permission.description,
+          permission.scope,
+        ]
+          .join(" ")
+          .toLowerCase();
+        return !normalizedQuery || haystack.includes(normalizedQuery);
+      })
+      .sort((a, b) => {
+        if (sortKey === "group") return a.group.localeCompare(b.group, "en");
+        if (sortKey === "name") return a.label.localeCompare(b.label, "en");
+        return a.key.localeCompare(b.key, "en");
+      });
+  }, [permissionFilter, permissions, query, rtl, selectedPermissions, sortKey]);
+  const groupedPermissions = useMemo(() => {
+    return filteredPermissions.reduce<Record<string, CompanyPermissionItem[]>>((acc, permission) => {
+      acc[permission.group] = [...(acc[permission.group] ?? []), permission];
+      return acc;
+    }, {});
+  }, [filteredPermissions]);
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const payload = await apiRequest<unknown>("/api/company/permissions/");
+      const normalized = normalizeCompanyPermissionsPayload(payload);
+      setPermissions(normalized.permissions);
+      setRoles(normalized.roles);
+      const currentSelectedRole = normalized.roles.find((role) => role.key === selectedRole) ?? normalized.roles[0];
+      if (currentSelectedRole) {
+        setSelectedRole(currentSelectedRole.key);
+        setSelectedPermissions(expandCompanyRolePermissionKeys(currentSelectedRole.permissions, normalized.permissions));
+      } else {
+        setSelectedRole("");
+        setSelectedPermissions([]);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t.loadError);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedRole, t.loadError]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const changeRole = (roleKey: string) => {
+    const role = roles.find((item) => item.key === roleKey);
+    setSelectedRole(roleKey);
+    setSelectedPermissions(expandCompanyRolePermissionKeys(role?.permissions ?? [], permissions));
+  };
+  const resetFilters = () => {
+    setQuery("");
+    setPermissionFilter("all");
+    setSortKey("code");
+  };
+  const togglePermission = (permissionKey: string) => {
+    setSelectedPermissions((current) =>
+      current.includes(permissionKey)
+        ? current.filter((key) => key !== permissionKey)
+        : [...current, permissionKey],
+    );
+  };
+  const save = async () => {
+    if (!selectedRole) {
+      toast.error(t.selectRole);
+      return;
+    }
+    try {
+      setSaving(true);
+      await apiRequest("/api/company/permissions/", {
+        method: "PATCH",
+        body: JSON.stringify({
+          role: selectedRole,
+          permissions: selectedPermissions,
+        }),
+      });
+      toast.success(t.saved);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t.saveError);
+    } finally {
+      setSaving(false);
+    }
+  };
+  const exportExcel = () => {
+    const content = buildCompanyPermissionsExcel(filteredPermissions, selectedPermissions, t, rtl);
+    const blob = new Blob(["\ufeff", content], {
+      type: "application/vnd.ms-excel;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `company-permissions-${formatEnglishDateTime(new Date()).replace(/[: ]/g, "-")}.xls`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    toast.success(t.exported);
+  };
+  const rolePermissionCount = (role: CompanyPermissionRole) => {
+    return expandCompanyRolePermissionKeys(role.permissions, permissions).length;
+  };
   return (
     <PageShell
-      title={rtl ? "\u0635\u0644\u0627\u062d\u064a\u0627\u062a \u0627\u0644\u0634\u0631\u0643\u0629" : "Company permissions"}
-      description={
-        rtl
-          ? "\u0645\u0631\u0627\u062c\u0639\u0629 \u0623\u062f\u0648\u0627\u0631 \u0648\u0635\u0644\u0627\u062d\u064a\u0627\u062a \u0645\u0633\u062a\u062e\u062f\u0645\u064a \u0627\u0644\u0634\u0631\u0643\u0629."
-          : "Review company user roles and permissions."
+      title={t.title}
+      description={t.description}
+      icon={LockKeyhole}
+      actions={
+        <>
+          <SecondaryButton onClick={() => void load()} disabled={loading}>
+            <RefreshCcw className="h-4 w-4" />
+            {t.refresh}
+          </SecondaryButton>
+          <SecondaryButton onClick={exportExcel} disabled={filteredPermissions.length === 0}>
+            <FileText className="h-4 w-4" />
+            {t.exportExcel}
+          </SecondaryButton>
+          <SecondaryButton onClick={() => window.print()}>
+            <FileText className="h-4 w-4" />
+            {t.print}
+          </SecondaryButton>
+          <PrimaryButton onClick={() => void save()} disabled={saving || loading || !selectedRole}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+            {t.savePermissions}
+          </PrimaryButton>
+        </>
       }
-      icon={ShieldCheck}
     >
-      <ProfileSectionCard
-        title={rtl ? "\u0623\u062f\u0648\u0627\u0631 \u0627\u0644\u0634\u0631\u0643\u0629" : "Company roles"}
-        description={
-          rtl
-            ? "\u0639\u0631\u0636 \u0623\u062f\u0648\u0627\u0631 \u0627\u0644\u0634\u0631\u0643\u0629 \u0627\u0644\u0645\u0639\u062a\u0645\u062f\u0629. \u0633\u0646\u0631\u0627\u062c\u0639 \u062a\u0641\u0627\u0635\u064a\u0644 \u0647\u0630\u0647 \u0627\u0644\u0635\u0641\u062d\u0629 \u0641\u064a \u062e\u0637\u0648\u062a\u0647\u0627."
-            : "Shows approved company roles. This page will be reviewed in its own step."
-        }
-        icon={ShieldCheck}
-      >
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          {roles.map((role) => (
-            <div key={role} className="rounded-2xl border bg-card p-4 shadow-sm">
-              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                <ShieldCheck className="h-5 w-5" />
+      {loading ? (
+        <LoadingBlock />
+      ) : (
+        <div className="space-y-6">
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <StatCard label={t.totalPermissions} value={permissionStats.total} hint={t.totalHint} icon={ShieldCheck} />
+            <StatCard label={t.grantedPermissions} value={permissionStats.granted} hint={t.grantedHint} icon={CheckCircle2} />
+            <StatCard label={t.missingPermissions} value={permissionStats.missing} hint={t.missingHint} icon={XCircle} />
+            <StatCard label={t.rolesCount} value={permissionStats.roles} hint={t.rolesHint} icon={UsersRound} />
+          </section>
+          <ProfileSectionCard title={t.rolesTitle} description={t.rolesDescription} icon={ShieldCheck}>
+            {roles.length === 0 ? (
+              <EmptyState title={t.noRoles} description={t.noRolesDescription} />
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                {roles.map((role) => {
+                  const active = role.key === selectedRole;
+                  const count = rolePermissionCount(role);
+                  return (
+                    <button
+                      key={role.key}
+                      type="button"
+                      onClick={() => changeRole(role.key)}
+                      className={`rounded-2xl border p-4 text-start transition ${
+                        active
+                          ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                          : "border-border bg-card text-foreground hover:bg-muted/40"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold">{getCompanyPermissionRoleDisplayLabel(role, rtl)}</p>
+                          <p className={`mt-1 text-xs ${active ? "text-primary-foreground/75" : "text-muted-foreground"}`}>
+                            {`${formatInteger(count)} / ${formatInteger(permissions.length)}`}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className={active ? "border-white/30 text-primary-foreground" : "bg-background"}>
+                          {rtl ? getCompanyPermissionRoleDisplayLabel(role, rtl) : role.key}
+                        </Badge>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
-              <p className="text-sm font-bold text-foreground">{role}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {rtl ? "\u062f\u0648\u0631 \u0634\u0631\u0643\u0629" : "Company role"}
-              </p>
+            )}
+          </ProfileSectionCard>
+          <ProfileSectionCard title={t.filtersTitle} description={selectedRoleRecord ? getCompanyPermissionRoleDisplayLabel(selectedRoleRecord, rtl) : t.catalogDescription} icon={Search}>
+            <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px_auto]">
+              <SearchBox value={query} onChange={setQuery} placeholder={t.searchPlaceholder} />
+              <SelectInput
+                label={t.statusFilter}
+                value={permissionFilter}
+                onChange={(value) => setPermissionFilter(value as CompanyPermissionFilter)}
+                options={[
+                  { value: "all", label: t.all },
+                  { value: "granted", label: t.granted },
+                  { value: "missing", label: t.missing },
+                ]}
+              />
+              <SelectInput
+                label={t.sortBy}
+                value={sortKey}
+                onChange={(value) => setSortKey(value as CompanyPermissionSortKey)}
+                options={[
+                  { value: "code", label: t.code },
+                  { value: "group", label: t.group },
+                  { value: "name", label: t.name },
+                ]}
+              />
+              <div className="flex items-end">
+                <SecondaryButton onClick={resetFilters}>
+                  <RefreshCcw className="h-4 w-4" />
+                  {t.reset}
+                </SecondaryButton>
+              </div>
             </div>
-          ))}
+          </ProfileSectionCard>
+          <ProfileSectionCard
+            title={t.catalogTitle}
+            description={`${t.catalogDescription} ? ${formatInteger(filteredPermissions.length)} / ${formatInteger(permissions.length)} ? ${formatInteger(groups.length)} ${t.group}`}
+            icon={LockKeyhole}
+          >
+            {permissions.length === 0 ? (
+              <EmptyState title={t.noPermissions} description={t.noPermissionsDescription} />
+            ) : filteredPermissions.length === 0 ? (
+              <EmptyState title={t.noResults} description={t.noResultsDescription} />
+            ) : (
+              <div className="space-y-4">
+                {Object.entries(groupedPermissions).map(([group, items]) => (
+                  <div key={group} className="overflow-hidden rounded-2xl border bg-card">
+                    <div className="flex items-center justify-between gap-3 border-b bg-muted/30 px-4 py-3">
+                      <div>
+                        <p className="text-sm font-bold text-foreground">{getCompanyPermissionGroupDisplayLabel(group, rtl)}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{formatInteger(items.length)} {t.permission}</p>
+                      </div>
+                      <Badge variant="outline" className="rounded-full bg-background">
+                        {formatInteger(items.filter((item) => selectedPermissions.includes(item.key)).length)} / {formatInteger(items.length)}
+                      </Badge>
+                    </div>
+                    <div className="divide-y">
+                      {items.map((permission) => {
+                        const granted = selectedPermissions.includes(permission.key);
+                        return (
+                          <label key={permission.key} className="flex cursor-pointer items-start gap-3 px-4 py-3 transition hover:bg-muted/30">
+                            <input
+                              type="checkbox"
+                              checked={granted}
+                              onChange={() => togglePermission(permission.key)}
+                              className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="flex flex-wrap items-center gap-2">
+                                <span className="font-semibold text-foreground">{getCompanyPermissionDisplayLabel(permission, rtl)}</span>
+                                <Badge
+                                  variant="outline"
+                                  className="rounded-full bg-background px-2 py-0.5 text-[11px]"
+                                  title={permission.key}
+                                >
+                                  {rtl ? getCompanyPermissionGroupDisplayLabel(permission.group, rtl) : permission.key}
+                                </Badge>
+                              </span>
+                              {permission.description ? (
+                                <span className="mt-1 block text-xs leading-5 text-muted-foreground">{permission.description}</span>
+                              ) : null}
+                            </span>
+                            <StatusPill active={granted} />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ProfileSectionCard>
         </div>
-      </ProfileSectionCard>
+      )}
     </PageShell>
   );
 }
-
 type TaxSettingsForm = {
   is_vat_registered: boolean;
   tax_number: string;
