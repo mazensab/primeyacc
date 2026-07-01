@@ -1064,14 +1064,20 @@ export function CompanyProfilePage() {
       )}
     </PageShell>
   );
-}type GeneralSettingsForm = {
+}
+
+type GeneralSettingsForm = {
   default_currency: string;
   language: string;
   timezone: string;
   fiscal_year_start: string;
   invoice_prefix: string;
+  quotation_prefix: string;
+  purchase_prefix: string;
+  date_format: string;
   enable_notifications: boolean;
   allow_negative_stock: boolean;
+  auto_post_accounting: boolean;
   print_footer: string;
 };
 const emptyGeneralSettings: GeneralSettingsForm = {
@@ -1079,14 +1085,125 @@ const emptyGeneralSettings: GeneralSettingsForm = {
   language: "ar",
   timezone: "Asia/Riyadh",
   fiscal_year_start: "",
-  invoice_prefix: "",
+  invoice_prefix: "INV",
+  quotation_prefix: "QUO",
+  purchase_prefix: "PUR",
+  date_format: "YYYY-MM-DD",
   enable_notifications: true,
   allow_negative_stock: false,
+  auto_post_accounting: true,
   print_footer: "",
+};
+function getGeneralSettingsRecords(payload: unknown): ApiRecord[] {
+  const root = asRecord(payload);
+  const data = asRecord(root.data);
+  const candidates = [
+    getNestedRecord(root, ["settings", "company_settings", "general_settings", "generalSettings"]),
+    getNestedRecord(data, ["settings", "company_settings", "general_settings", "generalSettings"]),
+    data,
+    root,
+  ];
+  return candidates.filter((record) => Object.keys(record).length > 0);
+}
+function getFirstBool(records: ApiRecord[], keys: string[], fallback = false): boolean {
+  for (const record of records) {
+    for (const key of keys) {
+      const value = record[key];
+      if (typeof value === "boolean") return value;
+      if (typeof value === "number") return value === 1;
+      if (typeof value === "string") {
+        const normalized = value.toLowerCase();
+        if (["true", "1", "yes", "enabled", "active"].includes(normalized)) return true;
+        if (["false", "0", "no", "disabled", "inactive"].includes(normalized)) return false;
+      }
+    }
+  }
+  return fallback;
+}
+const generalSettingsAr = {
+  title: "\u0627\u0644\u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0639\u0627\u0645\u0629",
+  description: "\u0625\u062f\u0627\u0631\u0629 \u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u062a\u0634\u063a\u064a\u0644 \u0627\u0644\u0627\u0641\u062a\u0631\u0627\u0636\u064a\u0629 \u0644\u0644\u0634\u0631\u0643\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629.",
+  save: "\u062d\u0641\u0638",
+  currency: "\u0627\u0644\u0639\u0645\u0644\u0629",
+  currencyHint: "\u0627\u0644\u0639\u0645\u0644\u0629 \u0627\u0644\u0627\u0641\u062a\u0631\u0627\u0636\u064a\u0629 \u0644\u0644\u0634\u0631\u0643\u0629",
+  language: "\u0627\u0644\u0644\u063a\u0629",
+  languageHint: "\u0644\u063a\u0629 \u0627\u0644\u062a\u0634\u063a\u064a\u0644 \u0627\u0644\u0627\u0641\u062a\u0631\u0627\u0636\u064a\u0629",
+  timezone: "\u0627\u0644\u0645\u0646\u0637\u0642\u0629 \u0627\u0644\u0632\u0645\u0646\u064a\u0629",
+  timezoneHint: "\u062a\u0633\u062a\u062e\u062f\u0645 \u0641\u064a \u0627\u0644\u0633\u062c\u0644\u0627\u062a \u0648\u0627\u0644\u062a\u0642\u0627\u0631\u064a\u0631",
+  operatingTitle: "\u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u062a\u0634\u063a\u064a\u0644",
+  operatingDescription: "\u0627\u0644\u0644\u063a\u0629\u060c \u0627\u0644\u0639\u0645\u0644\u0629\u060c \u0627\u0644\u0645\u0646\u0637\u0642\u0629 \u0627\u0644\u0632\u0645\u0646\u064a\u0629\u060c \u0648\u0628\u062f\u0627\u064a\u0629 \u0627\u0644\u0633\u0646\u0629 \u0627\u0644\u0645\u0627\u0644\u064a\u0629.",
+  defaultCurrency: "\u0627\u0644\u0639\u0645\u0644\u0629 \u0627\u0644\u0627\u0641\u062a\u0631\u0627\u0636\u064a\u0629",
+  defaultLanguage: "\u0627\u0644\u0644\u063a\u0629 \u0627\u0644\u0627\u0641\u062a\u0631\u0627\u0636\u064a\u0629",
+  arabic: "\u0627\u0644\u0639\u0631\u0628\u064a\u0629",
+  english: "\u0627\u0644\u0625\u0646\u062c\u0644\u064a\u0632\u064a\u0629",
+  fiscalYearStart: "\u0628\u062f\u0627\u064a\u0629 \u0627\u0644\u0633\u0646\u0629 \u0627\u0644\u0645\u0627\u0644\u064a\u0629",
+  dateFormat: "\u0635\u064a\u063a\u0629 \u0627\u0644\u062a\u0627\u0631\u064a\u062e",
+  controlsTitle: "\u0636\u0648\u0627\u0628\u0637 \u0627\u0644\u062a\u0634\u063a\u064a\u0644",
+  controlsDescription: "\u062e\u064a\u0627\u0631\u0627\u062a \u062a\u0624\u062b\u0631 \u0639\u0644\u0649 \u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062a\u060c \u0627\u0644\u0645\u062e\u0632\u0648\u0646\u060c \u0648\u0627\u0644\u062a\u0631\u062d\u064a\u0644.",
+  enableNotifications: "\u062a\u0641\u0639\u064a\u0644 \u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062a",
+  enableNotificationsDescription: "\u0625\u0631\u0633\u0627\u0644 \u062a\u0646\u0628\u064a\u0647\u0627\u062a \u0627\u0644\u0634\u0631\u0643\u0629 \u062d\u0633\u0628 \u0627\u0644\u0623\u062d\u062f\u0627\u062b.",
+  allowNegativeStock: "\u0627\u0644\u0633\u0645\u0627\u062d \u0628\u0627\u0644\u0645\u062e\u0632\u0648\u0646 \u0627\u0644\u0633\u0627\u0644\u0628",
+  allowNegativeStockDescription: "\u064a\u0641\u0636\u0644 \u062a\u0639\u0637\u064a\u0644\u0647 \u0625\u0644\u0627 \u0639\u0646\u062f \u0627\u0644\u062d\u0627\u062c\u0629 \u0627\u0644\u062a\u0634\u063a\u064a\u0644\u064a\u0629.",
+  autoPostAccounting: "\u0627\u0644\u062a\u0631\u062d\u064a\u0644 \u0627\u0644\u0645\u062d\u0627\u0633\u0628\u064a \u0627\u0644\u062a\u0644\u0642\u0627\u0626\u064a",
+  autoPostAccountingDescription: "\u062a\u0631\u062d\u064a\u0644 \u0627\u0644\u0642\u064a\u0648\u062f \u0639\u0646\u062f \u0627\u0643\u062a\u0645\u0627\u0644 \u0627\u0644\u0639\u0645\u0644\u064a\u0627\u062a.",
+  documentsTitle: "\u0627\u0644\u0645\u0633\u062a\u0646\u062f\u0627\u062a \u0648\u0627\u0644\u0637\u0628\u0627\u0639\u0629",
+  documentsDescription: "\u0628\u0627\u062f\u0626\u0627\u062a \u0627\u0644\u0641\u0648\u0627\u062a\u064a\u0631 \u0648\u0627\u0644\u0639\u0631\u0648\u0636 \u0648\u0627\u0644\u0645\u0634\u062a\u0631\u064a\u0627\u062a \u0648\u062a\u0630\u064a\u064a\u0644 \u0627\u0644\u0637\u0628\u0627\u0639\u0629.",
+  invoicePrefix: "\u0628\u0627\u062f\u0626\u0629 \u0641\u0648\u0627\u062a\u064a\u0631 \u0627\u0644\u0628\u064a\u0639",
+  quotationPrefix: "\u0628\u0627\u062f\u0626\u0629 \u0639\u0631\u0648\u0636 \u0627\u0644\u0623\u0633\u0639\u0627\u0631",
+  purchasePrefix: "\u0628\u0627\u062f\u0626\u0629 \u0627\u0644\u0645\u0634\u062a\u0631\u064a\u0627\u062a",
+  printFooter: "\u062a\u0630\u064a\u064a\u0644 \u0627\u0644\u0637\u0628\u0627\u0639\u0629",
+  printFooterPlaceholder: "\u0645\u062b\u0627\u0644: \u0634\u0643\u0631\u0627\u064b \u0644\u062a\u0639\u0627\u0645\u0644\u0643\u0645 \u0645\u0639\u0646\u0627",
+  documentPreview: "\u0645\u0639\u0627\u064a\u0646\u0629 \u0627\u0644\u0645\u0633\u062a\u0646\u062f\u0627\u062a",
+  currencyRequired: "\u0627\u0644\u0639\u0645\u0644\u0629 \u0627\u0644\u0627\u0641\u062a\u0631\u0627\u0636\u064a\u0629 \u0645\u0637\u0644\u0648\u0628\u0629",
+  timezoneRequired: "\u0627\u0644\u0645\u0646\u0637\u0642\u0629 \u0627\u0644\u0632\u0645\u0646\u064a\u0629 \u0645\u0637\u0644\u0648\u0628\u0629",
+  loadError: "\u062a\u0639\u0630\u0631 \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0639\u0627\u0645\u0629",
+  saveError: "\u062a\u0639\u0630\u0631 \u062d\u0641\u0638 \u0627\u0644\u0625\u0639\u062f\u0627\u062f\u0627\u062a",
+  saved: "\u062a\u0645 \u062d\u0641\u0638 \u0627\u0644\u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0639\u0627\u0645\u0629",
+};
+const generalSettingsEn = {
+  title: "General settings",
+  description: "Manage default operating settings for the current company.",
+  save: "Save",
+  currency: "Currency",
+  currencyHint: "Default company currency",
+  language: "Language",
+  languageHint: "Default operating language",
+  timezone: "Timezone",
+  timezoneHint: "Used in logs and reports",
+  operatingTitle: "Operating settings",
+  operatingDescription: "Language, currency, timezone, and fiscal year start.",
+  defaultCurrency: "Default currency",
+  defaultLanguage: "Default language",
+  arabic: "Arabic",
+  english: "English",
+  fiscalYearStart: "Fiscal year start",
+  dateFormat: "Date format",
+  controlsTitle: "Operational controls",
+  controlsDescription: "Controls for notifications, inventory, and posting.",
+  enableNotifications: "Enable notifications",
+  enableNotificationsDescription: "Send company alerts based on events.",
+  allowNegativeStock: "Allow negative stock",
+  allowNegativeStockDescription: "Usually kept disabled unless operationally required.",
+  autoPostAccounting: "Automatic accounting posting",
+  autoPostAccountingDescription: "Post entries when operations are completed.",
+  documentsTitle: "Documents and printing",
+  documentsDescription: "Prefixes for invoices, quotations, purchases, and print footer.",
+  invoicePrefix: "Sales invoice prefix",
+  quotationPrefix: "Quotation prefix",
+  purchasePrefix: "Purchase prefix",
+  printFooter: "Print footer",
+  printFooterPlaceholder: "Example: Thank you for your business",
+  documentPreview: "Document preview",
+  currencyRequired: "Default currency is required",
+  timezoneRequired: "Timezone is required",
+  loadError: "Could not load general settings",
+  saveError: "Could not save settings",
+  saved: "General settings saved",
 };
 export function GeneralSettingsPage() {
   const locale = useLocale();
   const rtl = locale === "ar";
+  const t = rtl ? generalSettingsAr : generalSettingsEn;
   const [form, setForm] = useState<GeneralSettingsForm>(emptyGeneralSettings);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1096,83 +1213,171 @@ export function GeneralSettingsPage() {
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const payload = asRecord(await apiRequest<unknown>("/api/company/settings/"));
+      const payload = await apiRequest<unknown>("/api/company/settings/");
+      const records = getGeneralSettingsRecords(payload);
       setForm({
-        default_currency: getText(payload, ["default_currency", "currency"], "SAR"),
-        language: getText(payload, ["language", "default_language"], "ar"),
-        timezone: getText(payload, ["timezone"], "Asia/Riyadh"),
-        fiscal_year_start: getText(payload, ["fiscal_year_start"]),
-        invoice_prefix: getText(payload, ["invoice_prefix"]),
-        enable_notifications: getBool(payload, ["enable_notifications", "notifications_enabled"], true),
-        allow_negative_stock: getBool(payload, ["allow_negative_stock"], false),
-        print_footer: getText(payload, ["print_footer", "receipt_footer"]),
+        default_currency: getFirstText(records, ["default_currency", "currency", "base_currency"], "SAR"),
+        language: getFirstText(records, ["language", "default_language", "locale"], "ar"),
+        timezone: getFirstText(records, ["timezone", "time_zone"], "Asia/Riyadh"),
+        fiscal_year_start: getFirstText(records, ["fiscal_year_start", "financial_year_start", "year_start"]),
+        invoice_prefix: getFirstText(records, ["invoice_prefix", "sales_invoice_prefix"], "INV"),
+        quotation_prefix: getFirstText(records, ["quotation_prefix", "quote_prefix"], "QUO"),
+        purchase_prefix: getFirstText(records, ["purchase_prefix", "purchase_bill_prefix"], "PUR"),
+        date_format: getFirstText(records, ["date_format"], "YYYY-MM-DD"),
+        enable_notifications: getFirstBool(records, ["enable_notifications", "notifications_enabled"], true),
+        allow_negative_stock: getFirstBool(records, ["allow_negative_stock", "negative_stock_allowed"], false),
+        auto_post_accounting: getFirstBool(records, ["auto_post_accounting", "automatic_posting_enabled"], true),
+        print_footer: getFirstText(records, ["print_footer", "receipt_footer", "document_footer"]),
       });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : rtl ? "تعذر تحميل الإعدادات العامة" : "Could not load settings");
+      toast.error(error instanceof Error ? error.message : t.loadError);
     } finally {
       setLoading(false);
     }
-  }, [rtl]);
+  }, [t.loadError]);
   useEffect(() => {
     void load();
   }, [load]);
   const save = async () => {
+    if (!form.default_currency.trim()) {
+      toast.error(t.currencyRequired);
+      return;
+    }
+    if (!form.timezone.trim()) {
+      toast.error(t.timezoneRequired);
+      return;
+    }
+    const payload = {
+      default_currency: form.default_currency.trim(),
+      currency: form.default_currency.trim(),
+      language: form.language,
+      default_language: form.language,
+      timezone: form.timezone.trim(),
+      fiscal_year_start: form.fiscal_year_start,
+      invoice_prefix: form.invoice_prefix.trim(),
+      quotation_prefix: form.quotation_prefix.trim(),
+      purchase_prefix: form.purchase_prefix.trim(),
+      date_format: form.date_format.trim(),
+      enable_notifications: form.enable_notifications,
+      allow_negative_stock: form.allow_negative_stock,
+      auto_post_accounting: form.auto_post_accounting,
+      print_footer: form.print_footer.trim(),
+    };
     try {
       setSaving(true);
       await apiRequest("/api/company/settings/", {
         method: "PATCH",
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
-      toast.success(rtl ? "تم حفظ الإعدادات العامة" : "General settings saved");
+      toast.success(t.saved);
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : rtl ? "تعذر الحفظ" : "Could not save");
+      toast.error(error instanceof Error ? error.message : t.saveError);
     } finally {
       setSaving(false);
     }
   };
   return (
     <PageShell
-      title={rtl ? "الإعدادات العامة" : "General settings"}
-      description={rtl ? "إعدادات التشغيل الافتراضية للشركة الحالية." : "Default operating settings for the current company."}
+      title={t.title}
+      description={t.description}
       icon={SlidersHorizontal}
       actions={
         <PrimaryButton onClick={() => void save()} disabled={saving}>
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          {rtl ? "حفظ" : "Save"}
+          {t.save}
         </PrimaryButton>
       }
     >
       {loading ? (
         <LoadingBlock />
       ) : (
-        <Card title={rtl ? "تفضيلات التشغيل" : "Operating preferences"} icon={Settings2}>
-          <div className="grid gap-4 md:grid-cols-2">
-            <SelectInput
-              label={rtl ? "العملة الافتراضية" : "Default currency"}
-              value={form.default_currency}
-              onChange={(value) => setField("default_currency", value)}
-              options={[{ value: "SAR", label: "SAR" }]}
-            />
-            <SelectInput
-              label={rtl ? "اللغة الافتراضية" : "Default language"}
-              value={form.language}
-              onChange={(value) => setField("language", value)}
-              options={[
-                { value: "ar", label: rtl ? "العربية" : "Arabic" },
-                { value: "en", label: rtl ? "الإنجليزية" : "English" },
-              ]}
-            />
-            <TextInput label={rtl ? "المنطقة الزمنية" : "Timezone"} value={form.timezone} onChange={(value) => setField("timezone", value)} />
-            <TextInput label={rtl ? "بداية السنة المالية" : "Fiscal year start"} value={form.fiscal_year_start} onChange={(value) => setField("fiscal_year_start", value)} type="date" />
-            <TextInput label={rtl ? "بادئة الفواتير" : "Invoice prefix"} value={form.invoice_prefix} onChange={(value) => setField("invoice_prefix", value)} />
-            <div className="grid gap-4">
-              <ToggleInput label={rtl ? "تفعيل الإشعارات" : "Enable notifications"} checked={form.enable_notifications} onChange={(value) => setField("enable_notifications", value)} />
-              <ToggleInput label={rtl ? "السماح بالمخزون السالب" : "Allow negative stock"} checked={form.allow_negative_stock} onChange={(value) => setField("allow_negative_stock", value)} />
+        <div className="space-y-6">
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <StatCard label={t.currency} value={form.default_currency || "SAR"} hint={t.currencyHint} icon={CreditCard} />
+            <StatCard label={t.language} value={form.language === "en" ? "English" : "Arabic"} hint={t.languageHint} icon={SlidersHorizontal} />
+            <StatCard label={t.timezone} value={form.timezone || "Asia/Riyadh"} hint={t.timezoneHint} icon={Settings2} />
+          </section>
+          <section className="grid gap-6 xl:grid-cols-[1fr_360px]">
+            <ProfileSectionCard title={t.operatingTitle} description={t.operatingDescription} icon={SlidersHorizontal}>
+              <div className="grid gap-4 md:grid-cols-2">
+                <SelectInput
+                  label={t.defaultCurrency}
+                  value={form.default_currency}
+                  onChange={(value) => setField("default_currency", value)}
+                  options={[{ value: "SAR", label: "SAR" }]}
+                />
+                <SelectInput
+                  label={t.defaultLanguage}
+                  value={form.language}
+                  onChange={(value) => setField("language", value)}
+                  options={[
+                    { value: "ar", label: t.arabic },
+                    { value: "en", label: t.english },
+                  ]}
+                />
+                <TextInput label={t.timezone} value={form.timezone} onChange={(value) => setField("timezone", value)} />
+                <TextInput
+                  label={t.fiscalYearStart}
+                  value={form.fiscal_year_start}
+                  onChange={(value) => setField("fiscal_year_start", value)}
+                  type="date"
+                />
+                <SelectInput
+                  label={t.dateFormat}
+                  value={form.date_format}
+                  onChange={(value) => setField("date_format", value)}
+                  options={[
+                    { value: "YYYY-MM-DD", label: "YYYY-MM-DD" },
+                    { value: "DD/MM/YYYY", label: "DD/MM/YYYY" },
+                    { value: "MM/DD/YYYY", label: "MM/DD/YYYY" },
+                  ]}
+                />
+              </div>
+            </ProfileSectionCard>
+            <ProfileSectionCard title={t.controlsTitle} description={t.controlsDescription} icon={ShieldCheck}>
+              <div className="space-y-4">
+                <ToggleInput
+                  label={t.enableNotifications}
+                  description={t.enableNotificationsDescription}
+                  checked={form.enable_notifications}
+                  onChange={(value) => setField("enable_notifications", value)}
+                />
+                <ToggleInput
+                  label={t.allowNegativeStock}
+                  description={t.allowNegativeStockDescription}
+                  checked={form.allow_negative_stock}
+                  onChange={(value) => setField("allow_negative_stock", value)}
+                />
+                <ToggleInput
+                  label={t.autoPostAccounting}
+                  description={t.autoPostAccountingDescription}
+                  checked={form.auto_post_accounting}
+                  onChange={(value) => setField("auto_post_accounting", value)}
+                />
+              </div>
+            </ProfileSectionCard>
+          </section>
+          <ProfileSectionCard title={t.documentsTitle} description={t.documentsDescription} icon={FileText}>
+            <div className="grid gap-4 md:grid-cols-3">
+              <TextInput label={t.invoicePrefix} value={form.invoice_prefix} onChange={(value) => setField("invoice_prefix", value)} />
+              <TextInput label={t.quotationPrefix} value={form.quotation_prefix} onChange={(value) => setField("quotation_prefix", value)} />
+              <TextInput label={t.purchasePrefix} value={form.purchase_prefix} onChange={(value) => setField("purchase_prefix", value)} />
+              <TextArea
+                label={t.printFooter}
+                value={form.print_footer}
+                onChange={(value) => setField("print_footer", value)}
+                placeholder={t.printFooterPlaceholder}
+              />
             </div>
-            <TextArea label={rtl ? "تذييل الطباعة" : "Print footer"} value={form.print_footer} onChange={(value) => setField("print_footer", value)} />
-          </div>
-        </Card>
+            <div className="mt-5 rounded-2xl border bg-muted/30 p-4">
+              <p className="text-xs font-semibold text-muted-foreground">{t.documentPreview}</p>
+              <p className="mt-2 text-sm font-medium text-foreground">
+                {form.invoice_prefix || "INV"}-000001 ? {form.quotation_prefix || "QUO"}-000001 ? {form.purchase_prefix || "PUR"}-000001
+              </p>
+            </div>
+          </ProfileSectionCard>
+        </div>
       )}
     </PageShell>
   );
