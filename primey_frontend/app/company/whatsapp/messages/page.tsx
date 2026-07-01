@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 /* ============================================================
    📂 primey_frontend/app/company/whatsapp/messages/page.tsx
    💬 Mhamcloud — Company WhatsApp Message Logs Page
@@ -68,7 +68,7 @@ const ENDPOINT = "/api/company/whatsapp/messages/?limit=100";
 const tr = {
   ar: {
     title: "سجل رسائل واتساب",
-    subtitle: "صفحة مستقلة لمتابعة رسائل واتساب المسجلة في النظام مع البحث والتصفية والتصدير والطباعة.",
+    subtitle: "صفحة مستقلة لمتابعة رسائل واتساب المسجلة في الشركة مع البحث والتصفية والتصدير والطباعة.",
     badge: "التواصل والإشعارات",
     refresh: "تحديث",
     excel: "تصدير Excel",
@@ -79,17 +79,17 @@ const tr = {
     sent: "مرسلة",
     failed: "فاشلة",
     pending: "بانتظار المعالجة",
-    live: "من واجهات النظام الحقيقية",
-    pagesTitle: "صفحات واتساب النظام",
+    live: "من واجهات الشركة الحقيقية",
+    pagesTitle: "صفحات واتساب الشركة",
     pagesDesc: "تنقل بين صفحات واتساب المستقلة بنفس نمط إدارة المنصة.",
-    settings: "إعدادات واتساب النظام",
+    settings: "إعدادات واتساب الشركة",
     settingsDesc: "إعداد الرقم الرسمي وQR وWebhook.",
     templates: "قوالب واتساب",
     templatesDesc: "إدارة قوالب واتساب وتحديث حالتها.",
     overview: "مركز واتساب",
-    overviewDesc: "نظرة عامة على واتساب النظام.",
-    dashboard: "لوحة النظام",
-    dashboardDesc: "العودة إلى لوحة النظام.",
+    overviewDesc: "نظرة عامة على واتساب الشركة.",
+    dashboard: "لوحة الشركة",
+    dashboardDesc: "العودة إلى لوحة الشركة.",
     tableTitle: "بيانات رسائل واتساب",
     tableDesc: "جدول الرسائل مع البحث والتصفية حسب الحالة والاتجاه والمزود.",
     search: "ابحث بالشركة أو القالب أو المستلم أو رقم الهاتف أو نص الرسالة...",
@@ -258,7 +258,16 @@ function normalizeMessage(value: unknown): MessageRow {
     messageBody: toStringValue(record.message_body || record.messageBody || record.body || record.content),
     status: toStringValue(record.status || record.delivery_status, "DRAFT").toUpperCase(),
     direction: toStringValue(record.direction, "OUTBOUND").toUpperCase(),
-    provider: toStringValue(record.provider, "MOCK").toUpperCase(),
+    provider: (() => {
+      const provider = toStringValue(record.provider, "").toUpperCase();
+      const providerResponse = asRecord(record.provider_response);
+      const providerStatus = toStringValue(providerResponse.provider_status, "");
+      const gatewayConfigured = Boolean(providerResponse.gateway_configured);
+      if ((provider === "MOCK" || provider === "CUSTOM") && (gatewayConfigured || providerStatus)) {
+        return "GATEWAY";
+      }
+      return provider || "GATEWAY";
+    })(),
     sourceType: toStringValue(record.source_type || record.sourceType, "MANUAL").toUpperCase(),
     errorMessage: toStringValue(record.error_message || record.errorMessage || record.failure_reason),
     createdAt: toStringValue(record.created_at || record.createdAt) || null,

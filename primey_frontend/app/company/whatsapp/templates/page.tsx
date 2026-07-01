@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 /* ============================================================
    📂 primey_frontend/app/company/whatsapp/templates/page.tsx
    💬 Mhamcloud — Company WhatsApp Templates Page
@@ -64,7 +64,7 @@ const API_ROOT = "/api/company/whatsapp/";
 const tr = {
   ar: {
     title: "قوالب واتساب",
-    subtitle: "صفحة مستقلة لمراجعة قوالب واتساب المسجلة في النظام مع الفلاتر والتصدير وتغيير الحالة.",
+    subtitle: "صفحة مستقلة لمراجعة قوالب واتساب المسجلة في الشركة مع الفلاتر والتصدير وتغيير الحالة.",
     badge: "التواصل والإشعارات",
     refresh: "تحديث",
     excel: "تصدير Excel",
@@ -75,17 +75,17 @@ const tr = {
     active: "قوالب نشطة",
     draft: "قوالب مسودة",
     archived: "قوالب مؤرشفة",
-    live: "من واجهات النظام الحقيقية",
-    pagesTitle: "صفحات واتساب النظام",
+    live: "من واجهات الشركة الحقيقية",
+    pagesTitle: "صفحات واتساب الشركة",
     pagesDesc: "تنقل بين صفحات واتساب المستقلة بنفس نمط إدارة المنصة.",
-    settings: "إعدادات واتساب النظام",
+    settings: "إعدادات واتساب الشركة",
     settingsDesc: "إعداد الرقم الرسمي وQR وWebhook.",
     messages: "سجل الرسائل",
     messagesDesc: "متابعة رسائل واتساب المسجلة.",
     overview: "مركز واتساب",
-    overviewDesc: "نظرة عامة على واتساب النظام.",
-    dashboard: "لوحة النظام",
-    dashboardDesc: "العودة إلى لوحة النظام.",
+    overviewDesc: "نظرة عامة على واتساب الشركة.",
+    dashboard: "لوحة الشركة",
+    dashboardDesc: "العودة إلى لوحة الشركة.",
     tableTitle: "بيانات قوالب واتساب",
     tableDesc: "جدول القوالب مع البحث والتصفية وتحديث الحالة.",
     search: "ابحث باسم القالب أو الكود أو الشركة أو النص...",

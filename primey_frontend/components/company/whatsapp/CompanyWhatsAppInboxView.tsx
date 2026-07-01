@@ -4,12 +4,12 @@
 📂 primey_frontend/components/company/whatsapp/CompanyWhatsAppInboxView.tsx
 🟢 Mhamcloud — Company WhatsApp Inbox Premium View
 ================================================================================
-✅ Approved Premium pattern matching system companies page
-✅ Real API only: /api/company/whatsapp/messages/
+✅ Approved Premium pattern matching company workspace companies page
+✅ Real API only: /api/company/whatsapp/conversations/
 ✅ Arabic/English via primey-locale
 ✅ English digits always in Arabic and English, matching approved companies page
 ✅ Main /company/whatsapp page is Inbox, not dashboard quick-card page
-✅ No "لوحة النظام / العودة إلى لوحة النظام الرئيسية" card
+✅ No "لوحة الشركة / العودة إلى لوحة الشركة الرئيسية" card
 ✅ Company WhatsApp conversations + messages + reply
 ✅ Supports LID/JID reply through backend Phase 3
 ================================================================================
@@ -130,11 +130,11 @@ type QuickAction = {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
 };
-const API_ROOT = "/api/company/whatsapp/messages/";
+const API_ROOT = "/api/company/whatsapp/conversations/";
 const translations = {
   ar: {
     badge: "التواصل والإشعارات",
-    title: "صندوق محادثات واتساب النظام",
+    title: "صندوق محادثات واتساب الشركة",
     desc: "متابعة المحادثات الواردة والرد عليها مباشرة من داخل Mhamcloud باستخدام اتصال واتساب الرسمي للنظام.",
     settings: "إعدادات واتساب",
     settingsDesc: "إدارة الاتصال، QR، Pairing Code، وحالة الجلسة.",
@@ -153,9 +153,9 @@ const translations = {
     conversations: "المحادثات",
     conversationCount: "محادثة",
     noConversations: "لا توجد محادثات بعد",
-    noConversationsDesc: "ستظهر المحادثات تلقائيًا عند وصول أول رسالة إلى رقم النظام.",
+    noConversationsDesc: "ستظهر المحادثات تلقائيًا عند وصول أول رسالة إلى رقم الشركة.",
     selectConversation: "اختر محادثة",
-    selectConversationDesc: "اختر محادثة من القائمة لعرض الرسائل والرد من داخل النظام.",
+    selectConversationDesc: "اختر محادثة من القائمة لعرض الرسائل والرد من داخل الشركة.",
     jid: "JID",
     phone: "الرقم",
     unread: "غير مقروء",
@@ -174,8 +174,8 @@ const translations = {
     emptyMessages: "لا توجد رسائل في هذه المحادثة.",
     media: "رسالة وسائط",
     latest: "آخر نشاط",
-    fromLiveApi: "من واجهات النظام الحقيقية",
-    actionsTitle: "صفحات واتساب النظام",
+    fromLiveApi: "من واجهات الشركة الحقيقية",
+    actionsTitle: "صفحات واتساب الشركة",
     actionsDesc: "تنقل سريع بين صفحات واتساب الأساسية بنفس نمط إدارة المنصة.",
     audio: "صوت",
     image: "صورة",
@@ -210,7 +210,7 @@ const translations = {
     noConversations: "No conversations yet",
     noConversationsDesc: "Inbound conversations will appear automatically once the first message arrives.",
     selectConversation: "Select a conversation",
-    selectConversationDesc: "Choose a conversation from the list to view messages and reply from the system.",
+    selectConversationDesc: "Choose a conversation from the list to view messages and reply from the company workspace.",
     jid: "JID",
     phone: "Phone",
     unread: "Unread",
@@ -229,7 +229,7 @@ const translations = {
     emptyMessages: "No messages in this conversation.",
     media: "Media message",
     latest: "Latest activity",
-    fromLiveApi: "From real system APIs",
+    fromLiveApi: "From real company workspace APIs",
     actionsTitle: "Company WhatsApp pages",
     actionsDesc: "Quick navigation between core WhatsApp pages using the approved platform style.",
     audio: "Audio",

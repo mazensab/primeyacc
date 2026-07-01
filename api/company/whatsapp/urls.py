@@ -18,6 +18,13 @@ from .connection import (
     company_whatsapp_connection_test,
 )
 
+from .inbox import (
+    company_whatsapp_conversation_detail,
+    company_whatsapp_conversation_messages,
+    company_whatsapp_conversation_reply,
+    company_whatsapp_conversations_list,
+)
+
 from django.urls import path
 
 from .messages_detail import company_whatsapp_message_detail
@@ -49,6 +56,13 @@ urlpatterns = [
     path("templates/<int:template_id>/update/", company_whatsapp_template_update, name="templates-update"),
     path("templates/<int:template_id>/status/", company_whatsapp_template_status, name="templates-status"),
 
+    path("conversations/", company_whatsapp_conversations_list, name="conversations-list"),
+    path("conversations/<int:conversation_id>/", company_whatsapp_conversation_detail, name="conversations-detail"),
+    path("conversations/<int:conversation_id>/messages/", company_whatsapp_conversation_messages, name="conversations-messages"),
+    path("conversations/<int:conversation_id>/reply/", company_whatsapp_conversation_reply, name="conversations-reply"),
+    # Backward-compatible aliases for older inbox bundle while the browser refreshes.
+    path("messages/<int:conversation_id>/messages/", company_whatsapp_conversation_messages, name="messages-conversation-messages"),
+    path("messages/<int:conversation_id>/reply/", company_whatsapp_conversation_reply, name="messages-conversation-reply"),
     path("messages/", company_whatsapp_messages_list, name="messages-list"),
     path("messages/send/", company_whatsapp_message_send, name="messages-send"),
     path("messages/<int:message_id>/", company_whatsapp_message_detail, name="messages-detail"),

@@ -1288,3 +1288,132 @@ class CompanyWhatsAppConnectionGatewayAPITests(TestCase):
         self.assertTrue(response.data["success"])
         self.assertEqual(response.data["message_log"]["company_id"], self.company.id)
         self.assertEqual(response.data["message_log"]["provider_message_id"], "gw-test-message-id")
+
+class CompanyWhatsAppInboxAPITests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from rest_framework.test import APIClient
+        from companies.models import Company
+        from accounts.models import CompanyMembership, CompanyRole, MembershipStatus
+        User = get_user_model()
+        self.company = Company.objects.create(
+            name="Company WhatsApp Inbox",
+            company_code="WA-INBOX-001",
+            is_active=True,
+        )
+        self.other_company = Company.objects.create(
+            name="Other Company WhatsApp Inbox",
+            company_code="WA-INBOX-002",
+            is_active=True,
+        )
+        self.user = User.objects.create_user(
+            username="company_whatsapp_inbox_user",
+            email="company_whatsapp_inbox_user@example.com",
+            password="StrongPass123!",
+        )
+        CompanyMembership.objects.create(
+            user=self.user,
+            company=self.company,
+            role=CompanyRole.ADMIN,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+    def _create_conversation(self, *, company=None, body="Inbound hello"):
+        from django.utils import timezone
+        from whatsapp.models import (
+            WhatsAppContact,
+            WhatsAppConversation,
+            WhatsAppConversationMessage,
+            WhatsAppInboxScope,
+        )
+        company = company or self.company
+        session_name = f"company-{company.id}-whatsapp"
+        contact = WhatsAppContact.objects.create(
+            scope=WhatsAppInboxScope.COMPANY,
+            company=company,
+            session_name=session_name,
+            phone_number="966500000000",
+            normalized_phone="966500000000",
+            whatsapp_jid="966500000000@s.whatsapp.net",
+            display_name="Inbox Contact",
+            push_name="Inbox Contact",
+        )
+        conversation = WhatsAppConversation.objects.create(
+            scope=WhatsAppInboxScope.COMPANY,
+            company=company,
+            contact=contact,
+            session_name=session_name,
+            status="OPEN",
+            last_message_preview=body,
+            last_message_at=timezone.now(),
+            unread_count=1,
+        )
+        message = WhatsAppConversationMessage.objects.create(
+            conversation=conversation,
+            contact=contact,
+            company=company,
+            scope=WhatsAppInboxScope.COMPANY,
+            session_name=session_name,
+            direction="INBOUND",
+            status="RECEIVED",
+            message_type="TEXT",
+            body=body,
+            external_message_id=f"INBOX-{company.id}-{conversation.id}",
+            provider="WHATSAPP_GATEWAY",
+            provider_response={"from_jid": contact.whatsapp_jid},
+            received_at=timezone.now(),
+        )
+        return conversation, message
+    def test_company_inbox_conversations_list_is_tenant_scoped(self):
+        visible, _ = self._create_conversation(body="Visible company inbox.")
+        self._create_conversation(company=self.other_company, body="Hidden company inbox.")
+        response = self.client.get("/api/company/whatsapp/conversations/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["conversations"][0]["id"], visible.id)
+        self.assertEqual(response.data["conversations"][0]["company_id"], self.company.id)
+    def test_company_inbox_messages_endpoint_returns_messages_and_marks_read(self):
+        conversation, message = self._create_conversation(body="Read me.")
+        response = self.client.get(
+            f"/api/company/whatsapp/conversations/{conversation.id}/messages/"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["conversation"]["id"], conversation.id)
+        self.assertEqual(response.data["messages"][0]["id"], message.id)
+        conversation.refresh_from_db()
+        self.assertEqual(conversation.unread_count, 0)
+    def test_company_inbox_messages_blocks_other_company_conversation(self):
+        conversation, _ = self._create_conversation(
+            company=self.other_company,
+            body="Hidden message.",
+        )
+        response = self.client.get(
+            f"/api/company/whatsapp/conversations/{conversation.id}/messages/"
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(response.data["success"])
+    @patch("whatsapp.services._post_system_whatsapp_gateway_text")
+    def test_company_inbox_reply_uses_company_conversation_session(self, mocked_gateway):
+        conversation, _ = self._create_conversation(body="Need reply.")
+        mocked_gateway.return_value = {
+            "success": True,
+            "message": "Reply accepted.",
+            "message_id": "COMPANY-INBOX-REPLY-001",
+            "provider_status": "sent_to_whatsapp_server",
+        }
+        response = self.client.post(
+            f"/api/company/whatsapp/conversations/{conversation.id}/reply/",
+            {"body": "Company reply."},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["reply"]["body"], "Company reply.")
+        self.assertEqual(response.data["reply"]["scope"], "COMPANY")
+        self.assertEqual(response.data["reply"]["company_id"], self.company.id)
+        call_kwargs = mocked_gateway.call_args.kwargs
+        self.assertEqual(call_kwargs["session_name"], f"company-{self.company.id}-whatsapp")

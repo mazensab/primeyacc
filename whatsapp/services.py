@@ -2137,6 +2137,151 @@ def _normalize_company_whatsapp_test_phone(
     if len(digits) >= 10:
         return f"+{digits}"
     return f"+{country_code}{digits}"
+
+def _record_company_outbound_inbox_message_from_log(
+    *,
+    setting: CompanyWhatsAppSetting,
+    log: WhatsAppMessageLog,
+    result: dict[str, Any],
+    user=None,
+) -> None:
+    """
+    Mirror company Gateway outbound test messages into the conversation inbox.
+    This keeps /company/whatsapp/inbox conversation-oriented while
+    /company/whatsapp/messages remains an audit log table.
+    """
+    from whatsapp.models import (
+        WhatsAppContact,
+        WhatsAppConversation,
+        WhatsAppConversationMessage,
+        WhatsAppInboxScope,
+    )
+    company = setting.company
+    session_name = _company_whatsapp_session_name(setting)
+    normalized_phone = _normalize_whatsapp_inbox_phone(log.recipient_phone)
+    recipient_jid = _company_safe_text(
+        result.get("recipient_jid")
+        or result.get("remote_jid")
+        or result.get("to_jid")
+    )
+    if not recipient_jid and normalized_phone:
+        recipient_jid = f"{normalized_phone}@s.whatsapp.net"
+    contact_queryset = WhatsAppContact.objects.filter(
+        scope=WhatsAppInboxScope.COMPANY,
+        company=company,
+        session_name=session_name,
+    )
+    if recipient_jid:
+        contact = contact_queryset.filter(whatsapp_jid=recipient_jid).first()
+    else:
+        contact = None
+    if contact is None and normalized_phone:
+        contact = contact_queryset.filter(normalized_phone=normalized_phone).first()
+    if contact is None:
+        contact = WhatsAppContact.objects.create(
+            scope=WhatsAppInboxScope.COMPANY,
+            company=company,
+            session_name=session_name,
+            phone_number=log.recipient_phone,
+            normalized_phone=normalized_phone,
+            whatsapp_jid=recipient_jid,
+            display_name=log.recipient_name or "Company WhatsApp Test",
+            push_name=log.recipient_name or "",
+            metadata={"source": "company_gateway_outbound"},
+        )
+    else:
+        changed = False
+        if normalized_phone and contact.normalized_phone != normalized_phone:
+            contact.normalized_phone = normalized_phone
+            changed = True
+        if log.recipient_phone and contact.phone_number != log.recipient_phone:
+            contact.phone_number = log.recipient_phone
+            changed = True
+        if recipient_jid and contact.whatsapp_jid != recipient_jid:
+            contact.whatsapp_jid = recipient_jid
+            changed = True
+        if not contact.display_name and log.recipient_name:
+            contact.display_name = log.recipient_name
+            changed = True
+        if changed:
+            contact.save()
+    conversation = (
+        WhatsAppConversation.objects
+        .filter(
+            scope=WhatsAppInboxScope.COMPANY,
+            company=company,
+            session_name=session_name,
+            contact=contact,
+        )
+        .first()
+    )
+    if conversation is None:
+        conversation = WhatsAppConversation.objects.create(
+            scope=WhatsAppInboxScope.COMPANY,
+            company=company,
+            contact=contact,
+            session_name=session_name,
+            status="OPEN",
+            is_resolved=False,
+            last_message_preview=log.message_body[:500],
+            last_message_at=timezone.now(),
+            unread_count=0,
+            metadata={"source": "company_gateway_outbound"},
+        )
+    external_message_id = _company_safe_text(
+        log.provider_message_id
+        or result.get("message_id")
+        or result.get("external_message_id")
+        or result.get("provider_message_id")
+        or result.get("id")
+    )
+    if external_message_id:
+        existing = conversation.messages.filter(
+            external_message_id=external_message_id,
+            direction="OUTBOUND",
+        ).first()
+        if existing:
+            return
+    now = timezone.now()
+    success = bool(result.get("success"))
+    message = WhatsAppConversationMessage.objects.create(
+        conversation=conversation,
+        contact=contact,
+        company=company,
+        scope=WhatsAppInboxScope.COMPANY,
+        session_name=session_name,
+        direction="OUTBOUND",
+        status="SENT" if success else "FAILED",
+        message_type="TEXT",
+        body=log.message_body,
+        external_message_id=external_message_id,
+        provider="WHATSAPP_GATEWAY",
+        provider_response={
+            **(result or {}),
+            "message_log_id": log.id,
+        },
+        sent_by=user if getattr(user, "is_authenticated", False) else None,
+        sent_at=now if success else None,
+        metadata={
+            "source": "company_connection_test",
+            "message_log_id": log.id,
+            "target_jid": recipient_jid,
+            "target_phone": normalized_phone,
+        },
+    )
+    conversation.last_message_preview = message.body[:500]
+    conversation.last_message_at = now
+    conversation.status = "OPEN"
+    conversation.is_resolved = False
+    conversation.save(
+        update_fields=[
+            "last_message_preview",
+            "last_message_at",
+            "status",
+            "is_resolved",
+            "updated_at",
+        ]
+    )
 def company_whatsapp_send_test_message(
     *,
     company: Company,
@@ -2172,7 +2317,7 @@ def company_whatsapp_send_test_message(
         recipient_name="Company WhatsApp Test",
         recipient_phone=phone,
         message_body=body,
-        provider=setting.provider or WhatsAppProvider.CUSTOM,
+        provider=WhatsAppProvider.CUSTOM,
         status=status,
         source_type=WhatsAppMessageSourceType.MANUAL,
         source_id=f"company-whatsapp-test-{company.id}",
@@ -2197,6 +2342,12 @@ def company_whatsapp_send_test_message(
         )
     log.provider_response = result
     log.save()
+    _record_company_outbound_inbox_message_from_log(
+        setting=setting,
+        log=log,
+        result=result,
+        user=user,
+    )
     setting = _sync_company_connection_from_gateway(setting, result, user=user)
     return {
         "success": bool(result.get("success")),
