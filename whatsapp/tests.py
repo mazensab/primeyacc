@@ -1151,3 +1151,140 @@ class WhatsAppInboxReplyServiceTests(WhatsAppInboxReplyDjangoTestCase):
         conversation.refresh_from_db()
         self.assertEqual(conversation.unread_count, 0)
         self.assertEqual(conversation.last_message_preview, "تم استلام رسالتك من داخل النظام.")
+
+class CompanyWhatsAppConnectionGatewayAPITests(TestCase):
+    def setUp(self):
+        self.company = Company.objects.create(
+            name="Company WhatsApp Gateway",
+            company_code="WA-GW-001",
+            is_active=True,
+        )
+        self.other_company = Company.objects.create(
+            name="Other Company WhatsApp Gateway",
+            company_code="WA-GW-002",
+            is_active=True,
+        )
+        self.user = User.objects.create_user(
+            username="company_whatsapp_gateway_user",
+            email="company_whatsapp_gateway_user@example.com",
+            password="StrongPass123!",
+        )
+        CompanyMembership.objects.create(
+            user=self.user,
+            company=self.company,
+            role=CompanyRole.ADMIN,
+            status=MembershipStatus.ACTIVE,
+            is_primary=True,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+    def test_company_connection_get_uses_current_company(self):
+        response = self.client.get("/api/company/whatsapp/connection/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["connection"]["company_id"], self.company.id)
+        self.assertEqual(
+            response.data["connection"]["session_name"],
+            f"company-{self.company.id}-whatsapp",
+        )
+    @patch("whatsapp.services._company_gateway_request")
+    def test_company_connection_status_uses_backend_owned_session_name(self, mocked_gateway):
+        mocked_gateway.return_value = {
+            "success": True,
+            "message": "Session status loaded.",
+            "gateway_configured": True,
+            "session_status": "connected",
+            "connected": True,
+            "connected_phone": "966500000000",
+            "device_label": "Test Gateway",
+        }
+        response = self.client.post("/api/company/whatsapp/connection/status/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["connection"]["company_id"], self.company.id)
+        self.assertEqual(
+            response.data["connection"]["session_name"],
+            f"company-{self.company.id}-whatsapp",
+        )
+        self.assertTrue(response.data["connection"]["connected"])
+        call_payload = mocked_gateway.call_args.kwargs["payload"]
+        self.assertEqual(
+            call_payload["session_name"],
+            f"company-{self.company.id}-whatsapp",
+        )
+    @patch("whatsapp.services._company_gateway_request")
+    def test_company_connection_qr_ignores_frontend_session_name(self, mocked_gateway):
+        mocked_gateway.return_value = {
+            "success": True,
+            "message": "QR requested.",
+            "gateway_configured": True,
+            "session_status": "qr_pending",
+            "connected": False,
+            "qr_code": "data:image/png;base64,test",
+        }
+        response = self.client.post(
+            "/api/company/whatsapp/connection/qr/",
+            {
+                "session_name": "system-platform-session",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(
+            response.data["connection"]["session_name"],
+            f"company-{self.company.id}-whatsapp",
+        )
+        call_payload = mocked_gateway.call_args.kwargs["payload"]
+        self.assertEqual(
+            call_payload["session_name"],
+            f"company-{self.company.id}-whatsapp",
+        )
+
+    @patch("whatsapp.services._company_gateway_request")
+    def test_company_connection_test_message_normalizes_966_without_double_prefix(self, mocked_gateway):
+        mocked_gateway.return_value = {
+            "success": True,
+            "message": "Message accepted by WhatsApp server.",
+            "gateway_configured": True,
+            "session_status": "connected",
+            "connected": True,
+            "external_message_id": "gw-normalized-phone-message-id",
+        }
+        response = self.client.post(
+            "/api/company/whatsapp/connection/test/",
+            {
+                "recipient_phone": "966503185950",
+                "message_body": "Gateway normalized phone test.",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        call_payload = mocked_gateway.call_args.kwargs["payload"]
+        self.assertEqual(call_payload["to_phone"], "+966503185950")
+        self.assertNotEqual(call_payload["to_phone"], "+966966503185950")
+        self.assertEqual(response.data["message_log"]["recipient_phone"], "+966503185950")
+
+    @patch("whatsapp.services._company_gateway_request")
+    def test_company_connection_test_message_logs_result_for_current_company(self, mocked_gateway):
+        mocked_gateway.return_value = {
+            "success": True,
+            "message": "Message accepted by WhatsApp server.",
+            "gateway_configured": True,
+            "session_status": "connected",
+            "connected": True,
+            "external_message_id": "gw-test-message-id",
+        }
+        response = self.client.post(
+            "/api/company/whatsapp/connection/test/",
+            {
+                "recipient_phone": "0500000000",
+                "message_body": "Gateway test.",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["message_log"]["company_id"], self.company.id)
+        self.assertEqual(response.data["message_log"]["provider_message_id"], "gw-test-message-id")

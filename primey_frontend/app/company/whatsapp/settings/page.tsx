@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 /* ============================================================
    📂 primey_frontend/app/company/whatsapp/settings/page.tsx
    💬 Mhamcloud — Company WhatsApp Settings Page
@@ -53,7 +53,7 @@ import { cn } from "@/lib/utils";
 type Locale = "ar" | "en";
 type ApiRecord = Record<string, unknown>;
 type ConnectionAction = "status" | "qr" | "pairing" | "disconnect" | "test";
-type SystemConnection = {
+type CompanyConnection = {
   id: number;
   provider: string;
   isEnabled: boolean;
@@ -118,9 +118,9 @@ const API_ENDPOINT = "/api/company/whatsapp/connection/";
 const DEFAULT_TEST_BODY = "Mhamcloud company WhatsApp test message.";
 const translations = {
   ar: {
-    title: "إعدادات واتساب النظام",
+    title: "إعدادات واتساب الشركة",
     subtitle:
-      "صفحة مستقلة لإعداد رقم واتساب الرسمي للنظام، إدارة الاتصال، QR، Pairing Code، Webhook، ورسالة الاختبار.",
+      "صفحة مستقلة لإعداد رقم واتساب الرسمي للشركة، إدارة الاتصال، QR، Pairing Code، Webhook، ورسالة الاختبار.",
     badge: "التواصل والإشعارات",
     refresh: "تحديث",
     save: "حفظ الإعدادات",
@@ -139,19 +139,19 @@ const translations = {
     notConfigured: "غير مضبوط",
     saved: "محفوظ",
     missing: "غير محفوظ",
-    fromLiveApi: "من واجهات النظام الحقيقية",
-    pageLinksTitle: "صفحات واتساب النظام",
-    pageLinksDesc: "تنقل بين صفحات واتساب المستقلة بنفس نمط إدارة المنصة.",
+    fromLiveApi: "من واجهات الشركة",
+    pageLinksTitle: "صفحات واتساب الشركة",
+    pageLinksDesc: "تنقل بين صفحات واتساب الخاصة بالشركة.",
     overviewTitle: "مركز واتساب",
     overviewDesc: "نظرة عامة على إعدادات واتساب والقوالب وسجل الرسائل.",
     templatesTitle: "قوالب واتساب",
     templatesDesc: "إدارة حالة القوالب ومراجعة محتواها.",
     messagesTitle: "سجل الرسائل",
-    messagesDesc: "متابعة رسائل واتساب المسجلة في النظام.",
-    dashboardTitle: "لوحة النظام",
-    dashboardDesc: "العودة إلى لوحة تحكم النظام.",
+    messagesDesc: "متابعة رسائل واتساب المسجلة في مساحة الشركة.",
+    dashboardTitle: "لوحة الشركة",
+    dashboardDesc: "العودة إلى لوحة تحكم الشركة.",
     actionsTitle: "اختصارات اتصال واتساب",
-    actionsDesc: "عمليات الاتصال الفعلية الخاصة برقم واتساب النظام.",
+    actionsDesc: "عمليات الاتصال الفعلية الخاصة برقم واتساب الشركة.",
     refreshConnection: "تحديث الاتصال",
     refreshConnectionDesc: "فحص حالة الجلسة الحالية من Gateway.",
     createQr: "إنشاء QR",
@@ -160,8 +160,8 @@ const translations = {
     createPairingDesc: "توليد كود ربط باستخدام رقم الهاتف.",
     disconnect: "فصل الاتصال",
     disconnectDesc: "فصل الجلسة الحالية وتنظيف حالة الربط.",
-    settingsTitle: "بيانات اتصال واتساب النظام",
-    settingsDesc: "هذه البيانات تخص واتساب النظام الرسمي ولا تعدل إعدادات الشركات.",
+    settingsTitle: "بيانات اتصال واتساب الشركة",
+    settingsDesc: "هذه البيانات تخص واتساب الشركة ولا تكشف التوكنات المحفوظة.",
     provider: "المزود",
     businessName: "اسم النشاط",
     phoneNumber: "رقم واتساب",
@@ -210,18 +210,18 @@ const translations = {
     sendTest: "إرسال اختبار",
     gatewayHint:
       "Gateway غير مضبوط. للتفعيل الحقيقي شغل WhatsApp Session Gateway واضبط WHATSAPP_SESSION_GATEWAY_URL في .env.",
-    loadError: "تعذر تحميل إعدادات واتساب النظام.",
-    saveSuccess: "تم حفظ إعدادات واتساب النظام.",
-    saveError: "تعذر حفظ إعدادات واتساب النظام.",
+    loadError: "تعذر تحميل إعدادات واتساب الشركة.",
+    saveSuccess: "تم حفظ إعدادات واتساب الشركة.",
+    saveError: "تعذر حفظ إعدادات واتساب الشركة.",
     actionError: "تعذر تنفيذ العملية.",
-    refreshed: "تم تحديث اتصال واتساب النظام.",
+    refreshed: "تم تحديث اتصال واتساب الشركة.",
     qrRequested: "تم طلب QR.",
     pairingRequested: "تم طلب Pairing Code.",
     disconnectRequested: "تم طلب فصل الاتصال.",
     testRequested: "تم طلب إرسال رسالة اختبار.",
     pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
     tryAgain: "إعادة المحاولة",
-    errorTitle: "تعذر تحميل إعدادات واتساب النظام",
+    errorTitle: "تعذر تحميل إعدادات واتساب الشركة",
   },
   en: {
     title: "Company WhatsApp Settings",
@@ -245,17 +245,17 @@ const translations = {
     notConfigured: "Not configured",
     saved: "Saved",
     missing: "Missing",
-    fromLiveApi: "From real system APIs",
+    fromLiveApi: "From real company APIs",
     pageLinksTitle: "Company WhatsApp pages",
-    pageLinksDesc: "Navigate between standalone WhatsApp system pages.",
+    pageLinksDesc: "Navigate between standalone WhatsApp company pages.",
     overviewTitle: "WhatsApp center",
     overviewDesc: "Overview for WhatsApp settings, templates, and messages.",
     templatesTitle: "WhatsApp templates",
     templatesDesc: "Manage template status and review content.",
     messagesTitle: "Message logs",
-    messagesDesc: "Monitor WhatsApp messages registered in the system.",
-    dashboardTitle: "System dashboard",
-    dashboardDesc: "Return to the main system dashboard.",
+    messagesDesc: "Monitor WhatsApp messages registered for the company.",
+    dashboardTitle: "Company dashboard",
+    dashboardDesc: "Return to the main company dashboard.",
     actionsTitle: "WhatsApp connection shortcuts",
     actionsDesc: "Real connection operations for the company WhatsApp number.",
     refreshConnection: "Refresh connection",
@@ -267,7 +267,7 @@ const translations = {
     disconnect: "Disconnect",
     disconnectDesc: "Disconnect the current session and clear link state.",
     settingsTitle: "Company WhatsApp connection details",
-    settingsDesc: "These details belong to the official company WhatsApp and do not mutate company settings.",
+    settingsDesc: "These details belong to the official company WhatsApp and do not expose saved tokens.",
     provider: "Provider",
     businessName: "Business name",
     phoneNumber: "WhatsApp phone",
@@ -402,7 +402,7 @@ async function postJson<T>(url: string, body: ApiRecord): Promise<T> {
     },
   });
 }
-function normalizeConnection(value: unknown): SystemConnection {
+function normalizeConnection(value: unknown): CompanyConnection {
   const record = asRecord(value);
   return {
     id: toNumber(record.id),
@@ -424,7 +424,7 @@ function normalizeConnection(value: unknown): SystemConnection {
     allowBroadcasts: toBool(record.allow_broadcasts),
     sendTestEnabled: toBool(record.send_test_enabled),
     defaultTestRecipient: toStringValue(record.default_test_recipient),
-    sessionName: toStringValue(record.session_name) || "Mhamcloud-system-session",
+    sessionName: toStringValue(record.session_name) || "company-whatsapp-session",
     sessionMode: toStringValue(record.session_mode) || "qr",
     sessionStatus: toStringValue(record.session_status) || "disconnected",
     sessionConnectedPhone: toStringValue(record.session_connected_phone),
@@ -438,7 +438,7 @@ function normalizeConnection(value: unknown): SystemConnection {
     updatedAt: toStringValue(record.updated_at),
   };
 }
-function buildForm(connection: SystemConnection | null): ConnectionForm {
+function buildForm(connection: CompanyConnection | null): ConnectionForm {
   return {
     provider: connection?.provider || "WEB_SESSION",
     is_enabled: connection?.isEnabled ?? false,
@@ -458,7 +458,7 @@ function buildForm(connection: SystemConnection | null): ConnectionForm {
     allow_broadcasts: connection?.allowBroadcasts ?? true,
     send_test_enabled: connection?.sendTestEnabled ?? true,
     default_test_recipient: connection?.defaultTestRecipient || "",
-    session_name: connection?.sessionName || "Mhamcloud-system-session",
+    session_name: connection?.sessionName || "company-whatsapp-session",
     session_mode: connection?.sessionMode || "qr",
   };
 }
@@ -646,7 +646,7 @@ function SettingsSkeleton({ dir }: { dir: "rtl" | "ltr" }) {
 }
 export default function CompanyWhatsAppSettingsPage() {
   const [locale, setLocale] = React.useState<Locale>("ar");
-  const [connection, setConnection] = React.useState<SystemConnection | null>(null);
+  const [connection, setConnection] = React.useState<CompanyConnection | null>(null);
   const [form, setForm] = React.useState<ConnectionForm>(() => buildForm(null));
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -675,7 +675,8 @@ export default function CompanyWhatsAppSettingsPage() {
     };
   }, []);
   const syncConnection = React.useCallback((payload: unknown) => {
-    const next = normalizeConnection(asRecord(payload).connection);
+    const record = asRecord(payload);
+    const next = normalizeConnection(record.setting || record.connection || payload);
     setConnection(next);
     setForm(buildForm(next));
     setTestRecipient((current) => current || next.defaultTestRecipient || next.phoneNumber);
@@ -788,15 +789,19 @@ export default function CompanyWhatsAppSettingsPage() {
       setActionLoading("");
     }
   }
+
   function resetLocalForm() {
     setForm(buildForm(connection));
     setTestRecipient(connection?.defaultTestRecipient || connection?.phoneNumber || "");
     setTestBody(DEFAULT_TEST_BODY);
   }
   function openPrintWindow(kind: "print" | "pdf") {
-    if (kind === "pdf") toast.info(t.pdfHint);
+    if (kind === "pdf") {
+      toast.info(t.pdfHint);
+    }
     window.print();
   }
+
   async function copyPairingCode() {
     if (!connection?.sessionPairingCode || typeof navigator === "undefined" || !navigator.clipboard) return;
     await navigator.clipboard.writeText(connection.sessionPairingCode);
@@ -828,7 +833,7 @@ export default function CompanyWhatsAppSettingsPage() {
     {
       title: t.dashboardTitle,
       description: t.dashboardDesc,
-      href: "/system",
+      href: "/company",
       icon: LayoutDashboard,
     },
   ];

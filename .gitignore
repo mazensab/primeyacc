@@ -62,3 +62,6 @@ htmlcov/
 *.pem
 *.key
 *.crt
+# WhatsApp Session Gateway runtime files
+whatsapp_session_gateway/gateway.pid
+whatsapp_session_gateway/logs/*.log

@@ -7,7 +7,7 @@
 ✅ Approved Premium pattern
 ✅ Real API only: /api/company/whatsapp/messages/
 ✅ Main WhatsApp page renders Inbox directly
-✅ No system dashboard return card
+✅ No company dashboard return card
 ✅ Arabic-first visual alignment
 ================================================================================
 */

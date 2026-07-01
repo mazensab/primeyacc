@@ -9,6 +9,15 @@
 
 from __future__ import annotations
 
+from .connection import (
+    company_whatsapp_connection,
+    company_whatsapp_connection_disconnect,
+    company_whatsapp_connection_pairing,
+    company_whatsapp_connection_qr,
+    company_whatsapp_connection_status,
+    company_whatsapp_connection_test,
+)
+
 from django.urls import path
 
 from .messages_detail import company_whatsapp_message_detail
@@ -27,6 +36,12 @@ app_name = "company_whatsapp"
 
 urlpatterns = [
     path("settings/", company_whatsapp_settings, name="settings"),
+    path("connection/", company_whatsapp_connection, name="connection"),
+    path("connection/status/", company_whatsapp_connection_status, name="connection-status"),
+    path("connection/qr/", company_whatsapp_connection_qr, name="connection-qr"),
+    path("connection/pairing/", company_whatsapp_connection_pairing, name="connection-pairing"),
+    path("connection/disconnect/", company_whatsapp_connection_disconnect, name="connection-disconnect"),
+    path("connection/test/", company_whatsapp_connection_test, name="connection-test"),
 
     path("templates/", company_whatsapp_templates_list, name="templates-list"),
     path("templates/create/", company_whatsapp_template_create, name="templates-create"),

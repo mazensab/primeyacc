@@ -1680,3 +1680,528 @@ def send_system_whatsapp_inbox_reply(*, conversation, body: str, user=None) -> d
         "conversation": serialize_whatsapp_inbox_conversation(conversation),
         "reply": serialize_whatsapp_inbox_message(message),
     }
+
+# ============================================================
+# Company WhatsApp Connection Services V1.0
+# ============================================================
+# ============================================================
+# Company WhatsApp Connection Services V1.0
+# ============================================================
+def _company_safe_text(value, fallback: str = "") -> str:
+    if value is None:
+        return fallback
+    text = str(value).strip()
+    return text or fallback
+def _company_whatsapp_session_name(setting: CompanyWhatsAppSetting) -> str:
+    """
+    Return a backend-owned session name for this company.
+    Important:
+    - Do not trust session_name from frontend.
+    - Each company gets a separate Gateway session folder.
+    """
+    company_id = getattr(setting, "company_id", None)
+    return f"company-{company_id}-whatsapp"
+def _company_gateway_env_value(*names: str) -> str:
+    import os
+    from django.conf import settings as django_settings
+    for name in names:
+        value = str(getattr(django_settings, name, "") or os.environ.get(name, "") or "").strip()
+        if value:
+            return value
+    return ""
+def _company_gateway_url() -> str:
+    return _company_gateway_env_value(
+        "WHATSAPP_SESSION_GATEWAY_URL",
+        "WHATSAPP_GATEWAY_URL",
+        "WHATSAPP_WEB_SESSION_GATEWAY_URL",
+    ).rstrip("/")
+def _company_gateway_token() -> str:
+    return _company_gateway_env_value(
+        "WHATSAPP_SESSION_GATEWAY_TOKEN",
+        "WHATSAPP_GATEWAY_TOKEN",
+        "WHATSAPP_WEB_SESSION_GATEWAY_TOKEN",
+    )
+def _company_gateway_request(*, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    """
+    Call the local WhatsApp Session Gateway.
+    Uses stdlib urllib to avoid adding requests dependency.
+    """
+    import json
+    import urllib.error
+    import urllib.request
+    base_url = _company_gateway_url()
+    if not base_url:
+        return {
+            "success": False,
+            "message": (
+                "WHATSAPP_SESSION_GATEWAY_URL is not configured. "
+                "Set it in .env, for example: WHATSAPP_SESSION_GATEWAY_URL=http://127.0.0.1:3100"
+            ),
+            "provider_status": "gateway_not_configured",
+            "gateway_configured": False,
+            "session_status": "disconnected",
+            "connected": False,
+            "error_message": "Gateway URL is missing.",
+        }
+    url = f"{base_url}/{str(path or '').lstrip('/')}"
+    body = json.dumps(payload or {}).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    token = _company_gateway_token()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(
+        url,
+        data=body,
+        headers=headers,
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=35) as response:
+            raw = response.read().decode("utf-8")
+            data = json.loads(raw or "{}")
+            if isinstance(data, dict):
+                data.setdefault("gateway_configured", True)
+                return data
+            return {
+                "success": False,
+                "message": "Unexpected gateway response.",
+                "provider_status": "invalid_response",
+                "gateway_configured": True,
+                "raw": data,
+            }
+    except urllib.error.HTTPError as exc:
+        raw = exc.read().decode("utf-8", errors="replace")
+        try:
+            data = json.loads(raw or "{}")
+        except Exception:
+            data = {}
+        if not isinstance(data, dict):
+            data = {}
+        data.setdefault("success", False)
+        data.setdefault("message", f"Gateway HTTP error {exc.code}.")
+        data.setdefault("provider_status", "gateway_http_error")
+        data.setdefault("gateway_configured", True)
+        data.setdefault("error_message", data.get("message", "Gateway HTTP error."))
+        data["http_status"] = exc.code
+        return data
+    except Exception as exc:
+        return {
+            "success": False,
+            "message": str(exc),
+            "provider_status": "gateway_request_failed",
+            "gateway_configured": True,
+            "session_status": "failed",
+            "connected": False,
+            "error_message": str(exc),
+        }
+def _company_connection_config(setting: CompanyWhatsAppSetting) -> dict[str, Any]:
+    config = dict(setting.provider_config or {})
+    config["session_name"] = _company_whatsapp_session_name(setting)
+    return config
+def _sync_company_connection_from_gateway(
+    setting: CompanyWhatsAppSetting,
+    result: dict[str, Any],
+    *,
+    user=None,
+) -> CompanyWhatsAppSetting:
+    from django.utils import timezone as django_timezone
+    config = _company_connection_config(setting)
+    session_status = (
+        result.get("session_status")
+        or result.get("status")
+        or config.get("session_status")
+        or "disconnected"
+    )
+    connected = bool(result.get("connected"))
+    config.update(
+        {
+            "session_name": _company_whatsapp_session_name(setting),
+            "session_status": session_status,
+            "is_active": connected,
+            "session_connected_phone": _company_safe_text(
+                result.get("connected_phone") or result.get("phone_number")
+            ),
+            "session_device_label": _company_safe_text(
+                result.get("device_label") or result.get("browser")
+            ),
+            "session_qr_code": _company_safe_text(
+                result.get("qr_code") or result.get("qrDataUrl") or result.get("qr")
+            ),
+            "session_pairing_code": _company_safe_text(
+                result.get("pairing_code") or result.get("pairingCode")
+            ),
+            "gateway_configured": bool(result.get("gateway_configured")),
+            "last_error_message": _company_safe_text(
+                result.get("error_message") or result.get("message")
+            ) if not result.get("success", False) else "",
+            "last_health_check_at": django_timezone.now().isoformat(),
+        }
+    )
+    setting.provider_config = config
+    update_fields = ["provider_config", "updated_at"]
+    if connected:
+        setting.last_verified_at = django_timezone.now()
+        update_fields.append("last_verified_at")
+    if user:
+        setting.updated_by = user
+        update_fields.append("updated_by")
+    setting.save(update_fields=update_fields)
+    return setting
+def get_or_create_company_whatsapp_connection(
+    *,
+    company: Company,
+    user=None,
+) -> CompanyWhatsAppSetting:
+    setting = get_or_create_company_whatsapp_setting(company=company, user=user)
+    config = _company_connection_config(setting)
+    changed = False
+    defaults = {
+        "session_status": "disconnected",
+        "is_active": False,
+        "session_mode": "qr",
+        "gateway_configured": bool(_company_gateway_url()),
+        "default_test_recipient": setting.phone_number or "",
+        "send_test_enabled": True,
+        "business_name": getattr(company, "display_name", "") or getattr(company, "name", "") or "",
+        "api_version": "v1",
+        "default_language_code": "ar",
+        "allow_broadcasts": False,
+    }
+    for key, value in defaults.items():
+        if key not in config:
+            config[key] = value
+            changed = True
+    # Enforce backend-owned session name every time.
+    enforced_session_name = _company_whatsapp_session_name(setting)
+    if config.get("session_name") != enforced_session_name:
+        config["session_name"] = enforced_session_name
+        changed = True
+    if changed:
+        setting.provider_config = config
+        if user:
+            setting.updated_by = user
+            setting.save(update_fields=["provider_config", "updated_by", "updated_at"])
+        else:
+            setting.save(update_fields=["provider_config", "updated_at"])
+    return setting
+def update_company_whatsapp_connection(
+    *,
+    company: Company,
+    data: dict[str, Any],
+    user=None,
+) -> CompanyWhatsAppSetting:
+    """
+    Update company WhatsApp connection safely.
+    session_name is intentionally ignored from frontend and generated from company id.
+    """
+    setting = get_or_create_company_whatsapp_connection(company=company, user=user)
+    data = data or {}
+    allowed_model_fields = [
+        "is_enabled",
+        "provider",
+        "phone_number",
+        "phone_number_id",
+        "business_account_id",
+        "access_token",
+        "webhook_verify_token",
+        "default_country_code",
+        "send_invoice_notifications",
+        "send_payment_notifications",
+        "send_pos_notifications",
+        "send_system_notifications",
+    ]
+    for field in allowed_model_fields:
+        if field in data:
+            setattr(setting, field, data[field])
+    config = _company_connection_config(setting)
+    safe_config_fields = [
+        "business_name",
+        "app_id",
+        "api_version",
+        "default_language_code",
+        "webhook_callback_url",
+        "webhook_verified",
+        "allow_broadcasts",
+        "send_test_enabled",
+        "default_test_recipient",
+        "session_mode",
+    ]
+    for field in safe_config_fields:
+        if field in data:
+            config[field] = data[field]
+    # Never trust frontend session_name.
+    config["session_name"] = _company_whatsapp_session_name(setting)
+    config["gateway_configured"] = bool(_company_gateway_url())
+    setting.provider_config = config
+    if user:
+        setting.updated_by = user
+    setting.save()
+    return setting
+def serialize_company_whatsapp_connection(setting: CompanyWhatsAppSetting) -> dict[str, Any]:
+    """
+    Serialize company WhatsApp connection without exposing raw secrets.
+    """
+    base = serialize_whatsapp_setting(setting)
+    config = _company_connection_config(setting)
+    session_status = _company_safe_text(config.get("session_status"), "disconnected")
+    connected = session_status == "connected" or bool(config.get("is_active"))
+    base.update(
+        {
+            "business_name": _company_safe_text(
+                config.get("business_name"),
+                getattr(setting.company, "display_name", "") or getattr(setting.company, "name", "") or "",
+            ),
+            "app_id": _company_safe_text(config.get("app_id")),
+            "api_version": _company_safe_text(config.get("api_version"), "v1"),
+            "default_language_code": _company_safe_text(config.get("default_language_code"), "ar"),
+            "webhook_callback_url": _company_safe_text(config.get("webhook_callback_url")),
+            "webhook_verified": bool(config.get("webhook_verified")),
+            "allow_broadcasts": bool(config.get("allow_broadcasts")),
+            "send_test_enabled": bool(config.get("send_test_enabled", True)),
+            "default_test_recipient": _company_safe_text(
+                config.get("default_test_recipient"),
+                setting.phone_number or "",
+            ),
+            "session_name": _company_whatsapp_session_name(setting),
+            "session_mode": _company_safe_text(config.get("session_mode"), "qr"),
+            "session_status": session_status,
+            "is_active": connected,
+            "is_connected": connected,
+            "connected": connected,
+            "session_connected_phone": _company_safe_text(config.get("session_connected_phone")),
+            "session_device_label": _company_safe_text(config.get("session_device_label")),
+            "session_qr_code": _company_safe_text(config.get("session_qr_code")),
+            "session_pairing_code": _company_safe_text(config.get("session_pairing_code")),
+            "last_health_check_at": config.get("last_health_check_at"),
+            "last_error_message": _company_safe_text(config.get("last_error_message")),
+            "gateway_configured": bool(_company_gateway_url()),
+            "gateway_url_configured": bool(_company_gateway_url()),
+        }
+    )
+    return base
+def company_whatsapp_session_status(
+    *,
+    company: Company,
+    user=None,
+) -> dict[str, Any]:
+    setting = get_or_create_company_whatsapp_connection(company=company, user=user)
+    result = _company_gateway_request(
+        path="/session/status",
+        payload={"session_name": _company_whatsapp_session_name(setting)},
+    )
+    setting = _sync_company_connection_from_gateway(setting, result, user=user)
+    return {
+        "success": bool(result.get("success")),
+        "message": _company_safe_text(result.get("message"), "Company WhatsApp connection status loaded."),
+        "result": result,
+        "connection": serialize_company_whatsapp_connection(setting),
+    }
+def company_whatsapp_create_qr(
+    *,
+    company: Company,
+    user=None,
+) -> dict[str, Any]:
+    setting = get_or_create_company_whatsapp_connection(company=company, user=user)
+    config = _company_connection_config(setting)
+    config["session_mode"] = "qr"
+    setting.provider_config = config
+    if user:
+        setting.updated_by = user
+    setting.save()
+    result = _company_gateway_request(
+        path="/session/create-qr",
+        payload={"session_name": _company_whatsapp_session_name(setting)},
+    )
+    setting = _sync_company_connection_from_gateway(setting, result, user=user)
+    return {
+        "success": bool(result.get("success")),
+        "message": _company_safe_text(result.get("message"), "Company WhatsApp QR requested."),
+        "result": result,
+        "connection": serialize_company_whatsapp_connection(setting),
+    }
+def company_whatsapp_create_pairing_code(
+    *,
+    company: Company,
+    phone_number: str = "",
+    user=None,
+) -> dict[str, Any]:
+    setting = get_or_create_company_whatsapp_connection(company=company, user=user)
+    config = _company_connection_config(setting)
+    config["session_mode"] = "pairing_code"
+    setting.provider_config = config
+    if user:
+        setting.updated_by = user
+    setting.save()
+    phone = _company_safe_text(
+        phone_number
+        or config.get("default_test_recipient")
+        or setting.phone_number
+    )
+    result = _company_gateway_request(
+        path="/session/create-pairing-code",
+        payload={
+            "session_name": _company_whatsapp_session_name(setting),
+            "phone_number": phone,
+        },
+    )
+    setting = _sync_company_connection_from_gateway(setting, result, user=user)
+    return {
+        "success": bool(result.get("success")),
+        "message": _company_safe_text(result.get("message"), "Company WhatsApp pairing code requested."),
+        "result": result,
+        "connection": serialize_company_whatsapp_connection(setting),
+    }
+def company_whatsapp_disconnect(
+    *,
+    company: Company,
+    user=None,
+) -> dict[str, Any]:
+    setting = get_or_create_company_whatsapp_connection(company=company, user=user)
+    result = _company_gateway_request(
+        path="/session/disconnect",
+        payload={"session_name": _company_whatsapp_session_name(setting)},
+    )
+    setting = _sync_company_connection_from_gateway(setting, result, user=user)
+    if bool(result.get("success")):
+        config = _company_connection_config(setting)
+        config.update(
+            {
+                "session_status": "disconnected",
+                "is_active": False,
+                "session_qr_code": "",
+                "session_pairing_code": "",
+                "session_connected_phone": "",
+                "last_error_message": "",
+            }
+        )
+        setting.provider_config = config
+        if user:
+            setting.updated_by = user
+        setting.save()
+    return {
+        "success": bool(result.get("success")),
+        "message": _company_safe_text(result.get("message"), "Company WhatsApp disconnected."),
+        "result": result,
+        "connection": serialize_company_whatsapp_connection(setting),
+    }
+
+def _normalize_company_whatsapp_test_phone(
+    *,
+    phone_number: str,
+    default_country_code: str = "966",
+) -> str:
+    """
+    Normalize Company WhatsApp test recipient phones.
+    Saudi default behavior:
+    - 0505263775      -> +966505263775
+    - 505263775       -> +966505263775
+    - 966505263775    -> +966505263775
+    - +966505263775   -> +966505263775
+    - 00966505263775  -> +966505263775
+    External numbers are accepted when the user enters a country code:
+    - +971501234567   -> +971501234567
+    - 00971501234567  -> +971501234567
+    - 971501234567    -> +971501234567
+    """
+    raw = _company_safe_text(phone_number).strip()
+    country_code = "".join(
+        ch for ch in _company_safe_text(default_country_code, "966") if ch.isdigit()
+    ) or "966"
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    if not digits:
+        return normalize_phone_number(
+            phone_number=phone_number,
+            default_country_code=country_code,
+        )
+    if raw.startswith("+"):
+        return f"+{digits}"
+    if digits.startswith("00") and len(digits) > 2:
+        return f"+{digits[2:]}"
+    if digits.startswith(country_code):
+        return f"+{digits}"
+    if country_code == "966":
+        if digits.startswith("05") and len(digits) == 10:
+            return f"+966{digits[1:]}"
+        if digits.startswith("5") and len(digits) == 9:
+            return f"+966{digits}"
+        if digits.startswith("0"):
+            return f"+966{digits[1:]}"
+        if len(digits) >= 10:
+            return f"+{digits}"
+        return f"+966{digits}"
+    if digits.startswith("0"):
+        return f"+{country_code}{digits[1:]}"
+    if len(digits) >= 10:
+        return f"+{digits}"
+    return f"+{country_code}{digits}"
+def company_whatsapp_send_test_message(
+    *,
+    company: Company,
+    recipient_phone: str = "",
+    message_body: str = "",
+    user=None,
+) -> dict[str, Any]:
+    setting = get_or_create_company_whatsapp_connection(company=company, user=user)
+    config = _company_connection_config(setting)
+    phone = _normalize_company_whatsapp_test_phone(
+        phone_number=_company_safe_text(
+            recipient_phone
+            or config.get("default_test_recipient")
+            or setting.phone_number
+        ),
+        default_country_code=setting.default_country_code,
+    )
+    body = _company_safe_text(
+        message_body,
+        "Company WhatsApp test message from Mhamcloud.",
+    )
+    result = _company_gateway_request(
+        path="/messages/send-text",
+        payload={
+            "session_name": _company_whatsapp_session_name(setting),
+            "to_phone": phone,
+            "body": body,
+        },
+    )
+    status = WhatsAppMessageStatus.QUEUED
+    log = create_message_log(
+        company=company,
+        recipient_name="Company WhatsApp Test",
+        recipient_phone=phone,
+        message_body=body,
+        provider=setting.provider or WhatsAppProvider.CUSTOM,
+        status=status,
+        source_type=WhatsAppMessageSourceType.MANUAL,
+        source_id=f"company-whatsapp-test-{company.id}",
+        provider_response=result,
+        created_by=user,
+    )
+    if bool(result.get("success")):
+        log.status = WhatsAppMessageStatus.SENT
+        log.sent_at = timezone.now()
+        log.provider_message_id = _company_safe_text(
+            result.get("external_message_id")
+            or result.get("message_id")
+        )
+        log.error_message = ""
+    else:
+        log.status = WhatsAppMessageStatus.FAILED
+        log.failed_at = timezone.now()
+        log.error_message = _company_safe_text(
+            result.get("error_message")
+            or result.get("message"),
+            "Gateway failed to send message.",
+        )
+    log.provider_response = result
+    log.save()
+    setting = _sync_company_connection_from_gateway(setting, result, user=user)
+    return {
+        "success": bool(result.get("success")),
+        "message": _company_safe_text(result.get("message"), "Company WhatsApp test message processed."),
+        "result": result,
+        "connection": serialize_company_whatsapp_connection(setting),
+        "message_log": serialize_whatsapp_message_log(log),
+    }
