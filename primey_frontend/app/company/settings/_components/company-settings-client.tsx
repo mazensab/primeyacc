@@ -546,7 +546,7 @@ function SearchBox({
       apiRequest<unknown>("/api/company/settings/"),
       apiRequest<unknown>("/api/company/branches/"),
       apiRequest<unknown>("/api/company/users/"),
-      apiRequest<unknown>("/api/company/payment-methods/"),
+      apiRequest<unknown>("/api/company/payments/methods/"),
       Promise.all([apiRequest<unknown>("/api/company/profile/"), apiRequest<unknown>("/api/company/settings/").catch(() => null)]),
     ]);
     setStats({
@@ -4073,33 +4073,137 @@ export function TaxSettingsPage() {
 type PaymentMethodForm = {
   name: string;
   code: string;
-  type: string;
-  account_name: string;
+  method_type: string;
+  settlement_behavior: string;
+  cashbox_account_code: string;
+  bank_account_code: string;
+  allow_pos: boolean;
+  allow_customer_checkout: boolean;
+  is_default: boolean;
   is_active: boolean;
+  notes: string;
 };
+const paymentMethodsEndpoint = "/api/company/payments/methods/";
 const emptyPaymentMethodForm: PaymentMethodForm = {
   name: "",
   code: "",
-  type: "cash",
-  account_name: "",
+  method_type: "CASH",
+  settlement_behavior: "IMMEDIATE",
+  cashbox_account_code: "",
+  bank_account_code: "",
+  allow_pos: true,
+  allow_customer_checkout: false,
+  is_default: false,
   is_active: true,
+  notes: "",
 };
+const paymentMethodTypeOptions = [
+  { value: "CASH", labelAr: "نقدي", labelEn: "Cash" },
+  { value: "BANK_TRANSFER", labelAr: "تحويل بنكي", labelEn: "Bank transfer" },
+  { value: "POS_TERMINAL", labelAr: "جهاز نقاط بيع", labelEn: "POS terminal" },
+  { value: "ONLINE_GATEWAY", labelAr: "بوابة إلكترونية", labelEn: "Online gateway" },
+];
+const settlementBehaviorOptions = [
+  { value: "IMMEDIATE", labelAr: "فوري", labelEn: "Immediate" },
+  { value: "NEEDS_SETTLEMENT", labelAr: "يحتاج تسوية", labelEn: "Needs settlement" },
+];
+function paymentMethodOptionLabel(
+  options: Array<{ value: string; labelAr: string; labelEn: string }>,
+  value: string,
+  rtl: boolean
+): string {
+  const option = options.find((item) => item.value === value);
+  if (!option) return value || "-";
+  return rtl ? option.labelAr : option.labelEn;
+}
+function normalizePaymentMethodCode(value: string): string {
+  return value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+}
+function defaultPaymentMethodCode(methodType: string): string {
+  if (methodType === "BANK_TRANSFER") return "BANK";
+  if (methodType === "POS_TERMINAL") return "POS";
+  if (methodType === "ONLINE_GATEWAY") return "ONLINE";
+  return "CASH";
+}
+function buildPaymentMethodPayload(form: PaymentMethodForm) {
+  const code =
+    normalizePaymentMethodCode(form.code) ||
+    normalizePaymentMethodCode(form.name) ||
+    defaultPaymentMethodCode(form.method_type);
+  return {
+    name: form.name.trim(),
+    code,
+    method_type: form.method_type,
+    type: form.method_type,
+    settlement_behavior: form.settlement_behavior,
+    cashbox_account_code: form.cashbox_account_code.trim(),
+    bank_account_code: form.bank_account_code.trim(),
+    allow_pos: form.allow_pos,
+    allow_customer_checkout: form.allow_customer_checkout,
+    is_default: form.is_default,
+    is_active: form.is_active,
+    notes: form.notes.trim(),
+  };
+}
+function paymentMethodTypeFromRow(row: ApiRecord): string {
+  return getText(row, ["method_type", "type"], "CASH").toUpperCase();
+}
+function paymentMethodSettlementFromRow(row: ApiRecord): string {
+  return getText(row, ["settlement_behavior"], "IMMEDIATE").toUpperCase();
+}
+function paymentMethodDisplayName(row: ApiRecord): string {
+  return getText(row, ["name", "title", "label"], "-");
+}
+function paymentMethodCode(row: ApiRecord): string {
+  return getText(row, ["code"], "-");
+}
 export function PaymentMethodsPage() {
   const locale = useLocale();
   const rtl = locale === "ar";
   const [rows, setRows] = useState<ApiRecord[]>([]);
   const [query, setQuery] = useState("");
-  const [form, setForm] = useState<PaymentMethodForm>(emptyPaymentMethodForm);
+  const [form, setForm] = useState<PaymentMethodForm>({ ...emptyPaymentMethodForm });
   const [editingId, setEditingId] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [seeding, setSeeding] = useState(false);
   const setField = <K extends keyof PaymentMethodForm>(key: K, value: PaymentMethodForm[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
+  const filteredRows = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (!normalizedQuery) return true;
+      return [
+        paymentMethodDisplayName(row),
+        paymentMethodCode(row),
+        getText(row, ["method_type", "method_type_display", "type"]),
+        getText(row, ["settlement_behavior", "settlement_behavior_display"]),
+        getText(row, ["cashbox_account_code"]),
+        getText(row, ["bank_account_code"]),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedQuery);
+    });
+  }, [query, rows]);
+  const stats = useMemo(() => {
+    return {
+      total: rows.length,
+      active: rows.filter((row) => getBool(row, ["is_active", "active"], true)).length,
+      pos: rows.filter((row) => getBool(row, ["allow_pos"], false)).length,
+      checkout: rows.filter((row) => getBool(row, ["allow_customer_checkout"], false)).length,
+    };
+  }, [rows]);
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const payload = await apiRequest<unknown>("/api/company/payment-methods/");
+      const payload = await apiRequest<unknown>(paymentMethodsEndpoint);
       setRows(normalizeList(payload));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : rtl ? "تعذر تحميل طرق الدفع" : "Could not load payment methods");
@@ -4112,16 +4216,23 @@ export function PaymentMethodsPage() {
   }, [load]);
   const resetForm = () => {
     setEditingId("");
-    setForm(emptyPaymentMethodForm);
+    setForm({ ...emptyPaymentMethodForm });
   };
   const edit = (row: ApiRecord) => {
     setEditingId(getRowId(row));
+    const methodType = paymentMethodTypeFromRow(row);
     setForm({
-      name: getText(row, ["name"]),
-      code: getText(row, ["code"]),
-      type: getText(row, ["type", "method_type"], "cash"),
-      account_name: getText(row, ["account_name", "account"]),
+      name: paymentMethodDisplayName(row),
+      code: paymentMethodCode(row) === "-" ? "" : paymentMethodCode(row),
+      method_type: methodType,
+      settlement_behavior: paymentMethodSettlementFromRow(row),
+      cashbox_account_code: getText(row, ["cashbox_account_code"]),
+      bank_account_code: getText(row, ["bank_account_code"]),
+      allow_pos: getBool(row, ["allow_pos"], methodType === "CASH" || methodType === "POS_TERMINAL"),
+      allow_customer_checkout: getBool(row, ["allow_customer_checkout"], methodType === "ONLINE_GATEWAY"),
+      is_default: getBool(row, ["is_default"], false),
       is_active: getBool(row, ["is_active", "active"], true),
+      notes: getText(row, ["notes", "description"]),
     });
   };
   const save = async () => {
@@ -4129,11 +4240,12 @@ export function PaymentMethodsPage() {
       toast.error(rtl ? "اسم طريقة الدفع مطلوب" : "Payment method name is required");
       return;
     }
+    const payload = buildPaymentMethodPayload(form);
     try {
       setSaving(true);
-      await apiRequest(editingId ? `/api/company/payment-methods/${editingId}/` : "/api/company/payment-methods/", {
+      await apiRequest(editingId ? `${paymentMethodsEndpoint}${editingId}/` : paymentMethodsEndpoint, {
         method: editingId ? "PATCH" : "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
       toast.success(editingId ? (rtl ? "تم تحديث طريقة الدفع" : "Payment method updated") : rtl ? "تم إنشاء طريقة الدفع" : "Payment method created");
       resetForm();
@@ -4144,17 +4256,15 @@ export function PaymentMethodsPage() {
       setSaving(false);
     }
   };
-  const toggleActive = async (row: ApiRecord, nextActive: boolean) => {
-    const id = getRowId(row);
-    if (!id) return;
+  const toggle = async (id: string, nextActive: boolean) => {
     try {
       try {
-        await apiRequest(`/api/company/payment-methods/${id}/${nextActive ? "activate" : "deactivate"}/`, {
+        await apiRequest(`${paymentMethodsEndpoint}${id}/status/`, {
           method: "POST",
-          body: JSON.stringify({}),
+          body: JSON.stringify({ is_active: nextActive }),
         });
       } catch {
-        await apiRequest(`/api/company/payment-methods/${id}/`, {
+        await apiRequest(`${paymentMethodsEndpoint}${id}/`, {
           method: "PATCH",
           body: JSON.stringify({ is_active: nextActive }),
         });
@@ -4162,109 +4272,214 @@ export function PaymentMethodsPage() {
       toast.success(nextActive ? (rtl ? "تم تفعيل طريقة الدفع" : "Payment method activated") : rtl ? "تم تعطيل طريقة الدفع" : "Payment method deactivated");
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : rtl ? "تعذر تحديث حالة طريقة الدفع" : "Could not update payment method status");
+      toast.error(error instanceof Error ? error.message : rtl ? "تعذر تحديث الحالة" : "Could not update status");
     }
   };
-  const filteredRows = rows.filter((row) => {
-    const haystack = [
-      getText(row, ["name"]),
-      getText(row, ["code"]),
-      getText(row, ["type", "method_type"]),
-      getText(row, ["account_name", "account"]),
-    ]
-      .join(" ")
-      .toLowerCase();
-    return haystack.includes(query.toLowerCase());
-  });
+  const seedDefaults = async () => {
+    const existingCodes = new Set(rows.map((row) => paymentMethodCode(row).toUpperCase()));
+    const defaults = [
+      {
+        name: rtl ? "نقدي" : "Cash",
+        code: "CASH",
+        method_type: "CASH",
+        type: "CASH",
+        settlement_behavior: "IMMEDIATE",
+        allow_pos: true,
+        allow_customer_checkout: false,
+        is_default: true,
+        is_active: true,
+      },
+      {
+        name: rtl ? "بطاقة بنكية - نقطة بيع" : "Card POS",
+        code: "POS",
+        method_type: "POS_TERMINAL",
+        type: "POS_TERMINAL",
+        settlement_behavior: "NEEDS_SETTLEMENT",
+        allow_pos: true,
+        allow_customer_checkout: false,
+        is_default: false,
+        is_active: true,
+      },
+      {
+        name: rtl ? "تحويل بنكي" : "Bank transfer",
+        code: "BANK",
+        method_type: "BANK_TRANSFER",
+        type: "BANK_TRANSFER",
+        settlement_behavior: "IMMEDIATE",
+        allow_pos: false,
+        allow_customer_checkout: true,
+        is_default: false,
+        is_active: true,
+      },
+    ];
+    const missing = defaults.filter((item) => !existingCodes.has(item.code));
+    if (missing.length === 0) {
+      toast.success(rtl ? "طرق الدفع الأساسية موجودة بالفعل" : "Default payment methods already exist");
+      return;
+    }
+    try {
+      setSeeding(true);
+      for (const item of missing) {
+        await apiRequest(paymentMethodsEndpoint, {
+          method: "POST",
+          body: JSON.stringify(item),
+        });
+      }
+      toast.success(rtl ? "تمت تهيئة طرق الدفع الأساسية" : "Default payment methods created");
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : rtl ? "تعذرت تهيئة طرق الدفع" : "Could not seed payment methods");
+    } finally {
+      setSeeding(false);
+    }
+  };
   return (
     <PageShell
       title={rtl ? "طرق الدفع" : "Payment methods"}
-      description={rtl ? "إدارة طرق الدفع التي تستخدمها الشركة في الفواتير ونقطة البيع." : "Manage payment methods used by the company in invoices and POS."}
+      description={rtl ? "إدارة طرق الدفع التي تستخدمها الشركة في الفواتير ونقطة البيع والتحصيل." : "Manage company payment methods used in invoices, POS and collections."}
       icon={CreditCard}
       actions={
-        <SecondaryButton onClick={() => void load()} disabled={loading}>
-          <RefreshCcw className="h-4 w-4" />
-          {rtl ? "تحديث" : "Refresh"}
-        </SecondaryButton>
+        <>
+          <SecondaryButton onClick={() => void load()}>
+            <RefreshCcw className="h-4 w-4" />
+            {rtl ? "تحديث" : "Refresh"}
+          </SecondaryButton>
+          <SecondaryButton onClick={() => void seedDefaults()} disabled={seeding}>
+            <Plus className="h-4 w-4" />
+            {rtl ? "تهيئة الطرق الأساسية" : "Seed defaults"}
+          </SecondaryButton>
+        </>
       }
     >
-      <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
-        <Card title={editingId ? (rtl ? "تعديل طريقة دفع" : "Edit payment method") : rtl ? "إضافة طريقة دفع" : "Add payment method"} icon={Plus}>
-          <div className="grid gap-4">
-            <TextInput label={rtl ? "اسم طريقة الدفع" : "Payment method name"} value={form.name} onChange={(value) => setField("name", value)} required />
-            <TextInput label={rtl ? "الكود" : "Code"} value={form.code} onChange={(value) => setField("code", value)} />
-            <SelectInput
-              label={rtl ? "النوع" : "Type"}
-              value={form.type}
-              onChange={(value) => setField("type", value)}
-              options={[
-                { value: "cash", label: rtl ? "نقدي" : "Cash" },
-                { value: "bank", label: rtl ? "تحويل بنكي" : "Bank transfer" },
-                { value: "card", label: rtl ? "بطاقة" : "Card" },
-                { value: "wallet", label: rtl ? "محفظة" : "Wallet" },
-                { value: "other", label: rtl ? "أخرى" : "Other" },
-              ]}
-            />
-            <TextInput label={rtl ? "اسم الحساب" : "Account name"} value={form.account_name} onChange={(value) => setField("account_name", value)} />
-            <ToggleInput label={rtl ? "طريقة دفع نشطة" : "Active payment method"} checked={form.is_active} onChange={(value) => setField("is_active", value)} />
-            <div className="flex flex-wrap gap-2">
-              <PrimaryButton onClick={() => void save()} disabled={saving}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                {rtl ? "حفظ" : "Save"}
-              </PrimaryButton>
-              {editingId ? <SecondaryButton onClick={resetForm}>{rtl ? "إلغاء" : "Cancel"}</SecondaryButton> : null}
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard label={rtl ? "الإجمالي" : "Total"} value={stats.total} hint={rtl ? "طرق دفع مسجلة" : "Registered payment methods"} icon={CreditCard} />
+        <StatCard label={rtl ? "النشطة" : "Active"} value={stats.active} hint={rtl ? "متاحة للاستخدام" : "Available for use"} icon={CheckCircle2} />
+        <StatCard label={rtl ? "نقطة البيع" : "POS"} value={stats.pos} hint={rtl ? "مفعلة لنقطة البيع" : "Allowed in POS"} icon={Store} />
+        <StatCard label={rtl ? "تحصيل العملاء" : "Checkout"} value={stats.checkout} hint={rtl ? "مفعلة للتحصيل" : "Allowed for checkout"} icon={Landmark} />
+      </section>
+      {loading ? (
+        <LoadingBlock />
+      ) : (
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <Card
+            title={rtl ? "قائمة طرق الدفع" : "Payment methods list"}
+            description={`${rtl ? "الإجمالي" : "Total"}: ${filteredRows.length} / ${rows.length}`}
+            icon={CreditCard}
+          >
+            <div className="mb-4">
+              <SearchBox
+                value={query}
+                onChange={setQuery}
+                placeholder={rtl ? "ابحث بالاسم أو الكود أو نوع طريقة الدفع..." : "Search by name, code or method type..."}
+              />
             </div>
-          </div>
-        </Card>
-        <Card title={rtl ? "قائمة طرق الدفع" : "Payment methods list"} description={`${rtl ? "الإجمالي" : "Total"}: ${formatInteger(rows.length)}`} icon={CreditCard}>
-          <div className="mb-4">
-            <SearchBox value={query} onChange={setQuery} placeholder={rtl ? "ابحث باسم طريقة الدفع أو الكود..." : "Search payment method name or code..."} />
-          </div>
-          {loading ? (
-            <LoadingBlock />
-          ) : filteredRows.length === 0 ? (
-            <EmptyState title={rtl ? "لا توجد طرق دفع" : "No payment methods"} description={rtl ? "ستظهر طرق الدفع هنا عند توفرها من API." : "Payment methods will appear here when returned by the API."} />
-          ) : (
-            <div className="overflow-hidden rounded-3xl border border-neutral-200">
-              <table className="w-full min-w-[760px] text-sm">
-                <thead className="bg-neutral-50 text-neutral-500">
-                  <tr>
-                    <th className="px-4 py-3 text-start font-semibold">{rtl ? "طريقة الدفع" : "Payment method"}</th>
-                    <th className="px-4 py-3 text-start font-semibold">{rtl ? "النوع" : "Type"}</th>
-                    <th className="px-4 py-3 text-start font-semibold">{rtl ? "الحساب" : "Account"}</th>
-                    <th className="px-4 py-3 text-start font-semibold">{rtl ? "الحالة" : "Status"}</th>
-                    <th className="px-4 py-3 text-start font-semibold">{rtl ? "إجراءات" : "Actions"}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100 bg-white">
-                  {filteredRows.map((row, index) => {
-                    const active = getBool(row, ["is_active", "active"], true);
-                    return (
-                      <tr key={getRowId(row) || index}>
-                        <td className="px-4 py-4">
-                          <p className="font-semibold text-neutral-900">{getText(row, ["name"], "-")}</p>
-                          <p className="mt-1 text-xs text-neutral-500">{getText(row, ["code"], "-")}</p>
-                        </td>
-                        <td className="px-4 py-4 text-neutral-600">{getText(row, ["type", "method_type"], "-")}</td>
-                        <td className="px-4 py-4 text-neutral-600">{getText(row, ["account_name", "account"], "-")}</td>
-                        <td className="px-4 py-4"><StatusPill active={active} /></td>
-                        <td className="px-4 py-4">
-                          <div className="flex flex-wrap gap-2">
-                            <SecondaryButton onClick={() => edit(row)}>{rtl ? "تعديل" : "Edit"}</SecondaryButton>
-                            <SecondaryButton onClick={() => void toggleActive(row, !active)}>
-                              {active ? (rtl ? "تعطيل" : "Deactivate") : rtl ? "تفعيل" : "Activate"}
-                            </SecondaryButton>
-                          </div>
-                        </td>
+            {filteredRows.length === 0 ? (
+              <EmptyState
+                title={rtl ? "لا توجد طرق دفع" : "No payment methods"}
+                description={rtl ? "استخدم زر تهيئة الطرق الأساسية أو أضف طريقة دفع جديدة من النموذج." : "Use Seed defaults or add a new payment method from the form."}
+              />
+            ) : (
+              <div className="overflow-hidden rounded-3xl border border-neutral-200">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-neutral-200 text-sm">
+                    <thead className="bg-neutral-50 text-xs text-neutral-500">
+                      <tr>
+                        <th className="px-4 py-3 text-start">{rtl ? "الكود" : "Code"}</th>
+                        <th className="px-4 py-3 text-start">{rtl ? "الاسم" : "Name"}</th>
+                        <th className="px-4 py-3 text-start">{rtl ? "النوع" : "Type"}</th>
+                        <th className="px-4 py-3 text-start">{rtl ? "التسوية" : "Settlement"}</th>
+                        <th className="px-4 py-3 text-start">{rtl ? "الاستخدام" : "Usage"}</th>
+                        <th className="px-4 py-3 text-start">{rtl ? "الحالة" : "Status"}</th>
+                        <th className="px-4 py-3 text-end">{rtl ? "إجراءات" : "Actions"}</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-200 bg-white">
+                      {filteredRows.map((row) => {
+                        const id = getRowId(row);
+                        const methodType = paymentMethodTypeFromRow(row);
+                        const active = getBool(row, ["is_active", "active"], true);
+                        return (
+                          <tr key={id || paymentMethodCode(row)} className="align-top">
+                            <td className="px-4 py-3 font-semibold text-neutral-950">{paymentMethodCode(row)}</td>
+                            <td className="px-4 py-3">
+                              <div className="font-semibold text-neutral-950">{paymentMethodDisplayName(row)}</div>
+                              <div className="mt-1 text-xs text-neutral-500">
+                                {getBool(row, ["is_default"], false) ? (rtl ? "افتراضية" : "Default") : rtl ? "غير افتراضية" : "Not default"}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">{paymentMethodOptionLabel(paymentMethodTypeOptions, methodType, rtl)}</td>
+                            <td className="px-4 py-3">{paymentMethodOptionLabel(settlementBehaviorOptions, paymentMethodSettlementFromRow(row), rtl)}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex flex-wrap gap-1">
+                                {getBool(row, ["allow_pos"], false) ? <span className="rounded-full bg-neutral-100 px-2 py-1 text-xs">POS</span> : null}
+                                {getBool(row, ["allow_customer_checkout"], false) ? <span className="rounded-full bg-neutral-100 px-2 py-1 text-xs">{rtl ? "تحصيل" : "Checkout"}</span> : null}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <StatusPill active={active} />
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex justify-end gap-2">
+                                <SecondaryButton onClick={() => edit(row)}>{rtl ? "تعديل" : "Edit"}</SecondaryButton>
+                                <SecondaryButton onClick={() => void toggle(id, !active)}>
+                                  {active ? (rtl ? "تعطيل" : "Deactivate") : rtl ? "تفعيل" : "Activate"}
+                                </SecondaryButton>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </Card>
+          <Card
+            title={editingId ? (rtl ? "تعديل طريقة دفع" : "Edit payment method") : rtl ? "إضافة طريقة دفع" : "Add payment method"}
+            description={rtl ? "اربط طريقة الدفع بنوعها واستخدامها في نقطة البيع أو التحصيل." : "Configure the payment method type and where it can be used."}
+            icon={Plus}
+          >
+            <div className="grid gap-4">
+              <TextInput label={rtl ? "اسم طريقة الدفع" : "Payment method name"} value={form.name} onChange={(value) => setField("name", value)} required />
+              <TextInput
+                label={rtl ? "الكود" : "Code"}
+                value={form.code}
+                onChange={(value) => setField("code", normalizePaymentMethodCode(value))}
+                placeholder={rtl ? "اختياري - يولد تلقائيًا إن ترك فارغًا" : "Optional - auto generated if empty"}
+              />
+              <SelectInput
+                label={rtl ? "النوع" : "Type"}
+                value={form.method_type}
+                onChange={(value) => setField("method_type", value)}
+                options={paymentMethodTypeOptions.map((item) => ({ value: item.value, label: rtl ? item.labelAr : item.labelEn }))}
+              />
+              <SelectInput
+                label={rtl ? "سلوك التسوية" : "Settlement behavior"}
+                value={form.settlement_behavior}
+                onChange={(value) => setField("settlement_behavior", value)}
+                options={settlementBehaviorOptions.map((item) => ({ value: item.value, label: rtl ? item.labelAr : item.labelEn }))}
+              />
+              <TextInput label={rtl ? "كود حساب الصندوق" : "Cashbox account code"} value={form.cashbox_account_code} onChange={(value) => setField("cashbox_account_code", value)} />
+              <TextInput label={rtl ? "كود الحساب البنكي" : "Bank account code"} value={form.bank_account_code} onChange={(value) => setField("bank_account_code", value)} />
+              <div className="grid gap-3">
+                <ToggleInput label={rtl ? "متاحة في نقطة البيع" : "Allowed in POS"} checked={form.allow_pos} onChange={(value) => setField("allow_pos", value)} />
+                <ToggleInput label={rtl ? "متاحة لتحصيل العملاء" : "Allowed for customer checkout"} checked={form.allow_customer_checkout} onChange={(value) => setField("allow_customer_checkout", value)} />
+                <ToggleInput label={rtl ? "طريقة الدفع الافتراضية" : "Default payment method"} checked={form.is_default} onChange={(value) => setField("is_default", value)} />
+                <ToggleInput label={rtl ? "طريقة دفع نشطة" : "Active payment method"} checked={form.is_active} onChange={(value) => setField("is_active", value)} />
+              </div>
+              <TextArea label={rtl ? "ملاحظات" : "Notes"} value={form.notes} onChange={(value) => setField("notes", value)} />
+              <div className="flex flex-wrap justify-end gap-2">
+                {editingId ? <SecondaryButton onClick={resetForm}>{rtl ? "إلغاء التعديل" : "Cancel edit"}</SecondaryButton> : null}
+                <PrimaryButton onClick={() => void save()} disabled={saving}>
+                  <Save className="h-4 w-4" />
+                  {editingId ? (rtl ? "تحديث" : "Update") : rtl ? "حفظ" : "Save"}
+                </PrimaryButton>
+              </div>
             </div>
-          )}
-        </Card>
-      </div>
+          </Card>
+        </div>
+      )}
     </PageShell>
   );
 }
