@@ -249,7 +249,7 @@ export function NavUser() {
   const accountHref = useMemo(() => {
     if (isCustomerArea) return "/customer/profile";
     if (isAgentArea) return "/agent/account";
-    if (isCompanyArea) return "/company/profile";
+    if (isCompanyArea) return "/company/settings/company-profile";
 
     return "/system/profile";
   }, [isCompanyArea, isCustomerArea, isAgentArea]);

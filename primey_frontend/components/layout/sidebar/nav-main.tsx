@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 /* =====================================================
    📂 components/layout/sidebar/nav-main.tsx
@@ -949,7 +949,7 @@ const companyNavItems: NavGroup[] = [
         items: [
           {
             title: { ar: "ملف الشركة", en: "Company Profile" },
-            href: "/company/profile",
+            href: "/company/settings/company-profile",
             icon: ShieldCheck,
             permission: PERMISSIONS.PROVIDER_WORKSPACE_VIEW,
             workspaces: ["company"],
