@@ -52,8 +52,8 @@ from .profile import company_profile
 app_name = "company"
 
 urlpatterns = [
-
-    path("business-controls/", include("api.company.business_controls.urls")),
+    path("tax-rates/", include("api.company.tax_rates.urls")),
+path("business-controls/", include("api.company.business_controls.urls")),
     path('jewelry/', include('api.company.jewelry.urls')),
     path("activity-backends/", include("api.company.activity_backends.urls")),
     path("me/", company_me, name="me"),

@@ -117,7 +117,9 @@ class CostCenterStatus(models.TextChoices):
 class TaxType(models.TextChoices):
     VAT = "VAT", "ضريبة القيمة المضافة"
     WITHHOLDING = "WITHHOLDING", "ضريبة استقطاع"
+    EXCISE = "EXCISE", "ضريبة انتقائية"
     ZAKAT = "ZAKAT", "زكاة"
+    CUSTOM = "CUSTOM", "ضريبة مخصصة"
     OTHER = "OTHER", "أخرى"
 
 
@@ -125,6 +127,12 @@ class TaxDirection(models.TextChoices):
     OUTPUT = "OUTPUT", "ضريبة مبيعات"
     INPUT = "INPUT", "ضريبة مشتريات"
     SETTLEMENT = "SETTLEMENT", "تسوية ضريبية"
+
+class TaxCalculationBase(models.TextChoices):
+    NET = "NET", "صافي السطر"
+    GROSS = "GROSS", "السعر شامل الضريبة"
+    AFTER_PREVIOUS_TAX = "AFTER_PREVIOUS_TAX", "بعد الضرائب السابقة"
+    RETAIL_PRICE = "RETAIL_PRICE", "سعر البيع"
 
 
 class JournalEntryStatus(models.TextChoices):
@@ -622,6 +630,7 @@ class TaxRate(models.Model):
 
     code = models.CharField(max_length=50, verbose_name="كود الضريبة")
     name = models.CharField(max_length=255, verbose_name="اسم الضريبة")
+    name_en = models.CharField(max_length=255, blank=True, default="", verbose_name="اسم الضريبة بالإنجليزية")
     tax_type = models.CharField(
         max_length=20,
         choices=TaxType.choices,
@@ -635,6 +644,36 @@ class TaxRate(models.Model):
         verbose_name="اتجاه الضريبة",
     )
     rate = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("15.0000"), verbose_name="النسبة")
+    calculation_base = models.CharField(
+        max_length=30,
+        choices=TaxCalculationBase.choices,
+        default=TaxCalculationBase.NET,
+        db_index=True,
+        verbose_name="أساس احتساب الضريبة",
+    )
+    zatca_category_code = models.CharField(
+        max_length=10,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name="كود تصنيف VAT في زاتكا",
+        help_text="Examples: S, Z, E, O for VAT categories. Leave blank for non-VAT taxes.",
+    )
+    zatca_exemption_reason_code = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        verbose_name="كود سبب الإعفاء في زاتكا",
+    )
+    zatca_exemption_reason = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="سبب الإعفاء",
+    )
+    is_system = models.BooleanField(default=False, db_index=True, verbose_name="ضريبة نظامية")
+    valid_from = models.DateField(null=True, blank=True, verbose_name="صالحة من")
+    valid_to = models.DateField(null=True, blank=True, verbose_name="صالحة إلى")
 
     sales_account = models.ForeignKey(
         Account,
@@ -656,6 +695,7 @@ class TaxRate(models.Model):
     is_active = models.BooleanField(default=True, verbose_name="نشطة")
     is_default = models.BooleanField(default=False, verbose_name="افتراضية")
     description = models.TextField(blank=True, verbose_name="الوصف")
+    metadata = models.JSONField(default=dict, blank=True, verbose_name="بيانات إضافية")
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ الإنشاء")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="آخر تحديث")
@@ -671,6 +711,9 @@ class TaxRate(models.Model):
             models.Index(fields=["company", "direction"]),
             models.Index(fields=["company", "is_active"]),
             models.Index(fields=["company", "is_default"]),
+            models.Index(fields=["company", "calculation_base"]),
+            models.Index(fields=["company", "zatca_category_code"]),
+            models.Index(fields=["company", "is_system"]),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -687,6 +730,10 @@ class TaxRate(models.Model):
 
         self.code = clean_code(self.code)
         self.name = clean_text(self.name)
+        self.name_en = clean_text(self.name_en)
+        self.zatca_category_code = clean_code(self.zatca_category_code)
+        self.zatca_exemption_reason_code = clean_code(self.zatca_exemption_reason_code)
+        self.zatca_exemption_reason = clean_text(self.zatca_exemption_reason)
         self.rate = Decimal(str(self.rate or "0.0000")).quantize(Decimal("0.0001"))
 
         if not self.company_id:
@@ -700,6 +747,9 @@ class TaxRate(models.Model):
 
         if self.rate < Decimal("0.0000"):
             raise ValidationError({"rate": "نسبة الضريبة لا يمكن أن تكون سالبة."})
+
+        if self.valid_from and self.valid_to and self.valid_to < self.valid_from:
+            raise ValidationError({"valid_to": "تاريخ نهاية صلاحية الضريبة لا يمكن أن يكون قبل تاريخ البداية."})
 
         if self.sales_account_id:
             if self.sales_account.company_id != self.company_id:

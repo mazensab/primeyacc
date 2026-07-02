@@ -3021,3 +3021,191 @@ def post_supplier_payment_to_accounting(
 
     _mark_payment_accounting_posted(payment, entry)
     return entry
+
+# ============================================================
+# 🧾 Tax Rate Catalog Seeds | كتالوج الضرائب الافتراضي
+# ============================================================
+
+TAX_RATE_CATALOG_SEEDS = [
+    {
+        "code": "VAT15",
+        "name": "ضريبة القيمة المضافة 15%",
+        "name_en": "VAT 15%",
+        "tax_type": "VAT",
+        "direction": "OUTPUT",
+        "rate": Decimal("15.0000"),
+        "calculation_base": "NET",
+        "zatca_category_code": "S",
+        "is_default": True,
+        "is_system": True,
+        "description": "Default Saudi VAT standard rate.",
+    },
+    {
+        "code": "VAT0",
+        "name": "ضريبة القيمة المضافة 0%",
+        "name_en": "VAT 0%",
+        "tax_type": "VAT",
+        "direction": "OUTPUT",
+        "rate": Decimal("0.0000"),
+        "calculation_base": "NET",
+        "zatca_category_code": "Z",
+        "is_default": False,
+        "is_system": True,
+        "description": "Zero-rated VAT tax code.",
+    },
+    {
+        "code": "VATEXEMPT",
+        "name": "معفى من ضريبة القيمة المضافة",
+        "name_en": "VAT Exempt",
+        "tax_type": "VAT",
+        "direction": "OUTPUT",
+        "rate": Decimal("0.0000"),
+        "calculation_base": "NET",
+        "zatca_category_code": "E",
+        "is_default": False,
+        "is_system": True,
+        "description": "VAT exempt tax code.",
+    },
+    {
+        "code": "VATOUTOFSCOPE",
+        "name": "خارج نطاق ضريبة القيمة المضافة",
+        "name_en": "VAT Out of Scope",
+        "tax_type": "VAT",
+        "direction": "OUTPUT",
+        "rate": Decimal("0.0000"),
+        "calculation_base": "NET",
+        "zatca_category_code": "O",
+        "is_default": False,
+        "is_system": True,
+        "description": "Out-of-scope VAT tax code.",
+    },
+    {
+        "code": "EXCISETOBACCO100",
+        "name": "ضريبة انتقائية تبغ 100%",
+        "name_en": "Excise Tobacco 100%",
+        "tax_type": "EXCISE",
+        "direction": "OUTPUT",
+        "rate": Decimal("100.0000"),
+        "calculation_base": "NET",
+        "zatca_category_code": "",
+        "is_default": False,
+        "is_system": True,
+        "description": "Saudi excise tax code for tobacco products.",
+    },
+    {
+        "code": "EXCISEENERGY100",
+        "name": "ضريبة انتقائية مشروبات الطاقة 100%",
+        "name_en": "Excise Energy Drinks 100%",
+        "tax_type": "EXCISE",
+        "direction": "OUTPUT",
+        "rate": Decimal("100.0000"),
+        "calculation_base": "NET",
+        "zatca_category_code": "",
+        "is_default": False,
+        "is_system": True,
+        "description": "Saudi excise tax code for energy drinks.",
+    },
+    {
+        "code": "EXCISESWEETENED50",
+        "name": "ضريبة انتقائية مشروبات محلاة 50%",
+        "name_en": "Excise Sweetened Drinks 50%",
+        "tax_type": "EXCISE",
+        "direction": "OUTPUT",
+        "rate": Decimal("50.0000"),
+        "calculation_base": "NET",
+        "zatca_category_code": "",
+        "is_default": False,
+        "is_system": True,
+        "description": "Saudi excise tax code for sweetened drinks.",
+    },
+    {
+        "code": "EXCISESOFTDRINK50",
+        "name": "ضريبة انتقائية مشروبات غازية 50%",
+        "name_en": "Excise Soft Drinks 50%",
+        "tax_type": "EXCISE",
+        "direction": "OUTPUT",
+        "rate": Decimal("50.0000"),
+        "calculation_base": "NET",
+        "zatca_category_code": "",
+        "is_default": False,
+        "is_system": True,
+        "description": "Saudi excise tax code for soft drinks.",
+    },
+]
+
+
+def ensure_company_tax_rate_catalog(company, *, user=None):
+    """
+    Ensure the current company has the standard tax catalog.
+
+    Existing invoice/product percentage fields remain untouched in this phase.
+    This prepares accounting.TaxRate as the official catalog for VAT, excise,
+    and future ZATCA mapping.
+    """
+    if not company:
+        raise ValidationError("الشركة مطلوبة لإنشاء كتالوج الضرائب.")
+
+    output_vat_account = None
+    input_vat_account = None
+
+    try:
+        output_vat_account = get_account_by_purpose(
+            company,
+            AccountingAccountPurpose.OUTPUT_VAT,
+        )
+    except Exception:
+        output_vat_account = None
+
+    try:
+        input_vat_account = get_account_by_purpose(
+            company,
+            AccountingAccountPurpose.INPUT_VAT,
+        )
+    except Exception:
+        input_vat_account = None
+
+    ensured_rates = []
+
+    for seed in TAX_RATE_CATALOG_SEEDS:
+        tax_rate = TaxRate.objects.filter(
+            company=company,
+            code=seed["code"],
+        ).first()
+
+        if tax_rate is None:
+            tax_rate = TaxRate(company=company, code=seed["code"])
+
+        tax_rate.name = seed["name"]
+
+        if hasattr(tax_rate, "name_en"):
+            tax_rate.name_en = seed["name_en"]
+
+        tax_rate.tax_type = seed["tax_type"]
+        tax_rate.direction = seed["direction"]
+        tax_rate.rate = seed["rate"]
+
+        if hasattr(tax_rate, "calculation_base"):
+            tax_rate.calculation_base = seed["calculation_base"]
+
+        if hasattr(tax_rate, "zatca_category_code"):
+            tax_rate.zatca_category_code = seed["zatca_category_code"]
+
+        if hasattr(tax_rate, "is_system"):
+            tax_rate.is_system = seed["is_system"]
+
+        tax_rate.is_active = True
+        tax_rate.is_default = seed["is_default"]
+        tax_rate.description = seed["description"]
+
+        if tax_rate.tax_type == "VAT":
+            if output_vat_account and tax_rate.sales_account_id != output_vat_account.id:
+                tax_rate.sales_account = output_vat_account
+
+            if input_vat_account and tax_rate.purchase_account_id != input_vat_account.id:
+                tax_rate.purchase_account = input_vat_account
+
+        tax_rate.full_clean()
+        tax_rate.save()
+        ensured_rates.append(tax_rate)
+
+    return ensured_rates
