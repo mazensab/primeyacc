@@ -7,6 +7,8 @@
  * ✅ SAR icon from public/currency/sar.svg
  */
 "use client";
+
+import type { ComponentType } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -545,7 +547,7 @@ function SearchBox({
       apiRequest<unknown>("/api/company/branches/"),
       apiRequest<unknown>("/api/company/users/"),
       apiRequest<unknown>("/api/company/payment-methods/"),
-      apiRequest<unknown>("/api/company/tax-settings/"),
+      Promise.all([apiRequest<unknown>("/api/company/profile/"), apiRequest<unknown>("/api/company/settings/").catch(() => null)]),
     ]);
     setStats({
       profileReady: results[0].status === "fulfilled" && Object.keys(asRecord(results[0].value)).length > 0,
@@ -1672,7 +1674,7 @@ export function BranchesPage() {
             <StatCard label={t.inactiveBranches} value={branchStats.inactive} hint={t.inactiveHint} icon={XCircle} />
             <StatCard label={t.mainBranches} value={branchStats.main} hint={t.mainHint} icon={Building2} />
           </section>
-          <section className="grid gap-6 xl:grid-cols-[420px_1fr]">
+          <section className="grid gap-6 xl:grid-cols-[520px_minmax(0,1fr)]">
             <ProfileSectionCard
               title={editingId ? t.editBranch : t.addBranch}
               description={t.formDescription}
@@ -3061,116 +3063,1013 @@ export function CompanyPermissionsPage() {
     </PageShell>
   );
 }
+
+
+
+function SettingsPageShell({
+  title,
+  description,
+  icon: Icon,
+  actions,
+  children,
+}: {
+  title: string;
+  description: string;
+  icon: ComponentType<{ className?: string }>;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 rounded-3xl border bg-card p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted">
+            <Icon className="h-6 w-6 text-foreground" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{description}</p>
+          </div>
+        </div>
+        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+      </div>
+      {children}
+    </div>
+  );
+}
+function SettingsLoading() {
+  return (
+    <div className="rounded-3xl border bg-card p-8 text-sm font-medium text-muted-foreground shadow-sm">
+      ...
+    </div>
+  );
+}
+function ReadinessRow({
+  label,
+  ready,
+  readyLabel,
+  pendingLabel,
+}: {
+  label: string;
+  ready: boolean;
+  readyLabel: string;
+  pendingLabel: string;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-2xl border bg-background p-4 text-sm">
+      <span className="font-semibold text-muted-foreground">{label}</span>
+      <Badge variant="outline" className="rounded-full bg-muted px-2.5 py-1 text-xs">
+        {ready ? readyLabel : pendingLabel}
+      </Badge>
+    </div>
+  );
+}
 type TaxSettingsForm = {
   is_vat_registered: boolean;
   tax_number: string;
-  vat_rate: string;
   prices_include_tax: boolean;
   invoice_tax_label: string;
   tax_address: string;
 };
+type TaxRateRow = {
+  id: string;
+  code: string;
+  name: string;
+  name_en: string;
+  tax_type: string;
+  tax_type_display: string;
+  direction: string;
+  direction_display: string;
+  rate: string;
+  calculation_base: string;
+  calculation_base_display: string;
+  zatca_category_code: string;
+  zatca_exemption_reason_code: string;
+  zatca_exemption_reason: string;
+  description: string;
+  is_active: boolean;
+  is_default: boolean;
+  is_system: boolean;
+};
+type TaxRateForm = {
+  code: string;
+  name: string;
+  name_en: string;
+  tax_type: string;
+  direction: string;
+  rate: string;
+  calculation_base: string;
+  zatca_category_code: string;
+  zatca_exemption_reason_code: string;
+  zatca_exemption_reason: string;
+  description: string;
+  is_active: boolean;
+  is_default: boolean;
+  is_system: boolean;
+};
 const emptyTaxSettings: TaxSettingsForm = {
   is_vat_registered: true,
   tax_number: "",
-  vat_rate: "15.00",
   prices_include_tax: false,
   invoice_tax_label: "VAT",
   tax_address: "",
 };
+const emptyTaxRateForm: TaxRateForm = {
+  code: "",
+  name: "",
+  name_en: "",
+  tax_type: "VAT",
+  direction: "OUTPUT",
+  rate: "15.0000",
+  calculation_base: "NET",
+  zatca_category_code: "S",
+  zatca_exemption_reason_code: "",
+  zatca_exemption_reason: "",
+  description: "",
+  is_active: true,
+  is_default: false,
+  is_system: false,
+};
+const taxTypeOptions = [
+  { value: "VAT", labelAr: "ضريبة القيمة المضافة", labelEn: "VAT" },
+  { value: "EXCISE", labelAr: "ضريبة انتقائية", labelEn: "Excise" },
+  { value: "WITHHOLDING", labelAr: "ضريبة استقطاع", labelEn: "Withholding" },
+  { value: "ZAKAT", labelAr: "زكاة", labelEn: "Zakat" },
+  { value: "CUSTOM", labelAr: "ضريبة مخصصة", labelEn: "Custom" },
+  { value: "OTHER", labelAr: "أخرى", labelEn: "Other" },
+];
+const taxDirectionOptions = [
+  { value: "OUTPUT", labelAr: "ضريبة مبيعات", labelEn: "Sales tax" },
+  { value: "INPUT", labelAr: "ضريبة مشتريات", labelEn: "Purchase tax" },
+  { value: "SETTLEMENT", labelAr: "تسوية ضريبية", labelEn: "Settlement" },
+];
+const taxCalculationBaseOptions = [
+  { value: "NET", labelAr: "صافي السطر", labelEn: "Net line" },
+  { value: "GROSS", labelAr: "السعر شامل الضريبة", labelEn: "Gross price" },
+  { value: "AFTER_PREVIOUS_TAX", labelAr: "بعد الضرائب السابقة", labelEn: "After previous tax" },
+  { value: "RETAIL_PRICE", labelAr: "سعر البيع", labelEn: "Retail price" },
+];
+const zatcaCategoryOptions = [
+  { value: "", labelAr: "بدون", labelEn: "None" },
+  { value: "S", labelAr: "قياسي", labelEn: "Standard" },
+  { value: "Z", labelAr: "صفرية", labelEn: "Zero rated" },
+  { value: "E", labelAr: "معفى", labelEn: "Exempt" },
+  { value: "O", labelAr: "خارج النطاق", labelEn: "Out of scope" },
+];
+
+const taxRatePercentOptions = [
+  { value: "0.0000", labelAr: "0% - صفرية / معفاة", labelEn: "0% - Zero / exempt" },
+  { value: "5.0000", labelAr: "5%", labelEn: "5%" },
+  { value: "15.0000", labelAr: "15% - VAT القياسية", labelEn: "15% - Standard VAT" },
+  { value: "50.0000", labelAr: "50% - ضريبة انتقائية", labelEn: "50% - Excise" },
+  { value: "100.0000", labelAr: "100% - ضريبة انتقائية", labelEn: "100% - Excise" },
+];
+const autoTaxNameByType: Record<string, { ar: string; en: string }> = {
+  VAT: { ar: "ضريبة القيمة المضافة", en: "VAT" },
+  EXCISE: { ar: "ضريبة انتقائية", en: "Excise tax" },
+  WITHHOLDING: { ar: "ضريبة استقطاع", en: "Withholding tax" },
+  ZAKAT: { ar: "زكاة", en: "Zakat" },
+  CUSTOM: { ar: "ضريبة مخصصة", en: "Custom tax" },
+  OTHER: { ar: "ضريبة أخرى", en: "Other tax" },
+};
+const taxSettingsEn = {
+  title: "Tax settings",
+  description: "Manage tax registration, VAT/excise/custom tax codes, and future ZATCA mapping for the current company.",
+  refresh: "Refresh",
+  saveRegistration: "Save registration",
+  seedCatalog: "Seed tax catalog",
+  saveTaxRate: "Save tax code",
+  updateTaxRate: "Update tax code",
+  cancelEdit: "Cancel edit",
+  edit: "Edit",
+  activate: "Activate",
+  deactivate: "Deactivate",
+  active: "Active",
+  inactive: "Inactive",
+  system: "System",
+  custom: "Custom",
+  registered: "Registered",
+  notRegistered: "Not registered",
+  complete: "Complete",
+  incomplete: "Incomplete",
+  included: "Tax included",
+  excluded: "Tax excluded",
+  status: "VAT status",
+  taxNumberStatus: "Tax number",
+  defaultVat: "Default VAT",
+  activeCodes: "Active codes",
+  taxCodes: "Tax codes",
+  priceMode: "Price mode",
+  statusHint: "Shown on invoices and documents",
+  taxNumberHint: "Read from company profile",
+  defaultVatHint: "Default VAT code in the catalog",
+  activeCodesHint: "Enabled tax codes",
+  priceModeHint: "How entered prices are interpreted",
+  registrationTitle: "Tax registration",
+  registrationDescription: "Core registration fields used by invoices, documents, reports, and ZATCA readiness.",
+  registeredLabel: "Company is VAT registered",
+  registeredDescription: "Enable VAT registration on invoices and official documents.",
+  pricesIncludeTax: "Prices include tax",
+  pricesIncludeTaxDescription: "Treat entered prices as tax-inclusive amounts.",
+  taxNumber: "Tax number",
+  taxLabel: "Invoice tax label",
+  taxAddress: "Tax address",
+  taxAddressDescription: "Official tax address shown on invoices and printed documents.",
+  catalogTitle: "Tax code catalog",
+  catalogDescription: "VAT, zero-rated, exempt, out-of-scope, excise, and custom taxes used by future document lines.",
+  formTitleCreate: "Create tax code",
+  formTitleEdit: "Edit tax code",
+  formDescription: "Create company-scoped tax codes. Do not use 100% as VAT; use excise or custom tax types.",
+  code: "Code",
+  name: "Arabic name",
+  nameEn: "English name",
+  taxType: "Tax type",
+  direction: "Direction",
+  rate: "Rate",
+  calculationBase: "Calculation base",
+  zatcaCategory: "ZATCA category",
+  exemptionCode: "Exemption reason code",
+  exemptionReason: "Exemption reason",
+  descriptionLabel: "Description",
+  isDefault: "Default",
+  isSystem: "System code",
+  filtersTitle: "Filters",
+  searchPlaceholder: "Search tax codes...",
+  typeFilter: "Tax type",
+  statusFilter: "Status",
+  all: "All",
+  listTitle: "Tax codes list",
+  noTaxCodes: "No tax codes yet",
+  noTaxCodesDescription: "Seed the Saudi tax catalog or create your own company tax code.",
+  summaryTitle: "Tax summary",
+  summaryDescription: "Live preview of the current default VAT configuration.",
+  taxableAmount: "Taxable amount",
+  netAmount: "Net amount",
+  taxAmount: "Tax amount",
+  totalAmount: "Total amount",
+  documentTitle: "Document readiness",
+  documentDescription: "Checks whether tax information is ready for official documents.",
+  registrationReady: "VAT registration",
+  taxNumberReady: "Tax number",
+  labelReady: "Invoice label",
+  addressReady: "Tax address",
+  ready: "Ready",
+  pending: "Pending",
+  taxNumberRequired: "Tax number is required when VAT registration is enabled",
+  taxLabelRequired: "Invoice tax label is required",
+  codeRequired: "Tax code is required",
+  nameRequired: "Tax name is required",
+  invalidRate: "Tax rate must be a valid number between 0 and 100",
+  loadError: "Could not load tax settings",
+  saveError: "Could not save tax settings",
+  saved: "Tax registration saved",
+  taxRateCreated: "Tax code created",
+  taxRateUpdated: "Tax code updated",
+  seeded: "Tax catalog seeded",
+  activated: "Tax code activated",
+  deactivated: "Tax code deactivated",
+};
+const taxSettingsAr: typeof taxSettingsEn = {
+  title: "إعدادات الضريبة",
+  description: "إدارة التسجيل الضريبي وأكواد VAT والضريبة الانتقائية والضرائب المخصصة وربط ZATCA مستقبلاً للشركة الحالية.",
+  refresh: "تحديث",
+  saveRegistration: "حفظ التسجيل",
+  seedCatalog: "تهيئة كتالوج الضرائب",
+  saveTaxRate: "حفظ كود الضريبة",
+  updateTaxRate: "تحديث كود الضريبة",
+  cancelEdit: "إلغاء التعديل",
+  edit: "تعديل",
+  activate: "تفعيل",
+  deactivate: "تعطيل",
+  active: "نشط",
+  inactive: "معطل",
+  system: "نظامي",
+  custom: "مخصص",
+  registered: "مسجلة",
+  notRegistered: "غير مسجلة",
+  complete: "مكتمل",
+  incomplete: "ناقص",
+  included: "شاملة الضريبة",
+  excluded: "غير شاملة",
+  status: "حالة VAT",
+  taxNumberStatus: "الرقم الضريبي",
+  defaultVat: "VAT الافتراضية",
+  activeCodes: "الأكواد النشطة",
+  taxCodes: "أكواد الضريبة",
+  priceMode: "نمط الأسعار",
+  statusHint: "تظهر في الفواتير والمستندات",
+  taxNumberHint: "يقرأ من ملف الشركة",
+  defaultVatHint: "كود VAT الافتراضي في الكتالوج",
+  activeCodesHint: "أكواد الضرائب المفعلة",
+  priceModeHint: "طريقة تفسير الأسعار المدخلة",
+  registrationTitle: "التسجيل الضريبي",
+  registrationDescription: "حقول التسجيل الأساسية المستخدمة في الفواتير والمستندات والتقارير وجاهزية ZATCA.",
+  registeredLabel: "الشركة مسجلة في VAT",
+  registeredDescription: "تفعيل التسجيل الضريبي على الفواتير والمستندات الرسمية.",
+  pricesIncludeTax: "الأسعار تشمل الضريبة",
+  pricesIncludeTaxDescription: "اعتبار السعر المدخل شاملاً للضريبة.",
+  taxNumber: "الرقم الضريبي",
+  taxLabel: "مسمى الضريبة في الفاتورة",
+  taxAddress: "العنوان الضريبي",
+  taxAddressDescription: "العنوان الرسمي الذي يظهر في الفواتير والمستندات المطبوعة.",
+  catalogTitle: "كتالوج أكواد الضريبة",
+  catalogDescription: "أكواد VAT والصفرية والمعفاة وخارج النطاق والانتقائية والمخصصة المستخدمة لاحقًا في سطور المستندات.",
+  formTitleCreate: "إنشاء كود ضريبي",
+  formTitleEdit: "تعديل كود ضريبي",
+  formDescription: "أنشئ أكواد ضريبية خاصة بالشركة. لا تستخدم 100% كـ VAT؛ استخدم ضريبة انتقائية أو مخصصة.",
+  code: "الكود",
+  name: "الاسم العربي",
+  nameEn: "الاسم الإنجليزي",
+  taxType: "نوع الضريبة",
+  direction: "الاتجاه",
+  rate: "النسبة",
+  calculationBase: "أساس الاحتساب",
+  zatcaCategory: "تصنيف ZATCA",
+  exemptionCode: "كود سبب الإعفاء",
+  exemptionReason: "سبب الإعفاء",
+  descriptionLabel: "الوصف",
+  isDefault: "افتراضي",
+  isSystem: "كود نظامي",
+  filtersTitle: "الفلاتر",
+  searchPlaceholder: "ابحث في أكواد الضرائب...",
+  typeFilter: "نوع الضريبة",
+  statusFilter: "الحالة",
+  all: "الكل",
+  listTitle: "قائمة أكواد الضريبة",
+  noTaxCodes: "لا توجد أكواد ضريبية بعد",
+  noTaxCodesDescription: "قم بتهيئة كتالوج الضرائب السعودي أو أنشئ كود ضريبة خاص بالشركة.",
+  summaryTitle: "ملخص الضريبة",
+  summaryDescription: "معاينة مباشرة لإعداد VAT الافتراضي الحالي.",
+  taxableAmount: "المبلغ الخاضع",
+  netAmount: "صافي المبلغ",
+  taxAmount: "مبلغ الضريبة",
+  totalAmount: "الإجمالي",
+  documentTitle: "جاهزية المستندات",
+  documentDescription: "فحص جاهزية البيانات الضريبية للمستندات الرسمية.",
+  registrationReady: "تسجيل VAT",
+  taxNumberReady: "الرقم الضريبي",
+  labelReady: "مسمى الفاتورة",
+  addressReady: "العنوان الضريبي",
+  ready: "جاهز",
+  pending: "ناقص",
+  taxNumberRequired: "الرقم الضريبي مطلوب عند تفعيل VAT",
+  taxLabelRequired: "مسمى الضريبة مطلوب",
+  codeRequired: "كود الضريبة مطلوب",
+  nameRequired: "اسم الضريبة مطلوب",
+  invalidRate: "نسبة الضريبة يجب أن تكون رقمًا بين 0 و 100",
+  loadError: "تعذر تحميل إعدادات الضريبة",
+  saveError: "تعذر حفظ إعدادات الضريبة",
+  saved: "تم حفظ التسجيل الضريبي",
+  taxRateCreated: "تم إنشاء كود الضريبة",
+  taxRateUpdated: "تم تحديث كود الضريبة",
+  seeded: "تم تهيئة كتالوج الضرائب",
+  activated: "تم تفعيل كود الضريبة",
+  deactivated: "تم تعطيل كود الضريبة",
+};
+function formatTaxRate(value: string): string {
+  const parsed = Number(String(value || "0").replace(",", "."));
+  if (!Number.isFinite(parsed)) return "0.0000";
+  return parsed.toFixed(4);
+}
+function formatTaxRateShort(value: string): string {
+  const parsed = Number(String(value || "0").replace(",", "."));
+  if (!Number.isFinite(parsed)) return "0.00";
+  return parsed.toFixed(2);
+}
+function formatTaxMoney(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+function getTaxPreview(rateValue: string, isVatRegistered: boolean, pricesIncludeTax: boolean) {
+  const rate = Math.max(Number(formatTaxRate(rateValue)), 0) / 100;
+  const sample = 1000;
+  if (!isVatRegistered || rate === 0) {
+    return { taxableAmount: sample, netAmount: sample, taxAmount: 0, totalAmount: sample };
+  }
+  if (pricesIncludeTax) {
+    const netAmount = sample / (1 + rate);
+    return { taxableAmount: sample, netAmount, taxAmount: sample - netAmount, totalAmount: sample };
+  }
+  const taxAmount = sample * rate;
+  return { taxableAmount: sample, netAmount: sample, taxAmount, totalAmount: sample + taxAmount };
+}
+function buildTaxAddressFromProfile(profileRecords: ApiRecord[]): string {
+  const addressRecords = getNationalAddressRecords(profileRecords);
+  const city = getFirstText(addressRecords, ["city", "city_name"]);
+  const district = getFirstText(addressRecords, ["district", "neighborhood", "area"]);
+  const street = getFirstText(addressRecords, ["street", "street_name"]);
+  const building = getFirstText(addressRecords, ["building_number", "building_no"]);
+  return [city, district, street, building]
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join(" - ");
+}
+function getTaxSettingsRecords(payload: unknown): ApiRecord[] {
+  const root = asRecord(payload);
+  const data = asRecord(root.data);
+  return [
+    asRecord(root.tax_settings),
+    asRecord(root.taxSettings),
+    asRecord(root.settings),
+    asRecord(data.tax_settings),
+    asRecord(data.taxSettings),
+    asRecord(data.settings),
+    data,
+    root,
+  ].filter((record) => Object.keys(record).length > 0);
+}
+function normalizeTaxRateRow(row: ApiRecord): TaxRateRow {
+  return {
+    id: getFirstText([row], ["id", "pk"]),
+    code: getFirstText([row], ["code"]),
+    name: getFirstText([row], ["name"]),
+    name_en: getFirstText([row], ["name_en", "nameEn"]),
+    tax_type: getFirstText([row], ["tax_type", "taxType"], "VAT"),
+    tax_type_display: getFirstText([row], ["tax_type_display", "taxTypeDisplay"]),
+    direction: getFirstText([row], ["direction"], "OUTPUT"),
+    direction_display: getFirstText([row], ["direction_display", "directionDisplay"]),
+    rate: formatTaxRate(getFirstText([row], ["rate"], "0")),
+    calculation_base: getFirstText([row], ["calculation_base", "calculationBase"], "NET"),
+    calculation_base_display: getFirstText([row], ["calculation_base_display", "calculationBaseDisplay"]),
+    zatca_category_code: getFirstText([row], ["zatca_category_code", "zatcaCategoryCode"]),
+    zatca_exemption_reason_code: getFirstText([row], ["zatca_exemption_reason_code", "zatcaExemptionReasonCode"]),
+    zatca_exemption_reason: getFirstText([row], ["zatca_exemption_reason", "zatcaExemptionReason"]),
+    description: getFirstText([row], ["description"]),
+    is_active: getFirstBool([row], ["is_active", "isActive"], true),
+    is_default: getFirstBool([row], ["is_default", "isDefault"], false),
+    is_system: getFirstBool([row], ["is_system", "isSystem"], false),
+  };
+}
+function normalizeTaxRateRows(payload: unknown): TaxRateRow[] {
+  return normalizeList(payload).map(normalizeTaxRateRow).filter((row) => row.id && row.code);
+}
+function taxOptionLabel(option: { labelAr: string; labelEn: string }, rtl: boolean): string {
+  return rtl ? option.labelAr : option.labelEn;
+}
+function taxRateDisplayName(row: TaxRateRow, rtl: boolean): string {
+  return rtl ? row.name || row.code : row.name_en || row.name || row.code;
+}
+function normalizeTaxRateCodePart(rateValue: string): string {
+  const rate = formatTaxRateShort(rateValue);
+  const [whole, decimal = "00"] = rate.split(".");
+  return decimal === "00" ? whole : `${whole}_${decimal}`;
+}
+function buildAutoTaxRateForm(form: TaxRateForm): TaxRateForm {
+  const rate = formatTaxRate(form.rate);
+  const rateShort = formatTaxRateShort(rate);
+  const taxType = form.tax_type || "CUSTOM";
+  const names = autoTaxNameByType[taxType] || autoTaxNameByType.CUSTOM;
+  return {
+    ...form,
+    code: `CUSTOM${taxType}${normalizeTaxRateCodePart(rate)}`.replace(/[^A-Z0-9_]/g, ""),
+    name: `${names.ar} ${rateShort}%`,
+    name_en: `${names.en} ${rateShort}%`,
+    rate,
+  };
+}
+function taxRateOptionLabel(
+  value: string,
+  options: Array<{ value: string; labelAr: string; labelEn: string }>,
+  rtl: boolean
+): string {
+  const option = options.find((item) => item.value === value);
+  return option ? taxOptionLabel(option, rtl) : value || "-";
+}
+function taxRateTypeLabel(row: TaxRateRow, rtl: boolean): string {
+  return taxRateOptionLabel(row.tax_type, taxTypeOptions, rtl);
+}
+function taxRateDirectionLabel(row: TaxRateRow, rtl: boolean): string {
+  return taxRateOptionLabel(row.direction, taxDirectionOptions, rtl);
+}
+function taxRateCalculationBaseLabel(row: TaxRateRow, rtl: boolean): string {
+  return taxRateOptionLabel(row.calculation_base, taxCalculationBaseOptions, rtl);
+}
+function taxRateSecondaryText(row: TaxRateRow, rtl: boolean): string {
+  if (rtl) {
+    return row.zatca_exemption_reason || taxRateCalculationBaseLabel(row, rtl);
+  }
+  return row.description || taxRateCalculationBaseLabel(row, rtl);
+}
+function getDefaultVatTaxRate(rows: TaxRateRow[]): TaxRateRow | null {
+  return (
+    rows.find((row) => row.tax_type === "VAT" && row.is_default && row.is_active) ||
+    rows.find((row) => row.code === "VAT15" && row.is_active) ||
+    rows.find((row) => row.tax_type === "VAT" && row.is_active) ||
+    null
+  );
+}
+function taxRateToForm(row: TaxRateRow): TaxRateForm {
+  return {
+    code: row.code,
+    name: row.name,
+    name_en: row.name_en,
+    tax_type: row.tax_type,
+    direction: row.direction,
+    rate: row.rate,
+    calculation_base: row.calculation_base,
+    zatca_category_code: row.zatca_category_code,
+    zatca_exemption_reason_code: row.zatca_exemption_reason_code,
+    zatca_exemption_reason: row.zatca_exemption_reason,
+    description: row.description,
+    is_active: row.is_active,
+    is_default: row.is_default,
+    is_system: row.is_system,
+  };
+}
+function TaxSelectField({
+  label,
+  value,
+  options,
+  onChange,
+  rtl,
+}: {
+  label: string;
+  value: string;
+  options: Array<{ value: string; labelAr: string; labelEn: string }>;
+  onChange: (value: string) => void;
+  rtl: boolean;
+}) {
+  return (
+    <label className="grid gap-2 text-sm">
+      <span className="font-semibold text-foreground">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-12 w-full rounded-2xl border bg-background px-3 text-sm outline-none ring-0 transition focus:border-foreground/40"
+      >
+        {options.map((option) => (
+          <option key={option.value || "empty"} value={option.value}>
+            {taxOptionLabel(option, rtl)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 export function TaxSettingsPage() {
   const locale = useLocale();
   const rtl = locale === "ar";
+  const t = rtl ? taxSettingsAr : taxSettingsEn;
   const [form, setForm] = useState<TaxSettingsForm>(emptyTaxSettings);
+  const [taxRateForm, setTaxRateForm] = useState<TaxRateForm>(emptyTaxRateForm);
+  const [taxRates, setTaxRates] = useState<TaxRateRow[]>([]);
+  const [editingTaxRateId, setEditingTaxRateId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingRegistration, setSavingRegistration] = useState(false);
+  const [savingTaxRate, setSavingTaxRate] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const defaultVatTaxRate = useMemo(() => getDefaultVatTaxRate(taxRates), [taxRates]);
+  const defaultVatRate = defaultVatTaxRate?.rate || "15.0000";
+  const previewTaxRateForm = useMemo(
+    () => (editingTaxRateId ? taxRateForm : buildAutoTaxRateForm(taxRateForm)),
+    [editingTaxRateId, taxRateForm]
+  );
+  const taxPreview = useMemo(
+    () => getTaxPreview(defaultVatRate, form.is_vat_registered, form.prices_include_tax),
+    [defaultVatRate, form.is_vat_registered, form.prices_include_tax]
+  );
+  const taxStats = useMemo(() => {
+    const active = taxRates.filter((row) => row.is_active);
+    return {
+      total: taxRates.length,
+      active: active.length,
+      vat: taxRates.filter((row) => row.tax_type === "VAT").length,
+      excise: taxRates.filter((row) => row.tax_type === "EXCISE").length,
+    };
+  }, [taxRates]);
+  const filteredTaxRates = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return taxRates.filter((row) => {
+      const matchesQuery =
+        !normalizedQuery ||
+        [
+          row.code,
+          row.name,
+          row.name_en,
+          row.description,
+          row.tax_type,
+          row.tax_type_display,
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedQuery);
+      const matchesType = typeFilter === "ALL" || row.tax_type === typeFilter;
+      const matchesStatus =
+        statusFilter === "ALL" ||
+        (statusFilter === "ACTIVE" && row.is_active) ||
+        (statusFilter === "INACTIVE" && !row.is_active);
+      return matchesQuery && matchesType && matchesStatus;
+    });
+  }, [query, statusFilter, taxRates, typeFilter]);
   const setField = <K extends keyof TaxSettingsForm>(key: K, value: TaxSettingsForm[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
+  };
+  const setTaxRateField = <K extends keyof TaxRateForm>(key: K, value: TaxRateForm[K]) => {
+    setTaxRateForm((current) => ({ ...current, [key]: value }));
   };
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const payload = asRecord(await apiRequest<unknown>("/api/company/tax-settings/"));
+      const [profilePayload, settingsPayload, taxRatesPayload] = await Promise.all([
+        apiRequest<unknown>("/api/company/profile/"),
+        apiRequest<unknown>("/api/company/settings/").catch(() => null),
+        apiRequest<unknown>("/api/company/tax-rates/"),
+      ]);
+      const profileRecords = getProfileSourceRecords(profilePayload, null);
+      const settingsRecords = getTaxSettingsRecords(settingsPayload);
+      const records = [...settingsRecords, ...profileRecords];
+      const profileTaxAddress = buildTaxAddressFromProfile(profileRecords);
+      const loadedTaxRates = normalizeTaxRateRows(taxRatesPayload);
+      const loadedDefaultVat = getDefaultVatTaxRate(loadedTaxRates);
+      setTaxRates(loadedTaxRates);
       setForm({
-        is_vat_registered: getBool(payload, ["is_vat_registered", "vat_registered"], true),
-        tax_number: getText(payload, ["tax_number", "vat_number"]),
-        vat_rate: getText(payload, ["vat_rate", "tax_rate"], "15.00"),
-        prices_include_tax: getBool(payload, ["prices_include_tax", "tax_inclusive"], false),
-        invoice_tax_label: getText(payload, ["invoice_tax_label", "tax_label"], "VAT"),
-        tax_address: getText(payload, ["tax_address", "address"]),
+        is_vat_registered: getFirstBool(records, ["is_vat_registered", "vat_registered"], true),
+        tax_number: getFirstText(records, ["tax_number", "vat_number", "tax_id", "vat_registration_number"]),
+        prices_include_tax: getFirstBool(records, ["prices_include_tax", "tax_inclusive"], false),
+        invoice_tax_label: getFirstText(records, ["invoice_tax_label", "tax_label"], "VAT"),
+        tax_address: getFirstText(records, ["tax_address", "address"]) || profileTaxAddress,
       });
+      if (!editingTaxRateId) {
+        setTaxRateForm({
+          ...emptyTaxRateForm,
+          rate: loadedDefaultVat?.rate || emptyTaxRateForm.rate,
+        });
+      }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : rtl ? "تعذر تحميل إعدادات الضريبة" : "Could not load tax settings");
+      toast.error(t.loadError);
     } finally {
       setLoading(false);
     }
-  }, [rtl]);
+  }, [editingTaxRateId, t.loadError]);
   useEffect(() => {
     void load();
   }, [load]);
-  const save = async () => {
+  const saveRegistration = async () => {
+    if (form.is_vat_registered && !form.tax_number.trim()) {
+      toast.error(t.taxNumberRequired);
+      return;
+    }
+    if (!form.invoice_tax_label.trim()) {
+      toast.error(t.taxLabelRequired);
+      return;
+    }
     try {
-      setSaving(true);
-      await apiRequest("/api/company/tax-settings/", {
-        method: "PATCH",
-        body: JSON.stringify(form),
-      });
-      toast.success(rtl ? "تم حفظ إعدادات الضريبة" : "Tax settings saved");
+      setSavingRegistration(true);
+      await Promise.all([
+        apiRequest("/api/company/profile/", {
+          method: "PATCH",
+          body: JSON.stringify({
+            tax_number: form.tax_number.trim(),
+          }),
+        }),
+        apiRequest("/api/company/settings/", {
+          method: "PATCH",
+          body: JSON.stringify({
+            is_vat_registered: form.is_vat_registered,
+            vat_registered: form.is_vat_registered,
+            prices_include_tax: form.prices_include_tax,
+            tax_inclusive: form.prices_include_tax,
+            invoice_tax_label: form.invoice_tax_label.trim(),
+            tax_label: form.invoice_tax_label.trim(),
+            tax_address: form.tax_address.trim(),
+          }),
+        }),
+      ]);
+      toast.success(t.saved);
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : rtl ? "تعذر الحفظ" : "Could not save");
+      toast.error(t.saveError);
     } finally {
-      setSaving(false);
+      setSavingRegistration(false);
+    }
+  };
+  const seedCatalog = async () => {
+    try {
+      setSeeding(true);
+      await apiRequest("/api/company/tax-rates/seed/", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      toast.success(t.seeded);
+      await load();
+    } catch (error) {
+      toast.error(t.saveError);
+    } finally {
+      setSeeding(false);
+    }
+  };
+  const resetTaxRateForm = () => {
+    setEditingTaxRateId(null);
+    setTaxRateForm({ ...emptyTaxRateForm, rate: defaultVatRate || emptyTaxRateForm.rate });
+  };
+  const editTaxRate = (row: TaxRateRow) => {
+    setEditingTaxRateId(row.id);
+    setTaxRateForm(taxRateToForm(row));
+  };
+  const saveTaxRate = async () => {
+    const effectiveTaxRateForm = editingTaxRateId ? taxRateForm : buildAutoTaxRateForm(taxRateForm);
+    const rate = Number(formatTaxRate(effectiveTaxRateForm.rate));
+    if (!effectiveTaxRateForm.code.trim()) {
+      toast.error(t.codeRequired);
+      return;
+    }
+    if (!effectiveTaxRateForm.name.trim()) {
+      toast.error(t.nameRequired);
+      return;
+    }
+    if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
+      toast.error(t.invalidRate);
+      return;
+    }
+    const payload = {
+      code: effectiveTaxRateForm.code.trim().toUpperCase(),
+      name: effectiveTaxRateForm.name.trim(),
+      name_en: effectiveTaxRateForm.name_en.trim(),
+      tax_type: effectiveTaxRateForm.tax_type,
+      direction: effectiveTaxRateForm.direction,
+      rate: formatTaxRate(effectiveTaxRateForm.rate),
+      calculation_base: effectiveTaxRateForm.calculation_base,
+      zatca_category_code: effectiveTaxRateForm.zatca_category_code,
+      zatca_exemption_reason_code: effectiveTaxRateForm.zatca_exemption_reason_code.trim(),
+      zatca_exemption_reason: effectiveTaxRateForm.zatca_exemption_reason.trim(),
+      description: effectiveTaxRateForm.description.trim(),
+      is_active: effectiveTaxRateForm.is_active,
+      is_default: effectiveTaxRateForm.is_default,
+      is_system: effectiveTaxRateForm.is_system,
+    };
+    try {
+      setSavingTaxRate(true);
+      await apiRequest(
+        editingTaxRateId ? `/api/company/tax-rates/${editingTaxRateId}/` : "/api/company/tax-rates/",
+        {
+          method: editingTaxRateId ? "PATCH" : "POST",
+          body: JSON.stringify(payload),
+        }
+      );
+      toast.success(editingTaxRateId ? t.taxRateUpdated : t.taxRateCreated);
+      resetTaxRateForm();
+      await load();
+    } catch (error) {
+      toast.error(t.saveError);
+    } finally {
+      setSavingTaxRate(false);
+    }
+  };
+  const toggleTaxRate = async (row: TaxRateRow, nextActive: boolean) => {
+    try {
+      await apiRequest(`/api/company/tax-rates/${row.id}/${nextActive ? "activate" : "deactivate"}/`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      toast.success(nextActive ? t.activated : t.deactivated);
+      await load();
+    } catch (error) {
+      toast.error(t.saveError);
     }
   };
   return (
-    <PageShell
-      title={rtl ? "إعدادات الضريبة" : "Tax settings"}
-      description={rtl ? "إعداد ضريبة القيمة المضافة والرقم الضريبي للشركة الحالية." : "Configure VAT and tax number for the current company."}
-      icon={FileText}
+    <SettingsPageShell
+      title={t.title}
+      description={t.description}
+      icon={Landmark}
       actions={
-        <PrimaryButton onClick={() => void save()} disabled={saving}>
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          {rtl ? "حفظ" : "Save"}
-        </PrimaryButton>
+        <div className="flex flex-wrap items-center gap-2">
+          <SecondaryButton onClick={() => void load()}>{t.refresh}</SecondaryButton>
+          <SecondaryButton onClick={() => void seedCatalog()} disabled={seeding}>
+            {t.seedCatalog}
+          </SecondaryButton>
+          <PrimaryButton onClick={() => void saveRegistration()} disabled={savingRegistration}>
+            {t.saveRegistration}
+          </PrimaryButton>
+        </div>
       }
     >
       {loading ? (
-        <LoadingBlock />
+        <SettingsLoading />
       ) : (
-        <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
-          <Card title={rtl ? "ضريبة القيمة المضافة" : "VAT configuration"} icon={FileText}>
-            <div className="grid gap-4 md:grid-cols-2">
-              <TextInput label={rtl ? "الرقم الضريبي" : "Tax number"} value={form.tax_number} onChange={(value) => setField("tax_number", value)} />
-              <TextInput label={rtl ? "نسبة VAT" : "VAT rate"} value={form.vat_rate} onChange={(value) => setField("vat_rate", value)} type="number" />
-              <TextInput label={rtl ? "مسمى الضريبة في الفاتورة" : "Invoice tax label"} value={form.invoice_tax_label} onChange={(value) => setField("invoice_tax_label", value)} />
+        <div className="space-y-6">
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <StatCard label={t.status} value={form.is_vat_registered ? t.registered : t.notRegistered} hint={t.statusHint} icon={ShieldCheck} />
+            <StatCard label={t.taxNumberStatus} value={form.tax_number.trim() ? t.complete : t.incomplete} hint={t.taxNumberHint} icon={FileText} />
+            <StatCard label={t.defaultVat} value={`${formatTaxRateShort(defaultVatRate)}%`} hint={t.defaultVatHint} icon={Landmark} />
+            <StatCard label={t.activeCodes} value={`${taxStats.active} / ${taxStats.total}`} hint={t.activeCodesHint} icon={CheckCircle2} />
+          </section>
+          <section className="grid gap-6 xl:grid-cols-[1fr_380px]">
+            <ProfileSectionCard title={t.registrationTitle} description={t.registrationDescription} icon={FileText}>
+              <div className="grid gap-4 md:grid-cols-2">
+                <TextInput label={t.taxNumber} value={form.tax_number} onChange={(value) => setField("tax_number", value)} required={form.is_vat_registered} />
+                <TextInput label={t.taxLabel} value={form.invoice_tax_label} onChange={(value) => setField("invoice_tax_label", value)} required />
+                <div className="grid gap-4">
+                  <ToggleInput label={t.registeredLabel} description={t.registeredDescription} checked={form.is_vat_registered} onChange={(value) => setField("is_vat_registered", value)} />
+                  <ToggleInput label={t.pricesIncludeTax} description={t.pricesIncludeTaxDescription} checked={form.prices_include_tax} onChange={(value) => setField("prices_include_tax", value)} />
+                </div>
+                <TextArea label={t.taxAddress} value={form.tax_address} onChange={(value) => setField("tax_address", value)} placeholder={t.taxAddressDescription} />
+              </div>
+            </ProfileSectionCard>
+            <div className="space-y-6">
+              <ProfileSectionCard title={t.summaryTitle} description={t.summaryDescription} icon={Landmark}>
+                <div className="space-y-3 text-sm">
+                  <div className="flex items-center justify-between rounded-2xl border bg-background p-4">
+                    <span className="font-semibold text-muted-foreground">{t.defaultVat}</span>
+                    <span className="font-bold text-foreground">{defaultVatTaxRate ? taxRateDisplayName(defaultVatTaxRate, rtl) : "-"}</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-2xl border bg-background p-4">
+                    <span className="font-semibold text-muted-foreground">{t.rate}</span>
+                    <span className="font-bold tabular-nums text-foreground">{formatTaxRateShort(defaultVatRate)}%</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-2xl border bg-background p-4">
+                    <span className="font-semibold text-muted-foreground">{t.priceMode}</span>
+                    <Badge variant="outline" className="rounded-full bg-muted px-2.5 py-1 text-xs">
+                      {form.prices_include_tax ? t.included : t.excluded}
+                    </Badge>
+                  </div>
+                </div>
+              </ProfileSectionCard>
+              <ProfileSectionCard title={t.documentTitle} description={t.documentDescription} icon={CheckCircle2}>
+                <div className="space-y-3">
+                  <ReadinessRow label={t.registrationReady} ready={form.is_vat_registered} readyLabel={t.ready} pendingLabel={t.pending} />
+                  <ReadinessRow label={t.taxNumberReady} ready={Boolean(form.tax_number.trim())} readyLabel={t.ready} pendingLabel={t.pending} />
+                  <ReadinessRow label={t.labelReady} ready={Boolean(form.invoice_tax_label.trim())} readyLabel={t.ready} pendingLabel={t.pending} />
+                  <ReadinessRow label={t.addressReady} ready={Boolean(form.tax_address.trim())} readyLabel={t.ready} pendingLabel={t.pending} />
+                </div>
+              </ProfileSectionCard>
+            </div>
+          </section>
+          <ProfileSectionCard title={t.summaryTitle} description={t.summaryDescription} icon={CreditCard}>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl border bg-background p-4">
+                <p className="text-xs font-semibold text-muted-foreground">{t.taxableAmount}</p>
+                <p className="mt-2 text-xl font-bold tabular-nums text-foreground">{formatTaxMoney(taxPreview.taxableAmount)}</p>
+              </div>
+              <div className="rounded-2xl border bg-background p-4">
+                <p className="text-xs font-semibold text-muted-foreground">{t.netAmount}</p>
+                <p className="mt-2 text-xl font-bold tabular-nums text-foreground">{formatTaxMoney(taxPreview.netAmount)}</p>
+              </div>
+              <div className="rounded-2xl border bg-background p-4">
+                <p className="text-xs font-semibold text-muted-foreground">{t.taxAmount}</p>
+                <p className="mt-2 text-xl font-bold tabular-nums text-foreground">{formatTaxMoney(taxPreview.taxAmount)}</p>
+              </div>
+              <div className="rounded-2xl border bg-background p-4">
+                <p className="text-xs font-semibold text-muted-foreground">{t.totalAmount}</p>
+                <p className="mt-2 text-xl font-bold tabular-nums text-foreground">{formatTaxMoney(taxPreview.totalAmount)}</p>
+              </div>
+            </div>
+          </ProfileSectionCard>
+          <section className="grid gap-6 xl:grid-cols-[520px_minmax(0,1fr)]">
+            <ProfileSectionCard
+              title={editingTaxRateId ? t.formTitleEdit : t.formTitleCreate}
+              description={t.formDescription}
+              icon={Landmark}
+            >
               <div className="grid gap-4">
-                <ToggleInput label={rtl ? "الشركة مسجلة في VAT" : "VAT registered"} checked={form.is_vat_registered} onChange={(value) => setField("is_vat_registered", value)} />
-                <ToggleInput label={rtl ? "الأسعار تشمل الضريبة" : "Prices include tax"} checked={form.prices_include_tax} onChange={(value) => setField("prices_include_tax", value)} />
+                <div className="rounded-2xl border bg-muted/30 p-4">
+                  <div className="grid gap-3">
+                    <div className="rounded-2xl border bg-background p-3">
+                      <p className="text-xs font-semibold text-muted-foreground">{t.code}</p>
+                      <p dir="ltr" className="mt-2 overflow-x-auto whitespace-nowrap font-mono text-sm font-bold text-foreground">
+                        {previewTaxRateForm.code || "-"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border bg-background p-3">
+                      <p className="text-xs font-semibold text-muted-foreground">{t.name}</p>
+                      <p className="mt-2 font-bold leading-7 text-foreground">
+                        {previewTaxRateForm.name || "-"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border bg-background p-3">
+                      <p className="text-xs font-semibold text-muted-foreground">{t.nameEn}</p>
+                      <p dir="ltr" className="mt-2 overflow-x-auto whitespace-nowrap font-bold leading-7 text-foreground">
+                        {previewTaxRateForm.name_en || "-"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <TaxSelectField label={t.taxType} value={taxRateForm.tax_type} options={taxTypeOptions} onChange={(value) => setTaxRateField("tax_type", value)} rtl={rtl} />
+                <TaxSelectField label={t.rate} value={taxRateForm.rate} options={taxRatePercentOptions} onChange={(value) => setTaxRateField("rate", value)} rtl={rtl} />
+                <TaxSelectField label={t.direction} value={taxRateForm.direction} options={taxDirectionOptions} onChange={(value) => setTaxRateField("direction", value)} rtl={rtl} />
+                <TaxSelectField label={t.calculationBase} value={taxRateForm.calculation_base} options={taxCalculationBaseOptions} onChange={(value) => setTaxRateField("calculation_base", value)} rtl={rtl} />
+                <div className="grid gap-4 md:grid-cols-2">
+                  <TaxSelectField label={t.zatcaCategory} value={taxRateForm.zatca_category_code} options={zatcaCategoryOptions} onChange={(value) => setTaxRateField("zatca_category_code", value)} rtl={rtl} />
+                  <TextInput label={t.exemptionCode} value={taxRateForm.zatca_exemption_reason_code} onChange={(value) => setTaxRateField("zatca_exemption_reason_code", value)} />
+                </div>
+                <TextArea label={t.exemptionReason} value={taxRateForm.zatca_exemption_reason} onChange={(value) => setTaxRateField("zatca_exemption_reason", value)} />
+                <TextArea label={t.descriptionLabel} value={taxRateForm.description} onChange={(value) => setTaxRateField("description", value)} />
+                <div className="grid gap-4 md:grid-cols-2">
+                  <ToggleInput label={t.active} description={t.activeCodesHint} checked={taxRateForm.is_active} onChange={(value) => setTaxRateField("is_active", value)} />
+                  <ToggleInput label={t.isDefault} description={t.defaultVatHint} checked={taxRateForm.is_default} onChange={(value) => setTaxRateField("is_default", value)} />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <PrimaryButton onClick={() => void saveTaxRate()} disabled={savingTaxRate}>
+                    {editingTaxRateId ? t.updateTaxRate : t.saveTaxRate}
+                  </PrimaryButton>
+                  {editingTaxRateId ? (
+                    <SecondaryButton onClick={resetTaxRateForm}>{t.cancelEdit}</SecondaryButton>
+                  ) : null}
+                </div>
               </div>
-              <TextArea label={rtl ? "العنوان الضريبي" : "Tax address"} value={form.tax_address} onChange={(value) => setField("tax_address", value)} />
+            </ProfileSectionCard>
+            <div className="space-y-6">
+              <ProfileSectionCard title={t.filtersTitle} description={`${t.catalogDescription} - ${filteredTaxRates.length} / ${taxRates.length}`} icon={Search}>
+                <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px_auto]">
+                  <SearchBox value={query} onChange={setQuery} placeholder={t.searchPlaceholder} />
+                  <TaxSelectField
+                    label={t.typeFilter}
+                    value={typeFilter}
+                    options={[{ value: "ALL", labelAr: t.all, labelEn: t.all }, ...taxTypeOptions]}
+                    onChange={setTypeFilter}
+                    rtl={rtl}
+                  />
+                  <TaxSelectField
+                    label={t.statusFilter}
+                    value={statusFilter}
+                    options={[
+                      { value: "ALL", labelAr: t.all, labelEn: t.all },
+                      { value: "ACTIVE", labelAr: t.active, labelEn: t.active },
+                      { value: "INACTIVE", labelAr: t.inactive, labelEn: t.inactive },
+                    ]}
+                    onChange={setStatusFilter}
+                    rtl={rtl}
+                  />
+                  <div className="flex items-end">
+                    <SecondaryButton onClick={() => void seedCatalog()} disabled={seeding}>
+                      {t.seedCatalog}
+                    </SecondaryButton>
+                  </div>
+                </div>
+              </ProfileSectionCard>
+              <ProfileSectionCard title={t.listTitle} description={t.catalogDescription} icon={FileText}>
+                {filteredTaxRates.length === 0 ? (
+                  <EmptyState title={t.noTaxCodes} description={t.noTaxCodesDescription} />
+                ) : (
+                  <div className="overflow-hidden rounded-2xl border">
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y text-sm">
+                        <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+                          <tr>
+                            <th className="px-4 py-3 text-start">{t.code}</th>
+                            <th className="px-4 py-3 text-start">{t.name}</th>
+                            <th className="px-4 py-3 text-start">{t.taxType}</th>
+                            <th className="px-4 py-3 text-start">{t.rate}</th>
+                            <th className="px-4 py-3 text-start">{t.zatcaCategory}</th>
+                            <th className="px-4 py-3 text-start">{t.statusFilter}</th>
+                            <th className="px-4 py-3 text-end">{t.edit}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y bg-card">
+                          {filteredTaxRates.map((row) => (
+                            <tr key={row.id} className="align-top">
+                              <td className="px-4 py-3">
+                                <div className="font-semibold text-foreground">{row.code}</div>
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {row.is_default ? <Badge variant="outline" className="rounded-full">{t.isDefault}</Badge> : null}
+                                  <Badge variant="outline" className="rounded-full">
+                                    {row.is_system ? t.system : t.custom}
+                                  </Badge>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="font-medium text-foreground">{taxRateDisplayName(row, rtl)}</div>
+                                <div className="text-xs text-muted-foreground">{taxRateSecondaryText(row, rtl)}</div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="font-medium">{taxRateTypeLabel(row, rtl)}</div>
+                                <div className="text-xs text-muted-foreground">{taxRateDirectionLabel(row, rtl)}</div>
+                              </td>
+                              <td className="px-4 py-3 font-semibold tabular-nums">{formatTaxRateShort(row.rate)}%</td>
+                              <td className="px-4 py-3">{row.zatca_category_code || "-"}</td>
+                              <td className="px-4 py-3">
+                                <StatusPill active={row.is_active} />
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex justify-end gap-2">
+                                  <SecondaryButton onClick={() => editTaxRate(row)}>{t.edit}</SecondaryButton>
+                                  <SecondaryButton onClick={() => void toggleTaxRate(row, !row.is_active)}>
+                                    {row.is_active ? t.deactivate : t.activate}
+                                  </SecondaryButton>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </ProfileSectionCard>
             </div>
-          </Card>
-          <Card title={rtl ? "ملخص الضريبة" : "Tax summary"} icon={Landmark}>
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center justify-between rounded-2xl bg-neutral-50 p-4">
-                <span className="text-neutral-500">{rtl ? "العملة" : "Currency"}</span>
-                <SarBadge />
-              </div>
-              <div className="flex items-center justify-between rounded-2xl bg-neutral-50 p-4">
-                <span className="text-neutral-500">{rtl ? "النسبة" : "Rate"}</span>
-                <span className="font-bold text-neutral-950">{form.vat_rate || "0"}%</span>
-              </div>
-              <div className="flex items-center justify-between rounded-2xl bg-neutral-50 p-4">
-                <span className="text-neutral-500">{rtl ? "الحالة" : "Status"}</span>
-                <StatusPill active={form.is_vat_registered} />
-              </div>
-            </div>
-          </Card>
+          </section>
         </div>
       )}
-    </PageShell>
+    </SettingsPageShell>
   );
 }
+
+
 type PaymentMethodForm = {
   name: string;
   code: string;
