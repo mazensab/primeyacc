@@ -140,7 +140,7 @@ const ACCOUNTING_ENDPOINTS = {
 };
 const shortcuts: ShortcutRecord[] = [
   {
-    href: "/company/accounting/chart",
+    href: "/company/accounting/chart-of-accounts",
     titleAr: "دليل الحسابات",
     titleEn: "Chart of Accounts",
     descAr: "إضافة وتعديل وتنظيم الحسابات الرئيسية والفرعية.",
@@ -1238,7 +1238,7 @@ export default function CompanyAccountingPage() {
       title: t.accounts,
       value: stats.accounts,
       description: `${t.activeAccounts}: ${formatInteger(stats.activeAccounts)}`,
-      href: "/company/accounting/chart",
+      href: "/company/accounting/chart-of-accounts",
       icon: BookOpen,
     },
   ];
