@@ -119,43 +119,23 @@ type DataColumn<T> = {
 };
 const ACCOUNTING_ENDPOINTS = {
   trialBalance: [
-    "/api/reports/trial-balance/",
-    "/api/reports/trial_balance/",
-    "/api/accounting/trial-balance/",
-    "/api/accounting/trial_balance/",
+    "/api/company/accounting/reports/trial-balance/",
+    "/api/company/reports/trial-balance/",
   ],
   profitLoss: [
-    "/api/reports/profit-loss/",
-    "/api/reports/profit_loss/",
-    "/api/reports/profit-and-loss/",
-    "/api/reports/profit_and_loss/",
-    "/api/accounting/profit-loss/",
-    "/api/accounting/profit_loss/",
+    "/api/company/reports/profit-loss/",
   ],
   balanceSheet: [
-    "/api/reports/balance-sheet/",
-    "/api/reports/balance_sheet/",
-    "/api/accounting/balance-sheet/",
-    "/api/accounting/balance_sheet/",
+    "/api/company/reports/balance-sheet/",
   ],
   cashFlow: [
-    "/api/reports/cash-flow/",
-    "/api/reports/cash_flow/",
-    "/api/accounting/cash-flow/",
-    "/api/accounting/cash_flow/",
+    "/api/company/reports/cash-flow/",
   ],
   accounts: [
-    "/api/accounting/accounts/",
-    "/api/accounting/chart-of-accounts/",
-    "/api/accounting/chart_of_accounts/",
-    "/api/accounting/chart/",
-    "/api/accounts/",
+    "/api/company/accounting/accounts/",
   ],
   journalEntries: [
-    "/api/accounting/journal-entries/",
-    "/api/accounting/journal_entries/",
-    "/api/accounting/journals/",
-    "/api/accounting/entries/",
+    "/api/company/accounting/journal-entries/",
   ],
 };
 const shortcuts: ShortcutRecord[] = [
@@ -478,6 +458,7 @@ function getApiBaseUrl() {
           "",
         )
       : "";
+
   if (!envBase) return fallbackBase;
   if (envBase.endsWith("/api")) return envBase.slice(0, -4);
   return envBase;
@@ -1154,19 +1135,19 @@ export default function CompanyAccountingPage() {
           }),
         );
         setEntries(journalRows);
-        setWarnings(failedMessages.filter(Boolean));
-        if (failedMessages.length && failedMessages.length < results.length && !silent) {
+        const hasPartialData = failedMessages.length > 0 && failedMessages.length < results.length;
+        setWarnings(hasPartialData ? failedMessages.filter(Boolean) : []);
+
+        if (hasPartialData && !silent) {
           toast.warning(t.partialWarningTitle);
         }
         if (failedMessages.length === results.length) {
           setStats(emptyStats);
           setEntries([]);
-          setWarnings(failedMessages.filter(Boolean));
-          if (!silent) {
-            toast.warning(t.partialWarningTitle);
-          }
+          setWarnings([]);
           return;
         }
+
         if (silent) toast.success(t.refreshed);
       } catch (caughtError) {
         const message = caughtError instanceof Error ? caughtError.message : t.errorDesc;
