@@ -14,10 +14,12 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from io import StringIO
 from typing import Any
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
 from django.db import IntegrityError
 from django.db.models import NOT_PROVIDED
 from django.test import TestCase
@@ -330,6 +332,19 @@ class AccountingCoreTests(TestCase):
         self.assertEqual(second_result["total_accounts"], 112)
         self.assertEqual(Account.objects.filter(company=self.company_one).count(), 112)
 
+
+    def test_seed_company_chart_management_command_is_idempotent(self):
+        out = StringIO()
+        call_command(
+            "seed_company_chart_of_accounts",
+            company_id=self.company_one.id,
+            stdout=out,
+        )
+        self.assertEqual(
+            Account.objects.filter(company=self.company_one).count(),
+            112,
+        )
+        self.assertIn("Total Accounts", out.getvalue())
     def test_same_account_code_allowed_between_different_companies(self):
         account_one = get_account_by_code(self.company_one, "110101")
         account_two = get_account_by_code(self.company_two, "110101")

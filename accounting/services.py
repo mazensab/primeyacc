@@ -396,6 +396,7 @@ def seed_company_chart_of_accounts(company, *, user: Any = None, overwrite: bool
     created_count = 0
     updated_count = 0
     skipped_count = 0
+    parents_updated_count = 0
 
     account_cache: dict[str, Account] = {}
 
@@ -468,23 +469,37 @@ def seed_company_chart_of_accounts(company, *, user: Any = None, overwrite: bool
             update_fields.append("updated_at")
             account.full_clean()
             account.save(update_fields=update_fields)
+            parents_updated_count += 1
 
     tax_rate = ensure_default_tax_rate(company, user=actor)
-    ensure_accounting_settings(company, user=actor)
-    ensure_default_routing_rules(company, user=actor, overwrite=overwrite)
+    settings_obj = ensure_accounting_settings(company, user=actor)
+    routing_result = ensure_default_routing_rules(company, user=actor, overwrite=overwrite)
 
     total_accounts = Account.objects.filter(company=company).count()
 
+    routing_created = routing_result.get("created", 0) if isinstance(routing_result, dict) else 0
+    routing_updated = routing_result.get("updated", 0) if isinstance(routing_result, dict) else 0
+    routing_skipped = routing_result.get("skipped", 0) if isinstance(routing_result, dict) else 0
     return {
+        "company_id": company.id,
+        "company_name": getattr(company, "name", ""),
         "created": created_count,
         "updated": updated_count,
         "skipped": skipped_count,
         "created_accounts": created_count,
         "updated_accounts": updated_count,
         "skipped_accounts": skipped_count,
+        "accounts_created": created_count,
+        "accounts_updated": updated_count,
+        "accounts_skipped": skipped_count,
+        "parents_updated": parents_updated_count,
+        "routing_rules_created": routing_created,
+        "routing_rules_updated": routing_updated,
+        "routing_rules_skipped": routing_skipped,
         "total": total_accounts,
         "total_accounts": total_accounts,
         "tax_rate_id": tax_rate.id if tax_rate else None,
+        "settings_id": settings_obj.id if settings_obj else None,
     }
 
 

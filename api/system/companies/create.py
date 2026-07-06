@@ -38,6 +38,10 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
+from accounting.services import (
+    AccountingConfigurationError,
+    seed_company_chart_of_accounts,
+)
 from accounts.models import (
     CompanyMembership,
     CompanyRole,
@@ -546,6 +550,15 @@ def system_company_create(request: HttpRequest) -> JsonResponse:
             payload=payload,
             activity_profile_ref=activity_profile_ref,
         )
+    except AccountingConfigurationError as exc:
+        return JsonResponse(
+            {
+                "ok": False,
+                "message": "تعذر تهيئة دليل الحسابات للشركة.",
+                "errors": {"accounting": str(exc)},
+            },
+            status=400,
+        )
     except ValidationError as exc:
         return JsonResponse(
             {
@@ -693,6 +706,12 @@ def system_company_create(request: HttpRequest) -> JsonResponse:
                 owner=owner,
                 company=company,
                 acting_user=request.user,
+            )
+
+            seed_company_chart_of_accounts(
+                company,
+                user=request.user,
+                overwrite=False,
             )
 
     except ValidationError as exc:

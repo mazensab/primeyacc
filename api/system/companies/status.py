@@ -31,6 +31,10 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
+from accounting.services import (
+    AccountingConfigurationError,
+    seed_company_chart_of_accounts,
+)
 from api.permissions import user_has_system_permission
 from companies.models import ActivityProfile, Company, CompanyStatus
 
@@ -391,6 +395,33 @@ def system_company_status(request: HttpRequest, company_id: int) -> JsonResponse
             else:
                 company.save()
 
+            should_seed_chart = (
+                action in {"activate", "restore"}
+                or (
+                    action == "set_active"
+                    and bool(getattr(company, "is_active", False))
+                )
+                or (
+                    action == "set_status"
+                    and getattr(company, "status", "") == CompanyStatus.ACTIVE
+                )
+            )
+            if should_seed_chart:
+                seed_company_chart_of_accounts(
+                    company,
+                    user=request.user,
+                    overwrite=False,
+                )
+
+    except AccountingConfigurationError as exc:
+        return JsonResponse(
+            {
+                "ok": False,
+                "message": "تعذر تهيئة دليل الحسابات للشركة.",
+                "errors": {"accounting": str(exc)},
+            },
+            status=400,
+        )
     except ValidationError as exc:
         return JsonResponse(
             {

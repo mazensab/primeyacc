@@ -39,7 +39,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--reset",
             action="store_true",
-            help="Reset the company chart of accounts before seeding. Fails if journal lines exist.",
+            help="Overwrite existing seeded account names/settings without deleting accounts. Safe and idempotent.",
         )
 
     def _get_company(self, *, company_id: int | None, company_code: str):
@@ -89,14 +89,14 @@ class Command(BaseCommand):
         if reset:
             self.stdout.write(
                 self.style.WARNING(
-                    "تم تفعيل reset. سيتم حذف دليل حسابات هذه الشركة فقط إذا لم توجد قيود محاسبية مرتبطة."
+                    "تم تفعيل reset كخيار توافق قديم. سيتم استخدام overwrite فقط بدون حذف أي حسابات."
                 )
             )
 
         try:
             result = seed_company_chart_of_accounts(
                 company,
-                reset=reset,
+                overwrite=reset,
             )
         except AccountingConfigurationError as exc:
             raise CommandError(str(exc)) from exc

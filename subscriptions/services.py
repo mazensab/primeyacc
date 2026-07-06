@@ -497,6 +497,16 @@ def activate_pending_subscription(
     if billing_reference:
         subscription.save(update_fields=["billing_reference", "updated_at"])
 
+    try:
+        from accounting.services import seed_company_chart_of_accounts
+        seed_company_chart_of_accounts(
+            subscription.company,
+            overwrite=False,
+        )
+    except Exception as exc:
+        raise ValidationError(
+            {"accounting": f"تعذر تهيئة دليل الحسابات للشركة: {exc}"}
+        ) from exc
     return subscription
 
 

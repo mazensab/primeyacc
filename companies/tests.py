@@ -39,6 +39,7 @@ from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 
 from accounts.models import CompanyMembership, CompanyRole, MembershipStatus, UserProfile
+from accounting.models import Account
 from companies.models import (
     ActivityProfile,
     Branch,
@@ -187,7 +188,7 @@ class CompanyWorkspacePhase3Tests(TestCase):
         """
 
         profile = ActivityProfile.objects.create(
-            code="retail",
+            code="retail-workspace-test",
             name="Retail",
             name_ar="ط·ع¾ط·آ¬ط·آ§ط·آ±ط·آ© ط·ع¾ط·آ¬ط·آ²ط·آ¦ط·آ©",
             name_en="Retail",
@@ -205,7 +206,7 @@ class CompanyWorkspacePhase3Tests(TestCase):
             updated_by=self.user,
         )
 
-        self.assertEqual(profile.code, "RETAIL")
+        self.assertEqual(profile.code, "RETAIL-WORKSPACE-TEST")
         self.assertTrue(profile.is_system)
         self.assertIsNone(profile.company_id)
         self.assertEqual(profile.display_name, "ط·ع¾ط·آ¬ط·آ§ط·آ±ط·آ© ط·ع¾ط·آ¬ط·آ²ط·آ¦ط·آ©")
@@ -245,7 +246,7 @@ class CompanyWorkspacePhase3Tests(TestCase):
         """
 
         profile = ActivityProfile.objects.create(
-            code="wholesale",
+            code="wholesale-workspace-test",
             name="Wholesale",
             name_ar="ط·ع¾ط·آ¬ط·آ§ط·آ±ط·آ© ط·آ¬ط¸â€¦ط¸â€‍ط·آ©",
             name_en="Wholesale",
@@ -1096,7 +1097,7 @@ class SystemCompanyManagementApiTests(TestCase):
             self.addCleanup(permission_patcher.stop)
 
         self.activity_profile = ActivityProfile.objects.create(
-            code="retail",
+            code="retail-workspace-test",
             name="Retail",
             name_ar="ط·ع¾ط·آ¬ط·آ§ط·آ±ط·آ© ط·آ§ط¸â€‍ط·ع¾ط·آ¬ط·آ²ط·آ¦ط·آ©",
             name_en="Retail",
@@ -1106,16 +1107,23 @@ class SystemCompanyManagementApiTests(TestCase):
             updated_by=self.system_user,
         )
 
-        self.second_activity_profile = ActivityProfile.objects.create(
-            code="wholesale",
-            name="Wholesale",
-            name_ar="ط·ع¾ط·آ¬ط·آ§ط·آ±ط·آ© ط·آ§ط¸â€‍ط·آ¬ط¸â€¦ط¸â€‍ط·آ©",
-            name_en="Wholesale",
-            is_system=True,
-            is_active=True,
-            created_by=self.system_user,
-            updated_by=self.system_user,
+        self.second_activity_profile, _second_profile_created = ActivityProfile.objects.get_or_create(
+            code=CompanyActivityProfile.WHOLESALE,
+            company=None,
+            defaults={
+                "name": "Wholesale",
+                "name_ar": "تجارة الجملة",
+                "name_en": "Wholesale",
+                "is_system": True,
+                "is_active": True,
+                "created_by": self.system_user,
+                "updated_by": self.system_user,
+            },
         )
+        if not self.second_activity_profile.is_active:
+            self.second_activity_profile.is_active = True
+            self.second_activity_profile.updated_by = self.system_user
+            self.second_activity_profile.save(update_fields=["is_active", "updated_by", "updated_at"])
 
         self.inactive_activity_profile = ActivityProfile.objects.create(
             code="inactive-system-profile",
@@ -1241,6 +1249,10 @@ class SystemCompanyManagementApiTests(TestCase):
         self.assertEqual(created_company.activity_profile_ref_id, self.activity_profile.id)
         self.assertTrue(created_company.company_code.startswith(expected_prefix))
         self.assertNotEqual(created_company.company_code, "FRONTEND-SHOULD-BE-IGNORED")
+        self.assertEqual(
+            Account.objects.filter(company=created_company).count(),
+            112,
+        )
 
     def test_system_company_create_requires_billing_identity_and_national_address(self) -> None:
         """

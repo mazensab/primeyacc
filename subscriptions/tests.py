@@ -21,6 +21,7 @@ from django.db import models
 from django.test import TestCase
 from django.utils import timezone
 
+from accounting.models import Account
 from companies.models import Company
 from subscriptions.models import CompanySubscription, SubscriptionPlan
 from subscriptions.services import (
@@ -365,6 +366,11 @@ class SubscriptionServiceTests(TestCase):
         ).count()
 
         self.assertEqual(active_count, 1)
+
+        self.assertEqual(
+            Account.objects.filter(company=self.company).count(),
+            112,
+        )
 
     def test_activate_non_pending_subscription_raises_validation_error(self):
         active_subscription = CompanySubscription.objects.create(
