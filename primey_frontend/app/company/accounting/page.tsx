@@ -126,7 +126,7 @@ const ACCOUNTING_ENDPOINTS = {
     "/api/company/accounting/reports/income-statement/",
   ],
   balanceSheet: [
-    "/api/company/reports/balance-sheet/",
+    "/api/company/accounting/reports/financial-position/",
   ],
   cashFlow: [
     "/api/company/reports/cash-flow/",
@@ -191,9 +191,9 @@ const shortcuts: ShortcutRecord[] = [
   },
   {
     href: "/company/accounting/balance-sheet",
-    titleAr: "الميزانية العمومية",
-    titleEn: "Balance Sheet",
-    descAr: "عرض الأصول والخصوم وحقوق الملكية.",
+    titleAr: "المركز المالي",
+    titleEn: "Financial Position",
+    descAr: "عرض الأصول والالتزامات وحقوق الملكية.",
     descEn: "View assets, liabilities, and equity.",
     badgeAr: "تقرير",
     badgeEn: "Report",

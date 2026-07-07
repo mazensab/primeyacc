@@ -374,7 +374,7 @@ const companyNavItems: NavGroup[] = [
             workspaces: ["company"],
           },
           {
-            title: { ar: "الميزانية العمومية", en: "Balance Sheet" },
+            title: { ar: "المركز المالي", en: "Financial Position" },
             href: "/company/accounting/balance-sheet",
             icon: BarChart3,
             anyPermissions: [PERMISSIONS.REPORTS_VIEW, PERMISSIONS.ACCOUNTING_REPORTS_VIEW],
