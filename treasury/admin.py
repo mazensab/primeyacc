@@ -38,11 +38,13 @@ class TreasuryAccountAdmin(admin.ModelAdmin):
         "id",
         "name",
         "company",
+        "accounting_account",
         "account_type",
         "status",
         "currency",
         "opening_balance",
         "current_balance",
+        "opening_accounting_entry",
         "is_default",
         "updated_at",
     )
@@ -52,6 +54,7 @@ class TreasuryAccountAdmin(admin.ModelAdmin):
         "currency",
         "is_default",
         "company",
+        "opening_accounting_entry",
         "created_at",
         "updated_at",
     )
@@ -69,6 +72,7 @@ class TreasuryAccountAdmin(admin.ModelAdmin):
     )
     autocomplete_fields = (
         "company",
+        "accounting_account",
         "created_by",
         "updated_by",
     )
@@ -79,6 +83,7 @@ class TreasuryAccountAdmin(admin.ModelAdmin):
     )
     list_select_related = (
         "company",
+        "accounting_account",
         "created_by",
         "updated_by",
     )
@@ -88,6 +93,7 @@ class TreasuryAccountAdmin(admin.ModelAdmin):
             {
                 "fields": (
                     "company",
+                    "accounting_account",
                     "name",
                     "code",
                     "account_type",
@@ -103,6 +109,7 @@ class TreasuryAccountAdmin(admin.ModelAdmin):
                 "fields": (
                     "opening_balance",
                     "current_balance",
+                    "opening_accounting_entry",
                 )
             },
         ),

@@ -37,6 +37,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from accounts.models import CompanyMembership, CompanyRole, UserProfile
+from accounting.models import Account, AccountingAccountPurpose, JournalEntryStatus, PostingSource
 from .models import (
     CustomerPayment,
     PaymentMethod,
@@ -238,6 +239,146 @@ class TreasuryServiceTests(MhamcloudTestFactoryMixin, TestCase):
         self.assertTrue(account.is_default)
         self.assertEqual(account.created_by_id, self.user.id)
 
+
+    def test_create_treasury_account_auto_links_accounting_account(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Linked Main Cash",
+            code="linked-main-cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="0.00",
+        )
+
+        account.refresh_from_db()
+        self.assertIsNotNone(account.accounting_account_id)
+
+        linked_account = account.accounting_account
+        self.assertEqual(linked_account.company_id, self.company_a.id)
+        self.assertTrue(linked_account.code.startswith("110101"))
+        self.assertEqual(linked_account.parent.code, "1101")
+        self.assertEqual(linked_account.purpose, AccountingAccountPurpose.CASH)
+        self.assertFalse(linked_account.is_group)
+        self.assertTrue(linked_account.is_active)
+        self.assertTrue(linked_account.allow_manual_posting)
+
+    def test_create_bank_treasury_account_auto_links_bank_accounting_account(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Linked Main Bank",
+            code="linked-main-bank",
+            account_type=TreasuryAccount.AccountType.BANK,
+            opening_balance="0.00",
+            bank_name="Al Rajhi",
+        )
+
+        account.refresh_from_db()
+        self.assertIsNotNone(account.accounting_account_id)
+
+        linked_account = account.accounting_account
+        self.assertEqual(linked_account.company_id, self.company_a.id)
+        self.assertTrue(linked_account.code.startswith("110201"))
+        self.assertEqual(linked_account.parent.code, "1102")
+        self.assertEqual(linked_account.purpose, AccountingAccountPurpose.BANK)
+        self.assertFalse(linked_account.is_group)
+        self.assertTrue(linked_account.is_active)
+        self.assertTrue(linked_account.allow_manual_posting)
+
+
+    def test_create_treasury_account_opening_balance_posts_accounting_entry(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Opening Balance Cash",
+            code="opening-balance-cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="1250.00",
+        )
+        account.refresh_from_db()
+        self.assertIsNotNone(account.accounting_account_id)
+        self.assertIsNotNone(account.opening_accounting_entry_id)
+        self.assertEqual(account.current_balance, Decimal("1250.00"))
+        entry = account.opening_accounting_entry
+        entry.refresh_from_db()
+        self.assertEqual(entry.company_id, self.company_a.id)
+        self.assertEqual(entry.status, JournalEntryStatus.POSTED)
+        self.assertEqual(entry.posting_source, PostingSource.OPENING_BALANCE)
+        self.assertTrue(entry.is_auto_posted)
+        self.assertEqual(entry.source_type, "treasury_account_opening_balance")
+        self.assertEqual(entry.source_id, str(account.id))
+        self.assertEqual(entry.total_debit, Decimal("1250.00"))
+        self.assertEqual(entry.total_credit, Decimal("1250.00"))
+        lines = list(entry.lines.select_related("account").order_by("sort_order", "id"))
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(lines[0].account_id, account.accounting_account_id)
+        self.assertEqual(lines[0].debit_amount, Decimal("1250.00"))
+        self.assertEqual(lines[0].credit_amount, Decimal("0.00"))
+        self.assertEqual(lines[1].account.purpose, AccountingAccountPurpose.OPENING_EQUITY)
+        self.assertEqual(lines[1].debit_amount, Decimal("0.00"))
+        self.assertEqual(lines[1].credit_amount, Decimal("1250.00"))
+    def test_create_treasury_account_zero_opening_balance_does_not_post_opening_entry(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Zero Opening Cash",
+            code="zero-opening-cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="0.00",
+        )
+        account.refresh_from_db()
+        self.assertIsNotNone(account.accounting_account_id)
+        self.assertIsNone(account.opening_accounting_entry_id)
+        self.assertEqual(account.current_balance, Decimal("0.00"))
+
+    def test_treasury_account_api_serializer_exposes_accounting_linkage(self) -> None:
+        from api.company.treasury.accounts.list import (
+            serialize_treasury_account as serialize_api_treasury_account,
+        )
+        from api.company.treasury.transactions.list import (
+            _serialize_treasury_account as serialize_api_transaction_treasury_account,
+        )
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="API Linked Opening Cash",
+            code="api-linked-opening-cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="500.00",
+        )
+        account = (
+            TreasuryAccount.objects.select_related(
+                "accounting_account",
+                "opening_accounting_entry",
+            )
+            .get(id=account.id)
+        )
+        payload = serialize_api_treasury_account(account)
+        self.assertEqual(payload["accounting_account_id"], account.accounting_account_id)
+        self.assertEqual(payload["accounting_account_code"], account.accounting_account.code)
+        self.assertEqual(payload["accounting_account_name"], account.accounting_account.name)
+        self.assertTrue(payload["has_accounting_account"])
+        self.assertIsNotNone(payload["accounting_account"])
+        self.assertEqual(payload["accounting_account"]["id"], account.accounting_account_id)
+        self.assertEqual(
+            payload["opening_accounting_entry_id"],
+            account.opening_accounting_entry_id,
+        )
+        self.assertEqual(
+            payload["opening_accounting_entry_number"],
+            account.opening_accounting_entry.entry_number,
+        )
+        self.assertTrue(payload["has_opening_accounting_entry"])
+        self.assertIsNotNone(payload["opening_accounting_entry"])
+        snapshot = serialize_api_transaction_treasury_account(account)
+        self.assertEqual(snapshot["accounting_account_id"], account.accounting_account_id)
+        self.assertEqual(snapshot["accounting_account_code"], account.accounting_account.code)
+        self.assertTrue(snapshot["has_accounting_account"])
+        self.assertEqual(
+            snapshot["opening_accounting_entry_id"],
+            account.opening_accounting_entry_id,
+        )
+        self.assertTrue(snapshot["has_opening_accounting_entry"])
     def test_duplicate_account_name_is_blocked_inside_same_company(self) -> None:
         create_treasury_account(
             company=self.company_a,
@@ -816,6 +957,213 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
         )
         self.assertEqual(treasury_transaction.amount, Decimal("150.00"))
 
+
+
+
+    def test_customer_payment_api_serializer_exposes_treasury_accounting_linkage(self) -> None:
+        from api.company.treasury.customer_payments.list import (
+            serialize_customer_payment as serialize_api_customer_payment,
+        )
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="API Customer Payment Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="0.00",
+        )
+        payment = create_customer_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="90.00",
+            payment_method=PaymentMethod.CASH,
+            customer_name="API Serialization Customer",
+            reference="CP-API-SERIALIZATION",
+        )
+        payment = confirm_customer_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+        )
+        payment = (
+            CustomerPayment.objects.select_related(
+                "treasury_account__accounting_account",
+                "treasury_transaction",
+                "accounting_entry",
+                "created_by",
+                "updated_by",
+                "confirmed_by",
+                "cancelled_by",
+            )
+            .get(id=payment.id)
+        )
+        payload = serialize_api_customer_payment(payment)
+        self.assertEqual(
+            payload["treasury_accounting_account_id"],
+            account.accounting_account_id,
+        )
+        self.assertEqual(
+            payload["treasury_accounting_account_code"],
+            account.accounting_account.code,
+        )
+        self.assertEqual(
+            payload["treasury_accounting_account_name"],
+            account.accounting_account.name,
+        )
+        self.assertTrue(payload["treasury_has_accounting_account"])
+    def test_supplier_payment_api_serializer_exposes_treasury_accounting_linkage(self) -> None:
+        from api.company.treasury.supplier_payments.list import (
+            serialize_supplier_payment as serialize_api_supplier_payment,
+        )
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="API Supplier Payment Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="300.00",
+        )
+        payment = create_supplier_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="75.00",
+            payment_method=PaymentMethod.CASH,
+            supplier_name="API Serialization Supplier",
+            reference="SP-API-SERIALIZATION",
+        )
+        payment = confirm_supplier_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+        )
+        payment = (
+            SupplierPayment.objects.select_related(
+                "treasury_account__accounting_account",
+                "treasury_transaction",
+                "accounting_entry",
+                "created_by",
+                "updated_by",
+                "confirmed_by",
+                "cancelled_by",
+            )
+            .get(id=payment.id)
+        )
+        payload = serialize_api_supplier_payment(payment)
+        self.assertEqual(
+            payload["treasury_accounting_account_id"],
+            account.accounting_account_id,
+        )
+        self.assertEqual(
+            payload["treasury_accounting_account_code"],
+            account.accounting_account.code,
+        )
+        self.assertEqual(
+            payload["treasury_accounting_account_name"],
+            account.accounting_account.name,
+        )
+        self.assertTrue(payload["treasury_has_accounting_account"])
+    def test_confirm_customer_payment_requires_linked_treasury_accounting_account(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Unlinked Cash Posting Guard",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="0.00",
+            auto_create_accounting_account=False,
+        )
+        account.refresh_from_db()
+        self.assertIsNone(account.accounting_account_id)
+        payment = create_customer_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="45.00",
+            payment_method=PaymentMethod.CASH,
+            customer_name="Unlinked Guard Customer",
+            reference="CP-UNLINKED-GUARD",
+        )
+        with self.assertRaises(Exception):
+            confirm_customer_payment(
+                company=self.company_a,
+                payment=payment,
+                user=self.user,
+            )
+        payment.refresh_from_db()
+        account.refresh_from_db()
+        self.assertEqual(payment.status, PaymentStatus.DRAFT)
+        self.assertIsNone(payment.accounting_entry_id)
+        self.assertIsNone(payment.treasury_transaction_id)
+        self.assertEqual(account.current_balance, Decimal("0.00"))
+    def test_confirm_customer_payment_posts_to_linked_treasury_accounting_account(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Customer Linked Cash Posting",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="0.00",
+        )
+        payment = create_customer_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="80.00",
+            payment_method=PaymentMethod.CASH,
+            customer_name="Linked Posting Customer",
+            reference="CP-LINKED-ACCOUNT",
+        )
+        payment = confirm_customer_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+        )
+        payment.refresh_from_db()
+        account.refresh_from_db()
+        self.assertIsNotNone(account.accounting_account_id)
+        self.assertIsNotNone(payment.accounting_entry_id)
+        lines = list(payment.accounting_entry.lines.select_related("account"))
+        self.assertTrue(
+            any(
+                line.account_id == account.accounting_account_id
+                and line.debit_amount == Decimal("80.00")
+                and line.credit_amount == Decimal("0.00")
+                for line in lines
+            )
+        )
+    def test_confirm_supplier_payment_posts_to_linked_treasury_accounting_account(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Supplier Linked Cash Posting",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="200.00",
+        )
+        payment = create_supplier_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="70.00",
+            payment_method=PaymentMethod.CASH,
+            supplier_name="Linked Posting Supplier",
+            reference="SP-LINKED-ACCOUNT",
+        )
+        payment = confirm_supplier_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+        )
+        payment.refresh_from_db()
+        account.refresh_from_db()
+        self.assertIsNotNone(account.accounting_account_id)
+        self.assertIsNotNone(payment.accounting_entry_id)
+        lines = list(payment.accounting_entry.lines.select_related("account"))
+        self.assertTrue(
+            any(
+                line.account_id == account.accounting_account_id
+                and line.debit_amount == Decimal("0.00")
+                and line.credit_amount == Decimal("70.00")
+                for line in lines
+            )
+        )
     def test_confirm_customer_payment_twice_does_not_duplicate_balance_effect(self) -> None:
         account = create_treasury_account(
             company=self.company_a,

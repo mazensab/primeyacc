@@ -140,9 +140,19 @@ def _serialize_user(user: Any) -> dict[str, Any] | None:
 def _serialize_treasury_account(account: TreasuryAccount | None) -> dict[str, Any] | None:
     if not account:
         return None
+    accounting_account = getattr(account, "accounting_account", None)
+    opening_accounting_entry = getattr(account, "opening_accounting_entry", None)
 
     return {
         "id": account.id,
+        "accounting_account_id": account.accounting_account_id,
+        "accounting_account_code": getattr(accounting_account, "code", ""),
+        "accounting_account_name": getattr(accounting_account, "name", ""),
+        "has_accounting_account": bool(account.accounting_account_id),
+        "opening_accounting_entry_id": account.opening_accounting_entry_id,
+        "opening_accounting_entry_number": getattr(opening_accounting_entry, "entry_number", ""),
+        "opening_accounting_entry_status": getattr(opening_accounting_entry, "status", ""),
+        "has_opening_accounting_entry": bool(account.opening_accounting_entry_id),
         "name": account.name,
         "code": account.code,
         "account_type": account.account_type,

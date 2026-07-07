@@ -57,6 +57,23 @@ class TreasuryAccount(models.Model):
         related_name="treasury_accounts",
     )
 
+    accounting_account = models.ForeignKey(
+        "accounting.Account",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="treasury_accounts",
+        help_text="Linked posting account in the company chart of accounts.",
+    )
+
+    opening_accounting_entry = models.ForeignKey(
+        "accounting.JournalEntry",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="treasury_opening_accounts",
+        help_text="Auto-posted opening balance journal entry for this treasury account.",
+    )
     name = models.CharField(max_length=180)
     code = models.CharField(max_length=50, blank=True)
 
@@ -122,6 +139,8 @@ class TreasuryAccount(models.Model):
             models.Index(fields=["company", "status"]),
             models.Index(fields=["company", "is_default"]),
             models.Index(fields=["company", "code"]),
+            models.Index(fields=["company", "accounting_account"]),
+            models.Index(fields=["company", "opening_accounting_entry"]),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -150,6 +169,42 @@ class TreasuryAccount(models.Model):
 
         if self.current_balance is None:
             self.current_balance = self.opening_balance or Decimal("0.00")
+
+        if self.opening_accounting_entry_id:
+            if self.company_id and self.opening_accounting_entry.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "opening_accounting_entry": "Opening accounting entry must belong to the same company.",
+                    }
+                )
+        if self.accounting_account_id:
+            if self.company_id and self.accounting_account.company_id != self.company_id:
+                raise ValidationError(
+                    {
+                        "accounting_account": "Accounting account must belong to the same company.",
+                    }
+                )
+
+            if self.accounting_account.is_group:
+                raise ValidationError(
+                    {
+                        "accounting_account": "Accounting account cannot be a group account.",
+                    }
+                )
+
+            if not self.accounting_account.is_active:
+                raise ValidationError(
+                    {
+                        "accounting_account": "Accounting account must be active.",
+                    }
+                )
+
+            if not self.accounting_account.allow_manual_posting:
+                raise ValidationError(
+                    {
+                        "accounting_account": "Accounting account must allow posting.",
+                    }
+                )
 
         if self.account_type == self.AccountType.BANK and not self.bank_name:
             raise ValidationError(

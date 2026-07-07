@@ -196,6 +196,8 @@ def serialize_supplier_payment(payment: SupplierPayment) -> dict[str, Any]:
     treasury_transaction = payment.treasury_transaction
     accounting_entry = payment.accounting_entry
     purchase_bill = payment.purchase_bill
+    treasury_account = payment.treasury_account
+    treasury_accounting_account = getattr(treasury_account, "accounting_account", None)
 
     accounting_payload = _serialize_accounting_entry(accounting_entry)
     transaction_payload = _serialize_treasury_transaction(treasury_transaction)
@@ -227,6 +229,10 @@ def serialize_supplier_payment(payment: SupplierPayment) -> dict[str, Any]:
         "treasury_account_name": getattr(payment.treasury_account, "name", ""),
         "treasury_account_type": getattr(payment.treasury_account, "account_type", ""),
         "treasury_account_currency": getattr(payment.treasury_account, "currency", ""),
+        "treasury_accounting_account_id": getattr(payment.treasury_account, "accounting_account_id", None),
+        "treasury_accounting_account_code": getattr(treasury_accounting_account, "code", ""),
+        "treasury_accounting_account_name": getattr(treasury_accounting_account, "name", ""),
+        "treasury_has_accounting_account": bool(getattr(payment.treasury_account, "accounting_account_id", None)),
 
         # Treasury transaction flat fields
         "treasury_transaction_id": payment.treasury_transaction_id,

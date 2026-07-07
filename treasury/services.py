@@ -45,10 +45,24 @@ from django.db import transaction
 from django.db.models import Count, Q, QuerySet, Sum
 from django.utils import timezone
 
+from accounting.models import (
+    Account,
+    AccountNature,
+    AccountType as AccountingAccountType,
+    AccountingAccountPurpose,
+    JournalEntry,
+    PostingSource,
+)
+
 from accounting.services import (
     post_customer_payment_to_accounting,
+    seed_company_chart_of_accounts,
     post_supplier_payment_to_accounting,
     reverse_journal_entry,
+    EntryLinePayload,
+    create_manual_journal_entry,
+    get_account_by_purpose,
+    post_journal_entry,
 )
 from purchases.models import PurchaseBill
 from sales.models import SalesInvoice
@@ -285,6 +299,271 @@ def get_supplier_payment_or_raise(company, payment_id: int) -> SupplierPayment:
     return payment
 
 
+
+# ---------------------------------------------------------------------
+# Treasury accounting-account helpers
+# ---------------------------------------------------------------------
+
+def _treasury_accounting_config(account_type: str) -> dict[str, str]:
+    if account_type == TreasuryAccount.AccountType.BANK:
+        return {
+            "parent_code": "1102",
+            "code_prefix": "110201",
+            "purpose": AccountingAccountPurpose.BANK,
+            "name_en_prefix": "Bank Account",
+        }
+
+    if account_type == TreasuryAccount.AccountType.WALLET:
+        return {
+            "parent_code": "1101",
+            "code_prefix": "110103",
+            "purpose": AccountingAccountPurpose.CASH,
+            "name_en_prefix": "Wallet Account",
+        }
+
+    return {
+        "parent_code": "1101",
+        "code_prefix": "110101",
+        "purpose": AccountingAccountPurpose.CASH,
+        "name_en_prefix": "Cash Account",
+    }
+
+
+def _validate_accounting_account_for_treasury(*, company, account: Account) -> Account:
+    ensure_same_company(company, account, field_name="accounting_account")
+
+    if account.is_group:
+        raise ValidationError({"accounting_account": "Accounting account cannot be a group account."})
+
+    if not account.is_active:
+        raise ValidationError({"accounting_account": "Accounting account must be active."})
+
+    if not account.allow_manual_posting:
+        raise ValidationError({"accounting_account": "Accounting account must allow posting."})
+
+    if account.account_type != AccountingAccountType.ASSET:
+        raise ValidationError({"accounting_account": "Treasury accounting account must be an asset account."})
+
+    if account.nature != AccountNature.DEBIT:
+        raise ValidationError({"accounting_account": "Treasury accounting account must have debit nature."})
+
+    return account
+
+
+def _generate_treasury_accounting_account_code(*, company, code_prefix: str) -> str:
+    existing_codes = Account.objects.filter(
+        company=company,
+        code__startswith=code_prefix,
+    ).values_list("code", flat=True)
+
+    max_suffix = 0
+
+    for existing_code in existing_codes:
+        suffix = str(existing_code or "")[len(code_prefix):]
+        if suffix.isdigit():
+            max_suffix = max(max_suffix, int(suffix))
+
+    return f"{code_prefix}{max_suffix + 1:03d}"
+
+
+def ensure_treasury_accounting_account(
+    *,
+    company,
+    name: str,
+    account_type: str,
+    currency: str = "SAR",
+) -> Account:
+    """
+    Ensure a postable accounting account for a treasury account.
+
+    Step 2 scope:
+    - Create/link the ledger account.
+    - Do not create opening journal entry yet.
+    """
+    if not company:
+        raise ValidationError({"company": "Company is required."})
+
+    clean_name = normalize_text(name)
+    if not clean_name:
+        raise ValidationError({"name": "Treasury account name is required."})
+
+    config = _treasury_accounting_config(account_type)
+
+    parent = Account.objects.filter(
+        company=company,
+        code=config["parent_code"],
+    ).first()
+
+    if not parent:
+        seed_company_chart_of_accounts(company)
+        parent = Account.objects.filter(
+            company=company,
+            code=config["parent_code"],
+        ).first()
+
+    if not parent:
+        raise ValidationError(
+            {
+                "accounting_account": (
+                    f"Parent accounting account {config['parent_code']} was not found."
+                )
+            }
+        )
+
+    if not parent.is_group:
+        raise ValidationError(
+            {
+                "accounting_account": (
+                    f"Parent accounting account {parent.code} must be a group account."
+                )
+            }
+        )
+
+    account_code = _generate_treasury_accounting_account_code(
+        company=company,
+        code_prefix=config["code_prefix"],
+    )
+
+    account = Account(
+        company=company,
+        code=account_code,
+        name=clean_name,
+        name_en=f"{config['name_en_prefix']} - {clean_name}",
+        account_type=AccountingAccountType.ASSET,
+        nature=AccountNature.DEBIT,
+        purpose=config["purpose"],
+        parent=parent,
+        is_group=False,
+        is_active=True,
+        is_system=False,
+        allow_manual_posting=True,
+        currency=normalize_currency(currency),
+        description="Auto-created for treasury account posting.",
+        metadata={
+            "source": "treasury_account",
+            "auto_created": True,
+            "treasury_account_type": account_type,
+        },
+    )
+    account.full_clean()
+    account.save()
+
+    return account
+
+
+
+AUTO_SOURCE_TYPE_TREASURY_OPENING_BALANCE = "treasury_account_opening_balance"
+def create_treasury_opening_balance_entry(
+    *,
+    company,
+    treasury_account: TreasuryAccount,
+    amount,
+    entry_date=None,
+    user=None,
+) -> JournalEntry | None:
+    """
+    Create and post the opening balance journal entry for a treasury account.
+    Accounting effect:
+    - Debit  linked treasury accounting account
+    - Credit opening equity account
+    """
+    amount_decimal = normalize_decimal(amount, field_name="opening_balance")
+    if amount_decimal <= ZERO:
+        return None
+    ensure_same_company(company, treasury_account, field_name="treasury_account")
+    with transaction.atomic():
+        treasury_account = (
+            TreasuryAccount.objects.select_for_update()
+            .select_related(
+                "accounting_account",
+                "opening_accounting_entry",
+            )
+            .get(
+                id=treasury_account.id,
+                company=company,
+            )
+        )
+        if treasury_account.opening_accounting_entry_id:
+            return treasury_account.opening_accounting_entry
+        if not treasury_account.accounting_account_id:
+            raise ValidationError(
+                {
+                    "accounting_account": (
+                        "Treasury account must be linked to an accounting account before posting opening balance."
+                    )
+                }
+            )
+        treasury_posting_account = _validate_accounting_account_for_treasury(
+            company=company,
+            account=treasury_account.accounting_account,
+        )
+        opening_equity_account = get_account_by_purpose(
+            company,
+            AccountingAccountPurpose.OPENING_EQUITY,
+            required=True,
+        )
+        entry = create_manual_journal_entry(
+            company=company,
+            entry_date=entry_date or timezone.localdate(),
+            description=f"Opening balance for treasury account: {treasury_account.name}",
+            reference=f"TREASURY-OPENING-{treasury_account.id}",
+            external_reference=treasury_account.code or str(treasury_account.id),
+            currency=treasury_account.currency,
+            actor=user,
+            auto_post=False,
+            lines=[
+                EntryLinePayload(
+                    account=treasury_posting_account,
+                    description=f"Opening balance debit for {treasury_account.name}",
+                    debit_amount=amount_decimal,
+                    credit_amount=ZERO,
+                    currency=treasury_account.currency,
+                    source_line_id=f"treasury-account:{treasury_account.id}:debit",
+                    sort_order=1,
+                    metadata={
+                        "source": "treasury_opening_balance",
+                        "treasury_account_id": treasury_account.id,
+                    },
+                ),
+                EntryLinePayload(
+                    account=opening_equity_account,
+                    description=f"Opening balance credit for {treasury_account.name}",
+                    debit_amount=ZERO,
+                    credit_amount=amount_decimal,
+                    currency=treasury_account.currency,
+                    source_line_id=f"treasury-account:{treasury_account.id}:credit",
+                    sort_order=2,
+                    metadata={
+                        "source": "treasury_opening_balance",
+                        "treasury_account_id": treasury_account.id,
+                    },
+                ),
+            ],
+        )
+        entry.posting_source = PostingSource.OPENING_BALANCE
+        entry.source_type = AUTO_SOURCE_TYPE_TREASURY_OPENING_BALANCE
+        entry.source_id = str(treasury_account.id)
+        entry.source_number = treasury_account.code or str(treasury_account.id)
+        entry.is_auto_posted = True
+        entry.save(
+            update_fields=[
+                "posting_source",
+                "source_type",
+                "source_id",
+                "source_number",
+                "is_auto_posted",
+                "updated_at",
+            ]
+        )
+        entry = post_journal_entry(entry, actor=user)
+        treasury_account.opening_accounting_entry = entry
+        treasury_account.save(
+            update_fields=[
+                "opening_accounting_entry",
+                "updated_at",
+            ]
+        )
+        return entry
 # ---------------------------------------------------------------------
 # Treasury account services
 # ---------------------------------------------------------------------
@@ -305,6 +584,8 @@ def create_treasury_account(
     is_default: bool = False,
     notes: str = "",
     status: str = TreasuryAccount.AccountStatus.ACTIVE,
+    accounting_account: Account | None = None,
+    auto_create_accounting_account: bool = True,
 ) -> TreasuryAccount:
     opening_balance_decimal = normalize_decimal(
         opening_balance,
@@ -315,8 +596,24 @@ def create_treasury_account(
         raise ValidationError({"name": "Treasury account name is required."})
 
     with transaction.atomic():
+        linked_account = accounting_account
+
+        if linked_account is not None:
+            linked_account = _validate_accounting_account_for_treasury(
+                company=company,
+                account=linked_account,
+            )
+        elif auto_create_accounting_account:
+            linked_account = ensure_treasury_accounting_account(
+                company=company,
+                name=normalize_text(name),
+                account_type=account_type,
+                currency=normalize_currency(currency),
+            )
+
         account = TreasuryAccount(
             company=company,
+            accounting_account=linked_account,
             name=normalize_text(name),
             code=normalize_code(code),
             account_type=account_type,
@@ -342,6 +639,16 @@ def create_treasury_account(
                 .exclude(id=account.id)
                 .update(is_default=False)
             )
+
+        if opening_balance_decimal > ZERO:
+            create_treasury_opening_balance_entry(
+                company=company,
+                treasury_account=account,
+                amount=opening_balance_decimal,
+                entry_date=timezone.localdate(),
+                user=user,
+            )
+            account.refresh_from_db()
 
         return account
 

@@ -30,6 +30,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from accounting.models import Account
 from treasury.models import TreasuryAccount
 from treasury.services import (
     create_treasury_account,
@@ -107,13 +108,83 @@ def _to_bool(value: Any) -> bool | None:
     return None
 
 
+
+def _serialize_accounting_account(account: Account | None) -> dict[str, Any] | None:
+    if not account:
+        return None
+    return {
+        "id": account.id,
+        "code": account.code,
+        "name": account.name,
+        "account_type": account.account_type,
+        "nature": account.nature,
+        "purpose": account.purpose,
+        "is_group": account.is_group,
+        "is_active": account.is_active,
+        "allow_manual_posting": account.allow_manual_posting,
+    }
+def _serialize_opening_accounting_entry(entry) -> dict[str, Any] | None:
+    if not entry:
+        return None
+    return {
+        "id": entry.id,
+        "entry_number": entry.entry_number,
+        "status": entry.status,
+        "entry_date": entry.entry_date.isoformat() if entry.entry_date else None,
+        "total_debit": str(entry.total_debit),
+        "total_credit": str(entry.total_credit),
+        "posted_at": entry.posted_at.isoformat() if entry.posted_at else None,
+    }
+def _resolve_accounting_account_from_request(
+    data: dict[str, Any],
+    company,
+) -> Account | None:
+    raw_account_id = data.get("accounting_account_id") or data.get("accounting_account")
+    if raw_account_id in (None, ""):
+        return None
+    try:
+        account_id = int(raw_account_id)
+    except (TypeError, ValueError) as exc:
+        raise TreasuryAccountListAPIError(
+            "accounting_account_id must be a valid accounting account id."
+        ) from exc
+    account = Account.objects.filter(
+        company=company,
+        id=account_id,
+    ).first()
+    if not account:
+        raise TreasuryAccountListAPIError(
+            "Accounting account was not found for this company."
+        )
+    return account
+def _resolve_auto_create_accounting_account(data: dict[str, Any]) -> bool:
+    if "auto_create_accounting_account" not in data:
+        return True
+    return bool(_to_bool(data.get("auto_create_accounting_account")))
+
 def serialize_treasury_account(account: TreasuryAccount) -> dict[str, Any]:
     """
     Serialize treasury account for frontend responses.
     """
+    accounting_account = getattr(account, "accounting_account", None)
+    opening_accounting_entry = getattr(account, "opening_accounting_entry", None)
     return {
         "id": account.id,
         "company_id": account.company_id,
+        # Accounting linkage
+        "accounting_account_id": account.accounting_account_id,
+        "accounting_account_code": getattr(accounting_account, "code", ""),
+        "accounting_account_name": getattr(accounting_account, "name", ""),
+        "accounting_account_type": getattr(accounting_account, "account_type", ""),
+        "accounting_account_purpose": getattr(accounting_account, "purpose", ""),
+        "has_accounting_account": bool(account.accounting_account_id),
+        "accounting_account": _serialize_accounting_account(accounting_account),
+        # Opening balance journal entry
+        "opening_accounting_entry_id": account.opening_accounting_entry_id,
+        "opening_accounting_entry_number": getattr(opening_accounting_entry, "entry_number", ""),
+        "opening_accounting_entry_status": getattr(opening_accounting_entry, "status", ""),
+        "has_opening_accounting_entry": bool(account.opening_accounting_entry_id),
+        "opening_accounting_entry": _serialize_opening_accounting_entry(opening_accounting_entry),
         "name": account.name,
         "code": account.code,
         "account_type": account.account_type,
@@ -298,6 +369,8 @@ def _create_account_from_request(request: Request, company):
         status=data.get("status") or TreasuryAccount.AccountStatus.ACTIVE,
         currency=data.get("currency") or "SAR",
         opening_balance=data.get("opening_balance") or "0.00",
+        accounting_account=_resolve_accounting_account_from_request(data, company),
+        auto_create_accounting_account=_resolve_auto_create_accounting_account(data),
         bank_name=data.get("bank_name") or "",
         bank_account_number=data.get("bank_account_number") or "",
         iban=data.get("iban") or "",

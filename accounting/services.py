@@ -2560,44 +2560,38 @@ def _ensure_confirmed_payment(payment: Any, *, payment_label: str) -> None:
 
 def _resolve_treasury_accounting_account(company, treasury_account: Any) -> Account:
     """
-    Resolve accounting account for treasury account.
-
-    Mapping:
-    - CASH   -> AccountingAccountPurpose.CASH
-    - BANK   -> AccountingAccountPurpose.BANK
-    - WALLET -> 110103 Digital Wallets, fallback CASH
-    - Other  -> CASH fallback
+    Resolve accounting account for treasury payment posting.
+    Confirmed treasury payments must post to the exact linked cashbox/bank
+    ledger account. Missing linkage is an accounting configuration error.
     """
     if not treasury_account:
         raise AccountingConfigurationError("حساب الخزينة مطلوب للترحيل المحاسبي.")
-
     if getattr(treasury_account, "company_id", None) != getattr(company, "pk", None):
         raise AccountingConfigurationError("حساب الخزينة لا يتبع نفس الشركة.")
-
-    account_type = _clean_text(getattr(treasury_account, "account_type", "")).upper()
-
-    if account_type == "BANK":
-        return get_account_by_purpose(
-            company,
-            AccountingAccountPurpose.BANK,
-            required=True,
+    linked_account = getattr(treasury_account, "accounting_account", None)
+    linked_account_id = getattr(treasury_account, "accounting_account_id", None)
+    if linked_account is None and linked_account_id:
+        linked_account = Account.objects.filter(
+            company=company,
+            pk=linked_account_id,
+        ).first()
+    if linked_account is None:
+        raise AccountingConfigurationError(
+            "حساب الخزينة غير مربوط بحساب محاسبي. اربط الصندوق أو الحساب البنكي بحساب محاسبي قبل التأكيد."
         )
-
-    if account_type == "WALLET":
-        wallet_account = get_account_by_code(
-            company,
-            "110103",
-            required=False,
-        )
-        if wallet_account:
-            return wallet_account
-
-    return get_account_by_purpose(
-        company,
-        AccountingAccountPurpose.CASH,
-        required=True,
-    )
-
+    if getattr(linked_account, "company_id", None) != getattr(company, "pk", None):
+        raise AccountingConfigurationError("حساب الخزينة المحاسبي لا يتبع نفس الشركة.")
+    if linked_account.is_group:
+        raise AccountingConfigurationError("حساب الخزينة المحاسبي لا يمكن أن يكون حساب مجموعة.")
+    if not linked_account.is_active:
+        raise AccountingConfigurationError("حساب الخزينة المحاسبي غير نشط.")
+    if not linked_account.allow_manual_posting:
+        raise AccountingConfigurationError("حساب الخزينة المحاسبي لا يسمح بالترحيل.")
+    if linked_account.account_type != AccountType.ASSET:
+        raise AccountingConfigurationError("حساب الخزينة المحاسبي يجب أن يكون من نوع أصل.")
+    if linked_account.nature != AccountNature.DEBIT:
+        raise AccountingConfigurationError("حساب الخزينة المحاسبي يجب أن تكون طبيعته مدينة.")
+    return linked_account
 
 def _mark_payment_accounting_posted(payment: Any, entry: JournalEntry) -> None:
     """
