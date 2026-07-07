@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📂 accounting/services.py
 # 🧠 Mhamcloud | Accounting Services - Phase 10.1
 # ------------------------------------------------------------
@@ -106,153 +106,147 @@ class RoutingSeedRow:
 
 CHART_OF_ACCOUNTS: list[AccountSeedRow] = [
     # ========================================================
-    # 1 الأصول
+    # Default chart generated from approved Excel + PrimeyAcc system accounts
     # ========================================================
-    AccountSeedRow("1", "الأصول", "Assets", AccountType.ASSET, AccountNature.DEBIT, None, True, is_system=True),
-    AccountSeedRow("11", "الأصول المتداولة", "Current Assets", AccountType.ASSET, AccountNature.DEBIT, "1", True, is_system=True),
 
-    AccountSeedRow("1101", "النقد وما في حكمه", "Cash and Cash Equivalents", AccountType.ASSET, AccountNature.DEBIT, "11", True, is_system=True),
-    AccountSeedRow("110101", "النقدية في الخزينة", "Cash on Hand", AccountType.ASSET, AccountNature.DEBIT, "1101", False, is_system=True, description="حساب الصناديق النقدية الرئيسي", purpose=AccountingAccountPurpose.CASH),
-    AccountSeedRow("110102", "العهد النقدية", "Petty Cash", AccountType.ASSET, AccountNature.DEBIT, "1101", False),
-    AccountSeedRow("110103", "محافظ إلكترونية", "Digital Wallets", AccountType.ASSET, AccountNature.DEBIT, "1101", False),
+    # -------------------- 1 --------------------
+    AccountSeedRow('1', 'الأصول', 'Assets', AccountType.ASSET, AccountNature.DEBIT, None, True, is_system=True),
 
-    AccountSeedRow("1102", "النقدية في البنوك", "Cash at Banks", AccountType.ASSET, AccountNature.DEBIT, "11", True, is_system=True),
-    AccountSeedRow("110201", "حساب البنك الجاري", "Current Bank Account", AccountType.ASSET, AccountNature.DEBIT, "1102", False, is_system=True, purpose=AccountingAccountPurpose.BANK),
-    AccountSeedRow("110202", "حساب بنكي آخر", "Other Bank Account", AccountType.ASSET, AccountNature.DEBIT, "1102", False),
-    AccountSeedRow("110203", "حساب ادخار بنكي", "Bank Savings Account", AccountType.ASSET, AccountNature.DEBIT, "1102", False),
-    AccountSeedRow("110204", "حساب رواتب بنكي", "Payroll Bank Account", AccountType.ASSET, AccountNature.DEBIT, "1102", False),
+    # -------------------- 2 --------------------
+    AccountSeedRow('2', 'الالتزامات', 'Liability', AccountType.LIABILITY, AccountNature.CREDIT, None, True, is_system=True),
 
-    AccountSeedRow("1103", "الذمم المدينة - العملاء", "Accounts Receivable - Customers", AccountType.ASSET, AccountNature.DEBIT, "11", False, is_system=True, purpose=AccountingAccountPurpose.ACCOUNTS_RECEIVABLE),
+    # -------------------- 3 --------------------
+    AccountSeedRow('3', 'حقوق الملكية', 'Equity', AccountType.EQUITY, AccountNature.CREDIT, None, True, is_system=True),
 
-    AccountSeedRow("1104", "تسويات بوابات الدفع", "Payment Gateway Clearing", AccountType.ASSET, AccountNature.DEBIT, "11", True, is_system=True),
-    AccountSeedRow("110401", "تسوية ميسر", "Moyasar Clearing", AccountType.ASSET, AccountNature.DEBIT, "1104", False, is_system=True),
-    AccountSeedRow("110402", "تسوية تاب", "Tap Clearing", AccountType.ASSET, AccountNature.DEBIT, "1104", False, is_system=True),
-    AccountSeedRow("110403", "تسوية تمارا", "Tamara Clearing", AccountType.ASSET, AccountNature.DEBIT, "1104", False, is_system=True),
-    AccountSeedRow("110404", "تسوية تابي", "Tabby Clearing", AccountType.ASSET, AccountNature.DEBIT, "1104", False, is_system=True),
+    # -------------------- 4 --------------------
+    AccountSeedRow('4', 'الإيرادات', 'Revenue', AccountType.REVENUE, AccountNature.CREDIT, None, True, is_system=True),
 
-    AccountSeedRow("1105", "مصروفات مقدمة", "Prepaid Expenses", AccountType.ASSET, AccountNature.DEBIT, "11", True),
-    AccountSeedRow("110501", "تأمين طبي مقدم", "Prepaid Medical Insurance", AccountType.ASSET, AccountNature.DEBIT, "1105", False),
-    AccountSeedRow("110502", "إيجار مقدم", "Prepaid Rent", AccountType.ASSET, AccountNature.DEBIT, "1105", False),
-    AccountSeedRow("110503", "اشتراكات مقدمة", "Prepaid Subscriptions", AccountType.ASSET, AccountNature.DEBIT, "1105", False),
+    # -------------------- 5 --------------------
+    AccountSeedRow('5', 'المصاريف', 'Expenses', AccountType.EXPENSE, AccountNature.DEBIT, None, True, is_system=True),
 
-    AccountSeedRow("1106", "مدفوعات مقدمة للموظفين", "Employee Advances", AccountType.ASSET, AccountNature.DEBIT, "11", False),
-    AccountSeedRow("1107", "مدفوعات مقدمة للمزودين", "Provider Advances", AccountType.ASSET, AccountNature.DEBIT, "11", False),
-    AccountSeedRow("1108", "المخزون", "Inventory", AccountType.ASSET, AccountNature.DEBIT, "11", False, is_system=True, purpose=AccountingAccountPurpose.INVENTORY),
+    # -------------------- 1 --------------------
+    AccountSeedRow('11', 'أصول متداولة', 'Current Assets', AccountType.ASSET, AccountNature.DEBIT, '1', True, is_system=True),
+    AccountSeedRow('12', 'أصول غير متداولة', 'Non-current assets', AccountType.ASSET, AccountNature.DEBIT, '1', True, is_system=True),
 
-    AccountSeedRow("1109", "العهد التشغيلية", "Operational Custodies", AccountType.ASSET, AccountNature.DEBIT, "11", True, is_system=True),
-    AccountSeedRow("110901", "عهدة المندوبين", "Agent Custody", AccountType.ASSET, AccountNature.DEBIT, "1109", False, is_system=True, description="مبالغ تشغيلية محصلة بواسطة مندوبين ولم تورد بعد"),
-    AccountSeedRow("110902", "عهدة الوسطاء", "Broker Custody", AccountType.ASSET, AccountNature.DEBIT, "1109", False, is_system=True, description="مبالغ تشغيلية على الوسطاء ولم تورد بعد"),
-    AccountSeedRow("110903", "عهدة الموظفين", "Employee Custody", AccountType.ASSET, AccountNature.DEBIT, "1109", False),
-    AccountSeedRow("110904", "عهدة الموردين", "Supplier Custody", AccountType.ASSET, AccountNature.DEBIT, "1109", False),
+    # -------------------- 2 --------------------
+    AccountSeedRow('21', 'الالتزامات المتداولة', 'Current Liability', AccountType.LIABILITY, AccountNature.CREDIT, '2', True, is_system=True),
+    AccountSeedRow('22', 'التزامات غير متداولة', 'Non-current Liability', AccountType.LIABILITY, AccountNature.CREDIT, '2', True, is_system=True),
 
-    AccountSeedRow("1110", "أوراق قبض وأرصدة مدينة", "Notes Receivable and Debit Balances", AccountType.ASSET, AccountNature.DEBIT, "11", True),
-    AccountSeedRow("111001", "أوراق قبض", "Notes Receivable", AccountType.ASSET, AccountNature.DEBIT, "1110", False),
-    AccountSeedRow("111002", "ذمم موظفين", "Employee Receivables", AccountType.ASSET, AccountNature.DEBIT, "1110", False),
-    AccountSeedRow("111003", "ذمم أطراف ذات علاقة مدينة", "Related Party Receivables", AccountType.ASSET, AccountNature.DEBIT, "1110", False),
-    AccountSeedRow("111004", "دفعات مقدمة أخرى", "Other Advances", AccountType.ASSET, AccountNature.DEBIT, "1110", False),
+    # -------------------- 3 --------------------
+    AccountSeedRow('31', 'رأس المال', 'Issued Capital', AccountType.EQUITY, AccountNature.CREDIT, '3', True),
+    AccountSeedRow('32', 'حقوق ملكية أخرى', 'Other equity', AccountType.EQUITY, AccountNature.CREDIT, '3', True),
+    AccountSeedRow('33', 'احتياطيات', 'Reserve', AccountType.EQUITY, AccountNature.CREDIT, '3', True),
+    AccountSeedRow('34', 'الأرباح المبقاة (أو الخسائر)', 'Retained earnings or losses', AccountType.EQUITY, AccountNature.CREDIT, '3', True),
 
-    AccountSeedRow("12", "الأصول غير المتداولة", "Non-current Assets", AccountType.ASSET, AccountNature.DEBIT, "1", True),
-    AccountSeedRow("1201", "العقارات والآلات والمعدات", "Property, Plant and Equipment", AccountType.ASSET, AccountNature.DEBIT, "12", True),
-    AccountSeedRow("120101", "الأراضي", "Land", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
-    AccountSeedRow("120102", "المباني", "Buildings", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
-    AccountSeedRow("120103", "الأثاث والتجهيزات", "Furniture and Fixtures", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
-    AccountSeedRow("120104", "أجهزة الحاسب", "Computer Equipment", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
-    AccountSeedRow("120105", "السيارات", "Vehicles", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
-    AccountSeedRow("120106", "العدد والأدوات", "Tools and Equipment", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
-    AccountSeedRow("120107", "معدات مكتبية", "Office Equipment", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
-    AccountSeedRow("120108", "تحسينات على مبان مستأجرة", "Leasehold Improvements", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
-    AccountSeedRow("120109", "آلات ومعدات تشغيل", "Machinery and Operating Equipment", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
-    AccountSeedRow("120110", "أجهزة اتصال", "Communication Equipment", AccountType.ASSET, AccountNature.DEBIT, "1201", False),
+    # -------------------- 4 --------------------
+    AccountSeedRow('41', 'الإيرادات التشغيلية', 'Operational Revenue', AccountType.REVENUE, AccountNature.CREDIT, '4', True, is_system=True),
+    AccountSeedRow('42', 'الإيرادات غير التشغيلية', 'Non-operating revenues', AccountType.REVENUE, AccountNature.CREDIT, '4', True),
 
-    AccountSeedRow("1299", "مجمع الإهلاك", "Accumulated Depreciation", AccountType.ASSET, AccountNature.CREDIT, "12", True),
-    AccountSeedRow("129901", "مجمع إهلاك الأصول", "Accumulated Depreciation", AccountType.ASSET, AccountNature.CREDIT, "1299", False),
-    AccountSeedRow("129902", "مجمع إهلاك المباني", "Accumulated Depreciation - Buildings", AccountType.ASSET, AccountNature.CREDIT, "1299", False),
-    AccountSeedRow("129903", "مجمع إهلاك السيارات", "Accumulated Depreciation - Vehicles", AccountType.ASSET, AccountNature.CREDIT, "1299", False),
-    AccountSeedRow("129904", "مجمع إهلاك الأثاث", "Accumulated Depreciation - Furniture", AccountType.ASSET, AccountNature.CREDIT, "1299", False),
-    AccountSeedRow("129905", "مجمع إهلاك أجهزة الحاسب", "Accumulated Depreciation - Computers", AccountType.ASSET, AccountNature.CREDIT, "1299", False),
+    # -------------------- 5 --------------------
+    AccountSeedRow('51', 'التكاليف المباشرة', 'Direct Cost', AccountType.EXPENSE, AccountNature.DEBIT, '5', True, is_system=True),
+    AccountSeedRow('52', 'التكاليف التشغيلية', 'Operational Cost', AccountType.EXPENSE, AccountNature.DEBIT, '5', True, is_system=True),
+    AccountSeedRow('53', 'مصاريف غير التشغيلية', 'Non- Operational Expenses', AccountType.EXPENSE, AccountNature.DEBIT, '5', True, is_system=True),
 
-    AccountSeedRow("13", "الأصول غير الملموسة", "Intangible Assets", AccountType.ASSET, AccountNature.DEBIT, "1", True),
-    AccountSeedRow("1301", "برمجيات وأنظمة", "Software and Systems", AccountType.ASSET, AccountNature.DEBIT, "13", False),
-    AccountSeedRow("1302", "علامات تجارية", "Trademarks", AccountType.ASSET, AccountNature.DEBIT, "13", False),
-    AccountSeedRow("1303", "رخص وامتيازات", "Licenses and Franchises", AccountType.ASSET, AccountNature.DEBIT, "13", False),
+    # -------------------- 1 --------------------
+    AccountSeedRow('1101', 'النقد ومايعادله', 'Cash and equivalents', AccountType.ASSET, AccountNature.DEBIT, '11', True, is_system=True),
+    AccountSeedRow('1102', 'النقدية في البنك', 'Cash in bank', AccountType.ASSET, AccountNature.DEBIT, '11', True, is_system=True),
+    AccountSeedRow('1103', 'المدينون', 'Accounts receivable', AccountType.ASSET, AccountNature.DEBIT, '11', False, is_system=True, purpose=AccountingAccountPurpose.ACCOUNTS_RECEIVABLE),
+    AccountSeedRow('1104', 'مصروفات مقدمة', 'Prepaid expenses', AccountType.ASSET, AccountNature.DEBIT, '11', True),
+    AccountSeedRow('1105', 'مدفوعات مقدمة للموظفين', 'Staff advances', AccountType.ASSET, AccountNature.DEBIT, '11', False),
+    AccountSeedRow('1106', 'المخزون', 'Inventory', AccountType.ASSET, AccountNature.DEBIT, '11', False, is_system=True, purpose=AccountingAccountPurpose.INVENTORY),
+    AccountSeedRow('1107', 'ضريبة القيمة المضافة - مدخلات', 'VAT Input', AccountType.ASSET, AccountNature.DEBIT, '11', False, is_system=True, purpose=AccountingAccountPurpose.INPUT_VAT, description='حساب ضريبة المدخلات القابلة للخصم.'),
+    AccountSeedRow('1109', 'العهد التشغيلية', 'Operational Custodies', AccountType.ASSET, AccountNature.DEBIT, '11', True, is_system=True),
+    AccountSeedRow('1110', 'تسويات بوابات الدفع', 'Payment Gateway Clearing', AccountType.ASSET, AccountNature.DEBIT, '11', True, is_system=True),
+    AccountSeedRow('1201', 'عقارات وآلات ومعدات', 'PPE', AccountType.ASSET, AccountNature.DEBIT, '12', True),
+    AccountSeedRow('1202', 'الأصول غير الملموسة', 'Intangible assets', AccountType.ASSET, AccountNature.DEBIT, '12', False),
+    AccountSeedRow('1203', 'العقارات الاستثمارية', 'Investment property', AccountType.ASSET, AccountNature.DEBIT, '12', False),
 
-    # ========================================================
-    # 2 الالتزامات
-    # ========================================================
-    AccountSeedRow("2", "الالتزامات", "Liabilities", AccountType.LIABILITY, AccountNature.CREDIT, None, True, is_system=True),
-    AccountSeedRow("21", "الالتزامات المتداولة", "Current Liabilities", AccountType.LIABILITY, AccountNature.CREDIT, "2", True, is_system=True),
+    # -------------------- 2 --------------------
+    AccountSeedRow('2101', 'الدائنون', 'Accounts payable', AccountType.LIABILITY, AccountNature.CREDIT, '21', False, is_system=True, purpose=AccountingAccountPurpose.ACCOUNTS_PAYABLE),
+    AccountSeedRow('2102', 'مصروفات مستحقة', 'Accrued expenses', AccountType.LIABILITY, AccountNature.CREDIT, '21', False),
+    AccountSeedRow('2103', 'الرواتب المستحقة', 'Accrued salaries', AccountType.LIABILITY, AccountNature.CREDIT, '21', False),
+    AccountSeedRow('2104', 'قروض قصيرة الأجل', 'Short-term loans', AccountType.LIABILITY, AccountNature.CREDIT, '21', False),
+    AccountSeedRow('2105', 'ضريبة القيمة المضافة المستحقة', 'VAT payable', AccountType.LIABILITY, AccountNature.CREDIT, '21', True, is_system=True),
+    AccountSeedRow('2106', 'الضرائب المستحقة', 'Accrued Taxes', AccountType.LIABILITY, AccountNature.CREDIT, '21', False),
+    AccountSeedRow('2107', 'إيرادات غير مكتسبة', 'Unearned revenues', AccountType.LIABILITY, AccountNature.CREDIT, '21', False),
+    AccountSeedRow('2108', 'مستحقات المؤسسة العامة للتأمينات الاجتماعية', 'General Organization for Social insurance payable', AccountType.LIABILITY, AccountNature.CREDIT, '21', False),
+    AccountSeedRow('2109', 'مجمع الاستهلاك', 'Accumulated Depreciation', AccountType.LIABILITY, AccountNature.CREDIT, '21', True),
+    AccountSeedRow('2201', 'قروض طويلة أجل', 'Long-term loans', AccountType.LIABILITY, AccountNature.CREDIT, '22', False),
+    AccountSeedRow('2202', 'مخصص مكافأة نهاية الخدمة', 'End of Services Provision', AccountType.LIABILITY, AccountNature.CREDIT, '22', False),
 
-    AccountSeedRow("2101", "الذمم الدائنة - الموردون", "Accounts Payable - Suppliers", AccountType.LIABILITY, AccountNature.CREDIT, "21", False, is_system=True, purpose=AccountingAccountPurpose.ACCOUNTS_PAYABLE),
-    AccountSeedRow("2102", "مصروفات مستحقة", "Accrued Expenses", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
-    AccountSeedRow("2103", "إيرادات مقدمة", "Deferred Revenue", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
-    AccountSeedRow("2104", "رواتب وأجور مستحقة", "Accrued Payroll", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
+    # -------------------- 3 --------------------
+    AccountSeedRow('3101', 'رأس المال المسجل', 'Registered capital', AccountType.EQUITY, AccountNature.CREDIT, '31', False),
+    AccountSeedRow('3102', 'رأس المال الإضافي المدفوع', 'Additional paid in capital', AccountType.EQUITY, AccountNature.CREDIT, '31', False),
+    AccountSeedRow('3201', 'أرصدة افتتاحية', 'Opening balance', AccountType.EQUITY, AccountNature.CREDIT, '32', False, is_system=True, purpose=AccountingAccountPurpose.OPENING_EQUITY),
+    AccountSeedRow('3301', 'احتياطي نظامي', 'Statutory reserve', AccountType.EQUITY, AccountNature.CREDIT, '33', False),
+    AccountSeedRow('3302', 'احتياطي ترجمة عملات أجنبية', 'Foreign currency translation reserve', AccountType.EQUITY, AccountNature.CREDIT, '33', False),
+    AccountSeedRow('3401', 'الأرباح والخسائر العاملة', 'Profit and loss', AccountType.EQUITY, AccountNature.CREDIT, '34', False),
+    AccountSeedRow('3402', 'الأرباح المبقاة (أو الخسائر)', 'Retained earnings or losses', AccountType.EQUITY, AccountNature.CREDIT, '34', False),
 
-    AccountSeedRow("2105", "ضرائب مستحقة", "Taxes Payable", AccountType.LIABILITY, AccountNature.CREDIT, "21", True, is_system=True),
-    AccountSeedRow("210501", "ضريبة القيمة المضافة - مخرجات", "VAT Output", AccountType.LIABILITY, AccountNature.CREDIT, "2105", False, is_system=True, purpose=AccountingAccountPurpose.OUTPUT_VAT),
-    AccountSeedRow("210502", "ضريبة القيمة المضافة - مدخلات", "VAT Input", AccountType.ASSET, AccountNature.DEBIT, "11", False, is_system=True, purpose=AccountingAccountPurpose.INPUT_VAT),
-    AccountSeedRow("210503", "صافي ضريبة القيمة المضافة", "VAT Net Payable", AccountType.LIABILITY, AccountNature.CREDIT, "2105", False, is_system=True, purpose=AccountingAccountPurpose.VAT_PAYABLE),
+    # -------------------- 4 --------------------
+    AccountSeedRow('4101', 'إيرادات المبيعات/ الخدمات', 'Revenue of Products and services Sales', AccountType.REVENUE, AccountNature.CREDIT, '41', False, is_system=True, purpose=AccountingAccountPurpose.SALES_REVENUE),
+    AccountSeedRow('4201', 'إيرادات أخرى', 'Other income', AccountType.REVENUE, AccountNature.CREDIT, '42', False, purpose=AccountingAccountPurpose.OTHER_REVENUE),
 
-    AccountSeedRow("2106", "دفعات مقدمة من العملاء", "Customer Advances", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
-    AccountSeedRow("2107", "عمولات مستحقة", "Accrued Commissions", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
-    AccountSeedRow("2108", "مصروفات شحن مستحقة", "Accrued Shipping Expenses", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
-    AccountSeedRow("2109", "تسويات مستحقة لبوابات الدفع", "Payment Gateway Payables", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
-    AccountSeedRow("2110", "مستحقات الموظفين", "Employee Payables", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
-    AccountSeedRow("2111", "ذمم أطراف ذات علاقة دائنة", "Related Party Payables", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
-    AccountSeedRow("2112", "زكاة مستحقة", "Zakat Payable", AccountType.LIABILITY, AccountNature.CREDIT, "21", False),
+    # -------------------- 5 --------------------
+    AccountSeedRow('5101', 'تكلفة البضاعة المباعة', 'Cost of goods sold', AccountType.EXPENSE, AccountNature.DEBIT, '51', False, is_system=True, purpose=ACCOUNT_PURPOSE_COST_OF_SALES),
+    AccountSeedRow('5102', 'رواتب وأجور', 'Salaries and wages', AccountType.EXPENSE, AccountNature.DEBIT, '51', False),
+    AccountSeedRow('5103', 'عمولات البيع', 'Sales commissions', AccountType.EXPENSE, AccountNature.DEBIT, '51', False),
+    AccountSeedRow('5104', 'شحن وتخليص جمركي', 'Shipping and custom fees', AccountType.EXPENSE, AccountNature.DEBIT, '51', False),
+    AccountSeedRow('5201', 'الرواتب والرسوم الإدارية', 'Salaries and administrative fees', AccountType.EXPENSE, AccountNature.DEBIT, '52', False),
+    AccountSeedRow('5202', 'تأمين طبي', 'Medical insurance and treatment', AccountType.EXPENSE, AccountNature.DEBIT, '52', False),
+    AccountSeedRow('5203', 'مصاريف تسويقية ودعائية', 'Marketing and advertising', AccountType.EXPENSE, AccountNature.DEBIT, '52', False),
+    AccountSeedRow('5204', 'مصاريف الإيجار', 'Rental expenses', AccountType.EXPENSE, AccountNature.DEBIT, '52', False),
+    AccountSeedRow('5205', 'عمولات وحوافز', 'Commissions and incentives', AccountType.EXPENSE, AccountNature.DEBIT, '52', False),
+    AccountSeedRow('5206', 'تذاكر سفر', 'Travel Expenses', AccountType.EXPENSE, AccountNature.DEBIT, '52', False),
+    AccountSeedRow('5207', 'التأمينات الاجتماعية', 'Social insurance expense', AccountType.EXPENSE, AccountNature.DEBIT, '52', False),
+    AccountSeedRow('5208', 'الرسوم الحكومية', 'Government fees', AccountType.EXPENSE, AccountNature.DEBIT, '52', False),
+    AccountSeedRow('5209', 'رسوم واشتراكات', 'Fees and subscriptions', AccountType.EXPENSE, AccountNature.DEBIT, '52', False),
+    AccountSeedRow('5210', 'مصاريف خدمات المكتب', 'Utilities expenses', AccountType.EXPENSE, AccountNature.DEBIT, '52', False),
+    AccountSeedRow('5211', 'مصاريف مكتبية ومطبوعات', 'Stationery and prints', AccountType.EXPENSE, AccountNature.DEBIT, '52', False),
+    AccountSeedRow('5212', 'مصاريف ضيافة', 'Hospitality and cleanliness', AccountType.EXPENSE, AccountNature.DEBIT, '52', False),
+    AccountSeedRow('5213', 'عمولات بنكية', 'Bank commissions', AccountType.EXPENSE, AccountNature.DEBIT, '52', False),
+    AccountSeedRow('5214', 'مصاريف أخرى', 'Other expenses', AccountType.EXPENSE, AccountNature.DEBIT, '52', False),
+    AccountSeedRow('5215', 'مصاريف الإهلاك', 'Depreciation', AccountType.EXPENSE, AccountNature.DEBIT, '52', True),
+    AccountSeedRow('5216', 'مصروف مشتريات / تسويات', 'Purchase / Adjustment Expense', AccountType.EXPENSE, AccountNature.DEBIT, '52', False, is_system=True, purpose=ACCOUNT_PURPOSE_EXPENSE, description='حساب نظامي للمشتريات غير المخزنية وفروقات التسوية.'),
+    AccountSeedRow('5217', 'عمولات بوابات الدفع', 'Payment Gateway Fees', AccountType.EXPENSE, AccountNature.DEBIT, '52', False, is_system=True, purpose=AccountingAccountPurpose.GATEWAY_FEES, description='رسوم وعمولات بوابات الدفع.'),
+    AccountSeedRow('5219', 'مصروف نقل ومواصلات', 'Transportation expense', AccountType.EXPENSE, AccountNature.DEBIT, '52', False),
+    AccountSeedRow('5301', 'الزكاة', 'Zakat', AccountType.EXPENSE, AccountNature.DEBIT, '53', False),
+    AccountSeedRow('5302', 'الضرائب', 'TAX', AccountType.EXPENSE, AccountNature.DEBIT, '53', False),
+    AccountSeedRow('5303', 'ترجمة عملات أجنبية', 'Change in currency value gains or losses', AccountType.EXPENSE, AccountNature.DEBIT, '53', False),
+    AccountSeedRow('5304', 'فوائد', 'Interest', AccountType.EXPENSE, AccountNature.DEBIT, '53', False),
 
-    AccountSeedRow("22", "الالتزامات غير المتداولة", "Non-current Liabilities", AccountType.LIABILITY, AccountNature.CREDIT, "2", True),
-    AccountSeedRow("2201", "قروض طويلة الأجل", "Long-term Loans", AccountType.LIABILITY, AccountNature.CREDIT, "22", False),
-    AccountSeedRow("2202", "التزامات عقود إيجار", "Lease Liabilities", AccountType.LIABILITY, AccountNature.CREDIT, "22", False),
-    AccountSeedRow("2203", "مخصص نهاية الخدمة", "End of Service Provision", AccountType.LIABILITY, AccountNature.CREDIT, "22", False),
+    # -------------------- 1 --------------------
+    AccountSeedRow('110101', 'النقدية في الخزينة', 'Cash on hand', AccountType.ASSET, AccountNature.DEBIT, '1101', False, is_system=True, purpose=AccountingAccountPurpose.CASH),
+    AccountSeedRow('110102', 'العهد النقدية', 'Petty cash', AccountType.ASSET, AccountNature.DEBIT, '1101', False),
+    AccountSeedRow('110103', 'محافظ إلكترونية', 'Digital Wallets', AccountType.ASSET, AccountNature.DEBIT, '1101', False, is_system=True, purpose=AccountingAccountPurpose.CASH, description='حساب محافظ إلكترونية لاستخدامات الخزينة والدفع.'),
+    AccountSeedRow('110201', 'حساب البنك الجاري - اسم البنك', 'Bank Current Account - Bank Name', AccountType.ASSET, AccountNature.DEBIT, '1102', False, is_system=True, purpose=AccountingAccountPurpose.BANK),
+    AccountSeedRow('110202', 'بنك تجريبي', 'bank demo', AccountType.ASSET, AccountNature.DEBIT, '1102', False),
+    AccountSeedRow('110401', 'تأمين طبي مقدم', 'Prepaid medical insurance', AccountType.ASSET, AccountNature.DEBIT, '1104', False),
+    AccountSeedRow('110402', 'إيجار مقدم', 'Prepaid rent', AccountType.ASSET, AccountNature.DEBIT, '1104', False),
+    AccountSeedRow('110901', 'عهدة المندوبين', 'Agent Custody', AccountType.ASSET, AccountNature.DEBIT, '1109', False, is_system=True),
+    AccountSeedRow('110902', 'عهدة الوسطاء', 'Broker Custody', AccountType.ASSET, AccountNature.DEBIT, '1109', False, is_system=True),
+    AccountSeedRow('110903', 'عهدة الموظفين', 'Employee Custody', AccountType.ASSET, AccountNature.DEBIT, '1109', False, is_system=True),
+    AccountSeedRow('110904', 'عهدة الموردين', 'Supplier Custody', AccountType.ASSET, AccountNature.DEBIT, '1109', False, is_system=True),
+    AccountSeedRow('111001', 'تسوية ميسر', 'Moyasar Clearing', AccountType.ASSET, AccountNature.DEBIT, '1110', False, is_system=True),
+    AccountSeedRow('111002', 'تسوية تاب', 'Tap Clearing', AccountType.ASSET, AccountNature.DEBIT, '1110', False, is_system=True),
+    AccountSeedRow('111003', 'تسوية تمارا', 'Tamara Clearing', AccountType.ASSET, AccountNature.DEBIT, '1110', False, is_system=True),
+    AccountSeedRow('111004', 'تسوية تابي', 'Tabby Clearing', AccountType.ASSET, AccountNature.DEBIT, '1110', False, is_system=True),
+    AccountSeedRow('120101', 'الأراضي', 'Lands', AccountType.ASSET, AccountNature.DEBIT, '1201', False),
+    AccountSeedRow('120102', 'المباني', 'Buildings', AccountType.ASSET, AccountNature.DEBIT, '1201', False),
+    AccountSeedRow('120103', 'المعدات', 'Equipment', AccountType.ASSET, AccountNature.DEBIT, '1201', False),
+    AccountSeedRow('120104', 'أجهزة مكتبية وطابعات', 'Computers & printers', AccountType.ASSET, AccountNature.DEBIT, '1201', False),
 
-    # ========================================================
-    # 3 حقوق الملكية
-    # ========================================================
-    AccountSeedRow("3", "حقوق الملكية", "Equity", AccountType.EQUITY, AccountNature.CREDIT, None, True, is_system=True),
-    AccountSeedRow("31", "رأس المال والاحتياطيات", "Capital and Reserves", AccountType.EQUITY, AccountNature.CREDIT, "3", True),
-    AccountSeedRow("3101", "رأس المال", "Capital", AccountType.EQUITY, AccountNature.CREDIT, "31", False),
-    AccountSeedRow("3102", "الأرباح المبقاة", "Retained Earnings", AccountType.EQUITY, AccountNature.CREDIT, "31", False),
-    AccountSeedRow("32", "الأرصدة الافتتاحية", "Opening Balances", AccountType.EQUITY, AccountNature.CREDIT, "3", True, is_system=True),
-    AccountSeedRow("3201", "أرصدة افتتاحية", "Opening Balance Equity", AccountType.EQUITY, AccountNature.CREDIT, "32", False, is_system=True),
-    AccountSeedRow("33", "نتائج الفترة", "Period Results", AccountType.EQUITY, AccountNature.CREDIT, "3", True),
-    AccountSeedRow("3301", "أرباح وخسائر الفترة", "Current Period Profit and Loss", AccountType.EQUITY, AccountNature.CREDIT, "33", False),
+    # -------------------- 2 --------------------
+    AccountSeedRow('210501', 'ضريبة القيمة المضافة - مخرجات', 'VAT Output', AccountType.LIABILITY, AccountNature.CREDIT, '2105', False, is_system=True, purpose=AccountingAccountPurpose.OUTPUT_VAT, description='حساب ضريبة المخرجات على المبيعات.'),
+    AccountSeedRow('210503', 'صافي ضريبة القيمة المضافة', 'VAT Net Payable', AccountType.LIABILITY, AccountNature.CREDIT, '2105', False, is_system=True, purpose=AccountingAccountPurpose.VAT_PAYABLE, description='صافي ضريبة القيمة المضافة المستحقة.'),
+    AccountSeedRow('210901', 'مجمع استهلاك المباني', 'Buildings accumulated depreciation', AccountType.LIABILITY, AccountNature.CREDIT, '2109', False),
+    AccountSeedRow('210902', 'مجمع استهلاك المعدات', 'Equipment accumulated depreciation', AccountType.LIABILITY, AccountNature.CREDIT, '2109', False),
+    AccountSeedRow('210903', 'مجمع استهلاك أجهزة مكتبية وطابعات', 'Computers & printers accumulated depreciation', AccountType.LIABILITY, AccountNature.CREDIT, '2109', False),
 
-    # ========================================================
-    # 4 الإيرادات
-    # ========================================================
-    AccountSeedRow("4", "الإيرادات", "Revenue", AccountType.REVENUE, AccountNature.CREDIT, None, True, is_system=True),
-    AccountSeedRow("41", "إيرادات التشغيل", "Operating Revenue", AccountType.REVENUE, AccountNature.CREDIT, "4", True, is_system=True),
-    AccountSeedRow("4101", "إيرادات المبيعات والخدمات", "Sales and Services Revenue", AccountType.REVENUE, AccountNature.CREDIT, "41", False, is_system=True, purpose=AccountingAccountPurpose.SALES_REVENUE),
-    AccountSeedRow("4102", "إيرادات خصومات مكتسبة", "Discounts Earned", AccountType.REVENUE, AccountNature.CREDIT, "41", False),
-    AccountSeedRow("49", "إيرادات أخرى", "Other Income", AccountType.REVENUE, AccountNature.CREDIT, "4", True),
-    AccountSeedRow("4901", "أرباح أخرى", "Other Gains", AccountType.REVENUE, AccountNature.CREDIT, "49", False, purpose=AccountingAccountPurpose.OTHER_REVENUE),
-
-    # ========================================================
-    # 5 المصروفات والتكاليف
-    # ========================================================
-    AccountSeedRow("5", "المصروفات والتكاليف", "Expenses and Costs", AccountType.EXPENSE, AccountNature.DEBIT, None, True, is_system=True),
-    AccountSeedRow("51", "تكلفة المبيعات", "Cost of Sales", AccountType.EXPENSE, AccountNature.DEBIT, "5", True, is_system=True),
-    AccountSeedRow("5101", "تكلفة البضاعة المباعة", "Cost of Goods Sold", AccountType.EXPENSE, AccountNature.DEBIT, "51", False, is_system=True, purpose=ACCOUNT_PURPOSE_COST_OF_SALES),
-
-    AccountSeedRow("52", "مصروفات التشغيل", "Operating Expenses", AccountType.EXPENSE, AccountNature.DEBIT, "5", True),
-    AccountSeedRow("5201", "رواتب وأجور", "Salaries and Wages", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5202", "إيجار", "Rent Expense", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5203", "كهرباء ومياه", "Utilities", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5204", "اتصالات وإنترنت", "Telecommunications and Internet", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5205", "مصروفات تسويق", "Marketing Expense", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5206", "مصروفات إدارية", "Administrative Expense", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5207", "مصروفات صيانة", "Maintenance Expense", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5208", "رسوم بنكية", "Bank Charges", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5209", "عمولات بوابات دفع", "Payment Gateway Fees", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5210", "مصروفات ضيافة", "Hospitality Expense", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5211", "مصروفات سفر وانتقال", "Travel and Transportation", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5212", "مصروفات حكومية", "Government Fees", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5213", "مصروفات تقنية", "Technology Expense", AccountType.EXPENSE, AccountNature.DEBIT, "52", False),
-    AccountSeedRow("5214", "مصروفات بريد وشحن", "Shipping and Delivery Expense", AccountType.EXPENSE, AccountNature.DEBIT, "52", False, purpose=AccountingAccountPurpose.GATEWAY_FEES),
-    AccountSeedRow("5215", "مصروف مشتريات / تسويات", "Purchase / Adjustment Expense", AccountType.EXPENSE, AccountNature.DEBIT, "52", False, is_system=True, purpose=ACCOUNT_PURPOSE_EXPENSE),
-
-    AccountSeedRow("53", "مصروفات غير تشغيلية", "Non-operating Expenses", AccountType.EXPENSE, AccountNature.DEBIT, "5", True),
-    AccountSeedRow("5301", "خسائر أخرى", "Other Losses", AccountType.EXPENSE, AccountNature.DEBIT, "53", False),
+    # -------------------- 5 --------------------
+    AccountSeedRow('521501', 'مصروف إهلاك المباني', 'Buildings depreciation expense', AccountType.EXPENSE, AccountNature.DEBIT, '5215', False),
+    AccountSeedRow('521502', 'مصروف إهلاك المعدات', 'Equipment depreciation expense', AccountType.EXPENSE, AccountNature.DEBIT, '5215', False),
+    AccountSeedRow('521503', 'مصروف إهلاك أجهزة مكتبية وطابعات', 'Computers & printers depreciation expense', AccountType.EXPENSE, AccountNature.DEBIT, '5215', False),
 ]
 
 
@@ -260,62 +254,22 @@ DEFAULT_ROUTING_RULES: list[RoutingSeedRow] = [
     RoutingSeedRow(AccountingRoutingSource.SALES_INVOICE, AccountingAccountPurpose.ACCOUNTS_RECEIVABLE, "1103", "مدين فاتورة البيع"),
     RoutingSeedRow(AccountingRoutingSource.SALES_INVOICE, AccountingAccountPurpose.SALES_REVENUE, "4101", "دائن إيرادات البيع"),
     RoutingSeedRow(AccountingRoutingSource.SALES_INVOICE, AccountingAccountPurpose.OUTPUT_VAT, "210501", "دائن ضريبة المخرجات"),
-
-    RoutingSeedRow(
-        AccountingRoutingSource.SALES_CREDIT_NOTE,
-        AccountingAccountPurpose.ACCOUNTS_RECEIVABLE,
-        "1103",
-        "???? ??? ??????? ?? ??????? ??????",
-    ),
-    RoutingSeedRow(
-        AccountingRoutingSource.SALES_CREDIT_NOTE,
-        AccountingAccountPurpose.SALES_REVENUE,
-        "4101",
-        "???? ??? ??????? ????????",
-    ),
-    RoutingSeedRow(
-        AccountingRoutingSource.SALES_CREDIT_NOTE,
-        AccountingAccountPurpose.OUTPUT_VAT,
-        "210501",
-        "???? ??? ????? ????????",
-    ),
-
-
-    RoutingSeedRow(AccountingRoutingSource.PURCHASE_BILL, ACCOUNT_PURPOSE_EXPENSE, "5215", "مدين مشتريات أو مصروفات"),
-    RoutingSeedRow(AccountingRoutingSource.PURCHASE_BILL, AccountingAccountPurpose.INVENTORY, "1108", "مدين المخزون عند الشراء"),
-    RoutingSeedRow(AccountingRoutingSource.PURCHASE_BILL, AccountingAccountPurpose.INPUT_VAT, "210502", "مدين ضريبة المدخلات"),
+    RoutingSeedRow(AccountingRoutingSource.SALES_CREDIT_NOTE, AccountingAccountPurpose.ACCOUNTS_RECEIVABLE, "1103", "تخفيض ذمم العملاء من الإشعار الدائن"),
+    RoutingSeedRow(AccountingRoutingSource.SALES_CREDIT_NOTE, AccountingAccountPurpose.SALES_REVENUE, "4101", "عكس إيراد المبيعات للإشعار الدائن"),
+    RoutingSeedRow(AccountingRoutingSource.SALES_CREDIT_NOTE, AccountingAccountPurpose.OUTPUT_VAT, "210501", "عكس ضريبة المخرجات للإشعار الدائن"),
+    RoutingSeedRow(AccountingRoutingSource.PURCHASE_BILL, ACCOUNT_PURPOSE_EXPENSE, "5216", "مدين مشتريات أو مصروفات"),
+    RoutingSeedRow(AccountingRoutingSource.PURCHASE_BILL, AccountingAccountPurpose.INVENTORY, "1106", "مدين المخزون عند الشراء"),
+    RoutingSeedRow(AccountingRoutingSource.PURCHASE_BILL, AccountingAccountPurpose.INPUT_VAT, "1107", "مدين ضريبة المدخلات"),
     RoutingSeedRow(AccountingRoutingSource.PURCHASE_BILL, AccountingAccountPurpose.ACCOUNTS_PAYABLE, "2101", "دائن الموردين"),
-
-
-    RoutingSeedRow(
-        AccountingRoutingSource.SUPPLIER_DEBIT_NOTE,
-        AccountingAccountPurpose.ACCOUNTS_PAYABLE,
-        "2101",
-        "???? ???????? ?? ????? ?????",
-    ),
-    RoutingSeedRow(
-        AccountingRoutingSource.SUPPLIER_DEBIT_NOTE,
-        AccountingAccountPurpose.INVENTORY,
-        "1108",
-        "???? ??????? ??????? ??????",
-    ),
-    RoutingSeedRow(
-        AccountingRoutingSource.SUPPLIER_DEBIT_NOTE,
-        ACCOUNT_PURPOSE_EXPENSE,
-        "5215",
-        "???? ????? ????????? ???????",
-    ),
-    RoutingSeedRow(
-        AccountingRoutingSource.SUPPLIER_DEBIT_NOTE,
-        AccountingAccountPurpose.INPUT_VAT,
-        "210502",
-        "???? ????? ???????? ????????",
-    ),
-    RoutingSeedRow(AccountingRoutingSource.INVENTORY_RECEIPT, AccountingAccountPurpose.INVENTORY, "1108", "مدين المخزون"),
+    RoutingSeedRow(AccountingRoutingSource.SUPPLIER_DEBIT_NOTE, AccountingAccountPurpose.ACCOUNTS_PAYABLE, "2101", "تخفيض ذمم الموردين من إشعار المورد"),
+    RoutingSeedRow(AccountingRoutingSource.SUPPLIER_DEBIT_NOTE, AccountingAccountPurpose.INVENTORY, "1106", "عكس المخزون لإشعار المورد"),
+    RoutingSeedRow(AccountingRoutingSource.SUPPLIER_DEBIT_NOTE, ACCOUNT_PURPOSE_EXPENSE, "5216", "عكس مصروفات المشتريات لإشعار المورد"),
+    RoutingSeedRow(AccountingRoutingSource.SUPPLIER_DEBIT_NOTE, AccountingAccountPurpose.INPUT_VAT, "1107", "عكس ضريبة المدخلات لإشعار المورد"),
+    RoutingSeedRow(AccountingRoutingSource.INVENTORY_RECEIPT, AccountingAccountPurpose.INVENTORY, "1106", "مدين المخزون"),
     RoutingSeedRow(AccountingRoutingSource.INVENTORY_ISSUE, ACCOUNT_PURPOSE_COST_OF_SALES, "5101", "مدين تكلفة البضاعة المباعة"),
-    RoutingSeedRow(AccountingRoutingSource.INVENTORY_ISSUE, AccountingAccountPurpose.INVENTORY, "1108", "دائن المخزون"),
-    RoutingSeedRow(AccountingRoutingSource.INVENTORY_ADJUSTMENT, AccountingAccountPurpose.INVENTORY, "1108", "حساب المخزون للتسوية"),
-    RoutingSeedRow(AccountingRoutingSource.INVENTORY_ADJUSTMENT, AccountingAccountPurpose.INVENTORY_ADJUSTMENT, "5215", "فرق تسوية المخزون"),
+    RoutingSeedRow(AccountingRoutingSource.INVENTORY_ISSUE, AccountingAccountPurpose.INVENTORY, "1106", "دائن المخزون"),
+    RoutingSeedRow(AccountingRoutingSource.INVENTORY_ADJUSTMENT, AccountingAccountPurpose.INVENTORY, "1106", "حساب المخزون للتسوية"),
+    RoutingSeedRow(AccountingRoutingSource.INVENTORY_ADJUSTMENT, AccountingAccountPurpose.INVENTORY_ADJUSTMENT, "5216", "فرق تسوية المخزون"),
 ]
 
 

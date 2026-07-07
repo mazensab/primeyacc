@@ -289,7 +289,7 @@ class AccountingCoreTests(TestCase):
     # ========================================================
 
     def test_seed_company_chart_of_accounts_creates_expected_records(self):
-        self.assertEqual(Account.objects.filter(company=self.company_one).count(), 112)
+        self.assertEqual(Account.objects.filter(company=self.company_one).count(), 103)
 
         self.assertTrue(
             Account.objects.filter(
@@ -328,9 +328,9 @@ class AccountingCoreTests(TestCase):
         first_result = seed_company_chart_of_accounts(self.company_one)
         second_result = seed_company_chart_of_accounts(self.company_one)
 
-        self.assertEqual(first_result["total_accounts"], 112)
-        self.assertEqual(second_result["total_accounts"], 112)
-        self.assertEqual(Account.objects.filter(company=self.company_one).count(), 112)
+        self.assertEqual(first_result["total_accounts"], 103)
+        self.assertEqual(second_result["total_accounts"], 103)
+        self.assertEqual(Account.objects.filter(company=self.company_one).count(), 103)
 
 
     def test_seed_company_chart_management_command_is_idempotent(self):
@@ -342,7 +342,7 @@ class AccountingCoreTests(TestCase):
         )
         self.assertEqual(
             Account.objects.filter(company=self.company_one).count(),
-            112,
+            103,
         )
         self.assertIn("Total Accounts", out.getvalue())
     def test_same_account_code_allowed_between_different_companies(self):
@@ -371,8 +371,8 @@ class AccountingCoreTests(TestCase):
             )
 
     def test_company_chart_isolation(self):
-        self.assertEqual(Account.objects.filter(company=self.company_one).count(), 112)
-        self.assertEqual(Account.objects.filter(company=self.company_two).count(), 112)
+        self.assertEqual(Account.objects.filter(company=self.company_one).count(), 103)
+        self.assertEqual(Account.objects.filter(company=self.company_two).count(), 103)
 
         company_one_codes = set(
             Account.objects.filter(company=self.company_one).values_list("code", flat=True)
@@ -712,9 +712,9 @@ class AccountingCompanyApiTests(TestCase):
         body = response.json()
         self.assertTrue(body["success"])
         self.assertEqual(body["company"]["id"], self.company_one.pk)
-        self.assertEqual(body["count"], 112)
-        self.assertEqual(body["summary"]["total_accounts"], 112)
-        self.assertEqual(len(body["results"]), 112)
+        self.assertEqual(body["count"], 103)
+        self.assertEqual(body["summary"]["total_accounts"], 103)
+        self.assertEqual(len(body["results"]), 103)
 
         for row in body["results"]:
             self.assertEqual(row["company_id"], self.company_one.pk)
