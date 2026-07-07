@@ -15,6 +15,7 @@ from django.urls import path
 
 from api.company.accounting.accounts.detail import accounting_account_detail
 from api.company.accounting.accounts.list import accounting_accounts_list
+from api.company.accounting.cost_centers.list import accounting_cost_centers_list
 from api.company.accounting.journal_entries.create import accounting_journal_entry_create
 from api.company.accounting.journal_entries.detail import accounting_journal_entry_detail
 from api.company.accounting.journal_entries.list import accounting_journal_entries_list
@@ -30,6 +31,10 @@ urlpatterns = [
     # Chart of Accounts
     path("accounts/", accounting_accounts_list, name="accounts-list"),
     path("accounts/<int:account_id>/", accounting_account_detail, name="accounts-detail"),
+
+    # Cost Centers
+    path("cost-centers/", accounting_cost_centers_list, name="cost-centers-list"),
+    path("cost_centers/", accounting_cost_centers_list, name="cost-centers-list-legacy"),
 
     # Journal Entries
     path("journal-entries/", accounting_journal_entries_list, name="journal-entries-list"),
