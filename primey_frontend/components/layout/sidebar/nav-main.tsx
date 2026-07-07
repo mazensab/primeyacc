@@ -346,6 +346,13 @@ const companyNavItems: NavGroup[] = [
             workspaces: ["company"],
           },
           {
+            title: { ar: "مراكز التكلفة", en: "Cost Centers" },
+            href: "/company/accounting/cost-centers",
+            icon: ReceiptText,
+            permission: PERMISSIONS.ACCOUNTING_VIEW,
+            workspaces: ["company"],
+          },
+          {
             title: { ar: "دفتر الأستاذ", en: "General Ledger" },
             href: "/company/accounting/ledger",
             icon: FileText,

@@ -15,7 +15,9 @@ from django.urls import path
 
 from api.company.accounting.accounts.detail import accounting_account_detail
 from api.company.accounting.accounts.list import accounting_accounts_list
+from api.company.accounting.cost_centers.detail import accounting_cost_center_detail
 from api.company.accounting.cost_centers.list import accounting_cost_centers_list
+from api.company.accounting.cost_centers.status import accounting_cost_center_activate, accounting_cost_center_deactivate
 from api.company.accounting.journal_entries.create import accounting_journal_entry_create
 from api.company.accounting.journal_entries.detail import accounting_journal_entry_detail
 from api.company.accounting.journal_entries.list import accounting_journal_entries_list
@@ -34,6 +36,9 @@ urlpatterns = [
 
     # Cost Centers
     path("cost-centers/", accounting_cost_centers_list, name="cost-centers-list"),
+    path("cost-centers/<int:cost_center_id>/", accounting_cost_center_detail, name="cost-centers-detail"),
+    path("cost-centers/<int:cost_center_id>/activate/", accounting_cost_center_activate, name="cost-centers-activate"),
+    path("cost-centers/<int:cost_center_id>/deactivate/", accounting_cost_center_deactivate, name="cost-centers-deactivate"),
     path("cost_centers/", accounting_cost_centers_list, name="cost-centers-list-legacy"),
 
     # Journal Entries
