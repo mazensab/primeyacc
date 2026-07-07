@@ -23,6 +23,7 @@ from api.company.accounting.journal_entries.detail import accounting_journal_ent
 from api.company.accounting.journal_entries.list import accounting_journal_entries_list
 from api.company.accounting.journal_entries.post import accounting_journal_entry_post
 from api.company.accounting.journal_entries.reverse import accounting_journal_entry_reverse
+from api.company.accounting.reports.ledger import accounting_ledger_report
 from api.company.accounting.reports.trial_balance import accounting_trial_balance
 
 
@@ -49,5 +50,6 @@ urlpatterns = [
     path("journal-entries/<int:entry_id>/reverse/", accounting_journal_entry_reverse, name="journal-entries-reverse"),
 
     # Reports
+    path("reports/ledger/", accounting_ledger_report, name="reports-ledger"),
     path("reports/trial-balance/", accounting_trial_balance, name="reports-trial-balance"),
 ]
