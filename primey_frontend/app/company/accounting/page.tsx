@@ -123,7 +123,7 @@ const ACCOUNTING_ENDPOINTS = {
     "/api/company/reports/trial-balance/",
   ],
   profitLoss: [
-    "/api/company/reports/profit-loss/",
+    "/api/company/accounting/reports/income-statement/",
   ],
   balanceSheet: [
     "/api/company/reports/balance-sheet/",
@@ -181,8 +181,8 @@ const shortcuts: ShortcutRecord[] = [
   },
   {
     href: "/company/accounting/profit-loss",
-    titleAr: "الأرباح والخسائر",
-    titleEn: "Profit & Loss",
+    titleAr: "قائمة الدخل",
+    titleEn: "Income Statement",
     descAr: "تحليل الإيرادات والمصروفات وصافي الربح.",
     descEn: "Analyze revenue, expenses, and net income.",
     badgeAr: "تقرير",

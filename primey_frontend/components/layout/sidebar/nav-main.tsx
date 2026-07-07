@@ -367,7 +367,7 @@ const companyNavItems: NavGroup[] = [
             workspaces: ["company"],
           },
           {
-            title: { ar: "الأرباح والخسائر", en: "Profit & Loss" },
+            title: { ar: "قائمة الدخل", en: "Income Statement" },
             href: "/company/accounting/profit-loss",
             icon: BarChart3,
             anyPermissions: [PERMISSIONS.REPORTS_VIEW, PERMISSIONS.ACCOUNTING_REPORTS_VIEW],
