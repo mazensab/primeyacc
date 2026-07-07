@@ -381,7 +381,7 @@ const companyNavItems: NavGroup[] = [
             workspaces: ["company"],
           },
           {
-            title: { ar: "التدفقات النقدية", en: "Cash Flow" },
+            title: { ar: "قائمة التدفقات النقدية", en: "Cash Flow Statement" },
             href: "/company/accounting/cash-flow",
             icon: Wallet,
             anyPermissions: [PERMISSIONS.REPORTS_VIEW, PERMISSIONS.ACCOUNTING_REPORTS_VIEW],

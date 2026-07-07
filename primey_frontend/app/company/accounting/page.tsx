@@ -129,7 +129,7 @@ const ACCOUNTING_ENDPOINTS = {
     "/api/company/accounting/reports/financial-position/",
   ],
   cashFlow: [
-    "/api/company/reports/cash-flow/",
+    "/api/company/accounting/reports/cash-flow/",
   ],
   accounts: [
     "/api/company/accounting/accounts/",
@@ -201,8 +201,8 @@ const shortcuts: ShortcutRecord[] = [
   },
   {
     href: "/company/accounting/cash-flow",
-    titleAr: "التدفقات النقدية",
-    titleEn: "Cash Flow",
+    titleAr: "قائمة التدفقات النقدية",
+    titleEn: "Cash Flow Statement",
     descAr: "متابعة حركة النقد التشغيلية والتمويلية.",
     descEn: "Track operating and financing cash movements.",
     badgeAr: "تقرير",
