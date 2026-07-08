@@ -22,9 +22,11 @@ import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
+  AlertTriangle,
   ArrowDownLeft,
   ArrowUpDown,
   ArrowUpRight,
+  CalendarIcon,
   CheckCircle2,
   ChevronLeft,
   CircleX,
@@ -45,6 +47,8 @@ import {
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Card,
   CardContent,
@@ -82,6 +86,21 @@ type TreasuryAccountOption = {
   type: string;
   currentBalance: number;
   status: string;
+};
+type PartySuggestion = {
+  id: string;
+  code: string;
+  name: string;
+  phone: string;
+};
+type LinkedDocumentSuggestion = {
+  id: string;
+  number: string;
+  partyName: string;
+  status: string;
+  paymentStatus: string;
+  totalAmount: number;
+  balanceDue: number;
 };
 type VoucherRecord = {
   id: string;
@@ -147,6 +166,10 @@ const API_PATHS = {
   receipt: "/api/company/treasury/customer-payments/",
   payment: "/api/company/treasury/supplier-payments/",
   accounts: "/api/company/treasury/accounts/",
+  customers: "/api/company/customers/",
+  suppliers: "/api/company/suppliers/",
+  salesInvoices: "/api/company/sales/invoices/",
+  purchaseBills: "/api/company/purchases/bills/",
 } as const;
 const paymentMethods: MethodFilter[] = [
   "all",
@@ -605,6 +628,91 @@ function normalizeAccount(value: unknown): TreasuryAccountOption {
     status: normalizeText(record.status, "ACTIVE"),
   };
 }
+function normalizePartySuggestion(value: unknown, variant: VoucherVariant): PartySuggestion {
+  const record = asRecord(value);
+  const nestedParty = asRecord(record.party || record.customer || record.supplier);
+  const id = normalizeText(
+    record.id ||
+      record.pk ||
+      record.party_id ||
+      record.customer_id ||
+      record.supplier_id ||
+      nestedParty.id ||
+      nestedParty.pk,
+  );
+  const code = normalizeText(
+    record.code ||
+      record.party_code ||
+      record.customer_code ||
+      record.supplier_code ||
+      record.account_code ||
+      record.number ||
+      nestedParty.code ||
+      nestedParty.account_code,
+  );
+  const name = normalizeText(
+    record.name ||
+      record.display_name ||
+      record.customer_name ||
+      record.supplier_name ||
+      record.party_name ||
+      record.commercial_name ||
+      record.name_ar ||
+      record.name_en ||
+      nestedParty.name ||
+      nestedParty.display_name,
+    variant === "receipt" ? "Customer" : "Supplier",
+  );
+  const phone = normalizeText(
+    record.phone ||
+      record.mobile ||
+      record.phone_number ||
+      record.customer_phone ||
+      record.supplier_phone ||
+      record.contact_phone ||
+      nestedParty.phone ||
+      nestedParty.mobile,
+  );
+  return { id, code, name, phone };
+}
+function normalizeLinkedDocumentSuggestion(value: unknown, variant: VoucherVariant): LinkedDocumentSuggestion {
+  const record = asRecord(value);
+  const id = normalizeText(record.id || record.pk || record.invoice_id || record.bill_id);
+  const number = normalizeText(
+    variant === "receipt"
+      ? record.invoice_number || record.sales_invoice_number || record.number || record.reference
+      : record.bill_number || record.purchase_bill_number || record.number || record.reference,
+    id,
+  );
+  const partyName = normalizeText(
+    variant === "receipt"
+      ? record.customer_name || record.party_name || record.client_name
+      : record.supplier_name || record.party_name || record.vendor_name,
+  );
+  const status = normalizeText(record.status);
+  const paymentStatus = normalizeText(record.payment_status || record.invoice_payment_status || record.bill_payment_status);
+  const totalAmount = toNumber(record.total_amount || record.total || record.net_amount);
+  const balanceDue = toNumber(record.balance_due || record.remaining_amount || record.due_amount);
+  return {
+    id,
+    number,
+    partyName,
+    status,
+    paymentStatus,
+    totalAmount,
+    balanceDue,
+  };
+}
+function buildAutocompleteParams(query: string, pageSize = "8") {
+  const params = new URLSearchParams({
+    page: "1",
+    page_size: pageSize,
+    search: query,
+    q: query,
+  });
+  return params;
+}
+
 function normalizeVoucher(value: unknown, variant: VoucherVariant): VoucherRecord {
   const record = asRecord(value);
   const isReceipt = variant === "receipt";
@@ -654,6 +762,64 @@ function normalizeVoucher(value: unknown, variant: VoucherVariant): VoucherRecor
     createdAt: normalizeText(record.created_at) || null,
     updatedAt: normalizeText(record.updated_at) || null,
   };
+}
+
+function parseVoucherDate(value: string) {
+  if (!value) return undefined;
+  const [year, month, day] = value.split("-").map((part) => Number(part));
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+}
+function formatVoucherDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+function VoucherDatePicker({
+  value,
+  onChange,
+  locale,
+  placeholder,
+  compact = false,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  locale: Locale;
+  placeholder?: string;
+  compact?: boolean;
+}) {
+  const selectedDate = parseVoucherDate(value);
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className={cn(
+            "justify-start rounded-xl bg-background text-start font-normal tabular-nums",
+            compact
+              ? "h-8 w-[140px] border-0 px-0 text-xs shadow-none hover:bg-transparent"
+              : "h-10 w-full",
+            !value && "text-muted-foreground",
+          )}
+        >
+          <CalendarIcon className="me-2 h-4 w-4 text-muted-foreground" />
+          <span>{value || placeholder || (locale === "ar" ? "اختر التاريخ" : "Select date")}</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align={locale === "ar" ? "end" : "start"}>
+        <Calendar
+          mode="single"
+          selected={selectedDate}
+          onSelect={(date) => {
+            if (date) onChange(formatVoucherDate(date));
+          }}
+          initialFocus
+        />
+      </PopoverContent>
+    </Popover>
+  );
 }
 function MoneyValue({ value, label }: { value: number; label: string }) {
   return (
@@ -880,6 +1046,89 @@ function VoucherFormCard({
 }) {
   const t = translations[locale];
   const config = getConfig(variant, locale);
+  const [partyQuery, setPartyQuery] = React.useState(form.partyName || form.partyId);
+  const [partyOptions, setPartyOptions] = React.useState<PartySuggestion[]>([]);
+  const [partyLoading, setPartyLoading] = React.useState(false);
+  const [documentQuery, setDocumentQuery] = React.useState(form.linkedDocumentId);
+  const [documentOptions, setDocumentOptions] = React.useState<LinkedDocumentSuggestion[]>([]);
+  const [documentLoading, setDocumentLoading] = React.useState(false);
+  React.useEffect(() => {
+    setPartyQuery(form.partyName || form.partyId);
+    setDocumentQuery(form.linkedDocumentId);
+    setPartyOptions([]);
+    setDocumentOptions([]);
+  }, [form.id, mode, variant]);
+  React.useEffect(() => {
+    const query = partyQuery.trim();
+    if (!query) {
+      setPartyOptions([]);
+      return;
+    }
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      const endpoint = variant === "receipt" ? API_PATHS.customers : API_PATHS.suppliers;
+      const params = buildAutocompleteParams(query);
+      setPartyLoading(true);
+      void fetchJson<unknown>(makeApiUrl(endpoint, params))
+        .then((payload) => {
+          if (cancelled) return;
+          const options = extractArray(payload)
+            .map((item) => normalizePartySuggestion(item, variant))
+            .filter((item) => item.id || item.name)
+            .slice(0, 8);
+          setPartyOptions(options);
+        })
+        .catch(() => {
+          if (!cancelled) setPartyOptions([]);
+        })
+        .finally(() => {
+          if (!cancelled) setPartyLoading(false);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [partyQuery, variant]);
+  React.useEffect(() => {
+    const query = documentQuery.trim();
+    if (!query) {
+      setDocumentOptions([]);
+      return;
+    }
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      const endpoint = variant === "receipt" ? API_PATHS.salesInvoices : API_PATHS.purchaseBills;
+      const params = buildAutocompleteParams(query);
+      if (form.partyId) {
+        if (variant === "receipt") {
+          params.set("customer_id", form.partyId);
+        } else {
+          params.set("supplier_id", form.partyId);
+        }
+      }
+      setDocumentLoading(true);
+      void fetchJson<unknown>(makeApiUrl(endpoint, params))
+        .then((payload) => {
+          if (cancelled) return;
+          const options = extractArray(payload)
+            .map((item) => normalizeLinkedDocumentSuggestion(item, variant))
+            .filter((item) => item.id || item.number)
+            .slice(0, 8);
+          setDocumentOptions(options);
+        })
+        .catch(() => {
+          if (!cancelled) setDocumentOptions([]);
+        })
+        .finally(() => {
+          if (!cancelled) setDocumentLoading(false);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [documentQuery, form.partyId, variant]);
   const title = mode === "create" ? config.addLabel : config.editLabel;
   return (
     <Card className="rounded-2xl shadow-sm">
@@ -943,21 +1192,83 @@ function VoucherFormCard({
           </label>
           <label className="space-y-2">
             <span className="text-sm font-medium">{t.date}</span>
-            <Input
-              type="date"
+            <VoucherDatePicker
               value={form.paymentDate}
-              onChange={(event) => onChange({ paymentDate: event.target.value })}
-              className="h-10 rounded-xl bg-background tabular-nums"
+              onChange={(value) => onChange({ paymentDate: value })}
+              locale={locale}
             />
           </label>
-          <label className="space-y-2">
+          <div className="relative space-y-2">
             <span className="text-sm font-medium">{config.partyNameLabel}</span>
-            <Input
-              value={form.partyName}
-              onChange={(event) => onChange({ partyName: event.target.value })}
-              className="h-10 rounded-xl bg-background"
-            />
-          </label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={partyQuery}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setPartyQuery(value);
+                  onChange({
+                    partyName: value,
+                    partyId: "",
+                    partyPhone: "",
+                    linkedDocumentId: "",
+                  });
+                }}
+                placeholder={
+                  variant === "receipt"
+                    ? locale === "ar"
+                      ? "ابحث باسم العميل أو رقمه أو جواله..."
+                      : "Search customer by name, number, or phone..."
+                    : locale === "ar"
+                      ? "ابحث باسم المورد أو رقمه أو جواله..."
+                      : "Search supplier by name, number, or phone..."
+                }
+                className="h-10 rounded-xl bg-background ps-9"
+              />
+            </div>
+            {(partyLoading || partyOptions.length > 0) && partyQuery.trim() ? (
+              <div className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-xl border bg-background p-1 shadow-lg">
+                {partyLoading ? (
+                  <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    {locale === "ar" ? "جاري البحث..." : "Searching..."}
+                  </div>
+                ) : null}
+                {!partyLoading && partyOptions.length ? (
+                  partyOptions.map((option, index) => (
+                    <button
+                      key={`${option.id || option.name}-${index}`}
+                      type="button"
+                      className="flex w-full flex-col rounded-lg px-3 py-2 text-start hover:bg-muted"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        setPartyQuery(option.name);
+                        setPartyOptions([]);
+                        setDocumentQuery("");
+                        setDocumentOptions([]);
+                        onChange({
+                          partyId: option.id,
+                          partyName: option.name,
+                          partyPhone: option.phone,
+                          linkedDocumentId: "",
+                        });
+                      }}
+                    >
+                      <span className="text-sm font-medium text-foreground">{option.name}</span>
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {[option.code, option.phone, option.id].filter(Boolean).join(" • ") || "—"}
+                      </span>
+                    </button>
+                  ))
+                ) : null}
+                {!partyLoading && !partyOptions.length ? (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">
+                    {locale === "ar" ? "لا توجد نتائج مطابقة" : "No matching results"}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
           <label className="space-y-2">
             <span className="text-sm font-medium">{t.partyPhone}</span>
             <Input
@@ -974,14 +1285,75 @@ function VoucherFormCard({
               className="h-10 rounded-xl bg-background tabular-nums"
             />
           </label>
-          <label className="space-y-2">
+          <div className="relative space-y-2">
             <span className="text-sm font-medium">{config.linkedDocumentLabel}</span>
-            <Input
-              value={form.linkedDocumentId}
-              onChange={(event) => onChange({ linkedDocumentId: event.target.value })}
-              className="h-10 rounded-xl bg-background tabular-nums"
-            />
-          </label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={documentQuery}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setDocumentQuery(value);
+                  onChange({ linkedDocumentId: value });
+                }}
+                placeholder={
+                  variant === "receipt"
+                    ? locale === "ar"
+                      ? "ابحث برقم فاتورة المبيعات..."
+                      : "Search sales invoice number..."
+                    : locale === "ar"
+                      ? "ابحث برقم فاتورة المشتريات..."
+                      : "Search purchase bill number..."
+                }
+                className="h-10 rounded-xl bg-background ps-9 tabular-nums"
+              />
+            </div>
+            {(documentLoading || documentOptions.length > 0) && documentQuery.trim() ? (
+              <div className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-xl border bg-background p-1 shadow-lg">
+                {documentLoading ? (
+                  <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    {locale === "ar" ? "جاري البحث..." : "Searching..."}
+                  </div>
+                ) : null}
+                {!documentLoading && documentOptions.length ? (
+                  documentOptions.map((option, index) => (
+                    <button
+                      key={`${option.id || option.number}-${index}`}
+                      type="button"
+                      className="flex w-full flex-col rounded-lg px-3 py-2 text-start hover:bg-muted"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        setDocumentQuery(option.number || option.id);
+                        setDocumentOptions([]);
+                        onChange({
+                          linkedDocumentId: option.id,
+                          partyName: form.partyName || option.partyName,
+                        });
+                      }}
+                    >
+                      <span className="text-sm font-medium text-foreground tabular-nums">{option.number}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {[option.partyName, option.paymentStatus || option.status]
+                          .filter(Boolean)
+                          .join(" • ") || "—"}
+                      </span>
+                      {option.balanceDue > 0 ? (
+                        <span className="text-[11px] text-muted-foreground tabular-nums">
+                          {locale === "ar" ? "المتبقي" : "Due"}: {formatMoney(option.balanceDue)}
+                        </span>
+                      ) : null}
+                    </button>
+                  ))
+                ) : null}
+                {!documentLoading && !documentOptions.length ? (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">
+                    {locale === "ar" ? "لا توجد نتائج مطابقة" : "No matching results"}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
           <label className="space-y-2 md:col-span-2">
             <span className="text-sm font-medium">{t.reference}</span>
             <Input
@@ -1043,6 +1415,8 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
   const [formVisible, setFormVisible] = React.useState(false);
   const [mode, setMode] = React.useState<"create" | "edit">("create");
   const [form, setForm] = React.useState<VoucherFormState>(emptyForm);
+  const [cancelTarget, setCancelTarget] = React.useState<VoucherRecord | null>(null);
+  const [cancelReason, setCancelReason] = React.useState("");
   const [search, setSearch] = React.useState("");
   const [status, setStatus] = React.useState<StatusFilter>("all");
   const [method, setMethod] = React.useState<MethodFilter>("all");
@@ -1279,17 +1653,22 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
       setSaving(false);
     }
   }
-  async function cancelVoucher(row: VoucherRecord) {
+  function cancelVoucher(row: VoucherRecord) {
     if (row.status === "cancelled") return;
-    const reason = window.prompt(t.cancelReasonPrompt, "");
-    if (reason === null) return;
+    setCancelTarget(row);
+    setCancelReason("");
+  }
+  async function submitCancelVoucher() {
+    if (!cancelTarget) return;
     setSaving(true);
     try {
-      await fetchJson(makeApiUrl(`${config.apiPath}${row.id}/cancel/`), {
+      await fetchJson(makeApiUrl(`${config.apiPath}${cancelTarget.id}/cancel/`), {
         method: "POST",
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify({ reason: cancelReason.trim() }),
       });
       toast.success(t.cancelledDone);
+      setCancelTarget(null);
+      setCancelReason("");
       await loadData({ silent: true });
     } catch (caughtError) {
       const message = caughtError instanceof Error ? caughtError.message : t.apiUnsupported;
@@ -1298,6 +1677,7 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
       setSaving(false);
     }
   }
+
   function exportExcel() {
     if (!filteredRows.length) {
       toast.warning(t.exportEmpty);
@@ -1578,6 +1958,61 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
             onCancel={closeForm}
           />
         ) : null}
+        {cancelTarget ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+            <Card className="w-full max-w-lg rounded-2xl border-amber-200 shadow-xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <AlertTriangle className="h-5 w-5 text-amber-600" />
+                  {locale === "ar" ? "تأكيد إلغاء السند" : "Confirm voucher cancellation"}
+                </CardTitle>
+                <CardDescription>
+                  {locale === "ar"
+                    ? "سيتم إلغاء السند من خلال إجراء آمن داخل النظام، وليس من نافذة المتصفح."
+                    : "The voucher will be cancelled using an in-page controlled action, not a browser prompt."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-xl border bg-muted/30 p-3 text-sm">
+                  <span className="font-medium">{t.voucherNo}: </span>
+                  <span className="tabular-nums">{cancelTarget.paymentNumber || cancelTarget.id}</span>
+                </div>
+                <label className="space-y-2">
+                  <span className="text-sm font-medium">{t.cancelReasonPrompt}</span>
+                  <textarea
+                    value={cancelReason}
+                    onChange={(event) => setCancelReason(event.target.value)}
+                    rows={3}
+                    className="min-h-24 w-full rounded-xl border bg-background px-3 py-2 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </label>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl bg-background"
+                    onClick={() => {
+                      setCancelTarget(null);
+                      setCancelReason("");
+                    }}
+                    disabled={saving}
+                  >
+                    {t.cancel}
+                  </Button>
+                  <Button
+                    type="button"
+                    className="rounded-xl bg-rose-600 text-white hover:bg-rose-700"
+                    onClick={() => void submitCancelVoucher()}
+                    disabled={saving}
+                  >
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
+                    {locale === "ar" ? "إلغاء السند" : "Cancel voucher"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        ) : null}
         <Card className="rounded-2xl shadow-sm">
           <CardHeader>
             <CardTitle>{config.tableTitle}</CardTitle>
@@ -1622,20 +2057,22 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex h-10 items-center gap-2 rounded-xl border bg-background px-3">
                   <span className="text-xs text-muted-foreground">{t.from}</span>
-                  <Input
-                    type="date"
+                  <VoucherDatePicker
                     value={dateFrom}
-                    onChange={(event) => setDateFrom(event.target.value)}
-                    className="h-8 w-[135px] border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
+                    onChange={setDateFrom}
+                    locale={locale}
+                    placeholder={locale === "ar" ? "من تاريخ" : "From date"}
+                    compact
                   />
                 </div>
                 <div className="flex h-10 items-center gap-2 rounded-xl border bg-background px-3">
                   <span className="text-xs text-muted-foreground">{t.to}</span>
-                  <Input
-                    type="date"
+                  <VoucherDatePicker
                     value={dateTo}
-                    onChange={(event) => setDateTo(event.target.value)}
-                    className="h-8 w-[135px] border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
+                    onChange={setDateTo}
+                    locale={locale}
+                    placeholder={locale === "ar" ? "إلى تاريخ" : "To date"}
+                    compact
                   />
                 </div>
                 <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
