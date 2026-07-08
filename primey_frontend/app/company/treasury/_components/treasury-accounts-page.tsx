@@ -1099,7 +1099,7 @@ export function TreasuryAccountsPage({ variant }: { variant: PageVariant }) {
     window.print();
   }
   const columns: DataColumn<TreasuryAccountRecord>[] = [
-    
+
     {
       key: "accountingLinkage",
       label: locale === "ar" ? "الحساب المحاسبي" : "Accounting account",

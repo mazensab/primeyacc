@@ -1882,4 +1882,3 @@ export default function CompanyTreasuryPage() {
     </main>
   );
 }
-
