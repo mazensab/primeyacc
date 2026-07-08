@@ -69,6 +69,7 @@ from sales.models import SalesInvoice
 
 from .models import (
     CustomerPayment,
+    PaymentCounterpartyType,
     PaymentStatus,
     SupplierPayment,
     TreasuryAccount,
@@ -1209,6 +1210,116 @@ def generate_customer_payment_number(company) -> str:
     return f"{prefix}{next_number:06d}"
 
 
+
+def _clean_payment_counterparty_text(value: Any) -> str:
+    """
+    Normalize counterparty display snapshots for payment vouchers.
+    """
+    if value is None:
+        return ""
+    return str(value).strip()
+def _clean_payment_counterparty_id(value: Any) -> int | None:
+    """
+    Normalize flexible counterparty ids without trusting frontend company scope.
+    Scope validation for real linked objects is handled in later specific resolvers.
+    """
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        number = int(text)
+    except (TypeError, ValueError):
+        raise ValidationError(
+            {"counterparty_id": "Counterparty id must be a positive integer."}
+        )
+    if number <= 0:
+        raise ValidationError(
+            {"counterparty_id": "Counterparty id must be a positive integer."}
+        )
+    return number
+def _normalize_payment_counterparty_type(
+    value: Any,
+    *,
+    default: PaymentCounterpartyType,
+    allowed: set[PaymentCounterpartyType],
+) -> PaymentCounterpartyType:
+    """
+    Normalize and validate counterparty type.
+    Current B2B scope keeps accounting-safe legacy behavior:
+    - receipt voucher: CUSTOMER
+    - payment voucher: SUPPLIER
+    EMPLOYEE/OTHER will be enabled in the next accounting-routing step.
+    """
+    raw = _clean_payment_counterparty_text(value)
+    normalized = (raw or default.value).upper()
+    choices = {
+        item.value: item
+        for item in PaymentCounterpartyType
+    }
+    selected = choices.get(normalized)
+    if not selected:
+        raise ValidationError(
+            {
+                "counterparty_type": (
+                    "Unsupported counterparty type. "
+                    f"Allowed values: {', '.join(sorted(choices))}."
+                )
+            }
+        )
+    if selected not in allowed:
+        allowed_values = ", ".join(sorted(item.value for item in allowed))
+        raise ValidationError(
+            {
+                "counterparty_type": (
+                    "This counterparty type is not enabled for this voucher yet. "
+                    f"Allowed now: {allowed_values}."
+                )
+            }
+        )
+    return selected
+def _resolve_payment_counterparty_account(
+    *,
+    company: Any,
+    account: Any = None,
+    account_id: Any = None,
+):
+    """
+    Resolve optional counterparty accounting account safely.
+    This is stored for the next accounting-routing phase and must never cross companies.
+    """
+    selected = account
+    if selected is None and account_id:
+        from accounting.models import Account
+        selected = (
+            Account.objects
+            .filter(company=company, pk=_clean_payment_counterparty_id(account_id))
+            .first()
+        )
+        if selected is None:
+            raise ValidationError(
+                {"counterparty_account": "Counterparty accounting account was not found."}
+            )
+    if selected is None:
+        return None
+    if getattr(selected, "company_id", None) != getattr(company, "id", None):
+        raise ValidationError(
+            {"counterparty_account": "Counterparty accounting account must belong to the same company."}
+        )
+    if getattr(selected, "is_group", False):
+        raise ValidationError(
+            {"counterparty_account": "Counterparty accounting account must be a postable account, not a group."}
+        )
+    if not getattr(selected, "is_active", False):
+        raise ValidationError(
+            {"counterparty_account": "Counterparty accounting account must be active."}
+        )
+    if not getattr(selected, "allow_manual_posting", True):
+        raise ValidationError(
+            {"counterparty_account": "Counterparty accounting account must allow posting."}
+        )
+    return selected
 def create_customer_payment(
     *,
     company,
@@ -1220,6 +1331,12 @@ def create_customer_payment(
     customer_id: Any = None,
     customer_name: str = "",
     customer_phone: str = "",
+    counterparty_type: Any = None,
+    counterparty_id: Any = None,
+    counterparty_name: str = "",
+    counterparty_phone: str = "",
+    counterparty_account: Any = None,
+    counterparty_account_id: Any = None,
     sales_invoice=None,
     currency: str | None = None,
     payment_number: str = "",
@@ -1249,6 +1366,19 @@ def create_customer_payment(
             ),
             customer_name=normalize_text(customer_name),
             customer_phone=normalize_text(customer_phone),
+        counterparty_type=_normalize_payment_counterparty_type(
+            counterparty_type,
+            default=PaymentCounterpartyType.CUSTOMER,
+            allowed={PaymentCounterpartyType.CUSTOMER},
+        ),
+        counterparty_id=_clean_payment_counterparty_id(counterparty_id if counterparty_id is not None else customer_id),
+        counterparty_name=_clean_payment_counterparty_text(counterparty_name or customer_name),
+        counterparty_phone=_clean_payment_counterparty_text(counterparty_phone or customer_phone),
+        counterparty_account=_resolve_payment_counterparty_account(
+            company=company,
+            account=counterparty_account,
+            account_id=counterparty_account_id,
+        ),
             sales_invoice=sales_invoice,
             treasury_account=treasury_account,
             amount=amount_decimal,
@@ -1274,8 +1404,6 @@ def create_customer_payment(
             )
 
         return payment
-
-
 def update_customer_payment(
     *,
     company,
@@ -1554,6 +1682,12 @@ def create_supplier_payment(
     supplier_id: Any = None,
     supplier_name: str = "",
     supplier_phone: str = "",
+    counterparty_type: Any = None,
+    counterparty_id: Any = None,
+    counterparty_name: str = "",
+    counterparty_phone: str = "",
+    counterparty_account: Any = None,
+    counterparty_account_id: Any = None,
     purchase_bill=None,
     currency: str | None = None,
     payment_number: str = "",
@@ -1583,6 +1717,19 @@ def create_supplier_payment(
             ),
             supplier_name=normalize_text(supplier_name),
             supplier_phone=normalize_text(supplier_phone),
+        counterparty_type=_normalize_payment_counterparty_type(
+            counterparty_type,
+            default=PaymentCounterpartyType.SUPPLIER,
+            allowed={PaymentCounterpartyType.SUPPLIER},
+        ),
+        counterparty_id=_clean_payment_counterparty_id(counterparty_id if counterparty_id is not None else supplier_id),
+        counterparty_name=_clean_payment_counterparty_text(counterparty_name or supplier_name),
+        counterparty_phone=_clean_payment_counterparty_text(counterparty_phone or supplier_phone),
+        counterparty_account=_resolve_payment_counterparty_account(
+            company=company,
+            account=counterparty_account,
+            account_id=counterparty_account_id,
+        ),
             purchase_bill=purchase_bill,
             treasury_account=treasury_account,
             amount=amount_decimal,
@@ -1608,8 +1755,6 @@ def create_supplier_payment(
             )
 
         return payment
-
-
 def update_supplier_payment(
     *,
     company,

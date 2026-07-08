@@ -501,6 +501,18 @@ class PaymentMethod(models.TextChoices):
     OTHER = "OTHER", "Other"
 
 
+
+class PaymentCounterpartyType(models.TextChoices):
+    """
+    Unified counterparty type used behind receipt/payment vouchers.
+    الهدف:
+    - لا نفتح مداخل تشغيلية جديدة للمستخدم.
+    - نفس سند القبض/الصرف يدعم أنواع أطراف متعددة خلفيًا.
+    """
+    CUSTOMER = "CUSTOMER", "Customer"
+    SUPPLIER = "SUPPLIER", "Supplier"
+    EMPLOYEE = "EMPLOYEE", "Employee"
+    OTHER = "OTHER", "Other"
 class PaymentStatus(models.TextChoices):
     DRAFT = "DRAFT", "Draft"
     CONFIRMED = "CONFIRMED", "Confirmed"
@@ -531,6 +543,38 @@ class CustomerPayment(models.Model):
     )
     customer_name = models.CharField(max_length=255, blank=True)
     customer_phone = models.CharField(max_length=50, blank=True)
+
+    counterparty_type = models.CharField(
+        max_length=20,
+        choices=PaymentCounterpartyType.choices,
+        default=PaymentCounterpartyType.CUSTOMER,
+        db_index=True,
+        help_text="Receipt voucher counterparty type.",
+    )
+    counterparty_id = models.PositiveBigIntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Receipt voucher flexible counterparty id.",
+    )
+    counterparty_name = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Receipt voucher counterparty display name snapshot.",
+    )
+    counterparty_phone = models.CharField(
+        max_length=40,
+        blank=True,
+        help_text="Receipt voucher counterparty phone snapshot.",
+    )
+    counterparty_account = models.ForeignKey(
+        "accounting.Account",
+        on_delete=models.PROTECT,
+        related_name="customer_payments_as_counterparty",
+        null=True,
+        blank=True,
+        help_text="Receipt voucher accounting account for employee/other counterparty posting.",
+    )
 
     sales_invoice = models.ForeignKey(
         "sales.SalesInvoice",
@@ -740,6 +784,38 @@ class SupplierPayment(models.Model):
     )
     supplier_name = models.CharField(max_length=255, blank=True)
     supplier_phone = models.CharField(max_length=50, blank=True)
+
+    counterparty_type = models.CharField(
+        max_length=20,
+        choices=PaymentCounterpartyType.choices,
+        default=PaymentCounterpartyType.SUPPLIER,
+        db_index=True,
+        help_text="Payment voucher counterparty type.",
+    )
+    counterparty_id = models.PositiveBigIntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Payment voucher flexible counterparty id.",
+    )
+    counterparty_name = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Payment voucher counterparty display name snapshot.",
+    )
+    counterparty_phone = models.CharField(
+        max_length=40,
+        blank=True,
+        help_text="Payment voucher counterparty phone snapshot.",
+    )
+    counterparty_account = models.ForeignKey(
+        "accounting.Account",
+        on_delete=models.PROTECT,
+        related_name="supplier_payments_as_counterparty",
+        null=True,
+        blank=True,
+        help_text="Payment voucher accounting account for employee/other counterparty posting.",
+    )
 
     purchase_bill = models.ForeignKey(
         "purchases.PurchaseBill",

@@ -41,6 +41,7 @@ from accounting.models import Account, AccountingAccountPurpose, JournalEntrySta
 from .models import (
     CustomerPayment,
     PaymentMethod,
+    PaymentCounterpartyType,
     PaymentStatus,
     SupplierPayment,
     TreasuryAccount,
@@ -1281,6 +1282,51 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
                 customer_name="Cross Company Customer",
             )
 
+
+    def test_customer_payment_populates_counterparty_snapshot_from_legacy_fields(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Customer Counterparty Snapshot Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="0.00",
+        )
+        payment = create_customer_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="25.00",
+            payment_method=PaymentMethod.CASH,
+            customer_id=123,
+            customer_name="Snapshot Customer",
+            customer_phone="0501112222",
+        )
+        self.assertEqual(payment.counterparty_type, PaymentCounterpartyType.CUSTOMER)
+        self.assertEqual(payment.counterparty_id, 123)
+        self.assertEqual(payment.counterparty_name, "Snapshot Customer")
+        self.assertEqual(payment.counterparty_phone, "0501112222")
+    def test_supplier_payment_populates_counterparty_snapshot_from_legacy_fields(self) -> None:
+        account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Supplier Counterparty Snapshot Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="200.00",
+        )
+        payment = create_supplier_payment(
+            company=self.company_a,
+            treasury_account=account,
+            user=self.user,
+            amount="35.00",
+            payment_method=PaymentMethod.CASH,
+            supplier_id=456,
+            supplier_name="Snapshot Supplier",
+            supplier_phone="0503334444",
+        )
+        self.assertEqual(payment.counterparty_type, PaymentCounterpartyType.SUPPLIER)
+        self.assertEqual(payment.counterparty_id, 456)
+        self.assertEqual(payment.counterparty_name, "Snapshot Supplier")
+        self.assertEqual(payment.counterparty_phone, "0503334444")
     def test_create_supplier_payment_draft_does_not_change_balance(self) -> None:
         account = create_treasury_account(
             company=self.company_a,
