@@ -2616,6 +2616,44 @@ def _mark_payment_accounting_posted(payment: Any, entry: JournalEntry) -> None:
         payment.save(update_fields=update_fields)
 
 
+
+def _payment_counterparty_type(payment: Any, default: str) -> str:
+    value = _clean_text(getattr(payment, "counterparty_type", "") or default).upper()
+    return value or default
+def _resolve_payment_counterparty_posting_account(
+    company,
+    payment: Any,
+    *,
+    payment_label: str,
+) -> Account:
+    account = getattr(payment, "counterparty_account", None)
+    account_id = getattr(payment, "counterparty_account_id", None)
+    if account is None and account_id:
+        account = Account.objects.filter(
+            company=company,
+            pk=account_id,
+        ).first()
+    if not account:
+        raise AccountingConfigurationError(
+            f"{payment_label} يتطلب حساب طرف محاسبي صالح."
+        )
+    if getattr(account, "company_id", None) != getattr(company, "pk", None):
+        raise AccountingConfigurationError(
+            f"حساب الطرف في {payment_label} لا يتبع نفس الشركة."
+        )
+    if account.is_group:
+        raise AccountingConfigurationError(
+            f"حساب الطرف في {payment_label} لا يمكن أن يكون حساب مجموعة."
+        )
+    if not account.is_active:
+        raise AccountingConfigurationError(
+            f"حساب الطرف في {payment_label} غير نشط."
+        )
+    if not account.allow_manual_posting:
+        raise AccountingConfigurationError(
+            f"حساب الطرف في {payment_label} لا يسمح بالترحيل."
+        )
+    return account
 def find_customer_payment_journal_entry(payment: Any) -> JournalEntry | None:
     """
     Find the existing accounting entry linked to a customer payment.
@@ -2702,6 +2740,18 @@ def post_customer_payment_to_accounting(
         required=True,
     )
 
+    counterparty_type = _payment_counterparty_type(payment, "CUSTOMER")
+    if counterparty_type == "OTHER":
+        receivable_account = _resolve_payment_counterparty_posting_account(
+            company,
+            payment,
+            payment_label="سند قبض طرف آخر",
+        )
+    elif counterparty_type != "CUSTOMER":
+        raise AccountingConfigurationError(
+            "سند القبض يدعم CUSTOMER أو OTHER فقط."
+        )
+
     currency = _clean_currency(getattr(payment, "currency", "") or "SAR")
     entry_date = getattr(payment, "payment_date", None) or timezone.localdate()
 
@@ -2710,6 +2760,18 @@ def post_customer_payment_to_accounting(
         _clean_text(getattr(sales_invoice, "customer_id", "") or "")
         or _clean_text(getattr(payment, "customer_id", "") or "")
     )
+
+    counterparty_party_type = (
+        "other"
+        if counterparty_type == "OTHER"
+        else ("customer" if customer_id else "")
+    )
+    counterparty_party_id = (
+        _clean_text(getattr(payment, "counterparty_id", "") or "")
+        if counterparty_type == "OTHER"
+        else customer_id
+    )
+
 
     entry = create_journal_entry_header(
         company=company,
@@ -2735,8 +2797,8 @@ def post_customer_payment_to_accounting(
             debit_amount=amount,
             credit_amount=MONEY_ZERO,
             currency=currency,
-            party_type="customer" if customer_id else "",
-            party_id=customer_id,
+            party_type=counterparty_party_type,
+            party_id=counterparty_party_id,
             source_line_id="customer-payment-treasury",
             sort_order=1,
             metadata={
@@ -2753,8 +2815,8 @@ def post_customer_payment_to_accounting(
             debit_amount=MONEY_ZERO,
             credit_amount=amount,
             currency=currency,
-            party_type="customer" if customer_id else "",
-            party_id=customer_id,
+            party_type=counterparty_party_type,
+            party_id=counterparty_party_id,
             source_line_id="customer-payment-receivable",
             sort_order=2,
             metadata={
@@ -2762,6 +2824,8 @@ def post_customer_payment_to_accounting(
                 "payment_id": payment.pk,
                 "payment_number": payment_number,
                 "customer_id": customer_id,
+        "counterparty_type": counterparty_type,
+        "counterparty_id": counterparty_party_id,
                 "sales_invoice_id": getattr(payment, "sales_invoice_id", None),
             },
         ),
@@ -2882,6 +2946,18 @@ def post_supplier_payment_to_accounting(
         required=True,
     )
 
+    counterparty_type = _payment_counterparty_type(payment, "SUPPLIER")
+    if counterparty_type in {"EMPLOYEE", "OTHER"}:
+        payable_account = _resolve_payment_counterparty_posting_account(
+            company,
+            payment,
+            payment_label="سند صرف موظف/طرف آخر",
+        )
+    elif counterparty_type != "SUPPLIER":
+        raise AccountingConfigurationError(
+            "سند الصرف يدعم SUPPLIER أو EMPLOYEE أو OTHER فقط."
+        )
+
     treasury_account = _resolve_treasury_accounting_account(
         company,
         getattr(payment, "treasury_account", None),
@@ -2895,6 +2971,18 @@ def post_supplier_payment_to_accounting(
         _clean_text(getattr(purchase_bill, "supplier_id", "") or "")
         or _clean_text(getattr(payment, "supplier_id", "") or "")
     )
+
+    counterparty_party_type = (
+        counterparty_type.lower()
+        if counterparty_type in {"EMPLOYEE", "OTHER"}
+        else ("supplier" if supplier_id else "")
+    )
+    counterparty_party_id = (
+        _clean_text(getattr(payment, "counterparty_id", "") or "")
+        if counterparty_type in {"EMPLOYEE", "OTHER"}
+        else supplier_id
+    )
+
 
     entry = create_journal_entry_header(
         company=company,
@@ -2920,8 +3008,8 @@ def post_supplier_payment_to_accounting(
             debit_amount=amount,
             credit_amount=MONEY_ZERO,
             currency=currency,
-            party_type="supplier" if supplier_id else "",
-            party_id=supplier_id,
+            party_type=counterparty_party_type,
+            party_id=counterparty_party_id,
             source_line_id="supplier-payment-payable",
             sort_order=1,
             metadata={
@@ -2929,6 +3017,8 @@ def post_supplier_payment_to_accounting(
                 "payment_id": payment.pk,
                 "payment_number": payment_number,
                 "supplier_id": supplier_id,
+        "counterparty_type": counterparty_type,
+        "counterparty_id": counterparty_party_id,
                 "purchase_bill_id": getattr(payment, "purchase_bill_id", None),
             },
         ),
@@ -2938,8 +3028,8 @@ def post_supplier_payment_to_accounting(
             debit_amount=MONEY_ZERO,
             credit_amount=amount,
             currency=currency,
-            party_type="supplier" if supplier_id else "",
-            party_id=supplier_id,
+            party_type=counterparty_party_type,
+            party_id=counterparty_party_id,
             source_line_id="supplier-payment-treasury",
             sort_order=2,
             metadata={

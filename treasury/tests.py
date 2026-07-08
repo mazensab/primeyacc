@@ -1327,6 +1327,103 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
         self.assertEqual(payment.counterparty_id, 456)
         self.assertEqual(payment.counterparty_name, "Snapshot Supplier")
         self.assertEqual(payment.counterparty_phone, "0503334444")
+
+    def test_confirm_customer_other_payment_posts_to_counterparty_account(self) -> None:
+        treasury_account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Other Receipt Posting Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="0.00",
+        )
+        other_income_account = Account.objects.get(
+            company=self.company_a,
+            code="4201",
+        )
+        payment = create_customer_payment(
+            company=self.company_a,
+            treasury_account=treasury_account,
+            user=self.user,
+            amount="45.00",
+            payment_method=PaymentMethod.CASH,
+            counterparty_type=PaymentCounterpartyType.OTHER,
+            counterparty_name="Other Receipt Party",
+            counterparty_account=other_income_account,
+            reference="OTHER-RECEIPT-POSTING",
+        )
+        payment = confirm_customer_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+        )
+        payment.refresh_from_db()
+        treasury_account.refresh_from_db()
+        self.assertIsNotNone(payment.accounting_entry_id)
+        lines = list(payment.accounting_entry.lines.select_related("account"))
+        self.assertTrue(
+            any(
+                line.account_id == treasury_account.accounting_account_id
+                and line.debit_amount == Decimal("45.00")
+                and line.credit_amount == Decimal("0.00")
+                for line in lines
+            )
+        )
+        self.assertTrue(
+            any(
+                line.account_id == other_income_account.id
+                and line.debit_amount == Decimal("0.00")
+                and line.credit_amount == Decimal("45.00")
+                for line in lines
+            )
+        )
+    def test_confirm_supplier_employee_payment_posts_to_counterparty_account(self) -> None:
+        treasury_account = create_treasury_account(
+            company=self.company_a,
+            user=self.user,
+            name="Employee Payment Posting Cash",
+            account_type=TreasuryAccount.AccountType.CASH,
+            opening_balance="200.00",
+        )
+        employee_advance_account = Account.objects.get(
+            company=self.company_a,
+            code="1106",
+        )
+        payment = create_supplier_payment(
+            company=self.company_a,
+            treasury_account=treasury_account,
+            user=self.user,
+            amount="55.00",
+            payment_method=PaymentMethod.CASH,
+            counterparty_type=PaymentCounterpartyType.EMPLOYEE,
+            counterparty_name="Employee Advance Party",
+            counterparty_account=employee_advance_account,
+            reference="EMPLOYEE-PAYMENT-POSTING",
+        )
+        payment = confirm_supplier_payment(
+            company=self.company_a,
+            payment=payment,
+            user=self.user,
+        )
+        payment.refresh_from_db()
+        treasury_account.refresh_from_db()
+        self.assertIsNotNone(payment.accounting_entry_id)
+        lines = list(payment.accounting_entry.lines.select_related("account"))
+        self.assertTrue(
+            any(
+                line.account_id == employee_advance_account.id
+                and line.debit_amount == Decimal("55.00")
+                and line.credit_amount == Decimal("0.00")
+                for line in lines
+            )
+        )
+        self.assertTrue(
+            any(
+                line.account_id == treasury_account.accounting_account_id
+                and line.debit_amount == Decimal("0.00")
+                and line.credit_amount == Decimal("55.00")
+                for line in lines
+            )
+        )
     def test_create_supplier_payment_draft_does_not_change_balance(self) -> None:
         account = create_treasury_account(
             company=self.company_a,

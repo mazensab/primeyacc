@@ -1320,6 +1320,75 @@ def _resolve_payment_counterparty_account(
             {"counterparty_account": "Counterparty accounting account must allow posting."}
         )
     return selected
+
+def _payment_counterparty_type_value(payment, *, default: str) -> str:
+    value = normalize_code(getattr(payment, "counterparty_type", "") or default)
+    return value or default
+def _ensure_customer_payment_counterparty_can_confirm(payment: CustomerPayment) -> None:
+    counterparty_type = _payment_counterparty_type_value(
+        payment,
+        default=PaymentCounterpartyType.CUSTOMER,
+    )
+    if counterparty_type == PaymentCounterpartyType.CUSTOMER:
+        return
+    if counterparty_type != PaymentCounterpartyType.OTHER:
+        raise ValidationError(
+            {
+                "counterparty_type": (
+                    "Receipt voucher supports CUSTOMER or OTHER counterparty only."
+                )
+            }
+        )
+    if payment.sales_invoice_id:
+        raise ValidationError(
+            {
+                "sales_invoice": (
+                    "OTHER receipt voucher cannot be linked to a sales invoice."
+                )
+            }
+        )
+    if not payment.counterparty_account_id:
+        raise ValidationError(
+            {
+                "counterparty_account": (
+                    "OTHER receipt voucher requires a counterparty accounting account."
+                )
+            }
+        )
+def _ensure_supplier_payment_counterparty_can_confirm(payment: SupplierPayment) -> None:
+    counterparty_type = _payment_counterparty_type_value(
+        payment,
+        default=PaymentCounterpartyType.SUPPLIER,
+    )
+    if counterparty_type == PaymentCounterpartyType.SUPPLIER:
+        return
+    if counterparty_type not in {
+        PaymentCounterpartyType.EMPLOYEE,
+        PaymentCounterpartyType.OTHER,
+    }:
+        raise ValidationError(
+            {
+                "counterparty_type": (
+                    "Payment voucher supports SUPPLIER, EMPLOYEE, or OTHER counterparty only."
+                )
+            }
+        )
+    if payment.purchase_bill_id:
+        raise ValidationError(
+            {
+                "purchase_bill": (
+                    "EMPLOYEE/OTHER payment voucher cannot be linked to a purchase bill."
+                )
+            }
+        )
+    if not payment.counterparty_account_id:
+        raise ValidationError(
+            {
+                "counterparty_account": (
+                    "EMPLOYEE/OTHER payment voucher requires a counterparty accounting account."
+                )
+            }
+        )
 def create_customer_payment(
     *,
     company,
@@ -1369,7 +1438,7 @@ def create_customer_payment(
         counterparty_type=_normalize_payment_counterparty_type(
             counterparty_type,
             default=PaymentCounterpartyType.CUSTOMER,
-            allowed={PaymentCounterpartyType.CUSTOMER},
+            allowed={PaymentCounterpartyType.CUSTOMER, PaymentCounterpartyType.OTHER},
         ),
         counterparty_id=_clean_payment_counterparty_id(counterparty_id if counterparty_id is not None else customer_id),
         counterparty_name=_clean_payment_counterparty_text(counterparty_name or customer_name),
@@ -1507,6 +1576,8 @@ def confirm_customer_payment(
 
         if payment.status == PaymentStatus.CANCELLED:
             raise ValidationError({"status": "Cancelled customer payment cannot be confirmed."})
+
+        _ensure_customer_payment_counterparty_can_confirm(payment)
 
         _apply_customer_payment_invoice_allocation(
             company=company,
@@ -1720,7 +1791,7 @@ def create_supplier_payment(
         counterparty_type=_normalize_payment_counterparty_type(
             counterparty_type,
             default=PaymentCounterpartyType.SUPPLIER,
-            allowed={PaymentCounterpartyType.SUPPLIER},
+            allowed={PaymentCounterpartyType.SUPPLIER, PaymentCounterpartyType.EMPLOYEE, PaymentCounterpartyType.OTHER},
         ),
         counterparty_id=_clean_payment_counterparty_id(counterparty_id if counterparty_id is not None else supplier_id),
         counterparty_name=_clean_payment_counterparty_text(counterparty_name or supplier_name),
@@ -1858,6 +1929,8 @@ def confirm_supplier_payment(
 
         if payment.status == PaymentStatus.CANCELLED:
             raise ValidationError({"status": "Cancelled supplier payment cannot be confirmed."})
+
+        _ensure_supplier_payment_counterparty_can_confirm(payment)
 
         _apply_supplier_payment_bill_allocation(
             company=company,
