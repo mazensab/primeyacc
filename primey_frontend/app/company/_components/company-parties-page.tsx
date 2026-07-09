@@ -1,0 +1,1373 @@
+﻿"use client";
+/* ============================================================
+   📂 primey_frontend/app/company/_components/company-parties-page.tsx
+   🧠 PrimeyAcc — Company Customers & Suppliers Shared Page
+   ------------------------------------------------------------
+   ✅ Approved Premium company pattern
+   ✅ Real API only, no fake demo data
+   ✅ Company scoped customers/suppliers center
+   ✅ /company/parties + /company/customers + /company/suppliers
+   ✅ KPI cards + filters + tables
+   ✅ Excel .xls + Web print
+   ✅ Skeleton loading
+   ✅ Error / Empty states
+   ✅ sonner toast
+   ✅ RTL/LTR through primey-locale
+   ✅ English numbers/money always
+   ✅ SAR icon from /currency/sar.svg
+   ✅ components/ui only
+   ✅ No localhost hardcoding
+============================================================ */
+import * as React from "react";
+import Image from "next/image";
+import Link from "next/link";
+import {
+  ArrowDownLeft,
+  ArrowUpDown,
+  ArrowUpRight,
+  BadgeCheck,
+  Building2,
+  FileSpreadsheet,
+  Loader2,
+  Printer,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  Store,
+  TriangleAlert,
+  Users,
+  WalletCards,
+} from "lucide-react";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+type Locale = "ar" | "en";
+type PageVariant = "parties" | "customers" | "suppliers";
+type PartyKind = "customer" | "supplier";
+type StatusFilter = "all" | "active" | "inactive";
+type KindFilter = "all" | PartyKind;
+type SortKey = "newest" | "oldest" | "name" | "code" | "balance_high" | "balance_low";
+type ApiRecord = Record<string, unknown>;
+type ApiResponse = ApiRecord | ApiRecord[];
+type PartyRecord = {
+  id: string;
+  kind: PartyKind;
+  code: string;
+  name: string;
+  email: string;
+  phone: string;
+  taxNumber: string;
+  city: string;
+  status: "active" | "inactive";
+  balance: number;
+  creditLimit: number;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+type PartyStats = {
+  total: number;
+  customers: number;
+  suppliers: number;
+  active: number;
+  inactive: number;
+  customerBalance: number;
+  supplierBalance: number;
+  creditLimit: number;
+};
+type DataColumn<T> = {
+  key: string;
+  label: string;
+  className?: string;
+  render: (row: T) => React.ReactNode;
+};
+const ENDPOINTS = {
+  customers: "/api/company/customers/",
+  suppliers: "/api/company/suppliers/",
+};
+const translations = {
+  ar: {
+    badge: "وحدة العملاء والموردين",
+    partiesTitle: "العملاء والموردون",
+    customersTitle: "العملاء",
+    suppliersTitle: "الموردون",
+    partiesSubtitle:
+      "\u0645\u0631\u0643\u0632 \u0645\u062a\u0627\u0628\u0639\u0629 \u0623\u0637\u0631\u0627\u0641 \u0627\u0644\u0634\u0631\u0643\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629: \u0627\u0644\u0639\u0645\u0644\u0627\u0621\u060c \u0627\u0644\u0645\u0648\u0631\u062f\u0648\u0646\u060c \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u062a\u0648\u0627\u0635\u0644\u060c \u0627\u0644\u062d\u0627\u0644\u0629\u060c \u0648\u0627\u0644\u0623\u0631\u0635\u062f\u0629 \u0627\u0644\u062a\u0634\u063a\u064a\u0644\u064a\u0629.",
+    customersSubtitle:
+      "\u0642\u0627\u0626\u0645\u0629 \u062a\u0634\u063a\u064a\u0644\u064a\u0629 \u0644\u0645\u062a\u0627\u0628\u0639\u0629 \u0627\u0644\u0639\u0645\u0644\u0627\u0621\u060c \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u062a\u0648\u0627\u0635\u0644\u060c \u0627\u0644\u062d\u0627\u0644\u0629\u060c \u0627\u0644\u0631\u0635\u064a\u062f\u060c \u0648\u062d\u062f \u0627\u0644\u0627\u0626\u062a\u0645\u0627\u0646 \u062f\u0627\u062e\u0644 \u0627\u0644\u0634\u0631\u0643\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629.",
+    suppliersSubtitle:
+      "\u0642\u0627\u0626\u0645\u0629 \u062a\u0634\u063a\u064a\u0644\u064a\u0629 \u0644\u0645\u062a\u0627\u0628\u0639\u0629 \u0627\u0644\u0645\u0648\u0631\u062f\u064a\u0646\u060c \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u062a\u0648\u0627\u0635\u0644\u060c \u0627\u0644\u062d\u0627\u0644\u0629\u060c \u0627\u0644\u0631\u0635\u064a\u062f\u060c \u0648\u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0636\u0631\u064a\u0628\u064a\u0629 \u062f\u0627\u062e\u0644 \u0627\u0644\u0634\u0631\u0643\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629.",
+    refresh: "تحديث",
+    export: "تصدير Excel",
+    print: "طباعة",
+    reset: "إعادة ضبط",
+    search: "بحث",
+    all: "الكل",
+    active: "نشط",
+    inactive: "غير نشط",
+    customer: "عميل",
+    supplier: "مورد",
+    customers: "العملاء",
+    suppliers: "الموردون",
+    activeCustomers: "\u0627\u0644\u0639\u0645\u0644\u0627\u0621 \u0627\u0644\u0646\u0634\u0637\u0648\u0646",
+    inactiveCustomers: "\u0627\u0644\u0639\u0645\u0644\u0627\u0621 \u0627\u0644\u0645\u0639\u0637\u0644\u0648\u0646",
+    activeSuppliers: "\u0627\u0644\u0645\u0648\u0631\u062f\u0648\u0646 \u0627\u0644\u0646\u0634\u0637\u0648\u0646",
+    inactiveSuppliers: "\u0627\u0644\u0645\u0648\u0631\u062f\u0648\u0646 \u0627\u0644\u0645\u0639\u0637\u0644\u0648\u0646",
+    parties: "الأطراف",
+    totalParties: "إجمالي الأطراف",
+    activeParties: "الأطراف النشطة",
+    inactiveParties: "الأطراف المعطلة",
+    customerBalance: "أرصدة العملاء",
+    supplierBalance: "أرصدة الموردين",
+    creditLimit: "حدود الائتمان",
+    customersDesc: "عدد العملاء المسجلين",
+    suppliersDesc: "عدد الموردين المسجلين",
+    activeDesc: "الأطراف المفعلة حاليًا",
+    inactiveDesc: "الأطراف غير المفعلة",
+    customerBalanceDesc: "إجمالي أرصدة العملاء حسب البيانات المتاحة",
+    supplierBalanceDesc: "إجمالي أرصدة الموردين حسب البيانات المتاحة",
+    creditLimitDesc: "إجمالي حدود الائتمان المسجلة",
+    shortcutsTitle: "اختصارات الوحدة",
+    shortcutsDesc: "انتقال سريع للصفحات المرتبطة بالعملاء والموردين.",
+    customersList: "قائمة العملاء",
+    suppliersList: "قائمة الموردين",
+    salesInvoices: "فواتير المبيعات",
+    purchaseBills: "فواتير المشتريات",
+    receiptVouchers: "سندات القبض",
+    paymentVouchers: "سندات الصرف",
+    filtersTitle: "فلاتر الأطراف",
+    filtersDesc: "ابحث وفلتر حسب النوع والحالة والترتيب.",
+    searchPlaceholder: "ابحث بالاسم أو الكود أو الجوال أو البريد أو الرقم الضريبي...",
+    type: "النوع",
+    status: "الحالة",
+    sort: "الترتيب",
+    newest: "الأحدث",
+    oldest: "الأقدم",
+    nameSort: "الاسم",
+    codeSort: "الكود",
+    balanceHigh: "الأعلى رصيدًا",
+    balanceLow: "الأقل رصيدًا",
+    partiesTable: "سجل العملاء والموردين",
+    customersTable: "سجل العملاء",
+    suppliersTable: "سجل الموردين",
+    partiesTableDesc: "\u0633\u062c\u0644 \u0645\u0648\u062d\u062f \u0644\u0645\u062a\u0627\u0628\u0639\u0629 \u0627\u0644\u0639\u0645\u0644\u0627\u0621 \u0648\u0627\u0644\u0645\u0648\u0631\u062f\u064a\u0646 \u062f\u0627\u062e\u0644 \u0627\u0644\u0634\u0631\u0643\u0629.",
+    customersTableDesc: "\u0633\u062c\u0644 \u0627\u0644\u0639\u0645\u0644\u0627\u0621 \u0648\u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u062a\u0648\u0627\u0635\u0644 \u0648\u0627\u0644\u062d\u0627\u0644\u0629 \u0648\u0627\u0644\u0623\u0631\u0635\u062f\u0629.",
+    suppliersTableDesc: "\u0633\u062c\u0644 \u0627\u0644\u0645\u0648\u0631\u062f\u064a\u0646 \u0648\u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u062a\u0648\u0627\u0635\u0644 \u0648\u0627\u0644\u062d\u0627\u0644\u0629 \u0648\u0627\u0644\u0623\u0631\u0635\u062f\u0629.",
+    party: "الطرف",
+    contact: "التواصل",
+    tax: "الرقم الضريبي",
+    city: "المدينة",
+    balance: "الرصيد",
+    limit: "حد الائتمان",
+    updatedAt: "آخر تحديث",
+    showing: "عرض",
+    of: "من",
+    rows: "صفوف",
+    sar: "ر.س",
+    unknown: "غير محدد",
+    noDataTitle: "لا توجد بيانات",
+    noDataDesc: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0633\u062c\u0644\u0627\u062a \u062d\u0627\u0644\u064a\u0627\u064b.",
+    noResultsTitle: "لا توجد نتائج مطابقة",
+    noResultsDesc: "\u063a\u064a\u0651\u0631 \u0627\u0644\u0628\u062d\u062b \u0623\u0648 \u0627\u0644\u0641\u0644\u0627\u062a\u0631 \u0644\u0639\u0631\u0636 \u0646\u062a\u0627\u0626\u062c \u0623\u062e\u0631\u0649.",
+    errorTitle: "تعذر تحميل وحدة العملاء والموردين",
+    errorDesc: "\u062a\u0623\u0643\u062f \u0645\u0646 \u062a\u0633\u062c\u064a\u0644 \u0627\u0644\u062f\u062e\u0648\u0644 \u062f\u0627\u062e\u0644 \u0627\u0644\u0634\u0631\u0643\u0629 \u062b\u0645 \u0623\u0639\u062f \u0627\u0644\u0645\u062d\u0627\u0648\u0644\u0629.",
+    tryAgain: "إعادة المحاولة",
+    partialWarningTitle: "تم تحميل الصفحة جزئيًا",
+    refreshed: "تم تحديث البيانات.",
+    exportEmpty: "لا توجد بيانات للتصدير.",
+    printEmpty: "لا توجد بيانات للطباعة.",
+    generatedAt: "تم الإنشاء في",
+  },
+  en: {
+    badge: "Customers & Suppliers Module",
+    partiesTitle: "Customers & Suppliers",
+    customersTitle: "Customers",
+    suppliersTitle: "Suppliers",
+    partiesSubtitle:
+      "Company parties center: customers, suppliers, contact details, status, and operational balances.",
+    customersSubtitle:
+      "Operational customer list with contact details, status, balance, and credit limit inside the current company.",
+    suppliersSubtitle:
+      "Operational supplier list with contact details, status, balances, and tax data inside the current company.",
+    refresh: "Refresh",
+    export: "Export Excel",
+    print: "Print",
+    reset: "Reset",
+    search: "Search",
+    all: "All",
+    active: "Active",
+    inactive: "Inactive",
+    customer: "Customer",
+    supplier: "Supplier",
+    customers: "Customers",
+    suppliers: "Suppliers",
+    activeCustomers: "Active customers",
+    inactiveCustomers: "Inactive customers",
+    activeSuppliers: "Active suppliers",
+    inactiveSuppliers: "Inactive suppliers",
+    parties: "Parties",
+    totalParties: "Total parties",
+    activeParties: "Active parties",
+    inactiveParties: "Inactive parties",
+    customerBalance: "Customer balances",
+    supplierBalance: "Supplier balances",
+    creditLimit: "Credit limits",
+    customersDesc: "Registered customers",
+    suppliersDesc: "Registered suppliers",
+    activeDesc: "Currently active parties",
+    inactiveDesc: "Inactive parties",
+    customerBalanceDesc: "Customer balance total from available data",
+    supplierBalanceDesc: "Supplier balance total from available data",
+    creditLimitDesc: "Registered credit limits total",
+    shortcutsTitle: "Module shortcuts",
+    shortcutsDesc: "Quick navigation to customers and suppliers related pages.",
+    customersList: "Customers list",
+    suppliersList: "Suppliers list",
+    salesInvoices: "Sales invoices",
+    purchaseBills: "Purchase bills",
+    receiptVouchers: "Receipt vouchers",
+    paymentVouchers: "Payment vouchers",
+    filtersTitle: "Party filters",
+    filtersDesc: "Search and filter by kind, status, and sorting.",
+    searchPlaceholder: "Search by name, code, phone, email, or tax number...",
+    type: "Type",
+    status: "Status",
+    sort: "Sort",
+    newest: "Newest",
+    oldest: "Oldest",
+    nameSort: "Name",
+    codeSort: "Code",
+    balanceHigh: "Highest balance",
+    balanceLow: "Lowest balance",
+    partiesTable: "Customers & suppliers register",
+    customersTable: "Customers register",
+    suppliersTable: "Suppliers register",
+    partiesTableDesc: "Unified register for company customers and suppliers.",
+    customersTableDesc: "Customer register with contact details, status, and balances.",
+    suppliersTableDesc: "Supplier register with contact details, status, and balances.",
+    party: "Party",
+    contact: "Contact",
+    tax: "Tax number",
+    city: "City",
+    balance: "Balance",
+    limit: "Credit limit",
+    updatedAt: "Updated at",
+    showing: "Showing",
+    of: "of",
+    rows: "rows",
+    sar: "SAR",
+    unknown: "Unknown",
+    noDataTitle: "No data",
+    noDataDesc: "No records are available yet.",
+    noResultsTitle: "No matching results",
+    noResultsDesc: "Change the search or filters to show other results.",
+    errorTitle: "Could not load customers and suppliers module",
+    errorDesc: "Make sure you are signed in to the company, then try again.",
+    tryAgain: "Try again",
+    partialWarningTitle: "Page loaded partially",
+    refreshed: "Data refreshed.",
+    exportEmpty: "There is no data to export.",
+    printEmpty: "There is no data to print.",
+    generatedAt: "Generated at",
+  },
+} as const;
+function cn(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+function isRecord(value: unknown): value is ApiRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function asRecord(value: unknown): ApiRecord {
+  return isRecord(value) ? value : {};
+}
+function text(value: unknown, fallback = "") {
+  if (value === null || value === undefined) return fallback;
+  return String(value).trim() || fallback;
+}
+function numberValue(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/[^\d.-]/g, ""));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+function boolValue(value: unknown, fallback = true) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "active", "enabled"].includes(normalized)) return true;
+    if (["false", "0", "no", "inactive", "disabled"].includes(normalized)) return false;
+  }
+  return fallback;
+}
+function getInitialLocale(): Locale {
+  if (typeof window === "undefined") return "ar";
+  return window.localStorage.getItem("primey-locale") === "en" ? "en" : "ar";
+}
+function apiBase() {
+  const value = (
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    ""
+  ).replace(/\/+$/, "");
+  return value.endsWith("/api") ? value.slice(0, -4) : value;
+}
+function apiUrl(path: string, params?: URLSearchParams) {
+  const query = params?.toString();
+  return `${apiBase()}${path}${query ? `?${query}` : ""}`;
+}
+async function fetchJson<T>(path: string, params?: URLSearchParams, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(apiUrl(path, params), {
+    method: "GET",
+    credentials: "include",
+    cache: "no-store",
+    signal,
+    headers: {
+      Accept: "application/json",
+      "X-Requested-With": "XMLHttpRequest",
+    },
+  });
+  const contentType = response.headers.get("content-type") || "";
+  const rawText = await response.text();
+  let payload: unknown = {};
+  if (rawText && contentType.includes("application/json")) {
+    try {
+      payload = JSON.parse(rawText) as unknown;
+    } catch {
+      payload = {};
+    }
+  }
+  if (!response.ok) {
+    const record = asRecord(payload);
+    throw new Error(
+      text(record.message) ||
+        text(record.detail) ||
+        text(record.error) ||
+        `HTTP ${response.status}`,
+    );
+  }
+  return payload as T;
+}
+function extractArray(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) return payload;
+  const record = asRecord(payload);
+  const data = record.data;
+  const result = record.result;
+  for (const key of [
+    "results",
+    "items",
+    "records",
+    "rows",
+    "customers",
+    "suppliers",
+    "parties",
+    "data",
+  ]) {
+    const value = record[key];
+    if (Array.isArray(value)) return value;
+  }
+  const dataRecord = asRecord(data);
+  for (const key of ["results", "items", "records", "rows", "customers", "suppliers", "parties"]) {
+    const value = dataRecord[key];
+    if (Array.isArray(value)) return value;
+  }
+  const resultRecord = asRecord(result);
+  for (const key of ["results", "items", "records", "rows", "customers", "suppliers", "parties"]) {
+    const value = resultRecord[key];
+    if (Array.isArray(value)) return value;
+  }
+  return [];
+}
+function formatInteger(value: unknown) {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(
+    Math.round(numberValue(value)),
+  );
+}
+function formatMoney(value: unknown) {
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(numberValue(value));
+}
+function formatDate(value: string | null | undefined) {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value.slice(0, 10) || "—";
+  return parsed.toISOString().slice(0, 10);
+}
+function rowTime(value: string | null | undefined) {
+  if (!value) return 0;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+function normalizeStatus(record: ApiRecord): "active" | "inactive" {
+  if (Object.prototype.hasOwnProperty.call(record, "is_active")) {
+    return boolValue(record.is_active) ? "active" : "inactive";
+  }
+  if (Object.prototype.hasOwnProperty.call(record, "active")) {
+    return boolValue(record.active) ? "active" : "inactive";
+  }
+  const status = text(record.status || record.state).toLowerCase();
+  if (["inactive", "disabled", "archived", "suspended"].includes(status)) return "inactive";
+  return "active";
+}
+function normalizeParty(value: unknown, kind: PartyKind): PartyRecord {
+  const record = asRecord(value);
+  const address = asRecord(record.address);
+  const city = asRecord(record.city);
+  const contact = asRecord(record.contact);
+  return {
+    id: text(record.id || record.uuid || record.pk || record.code),
+    kind,
+    code: text(record.code || record.customer_code || record.supplier_code || record.number),
+    name:
+      text(record.name) ||
+      text(record.display_name) ||
+      text(record.full_name) ||
+      text(record.company_name) ||
+      text(record.legal_name) ||
+      "—",
+    email: text(record.email || record.contact_email || contact.email),
+    phone: text(record.phone || record.mobile || record.contact_phone || contact.phone),
+    taxNumber: text(record.tax_number || record.vat_number || record.trn || record.tax_id),
+    city: text(record.city_name || city.name || address.city || record.city),
+    status: normalizeStatus(record),
+    balance: numberValue(
+      record.balance ??
+        record.current_balance ??
+        record.outstanding_balance ??
+        record.receivable_balance ??
+        record.payable_balance ??
+        record.total_balance,
+    ),
+    creditLimit: numberValue(record.credit_limit || record.creditLimit || record.limit),
+    createdAt: text(record.created_at || record.created) || null,
+    updatedAt: text(record.updated_at || record.modified_at || record.created_at) || null,
+  };
+}
+function partyLabel(kind: PartyKind, locale: Locale) {
+  return kind === "customer" ? translations[locale].customer : translations[locale].supplier;
+}
+function statusLabel(status: "active" | "inactive", locale: Locale) {
+  return status === "active" ? translations[locale].active : translations[locale].inactive;
+}
+function getStatusBadgeClass(status: "active" | "inactive") {
+  return status === "active"
+    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+    : "border-rose-200 bg-rose-50 text-rose-700";
+}
+function kindBadgeClass(kind: PartyKind) {
+  return kind === "customer"
+    ? "border-blue-200 bg-blue-50 text-blue-700"
+    : "border-violet-200 bg-violet-50 text-violet-700";
+}
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+function MoneyValue({ value, label }: { value: number; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold tabular-nums">
+      <Image src="/currency/sar.svg" alt={label} width={14} height={14} className="h-3.5 w-3.5" />
+      <span>{formatMoney(value)}</span>
+    </span>
+  );
+}
+function StatusBadge({ value, label }: { value: "active" | "inactive"; label: string }) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn("whitespace-nowrap rounded-full px-2.5 py-1 text-xs", getStatusBadgeClass(value))}
+    >
+      {label}
+    </Badge>
+  );
+}
+function KindBadge({ value, label }: { value: PartyKind; label: string }) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn("whitespace-nowrap rounded-full px-2.5 py-1 text-xs", kindBadgeClass(value))}
+    >
+      {label}
+    </Badge>
+  );
+}
+function KpiCard({
+  title,
+  value,
+  description,
+  href,
+  icon: Icon,
+  money,
+  t,
+}: {
+  title: string;
+  value: number;
+  description: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  money?: boolean;
+  t: (typeof translations)[Locale];
+}) {
+  return (
+    <Card className="group overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <Link href={href} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
+          <div className="min-w-0">
+            <CardDescription className="truncate text-sm">{title}</CardDescription>
+            <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
+              {money ? <MoneyValue value={value} label={t.sar} /> : formatInteger(value)}
+            </CardTitle>
+          </div>
+          <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+            <Icon className="h-5 w-5" />
+          </span>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
+        </CardContent>
+      </Link>
+    </Card>
+  );
+}
+function PageSkeleton() {
+  return (
+    <div className="mx-auto max-w-[1500px] space-y-6">
+      <div className="rounded-3xl border bg-card p-6 shadow-sm">
+        <Skeleton className="h-5 w-40" />
+        <Skeleton className="mt-3 h-8 w-72" />
+        <Skeleton className="mt-3 h-4 w-full max-w-3xl" />
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <Card key={index} className="rounded-2xl">
+            <CardHeader>
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-8 w-20" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-4 w-full" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <Card className="rounded-2xl">
+        <CardHeader>
+          <Skeleton className="h-6 w-56" />
+          <Skeleton className="h-4 w-96" />
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-80 w-full" />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+function EmptyTableState({
+  title,
+  description,
+  showReset,
+  onReset,
+  resetLabel,
+}: {
+  title: string;
+  description: string;
+  showReset?: boolean;
+  onReset?: () => void;
+  resetLabel: string;
+}) {
+  return (
+    <div className="flex h-full min-h-64 flex-col items-center justify-center gap-3 px-6 py-10 text-center">
+      <div className="rounded-full bg-muted p-4 text-muted-foreground">
+        <Search className="h-6 w-6" />
+      </div>
+      <div>
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      </div>
+      {showReset && onReset ? (
+        <Button variant="outline" size="sm" onClick={onReset} className="rounded-lg">
+          <RotateCcw className="h-4 w-4" />
+          {resetLabel}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+function DataTable<T extends { id: string }>({
+  rows,
+  allRowsCount,
+  columns,
+  rowKey,
+  emptyTitle,
+  emptyDescription,
+  noResultsTitle,
+  noResultsDescription,
+  hasFilters,
+  onReset,
+  resetLabel,
+  showingLabel,
+  ofLabel,
+  rowsLabel,
+}: {
+  rows: T[];
+  allRowsCount: number;
+  columns: DataColumn<T>[];
+  rowKey: (row: T) => string;
+  emptyTitle: string;
+  emptyDescription: string;
+  noResultsTitle: string;
+  noResultsDescription: string;
+  hasFilters: boolean;
+  onReset: () => void;
+  resetLabel: string;
+  showingLabel: string;
+  ofLabel: string;
+  rowsLabel: string;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="overflow-hidden rounded-2xl border bg-background">
+        <div className="overflow-x-auto">
+          <Table className="min-w-[1120px] table-fixed">
+            <TableHeader>
+              <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
+                {columns.map((column) => (
+                  <TableHead
+                    key={column.key}
+                    className={cn(
+                      "h-11 whitespace-nowrap px-4 text-start text-xs font-semibold text-muted-foreground",
+                      column.className,
+                    )}
+                  >
+                    {column.label}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.length ? (
+                rows.map((row) => (
+                  <TableRow key={rowKey(row)} className="h-[66px]">
+                    {columns.map((column) => (
+                      <TableCell
+                        key={column.key}
+                        className={cn("h-[66px] overflow-hidden px-4 text-start align-middle", column.className)}
+                      >
+                        {column.render(row)}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="h-72">
+                    <EmptyTableState
+                      title={hasFilters ? noResultsTitle : emptyTitle}
+                      description={hasFilters ? noResultsDescription : emptyDescription}
+                      showReset={hasFilters}
+                      onReset={onReset}
+                      resetLabel={resetLabel}
+                    />
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+      <div className="text-sm text-muted-foreground">
+        {showingLabel} <span className="font-medium text-foreground tabular-nums">{formatInteger(rows.length)}</span>{" "}
+        {ofLabel} <span className="font-medium text-foreground tabular-nums">{formatInteger(allRowsCount)}</span>{" "}
+        {rowsLabel}
+      </div>
+    </div>
+  );
+}
+function buildStats(rows: PartyRecord[]): PartyStats {
+  const customers = rows.filter((row) => row.kind === "customer");
+  const suppliers = rows.filter((row) => row.kind === "supplier");
+  return {
+    total: rows.length,
+    customers: customers.length,
+    suppliers: suppliers.length,
+    active: rows.filter((row) => row.status === "active").length,
+    inactive: rows.filter((row) => row.status === "inactive").length,
+    customerBalance: customers.reduce((sum, row) => sum + row.balance, 0),
+    supplierBalance: suppliers.reduce((sum, row) => sum + row.balance, 0),
+    creditLimit: rows.reduce((sum, row) => sum + row.creditLimit, 0),
+  };
+}
+function sortRows(rows: PartyRecord[], sort: SortKey) {
+  return [...rows].sort((a, b) => {
+    if (sort === "oldest") return rowTime(a.createdAt || a.updatedAt) - rowTime(b.createdAt || b.updatedAt);
+    if (sort === "name") return a.name.localeCompare(b.name);
+    if (sort === "code") return a.code.localeCompare(b.code, undefined, { numeric: true });
+    if (sort === "balance_high") return b.balance - a.balance;
+    if (sort === "balance_low") return a.balance - b.balance;
+    return rowTime(b.createdAt || b.updatedAt) - rowTime(a.createdAt || a.updatedAt);
+  });
+}
+function variantTitle(variant: PageVariant, locale: Locale) {
+  const t = translations[locale];
+  if (variant === "customers") return t.customersTitle;
+  if (variant === "suppliers") return t.suppliersTitle;
+  return t.partiesTitle;
+}
+function variantSubtitle(variant: PageVariant, locale: Locale) {
+  const t = translations[locale];
+  if (variant === "customers") return t.customersSubtitle;
+  if (variant === "suppliers") return t.suppliersSubtitle;
+  return t.partiesSubtitle;
+}
+function variantTableTitle(variant: PageVariant, locale: Locale) {
+  const t = translations[locale];
+  if (variant === "customers") return t.customersTable;
+  if (variant === "suppliers") return t.suppliersTable;
+  return t.partiesTable;
+}
+function variantTableDesc(variant: PageVariant, locale: Locale) {
+  const t = translations[locale];
+  if (variant === "customers") return t.customersTableDesc;
+  if (variant === "suppliers") return t.suppliersTableDesc;
+  return t.partiesTableDesc;
+}
+export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
+  const [locale, setLocale] = React.useState<Locale>("ar");
+  const [rows, setRows] = React.useState<PartyRecord[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [warnings, setWarnings] = React.useState<string[]>([]);
+  const [search, setSearch] = React.useState("");
+  const [status, setStatus] = React.useState<StatusFilter>("all");
+  const [kind, setKind] = React.useState<KindFilter>("all");
+  const [sort, setSort] = React.useState<SortKey>("newest");
+  const t = translations[locale];
+  const dir = locale === "ar" ? "rtl" : "ltr";
+  React.useEffect(() => {
+    const applyLocale = () => {
+      const next = getInitialLocale();
+      setLocale(next);
+      document.documentElement.lang = next;
+      document.documentElement.dir = next === "ar" ? "rtl" : "ltr";
+      document.body.dir = next === "ar" ? "rtl" : "ltr";
+    };
+    applyLocale();
+    window.addEventListener("storage", applyLocale);
+    window.addEventListener("primey-locale-changed", applyLocale);
+    return () => {
+      window.removeEventListener("storage", applyLocale);
+      window.removeEventListener("primey-locale-changed", applyLocale);
+    };
+  }, []);
+  const loadData = React.useCallback(
+    async ({ silent = false }: { silent?: boolean } = {}) => {
+      const controller = new AbortController();
+      try {
+        if (!silent) setLoading(true);
+        setRefreshing(true);
+        setError("");
+        setWarnings([]);
+        const params = new URLSearchParams({
+          page: "1",
+          page_size: "100",
+          ordering: "-created_at",
+        });
+        const requests: Array<Promise<ApiResponse>> = [];
+        if (variant !== "suppliers") {
+          requests.push(fetchJson<ApiResponse>(ENDPOINTS.customers, params, controller.signal));
+        }
+        if (variant !== "customers") {
+          requests.push(fetchJson<ApiResponse>(ENDPOINTS.suppliers, params, controller.signal));
+        }
+        const results = await Promise.allSettled(requests);
+        const failedMessages = results
+          .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+          .map((result) => (result.reason instanceof Error ? result.reason.message : String(result.reason)));
+        if (failedMessages.length === results.length) {
+          throw new Error(failedMessages[0] || t.errorDesc);
+        }
+        let nextRows: PartyRecord[] = [];
+        let index = 0;
+        if (variant !== "suppliers") {
+          const result = results[index++];
+          if (result?.status === "fulfilled") {
+            nextRows = nextRows.concat(extractArray(result.value).map((item) => normalizeParty(item, "customer")));
+          }
+        }
+        if (variant !== "customers") {
+          const result = results[index];
+          if (result?.status === "fulfilled") {
+            nextRows = nextRows.concat(extractArray(result.value).map((item) => normalizeParty(item, "supplier")));
+          }
+        }
+        setRows(nextRows);
+        setWarnings(failedMessages.filter(Boolean));
+        if (failedMessages.length) {
+          toast.warning(t.partialWarningTitle);
+        } else if (silent) {
+          toast.success(t.refreshed);
+        }
+      } catch (caughtError) {
+        const message = caughtError instanceof Error ? caughtError.message : t.errorDesc;
+        setRows([]);
+        setError(message);
+        if (silent) toast.error(message);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+      return () => controller.abort();
+    },
+    [t.errorDesc, t.partialWarningTitle, t.refreshed, variant],
+  );
+  React.useEffect(() => {
+    void loadData();
+  }, [loadData]);
+  const resetFilters = React.useCallback(() => {
+    setSearch("");
+    setStatus("all");
+    setKind("all");
+    setSort("newest");
+  }, []);
+  const filteredRows = React.useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const result = rows.filter((row) => {
+      const haystack = [
+        row.name,
+        row.code,
+        row.email,
+        row.phone,
+        row.taxNumber,
+        row.city,
+        row.kind,
+        row.status,
+        row.balance,
+      ]
+        .join(" ")
+        .toLowerCase();
+      if (query && !haystack.includes(query)) return false;
+      if (status !== "all" && row.status !== status) return false;
+      if (variant === "parties" && kind !== "all" && row.kind !== kind) return false;
+      return true;
+    });
+    return sortRows(result, sort);
+  }, [kind, rows, search, sort, status, variant]);
+  const stats = React.useMemo(() => buildStats(rows), [rows]);
+  const hasFilters = Boolean(
+    search || status !== "all" || sort !== "newest" || (variant === "parties" && kind !== "all"),
+  );
+  const columns = React.useMemo<DataColumn<PartyRecord>[]>(
+    () => [
+      {
+        key: "party",
+        label: t.party,
+        className: "w-[280px]",
+        render: (row) => (
+          <div className="min-w-0">
+            <span className="block truncate text-sm font-semibold text-foreground">{row.name || t.unknown}</span>
+            <span className="block truncate text-xs text-muted-foreground tabular-nums">{row.code || "—"}</span>
+          </div>
+        ),
+      },
+      {
+        key: "kind",
+        label: t.type,
+        className: "w-[130px]",
+        render: (row) => <KindBadge value={row.kind} label={partyLabel(row.kind, locale)} />,
+      },
+      {
+        key: "contact",
+        label: t.contact,
+        className: "w-[260px]",
+        render: (row) => (
+          <div className="min-w-0">
+            <span className="block truncate text-sm text-muted-foreground">{row.phone || "—"}</span>
+            <span className="block truncate text-xs text-muted-foreground">{row.email || "—"}</span>
+          </div>
+        ),
+      },
+      {
+        key: "tax",
+        label: t.tax,
+        className: "w-[170px]",
+        render: (row) => <span className="text-sm tabular-nums text-muted-foreground">{row.taxNumber || "—"}</span>,
+      },
+      {
+        key: "city",
+        label: t.city,
+        className: "w-[150px]",
+        render: (row) => <span className="truncate text-sm text-muted-foreground">{row.city || "—"}</span>,
+      },
+      {
+        key: "balance",
+        label: t.balance,
+        className: "w-[160px]",
+        render: (row) => <MoneyValue value={row.balance} label={t.sar} />,
+      },
+      {
+        key: "limit",
+        label: t.limit,
+        className: "w-[160px]",
+        render: (row) => <MoneyValue value={row.creditLimit} label={t.sar} />,
+      },
+      {
+        key: "status",
+        label: t.status,
+        className: "w-[140px]",
+        render: (row) => <StatusBadge value={row.status} label={statusLabel(row.status, locale)} />,
+      },
+      {
+        key: "updated",
+        label: t.updatedAt,
+        className: "w-[140px]",
+        render: (row) => <span className="text-sm tabular-nums text-muted-foreground">{formatDate(row.updatedAt)}</span>,
+      },
+    ],
+    [locale, t],
+  );
+  const visibleColumns = React.useMemo(
+    () => (variant === "parties" ? columns : columns.filter((column) => column.key !== "kind")),
+    [columns, variant],
+  );
+  const kpiCards = (() => {
+    if (variant === "customers") {
+      return [
+        {
+          title: t.customers,
+          value: stats.customers,
+          description: t.customersDesc,
+          href: "/company/customers",
+          icon: Users,
+        },
+        {
+          title: t.activeCustomers,
+          value: stats.active,
+          description: t.activeDesc,
+          href: "/company/customers",
+          icon: BadgeCheck,
+        },
+        {
+          title: t.customerBalance,
+          value: stats.customerBalance,
+          description: t.customerBalanceDesc,
+          href: "/company/customers",
+          icon: ArrowDownLeft,
+          money: true,
+        },
+        {
+          title: t.creditLimit,
+          value: stats.creditLimit,
+          description: t.creditLimitDesc,
+          href: "/company/customers",
+          icon: WalletCards,
+          money: true,
+        },
+      ];
+    }
+    if (variant === "suppliers") {
+      return [
+        {
+          title: t.suppliers,
+          value: stats.suppliers,
+          description: t.suppliersDesc,
+          href: "/company/suppliers",
+          icon: Building2,
+        },
+        {
+          title: t.activeSuppliers,
+          value: stats.active,
+          description: t.activeDesc,
+          href: "/company/suppliers",
+          icon: BadgeCheck,
+        },
+        {
+          title: t.inactiveSuppliers,
+          value: stats.inactive,
+          description: t.inactiveDesc,
+          href: "/company/suppliers",
+          icon: ShieldCheck,
+        },
+        {
+          title: t.supplierBalance,
+          value: stats.supplierBalance,
+          description: t.supplierBalanceDesc,
+          href: "/company/suppliers",
+          icon: ArrowUpRight,
+          money: true,
+        },
+      ];
+    }
+    return [
+      {
+        title: t.totalParties,
+        value: stats.total,
+        description: t.parties,
+        href: "/company/parties",
+        icon: Users,
+      },
+      {
+        title: t.customers,
+        value: stats.customers,
+        description: t.customersDesc,
+        href: "/company/customers",
+        icon: Users,
+      },
+      {
+        title: t.suppliers,
+        value: stats.suppliers,
+        description: t.suppliersDesc,
+        href: "/company/suppliers",
+        icon: Building2,
+      },
+      {
+        title: t.activeParties,
+        value: stats.active,
+        description: t.activeDesc,
+        href: "/company/parties",
+        icon: BadgeCheck,
+      },
+      {
+        title: t.inactiveParties,
+        value: stats.inactive,
+        description: t.inactiveDesc,
+        href: "/company/parties",
+        icon: ShieldCheck,
+      },
+      {
+        title: t.customerBalance,
+        value: stats.customerBalance,
+        description: t.customerBalanceDesc,
+        href: "/company/customers",
+        icon: ArrowDownLeft,
+        money: true,
+      },
+      {
+        title: t.supplierBalance,
+        value: stats.supplierBalance,
+        description: t.supplierBalanceDesc,
+        href: "/company/suppliers",
+        icon: ArrowUpRight,
+        money: true,
+      },
+      {
+        title: t.creditLimit,
+        value: stats.creditLimit,
+        description: t.creditLimitDesc,
+        href: "/company/parties",
+        icon: WalletCards,
+        money: true,
+      },
+    ];
+  })();
+  const shortcuts = [
+    { href: "/company/parties", title: t.parties, icon: Users },
+    { href: "/company/customers", title: t.customersList, icon: Users },
+    { href: "/company/suppliers", title: t.suppliersList, icon: Building2 },
+    { href: "/company/treasury/receipt-vouchers", title: t.receiptVouchers, icon: WalletCards },
+    { href: "/company/treasury/payment-vouchers", title: t.paymentVouchers, icon: WalletCards },
+    { href: "/company/payments", title: t.paymentVouchers, icon: WalletCards },
+  ];
+  function exportExcel() {
+    if (!filteredRows.length) {
+      toast.warning(t.exportEmpty);
+      return;
+    }
+    const headers = [t.party, t.type, t.contact, t.tax, t.city, t.balance, t.limit, t.status, t.updatedAt];
+    const bodyRows = filteredRows.map((row) => [
+      `${row.code} — ${row.name}`,
+      partyLabel(row.kind, locale),
+      `${row.phone || ""} ${row.email || ""}`.trim(),
+      row.taxNumber,
+      row.city,
+      formatMoney(row.balance),
+      formatMoney(row.creditLimit),
+      statusLabel(row.status, locale),
+      formatDate(row.updatedAt),
+    ]);
+    const html = `
+      <html dir="${dir}" lang="${locale}">
+        <head><meta charset="utf-8" /></head>
+        <body>
+          <h1>${escapeHtml(variantTitle(variant, locale))}</h1>
+          <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString("en-US"))}</p>
+          <table border="1">
+            <thead>
+              <tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>
+            </thead>
+            <tbody>
+              ${bodyRows
+                .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
+                .join("")}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+    const blob = new Blob(["\uFEFF", html], {
+      type: "application/vnd.ms-excel;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `company-${variant}-${new Date().toISOString().slice(0, 10)}.xls`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    toast.success(t.export);
+  }
+  function printPage() {
+    if (!filteredRows.length) {
+      toast.warning(t.printEmpty);
+      return;
+    }
+    window.print();
+  }
+  if (loading) {
+    return (
+      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+        <PageSkeleton />
+      </main>
+    );
+  }
+  if (error) {
+    return (
+      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+        <Card className="mx-auto max-w-[900px] rounded-3xl border-destructive/30 bg-card shadow-sm">
+          <CardHeader className="text-center">
+            <div className="mx-auto rounded-full bg-destructive/10 p-4 text-destructive">
+              <TriangleAlert className="h-7 w-7" />
+            </div>
+            <CardTitle className="mt-3 text-2xl">{t.errorTitle}</CardTitle>
+            <CardDescription className="text-sm leading-7">{error || t.errorDesc}</CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-center pb-6">
+            <Button onClick={() => void loadData({ silent: true })} className="rounded-xl">
+              <RefreshCw className="h-4 w-4" />
+              {t.tryAgain}
+            </Button>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
+  return (
+    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1500px] space-y-6">
+        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+          <div className="relative min-h-[154px] p-5 sm:p-7">
+            <div className="absolute inset-x-0 top-0 h-[5px] bg-slate-950" />
+            <div className="flex h-full flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="max-w-4xl">
+                <div className="mb-2 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  {t.badge}
+                </div>
+                <h1 className="text-3xl font-black tracking-tight sm:text-4xl">
+                  {variantTitle(variant, locale)}
+                </h1>
+                <p className="mt-2 max-w-4xl text-sm leading-7 text-muted-foreground">
+                  {variantSubtitle(variant, locale)}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  <Link href="/company/parties" className="rounded-full border bg-background px-3 py-1 transition hover:bg-muted">
+                    {t.parties}
+                  </Link>
+                  <Link href="/company/customers" className="rounded-full border bg-background px-3 py-1 transition hover:bg-muted">
+                    {t.customers}
+                  </Link>
+                  <Link href="/company/suppliers" className="rounded-full border bg-background px-3 py-1 transition hover:bg-muted">
+                    {t.suppliers}
+                  </Link>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button className="rounded-xl bg-slate-950 text-white shadow-sm hover:bg-slate-800" onClick={printPage}>
+                  <Printer className="h-4 w-4" />
+                  {t.print}
+                </Button>
+                <Button variant="outline" className="rounded-xl bg-background shadow-sm hover:bg-muted/70" onClick={exportExcel}>
+                  <FileSpreadsheet className="h-4 w-4" />
+                  {t.export}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="rounded-xl bg-background shadow-sm hover:bg-muted/70"
+                  onClick={() => void loadData({ silent: true })}
+                  disabled={refreshing}
+                >
+                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  {t.refresh}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+        {warnings.length ? (
+          <Card className="rounded-2xl border-amber-200 bg-amber-50 text-amber-900">
+            <CardContent className="flex items-start gap-3 p-4">
+              <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold">{t.partialWarningTitle}</p>
+                <p className="mt-1 text-xs leading-6">{warnings.join(" · ")}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {kpiCards.map((card) => (
+            <KpiCard
+              key={card.title}
+              title={card.title}
+              value={card.value}
+              description={card.description}
+              href={card.href}
+              icon={card.icon}
+              money={card.money}
+              t={t}
+            />
+          ))}
+        </div>
+        <Card className="rounded-2xl border-border/70 bg-card shadow-sm transition hover:shadow-md">
+          <CardHeader className="px-5 py-4 sm:px-6">
+            <CardTitle>{t.shortcutsTitle}</CardTitle>
+            <CardDescription>{t.shortcutsDesc}</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 px-5 pb-5 sm:px-6 md:grid-cols-2 xl:grid-cols-3">
+            {shortcuts.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="group flex items-center justify-between gap-4 rounded-2xl border bg-background p-4 transition hover:-translate-y-0.5 hover:bg-muted/40 hover:shadow-sm"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+                    <item.icon className="h-5 w-5" />
+                  </span>
+                  <span className="truncate text-sm font-semibold">{item.title}</span>
+                </div>
+                <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+        <Card className="rounded-2xl border-border/70 bg-card shadow-sm transition hover:shadow-md">
+          <CardHeader className="px-5 py-4 sm:px-6">
+            <CardTitle>{t.filtersTitle}</CardTitle>
+            <CardDescription>{t.filtersDesc}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 px-5 pb-5 sm:px-6">
+            <div className="grid gap-3 rounded-2xl border bg-muted/20 p-3 lg:grid-cols-[1fr_150px_150px_180px_130px]">
+              <div className="relative">
+                <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder={t.searchPlaceholder}
+                  className="h-10 rounded-xl bg-background ps-9"
+                />
+              </div>
+              <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
+                <SelectTrigger className="h-10 rounded-xl bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
+                  <SelectItem value="all">{t.all}</SelectItem>
+                  <SelectItem value="active">{t.active}</SelectItem>
+                  <SelectItem value="inactive">{t.inactive}</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={kind}
+                onValueChange={(value) => setKind(value as KindFilter)}
+                disabled={variant !== "parties"}
+              >
+                <SelectTrigger className="h-10 rounded-xl bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
+                  <SelectItem value="all">{t.all}</SelectItem>
+                  <SelectItem value="customer">{t.customer}</SelectItem>
+                  <SelectItem value="supplier">{t.supplier}</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
+                <SelectTrigger className="h-10 rounded-xl bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
+                  <SelectItem value="newest">{t.newest}</SelectItem>
+                  <SelectItem value="oldest">{t.oldest}</SelectItem>
+                  <SelectItem value="name">{t.nameSort}</SelectItem>
+                  <SelectItem value="code">{t.codeSort}</SelectItem>
+                  <SelectItem value="balance_high">{t.balanceHigh}</SelectItem>
+                  <SelectItem value="balance_low">{t.balanceLow}</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={resetFilters}>
+                <RotateCcw className="h-4 w-4" />
+                {t.reset}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-2xl border-border/70 bg-card shadow-sm transition hover:shadow-md">
+          <CardHeader className="px-5 py-4 sm:px-6">
+            <CardTitle>{variantTableTitle(variant, locale)}</CardTitle>
+            <CardDescription>{variantTableDesc(variant, locale)}</CardDescription>
+          </CardHeader>
+          <CardContent className="px-5 pb-5 sm:px-6">
+            <DataTable
+              rows={filteredRows}
+              allRowsCount={rows.length}
+              columns={visibleColumns}
+              rowKey={(row) => `${row.kind}-${row.id || row.code || row.name}`}
+              emptyTitle={t.noDataTitle}
+              emptyDescription={t.noDataDesc}
+              noResultsTitle={t.noResultsTitle}
+              noResultsDescription={t.noResultsDesc}
+              hasFilters={hasFilters}
+              onReset={resetFilters}
+              resetLabel={t.reset}
+              showingLabel={t.showing}
+              ofLabel={t.of}
+              rowsLabel={t.rows}
+            />
+          </CardContent>
+        </Card>
+      </div>
+    </main>
+  );
+}
