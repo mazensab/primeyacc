@@ -1270,117 +1270,6 @@ function autocompleteOptionClass(isActive: boolean) {
   ].join(" ");
 }
 
-function installPrimeySmartAutocompleteBridge() {
-  const activeClasses = ["border-gray-400", "bg-gray-200", "shadow-sm"];
-  function findMenu(input: HTMLInputElement) {
-    const root = input.parentElement;
-    if (!root) return null;
-    const menus = Array.from(root.children).filter((child): child is HTMLElement => {
-      return child instanceof HTMLElement && child.classList.contains("absolute");
-    });
-    return menus.find((menu) => menu.querySelector('button[type="button"]')) || null;
-  }
-  function optionButtons(menu: HTMLElement) {
-    return Array.from(menu.querySelectorAll('button[type="button"]')) as HTMLButtonElement[];
-  }
-  function optionLabel(button: HTMLButtonElement) {
-    const primary = button.querySelector("span")?.textContent || button.textContent || "";
-    return primary
-      .split("\n")
-      .map((part) => part.trim())
-      .filter(Boolean)[0] || "";
-  }
-  function setInputPreview(input: HTMLInputElement, label: string) {
-    if (!label) return;
-    input.value = label;
-    window.requestAnimationFrame(() => {
-      if (document.activeElement === input) {
-        input.value = label;
-      }
-    });
-  }
-  function paintActive(buttons: HTMLButtonElement[], activeIndex: number) {
-    buttons.forEach((button, index) => {
-      const active = index === activeIndex;
-      button.dataset.primeyActive = active ? "true" : "false";
-      for (const className of activeClasses) {
-        button.classList.toggle(className, active);
-      }
-    });
-  }
-  function setActive(menu: HTMLElement, input: HTMLInputElement, activeIndex: number) {
-    const buttons = optionButtons(menu);
-    if (!buttons.length) return;
-    const safeIndex = ((activeIndex % buttons.length) + buttons.length) % buttons.length;
-    const button = buttons[safeIndex];
-    menu.dataset.primeyActiveIndex = String(safeIndex);
-    paintActive(buttons, safeIndex);
-    setInputPreview(input, optionLabel(button));
-    button.scrollIntoView({ block: "nearest" });
-  }
-  function currentIndex(menu: HTMLElement) {
-    const raw = Number(menu.dataset.primeyActiveIndex);
-    return Number.isFinite(raw) ? raw : -1;
-  }
-  function handleKeyDown(event: KeyboardEvent) {
-    const input = event.target;
-    if (!(input instanceof HTMLInputElement)) return;
-    const menu = findMenu(input);
-    if (!menu) return;
-    const buttons = optionButtons(menu);
-    if (!buttons.length) return;
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      setActive(menu, input, currentIndex(menu) + 1);
-      return;
-    }
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      setActive(menu, input, currentIndex(menu) - 1);
-      return;
-    }
-    if (event.key === "Enter") {
-      const index = currentIndex(menu) >= 0 ? currentIndex(menu) : 0;
-      const button = buttons[index];
-      if (!button) return;
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      setInputPreview(input, optionLabel(button));
-      button.click();
-      return;
-    }
-    if (event.key === "Escape") {
-      menu.dataset.primeyActiveIndex = "-1";
-      paintActive(buttons, -1);
-    }
-  }
-  function handleMouseMove(event: MouseEvent) {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
-    const button = target.closest('button[type="button"]') as HTMLButtonElement | null;
-    if (!button) return;
-    const menu = button.closest(".absolute") as HTMLElement | null;
-    if (!menu) return;
-    const root = menu.parentElement;
-    const input = root?.querySelector("input") as HTMLInputElement | null;
-    if (!input) return;
-    const buttons = optionButtons(menu);
-    const index = buttons.indexOf(button);
-    if (index < 0) return;
-    setActive(menu, input, index);
-  }
-  document.addEventListener("keydown", handleKeyDown, true);
-  document.addEventListener("mousemove", handleMouseMove, true);
-  return () => {
-    document.removeEventListener("keydown", handleKeyDown, true);
-    document.removeEventListener("mousemove", handleMouseMove, true);
-  };
-}
 function VoucherFormCard({
   variant,
   mode,
@@ -1588,9 +1477,6 @@ function VoucherFormCard({
           if (!cancelled) setPartyLoading(false);
         });
     }, 250);
-    React.useEffect(() => {
-    return installPrimeySmartAutocompleteBridge();
-  }, []);
   return () => {
       cancelled = true;
       window.clearTimeout(timeout);
