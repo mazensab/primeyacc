@@ -580,7 +580,22 @@ export default function CompanyAccountingLedgerPage() {
   const [accountCode, setAccountCode] = React.useState("all");
   const [dateFrom, setDateFrom] = React.useState(yearStartIso());
   const [dateTo, setDateTo] = React.useState(todayIso());
-  const [search, setSearch] = React.useState("");
+  const [search, setSearch] = React.useState("")
+  React.useEffect(() => {
+    // primeyAccountQueryPrefill: open reports already filtered by the selected account.
+    const params = new URLSearchParams(window.location.search);
+    const query =
+      params.get("account_code") ||
+      params.get("search") ||
+      params.get("q") ||
+      params.get("account") ||
+      params.get("account_id") ||
+      "";
+    if (query.trim()) {
+      setSearch(query.trim());
+    }
+  }, []);
+;
   const [sort, setSort] = React.useState<SortKey>("date");
   React.useEffect(() => {
     const initial = getInitialLocale();

@@ -19,6 +19,7 @@
 ============================================================ */
 
 import * as React from "react";
+
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -44,11 +45,22 @@ import {
   TriangleAlert,
   WalletCards,
   X,
+  ExternalLink,
+  MoreVertical,
+  Pencil,
+  Power,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Card,
   CardContent,
@@ -116,6 +128,17 @@ type DataColumn<T> = {
   className?: string;
   render: (row: T) => React.ReactNode;
 };
+
+
+type AccountHrefRecord = {
+  id?: string | number;
+  account_id?: string | number;
+  accountId?: string | number;
+};
+function accountDetailHref(row: AccountHrefRecord) {
+  const id = row.id ?? row.account_id ?? row.accountId ?? "";
+  return `/company/accounting/chart-of-accounts/${encodeURIComponent(String(id))}`;
+}
 
 const API_PATH = "/api/company/accounting/accounts/";
 
@@ -843,7 +866,8 @@ function DataTable<T extends { id: string }>({
             <TableBody>
               {rows.length ? (
                 rows.map((row) => (
-                  <TableRow key={rowKey(row)} className="h-[68px]">
+                  <TableRow key={rowKey(row)} className="h-[68px]"
+                onClick={() => window.location.assign(accountDetailHref(row))}>
                     {columns.map((column) => (
                       <TableCell
                         key={column.key}
@@ -1157,7 +1181,7 @@ function AccountFormModal({
 }
 
 export default function CompanyChartOfAccountsPage() {
-  const [locale, setLocale] = React.useState<Locale>("ar");
+const [locale, setLocale] = React.useState<Locale>("ar");
   const [accounts, setAccounts] = React.useState<AccountRecord[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -1456,24 +1480,37 @@ export default function CompanyChartOfAccountsPage() {
     },
     {
       key: "actions",
-      label: t.actions,
-      className: "w-[210px]",
+      label: locale === "ar" ? "الإجراءات" : "Actions",
+      className: "w-[92px] text-center",
       render: (row) => (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" className="rounded-lg" onClick={() => openEdit(row)}>
-            <Edit3 className="h-4 w-4" />
-            {t.edit}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-lg"
-            onClick={() => void toggleStatus(row)}
-            disabled={saving || row.isSystem}
-          >
-            {row.isActive ? <ToggleLeft className="h-4 w-4" /> : <ToggleRight className="h-4 w-4" />}
-            {row.isActive ? t.deactivate : t.activate}
-          </Button>
+        <div className="flex items-center justify-center" onClick={(event) => event.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-xl bg-background">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align={locale === "ar" ? "start" : "end"} className="w-48 rounded-xl">
+              <DropdownMenuItem asChild>
+                <Link href={accountDetailHref(row)} className="flex items-center gap-2">
+                  <ExternalLink className="h-4 w-4" />
+                  {locale === "ar" ? "فتح التفاصيل" : "Open details"}
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => openEdit(row)} className="flex items-center gap-2">
+                <Pencil className="h-4 w-4" />
+                {locale === "ar" ? "تعديل حساب" : "Edit account"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => void toggleStatus(row)}
+                className="flex items-center gap-2"
+              >
+                <Power className="h-4 w-4" />
+                {locale === "ar" ? "تفعيل / تعطيل" : "Activate / deactivate"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       ),
     },

@@ -737,7 +737,22 @@ export default function CompanyPaymentsPage() {
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState("");
   const [warnings, setWarnings] = React.useState<string[]>([]);
-  const [search, setSearch] = React.useState("");
+  const [search, setSearch] = React.useState("")
+  React.useEffect(() => {
+    // primeyAccountQueryPrefill: open reports already filtered by the selected account.
+    const params = new URLSearchParams(window.location.search);
+    const query =
+      params.get("account_code") ||
+      params.get("search") ||
+      params.get("q") ||
+      params.get("account") ||
+      params.get("account_id") ||
+      "";
+    if (query.trim()) {
+      setSearch(query.trim());
+    }
+  }, []);
+;
   const [kind, setKind] = React.useState<KindFilter>("all");
   const [status, setStatus] = React.useState<StatusFilter>("all");
   const [method, setMethod] = React.useState<MethodFilter>("all");

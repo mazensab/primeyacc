@@ -718,7 +718,22 @@ function CostCenterSearchField({
   const optionRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
   const [open, setOpen] = React.useState(false);
   const [highlightedIndex, setHighlightedIndex] = React.useState(0);
-  const [searchValue, setSearchValue] = React.useState("");
+  const [searchValue, setSearchValue] = React.useState("")
+  React.useEffect(() => {
+    // primeyAccountQueryPrefill: open reports already filtered by the selected account.
+    const params = new URLSearchParams(window.location.search);
+    const query =
+      params.get("account_code") ||
+      params.get("search") ||
+      params.get("q") ||
+      params.get("account") ||
+      params.get("account_id") ||
+      "";
+    if (query.trim()) {
+      setSearchValue(query.trim());
+    }
+  }, []);
+;
   const [menuPosition, setMenuPosition] = React.useState<{
     top: number;
     left: number;

@@ -462,7 +462,22 @@ export default function CompanyAccountingTrialBalancePage() {
   const t = translations[locale];
   const dir = locale === "ar" ? "rtl" : "ltr";
   const [rows, setRows] = React.useState<TrialBalanceRow[]>([]);
-  const [search, setSearch] = React.useState("");
+  const [search, setSearch] = React.useState("")
+  React.useEffect(() => {
+    // primeyAccountQueryPrefill: open reports already filtered by the selected account.
+    const params = new URLSearchParams(window.location.search);
+    const query =
+      params.get("account_code") ||
+      params.get("search") ||
+      params.get("q") ||
+      params.get("account") ||
+      params.get("account_id") ||
+      "";
+    if (query.trim()) {
+      setSearch(query.trim());
+    }
+  }, []);
+;
   const [dateFrom, setDateFrom] = React.useState(yearStartIso);
   const [dateTo, setDateTo] = React.useState(todayIso);
   const [accountType, setAccountType] = React.useState<AccountTypeFilter>(ALL_TYPES);
