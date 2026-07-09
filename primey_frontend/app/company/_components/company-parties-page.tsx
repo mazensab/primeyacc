@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 /* ============================================================
    📂 primey_frontend/app/company/_components/company-parties-page.tsx
    🧠 PrimeyAcc — Company Customers & Suppliers Shared Page
@@ -21,6 +21,7 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowDownLeft,
   ArrowUpDown,
@@ -29,6 +30,10 @@ import {
   Building2,
   FileSpreadsheet,
   Loader2,
+  Pencil,
+  Plus,
+  Power,
+  PowerOff,
   Printer,
   RefreshCw,
   RotateCcw,
@@ -39,10 +44,25 @@ import {
   TriangleAlert,
   Users,
   WalletCards,
+  Phone,
+  Mail,
+  MapPin,
+  Hash,
+  Landmark,
+  CircleDollarSign,
+  ExternalLink,
+  MoreVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Card,
   CardContent,
@@ -50,6 +70,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -80,15 +108,60 @@ type PartyRecord = {
   kind: PartyKind;
   code: string;
   name: string;
+  legalName: string;
+  partyKind: "INDIVIDUAL" | "ORGANIZATION";
+  contactPerson: string;
   email: string;
   phone: string;
+  mobile: string;
+  whatsappNumber: string;
   taxNumber: string;
+  commercialRegistration: string;
   city: string;
+  district: string;
+  street: string;
+  buildingNumber: string;
+  additionalNumber: string;
+  postalCode: string;
+  shortAddress: string;
+  addressLine: string;
   status: "active" | "inactive";
   balance: number;
   creditLimit: number;
+  openingBalance: number;
+  paymentTermsDays: number;
+  taxExempt: boolean;
+  notes: string;
   createdAt: string | null;
   updatedAt: string | null;
+};
+type PartyFormValues = {
+  kind: PartyKind;
+  code: string;
+  display_name: string;
+  legal_name: string;
+  party_kind: "INDIVIDUAL" | "ORGANIZATION";
+  status: "ACTIVE" | "INACTIVE";
+  contact_person: string;
+  phone: string;
+  mobile: string;
+  whatsapp_number: string;
+  email: string;
+  vat_number: string;
+  commercial_registration: string;
+  city: string;
+  district: string;
+  street: string;
+  building_number: string;
+  additional_number: string;
+  postal_code: string;
+  short_address: string;
+  address_line: string;
+  credit_limit: string;
+  opening_balance: string;
+  payment_terms_days: string;
+  tax_exempt: "true" | "false";
+  notes: string;
 };
 type PartyStats = {
   total: number;
@@ -109,6 +182,48 @@ type DataColumn<T> = {
 const ENDPOINTS = {
   customers: "/api/company/customers/",
   suppliers: "/api/company/suppliers/",
+};
+const ACTION_ENDPOINTS = {
+  customer: {
+    create: "/api/company/customers/create/",
+    detail: (id: string) => `/api/company/customers/${encodeURIComponent(id)}/`,
+    status: (id: string, action: "activate" | "deactivate") =>
+      `/api/company/customers/${encodeURIComponent(id)}/${action}/`,
+  },
+  supplier: {
+    create: "/api/company/suppliers/create/",
+    detail: (id: string) => `/api/company/suppliers/${encodeURIComponent(id)}/`,
+    status: (id: string, action: "activate" | "deactivate") =>
+      `/api/company/suppliers/${encodeURIComponent(id)}/${action}/`,
+  },
+} as const;
+const DEFAULT_PARTY_FORM: PartyFormValues = {
+  kind: "customer",
+  code: "",
+  display_name: "",
+  legal_name: "",
+  party_kind: "INDIVIDUAL",
+  status: "ACTIVE",
+  contact_person: "",
+  phone: "",
+  mobile: "",
+  whatsapp_number: "",
+  email: "",
+  vat_number: "",
+  commercial_registration: "",
+  city: "",
+  district: "",
+  street: "",
+  building_number: "",
+  additional_number: "",
+  postal_code: "",
+  short_address: "",
+  address_line: "",
+  credit_limit: "0",
+  opening_balance: "0",
+  payment_terms_days: "0",
+  tax_exempt: "false",
+  notes: "",
 };
 const translations = {
   ar: {
@@ -296,6 +411,126 @@ const translations = {
     generatedAt: "Generated at",
   },
 } as const;
+const actionTranslations = {
+  ar: {
+    addParty: "\u0625\u0636\u0627\u0641\u0629 \u0637\u0631\u0641",
+    addCustomer: "\u0625\u0636\u0627\u0641\u0629 \u0639\u0645\u064a\u0644",
+    addSupplier: "\u0625\u0636\u0627\u0641\u0629 \u0645\u0648\u0631\u062f",
+    editParty: "\u062a\u0639\u062f\u064a\u0644 \u0637\u0631\u0641",
+    editCustomer: "\u062a\u0639\u062f\u064a\u0644 \u0639\u0645\u064a\u0644",
+    editSupplier: "\u062a\u0639\u062f\u064a\u0644 \u0645\u0648\u0631\u062f",
+    createDesc: "\u0623\u062f\u062e\u0644 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0637\u0631\u0641 \u0648\u0627\u062d\u0641\u0638\u0647 \u062f\u0627\u062e\u0644 \u0627\u0644\u0634\u0631\u0643\u0629.",
+    editDesc: "\u062d\u062f\u062b \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0637\u0631\u0641 \u062f\u0627\u062e\u0644 \u0627\u0644\u0634\u0631\u0643\u0629.",
+    basic: "\u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0623\u0633\u0627\u0633\u064a\u0629",
+    contact: "\u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u062a\u0648\u0627\u0635\u0644",
+    financial: "\u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0645\u0627\u0644\u064a\u0629",
+    partyType: "\u0646\u0648\u0639 \u0627\u0644\u0637\u0631\u0641",
+    displayName: "\u0627\u0633\u0645 \u0627\u0644\u0639\u0645\u0644",
+    code: "\u0627\u0644\u0643\u0648\u062f",
+    legalName: "\u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064a",
+    partyKind: "\u0627\u0644\u0635\u0641\u0629",
+    individual: "\u0641\u0631\u062f",
+    organization: "\u0645\u0646\u0634\u0623\u0629",
+    contactPerson: "\u0634\u062e\u0635 \u0627\u0644\u062a\u0648\u0627\u0635\u0644",
+    phone: "\u0627\u0644\u0647\u0627\u062a\u0641",
+    mobile: "\u0627\u0644\u062c\u0648\u0627\u0644",
+    whatsapp: "\u0631\u0642\u0645 \u0648\u0627\u062a\u0633\u0627\u0628",
+    email: "\u0627\u0644\u0628\u0631\u064a\u062f \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a",
+    vat: "\u0627\u0644\u0631\u0642\u0645 \u0627\u0644\u0636\u0631\u064a\u0628\u064a",
+    commercialRegistration: "\u0627\u0644\u0633\u062c\u0644 \u0627\u0644\u062a\u062c\u0627\u0631\u064a",
+    address: "\u0627\u0644\u0639\u0646\u0648\u0627\u0646",
+    openingBalance: "\u0627\u0644\u0631\u0635\u064a\u062f \u0627\u0644\u0627\u0641\u062a\u062a\u0627\u062d\u064a",
+    paymentTerms: "\u0623\u064a\u0627\u0645 \u0627\u0644\u0633\u062f\u0627\u062f",
+    taxExempt: "\u0645\u0639\u0641\u0649 \u0636\u0631\u064a\u0628\u064a\u0627\u064b",
+    notes: "\u0645\u0644\u0627\u062d\u0638\u0627\u062a",
+    yes: "\u0646\u0639\u0645",
+    no: "\u0644\u0627",
+    actions: "\u0627\u0644\u0625\u062c\u0631\u0627\u0621\u0627\u062a",
+    edit: "\u062a\u0639\u062f\u064a\u0644",
+    activate: "\u062a\u0641\u0639\u064a\u0644",
+    deactivate: "\u062a\u0639\u0637\u064a\u0644",
+    save: "\u062d\u0641\u0638",
+    cancel: "\u0625\u0644\u063a\u0627\u0621",
+    saving: "\u062c\u0627\u0631\u064a \u0627\u0644\u062d\u0641\u0638",
+    requiredName: "\u0627\u0633\u0645 \u0627\u0644\u0637\u0631\u0641 \u0645\u0637\u0644\u0648\u0628.",
+    createSuccess: "\u062a\u0645 \u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u0633\u062c\u0644 \u0628\u0646\u062c\u0627\u062d.",
+    updateSuccess: "\u062a\u0645 \u062a\u062d\u062f\u064a\u062b \u0627\u0644\u0633\u062c\u0644 \u0628\u0646\u062c\u0627\u062d.",
+    statusSuccess: "\u062a\u0645 \u062a\u062d\u062f\u064a\u062b \u0627\u0644\u062d\u0627\u0644\u0629.",
+    actionFailed: "\u062a\u0639\u0630\u0631 \u062a\u0646\u0641\u064a\u0630 \u0627\u0644\u0625\u062c\u0631\u0627\u0621.",
+  },
+  en: {
+    addParty: "Add party",
+    addCustomer: "Add customer",
+    addSupplier: "Add supplier",
+    editParty: "Edit party",
+    editCustomer: "Edit customer",
+    editSupplier: "Edit supplier",
+    createDesc: "Enter party details and save it inside the company.",
+    editDesc: "Update party details inside the company.",
+    basic: "Basic information",
+    contact: "Contact information",
+    financial: "Financial information",
+    partyType: "Party type",
+    displayName: "Business name",
+    code: "Code",
+    legalName: "Legal name",
+    partyKind: "Kind",
+    individual: "Individual",
+    organization: "Organization",
+    contactPerson: "Contact person",
+    phone: "Phone",
+    mobile: "Mobile",
+    whatsapp: "WhatsApp number",
+    email: "Email",
+    vat: "VAT number",
+    commercialRegistration: "Commercial registration",
+    address: "Address",
+    openingBalance: "Opening balance",
+    paymentTerms: "Payment terms days",
+    taxExempt: "Tax exempt",
+    notes: "Notes",
+    yes: "Yes",
+    no: "No",
+    actions: "Actions",
+    edit: "Edit",
+    activate: "Activate",
+    deactivate: "Deactivate",
+    save: "Save",
+    cancel: "Cancel",
+    saving: "Saving",
+    requiredName: "Party name is required.",
+    createSuccess: "Record created successfully.",
+    updateSuccess: "Record updated successfully.",
+    statusSuccess: "Status updated.",
+    actionFailed: "Could not complete the action.",
+  },
+} as const;
+const nationalAddressTranslations = {
+  ar: {
+    title: "\u0627\u0644\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0648\u0637\u0646\u064a",
+    desc: "\u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0645\u0639\u062a\u0645\u062f\u0629 \u0644\u0644\u0641\u0648\u0627\u062a\u064a\u0631 \u0648\u0627\u0644\u062a\u0642\u0627\u0631\u064a\u0631.",
+    city: "\u0627\u0644\u0645\u062f\u064a\u0646\u0629",
+    district: "\u0627\u0644\u062d\u064a",
+    street: "\u0627\u0644\u0634\u0627\u0631\u0639",
+    buildingNumber: "\u0631\u0642\u0645 \u0627\u0644\u0645\u0628\u0646\u0649",
+    additionalNumber: "\u0627\u0644\u0631\u0642\u0645 \u0627\u0644\u0625\u0636\u0627\u0641\u064a",
+    postalCode: "\u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u0628\u0631\u064a\u062f\u064a",
+    shortAddress: "\u0627\u0644\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0645\u062e\u062a\u0635\u0631",
+    addressLine: "\u062a\u0641\u0627\u0635\u064a\u0644 \u0627\u0644\u0639\u0646\u0648\u0627\u0646",
+  },
+  en: {
+    title: "National address",
+    desc: "Official address details used for invoices and reports.",
+    city: "City",
+    district: "District",
+    street: "Street",
+    buildingNumber: "Building number",
+    additionalNumber: "Additional number",
+    postalCode: "Postal code",
+    shortAddress: "Short address",
+    addressLine: "Address details",
+  },
+} as const;
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
@@ -375,35 +610,102 @@ async function fetchJson<T>(path: string, params?: URLSearchParams, signal?: Abo
   }
   return payload as T;
 }
+function getCookie(name: string) {
+  if (typeof document === "undefined") return "";
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name.replace(/[.$?*|{}()[\]\\/+^]/g, "\\$&")}=([^;]*)`));
+  return match ? decodeURIComponent(match[1] || "") : "";
+}
+async function submitJson<T>(path: string, method: "POST" | "PATCH" | "PUT", body: ApiRecord): Promise<T> {
+  const csrfToken = getCookie("csrftoken");
+  const response = await fetch(apiUrl(path), {
+    method,
+    credentials: "include",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-Requested-With": "XMLHttpRequest",
+      ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  const contentType = response.headers.get("content-type") || "";
+  const rawText = await response.text();
+  let payload: unknown = {};
+  if (rawText && contentType.includes("application/json")) {
+    try {
+      payload = JSON.parse(rawText) as unknown;
+    } catch {
+      payload = {};
+    }
+  }
+  if (!response.ok) {
+    const record = asRecord(payload);
+    throw new Error(
+      text(record.message) || text(record.detail) || text(record.error) || `HTTP ${response.status}`,
+    );
+  }
+  return payload as T;
+}
+function inputNumber(value: unknown) {
+  const next = text(value);
+  return next || "0";
+}
+function buildPartyPayload(form: PartyFormValues): ApiRecord {
+  return {
+    code: form.code.trim(),
+    display_name: form.display_name.trim(),
+    legal_name: form.legal_name.trim(),
+    party_kind: form.party_kind,
+    status: form.status,
+    contact_person: form.contact_person.trim(),
+    phone: form.phone.trim(),
+    mobile: form.mobile.trim(),
+    whatsapp_number: form.whatsapp_number.trim(),
+    email: form.email.trim(),
+    vat_number: form.vat_number.trim(),
+    commercial_registration: form.commercial_registration.trim(),
+    city: form.city.trim(),
+    district: form.district.trim(),
+    street: form.street.trim(),
+    building_number: form.building_number.trim(),
+    additional_number: form.additional_number.trim(),
+    postal_code: form.postal_code.trim(),
+    short_address: form.short_address.trim(),
+    address_line: form.address_line.trim(),
+    credit_limit: inputNumber(form.credit_limit),
+    opening_balance: inputNumber(form.opening_balance),
+    payment_terms_days: inputNumber(form.payment_terms_days),
+    tax_exempt: form.tax_exempt === "true",
+    notes: form.notes.trim(),
+  };
+}
 function extractArray(payload: unknown): unknown[] {
-  if (Array.isArray(payload)) return payload;
-  const record = asRecord(payload);
-  const data = record.data;
-  const result = record.result;
-  for (const key of [
-    "results",
-    "items",
-    "records",
-    "rows",
-    "customers",
-    "suppliers",
-    "parties",
-    "data",
-  ]) {
-    const value = record[key];
+  const visited = new Set<unknown>();
+  function unwrap(value: unknown, depth = 0): unknown[] {
     if (Array.isArray(value)) return value;
+    if (!value || typeof value !== "object" || depth > 6 || visited.has(value)) return [];
+    visited.add(value);
+    const record = asRecord(value);
+    const candidates = [
+      record.results,
+      record.data,
+      record.items,
+      record.rows,
+      record.objects,
+      record.payload,
+      record.response,
+    ];
+    for (const candidate of candidates) {
+      if (Array.isArray(candidate)) return candidate;
+    }
+    for (const candidate of candidates) {
+      const nested = unwrap(candidate, depth + 1);
+      if (nested.length > 0) return nested;
+    }
+    return [];
   }
-  const dataRecord = asRecord(data);
-  for (const key of ["results", "items", "records", "rows", "customers", "suppliers", "parties"]) {
-    const value = dataRecord[key];
-    if (Array.isArray(value)) return value;
-  }
-  const resultRecord = asRecord(result);
-  for (const key of ["results", "items", "records", "rows", "customers", "suppliers", "parties"]) {
-    const value = resultRecord[key];
-    if (Array.isArray(value)) return value;
-  }
-  return [];
+  return unwrap(payload);
 }
 function formatInteger(value: unknown) {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(
@@ -435,14 +737,15 @@ function normalizeStatus(record: ApiRecord): "active" | "inactive" {
     return boolValue(record.active) ? "active" : "inactive";
   }
   const status = text(record.status || record.state).toLowerCase();
-  if (["inactive", "disabled", "archived", "suspended"].includes(status)) return "inactive";
+  if (["inactive", "disabled", "archived", "suspended", "blocked"].includes(status)) return "inactive";
   return "active";
 }
 function normalizeParty(value: unknown, kind: PartyKind): PartyRecord {
   const record = asRecord(value);
   const address = asRecord(record.address);
-  const city = asRecord(record.city);
+  const cityRecord = asRecord(record.city);
   const contact = asRecord(record.contact);
+  const rawKind = text(record.party_kind || record.kind || record.partyKind).toUpperCase();
   return {
     id: text(record.id || record.uuid || record.pk || record.code),
     kind,
@@ -453,11 +756,24 @@ function normalizeParty(value: unknown, kind: PartyKind): PartyRecord {
       text(record.full_name) ||
       text(record.company_name) ||
       text(record.legal_name) ||
-      "—",
+      "?",
+    legalName: text(record.legal_name || record.legalName),
+    partyKind: rawKind === "ORGANIZATION" ? "ORGANIZATION" : "INDIVIDUAL",
+    contactPerson: text(record.contact_person || record.contactPerson || contact.name),
     email: text(record.email || record.contact_email || contact.email),
-    phone: text(record.phone || record.mobile || record.contact_phone || contact.phone),
+    phone: text(record.phone || record.contact_phone || contact.phone),
+    mobile: text(record.mobile || contact.mobile),
+    whatsappNumber: text(record.whatsapp_number || record.whatsappNumber || contact.whatsapp_number),
     taxNumber: text(record.tax_number || record.vat_number || record.trn || record.tax_id),
-    city: text(record.city_name || city.name || address.city || record.city),
+    commercialRegistration: text(record.commercial_registration || record.commercialRegistration || record.cr_number),
+    city: text(record.city_name || cityRecord.name || address.city || record.city),
+    district: text(record.district || address.district),
+    street: text(record.street || address.street),
+    buildingNumber: text(record.building_number || record.buildingNumber || address.building_number),
+    additionalNumber: text(record.additional_number || record.additionalNumber || address.additional_number),
+    postalCode: text(record.postal_code || record.postalCode || address.postal_code),
+    shortAddress: text(record.short_address || record.shortAddress || address.short_address),
+    addressLine: text(record.address_line || record.addressLine || address.line || record.address),
     status: normalizeStatus(record),
     balance: numberValue(
       record.balance ??
@@ -468,12 +784,21 @@ function normalizeParty(value: unknown, kind: PartyKind): PartyRecord {
         record.total_balance,
     ),
     creditLimit: numberValue(record.credit_limit || record.creditLimit || record.limit),
+    openingBalance: numberValue(record.opening_balance || record.openingBalance),
+    paymentTermsDays: numberValue(record.payment_terms_days || record.paymentTermsDays),
+    taxExempt: boolValue(record.tax_exempt || record.taxExempt, false),
+    notes: text(record.notes || record.note),
     createdAt: text(record.created_at || record.created) || null,
     updatedAt: text(record.updated_at || record.modified_at || record.created_at) || null,
   };
 }
 function partyLabel(kind: PartyKind, locale: Locale) {
   return kind === "customer" ? translations[locale].customer : translations[locale].supplier;
+}
+
+function partyDetailHref(row: PartyRecord) {
+  const base = row.kind === "supplier" ? "/company/suppliers" : "/company/customers";
+  return row.id ? `${base}/${encodeURIComponent(row.id)}` : base;
 }
 function statusLabel(status: "active" | "inactive", locale: Locale) {
   return status === "active" ? translations[locale].active : translations[locale].inactive;
@@ -562,6 +887,58 @@ function KpiCard({
     </Card>
   );
 }
+function PremiumField({
+  label,
+  icon: Icon,
+  className,
+  children,
+}: {
+  label: string;
+  icon?: React.ComponentType<{ className?: string }>;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className={cn("space-y-1.5 text-sm font-medium text-foreground", className)}>
+      <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600">
+        {Icon ? (
+          <span className="grid h-5 w-5 place-items-center rounded-full bg-slate-100 text-slate-700">
+            <Icon className="h-3.5 w-3.5" />
+          </span>
+        ) : null}
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+function PremiumPanel({
+  title,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50/80 p-4 shadow-sm">
+      <div className="mb-3 flex items-center gap-2">
+        <span className="grid h-8 w-8 place-items-center rounded-2xl bg-slate-950 text-white shadow-sm">
+          <Icon className="h-4 w-4" />
+        </span>
+        <h3 className="text-sm font-black text-slate-950">{title}</h3>
+      </div>
+      {children}
+    </section>
+  );
+}
+function formInputClass(extra = "") {
+  return cn(
+    "h-10 rounded-xl border-slate-200 bg-white text-start text-sm shadow-sm transition placeholder:text-slate-300 focus-visible:ring-2 focus-visible:ring-slate-950/20",
+    extra,
+  );
+}
 function PageSkeleton() {
   return (
     <div className="mx-auto max-w-[1500px] space-y-6">
@@ -641,6 +1018,7 @@ function DataTable<T extends { id: string }>({
   showingLabel,
   ofLabel,
   rowsLabel,
+  rowHref,
 }: {
   rows: T[];
   allRowsCount: number;
@@ -656,7 +1034,10 @@ function DataTable<T extends { id: string }>({
   showingLabel: string;
   ofLabel: string;
   rowsLabel: string;
+  rowHref?: (row: T) => string;
 }) {
+  const router = useRouter();
+
   return (
     <div className="space-y-3">
       <div className="overflow-hidden rounded-2xl border bg-background">
@@ -680,7 +1061,14 @@ function DataTable<T extends { id: string }>({
             <TableBody>
               {rows.length ? (
                 rows.map((row) => (
-                  <TableRow key={rowKey(row)} className="h-[66px]">
+                  <TableRow
+                    key={rowKey(row)}
+                    className={cn("h-[66px]", rowHref ? "cursor-pointer hover:bg-muted/35" : "")}
+                    onClick={() => {
+                      const href = rowHref?.(row);
+                      if (href) router.push(href);
+                    }}
+                  >
                     {columns.map((column) => (
                       <TableCell
                         key={column.key}
@@ -775,7 +1163,15 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
   const [status, setStatus] = React.useState<StatusFilter>("all");
   const [kind, setKind] = React.useState<KindFilter>("all");
   const [sort, setSort] = React.useState<SortKey>("newest");
+  const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [dialogMode, setDialogMode] = React.useState<"create" | "edit">("create");
+  const [editingRow, setEditingRow] = React.useState<PartyRecord | null>(null);
+  const [form, setForm] = React.useState<PartyFormValues>(DEFAULT_PARTY_FORM);
+  const [saving, setSaving] = React.useState(false);
+  const [statusChangingId, setStatusChangingId] = React.useState("");
   const t = translations[locale];
+  const a = actionTranslations[locale];
+  const n = nationalAddressTranslations[locale];
   const dir = locale === "ar" ? "rtl" : "ltr";
   React.useEffect(() => {
     const applyLocale = () => {
@@ -863,6 +1259,113 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
     setKind("all");
     setSort("newest");
   }, []);
+  const defaultCreateKind = React.useMemo<PartyKind>(() => {
+    if (variant === "suppliers") return "supplier";
+    return "customer";
+  }, [variant]);
+  const dialogTitle = React.useMemo(() => {
+    if (dialogMode === "edit") {
+      if (editingRow?.kind === "supplier") return a.editSupplier;
+      if (editingRow?.kind === "customer") return a.editCustomer;
+      return a.editParty;
+    }
+    if (variant === "suppliers") return a.addSupplier;
+    if (variant === "customers") return a.addCustomer;
+    return a.addParty;
+  }, [a, dialogMode, editingRow?.kind, variant]);
+  const createButtonLabel = React.useMemo(() => {
+    if (variant === "suppliers") return a.addSupplier;
+    if (variant === "customers") return a.addCustomer;
+    return a.addParty;
+  }, [a, variant]);
+  const openCreateDialog = React.useCallback(() => {
+    setDialogMode("create");
+    setEditingRow(null);
+    setForm({ ...DEFAULT_PARTY_FORM, kind: defaultCreateKind });
+    setDialogOpen(true);
+  }, [defaultCreateKind]);
+  const openEditDialog = React.useCallback((row: PartyRecord) => {
+    setDialogMode("edit");
+    setEditingRow(row);
+    setForm({
+      kind: row.kind,
+      code: row.code || "",
+      display_name: row.name === "?" ? "" : row.name,
+      legal_name: row.legalName || "",
+      party_kind: row.partyKind,
+      status: row.status === "active" ? "ACTIVE" : "INACTIVE",
+      contact_person: row.contactPerson || "",
+      phone: row.phone || "",
+      mobile: row.mobile || "",
+      whatsapp_number: row.whatsappNumber || "",
+      email: row.email || "",
+      vat_number: row.taxNumber || "",
+      commercial_registration: row.commercialRegistration || "",
+      city: row.city || "",
+      district: row.district || "",
+      street: row.street || "",
+      building_number: row.buildingNumber || "",
+      additional_number: row.additionalNumber || "",
+      postal_code: row.postalCode || "",
+      short_address: row.shortAddress || "",
+      address_line: row.addressLine || "",
+      credit_limit: String(row.creditLimit || 0),
+      opening_balance: String(row.openingBalance || 0),
+      payment_terms_days: String(row.paymentTermsDays || 0),
+      tax_exempt: row.taxExempt ? "true" : "false",
+      notes: row.notes || "",
+    });
+    setDialogOpen(true);
+  }, []);
+  const updateForm = React.useCallback((key: keyof PartyFormValues, value: string) => {
+    setForm((current) => ({ ...current, [key]: value } as PartyFormValues));
+  }, []);
+  const handleSubmitParty = React.useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!form.display_name.trim()) {
+        toast.warning(a.requiredName);
+        return;
+      }
+      const actionKind = dialogMode === "edit" && editingRow ? editingRow.kind : form.kind;
+      const endpoint =
+        dialogMode === "edit" && editingRow
+          ? ACTION_ENDPOINTS[actionKind].detail(editingRow.id)
+          : ACTION_ENDPOINTS[actionKind].create;
+      try {
+        setSaving(true);
+        await submitJson<ApiResponse>(endpoint, dialogMode === "edit" ? "PATCH" : "POST", buildPartyPayload(form));
+        toast.success(dialogMode === "edit" ? a.updateSuccess : a.createSuccess);
+        setDialogOpen(false);
+        setEditingRow(null);
+        await loadData({ silent: true });
+      } catch (caughtError) {
+        const message = caughtError instanceof Error ? caughtError.message : a.actionFailed;
+        toast.error(message);
+      } finally {
+        setSaving(false);
+      }
+    },
+    [a, dialogMode, editingRow, form, loadData],
+  );
+  const handleStatusToggle = React.useCallback(
+    async (row: PartyRecord) => {
+      if (!row.id) return;
+      const action = row.status === "active" ? "deactivate" : "activate";
+      try {
+        setStatusChangingId(`${row.kind}-${row.id}`);
+        await submitJson<ApiResponse>(ACTION_ENDPOINTS[row.kind].status(row.id, action), "POST", {});
+        toast.success(a.statusSuccess);
+        await loadData({ silent: true });
+      } catch (caughtError) {
+        const message = caughtError instanceof Error ? caughtError.message : a.actionFailed;
+        toast.error(message);
+      } finally {
+        setStatusChangingId("");
+      }
+    },
+    [a, loadData],
+  );
   const filteredRows = React.useMemo(() => {
     const query = search.trim().toLowerCase();
     const result = rows.filter((row) => {
@@ -956,8 +1459,50 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
         className: "w-[140px]",
         render: (row) => <span className="text-sm tabular-nums text-muted-foreground">{formatDate(row.updatedAt)}</span>,
       },
+      {
+        key: "actions",
+        label: a.actions,
+        className: "sticky left-0 z-10 w-[84px]",
+        render: (row) => {
+          const changingKey = `${row.kind}-${row.id}`;
+          const isChanging = statusChangingId === changingKey;
+          const nextActionLabel = row.status === "active" ? a.deactivate : a.activate;
+          return (
+            <div className="flex items-center justify-center" onClick={(event) => event.stopPropagation()}>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-xl bg-background">
+                    {isChanging ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align={locale === "ar" ? "start" : "end"} className="w-44 rounded-xl">
+                  <DropdownMenuItem asChild>
+                    <Link href={partyDetailHref(row)} className="flex items-center gap-2">
+                      <ExternalLink className="h-4 w-4" />
+                      {locale === "ar" ? "فتح التفاصيل" : "Open details"}
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => openEditDialog(row)} className="flex items-center gap-2">
+                    <Pencil className="h-4 w-4" />
+                    {a.edit}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    disabled={isChanging}
+                    onClick={() => void handleStatusToggle(row)}
+                    className="flex items-center gap-2"
+                  >
+                    {isChanging ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                    {nextActionLabel}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          );
+        },
+      },
     ],
-    [locale, t],
+    [a, handleStatusToggle, locale, openEditDialog, statusChangingId, t],
   );
   const visibleColumns = React.useMemo(
     () => (variant === "parties" ? columns : columns.filter((column) => column.key !== "kind")),
@@ -1214,7 +1759,11 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Button className="rounded-xl bg-slate-950 text-white shadow-sm hover:bg-slate-800" onClick={printPage}>
+                <Button className="rounded-xl bg-slate-950 text-white shadow-sm hover:bg-slate-800" onClick={openCreateDialog}>
+                  <Plus className="h-4 w-4" />
+                  {createButtonLabel}
+                </Button>
+                <Button variant="outline" className="rounded-xl bg-background shadow-sm hover:bg-muted/70" onClick={printPage}>
                   <Printer className="h-4 w-4" />
                   {t.print}
                 </Button>
@@ -1353,6 +1902,7 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
               rows={filteredRows}
               allRowsCount={rows.length}
               columns={visibleColumns}
+              rowHref={(row) => partyDetailHref(row)}
               rowKey={(row) => `${row.kind}-${row.id || row.code || row.name}`}
               emptyTitle={t.noDataTitle}
               emptyDescription={t.noDataDesc}
@@ -1367,6 +1917,174 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
             />
           </CardContent>
         </Card>
+        <Dialog open={dialogOpen} onOpenChange={(open) => { if (!saving) setDialogOpen(open); }}>
+          <DialogContent dir={dir} className="overflow-hidden rounded-2xl border-slate-200 bg-white p-0 shadow-2xl sm:max-w-[560px]">
+            <div className="h-1.5 bg-slate-950" />
+            <DialogHeader className="border-b bg-gradient-to-b from-slate-50 to-white px-5 py-4 text-start">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <DialogTitle className="text-xl font-black tracking-tight text-slate-950">
+                    {dialogTitle}
+                  </DialogTitle>
+                  <DialogDescription className="mt-1 text-xs leading-6 text-slate-500">
+                    {dialogMode === "edit" ? a.editDesc : a.createDesc}
+                  </DialogDescription>
+                </div>
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-slate-950 text-white shadow-sm">
+                  {form.kind === "supplier" ? <Building2 className="h-5 w-5" /> : <Users className="h-5 w-5" />}
+                </span>
+              </div>
+            </DialogHeader>
+            <form id="party-form" className="max-h-[64vh] space-y-4 overflow-y-auto px-5 py-4" onSubmit={handleSubmitParty}>
+              <PremiumPanel title={a.basic} icon={form.party_kind === "ORGANIZATION" ? Building2 : Users}>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {variant === "parties" && dialogMode === "create" ? (
+                    <PremiumField label={a.partyType} icon={Users}>
+                      <Select value={form.kind} onValueChange={(value) => updateForm("kind", value)}>
+                        <SelectTrigger className={formInputClass()}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
+                          <SelectItem value="customer">{t.customer}</SelectItem>
+                          <SelectItem value="supplier">{t.supplier}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </PremiumField>
+                  ) : null}
+                  <PremiumField label={a.partyKind} icon={form.party_kind === "ORGANIZATION" ? Building2 : Users}>
+                    <Select
+                      value={form.party_kind}
+                      onValueChange={(value) => {
+                        const nextKind = value as PartyFormValues["party_kind"];
+                        setForm((current) => ({
+                          ...current,
+                          party_kind: nextKind,
+                          ...(nextKind === "INDIVIDUAL"
+                            ? {
+                                vat_number: "",
+                                commercial_registration: "",
+                                city: "",
+                                district: "",
+                                street: "",
+                                building_number: "",
+                                additional_number: "",
+                                postal_code: "",
+                                short_address: "",
+                                address_line: "",
+                              }
+                            : {}),
+                        }));
+                      }}
+                    >
+                      <SelectTrigger className={formInputClass()}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
+                        <SelectItem value="INDIVIDUAL">{a.individual}</SelectItem>
+                        <SelectItem value="ORGANIZATION">{a.organization}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </PremiumField>
+                  <PremiumField label={a.displayName} icon={Store} className="sm:col-span-2">
+                    <Input
+                      value={form.display_name}
+                      onChange={(event) => updateForm("display_name", event.target.value)}
+                      required
+                      className={formInputClass()}
+                    />
+                  </PremiumField>
+                  <PremiumField label={a.mobile} icon={Phone}>
+                    <Input
+                      value={form.mobile}
+                      onChange={(event) => updateForm("mobile", event.target.value)}
+                      className={formInputClass("tabular-nums")}
+                    />
+                  </PremiumField>
+                  <PremiumField label={a.email} icon={Mail}>
+                    <Input
+                      type="email"
+                      value={form.email}
+                      onChange={(event) => updateForm("email", event.target.value)}
+                      className={formInputClass()}
+                    />
+                  </PremiumField>
+                  {form.party_kind === "ORGANIZATION" ? (
+                    <>
+                      <PremiumField label={a.vat} icon={BadgeCheck}>
+                        <Input
+                          value={form.vat_number}
+                          onChange={(event) => updateForm("vat_number", event.target.value)}
+                          className={formInputClass("tabular-nums")}
+                        />
+                      </PremiumField>
+                      <PremiumField label={a.commercialRegistration} icon={Hash}>
+                        <Input
+                          value={form.commercial_registration}
+                          onChange={(event) => updateForm("commercial_registration", event.target.value)}
+                          className={formInputClass("tabular-nums")}
+                        />
+                      </PremiumField>
+                    </>
+                  ) : null}
+                  <PremiumField label={t.limit} icon={CircleDollarSign}>
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      value={form.credit_limit}
+                      onChange={(event) => updateForm("credit_limit", event.target.value)}
+                      className={formInputClass("tabular-nums")}
+                    />
+                  </PremiumField>
+                  <PremiumField label={a.openingBalance} icon={Landmark}>
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      value={form.opening_balance}
+                      onChange={(event) => updateForm("opening_balance", event.target.value)}
+                      className={formInputClass("tabular-nums")}
+                    />
+                  </PremiumField>
+                </div>
+              </PremiumPanel>
+              {form.party_kind === "ORGANIZATION" ? (
+                <PremiumPanel title={n.title} icon={MapPin}>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <PremiumField label={n.city}>
+                      <Input value={form.city} onChange={(event) => updateForm("city", event.target.value)} className={formInputClass()} />
+                    </PremiumField>
+                    <PremiumField label={n.district}>
+                      <Input value={form.district} onChange={(event) => updateForm("district", event.target.value)} className={formInputClass()} />
+                    </PremiumField>
+                    <PremiumField label={n.street}>
+                      <Input value={form.street} onChange={(event) => updateForm("street", event.target.value)} className={formInputClass()} />
+                    </PremiumField>
+                    <PremiumField label={n.buildingNumber}>
+                      <Input value={form.building_number} onChange={(event) => updateForm("building_number", event.target.value)} className={formInputClass("tabular-nums")} />
+                    </PremiumField>
+                    <PremiumField label={n.additionalNumber}>
+                      <Input value={form.additional_number} onChange={(event) => updateForm("additional_number", event.target.value)} className={formInputClass("tabular-nums")} />
+                    </PremiumField>
+                    <PremiumField label={n.postalCode}>
+                      <Input value={form.postal_code} onChange={(event) => updateForm("postal_code", event.target.value)} className={formInputClass("tabular-nums")} />
+                    </PremiumField>
+                    <PremiumField label={n.shortAddress} className="sm:col-span-2">
+                      <Input value={form.short_address} onChange={(event) => updateForm("short_address", event.target.value)} className={formInputClass()} />
+                    </PremiumField>
+                  </div>
+                </PremiumPanel>
+              ) : null}
+            </form>
+            <DialogFooter className="gap-2 border-t bg-white px-5 py-4 sm:justify-start">
+              <Button type="submit" form="party-form" className="rounded-xl bg-slate-950 text-white shadow-sm hover:bg-slate-800" disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {saving ? a.saving : a.save}
+              </Button>
+              <Button type="button" variant="outline" className="rounded-xl bg-white" onClick={() => setDialogOpen(false)} disabled={saving}>
+                {a.cancel}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </main>
   );
