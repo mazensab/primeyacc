@@ -894,7 +894,7 @@ export default function CompanyAccountingLedgerPage() {
                 <SelectTrigger className="rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
                   <SelectItem value="accounts">{t.accountsLedger}</SelectItem>
                   <SelectItem value="general">{t.generalLedger}</SelectItem>
                 </SelectContent>
@@ -906,7 +906,7 @@ export default function CompanyAccountingLedgerPage() {
                 <SelectTrigger className="rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
                   <SelectItem value="2">{t.level2}</SelectItem>
                   <SelectItem value="3">{t.level3}</SelectItem>
                   <SelectItem value="all">{t.allGroups}</SelectItem>
@@ -919,7 +919,7 @@ export default function CompanyAccountingLedgerPage() {
                 <SelectTrigger className="rounded-xl">
                   <SelectValue placeholder={t.allAccounts} />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
                   <SelectItem value="all">{t.allAccounts}</SelectItem>
                   {accounts.map((account) => (
                     <SelectItem key={account.id || account.code} value={account.code}>
@@ -949,7 +949,7 @@ export default function CompanyAccountingLedgerPage() {
               <SelectTrigger className="w-full rounded-xl md:w-48">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
                 <SelectItem value="date">{t.sortDate}</SelectItem>
                 <SelectItem value="account">{t.sortAccount}</SelectItem>
                 <SelectItem value="entry">{t.sortEntry}</SelectItem>
