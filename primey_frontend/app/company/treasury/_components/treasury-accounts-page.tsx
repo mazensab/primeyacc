@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 /* ============================================================
    📂 primey_frontend/app/company/treasury/_components/treasury-accounts-page.tsx
    🧠 PrimeyAcc — Company Treasury Accounts Shared Page
@@ -41,10 +41,18 @@ import {
   ToggleRight,
   TriangleAlert,
   WalletCards,
+  MoreVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Card,
   CardContent,
@@ -1169,23 +1177,31 @@ export function TreasuryAccountsPage({ variant }: { variant: PageVariant }) {
     {
       key: "actions",
       label: t.actions,
-      className: "w-[230px]",
+      className: "w-[86px] text-center",
       render: (row) => (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" className="rounded-lg" onClick={() => openEdit(row)}>
-            <Edit3 className="h-4 w-4" />
-            {mode === "edit" && form.id === row.id ? config.editLabel : t.save.replace(t.save, locale === "ar" ? "تعديل" : "Edit")}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-lg"
-            onClick={() => void toggleStatus(row)}
-            disabled={saving}
-          >
-            {row.status === "active" ? <ToggleLeft className="h-4 w-4" /> : <ToggleRight className="h-4 w-4" />}
-            {row.status === "active" ? t.deactivate : t.activate}
-          </Button>
+        <div className="flex items-center justify-center" onClick={(event) => event.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-xl bg-background">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align={locale === "ar" ? "start" : "end"} className="w-44 rounded-xl">
+              <DropdownMenuItem onClick={() => openEdit(row)} className="flex items-center gap-2">
+                <Edit3 className="h-4 w-4" />
+                {locale === "ar" ? "تعديل" : "Edit"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                disabled={saving}
+                onClick={() => void toggleStatus(row)}
+                className="flex items-center gap-2"
+              >
+                {row.status === "active" ? <ToggleLeft className="h-4 w-4" /> : <ToggleRight className="h-4 w-4" />}
+                {row.status === "active" ? t.deactivate : t.activate}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       ),
     },
@@ -1263,15 +1279,7 @@ export function TreasuryAccountsPage({ variant }: { variant: PageVariant }) {
             </div>
           </div>
         </section>
-        <Card className="rounded-2xl border-amber-200/70 bg-amber-50/70 text-amber-950 shadow-sm">
-          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-            <TriangleAlert className="h-5 w-5 shrink-0" />
-            <div>
-              <p className="text-sm font-semibold">{t.operationalHintTitle}</p>
-              <p className="mt-1 text-sm opacity-80">{config.operationalHint}</p>
-            </div>
-          </CardContent>
-        </Card>
+
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <KpiCard title={t.totalAccounts} value={stats.total} description={config.title} icon={PageIcon} t={t} />
           <KpiCard title={t.activeAccounts} value={stats.active} description={t.active} icon={ShieldCheck} t={t} />

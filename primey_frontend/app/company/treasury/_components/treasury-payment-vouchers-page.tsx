@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 /* ============================================================
    📂 primey_frontend/app/company/treasury/_components/treasury-payment-vouchers-page.tsx
    🧠 PrimeyAcc — Company Treasury Payment Vouchers Shared Page
@@ -43,10 +43,18 @@ import {
   Sparkles,
   TriangleAlert,
   WalletCards,
+  MoreVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -2414,39 +2422,43 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
     {
       key: "actions",
       label: t.actions,
-      className: "w-[270px]",
+      className: "w-[86px] text-center",
       render: (row) => (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-lg"
-            onClick={() => openEdit(row)}
-            disabled={saving || row.status !== "draft"}
-          >
-            <Edit3 className="h-4 w-4" />
-            {locale === "ar" ? "تعديل" : "Edit"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-lg"
-            onClick={() => void confirmVoucher(row)}
-            disabled={saving || row.status !== "draft"}
-          >
-            <CheckCircle2 className="h-4 w-4" />
-            {t.confirm}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-lg"
-            onClick={() => void cancelVoucher(row)}
-            disabled={saving || row.status === "cancelled"}
-          >
-            <CircleX className="h-4 w-4" />
-            {t.cancel}
-          </Button>
+        <div className="flex items-center justify-center" onClick={(event) => event.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-xl bg-background">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align={locale === "ar" ? "start" : "end"} className="w-44 rounded-xl">
+              <DropdownMenuItem
+                disabled={saving || row.status !== "draft"}
+                onClick={() => openEdit(row)}
+                className="flex items-center gap-2"
+              >
+                <Edit3 className="h-4 w-4" />
+                {locale === "ar" ? "تعديل" : "Edit"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={saving || row.status !== "draft"}
+                onClick={() => void confirmVoucher(row)}
+                className="flex items-center gap-2"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                {t.confirm}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                disabled={saving || row.status === "cancelled"}
+                onClick={() => cancelVoucher(row)}
+                className="flex items-center gap-2 text-rose-600 focus:text-rose-600"
+              >
+                <CircleX className="h-4 w-4" />
+                {t.cancel}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       ),
     },
@@ -2524,15 +2536,7 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
             </div>
           </div>
         </section>
-        <Card className="rounded-2xl border-amber-200/70 bg-amber-50/70 text-amber-950 shadow-sm">
-          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-            <TriangleAlert className="h-5 w-5 shrink-0" />
-            <div>
-              <p className="text-sm font-semibold">{t.operationalHintTitle}</p>
-              <p className="mt-1 text-sm opacity-80">{config.operationalHint}</p>
-            </div>
-          </CardContent>
-        </Card>
+
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <KpiCard title={t.totalVouchers} value={stats.total} description={config.title} icon={ReceiptText} t={t} />
           <KpiCard title={t.totalAmount} value={stats.amount} description={t.amount} icon={PageIcon} money t={t} />
