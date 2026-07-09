@@ -75,6 +75,7 @@ import {
 } from "@/components/ui/table";
 type Locale = "ar" | "en";
 type VoucherVariant = "receipt" | "payment";
+type CounterpartyType = "CUSTOMER" | "SUPPLIER" | "EMPLOYEE" | "OTHER";
 type ApiRecord = Record<string, unknown>;
 type SortKey = "newest" | "oldest" | "amount_high" | "amount_low" | "number" | "party";
 type StatusFilter = "all" | "draft" | "confirmed" | "cancelled";
@@ -93,6 +94,17 @@ type PartySuggestion = {
   name: string;
   phone: string;
 };
+type AccountingAccountSuggestion = {
+  id: string;
+  code: string;
+  name: string;
+  accountType: string;
+  nature: string;
+  purpose: string;
+  isGroup: boolean;
+  isActive: boolean;
+  allowManualPosting: boolean;
+};
 type LinkedDocumentSuggestion = {
   id: string;
   number: string;
@@ -101,6 +113,11 @@ type LinkedDocumentSuggestion = {
   paymentStatus: string;
   totalAmount: number;
   balanceDue: number;
+  documentNumber: string;
+  documentDate: string;
+  documentAmount: string;
+  documentBalance: string;
+  documentStatus: string;
 };
 type VoucherRecord = {
   id: string;
@@ -140,6 +157,13 @@ type VoucherRecord = {
   cancellationReason: string;
   createdAt: string | null;
   updatedAt: string | null;
+  counterpartyType: CounterpartyType;
+  counterpartyAccountId: string;
+  counterpartyAccountCode: string;
+  counterpartyAccountName: string;
+  linkedDocumentDate: string;
+  linkedDocumentAmount: string;
+  linkedDocumentBalance: string;
 };
 type VoucherFormState = {
   id: string;
@@ -155,6 +179,15 @@ type VoucherFormState = {
   description: string;
   notes: string;
   confirmNow: boolean;
+  counterpartyType: CounterpartyType;
+  counterpartyAccountId: string;
+  counterpartyAccountCode: string;
+  counterpartyAccountName: string;
+  linkedDocumentNumber: string;
+  linkedDocumentDate: string;
+  linkedDocumentAmount: string;
+  linkedDocumentBalance: string;
+  linkedDocumentStatus: string;
 };
 type DataColumn<T> = {
   key: string;
@@ -170,6 +203,8 @@ const API_PATHS = {
   suppliers: "/api/company/suppliers/",
   salesInvoices: "/api/company/sales/invoices/",
   purchaseBills: "/api/company/purchases/bills/",
+  accountingAccounts: "/api/company/accounting/accounts/",
+  employees: "/api/company/hr/employees/",
 } as const;
 const paymentMethods: MethodFilter[] = [
   "all",
@@ -194,7 +229,16 @@ const emptyForm: VoucherFormState = {
   description: "",
   notes: "",
   confirmNow: false,
-};
+
+  counterpartyType: "CUSTOMER",
+  counterpartyAccountId: "",
+  counterpartyAccountCode: "",
+  counterpartyAccountName: "",
+  linkedDocumentNumber: "",
+  linkedDocumentDate: "",
+  linkedDocumentAmount: "",
+  linkedDocumentBalance: "",
+  linkedDocumentStatus: "",};
 const translations = {
   ar: {
     back: "الخزينة والمدفوعات",
@@ -677,6 +721,7 @@ function normalizePartySuggestion(value: unknown, variant: VoucherVariant): Part
 }
 function normalizeLinkedDocumentSuggestion(value: unknown, variant: VoucherVariant): LinkedDocumentSuggestion {
   const record = asRecord(value);
+  const nested = asRecord(record.document || record.invoice || record.bill || record.result || record.item);
   const id = normalizeText(record.id || record.pk || record.invoice_id || record.bill_id);
   const number = normalizeText(
     variant === "receipt"
@@ -701,6 +746,60 @@ function normalizeLinkedDocumentSuggestion(value: unknown, variant: VoucherVaria
     paymentStatus,
     totalAmount,
     balanceDue,
+
+    documentNumber: normalizeText(
+      record.invoice_number ||
+        record.sales_invoice_number ||
+        record.bill_number ||
+        record.purchase_bill_number ||
+        record.document_number ||
+        record.number ||
+        record.code ||
+        record.reference ||
+        nested.invoice_number ||
+        nested.bill_number ||
+        nested.document_number ||
+        nested.number ||
+        nested.code,
+    ),
+    documentDate: normalizeText(
+      record.invoice_date ||
+        record.bill_date ||
+        record.document_date ||
+        record.issue_date ||
+        record.date ||
+        nested.invoice_date ||
+        nested.bill_date ||
+        nested.document_date ||
+        nested.issue_date ||
+        nested.date,
+    ),
+    documentAmount: normalizeText(
+      record.total_amount ||
+        record.grand_total ||
+        record.net_amount ||
+        record.amount ||
+        record.total ||
+        nested.total_amount ||
+        nested.grand_total ||
+        nested.net_amount ||
+        nested.amount ||
+        nested.total,
+    ),
+    documentBalance: normalizeText(
+      record.balance_due ||
+        record.remaining_amount ||
+        record.unpaid_amount ||
+        record.due_amount ||
+        record.outstanding_amount ||
+        nested.balance_due ||
+        nested.remaining_amount ||
+        nested.unpaid_amount ||
+        nested.due_amount ||
+        nested.outstanding_amount,
+    ),
+    documentStatus: normalizeText(record.status_display || record.status || nested.status_display || nested.status),
+
   };
 }
 function buildAutocompleteParams(query: string, pageSize = "8") {
@@ -713,6 +812,53 @@ function buildAutocompleteParams(query: string, pageSize = "8") {
   return params;
 }
 
+
+function defaultCounterpartyType(variant: VoucherVariant): CounterpartyType {
+  return variant === "receipt" ? "CUSTOMER" : "SUPPLIER";
+}
+function normalizeCounterpartyType(value: unknown, variant: VoucherVariant): CounterpartyType {
+  const raw = normalizeText(value).toUpperCase();
+  if (raw === "CUSTOMER" || raw === "SUPPLIER" || raw === "EMPLOYEE" || raw === "OTHER") {
+    return raw;
+  }
+  return defaultCounterpartyType(variant);
+}
+function counterpartyTypeOptions(variant: VoucherVariant): CounterpartyType[] {
+  return variant === "receipt" ? ["CUSTOMER", "OTHER"] : ["SUPPLIER", "EMPLOYEE", "OTHER"];
+}
+function counterpartyTypeLabel(value: CounterpartyType, locale: Locale) {
+  const labels: Record<CounterpartyType, { ar: string; en: string }> = {
+    CUSTOMER: { ar: "عميل", en: "Customer" },
+    SUPPLIER: { ar: "مورد", en: "Supplier" },
+    EMPLOYEE: { ar: "موظف", en: "Employee" },
+    OTHER: { ar: "طرف آخر", en: "Other party" },
+  };
+  return labels[value]?.[locale] || value;
+}
+function needsCounterpartyAccount(type: CounterpartyType) {
+  return type === "EMPLOYEE" || type === "OTHER";
+}
+function canUseLinkedDocument(type: CounterpartyType) {
+  return type === "CUSTOMER" || type === "SUPPLIER";
+}
+function normalizeAccountingAccountSuggestion(value: unknown): AccountingAccountSuggestion {
+  const record = asRecord(value);
+  const nested = asRecord(record.account || record.result || record.item);
+  return {
+    id: normalizeText(record.id || record.pk || nested.id),
+    code: normalizeText(record.code || nested.code),
+    name: normalizeText(
+      record.name || record.name_ar || record.name_en || nested.name || nested.name_ar || nested.name_en,
+      "—",
+    ),
+    accountType: normalizeText(record.account_type || nested.account_type),
+    nature: normalizeText(record.nature || nested.nature),
+    purpose: normalizeText(record.purpose || nested.purpose),
+    isGroup: Boolean(record.is_group ?? nested.is_group),
+    isActive: Boolean(record.is_active ?? nested.is_active ?? true),
+    allowManualPosting: Boolean(record.allow_manual_posting ?? nested.allow_manual_posting ?? true),
+  };
+}
 function normalizeVoucher(value: unknown, variant: VoucherVariant): VoucherRecord {
   const record = asRecord(value);
   const isReceipt = variant === "receipt";
@@ -728,6 +874,40 @@ function normalizeVoucher(value: unknown, variant: VoucherVariant): VoucherRecor
       isReceipt
         ? record.sales_invoice_number || record.invoice_number
         : record.purchase_bill_number || record.bill_number,
+    ),
+    linkedDocumentDate: normalizeText(
+      record.sales_invoice_date ||
+        record.purchase_bill_date ||
+        record.invoice_date ||
+        record.bill_date ||
+        record.linked_document_date ||
+        record.document_date ||
+        record.issue_date ||
+        record.date,
+    ),
+    linkedDocumentAmount: normalizeText(
+      record.sales_invoice_total_amount ||
+        record.purchase_bill_total_amount ||
+        record.invoice_total_amount ||
+        record.bill_total_amount ||
+        record.linked_document_amount ||
+        record.total_amount ||
+        record.grand_total ||
+        record.net_amount ||
+        record.amount ||
+        record.total,
+    ),
+    linkedDocumentBalance: normalizeText(
+      record.sales_invoice_balance_due ||
+        record.purchase_bill_balance_due ||
+        record.invoice_balance_due ||
+        record.bill_balance_due ||
+        record.linked_document_balance ||
+        record.balance_due ||
+        record.remaining_amount ||
+        record.unpaid_amount ||
+        record.due_amount ||
+        record.outstanding_amount,
     ),
     linkedDocumentStatus: normalizeText(isReceipt ? record.invoice_status : record.bill_status),
     linkedDocumentPaymentStatus: normalizeText(
@@ -747,6 +927,10 @@ function normalizeVoucher(value: unknown, variant: VoucherVariant): VoucherRecor
     accountingEntryNumber: normalizeText(record.accounting_entry_number),
     accountingEntryStatus: normalizeText(record.accounting_entry_status),
     isAccountingPosted: Boolean(record.is_accounting_posted),
+    counterpartyType: normalizeCounterpartyType(record.counterparty_type || record.party_type, variant),
+    counterpartyAccountId: normalizeText(record.counterparty_account_id),
+    counterpartyAccountCode: normalizeText(record.counterparty_account_code),
+    counterpartyAccountName: normalizeText(record.counterparty_account_name),
     amount: toNumber(record.amount),
     currency: normalizeText(record.currency, "SAR"),
     paymentMethod,
@@ -1023,6 +1207,180 @@ function DataTable<T extends { id: string }>({
     </div>
   );
 }
+
+function formatLinkedDocumentAmount(value: string) {
+  const cleaned = normalizeText(value).replace(/[^\d.-]/g, "");
+  const amount = Number(cleaned);
+  if (!Number.isFinite(amount)) {
+    return normalizeText(value);
+  }
+  return `${amount.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} SAR`;
+}
+function formatLinkedDocumentInput(option: LinkedDocumentSuggestion, variant: VoucherVariant, locale: Locale) {
+  const number = option.documentNumber || option.id;
+  const date = option.documentDate;
+  const amount = formatLinkedDocumentAmount(option.documentAmount);
+  const label = variant === "receipt"
+    ? locale === "ar" ? "فاتورة مبيعات" : "Sales invoice"
+    : locale === "ar" ? "فاتورة مشتريات" : "Purchase bill";
+  return [label, number, date, amount].filter(Boolean).join(" • ");
+}
+function buildLinkedDocumentNote(option: LinkedDocumentSuggestion, variant: VoucherVariant, locale: Locale) {
+  const number = option.documentNumber || option.id || "—";
+  const date = option.documentDate || "—";
+  const amount = formatLinkedDocumentAmount(option.documentAmount) || "—";
+  const balance = formatLinkedDocumentAmount(option.documentBalance) || "—";
+  const status = option.documentStatus || "—";
+  if (locale === "ar") {
+    const label = variant === "receipt" ? "فاتورة مبيعات مرتبطة" : "فاتورة مشتريات مرتبطة";
+    return `[${label}] الرقم: ${number} | التاريخ: ${date} | المبلغ: ${amount} | المتبقي: ${balance} | الحالة: ${status}`;
+  }
+  const label = variant === "receipt" ? "Linked sales invoice" : "Linked purchase bill";
+  return `[${label}] No: ${number} | Date: ${date} | Amount: ${amount} | Balance: ${balance} | Status: ${status}`;
+}
+function appendLinkedDocumentNote(currentNotes: string, nextNote: string) {
+  const blockedPrefixes = [
+    "[فاتورة مبيعات مرتبطة]",
+    "[فاتورة مشتريات مرتبطة]",
+    "[Linked sales invoice]",
+    "[Linked purchase bill]",
+  ];
+  const cleaned = normalizeText(currentNotes)
+    .split("\n")
+    .filter((line) => !blockedPrefixes.some((prefix) => line.trim().startsWith(prefix)))
+    .join("\n")
+    .trim();
+  return [cleaned, nextNote].filter(Boolean).join("\n");
+}
+
+function moveAutocompleteIndex(current: number, size: number, direction: 1 | -1) {
+  if (size <= 0) return -1;
+  if (current < 0) return direction > 0 ? 0 : size - 1;
+  return (current + direction + size) % size;
+}
+function autocompleteOptionClass(isActive: boolean) {
+  return [
+    "flex w-full flex-col rounded-lg border px-3 py-2 text-start transition-colors",
+    isActive
+      ? "border-gray-400 bg-gray-200 shadow-sm"
+      : "border-transparent hover:bg-gray-50",
+  ].join(" ");
+}
+
+function installPrimeySmartAutocompleteBridge() {
+  const activeClasses = ["border-gray-400", "bg-gray-200", "shadow-sm"];
+  function findMenu(input: HTMLInputElement) {
+    const root = input.parentElement;
+    if (!root) return null;
+    const menus = Array.from(root.children).filter((child): child is HTMLElement => {
+      return child instanceof HTMLElement && child.classList.contains("absolute");
+    });
+    return menus.find((menu) => menu.querySelector('button[type="button"]')) || null;
+  }
+  function optionButtons(menu: HTMLElement) {
+    return Array.from(menu.querySelectorAll('button[type="button"]')) as HTMLButtonElement[];
+  }
+  function optionLabel(button: HTMLButtonElement) {
+    const primary = button.querySelector("span")?.textContent || button.textContent || "";
+    return primary
+      .split("\n")
+      .map((part) => part.trim())
+      .filter(Boolean)[0] || "";
+  }
+  function setInputPreview(input: HTMLInputElement, label: string) {
+    if (!label) return;
+    input.value = label;
+    window.requestAnimationFrame(() => {
+      if (document.activeElement === input) {
+        input.value = label;
+      }
+    });
+  }
+  function paintActive(buttons: HTMLButtonElement[], activeIndex: number) {
+    buttons.forEach((button, index) => {
+      const active = index === activeIndex;
+      button.dataset.primeyActive = active ? "true" : "false";
+      for (const className of activeClasses) {
+        button.classList.toggle(className, active);
+      }
+    });
+  }
+  function setActive(menu: HTMLElement, input: HTMLInputElement, activeIndex: number) {
+    const buttons = optionButtons(menu);
+    if (!buttons.length) return;
+    const safeIndex = ((activeIndex % buttons.length) + buttons.length) % buttons.length;
+    const button = buttons[safeIndex];
+    menu.dataset.primeyActiveIndex = String(safeIndex);
+    paintActive(buttons, safeIndex);
+    setInputPreview(input, optionLabel(button));
+    button.scrollIntoView({ block: "nearest" });
+  }
+  function currentIndex(menu: HTMLElement) {
+    const raw = Number(menu.dataset.primeyActiveIndex);
+    return Number.isFinite(raw) ? raw : -1;
+  }
+  function handleKeyDown(event: KeyboardEvent) {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement)) return;
+    const menu = findMenu(input);
+    if (!menu) return;
+    const buttons = optionButtons(menu);
+    if (!buttons.length) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      setActive(menu, input, currentIndex(menu) + 1);
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      setActive(menu, input, currentIndex(menu) - 1);
+      return;
+    }
+    if (event.key === "Enter") {
+      const index = currentIndex(menu) >= 0 ? currentIndex(menu) : 0;
+      const button = buttons[index];
+      if (!button) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      setInputPreview(input, optionLabel(button));
+      button.click();
+      return;
+    }
+    if (event.key === "Escape") {
+      menu.dataset.primeyActiveIndex = "-1";
+      paintActive(buttons, -1);
+    }
+  }
+  function handleMouseMove(event: MouseEvent) {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const button = target.closest('button[type="button"]') as HTMLButtonElement | null;
+    if (!button) return;
+    const menu = button.closest(".absolute") as HTMLElement | null;
+    if (!menu) return;
+    const root = menu.parentElement;
+    const input = root?.querySelector("input") as HTMLInputElement | null;
+    if (!input) return;
+    const buttons = optionButtons(menu);
+    const index = buttons.indexOf(button);
+    if (index < 0) return;
+    setActive(menu, input, index);
+  }
+  document.addEventListener("keydown", handleKeyDown, true);
+  document.addEventListener("mousemove", handleMouseMove, true);
+  return () => {
+    document.removeEventListener("keydown", handleKeyDown, true);
+    document.removeEventListener("mousemove", handleMouseMove, true);
+  };
+}
 function VoucherFormCard({
   variant,
   mode,
@@ -1046,12 +1404,157 @@ function VoucherFormCard({
 }) {
   const t = translations[locale];
   const config = getConfig(variant, locale);
+  const selectedCounterpartyType = form.counterpartyType || defaultCounterpartyType(variant);
+  const counterpartyNeedsAccount = needsCounterpartyAccount(selectedCounterpartyType);
   const [partyQuery, setPartyQuery] = React.useState(form.partyName || form.partyId);
   const [partyOptions, setPartyOptions] = React.useState<PartySuggestion[]>([]);
   const [partyLoading, setPartyLoading] = React.useState(false);
   const [documentQuery, setDocumentQuery] = React.useState(form.linkedDocumentId);
   const [documentOptions, setDocumentOptions] = React.useState<LinkedDocumentSuggestion[]>([]);
   const [documentLoading, setDocumentLoading] = React.useState(false);
+  const [accountQuery, setAccountQuery] = React.useState(
+    form.counterpartyAccountName || form.counterpartyAccountCode || form.counterpartyAccountId,
+  );
+  const [accountOptions, setAccountOptions] = React.useState<AccountingAccountSuggestion[]>([]);
+  const [accountLoading, setAccountLoading] = React.useState(false);
+  const [partyActiveIndex, setPartyActiveIndex] = React.useState(-1);
+  const [documentActiveIndex, setDocumentActiveIndex] = React.useState(-1);
+  const [accountActiveIndex, setAccountActiveIndex] = React.useState(-1);
+
+  const selectPartyOption = React.useCallback((option: PartySuggestion) => {
+    const nextName = option.name || option.id;
+    setPartyQuery(nextName);
+    setPartyOptions([]);
+    setPartyActiveIndex(-1);
+    setDocumentQuery("");
+    setDocumentOptions([]);
+    setDocumentActiveIndex(-1);
+    onChange({
+      partyId: option.id,
+      partyName: nextName,
+      partyPhone: option.phone,
+      linkedDocumentId: "",
+      linkedDocumentNumber: "",
+      linkedDocumentDate: "",
+      linkedDocumentAmount: "",
+      linkedDocumentBalance: "",
+      linkedDocumentStatus: "",
+    });
+  }, [onChange]);
+  const selectLinkedDocumentOption = React.useCallback((option: LinkedDocumentSuggestion) => {
+    setDocumentQuery(formatLinkedDocumentInput(option, variant, locale));
+    setDocumentOptions([]);
+    setDocumentActiveIndex(-1);
+    onChange({
+      linkedDocumentId: option.id,
+      linkedDocumentNumber: option.documentNumber,
+      linkedDocumentDate: option.documentDate,
+      linkedDocumentAmount: option.documentAmount,
+      linkedDocumentBalance: option.documentBalance,
+      linkedDocumentStatus: option.documentStatus,
+      notes: appendLinkedDocumentNote(
+        form.notes,
+        buildLinkedDocumentNote(option, variant, locale),
+      ),
+    });
+  }, [form.notes, locale, onChange, variant]);
+  const selectAccountOption = React.useCallback((option: AccountingAccountSuggestion) => {
+    setAccountQuery(`${option.code} — ${option.name}`);
+    setAccountOptions([]);
+    setAccountActiveIndex(-1);
+    onChange({
+      counterpartyAccountId: option.id,
+      counterpartyAccountCode: option.code,
+      counterpartyAccountName: option.name,
+    });
+  }, [onChange]);
+  React.useEffect(() => {
+    setPartyActiveIndex(partyOptions.length ? 0 : -1);
+  }, [partyOptions.length, partyQuery]);
+  React.useEffect(() => {
+    setDocumentActiveIndex(documentOptions.length ? 0 : -1);
+  }, [documentOptions.length, documentQuery]);
+  React.useEffect(() => {
+    setAccountActiveIndex(accountOptions.length ? 0 : -1);
+  }, [accountOptions.length, accountQuery]);
+  const handlePartyKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!partyOptions.length) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setPartyActiveIndex((current) => moveAutocompleteIndex(current, partyOptions.length, 1));
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setPartyActiveIndex((current) => moveAutocompleteIndex(current, partyOptions.length, -1));
+      return;
+    }
+    if (event.key === "Enter") {
+      const option = partyOptions[partyActiveIndex >= 0 ? partyActiveIndex : 0];
+      if (option) {
+        event.preventDefault();
+        selectPartyOption(option);
+      }
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setPartyOptions([]);
+      setPartyActiveIndex(-1);
+    }
+  }, [partyActiveIndex, partyOptions, selectPartyOption]);
+  const handleDocumentKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!documentOptions.length) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setDocumentActiveIndex((current) => moveAutocompleteIndex(current, documentOptions.length, 1));
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setDocumentActiveIndex((current) => moveAutocompleteIndex(current, documentOptions.length, -1));
+      return;
+    }
+    if (event.key === "Enter") {
+      const option = documentOptions[documentActiveIndex >= 0 ? documentActiveIndex : 0];
+      if (option) {
+        event.preventDefault();
+        selectLinkedDocumentOption(option);
+      }
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setDocumentOptions([]);
+      setDocumentActiveIndex(-1);
+    }
+  }, [documentActiveIndex, documentOptions, selectLinkedDocumentOption]);
+  const handleAccountKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!accountOptions.length) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setAccountActiveIndex((current) => moveAutocompleteIndex(current, accountOptions.length, 1));
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setAccountActiveIndex((current) => moveAutocompleteIndex(current, accountOptions.length, -1));
+      return;
+    }
+    if (event.key === "Enter") {
+      const option = accountOptions[accountActiveIndex >= 0 ? accountActiveIndex : 0];
+      if (option) {
+        event.preventDefault();
+        selectAccountOption(option);
+      }
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setAccountOptions([]);
+      setAccountActiveIndex(-1);
+    }
+  }, [accountActiveIndex, accountOptions, selectAccountOption]);
   React.useEffect(() => {
     setPartyQuery(form.partyName || form.partyId);
     setDocumentQuery(form.linkedDocumentId);
@@ -1066,7 +1569,7 @@ function VoucherFormCard({
     }
     let cancelled = false;
     const timeout = window.setTimeout(() => {
-      const endpoint = variant === "receipt" ? API_PATHS.customers : API_PATHS.suppliers;
+      const endpoint = selectedCounterpartyType === "EMPLOYEE" ? API_PATHS.employees : variant === "receipt" ? API_PATHS.customers : API_PATHS.suppliers;
       const params = buildAutocompleteParams(query);
       setPartyLoading(true);
       void fetchJson<unknown>(makeApiUrl(endpoint, params))
@@ -1085,7 +1588,10 @@ function VoucherFormCard({
           if (!cancelled) setPartyLoading(false);
         });
     }, 250);
-    return () => {
+    React.useEffect(() => {
+    return installPrimeySmartAutocompleteBridge();
+  }, []);
+  return () => {
       cancelled = true;
       window.clearTimeout(timeout);
     };
@@ -1130,6 +1636,41 @@ function VoucherFormCard({
     };
   }, [documentQuery, form.partyId, variant]);
   const title = mode === "create" ? config.addLabel : config.editLabel;
+
+  React.useEffect(() => {
+    setAccountQuery(form.counterpartyAccountName || form.counterpartyAccountCode || form.counterpartyAccountId);
+  }, [form.counterpartyAccountCode, form.counterpartyAccountId, form.counterpartyAccountName]);
+  React.useEffect(() => {
+    let cancelled = false;
+    async function loadAccounts() {
+      if (!counterpartyNeedsAccount) {
+        setAccountOptions([]);
+        return;
+      }
+      setAccountLoading(true);
+      try {
+        const params = buildAutocompleteParams(accountQuery.trim());
+        params.set("page_size", "8");
+        params.set("is_group", "false");
+        params.set("active", "true");
+        params.set("is_active", "true");
+        const payload = await fetchJson<unknown>(makeApiUrl(API_PATHS.accountingAccounts, params));
+        const options = extractArray(payload)
+          .map(normalizeAccountingAccountSuggestion)
+          .filter((option) => option.id && !option.isGroup && option.isActive && option.allowManualPosting);
+        if (!cancelled) setAccountOptions(options);
+      } catch {
+        if (!cancelled) setAccountOptions([]);
+      } finally {
+        if (!cancelled) setAccountLoading(false);
+      }
+    }
+    const timeout = window.setTimeout(() => void loadAccounts(), 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [accountQuery, counterpartyNeedsAccount]);
   return (
     <Card className="rounded-2xl shadow-sm">
       <CardHeader>
@@ -1191,6 +1732,46 @@ function VoucherFormCard({
             </Select>
           </label>
           <label className="space-y-2">
+            <span className="text-sm font-medium">{locale === "ar" ? "نوع الطرف" : "Counterparty type"}</span>
+            <Select
+              value={selectedCounterpartyType}
+              onValueChange={(value) => {
+                const nextType = value as CounterpartyType;
+                onChange({
+                  counterpartyType: nextType,
+                  partyId: "",
+                  partyName: "",
+                  partyPhone: "",
+                  linkedDocumentId: "",
+                  linkedDocumentNumber: "",
+                  linkedDocumentDate: "",
+                  linkedDocumentAmount: "",
+                  linkedDocumentBalance: "",
+                  linkedDocumentStatus: "",
+                  counterpartyAccountId: "",
+                  counterpartyAccountCode: "",
+                  counterpartyAccountName: "",
+                });
+              }}
+            >
+              <SelectTrigger className="h-10 rounded-xl bg-background">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {counterpartyTypeOptions(variant).map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {counterpartyTypeLabel(option, locale)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {locale === "ar"
+                ? "رقم السند يولّد تلقائيًا بعد الحفظ."
+                : "Voucher number is generated automatically after saving."}
+            </p>
+          </label>
+          <label className="space-y-2">
             <span className="text-sm font-medium">{t.date}</span>
             <VoucherDatePicker
               value={form.paymentDate}
@@ -1204,6 +1785,7 @@ function VoucherFormCard({
               <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={partyQuery}
+                onKeyDown={handlePartyKeyDown}
                 onChange={(event) => {
                   const value = event.target.value;
                   setPartyQuery(value);
@@ -1239,8 +1821,10 @@ function VoucherFormCard({
                     <button
                       key={`${option.id || option.name}-${index}`}
                       type="button"
-                      className="flex w-full flex-col rounded-lg px-3 py-2 text-start hover:bg-muted"
+                      className={autocompleteOptionClass(index === partyActiveIndex)}
                       onMouseDown={(event) => event.preventDefault()}
+                          onMouseEnter={() => setPartyActiveIndex(index)}
+                          onFocus={() => setPartyActiveIndex(index)}
                       onClick={() => {
                         setPartyQuery(option.name);
                         setPartyOptions([]);
@@ -1261,7 +1845,7 @@ function VoucherFormCard({
                     </button>
                   ))
                 ) : null}
-                {!partyLoading && !partyOptions.length ? (
+                {!partyLoading && !partyOptions.length && !form.partyId ? (
                   <div className="px-3 py-2 text-xs text-muted-foreground">
                     {locale === "ar" ? "لا توجد نتائج مطابقة" : "No matching results"}
                   </div>
@@ -1291,6 +1875,7 @@ function VoucherFormCard({
               <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={documentQuery}
+                onKeyDown={handleDocumentKeyDown}
                 onChange={(event) => {
                   const value = event.target.value;
                   setDocumentQuery(value);
@@ -1321,13 +1906,24 @@ function VoucherFormCard({
                     <button
                       key={`${option.id || option.number}-${index}`}
                       type="button"
-                      className="flex w-full flex-col rounded-lg px-3 py-2 text-start hover:bg-muted"
+                      className={autocompleteOptionClass(index === documentActiveIndex)}
                       onMouseDown={(event) => event.preventDefault()}
+                          onMouseEnter={() => setDocumentActiveIndex(index)}
+                          onFocus={() => setDocumentActiveIndex(index)}
                       onClick={() => {
                         setDocumentQuery(option.number || option.id);
                         setDocumentOptions([]);
                         onChange({
                           linkedDocumentId: option.id,
+                              linkedDocumentNumber: option.documentNumber,
+                              linkedDocumentDate: option.documentDate,
+                              linkedDocumentAmount: option.documentAmount,
+                              linkedDocumentBalance: option.documentBalance,
+                              linkedDocumentStatus: option.documentStatus,
+                              notes: appendLinkedDocumentNote(
+                                form.notes,
+                                buildLinkedDocumentNote(option, variant, locale),
+                              ),
                           partyName: form.partyName || option.partyName,
                         });
                       }}
@@ -1346,7 +1942,7 @@ function VoucherFormCard({
                     </button>
                   ))
                 ) : null}
-                {!documentLoading && !documentOptions.length ? (
+                {!documentLoading && !documentOptions.length && !form.linkedDocumentId ? (
                   <div className="px-3 py-2 text-xs text-muted-foreground">
                     {locale === "ar" ? "لا توجد نتائج مطابقة" : "No matching results"}
                   </div>
@@ -1354,8 +1950,82 @@ function VoucherFormCard({
               </div>
             ) : null}
           </div>
+          {counterpartyNeedsAccount ? (
+            <label className="space-y-2 md:col-span-2">
+              <span className="text-sm font-medium">
+                {locale === "ar" ? "حساب الطرف المحاسبي" : "Counterparty accounting account"}
+              </span>
+              <div className="relative">
+                <Input
+                  value={accountQuery}
+                  onKeyDown={handleAccountKeyDown}
+                  onChange={(event) => {
+                    setAccountQuery(event.target.value);
+                    onChange({
+                      counterpartyAccountId: "",
+                      counterpartyAccountCode: "",
+                      counterpartyAccountName: event.target.value,
+                    });
+                  }}
+                  placeholder={
+                    locale === "ar"
+                      ? "ابحث برقم أو اسم الحساب المحاسبي..."
+                      : "Search by account code or name..."
+                  }
+                  className="h-10 rounded-xl bg-background"
+                />
+                {accountQuery.trim() && (accountLoading || accountOptions.length || !form.counterpartyAccountId) ? (
+                  <div className="absolute z-50 mt-2 max-h-64 w-full overflow-auto rounded-xl border bg-popover p-1 shadow-xl">
+                    {accountLoading ? (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">
+                        {locale === "ar" ? "جاري البحث..." : "Searching..."}
+                      </div>
+                    ) : null}
+                    {!accountLoading && accountOptions.length ? (
+                      accountOptions.map((option, index) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          className={autocompleteOptionClass(index === accountActiveIndex)}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onMouseEnter={() => setAccountActiveIndex(index)}
+                          onFocus={() => setAccountActiveIndex(index)}
+                          onClick={() => {
+                            setAccountQuery(`${option.code} — ${option.name}`);
+                            setAccountOptions([]);
+                            onChange({
+                              counterpartyAccountId: option.id,
+                              counterpartyAccountCode: option.code,
+                              counterpartyAccountName: option.name,
+                            });
+                          }}
+                        >
+                          <span className="text-sm font-medium tabular-nums">
+                            {option.code} — {option.name}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {[option.accountType, option.nature, option.purpose].filter(Boolean).join(" • ") || "—"}
+                          </span>
+                        </button>
+                      ))
+                    ) : null}
+                    {!accountLoading && !accountOptions.length && !form.counterpartyAccountId ? (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">
+                        {locale === "ar" ? "لا توجد نتائج مطابقة" : "No matching accounts"}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {locale === "ar"
+                  ? "مطلوب للموظف أو الطرف الآخر حتى يتم الترحيل المحاسبي الصحيح."
+                  : "Required for employee/other party accounting posting."}
+              </p>
+            </label>
+          ) : null}
           <label className="space-y-2 md:col-span-2">
-            <span className="text-sm font-medium">{t.reference}</span>
+            <span className="text-sm font-medium">{locale === "ar" ? "مرجع خارجي اختياري" : "Optional external reference"}</span>
             <Input
               value={form.reference}
               onChange={(event) => onChange({ reference: event.target.value })}
@@ -1541,6 +2211,7 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
       paymentDate: new Date().toISOString().slice(0, 10),
       treasuryAccountId: accounts[0]?.id || "",
       paymentMethod: "CASH",
+      counterpartyType: defaultCounterpartyType(variant),
     });
     setFormVisible(true);
   }
@@ -1560,6 +2231,15 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
       partyName: row.partyName === "—" ? "" : row.partyName,
       partyPhone: row.partyPhone,
       linkedDocumentId: row.linkedDocumentId,
+      linkedDocumentNumber: row.linkedDocumentNumber,
+      linkedDocumentDate: row.linkedDocumentDate,
+      linkedDocumentAmount: row.linkedDocumentAmount,
+      linkedDocumentBalance: row.linkedDocumentBalance,
+      linkedDocumentStatus: row.linkedDocumentStatus,
+      counterpartyType: row.counterpartyType || defaultCounterpartyType(variant),
+      counterpartyAccountId: row.counterpartyAccountId,
+      counterpartyAccountCode: row.counterpartyAccountCode,
+      counterpartyAccountName: row.counterpartyAccountName,
       reference: row.reference,
       description: row.description,
       notes: row.notes,
@@ -1572,7 +2252,11 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
     setForm(emptyForm);
     setFormVisible(false);
   }
-  function buildPayload() {
+    function buildPayload() {
+    const selectedType = form.counterpartyType || defaultCounterpartyType(variant);
+    const accountRequired = needsCounterpartyAccount(selectedType);
+    const documentAllowed = canUseLinkedDocument(selectedType);
+    const linkedDocumentId = documentAllowed ? form.linkedDocumentId.trim() : "";
     const commonPayload: ApiRecord = {
       treasury_account_id: form.treasuryAccountId,
       account_id: form.treasuryAccountId,
@@ -1583,33 +2267,45 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
       reference: form.reference.trim(),
       description: form.description.trim(),
       notes: form.notes.trim(),
+      counterparty_type: selectedType,
+      counterparty_id: form.partyId.trim() || null,
+      counterparty_name: form.partyName.trim(),
+      counterparty_phone: form.partyPhone.trim(),
+      counterparty_account_id: accountRequired ? form.counterpartyAccountId.trim() || null : null,
     };
     if (mode === "create" && form.confirmNow) {
       commonPayload.status = "CONFIRMED";
+      commonPayload.confirm = true;
+      commonPayload.confirm_now = true;
     }
     if (variant === "receipt") {
       return {
         ...commonPayload,
-        customer_id: form.partyId.trim() || null,
+        customer_id: selectedType === "CUSTOMER" ? form.partyId.trim() || null : null,
         customer_name: form.partyName.trim(),
         customer_phone: form.partyPhone.trim(),
-        sales_invoice_id: form.linkedDocumentId.trim() || null,
-        invoice_id: form.linkedDocumentId.trim() || null,
+        sales_invoice_id: selectedType === "CUSTOMER" ? linkedDocumentId || null : null,
+        invoice_id: selectedType === "CUSTOMER" ? linkedDocumentId || null : null,
       };
     }
     return {
       ...commonPayload,
-      supplier_id: form.partyId.trim() || null,
+      supplier_id: selectedType === "SUPPLIER" ? form.partyId.trim() || null : null,
       supplier_name: form.partyName.trim(),
       supplier_phone: form.partyPhone.trim(),
-      purchase_bill_id: form.linkedDocumentId.trim() || null,
-      bill_id: form.linkedDocumentId.trim() || null,
+      purchase_bill_id: selectedType === "SUPPLIER" ? linkedDocumentId || null : null,
+      bill_id: selectedType === "SUPPLIER" ? linkedDocumentId || null : null,
     };
   }
+
   async function submitForm() {
     const payload = buildPayload();
     if (!form.treasuryAccountId || toNumber(form.amount) <= 0 || !form.partyName.trim()) {
       toast.warning(t.validationRequired);
+      return;
+    }
+    if (needsCounterpartyAccount(form.counterpartyType || defaultCounterpartyType(variant)) && !form.counterpartyAccountId.trim()) {
+      toast.warning(locale === "ar" ? "اختر حساب الطرف المحاسبي." : "Select the counterparty accounting account.");
       return;
     }
     setSaving(true);
