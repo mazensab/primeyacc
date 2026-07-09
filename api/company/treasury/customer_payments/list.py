@@ -57,6 +57,33 @@ def _get_request_company(request: Request):
     return company
 
 
+
+def _payload_text(payload: Any, *keys: str) -> str:
+    for key in keys:
+        value = payload.get(key)
+        if value not in (None, ""):
+            return str(value).strip()
+    return ""
+def _payload_numeric_id(payload: Any, *keys: str):
+    for key in keys:
+        value = payload.get(key)
+        if value in (None, ""):
+            continue
+        raw = str(value).strip()
+        if raw.isdigit():
+            return raw
+    return None
+def _payload_counterparty_name(payload: Any, *, legacy_name_key: str, legacy_id_key: str) -> str:
+    return _payload_text(
+        payload,
+        "counterparty_name",
+        "party_name",
+        legacy_name_key,
+        "counterparty_id",
+        "party_id",
+        legacy_id_key,
+    )
+
 def _decimal_to_string(value: Any) -> str:
     if value is None:
         return "0.00"
@@ -98,6 +125,8 @@ def _serialize_accounting_entry(entry: Any) -> dict[str, Any]:
             "posted_at": None,
             "reversal_of_id": None,
             "reversal_entry_id": None,
+            "reversal_entry_number": "",
+            "reversal_entry_status": "",
         }
 
     reversal_entry = getattr(entry, "reversal_entries", None)
@@ -273,9 +302,9 @@ def serialize_customer_payment(payment: CustomerPayment) -> dict[str, Any]:
         "accounting_entry_status": accounting_payload["status"],
         "accounting_entry_date": accounting_payload["entry_date"],
         "accounting_entry_posted_at": accounting_payload["posted_at"],
-        "accounting_reversal_entry_id": accounting_payload["reversal_entry_id"],
-        "accounting_reversal_entry_number": accounting_payload["reversal_entry_number"],
-        "accounting_reversal_entry_status": accounting_payload["reversal_entry_status"],
+        "accounting_reversal_entry_id": accounting_payload.get("reversal_entry_id"),
+        "accounting_reversal_entry_number": accounting_payload.get("reversal_entry_number", ""),
+        "accounting_reversal_entry_status": accounting_payload.get("reversal_entry_status", ""),
         "is_accounting_posted": payment.is_accounting_posted,
         "accounting_posted_at": _datetime_to_string(payment.accounting_posted_at),
         "accounting_entry": accounting_payload,
@@ -484,13 +513,21 @@ def customer_payments_list(request: Request) -> Response:
             amount=payload.get("amount"),
             payment_method=payload.get("payment_method") or PaymentMethod.CASH,
             payment_date=payment_date,
-            customer_id=payload.get("customer_id"),
-            customer_name=payload.get("customer_name", ""),
-            customer_phone=payload.get("customer_phone", ""),
+            customer_id=_payload_numeric_id(payload, "customer_id"),
+            customer_name=_payload_counterparty_name(
+                payload,
+                legacy_name_key="customer_name",
+                legacy_id_key="customer_id",
+            ),
+            customer_phone=_payload_text(payload, "customer_phone", "counterparty_phone", "party_phone"),
             counterparty_type=payload.get("counterparty_type") or payload.get("party_type") or "",
-            counterparty_id=payload.get("counterparty_id") or payload.get("party_id") or payload.get("customer_id"),
-            counterparty_name=payload.get("counterparty_name") or payload.get("party_name") or payload.get("customer_name") or "",
-            counterparty_phone=payload.get("counterparty_phone") or payload.get("party_phone") or payload.get("customer_phone") or "",
+            counterparty_id=_payload_numeric_id(payload, "counterparty_id", "party_id", "customer_id"),
+            counterparty_name=_payload_counterparty_name(
+                payload,
+                legacy_name_key="customer_name",
+                legacy_id_key="customer_id",
+            ),
+            counterparty_phone=_payload_text(payload, "counterparty_phone", "party_phone", "customer_phone"),
             counterparty_account_id=payload.get("counterparty_account_id") or payload.get("counterparty_account"),
             sales_invoice=sales_invoice,
             currency=payload.get("currency"),

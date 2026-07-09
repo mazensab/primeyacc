@@ -813,6 +813,14 @@ function buildAutocompleteParams(query: string, pageSize = "8") {
 }
 
 
+
+function optionalNumericId(value: unknown) {
+  const raw = normalizeText(value).trim();
+  return /^\d+$/.test(raw) ? raw : null;
+}
+function resolveVoucherCounterpartyName(partyName: unknown, partyId: unknown) {
+  return normalizeText(partyName).trim() || normalizeText(partyId).trim();
+}
 function defaultCounterpartyType(variant: VoucherVariant): CounterpartyType {
   return variant === "receipt" ? "CUSTOMER" : "SUPPLIER";
 }
@@ -1905,7 +1913,7 @@ function VoucherFormCard({
               </div>
               <p className="text-xs text-muted-foreground">
                 {locale === "ar"
-                  ? "مطلوب للموظف أو الطرف الآخر حتى يتم الترحيل المحاسبي الصحيح."
+                  ? "مطلوب للموظف أو الطرف الآخر. إذا لم يوجد اسم مستقل، سيتم استخدام معرف الطرف كاسم للطرف."
                   : "Required for employee/other party accounting posting."}
               </p>
             </label>
@@ -2143,6 +2151,8 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
     const accountRequired = needsCounterpartyAccount(selectedType);
     const documentAllowed = canUseLinkedDocument(selectedType);
     const linkedDocumentId = documentAllowed ? form.linkedDocumentId.trim() : "";
+    const counterpartyName = resolveVoucherCounterpartyName(form.partyName, form.partyId);
+    const counterpartyId = optionalNumericId(form.partyId);
     const commonPayload: ApiRecord = {
       treasury_account_id: form.treasuryAccountId,
       account_id: form.treasuryAccountId,
@@ -2154,8 +2164,8 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
       description: form.description.trim(),
       notes: form.notes.trim(),
       counterparty_type: selectedType,
-      counterparty_id: form.partyId.trim() || null,
-      counterparty_name: form.partyName.trim(),
+      counterparty_id: counterpartyId,
+      counterparty_name: counterpartyName,
       counterparty_phone: form.partyPhone.trim(),
       counterparty_account_id: accountRequired ? form.counterpartyAccountId.trim() || null : null,
     };
@@ -2167,8 +2177,8 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
     if (variant === "receipt") {
       return {
         ...commonPayload,
-        customer_id: selectedType === "CUSTOMER" ? form.partyId.trim() || null : null,
-        customer_name: form.partyName.trim(),
+        customer_id: selectedType === "CUSTOMER" ? optionalNumericId(form.partyId) : null,
+        customer_name: counterpartyName,
         customer_phone: form.partyPhone.trim(),
         sales_invoice_id: selectedType === "CUSTOMER" ? linkedDocumentId || null : null,
         invoice_id: selectedType === "CUSTOMER" ? linkedDocumentId || null : null,
@@ -2176,8 +2186,8 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
     }
     return {
       ...commonPayload,
-      supplier_id: selectedType === "SUPPLIER" ? form.partyId.trim() || null : null,
-      supplier_name: form.partyName.trim(),
+      supplier_id: selectedType === "SUPPLIER" ? optionalNumericId(form.partyId) : null,
+      supplier_name: counterpartyName,
       supplier_phone: form.partyPhone.trim(),
       purchase_bill_id: selectedType === "SUPPLIER" ? linkedDocumentId || null : null,
       bill_id: selectedType === "SUPPLIER" ? linkedDocumentId || null : null,
@@ -2186,11 +2196,13 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
 
   async function submitForm() {
     const payload = buildPayload();
-    if (!form.treasuryAccountId || toNumber(form.amount) <= 0 || !form.partyName.trim()) {
+    const selectedType = form.counterpartyType || defaultCounterpartyType(variant);
+    const counterpartyName = resolveVoucherCounterpartyName(form.partyName, form.partyId);
+    if (!form.treasuryAccountId || toNumber(form.amount) <= 0 || !counterpartyName) {
       toast.warning(t.validationRequired);
       return;
     }
-    if (needsCounterpartyAccount(form.counterpartyType || defaultCounterpartyType(variant)) && !form.counterpartyAccountId.trim()) {
+    if (needsCounterpartyAccount(selectedType) && !form.counterpartyAccountId.trim()) {
       toast.warning(locale === "ar" ? "اختر حساب الطرف المحاسبي." : "Select the counterparty accounting account.");
       return;
     }
