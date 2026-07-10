@@ -13,24 +13,7 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { createPortal } from "react-dom";
-import {
-  ArrowLeft,
-  ArrowUpDown,
-  BookOpen,
-  CheckCircle2,
-  Eye,
-  FileSpreadsheet,
-  Loader2,
-  Printer,
-  RefreshCw,
-  RotateCcw,
-  Save,
-  Search,
-  Sparkles,
-  Trash2,
-  Undo2,
-} from "lucide-react";
+import { createPortal } from "react-dom"; import {   ArrowLeft, ArrowUpDown, BookOpen, CheckCircle2, Eye, FileSpreadsheet, Loader2, Printer, RefreshCw, RotateCcw, Save, Search, Sparkles, Trash2, Undo2, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -44,6 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   Card,
   CardContent,
@@ -953,6 +937,20 @@ export default function CompanyJournalEntriesPage() {
   const [accounts, setAccounts] = React.useState<AccountOption[]>([]);
   const [costCenters, setCostCenters] = React.useState<CostCenterOption[]>([]);
   const [selectedEntry, setSelectedEntry] = React.useState<JournalEntry | null>(null);
+
+  const openEntryDetails = React.useCallback((entry: JournalEntry) => {
+    setSelectedEntry(entry);
+    window.setTimeout(() => {
+      const detailPanel =
+        document.getElementById("journal-entry-details-panel") ??
+        document.querySelector("[data-journal-entry-details-panel]");
+      if (detailPanel instanceof HTMLElement) {
+        detailPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+    }, 80);
+  }, []);
   const [reverseTarget, setReverseTarget] = React.useState<JournalEntry | null>(null);
   const [form, setForm] = React.useState<EntryForm>(buildForm);
   const [search, setSearch] = React.useState("");
@@ -1118,7 +1116,12 @@ export default function CompanyJournalEntriesPage() {
     setActionId(entryId);
     try {
       const payload = await fetchJson<{ entry?: unknown }>(`/api/company/accounting/journal-entries/${entryId}/`);
-      setSelectedEntry(payload.entry ? normalizeEntry(payload.entry) : null);
+      const nextEntry = payload.entry ? normalizeEntry(payload.entry) : null;
+      if (nextEntry) {
+        openEntryDetails(nextEntry);
+      } else {
+        setSelectedEntry(null);
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t.actionFailed);
     } finally {
@@ -1372,11 +1375,11 @@ export default function CompanyJournalEntriesPage() {
       entry.currency,
     ]);
     const html = `<html><head><meta charset="utf-8" /></head><body><table border="1"><thead><tr>${headers
-      .map((header) => `<th>${header}</th>`)
+      .map((header) => `<th>${escapeHtml(header)}</th>`)
       .join("")}</tr></thead><tbody>${rows
-      .map((row) => `<tr>${row.map((cell) => `<td>${String(cell).replaceAll("<", "&lt;")}</td>`).join("")}</tr>`)
+      .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
       .join("")}</tbody></table></body></html>`;
-    const blob = new Blob(["\ufeff", html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+    const blob = new Blob(["\\ufeff", html], { type: "application/vnd.ms-excel;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -1668,19 +1671,36 @@ export default function CompanyJournalEntriesPage() {
                   <Table className="min-w-[1080px] table-fixed">
                     <TableHeader>
                       <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
-                        <TableHead className="text-start">{t.entryNumber}</TableHead>
-                        <TableHead className="text-start">{t.date}</TableHead>
+                        <TableHead className="w-[190px] text-start">{t.entryNumber}</TableHead>
+                        <TableHead className="w-[135px] text-start">{t.date}</TableHead>
                         <TableHead className="text-start">{t.description}</TableHead>
-                        <TableHead className="text-center">{t.status}</TableHead>
-                        <TableHead className="text-end">{t.totalDebit}</TableHead>
-                        <TableHead className="text-end">{t.totalCredit}</TableHead>
-                        <TableHead className="text-center">{t.actions}</TableHead>
+                        <TableHead className="w-[130px] text-center">{t.status}</TableHead>
+                        <TableHead className="w-[150px] text-end">{t.totalDebit}</TableHead>
+                        <TableHead className="w-[150px] text-end">{t.totalCredit}</TableHead>
+                        <TableHead className="w-[88px] text-center">{t.actions}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredEntries.map((entry) => (
-                        <TableRow key={entry.id} className="h-[54px] bg-card hover:bg-muted/30">
-                          <TableCell className="font-mono font-semibold tabular-nums">{entry.entryNumber || entry.id}</TableCell>
+                        <TableRow
+                          key={entry.id}
+                          role="button"
+                          tabIndex={0}
+                          title={locale === "ar" ? "اضغط لفتح تفاصيل القيد" : "Click to open journal entry details"}
+                          onClick={() => void openDetail(entry.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              void openDetail(entry.id);
+                            }
+                          }}
+                          className="h-[54px] cursor-pointer bg-card transition-colors hover:bg-muted/30"
+                        >
+                          <TableCell className="font-mono font-semibold tabular-nums">
+                            <span className="inline-flex max-w-full select-none rounded-lg px-2 py-1 transition hover:bg-slate-100 hover:underline">
+                              {entry.entryNumber || entry.id}
+                            </span>
+                          </TableCell>
                           <TableCell className="tabular-nums">{normalizeDate(entry.entryDate)}</TableCell>
                           <TableCell className="max-w-[360px] truncate">{entry.description || "—"}</TableCell>
                           <TableCell className="text-center">
@@ -1690,25 +1710,48 @@ export default function CompanyJournalEntriesPage() {
                           </TableCell>
                           <TableCell className="text-end"><MoneyValue value={entry.totalDebit} label={t.sar} /></TableCell>
                           <TableCell className="text-end"><MoneyValue value={entry.totalCredit} label={t.sar} /></TableCell>
-                          <TableCell>
-                            <div className="flex items-center justify-center gap-2">
-                              <Button variant="outline" size="sm" className="rounded-lg bg-background" onClick={() => void openDetail(entry.id)} disabled={actionId === entry.id}>
-                                {actionId === entry.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
-                                {t.view}
-                              </Button>
-                              {entry.status === "DRAFT" ? (
-                                <Button size="sm" className="rounded-lg" onClick={() => void postEntry(entry.id)} disabled={actionId === entry.id}>
-                                  <CheckCircle2 className="h-4 w-4" />
-                                  {t.post}
-                                </Button>
-                              ) : null}
-                              {entry.status === "POSTED" ? (
-                                <Button variant="outline" size="sm" className="rounded-lg bg-background" onClick={() => setReverseTarget(entry)} disabled={actionId === entry.id}>
-                                  <Undo2 className="h-4 w-4" />
-                                  {t.reverse}
-                                </Button>
-                              ) : null}
-                            </div>
+                          <TableCell className="w-[88px] text-center align-middle" onClick={(event) => event.stopPropagation()}>
+                            <div onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} className="journal-actions-cell flex w-full items-center justify-center">
+                                                          <DropdownMenu>
+                                                                                        <DropdownMenuTrigger asChild>
+                                                                                          <Button
+                                                                                            type="button"
+                                                                                            variant="outline"
+                                                                                            size="icon"
+                                                                                            className="mx-auto flex h-9 w-9 items-center justify-center rounded-xl border-slate-200 bg-white shadow-sm hover:bg-slate-50"
+
+      onClick={(event) => event.stopPropagation()}
+    >
+                                                                                            <MoreVertical className="h-4 w-4" />
+                                                                                            <span className="sr-only">الإجراءات</span>
+                                                                                          </Button>
+                                                                                        </DropdownMenuTrigger>
+                                                                                        <DropdownMenuContent
+                                                                                          align="start"
+                                                                                          className="w-40 rounded-xl border-slate-200 bg-white p-1 shadow-lg"
+                                                                                        >
+                                                                                          <div className="[&>button]:h-9 [&>button]:w-full [&>button]:justify-start [&>button]:rounded-lg [&>button]:border-0 [&>button]:bg-transparent [&>button]:px-2 [&>button]:text-sm [&>button]:font-medium [&>button]:shadow-none [&>button:hover]:bg-slate-50">
+
+                                                                                        <Button variant="outline" size="sm" className="rounded-lg bg-background" onClick={() => void openDetail(entry.id)} disabled={actionId === entry.id}>
+                                                                                          {actionId === entry.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+                                                                                          {t.view}
+                                                                                        </Button>
+                                                                                        {entry.status === "DRAFT" ? (
+                                                                                          <Button size="sm" className="rounded-lg" onClick={() => void postEntry(entry.id)} disabled={actionId === entry.id}>
+                                                                                            <CheckCircle2 className="h-4 w-4" />
+                                                                                            {t.post}
+                                                                                          </Button>
+                                                                                        ) : null}
+                                                                                        {entry.status === "POSTED" ? (
+                                                                                          <Button variant="outline" size="sm" className="rounded-lg bg-background" onClick={() => setReverseTarget(entry)} disabled={actionId === entry.id}>
+                                                                                            <Undo2 className="h-4 w-4" />
+                                                                                            {t.reverse}
+                                                                                          </Button>
+                                                                                        ) : null}
+                                                                                          </div>
+                                                                                        </DropdownMenuContent>
+                                                                                      </DropdownMenu>
+                                                        </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -1795,7 +1838,7 @@ export default function CompanyJournalEntriesPage() {
           </AlertDialogContent>
         </AlertDialog>
         {selectedEntry ? (
-          <Card className="rounded-2xl border-border/70 bg-card shadow-sm transition hover:shadow-md">
+          <Card id="journal-entry-details-panel" data-journal-entry-details-panel="true" className="rounded-2xl border-border/70 bg-card shadow-sm transition hover:shadow-md">
             <CardHeader className="px-5 py-4 sm:px-6">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
