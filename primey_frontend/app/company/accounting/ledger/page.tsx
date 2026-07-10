@@ -18,6 +18,7 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowUpDown,
   BookOpen,
@@ -458,6 +459,42 @@ function normalizeLine(value: unknown): LedgerLine {
     source: text(record.source),
   };
 }
+
+function hrefForLedgerDocumentNumber(documentNumber: string) {
+  const normalized = documentNumber.trim();
+  if (!normalized || normalized === "—") return "";
+  const upper = normalized.toUpperCase();
+  const encoded = encodeURIComponent(normalized);
+  if (/^CP-\d{4}-/i.test(upper)) {
+    return `/company/treasury/receipt-vouchers/${encoded}`;
+  }
+  if (/^SP-\d{4}-/i.test(upper)) {
+    return `/company/treasury/payment-vouchers/${encoded}`;
+  }
+  if (/^(CPAY|SPAY|JE|REV)-\d{4}-/i.test(upper)) {
+    return `/company/accounting/journal-entries/${encoded}`;
+  }
+  return `/company/accounting/journal-entries/${encoded}`;
+}
+function ledgerSourceDocumentNumber(line: LedgerLine) {
+  const candidates = [line.description, line.source].filter(Boolean).join(" ");
+  const match = candidates.match(/\b(?:CP|SP)-\d{4}-\d{5,}\b/i);
+  return (match?.[0] || "").trim();
+}
+function ledgerReferenceDocumentNumber(line: LedgerLine) {
+  const candidates = [line.reference_number, line.entry_number].filter(Boolean).join(" ");
+  const match = candidates.match(/\b(?:CPAY|SPAY|JE|REV|CP|SP)-\d{4}-\d{5,}\b/i);
+  return (match?.[0] || line.reference_number || line.entry_number || "").trim();
+}
+function ledgerDocumentHref(line: LedgerLine) {
+  const sourceNumber = ledgerSourceDocumentNumber(line);
+  const referenceNumber = ledgerReferenceDocumentNumber(line);
+  return hrefForLedgerDocumentNumber(sourceNumber || referenceNumber);
+}
+function ledgerReferenceHref(line: LedgerLine) {
+  return hrefForLedgerDocumentNumber(ledgerReferenceDocumentNumber(line));
+}
+
 function normalizeSection(value: unknown): LedgerSection {
   const record = asRecord(value);
   const account = normalizeAccount(record.account || record);
@@ -560,6 +597,7 @@ function LedgerSkeleton() {
   );
 }
 export default function CompanyAccountingLedgerPage() {
+  const router = useRouter();
   const [locale, setLocale] = React.useState<Locale>("ar");
   const [loading, setLoading] = React.useState(true);
   const [accountsLoading, setAccountsLoading] = React.useState(true);
@@ -606,6 +644,12 @@ export default function CompanyAccountingLedgerPage() {
   }, []);
   const t = translations[locale];
   const isRtl = locale === "ar";
+  const openLedgerLineDocument = React.useCallback((line: LedgerLine) => {
+    const href = ledgerDocumentHref(line);
+    if (href) {
+      router.push(href);
+    }
+  }, [router]);
   const loadAccounts = React.useCallback(async () => {
     setAccountsLoading(true);
     try {
@@ -1029,74 +1073,118 @@ export default function CompanyAccountingLedgerPage() {
                 </div>
               </div>
               <div className="overflow-x-auto">
-                <Table className="min-w-[1080px] table-fixed">
+                <Table className="min-w-[1180px] table-fixed">
                   <colgroup>
-                    <col className="w-[120px]" />
-                    <col className="w-[170px]" />
+                    <col className="w-[130px]" />
+                    <col className="w-[190px]" />
                     <col className="w-[150px]" />
-                    <col className="w-[270px]" />
+                    <col className="w-[330px]" />
+                    <col className="w-[125px]" />
+                    <col className="w-[125px]" />
+                    <col className="w-[145px]" />
                     <col className="w-[120px]" />
-                    <col className="w-[120px]" />
-                    <col className="w-[140px]" />
-                    <col className="w-[110px]" />
                   </colgroup>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="whitespace-nowrap text-start">{t.date}</TableHead>
-                      <TableHead className="whitespace-nowrap text-start">{t.referenceNumber}</TableHead>
-                      <TableHead className="whitespace-nowrap text-start">{t.costCenter}</TableHead>
-                      <TableHead className="whitespace-nowrap text-start">{t.definition}</TableHead>
-                      <TableHead className="whitespace-nowrap text-end">{t.debit}</TableHead>
-                      <TableHead className="whitespace-nowrap text-end">{t.credit}</TableHead>
-                      <TableHead className="whitespace-nowrap text-end">{t.balance}</TableHead>
-                      <TableHead className="whitespace-nowrap text-center">{t.status}</TableHead>
+                      <TableHead className="whitespace-nowrap px-4 text-start">{t.date}</TableHead>
+                      <TableHead className="whitespace-nowrap px-4 text-start">{t.referenceNumber}</TableHead>
+                      <TableHead className="whitespace-nowrap px-4 text-start">{t.costCenter}</TableHead>
+                      <TableHead className="whitespace-nowrap px-4 text-start">{t.definition}</TableHead>
+                      <TableHead className="whitespace-nowrap px-4 text-end">{t.debit}</TableHead>
+                      <TableHead className="whitespace-nowrap px-4 text-end">{t.credit}</TableHead>
+                      <TableHead className="whitespace-nowrap px-4 text-end">{t.balance}</TableHead>
+                      <TableHead className="whitespace-nowrap px-4 text-center">{t.status}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     <TableRow className="bg-muted/20">
-                      <TableCell className="text-start text-muted-foreground">—</TableCell>
-                      <TableCell className="text-start text-muted-foreground">—</TableCell>
-                      <TableCell className="text-start text-muted-foreground">—</TableCell>
-                      <TableCell className="text-start font-medium">{t.openingLine}</TableCell>
-                      <TableCell className="text-end text-muted-foreground">—</TableCell>
-                      <TableCell className="text-end text-muted-foreground">—</TableCell>
-                      <TableCell className="text-end font-semibold">
+                      <TableCell className="px-4 text-start text-muted-foreground">—</TableCell>
+                      <TableCell className="px-4 text-start text-muted-foreground">—</TableCell>
+                      <TableCell className="px-4 text-start text-muted-foreground">—</TableCell>
+                      <TableCell className="px-4 text-start font-medium">{t.openingLine}</TableCell>
+                      <TableCell className="px-4 text-end text-muted-foreground">—</TableCell>
+                      <TableCell className="px-4 text-end text-muted-foreground">—</TableCell>
+                      <TableCell className="px-4 text-end font-semibold">
                         <MoneyValue value={section.opening_balance} label={t.sar} />
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="px-4 text-center">
                         <Badge variant="outline" className="rounded-full">{balanceSideLabel(section.opening_balance_side, locale)}</Badge>
                       </TableCell>
                     </TableRow>
-                    {section.lines.length ? section.lines.map((line) => (
-                      <TableRow key={line.id}>
-                        <TableCell className="whitespace-nowrap text-start tabular-nums" dir="ltr" lang="en">
+                    {section.lines.length ? section.lines.map((line) => {
+                      const documentHref = ledgerDocumentHref(line);
+                      const referenceHref = ledgerReferenceHref(line);
+                      const sourceDocumentNumber = ledgerSourceDocumentNumber(line);
+                      const sourceDocumentHref = hrefForLedgerDocumentNumber(sourceDocumentNumber);
+                      return (
+                        <TableRow
+                          key={line.id}
+                          role={documentHref ? "button" : undefined}
+                          tabIndex={documentHref ? 0 : undefined}
+                          title={documentHref ? (locale === "ar" ? "اضغط لفتح المستند أو تفاصيل القيد" : "Click to open document or entry details") : undefined}
+                          onClick={() => openLedgerLineDocument(line)}
+                          onKeyDown={(event) => {
+                            if (documentHref && (event.key === "Enter" || event.key === " ")) {
+                              event.preventDefault();
+                              openLedgerLineDocument(line);
+                            }
+                          }}
+                          className={cn("transition-colors hover:bg-muted/30", documentHref && "cursor-pointer")}
+                        >
+                        <TableCell className="whitespace-nowrap px-4 text-start tabular-nums" dir="ltr" lang="en">
                           {formatDate(line.date)}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-start font-medium tabular-nums" dir="ltr" lang="en">
-                          {line.reference_number}
+                        <TableCell className="whitespace-nowrap px-4 text-start font-medium tabular-nums" dir="ltr" lang="en">
+                          {referenceHref ? (
+                            <Link
+                              href={referenceHref}
+                              onClick={(event) => event.stopPropagation()}
+                              className="inline-flex max-w-full rounded-lg px-2 py-1 font-semibold text-slate-950 transition hover:bg-slate-100 hover:underline"
+                              title={locale === "ar" ? "فتح تفاصيل القيد" : "Open journal entry details"}
+                            >
+                              {line.reference_number || ledgerReferenceDocumentNumber(line) || "—"}
+                            </Link>
+                          ) : (
+                            line.reference_number || "—"
+                          )}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-start">
+                        <TableCell className="whitespace-nowrap px-4 text-start">
                           {line.cost_center_code || line.cost_center_name || "—"}
                         </TableCell>
-                        <TableCell className="truncate text-start">
-                          {line.description || line.source || "—"}
+                        <TableCell className="px-4 text-start">
+                          <div className="truncate" title={line.description || line.source || "—"}>
+                            {line.description || line.source || "—"}
+                          </div>
+                          {sourceDocumentHref ? (
+                            <Link
+                              href={sourceDocumentHref}
+                              onClick={(event) => event.stopPropagation()}
+                              className="mt-1 inline-flex w-fit rounded-full border border-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-100 hover:underline"
+                              dir="ltr"
+                              lang="en"
+                              title={locale === "ar" ? "فتح تفاصيل السند الأصلي" : "Open source voucher details"}
+                            >
+                              {sourceDocumentNumber}
+                            </Link>
+                          ) : null}
                         </TableCell>
-                        <TableCell className="text-end">
+                        <TableCell className="px-4 text-end">
                           {line.debit ? <MoneyValue value={line.debit} label={t.sar} /> : "—"}
                         </TableCell>
-                        <TableCell className="text-end">
+                        <TableCell className="px-4 text-end">
                           {line.credit ? <MoneyValue value={line.credit} label={t.sar} /> : "—"}
                         </TableCell>
-                        <TableCell className="text-end font-medium">
+                        <TableCell className="px-4 text-end font-medium">
                           <MoneyValue value={line.balance} label={t.sar} />
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="px-4 text-center">
                           <Badge variant="outline" className="rounded-full border-emerald-200 bg-emerald-50 text-emerald-700">
                             {t.posted}
                           </Badge>
                         </TableCell>
                       </TableRow>
-                    )) : (
+                      );
+                    }) : (
                       <TableRow>
                         <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                           {t.noMovements}
@@ -1107,11 +1195,11 @@ export default function CompanyAccountingLedgerPage() {
                       <TableCell />
                       <TableCell />
                       <TableCell />
-                      <TableCell className="text-start">{t.totalOperation}</TableCell>
-                      <TableCell className="text-end"><MoneyValue value={section.period_debit} label={t.sar} /></TableCell>
-                      <TableCell className="text-end"><MoneyValue value={section.period_credit} label={t.sar} /></TableCell>
-                      <TableCell className="text-end"><MoneyValue value={section.closing_balance} label={t.sar} /></TableCell>
-                      <TableCell className="text-center">{balanceSideLabel(section.closing_balance_side, locale)}</TableCell>
+                      <TableCell className="px-4 text-start">{t.totalOperation}</TableCell>
+                      <TableCell className="px-4 text-end"><MoneyValue value={section.period_debit} label={t.sar} /></TableCell>
+                      <TableCell className="px-4 text-end"><MoneyValue value={section.period_credit} label={t.sar} /></TableCell>
+                      <TableCell className="px-4 text-end"><MoneyValue value={section.closing_balance} label={t.sar} /></TableCell>
+                      <TableCell className="px-4 text-center">{balanceSideLabel(section.closing_balance_side, locale)}</TableCell>
                     </TableRow>
                   </TableBody>
                 </Table>

@@ -19,6 +19,7 @@
    ✅ No localhost hardcoding except safe dev fallback
 ============================================================ */
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -42,6 +43,7 @@ import {
   TriangleAlert,
   WalletCards,
   MoreVertical,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -131,7 +133,7 @@ const translations = {
     moduleBadge: "الخزينة والمدفوعات",
     cashboxesTitle: "الصناديق",
     cashboxesSubtitle:
-      "إدارة صناديق الشركة النقدية ومتابعة أرصدتها وحالتها بدون حذف للحفاظ على الحركات السابقة.",
+      "إدارة صناديق الشركة النقدية ومتابعة أرصدتها وحالتها والحركات المرتبطة بها.",
     bankAccountsTitle: "الحسابات البنكية",
     bankAccountsSubtitle:
       "إدارة الحسابات البنكية والآيبان وربطها بحركات الخزينة والمدفوعات داخل الشركة.",
@@ -171,16 +173,12 @@ const translations = {
     defaultAccount: "افتراضي",
     notes: "ملاحظات",
     actions: "الإجراءات",
+    viewDetails: "فتح التفاصيل",
     totalAccounts: "إجمالي الحسابات",
     activeAccounts: "النشطة",
     inactiveAccounts: "المعطلة",
     totalBalance: "إجمالي الرصيد",
     defaultAccounts: "الحسابات الافتراضية",
-    operationalHintTitle: "صفحة تشغيلية",
-    cashOperationalHint:
-      "هذه الصفحة مخصصة لإنشاء وتعديل وتعطيل الصناديق. لا يوجد حذف حتى لا تتأثر الحركات السابقة.",
-    bankOperationalHint:
-      "هذه الصفحة مخصصة لإنشاء وتعديل وتعطيل الحسابات البنكية. لا يوجد حذف حتى لا تتأثر الحركات السابقة.",
     tableTitleCash: "قائمة الصناديق",
     tableTitleBank: "قائمة الحسابات البنكية",
     tableDescCash: "الصناديق النقدية الخاصة بالشركة الحالية.",
@@ -216,7 +214,7 @@ const translations = {
     moduleBadge: "Treasury & Payments",
     cashboxesTitle: "Cashboxes",
     cashboxesSubtitle:
-      "Manage company cashboxes, balances, and status without deleting historical movements.",
+      "Manage company cashboxes, balances, status, and related movements.",
     bankAccountsTitle: "Bank Accounts",
     bankAccountsSubtitle:
       "Manage company bank accounts and IBANs connected to treasury movements and payments.",
@@ -256,16 +254,12 @@ const translations = {
     defaultAccount: "Default",
     notes: "Notes",
     actions: "Actions",
+    viewDetails: "Open details",
     totalAccounts: "Total accounts",
     activeAccounts: "Active",
     inactiveAccounts: "Inactive",
     totalBalance: "Total balance",
     defaultAccounts: "Default accounts",
-    operationalHintTitle: "Operational page",
-    cashOperationalHint:
-      "This page creates, updates, and deactivates cashboxes. Delete is disabled to protect previous movements.",
-    bankOperationalHint:
-      "This page creates, updates, and deactivates bank accounts. Delete is disabled to protect previous movements.",
     tableTitleCash: "Cashboxes list",
     tableTitleBank: "Bank accounts list",
     tableDescCash: "Company cash accounts for the current workspace.",
@@ -364,6 +358,15 @@ function escapeHtml(value: unknown) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+function accountDetailHref(
+  row: TreasuryAccountRecord,
+) {
+  return row.accountingAccountId
+    ? `/company/accounting/chart-of-accounts/${encodeURIComponent(
+        row.accountingAccountId,
+      )}`
+    : "";
 }
 function getInitialLocale(): Locale {
   if (typeof window === "undefined") return "ar";
@@ -499,7 +502,6 @@ function getConfig(variant: PageVariant, locale: Locale) {
     noDataTitle: isBank ? t.noDataTitleBank : t.noDataTitleCash,
     noDataDesc: isBank ? t.noDataDescBank : t.noDataDescCash,
     errorTitle: isBank ? t.errorTitleBank : t.errorTitleCash,
-    operationalHint: isBank ? t.bankOperationalHint : t.cashOperationalHint,
     icon: isBank ? Landmark : Banknote,
   };
 }
@@ -658,6 +660,7 @@ function DataTable<T extends { id: string }>({
   showingLabel,
   ofLabel,
   rowsLabel,
+  rowHref,
 }: {
   rows: T[];
   allRowsCount: number;
@@ -673,7 +676,9 @@ function DataTable<T extends { id: string }>({
   showingLabel: string;
   ofLabel: string;
   rowsLabel: string;
+  rowHref?: (row: T) => string;
 }) {
+  const router = useRouter();
   return (
     <div className="space-y-3">
       <div className="overflow-hidden rounded-2xl border bg-background">
@@ -697,7 +702,28 @@ function DataTable<T extends { id: string }>({
             <TableBody>
               {rows.length ? (
                 rows.map((row) => (
-                  <TableRow key={rowKey(row)} className="h-[68px]">
+                  <TableRow
+                    key={rowKey(row)}
+                    className={cn(
+                      "h-[68px] transition-colors",
+                      rowHref?.(row)
+                        ? "cursor-pointer hover:bg-muted/40"
+                        : "",
+                    )}
+                    onClick={(event) => {
+                      const href = rowHref?.(row);
+                      if (!href) return;
+                      const target = event.target as HTMLElement;
+                      if (
+                        target.closest(
+                          "button, a, input, select, textarea, [role='menuitem']",
+                        )
+                      ) {
+                        return;
+                      }
+                      router.push(href);
+                    }}
+                  >
                     {columns.map((column) => (
                       <TableCell
                         key={column.key}
@@ -1187,6 +1213,20 @@ export function TreasuryAccountsPage({ variant }: { variant: PageVariant }) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align={locale === "ar" ? "start" : "end"} className="w-44 rounded-xl">
+              {accountDetailHref(row) ? (
+                <DropdownMenuItem
+                  asChild
+                  className="flex items-center gap-2"
+                >
+                  <Link href={accountDetailHref(row)}>
+                    <ExternalLink className="h-4 w-4" />
+                    {t.viewDetails}
+                  </Link>
+                </DropdownMenuItem>
+              ) : null}
+              {accountDetailHref(row) ? (
+                <DropdownMenuSeparator />
+              ) : null}
               <DropdownMenuItem onClick={() => openEdit(row)} className="flex items-center gap-2">
                 <Edit3 className="h-4 w-4" />
                 {locale === "ar" ? "تعديل" : "Edit"}
@@ -1351,6 +1391,7 @@ export function TreasuryAccountsPage({ variant }: { variant: PageVariant }) {
               allRowsCount={rows.length}
               columns={columns}
               rowKey={(row) => row.id}
+              rowHref={accountDetailHref}
               emptyTitle={config.noDataTitle}
               emptyDescription={config.noDataDesc}
               noResultsTitle={t.noResultsTitle}

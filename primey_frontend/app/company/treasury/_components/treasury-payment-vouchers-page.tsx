@@ -19,6 +19,7 @@
    ✅ No localhost hardcoding except safe dev fallback
 ============================================================ */
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -44,6 +45,7 @@ import {
   TriangleAlert,
   WalletCards,
   MoreVertical,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -511,6 +513,20 @@ function escapeHtml(value: unknown) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+function voucherDetailHref(
+  variant: VoucherVariant,
+  row: VoucherRecord,
+) {
+  const base =
+    variant === "receipt"
+      ? "/company/treasury/receipt-vouchers"
+      : "/company/treasury/payment-vouchers";
+  const identifier = row.paymentNumber || row.id;
+  return identifier
+    ? `${base}/${encodeURIComponent(identifier)}`
+    : base;
+}
+
 function getInitialLocale(): Locale {
   if (typeof window === "undefined") return "ar";
   return window.localStorage.getItem("primey-locale") === "en" ? "en" : "ar";
@@ -1149,6 +1165,7 @@ function DataTable<T extends { id: string }>({
   showingLabel,
   ofLabel,
   rowsLabel,
+  onRowClick,
 }: {
   rows: T[];
   allRowsCount: number;
@@ -1164,6 +1181,7 @@ function DataTable<T extends { id: string }>({
   showingLabel: string;
   ofLabel: string;
   rowsLabel: string;
+  onRowClick?: (row: T) => void;
 }) {
   return (
     <div className="space-y-3">
@@ -1188,7 +1206,15 @@ function DataTable<T extends { id: string }>({
             <TableBody>
               {rows.length ? (
                 rows.map((row) => (
-                  <TableRow key={rowKey(row)} className="h-[72px]">
+                  <TableRow
+                    key={rowKey(row)}
+                    className={`h-[72px] transition-colors ${onRowClick ? "cursor-pointer hover:bg-muted/40" : ""}`}
+                    onClick={(event) => {
+                      const target = event.target as HTMLElement;
+                      if (target.closest("button, a, input, select, textarea, [role='menuitem']")) return;
+                      onRowClick?.(row);
+                    }}
+                  >
                     {columns.map((column) => (
                       <TableCell
                         key={column.key}
@@ -1977,6 +2003,7 @@ function VoucherFormCard({
   );
 }
 export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVariant }) {
+  const router = useRouter();
   const [locale, setLocale] = React.useState<Locale>("ar");
   const [rows, setRows] = React.useState<VoucherRecord[]>([]);
   const [accounts, setAccounts] = React.useState<TreasuryAccountOption[]>([]);
@@ -2345,8 +2372,14 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
       className: "w-[190px]",
       render: (row) => (
         <div className="min-w-0">
-          <p className="truncate font-semibold text-foreground">{row.paymentNumber}</p>
-          <p className="mt-1 truncate text-xs text-muted-foreground">{row.reference || "—"}</p>
+          <span className="block max-w-full cursor-pointer select-none truncate font-semibold text-foreground">
+            {row.paymentNumber}
+          </span>
+          {row.reference && row.reference !== "—" ? (
+            <span className="mt-1 block truncate text-xs text-muted-foreground">
+              {row.reference}
+            </span>
+          ) : null}
         </div>
       ),
     },
@@ -2432,6 +2465,14 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align={locale === "ar" ? "start" : "end"} className="w-44 rounded-xl">
+              <DropdownMenuItem
+                onClick={() => router.push(voucherDetailHref(variant, row))}
+                className="flex items-center gap-2"
+              >
+                <ExternalLink className="h-4 w-4" />
+                {locale === "ar" ? "فتح التفاصيل" : "Open details"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 disabled={saving || row.status !== "draft"}
                 onClick={() => openEdit(row)}
@@ -2698,6 +2739,7 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
               allRowsCount={rows.length}
               columns={columns}
               rowKey={(row) => row.id}
+              onRowClick={(row) => router.push(voucherDetailHref(variant, row))}
               emptyTitle={config.noDataTitle}
               emptyDescription={config.noDataDesc}
               noResultsTitle={t.noResultsTitle}

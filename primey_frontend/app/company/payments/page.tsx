@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 /* ============================================================
    📂 primey_frontend/app/company/payments/page.tsx
    🧠 PrimeyAcc — Company Payments Center Page
@@ -18,6 +18,7 @@
    ✅ No localhost hardcoding except safe dev fallback
 ============================================================ */
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -36,10 +37,18 @@ import {
   Sparkles,
   TriangleAlert,
   WalletCards,
+  ExternalLink,
+  MoreVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Card,
   CardContent,
@@ -128,7 +137,7 @@ const translations = {
     moduleBadge: "الخزينة والمدفوعات",
     title: "المدفوعات",
     subtitle:
-      "مركز متابعة موحد لسندات القبض وسندات الصرف، مع ملخص التدفق النقدي وربط الخزينة والمحاسبة.",
+      "إدارة سندات القبض والصرف ومراجعة التدفقات النقدية والحركات المرتبطة بها.",
     refresh: "تحديث",
     export: "تصدير Excel",
     print: "طباعة",
@@ -158,9 +167,6 @@ const translations = {
     confirmedCount: "مؤكدة",
     draftCount: "مسودات",
     cancelledCount: "ملغاة",
-    operationalHintTitle: "مركز متابعة",
-    operationalHintDesc:
-      "هذه الصفحة تجمع سندات القبض والصرف للمتابعة والتحليل. إنشاء وتأكيد وإلغاء السندات يتم من صفحات سندات القبض وسندات الصرف.",
     shortcutsTitle: "اختصارات المدفوعات",
     shortcutsDesc: "انتقال سريع للصفحات التشغيلية المرتبطة بالمدفوعات.",
     receiptVoucher: "سند قبض",
@@ -168,7 +174,7 @@ const translations = {
     cashboxes: "الصناديق",
     bankAccounts: "الحسابات البنكية",
     tableTitle: "سجل المدفوعات",
-    tableDesc: "آخر سندات القبض والصرف المتاحة من واجهات الخزينة.",
+    tableDesc: "سندات القبض والصرف المسجلة في الشركة.",
     searchPlaceholder: "ابحث برقم السند أو الطرف أو المرجع أو حساب الخزينة...",
     kind: "النوع",
     status: "الحالة",
@@ -195,7 +201,7 @@ const translations = {
     sar: "ر.س",
     unknown: "غير محدد",
     noDataTitle: "لا توجد مدفوعات",
-    noDataDesc: "ستظهر هنا سندات القبض والصرف عند توفرها من API.",
+    noDataDesc: "لا توجد سندات مسجلة حاليًا.",
     noResultsTitle: "لا توجد نتائج مطابقة",
     noResultsDesc: "غيّر البحث أو الفلاتر لعرض نتائج أخرى.",
     partialWarningTitle: "تم تحميل الصفحة جزئيًا",
@@ -213,7 +219,7 @@ const translations = {
     moduleBadge: "Treasury & Payments",
     title: "Payments",
     subtitle:
-      "Unified monitoring center for receipt and payment vouchers, cash flow summary, treasury linkage, and accounting linkage.",
+      "Manage receipt and payment vouchers and review their related cash movements.",
     refresh: "Refresh",
     export: "Export Excel",
     print: "Print",
@@ -243,9 +249,6 @@ const translations = {
     confirmedCount: "Confirmed",
     draftCount: "Draft",
     cancelledCount: "Cancelled",
-    operationalHintTitle: "Monitoring center",
-    operationalHintDesc:
-      "This page combines receipt and payment vouchers for monitoring and analysis. Creating, confirming, and cancelling vouchers is handled in the dedicated voucher pages.",
     shortcutsTitle: "Payment shortcuts",
     shortcutsDesc: "Quick access to payment-related operational pages.",
     receiptVoucher: "Receipt voucher",
@@ -253,7 +256,7 @@ const translations = {
     cashboxes: "Cashboxes",
     bankAccounts: "Bank accounts",
     tableTitle: "Payments register",
-    tableDesc: "Latest receipt and payment vouchers available from treasury APIs.",
+    tableDesc: "Receipt and payment vouchers recorded for the company.",
     searchPlaceholder: "Search by voucher number, party, reference, or treasury account...",
     kind: "Type",
     status: "Status",
@@ -280,7 +283,7 @@ const translations = {
     sar: "SAR",
     unknown: "Unknown",
     noDataTitle: "No payments",
-    noDataDesc: "Receipt and payment vouchers will appear here when returned by the API.",
+    noDataDesc: "No vouchers are currently recorded.",
     noResultsTitle: "No matching results",
     noResultsDesc: "Change the search or filters to show other results.",
     partialWarningTitle: "Page loaded partially",
@@ -341,6 +344,17 @@ function escapeHtml(value: unknown) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+function paymentDetailHref(row: PaymentRecord) {
+  const base =
+    row.kind === "payment"
+      ? "/company/treasury/payment-vouchers"
+      : "/company/treasury/receipt-vouchers";
+  const identifier = row.number || row.id;
+  return identifier
+    ? `${base}/${encodeURIComponent(identifier)}`
+    : base;
+}
+
 function getInitialLocale(): Locale {
   if (typeof window === "undefined") return "ar";
   return window.localStorage.getItem("primey-locale") === "en" ? "en" : "ar";
@@ -656,6 +670,7 @@ function DataTable<T extends { id: string }>({
   showingLabel,
   ofLabel,
   rowsLabel,
+  onRowClick,
 }: {
   rows: T[];
   allRowsCount: number;
@@ -671,6 +686,7 @@ function DataTable<T extends { id: string }>({
   showingLabel: string;
   ofLabel: string;
   rowsLabel: string;
+  onRowClick?: (row: T) => void;
 }) {
   return (
     <div className="space-y-3">
@@ -695,7 +711,15 @@ function DataTable<T extends { id: string }>({
             <TableBody>
               {rows.length ? (
                 rows.map((row) => (
-                  <TableRow key={rowKey(row)} className="h-[72px]">
+                  <TableRow
+                    key={rowKey(row)}
+                    className={`h-[72px] transition-colors ${onRowClick ? "cursor-pointer hover:bg-muted/40" : ""}`}
+                    onClick={(event) => {
+                      const target = event.target as HTMLElement;
+                      if (target.closest("button, a, input, select, textarea, [role='menuitem']")) return;
+                      onRowClick?.(row);
+                    }}
+                  >
                     {columns.map((column) => (
                       <TableCell
                         key={column.key}
@@ -731,6 +755,7 @@ function DataTable<T extends { id: string }>({
   );
 }
 export default function CompanyPaymentsPage() {
+  const router = useRouter();
   const [locale, setLocale] = React.useState<Locale>("ar");
   const [rows, setRows] = React.useState<PaymentRecord[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -958,8 +983,14 @@ export default function CompanyPaymentsPage() {
       className: "w-[190px]",
       render: (row) => (
         <div className="min-w-0">
-          <p className="truncate font-semibold text-foreground">{row.number}</p>
-          <p className="mt-1 truncate text-xs text-muted-foreground">{row.reference || "—"}</p>
+          <span className="block max-w-full cursor-pointer select-none truncate font-semibold text-foreground">
+            {row.number}
+          </span>
+          {row.reference && row.reference !== "—" ? (
+            <span className="mt-1 block truncate text-xs text-muted-foreground">
+              {row.reference}
+            </span>
+          ) : null}
         </div>
       ),
     },
@@ -1029,6 +1060,48 @@ export default function CompanyPaymentsPage() {
                 }`
               : "—"}
           </p>
+        </div>
+      ),
+    },
+
+    {
+      key: "actions",
+      label: locale === "ar" ? "الإجراءات" : "Actions",
+      className: "w-[86px] text-center",
+      render: (row) => (
+        <div
+          className="flex items-center justify-center"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 rounded-xl bg-background"
+                aria-label={
+                  locale === "ar"
+                    ? "إجراءات السند"
+                    : "Voucher actions"
+                }
+              >
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align={locale === "ar" ? "start" : "end"}
+              className="w-44 rounded-xl"
+            >
+              <DropdownMenuItem
+                onClick={() => router.push(paymentDetailHref(row))}
+                className="flex items-center gap-2"
+              >
+                <ExternalLink className="h-4 w-4" />
+                {locale === "ar" ? "فتح التفاصيل" : "Open details"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       ),
     },
@@ -1118,15 +1191,6 @@ export default function CompanyPaymentsPage() {
             </CardContent>
           </Card>
         ) : null}
-        <Card className="rounded-2xl border-amber-200/70 bg-amber-50/70 text-amber-950 shadow-sm">
-          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-            <TriangleAlert className="h-5 w-5 shrink-0" />
-            <div>
-              <p className="text-sm font-semibold">{t.operationalHintTitle}</p>
-              <p className="mt-1 text-sm opacity-80">{t.operationalHintDesc}</p>
-            </div>
-          </CardContent>
-        </Card>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <KpiCard title={t.netFlow} value={stats.netFlow} description={t.netFlow} icon={WalletCards} money t={t} />
           <KpiCard title={t.totalReceipts} value={stats.totalReceipts} description={`${t.receipts}: ${formatInteger(stats.receipts)}`} icon={ArrowDownLeft} money t={t} />
@@ -1250,6 +1314,7 @@ export default function CompanyPaymentsPage() {
               allRowsCount={rows.length}
               columns={columns}
               rowKey={(row) => row.id}
+              onRowClick={(row) => router.push(paymentDetailHref(row))}
               emptyTitle={t.noDataTitle}
               emptyDescription={t.noDataDesc}
               noResultsTitle={t.noResultsTitle}

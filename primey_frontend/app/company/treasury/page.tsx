@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 /* ============================================================
    📂 primey_frontend/app/company/treasury/page.tsx
    🧠 PrimeyAcc — Company Treasury & Payments Dashboard
@@ -19,6 +19,7 @@
    ✅ No localhost hardcoding except safe dev fallback
 ============================================================ */
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -114,6 +115,11 @@ type TreasuryAccountRecord = {
 };
 type TreasuryTransactionRecord = {
   id: string;
+  sourceId: string;
+  sourceNumber: string;
+  treasuryAccountId: string;
+  accountingAccountId: string;
+  accountingEntryId: string;
   number: string;
   date: string | null;
   accountName: string;
@@ -154,7 +160,7 @@ type DataColumn<T> = {
 };
 const TREASURY_ENDPOINTS = {
   summary: "/api/company/treasury/summary/",
-  accounts: "/api/company/treasury/cashboxes/",
+  accounts: "/api/company/treasury/accounts/",
   transactions: "/api/company/treasury/transactions/",
 };
 const emptyStats: TreasuryStats = {
@@ -238,7 +244,7 @@ const translations = {
     moduleBadge: "وحدة الشركة",
     title: "الخزينة والمدفوعات",
     subtitle:
-      "لوحة تشغيلية لمتابعة أرصدة الصناديق والبنوك والمحافظ، حركات الوارد والصادر، وسندات القبض والصرف داخل الشركة الحالية.",
+      "إدارة أرصدة الصناديق والحسابات البنكية، ومراجعة حركات الوارد والصادر وسندات القبض والصرف.",
     refresh: "تحديث",
     export: "تصدير Excel",
     print: "طباعة",
@@ -260,9 +266,6 @@ const translations = {
     rows: "صفوف",
     sar: "ر.س",
     unknown: "غير محدد",
-    operationalTitle: "صفحة تشغيلية",
-    operationalDesc:
-      "هذه الصفحة تعرض مركز الخزينة، أما إنشاء الحسابات والحركات وتأكيد أو إلغاء سندات القبض والصرف فيتم من الصفحات المختصة داخل الوحدة.",
     totalBalance: "إجمالي الرصيد",
     cashBalance: "رصيد الصناديق",
     bankBalance: "رصيد البنوك",
@@ -315,7 +318,7 @@ const translations = {
     salesInvoice: "فاتورة مبيعات",
     purchaseBill: "فاتورة مشتريات",
     noDataTitle: "لا توجد بيانات",
-    noDataDesc: "ستظهر البيانات هنا عند توفرها من API.",
+    noDataDesc: "لا توجد بيانات مسجلة حاليًا.",
     noResultsTitle: "لا توجد نتائج مطابقة",
     noResultsDesc: "غيّر البحث أو الفلاتر لعرض نتائج أخرى.",
     errorTitle: "تعذر تحميل لوحة الخزينة",
@@ -325,14 +328,12 @@ const translations = {
     printEmpty: "لا توجد بيانات للطباعة.",
     generatedAt: "تم الإنشاء في",
     refreshed: "تم تحديث لوحة الخزينة.",
-    partialWarningTitle: "تم تحميل الصفحة جزئيًا",
-    partialWarningDesc: "بعض واجهات الخزينة لم تعد بيانات صالحة، لذلك تظهر البيانات المتاحة فقط.",
   },
   en: {
     moduleBadge: "Company module",
     title: "Treasury & Payments",
     subtitle:
-      "Operational dashboard for cash, bank, wallet balances, inflows, outflows, receipt vouchers, and payment vouchers inside the current company.",
+      "Manage cashbox and bank balances, treasury movements, receipt vouchers, and payment vouchers.",
     refresh: "Refresh",
     export: "Export Excel",
     print: "Print",
@@ -354,9 +355,6 @@ const translations = {
     rows: "rows",
     sar: "SAR",
     unknown: "Unknown",
-    operationalTitle: "Operational page",
-    operationalDesc:
-      "This page shows the treasury center. Creating accounts, posting movements, and confirming or cancelling receipt/payment vouchers is handled in the dedicated pages.",
     totalBalance: "Total balance",
     cashBalance: "Cash balance",
     bankBalance: "Bank balance",
@@ -409,7 +407,7 @@ const translations = {
     salesInvoice: "Sales invoice",
     purchaseBill: "Purchase bill",
     noDataTitle: "No data",
-    noDataDesc: "Data will appear here when returned by the API.",
+    noDataDesc: "No records are currently available.",
     noResultsTitle: "No matching results",
     noResultsDesc: "Change the search or filters to show other results.",
     errorTitle: "Could not load treasury dashboard",
@@ -419,8 +417,6 @@ const translations = {
     printEmpty: "There is no data to print.",
     generatedAt: "Generated at",
     refreshed: "Treasury dashboard refreshed.",
-    partialWarningTitle: "Page loaded partially",
-    partialWarningDesc: "Some treasury APIs did not return valid data, so only available data is shown.",
   },
 } as const;
 const statusFilters: StatusFilter[] = ["all", "active", "inactive", "draft", "posted", "cancelled"];
@@ -481,6 +477,71 @@ function escapeHtml(value: unknown) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+function accountDetailHref(
+  row: TreasuryAccountRecord,
+) {
+  return row.accountingAccountId
+    ? `/company/accounting/chart-of-accounts/${encodeURIComponent(
+        row.accountingAccountId,
+      )}`
+    : "";
+}
+function extractVoucherNumber(
+  ...values: string[]
+) {
+  for (const value of values) {
+    const match = value.match(
+      /\b(?:CP|SP)-\d{4}-\d{6}\b/i,
+    );
+    if (match) {
+      return match[0].toUpperCase();
+    }
+  }
+  return "";
+}
+function treasuryTransactionDetailHref(
+  row: TreasuryTransactionRecord,
+) {
+  const sourceType = row.sourceType.toUpperCase();
+  const sourceNumber =
+    row.sourceNumber ||
+    extractVoucherNumber(
+      row.reference,
+      row.description,
+      row.number,
+    );
+  if (
+    sourceNumber.startsWith("CP-") ||
+    sourceType.includes("CUSTOMER_PAYMENT")
+  ) {
+    return sourceNumber
+      ? `/company/treasury/receipt-vouchers/${encodeURIComponent(
+          sourceNumber,
+        )}`
+      : "";
+  }
+  if (
+    sourceNumber.startsWith("SP-") ||
+    sourceType.includes("SUPPLIER_PAYMENT")
+  ) {
+    return sourceNumber
+      ? `/company/treasury/payment-vouchers/${encodeURIComponent(
+          sourceNumber,
+        )}`
+      : "";
+  }
+  if (row.accountingEntryNumber) {
+    return `/company/accounting/journal-entries/${encodeURIComponent(
+      row.accountingEntryNumber,
+    )}`;
+  }
+  if (row.accountingAccountId) {
+    return `/company/accounting/chart-of-accounts/${encodeURIComponent(
+      row.accountingAccountId,
+    )}`;
+  }
+  return "";
 }
 function getInitialLocale(): Locale {
   if (typeof window === "undefined") return "ar";
@@ -674,7 +735,13 @@ function normalizeAccount(value: unknown): TreasuryAccountRecord {
     currency: normalizeText(record.currency, "SAR"),
     openingBalance: toNumber(record.opening_balance),
     currentBalance: toNumber(record.current_balance),
-    accountingAccountId: normalizeText(record.accounting_account_id),
+    accountingAccountId: normalizeText(
+      record.accounting_account_id ||
+        accountSnapshot.accounting_account_id ||
+        asRecord(
+          accountSnapshot.accounting_account,
+        ).id,
+    ),
     accountingAccountCode: normalizeText(record.accounting_account_code),
     accountingAccountName: normalizeText(record.accounting_account_name),
     openingAccountingEntryId: normalizeText(record.opening_accounting_entry_id),
@@ -694,8 +761,43 @@ function normalizeTransaction(value: unknown, locale: Locale): TreasuryTransacti
   const type = normalizeTransactionType(record.transaction_type || record.type);
   const status = normalizeStatus(record.status);
   return {
-    id: normalizeText(record.id || record.uuid || record.pk),
-    number: normalizeText(record.transaction_number || record.number || record.reference, "—"),
+    id: normalizeText(
+      record.id ||
+        record.uuid ||
+        record.pk,
+    ),
+    sourceId: normalizeText(
+      record.source_id ||
+        record.payment_id ||
+        record.voucher_id,
+    ),
+    sourceNumber: normalizeText(
+      record.source_number ||
+        record.payment_number ||
+        record.voucher_number ||
+        record.source_reference,
+    ),
+    treasuryAccountId: normalizeText(
+      record.treasury_account_id ||
+        record.account_id ||
+        accountSnapshot.id,
+    ),
+    accountingAccountId: normalizeText(
+      record.accounting_account_id ||
+        accountSnapshot.accounting_account_id ||
+        asRecord(
+          accountSnapshot.accounting_account,
+        ).id,
+    ),
+    accountingEntryId: normalizeText(
+      record.accounting_entry_id,
+    ),
+    number: normalizeText(
+      record.transaction_number ||
+        record.number ||
+        record.reference,
+      "—",
+    ),
     date: normalizeText(record.transaction_date || record.date || record.created_at) || null,
     accountName: normalizeText(record.account_name || accountSnapshot.name, "—"),
     accountCode: normalizeText(record.account_code || accountSnapshot.code),
@@ -943,6 +1045,7 @@ function DataTable<T extends { id: string }>({
   showingLabel,
   ofLabel,
   rowsLabel,
+  rowHref,
 }: {
   rows: T[];
   allRowsCount: number;
@@ -958,7 +1061,9 @@ function DataTable<T extends { id: string }>({
   showingLabel: string;
   ofLabel: string;
   rowsLabel: string;
+  rowHref?: (row: T) => string;
 }) {
+  const router = useRouter();
   return (
     <div className="space-y-3">
       <div className="overflow-hidden rounded-2xl border bg-background">
@@ -982,7 +1087,28 @@ function DataTable<T extends { id: string }>({
             <TableBody>
               {rows.length ? (
                 rows.map((row) => (
-                  <TableRow key={rowKey(row)} className="h-[64px]">
+                  <TableRow
+                    key={rowKey(row)}
+                    className={cn(
+                      "h-[64px] transition-colors",
+                      rowHref?.(row)
+                        ? "cursor-pointer hover:bg-muted/40"
+                        : "",
+                    )}
+                    onClick={(event) => {
+                      const href = rowHref?.(row);
+                      if (!href) return;
+                      const target = event.target as HTMLElement;
+                      if (
+                        target.closest(
+                          "button, a, input, select, textarea, [role='menuitem']",
+                        )
+                      ) {
+                        return;
+                      }
+                      router.push(href);
+                    }}
+                  >
                     {columns.map((column) => (
                       <TableCell
                         key={column.key}
@@ -1055,7 +1181,6 @@ export default function CompanyTreasuryPage() {
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState("");
-  const [warnings, setWarnings] = React.useState<string[]>([]);
   const [accountSearch, setAccountSearch] = React.useState("");
   const [accountStatus, setAccountStatus] = React.useState<StatusFilter>("all");
   const [accountType, setAccountType] = React.useState<AccountTypeFilter>("all");
@@ -1091,7 +1216,6 @@ export default function CompanyTreasuryPage() {
         if (!silent) setLoading(true);
         setRefreshing(true);
         setError("");
-        setWarnings([]);
         const accountParams = new URLSearchParams({
           page: "1",
           page_size: "50",
@@ -1120,14 +1244,10 @@ export default function CompanyTreasuryPage() {
         setAccounts(accountRows);
         setTransactions(transactionRows);
         setStats(buildStats(summary, accountRows, transactionRows));
-        const hasPartialData = failedMessages.length > 0 && failedMessages.length < results.length;
-        setWarnings(hasPartialData ? failedMessages.filter(Boolean) : []);
         if (failedMessages.length === results.length) {
           throw new Error(failedMessages[0] || t.errorDesc);
         }
-        if (hasPartialData) {
-          toast.warning(t.partialWarningTitle);
-        } else if (silent) {
+        if (silent) {
           toast.success(t.refreshed);
         }
       } catch (caughtError) {
@@ -1583,26 +1703,6 @@ export default function CompanyTreasuryPage() {
             </div>
           </div>
         </section>
-        {warnings.length ? (
-          <Card className="rounded-2xl border-amber-200 bg-amber-50 text-amber-950 shadow-sm">
-            <CardContent className="flex gap-3 p-4">
-              <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0" />
-              <div>
-                <p className="text-sm font-semibold">{t.partialWarningTitle}</p>
-                <p className="mt-1 text-sm opacity-80">{t.partialWarningDesc}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-        <Card className="rounded-2xl border-amber-200/70 bg-amber-50/70 text-amber-950 shadow-sm">
-          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-            <TriangleAlert className="h-5 w-5 shrink-0" />
-            <div>
-              <p className="text-sm font-semibold">{t.operationalTitle}</p>
-              <p className="mt-1 text-sm opacity-80">{t.operationalDesc}</p>
-            </div>
-          </CardContent>
-        </Card>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {kpiCards.map((card) => (
             <KpiCard
@@ -1767,6 +1867,7 @@ export default function CompanyTreasuryPage() {
               allRowsCount={accounts.length}
               columns={accountColumns}
               rowKey={(row) => row.id}
+              rowHref={accountDetailHref}
               emptyTitle={t.noDataTitle}
               emptyDescription={t.noDataDesc}
               noResultsTitle={t.noResultsTitle}
@@ -1865,6 +1966,7 @@ export default function CompanyTreasuryPage() {
               allRowsCount={transactions.length}
               columns={transactionColumns}
               rowKey={(row) => row.id || row.number}
+              rowHref={treasuryTransactionDetailHref}
               emptyTitle={t.noDataTitle}
               emptyDescription={t.noDataDesc}
               noResultsTitle={t.noResultsTitle}
