@@ -2425,10 +2425,34 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
         ) : null}
         <Card className="overflow-hidden rounded-lg border bg-card shadow-none">
           <CardHeader className="px-5 pt-5 sm:px-6">
-            <CardTitle>{variantTableTitle(variant, locale)}</CardTitle>
-            <CardDescription>
-              {variantTableDesc(variant, locale)}
-            </CardDescription>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <CardTitle>
+                  {variantTableTitle(variant, locale)}
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  {variantTableDesc(variant, locale)}
+                </CardDescription>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={exportExcel}
+                >
+                  <FileSpreadsheet />
+                  {t.export}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={printPage}
+                >
+                  <Printer />
+                  {t.print}
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4 px-5 pb-5 sm:px-6">
             <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
