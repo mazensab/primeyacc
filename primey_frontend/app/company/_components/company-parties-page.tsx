@@ -28,6 +28,7 @@ import {
   ArrowUpRight,
   BadgeCheck,
   Building2,
+  CalendarDays,
   FileSpreadsheet,
   Loader2,
   Pencil,
@@ -39,7 +40,6 @@ import {
   RotateCcw,
   Search,
   ShieldCheck,
-  Sparkles,
   Store,
   TriangleAlert,
   Users,
@@ -54,8 +54,19 @@ import {
   MoreVertical,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -79,6 +90,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -317,6 +333,12 @@ const translations = {
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
     generatedAt: "تم الإنشاء في",
+    dateFrom: "من تاريخ",
+    dateTo: "إلى تاريخ",
+    reportRows: "عدد السجلات",
+    exportSuccess: "تم تجهيز ملف Excel بنجاح.",
+    printReady: "تم تجهيز صفحة الطباعة.",
+    printWindowBlocked: "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة.",
   },
   en: {
     badge: "Customers & Suppliers Module",
@@ -409,6 +431,12 @@ const translations = {
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
     generatedAt: "Generated at",
+    dateFrom: "From date",
+    dateTo: "To date",
+    reportRows: "Records",
+    exportSuccess: "Excel file prepared successfully.",
+    printReady: "Print page prepared.",
+    printWindowBlocked: "The print window could not be opened. Allow pop-ups and try again.",
   },
 } as const;
 const actionTranslations = {
@@ -449,13 +477,20 @@ const actionTranslations = {
     edit: "\u062a\u0639\u062f\u064a\u0644",
     activate: "\u062a\u0641\u0639\u064a\u0644",
     deactivate: "\u062a\u0639\u0637\u064a\u0644",
+    confirmActivateTitle: "تأكيد تفعيل الطرف",
+    confirmDeactivateTitle: "تأكيد تعطيل الطرف",
+    confirmActivateDesc: "سيتم تفعيل هذا الطرف وإتاحته للاستخدام في العمليات الجديدة.",
+    confirmDeactivateDesc: "سيتم تعطيل هذا الطرف ومنع استخدامه في العمليات الجديدة، مع الاحتفاظ بسجلاته السابقة.",
+    confirmActivateAction: "تأكيد التفعيل",
+    confirmDeactivateAction: "تأكيد التعطيل",
     save: "\u062d\u0641\u0638",
     cancel: "\u0625\u0644\u063a\u0627\u0621",
     saving: "\u062c\u0627\u0631\u064a \u0627\u0644\u062d\u0641\u0638",
     requiredName: "\u0627\u0633\u0645 \u0627\u0644\u0637\u0631\u0641 \u0645\u0637\u0644\u0648\u0628.",
     createSuccess: "\u062a\u0645 \u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u0633\u062c\u0644 \u0628\u0646\u062c\u0627\u062d.",
     updateSuccess: "\u062a\u0645 \u062a\u062d\u062f\u064a\u062b \u0627\u0644\u0633\u062c\u0644 \u0628\u0646\u062c\u0627\u062d.",
-    statusSuccess: "\u062a\u0645 \u062a\u062d\u062f\u064a\u062b \u0627\u0644\u062d\u0627\u0644\u0629.",
+    activateSuccess: "\u062a\u0645 \u062a\u0641\u0639\u064a\u0644 \u0627\u0644\u0637\u0631\u0641 \u0628\u0646\u062c\u0627\u062d.",
+    deactivateSuccess: "\u062a\u0645 \u062a\u0639\u0637\u064a\u0644 \u0627\u0644\u0637\u0631\u0641 \u0628\u0646\u062c\u0627\u062d.",
     actionFailed: "\u062a\u0639\u0630\u0631 \u062a\u0646\u0641\u064a\u0630 \u0627\u0644\u0625\u062c\u0631\u0627\u0621.",
   },
   en: {
@@ -495,13 +530,20 @@ const actionTranslations = {
     edit: "Edit",
     activate: "Activate",
     deactivate: "Deactivate",
+    confirmActivateTitle: "Confirm party activation",
+    confirmDeactivateTitle: "Confirm party deactivation",
+    confirmActivateDesc: "This party will be activated and available for new transactions.",
+    confirmDeactivateDesc: "This party will be disabled for new transactions while previous records remain available.",
+    confirmActivateAction: "Confirm activation",
+    confirmDeactivateAction: "Confirm deactivation",
     save: "Save",
     cancel: "Cancel",
     saving: "Saving",
     requiredName: "Party name is required.",
     createSuccess: "Record created successfully.",
     updateSuccess: "Record updated successfully.",
-    statusSuccess: "Status updated.",
+    activateSuccess: "Party activated successfully.",
+    deactivateSuccess: "Party deactivated successfully.",
     actionFailed: "Could not complete the action.",
   },
 } as const;
@@ -724,6 +766,64 @@ function formatDate(value: string | null | undefined) {
   if (Number.isNaN(parsed.getTime())) return value.slice(0, 10) || "—";
   return parsed.toISOString().slice(0, 10);
 }
+function parseIsoDate(value: string) {
+  if (!value) return undefined;
+  const [year, month, day] = value
+    .slice(0, 10)
+    .split("-")
+    .map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+}
+function dateToIso(value?: Date) {
+  if (!value) return "";
+  return value.toLocaleDateString("en-CA");
+}
+function DatePickerField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const selected = parseIsoDate(value);
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          aria-label={label}
+          title={label}
+          className="h-9 w-full justify-start bg-background px-3 text-start font-normal shadow-none sm:w-[150px]"
+        >
+          <CalendarDays className="me-2 h-4 w-4 shrink-0 text-muted-foreground" />
+          <span
+            dir="ltr"
+            lang="en"
+            className="truncate tabular-nums"
+          >
+            {value || label}
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-auto p-0"
+        align="start"
+      >
+        <Calendar
+          mode="single"
+          selected={selected}
+          onSelect={(date) => onChange(dateToIso(date))}
+          initialFocus
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function rowTime(value: string | null | undefined) {
   if (!value) return 0;
   const parsed = new Date(value).getTime();
@@ -821,14 +921,38 @@ function escapeHtml(value: unknown) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+function formatReportDateTime() {
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(new Date());
+}
 function MoneyValue({ value, label }: { value: number; label: string }) {
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold tabular-nums">
-      <Image src="/currency/sar.svg" alt={label} width={14} height={14} className="h-3.5 w-3.5" />
-      <span>{formatMoney(value)}</span>
+    <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold">
+      <span
+        dir="ltr"
+        lang="en"
+        className="tabular-nums"
+      >
+        {formatMoney(value)}
+      </span>
+      <Image
+        src="/currency/sar.svg"
+        alt={label}
+        width={14}
+        height={14}
+        className="h-3.5 w-3.5 shrink-0"
+      />
     </span>
   );
 }
+
 function StatusBadge({ value, label }: { value: "active" | "inactive"; label: string }) {
   return (
     <Badge
@@ -867,7 +991,7 @@ function KpiCard({
   t: (typeof translations)[Locale];
 }) {
   return (
-    <Card className="group overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <Card className="group overflow-hidden rounded-lg border bg-card shadow-none transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-sm">
       <Link href={href} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
           <div className="min-w-0">
@@ -876,7 +1000,7 @@ function KpiCard({
               {money ? <MoneyValue value={value} label={t.sar} /> : formatInteger(value)}
             </CardTitle>
           </div>
-          <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+          <span className="rounded-lg border bg-background p-2.5 text-muted-foreground transition group-hover:border-foreground/20 group-hover:text-foreground">
             <Icon className="h-5 w-5" />
           </span>
         </CardHeader>
@@ -942,14 +1066,22 @@ function formInputClass(extra = "") {
 function PageSkeleton() {
   return (
     <div className="mx-auto max-w-[1500px] space-y-6">
-      <div className="rounded-3xl border bg-card p-6 shadow-sm">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="mt-3 h-8 w-72" />
-        <Skeleton className="mt-3 h-4 w-full max-w-3xl" />
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-72" />
+          <Skeleton className="h-4 w-full max-w-3xl" />
+          <Skeleton className="h-7 w-56" />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Skeleton className="h-9 w-24" />
+          <Skeleton className="h-9 w-28" />
+          <Skeleton className="h-9 w-24" />
+          <Skeleton className="h-9 w-28" />
+        </div>
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 8 }).map((_, index) => (
-          <Card key={index} className="rounded-2xl">
+          <Card key={index} className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <Skeleton className="h-4 w-28" />
               <Skeleton className="h-8 w-20" />
@@ -960,7 +1092,7 @@ function PageSkeleton() {
           </Card>
         ))}
       </div>
-      <Card className="rounded-2xl">
+      <Card className="rounded-lg border bg-card shadow-none">
         <CardHeader>
           <Skeleton className="h-6 w-56" />
           <Skeleton className="h-4 w-96" />
@@ -995,7 +1127,7 @@ function EmptyTableState({
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>
       {showReset && onReset ? (
-        <Button variant="outline" size="sm" onClick={onReset} className="rounded-lg">
+        <Button variant="outline" size="sm" onClick={onReset}>
           <RotateCcw className="h-4 w-4" />
           {resetLabel}
         </Button>
@@ -1040,7 +1172,7 @@ function DataTable<T extends { id: string }>({
 
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-2xl border bg-background">
+      <div className="overflow-hidden rounded-lg border bg-background">
         <div className="overflow-x-auto">
           <Table className="min-w-[1120px] table-fixed">
             <TableHeader>
@@ -1063,7 +1195,12 @@ function DataTable<T extends { id: string }>({
                 rows.map((row) => (
                   <TableRow
                     key={rowKey(row)}
-                    className={cn("h-[66px]", rowHref ? "cursor-pointer hover:bg-muted/35" : "")}
+                    className={cn(
+                      "h-[62px]",
+                      rowHref
+                        ? "cursor-pointer hover:bg-muted/35"
+                        : "",
+                    )}
                     onClick={() => {
                       const href = rowHref?.(row);
                       if (href) router.push(href);
@@ -1072,7 +1209,10 @@ function DataTable<T extends { id: string }>({
                     {columns.map((column) => (
                       <TableCell
                         key={column.key}
-                        className={cn("h-[66px] overflow-hidden px-4 text-start align-middle", column.className)}
+                        className={cn(
+                          "h-[62px] overflow-hidden px-4 text-start align-middle",
+                          column.className,
+                        )}
                       >
                         {column.render(row)}
                       </TableCell>
@@ -1163,12 +1303,16 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
   const [status, setStatus] = React.useState<StatusFilter>("all");
   const [kind, setKind] = React.useState<KindFilter>("all");
   const [sort, setSort] = React.useState<SortKey>("newest");
+  const [dateFrom, setDateFrom] = React.useState("");
+  const [dateTo, setDateTo] = React.useState("");
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [dialogMode, setDialogMode] = React.useState<"create" | "edit">("create");
   const [editingRow, setEditingRow] = React.useState<PartyRecord | null>(null);
   const [form, setForm] = React.useState<PartyFormValues>(DEFAULT_PARTY_FORM);
   const [saving, setSaving] = React.useState(false);
   const [statusChangingId, setStatusChangingId] = React.useState("");
+  const [statusConfirmTarget, setStatusConfirmTarget] =
+    React.useState<PartyRecord | null>(null);
   const t = translations[locale];
   const a = actionTranslations[locale];
   const n = nationalAddressTranslations[locale];
@@ -1190,7 +1334,13 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
     };
   }, []);
   const loadData = React.useCallback(
-    async ({ silent = false }: { silent?: boolean } = {}) => {
+    async ({
+      silent = false,
+      notify = false,
+    }: {
+      silent?: boolean;
+      notify?: boolean;
+    } = {}) => {
       const controller = new AbortController();
       try {
         if (!silent) setLoading(true);
@@ -1234,14 +1384,14 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
         setWarnings(failedMessages.filter(Boolean));
         if (failedMessages.length) {
           toast.warning(t.partialWarningTitle);
-        } else if (silent) {
+        } else if (notify) {
           toast.success(t.refreshed);
         }
       } catch (caughtError) {
         const message = caughtError instanceof Error ? caughtError.message : t.errorDesc;
         setRows([]);
         setError(message);
-        if (silent) toast.error(message);
+        if (notify) toast.error(message);
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -1258,6 +1408,8 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
     setStatus("all");
     setKind("all");
     setSort("newest");
+    setDateFrom("");
+    setDateTo("");
   }, []);
   const defaultCreateKind = React.useMemo<PartyKind>(() => {
     if (variant === "suppliers") return "supplier";
@@ -1355,7 +1507,12 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
       try {
         setStatusChangingId(`${row.kind}-${row.id}`);
         await submitJson<ApiResponse>(ACTION_ENDPOINTS[row.kind].status(row.id, action), "POST", {});
-        toast.success(a.statusSuccess);
+        toast.success(
+          action === "activate"
+            ? a.activateSuccess
+            : a.deactivateSuccess,
+        );
+        setStatusConfirmTarget(null);
         await loadData({ silent: true });
       } catch (caughtError) {
         const message = caughtError instanceof Error ? caughtError.message : a.actionFailed;
@@ -1384,14 +1541,49 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
         .toLowerCase();
       if (query && !haystack.includes(query)) return false;
       if (status !== "all" && row.status !== status) return false;
-      if (variant === "parties" && kind !== "all" && row.kind !== kind) return false;
+      if (
+        variant === "parties" &&
+        kind !== "all" &&
+        row.kind !== kind
+      ) {
+        return false;
+      }
+      const recordDate = formatDate(
+        row.updatedAt || row.createdAt,
+      );
+      if (
+        dateFrom &&
+        (recordDate === "—" || recordDate < dateFrom)
+      ) {
+        return false;
+      }
+      if (
+        dateTo &&
+        (recordDate === "—" || recordDate > dateTo)
+      ) {
+        return false;
+      }
       return true;
     });
     return sortRows(result, sort);
-  }, [kind, rows, search, sort, status, variant]);
+  }, [
+    dateFrom,
+    dateTo,
+    kind,
+    rows,
+    search,
+    sort,
+    status,
+    variant,
+  ]);
   const stats = React.useMemo(() => buildStats(rows), [rows]);
   const hasFilters = Boolean(
-    search || status !== "all" || sort !== "newest" || (variant === "parties" && kind !== "all"),
+    search ||
+      dateFrom ||
+      dateTo ||
+      status !== "all" ||
+      sort !== "newest" ||
+      (variant === "parties" && kind !== "all"),
   );
   const columns = React.useMemo<DataColumn<PartyRecord>[]>(
     () => [
@@ -1466,33 +1658,64 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
         render: (row) => {
           const changingKey = `${row.kind}-${row.id}`;
           const isChanging = statusChangingId === changingKey;
-          const nextActionLabel = row.status === "active" ? a.deactivate : a.activate;
+          const isActive = row.status === "active";
+          const nextActionLabel = isActive
+            ? a.deactivate
+            : a.activate;
           return (
             <div className="flex items-center justify-center" onClick={(event) => event.stopPropagation()}>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-xl bg-background">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={a.actions}
+                    title={a.actions}
+                  >
                     {isChanging ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align={locale === "ar" ? "start" : "end"} className="w-44 rounded-xl">
+                <DropdownMenuContent
+                  align={locale === "ar" ? "start" : "end"}
+                  className="w-44"
+                >
                   <DropdownMenuItem asChild>
-                    <Link href={partyDetailHref(row)} className="flex items-center gap-2">
-                      <ExternalLink className="h-4 w-4" />
-                      {locale === "ar" ? "فتح التفاصيل" : "Open details"}
+                    <Link
+                      href={partyDetailHref(row)}
+                      className="flex items-center gap-2 text-sky-700 hover:bg-sky-50 hover:text-sky-800 focus:bg-sky-50 focus:text-sky-800 dark:text-sky-400 dark:hover:bg-sky-950/40 dark:focus:bg-sky-950/40"
+                    >
+                      <ExternalLink className="h-4 w-4 shrink-0" />
+                      {locale === "ar"
+                        ? "فتح التفاصيل"
+                        : "Open details"}
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => openEditDialog(row)} className="flex items-center gap-2">
-                    <Pencil className="h-4 w-4" />
+                  <DropdownMenuItem
+                    onClick={() => openEditDialog(row)}
+                    className="flex items-center gap-2 text-amber-700 hover:bg-amber-50 hover:text-amber-800 focus:bg-amber-50 focus:text-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/40 dark:focus:bg-amber-950/40"
+                  >
+                    <Pencil className="h-4 w-4 shrink-0" />
                     {a.edit}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     disabled={isChanging}
-                    onClick={() => void handleStatusToggle(row)}
-                    className="flex items-center gap-2"
+                    onClick={() => setStatusConfirmTarget(row)}
+                    className={cn(
+                      "flex items-center gap-2",
+                      isActive
+                        ? "text-red-600 hover:bg-red-50 hover:text-red-700 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:hover:bg-red-950/40 dark:focus:bg-red-950/40"
+                        : "text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 focus:bg-emerald-50 focus:text-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-950/40 dark:focus:bg-emerald-950/40",
+                    )}
                   >
-                    {isChanging ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                    {isChanging ? (
+                      <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                    ) : isActive ? (
+                      <PowerOff className="h-4 w-4 shrink-0" />
+                    ) : (
+                      <Power className="h-4 w-4 shrink-0" />
+                    )}
                     {nextActionLabel}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -1651,32 +1874,145 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
       toast.warning(t.exportEmpty);
       return;
     }
-    const headers = [t.party, t.type, t.contact, t.tax, t.city, t.balance, t.limit, t.status, t.updatedAt];
-    const bodyRows = filteredRows.map((row) => [
-      `${row.code} — ${row.name}`,
-      partyLabel(row.kind, locale),
-      `${row.phone || ""} ${row.email || ""}`.trim(),
-      row.taxNumber,
-      row.city,
-      formatMoney(row.balance),
-      formatMoney(row.creditLimit),
-      statusLabel(row.status, locale),
-      formatDate(row.updatedAt),
-    ]);
+    const title = variantTitle(variant, locale);
+    const subtitle = variantSubtitle(variant, locale);
+    const generatedAt = formatReportDateTime();
+    const align = locale === "ar" ? "right" : "left";
+    const amountAlign = locale === "ar" ? "left" : "right";
+    const bodyRows = filteredRows
+      .map(
+        (row) => `
+          <tr>
+            <td class="text party-cell">
+              <strong>${escapeHtml(row.name || "—")}</strong>
+              <div class="muted">${escapeHtml(row.code || "—")}</div>
+            </td>
+            <td>${escapeHtml(partyLabel(row.kind, locale))}</td>
+            <td class="text contact-cell">
+              <div>${escapeHtml(
+                row.mobile ||
+                  row.phone ||
+                  row.whatsappNumber ||
+                  "—",
+              )}</div>
+              <div class="muted">
+                ${escapeHtml(row.email || "—")}
+              </div>
+            </td>
+            <td class="text">
+              ${escapeHtml(row.taxNumber || "—")}
+            </td>
+            <td>${escapeHtml(row.city || "—")}</td>
+            <td class="number">
+              ${escapeHtml(row.balance.toFixed(2))}
+            </td>
+            <td class="number">
+              ${escapeHtml(row.creditLimit.toFixed(2))}
+            </td>
+            <td>
+              ${escapeHtml(statusLabel(row.status, locale))}
+            </td>
+            <td class="text">
+              ${escapeHtml(formatDate(row.updatedAt))}
+            </td>
+          </tr>
+        `,
+      )
+      .join("");
     const html = `
+      <!doctype html>
       <html dir="${dir}" lang="${locale}">
-        <head><meta charset="utf-8" /></head>
+        <head>
+          <meta charset="utf-8" />
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              direction: ${dir};
+              color: #111827;
+            }
+            h1 {
+              margin: 0 0 6px;
+              font-size: 22px;
+            }
+            .subtitle {
+              margin: 0 0 6px;
+              color: #4b5563;
+            }
+            .meta {
+              margin: 0 0 16px;
+              color: #6b7280;
+              font-size: 12px;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              table-layout: fixed;
+              direction: ${dir};
+            }
+            th,
+            td {
+              border: 1px solid #000000;
+              padding: 8px;
+              text-align: ${align};
+              vertical-align: top;
+              white-space: normal;
+            }
+            th {
+              background: #f3f4f6;
+              font-weight: 700;
+            }
+            td.text {
+              mso-number-format: "\\@";
+            }
+            td.number {
+              mso-number-format: "0.00";
+              text-align: ${amountAlign};
+            }
+            .muted {
+              margin-top: 3px;
+              color: #6b7280;
+              font-size: 11px;
+            }
+            .party-cell {
+              width: 210px;
+            }
+            .contact-cell {
+              width: 220px;
+            }
+          </style>
+        </head>
         <body>
-          <h1>${escapeHtml(variantTitle(variant, locale))}</h1>
-          <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString("en-US"))}</p>
-          <table border="1">
+          <h1>${escapeHtml(title)}</h1>
+          <p class="subtitle">
+            ${escapeHtml(subtitle)}
+          </p>
+          <p class="meta">
+            ${escapeHtml(t.generatedAt)}:
+            ${escapeHtml(generatedAt)}
+            &nbsp; | &nbsp;
+            ${escapeHtml(t.reportRows)}:
+            ${escapeHtml(formatInteger(filteredRows.length))}
+          </p>
+          <table>
             <thead>
-              <tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>
+              <tr>
+                <th>${escapeHtml(t.party)}</th>
+                <th>${escapeHtml(t.type)}</th>
+                <th>${escapeHtml(t.contact)}</th>
+                <th>${escapeHtml(t.tax)}</th>
+                <th>${escapeHtml(t.city)}</th>
+                <th>
+                  ${escapeHtml(`${t.balance} (${t.sar})`)}
+                </th>
+                <th>
+                  ${escapeHtml(`${t.limit} (${t.sar})`)}
+                </th>
+                <th>${escapeHtml(t.status)}</th>
+                <th>${escapeHtml(t.updatedAt)}</th>
+              </tr>
             </thead>
             <tbody>
-              ${bodyRows
-                .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
-                .join("")}
+              ${bodyRows}
             </tbody>
           </table>
         </body>
@@ -1688,17 +2024,230 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `company-${variant}-${new Date().toISOString().slice(0, 10)}.xls`;
+    anchor.download =
+      `primeyacc-company-${variant}-${new Date()
+        .toISOString()
+        .slice(0, 10)}.xls`;
+    document.body.appendChild(anchor);
     anchor.click();
+    anchor.remove();
     URL.revokeObjectURL(url);
-    toast.success(t.export);
+    toast.success(t.exportSuccess);
   }
   function printPage() {
     if (!filteredRows.length) {
       toast.warning(t.printEmpty);
       return;
     }
-    window.print();
+    const title = variantTitle(variant, locale);
+    const subtitle = variantSubtitle(variant, locale);
+    const generatedAt = formatReportDateTime();
+    const align = locale === "ar" ? "right" : "left";
+    const bodyRows = filteredRows
+      .map(
+        (row) => `
+          <tr>
+            <td>
+              <strong>${escapeHtml(row.name || "—")}</strong>
+              <div class="muted">
+                ${escapeHtml(row.code || "—")}
+              </div>
+            </td>
+            <td>
+              ${escapeHtml(partyLabel(row.kind, locale))}
+            </td>
+            <td>
+              <div class="text-value">
+                ${escapeHtml(
+                  row.mobile ||
+                    row.phone ||
+                    row.whatsappNumber ||
+                    "—",
+                )}
+              </div>
+              <div class="muted">
+                ${escapeHtml(row.email || "—")}
+              </div>
+            </td>
+            <td class="text-value">
+              ${escapeHtml(row.taxNumber || "—")}
+            </td>
+            <td>${escapeHtml(row.city || "—")}</td>
+            <td class="number">
+              ${escapeHtml(formatMoney(row.balance))}
+            </td>
+            <td class="number">
+              ${escapeHtml(formatMoney(row.creditLimit))}
+            </td>
+            <td>
+              ${escapeHtml(statusLabel(row.status, locale))}
+            </td>
+            <td class="text-value">
+              ${escapeHtml(formatDate(row.updatedAt))}
+            </td>
+          </tr>
+        `,
+      )
+      .join("");
+    const printWindow = window.open(
+      "",
+      "_blank",
+      "width=1400,height=900",
+    );
+    if (!printWindow) {
+      toast.error(t.printWindowBlocked);
+      return;
+    }
+    printWindow.opener = null;
+    printWindow.document.write(`
+      <!doctype html>
+      <html dir="${dir}" lang="${locale}">
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(title)}</title>
+          <style>
+            @page {
+              size: A4 landscape;
+              margin: 10mm;
+            }
+            * {
+              box-sizing: border-box;
+            }
+            body {
+              margin: 0;
+              font-family: Arial, sans-serif;
+              color: #111827;
+              direction: ${dir};
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .report-header {
+              display: flex;
+              align-items: flex-start;
+              justify-content: space-between;
+              gap: 24px;
+              margin-bottom: 14px;
+              padding-bottom: 12px;
+              border-bottom: 2px solid #111827;
+            }
+            h1 {
+              margin: 0 0 6px;
+              font-size: 24px;
+            }
+            .subtitle {
+              margin: 0;
+              max-width: 760px;
+              color: #4b5563;
+              font-size: 12px;
+              line-height: 1.7;
+            }
+            .meta {
+              flex: 0 0 auto;
+              color: #6b7280;
+              font-size: 11px;
+              line-height: 1.8;
+              text-align: ${align};
+              white-space: nowrap;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              table-layout: fixed;
+              direction: ${dir};
+              font-size: 10.5px;
+            }
+            thead {
+              display: table-header-group;
+            }
+            tr {
+              break-inside: avoid;
+              page-break-inside: avoid;
+            }
+            th,
+            td {
+              border: 1px solid #000000;
+              padding: 7px;
+              text-align: ${align};
+              vertical-align: top;
+              overflow-wrap: anywhere;
+            }
+            th {
+              background: #f3f4f6 !important;
+              color: #111827;
+              font-weight: 700;
+            }
+            .muted {
+              margin-top: 3px;
+              color: #6b7280;
+              font-size: 9.5px;
+            }
+            .text-value,
+            .number {
+              direction: ltr;
+              unicode-bidi: plaintext;
+              font-variant-numeric: tabular-nums;
+            }
+            .number {
+              text-align: center;
+              white-space: nowrap;
+            }
+          </style>
+        </head>
+        <body>
+          <header class="report-header">
+            <div>
+              <h1>${escapeHtml(title)}</h1>
+              <p class="subtitle">
+                ${escapeHtml(subtitle)}
+              </p>
+            </div>
+            <div class="meta">
+              <div>
+                ${escapeHtml(t.generatedAt)}:
+                ${escapeHtml(generatedAt)}
+              </div>
+              <div>
+                ${escapeHtml(t.reportRows)}:
+                ${escapeHtml(formatInteger(filteredRows.length))}
+              </div>
+            </div>
+          </header>
+          <table>
+            <thead>
+              <tr>
+                <th>${escapeHtml(t.party)}</th>
+                <th>${escapeHtml(t.type)}</th>
+                <th>${escapeHtml(t.contact)}</th>
+                <th>${escapeHtml(t.tax)}</th>
+                <th>${escapeHtml(t.city)}</th>
+                <th>
+                  ${escapeHtml(`${t.balance} (${t.sar})`)}
+                </th>
+                <th>
+                  ${escapeHtml(`${t.limit} (${t.sar})`)}
+                </th>
+                <th>${escapeHtml(t.status)}</th>
+                <th>${escapeHtml(t.updatedAt)}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${bodyRows}
+            </tbody>
+          </table>
+          <script>
+            window.onload = function () {
+              window.focus();
+              window.print();
+            };
+            window.onafterprint = function () {
+              window.close();
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    toast.success(t.printReady);
   }
   if (loading) {
     return (
@@ -1719,7 +2268,14 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
             <CardDescription className="text-sm leading-7">{error || t.errorDesc}</CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center pb-6">
-            <Button onClick={() => void loadData({ silent: true })} className="rounded-xl">
+            <Button
+              onClick={() =>
+                void loadData({
+                  silent: true,
+                  notify: true,
+                })
+              }
+            >
               <RefreshCw className="h-4 w-4" />
               {t.tryAgain}
             </Button>
@@ -1730,62 +2286,93 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
   }
   return (
     <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-[1500px] space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
-          <div className="relative min-h-[154px] p-5 sm:p-7">
-            <div className="absolute inset-x-0 top-0 h-[5px] bg-slate-950" />
-            <div className="flex h-full flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="max-w-4xl">
-                <div className="mb-2 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  {t.badge}
-                </div>
-                <h1 className="text-3xl font-black tracking-tight sm:text-4xl">
-                  {variantTitle(variant, locale)}
-                </h1>
-                <p className="mt-2 max-w-4xl text-sm leading-7 text-muted-foreground">
-                  {variantSubtitle(variant, locale)}
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                  <Link href="/company/parties" className="rounded-full border bg-background px-3 py-1 transition hover:bg-muted">
-                    {t.parties}
-                  </Link>
-                  <Link href="/company/customers" className="rounded-full border bg-background px-3 py-1 transition hover:bg-muted">
-                    {t.customers}
-                  </Link>
-                  <Link href="/company/suppliers" className="rounded-full border bg-background px-3 py-1 transition hover:bg-muted">
-                    {t.suppliers}
-                  </Link>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button className="rounded-xl bg-slate-950 text-white shadow-sm hover:bg-slate-800" onClick={openCreateDialog}>
-                  <Plus className="h-4 w-4" />
-                  {createButtonLabel}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background shadow-sm hover:bg-muted/70" onClick={printPage}>
-                  <Printer className="h-4 w-4" />
-                  {t.print}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background shadow-sm hover:bg-muted/70" onClick={exportExcel}>
-                  <FileSpreadsheet className="h-4 w-4" />
-                  {t.export}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="rounded-xl bg-background shadow-sm hover:bg-muted/70"
-                  onClick={() => void loadData({ silent: true })}
-                  disabled={refreshing}
-                >
-                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  {t.refresh}
-                </Button>
-              </div>
-            </div>
+      <div className="mx-auto max-w-[1500px] space-y-5">
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 space-y-1 text-start">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground lg:text-3xl">
+              {variantTitle(variant, locale)}
+            </h1>
+            <p className="max-w-4xl text-sm leading-6 text-muted-foreground">
+              {variantSubtitle(variant, locale)}
+            </p>
+            <nav
+              aria-label={t.badge}
+              className="flex flex-wrap items-center gap-5 pt-2"
+            >
+              <Link
+                href="/company/parties"
+                aria-current={variant === "parties" ? "page" : undefined}
+                className={cn(
+                  "border-b-2 pb-1 text-sm transition-colors",
+                  variant === "parties"
+                    ? "border-foreground font-semibold text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t.parties}
+              </Link>
+              <Link
+                href="/company/customers"
+                aria-current={variant === "customers" ? "page" : undefined}
+                className={cn(
+                  "border-b-2 pb-1 text-sm transition-colors",
+                  variant === "customers"
+                    ? "border-foreground font-semibold text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t.customers}
+              </Link>
+              <Link
+                href="/company/suppliers"
+                aria-current={variant === "suppliers" ? "page" : undefined}
+                className={cn(
+                  "border-b-2 pb-1 text-sm transition-colors",
+                  variant === "suppliers"
+                    ? "border-foreground font-semibold text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t.suppliers}
+              </Link>
+            </nav>
           </div>
-        </section>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                void loadData({
+                  silent: true,
+                  notify: true,
+                })
+              }
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <RefreshCw />
+              )}
+              {t.refresh}
+            </Button>
+            <Button type="button" variant="outline" onClick={exportExcel}>
+              <FileSpreadsheet />
+              {t.export}
+            </Button>
+            <Button type="button" variant="outline" onClick={printPage}>
+              <Printer />
+              {t.print}
+            </Button>
+            <Button type="button" onClick={openCreateDialog}>
+              <Plus />
+              {createButtonLabel}
+            </Button>
+          </div>
+        </header>
+
         {warnings.length ? (
-          <Card className="rounded-2xl border-amber-200 bg-amber-50 text-amber-900">
+          <Card className="rounded-lg border-amber-200 bg-amber-50 text-amber-900 shadow-none">
             <CardContent className="flex items-start gap-3 p-4">
               <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0" />
               <div>
@@ -1809,101 +2396,159 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
             />
           ))}
         </div>
-        <Card className="rounded-2xl border-border/70 bg-card shadow-sm transition hover:shadow-md">
-          <CardHeader className="px-5 py-4 sm:px-6">
-            <CardTitle>{t.shortcutsTitle}</CardTitle>
-            <CardDescription>{t.shortcutsDesc}</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 px-5 pb-5 sm:px-6 md:grid-cols-2 xl:grid-cols-3">
-            {shortcuts.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="group flex items-center justify-between gap-4 rounded-2xl border bg-background p-4 transition hover:-translate-y-0.5 hover:bg-muted/40 hover:shadow-sm"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
-                    <item.icon className="h-5 w-5" />
-                  </span>
-                  <span className="truncate text-sm font-semibold">{item.title}</span>
-                </div>
-                <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
-              </Link>
-            ))}
-          </CardContent>
-        </Card>
-        <Card className="rounded-2xl border-border/70 bg-card shadow-sm transition hover:shadow-md">
-          <CardHeader className="px-5 py-4 sm:px-6">
-            <CardTitle>{t.filtersTitle}</CardTitle>
-            <CardDescription>{t.filtersDesc}</CardDescription>
+        {variant === "parties" ? (
+          <Card className="rounded-lg border bg-card shadow-none">
+            <CardHeader className="px-5 py-4 sm:px-6">
+              <CardTitle>{t.shortcutsTitle}</CardTitle>
+              <CardDescription>{t.shortcutsDesc}</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 px-5 pb-5 sm:px-6 md:grid-cols-2 xl:grid-cols-3">
+              {shortcuts.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="group flex items-center justify-between gap-4 rounded-lg border bg-background p-4 transition hover:-translate-y-0.5 hover:bg-muted/40 hover:shadow-sm"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="rounded-lg border bg-background p-2.5 text-muted-foreground transition group-hover:border-foreground/20 group-hover:text-foreground">
+                      <item.icon className="h-5 w-5" />
+                    </span>
+                    <span className="truncate text-sm font-semibold">
+                      {item.title}
+                    </span>
+                  </div>
+                  <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+        ) : null}
+        <Card className="overflow-hidden rounded-lg border bg-card shadow-none">
+          <CardHeader className="px-5 pt-5 sm:px-6">
+            <CardTitle>{variantTableTitle(variant, locale)}</CardTitle>
+            <CardDescription>
+              {variantTableDesc(variant, locale)}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 px-5 pb-5 sm:px-6">
-            <div className="grid gap-3 rounded-2xl border bg-muted/20 p-3 lg:grid-cols-[1fr_150px_150px_180px_130px]">
-              <div className="relative">
-                <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder={t.searchPlaceholder}
-                  className="h-10 rounded-xl bg-background ps-9"
+            <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                <div className="relative w-full sm:w-[320px]">
+                  <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={search}
+                    onChange={(event) =>
+                      setSearch(event.target.value)
+                    }
+                    placeholder={t.searchPlaceholder}
+                    className="h-9 bg-background ps-9 shadow-none"
+                  />
+                </div>
+                <Select
+                  value={status}
+                  onValueChange={(value) =>
+                    setStatus(value as StatusFilter)
+                  }
+                >
+                  <SelectTrigger className="h-9 bg-background shadow-none sm:w-[150px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
+                    <SelectItem value="all">
+                      {t.all}
+                    </SelectItem>
+                    <SelectItem value="active">
+                      {t.active}
+                    </SelectItem>
+                    <SelectItem value="inactive">
+                      {t.inactive}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                {variant === "parties" ? (
+                  <Select
+                    value={kind}
+                    onValueChange={(value) =>
+                      setKind(value as KindFilter)
+                    }
+                  >
+                    <SelectTrigger className="h-9 bg-background shadow-none sm:w-[150px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
+                      <SelectItem value="all">
+                        {t.all}
+                      </SelectItem>
+                      <SelectItem value="customer">
+                        {t.customer}
+                      </SelectItem>
+                      <SelectItem value="supplier">
+                        {t.supplier}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : null}
+                <DatePickerField
+                  label={t.dateFrom}
+                  value={dateFrom}
+                  onChange={setDateFrom}
+                />
+                <DatePickerField
+                  label={t.dateTo}
+                  value={dateTo}
+                  onChange={setDateTo}
                 />
               </div>
-              <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
-                <SelectTrigger className="h-10 rounded-xl bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
-                  <SelectItem value="all">{t.all}</SelectItem>
-                  <SelectItem value="active">{t.active}</SelectItem>
-                  <SelectItem value="inactive">{t.inactive}</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select
-                value={kind}
-                onValueChange={(value) => setKind(value as KindFilter)}
-                disabled={variant !== "parties"}
-              >
-                <SelectTrigger className="h-10 rounded-xl bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
-                  <SelectItem value="all">{t.all}</SelectItem>
-                  <SelectItem value="customer">{t.customer}</SelectItem>
-                  <SelectItem value="supplier">{t.supplier}</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
-                <SelectTrigger className="h-10 rounded-xl bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
-                  <SelectItem value="newest">{t.newest}</SelectItem>
-                  <SelectItem value="oldest">{t.oldest}</SelectItem>
-                  <SelectItem value="name">{t.nameSort}</SelectItem>
-                  <SelectItem value="code">{t.codeSort}</SelectItem>
-                  <SelectItem value="balance_high">{t.balanceHigh}</SelectItem>
-                  <SelectItem value="balance_low">{t.balanceLow}</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={resetFilters}>
-                <RotateCcw className="h-4 w-4" />
-                {t.reset}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select
+                  value={sort}
+                  onValueChange={(value) =>
+                    setSort(value as SortKey)
+                  }
+                >
+                  <SelectTrigger className="h-9 bg-background shadow-none sm:w-[180px]">
+                    <ArrowUpDown className="h-4 w-4" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
+                    <SelectItem value="newest">
+                      {t.newest}
+                    </SelectItem>
+                    <SelectItem value="oldest">
+                      {t.oldest}
+                    </SelectItem>
+                    <SelectItem value="name">
+                      {t.nameSort}
+                    </SelectItem>
+                    <SelectItem value="code">
+                      {t.codeSort}
+                    </SelectItem>
+                    <SelectItem value="balance_high">
+                      {t.balanceHigh}
+                    </SelectItem>
+                    <SelectItem value="balance_low">
+                      {t.balanceLow}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={resetFilters}
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  {t.reset}
+                </Button>
+              </div>
             </div>
-          </CardContent>
-        </Card>
-        <Card className="rounded-2xl border-border/70 bg-card shadow-sm transition hover:shadow-md">
-          <CardHeader className="px-5 py-4 sm:px-6">
-            <CardTitle>{variantTableTitle(variant, locale)}</CardTitle>
-            <CardDescription>{variantTableDesc(variant, locale)}</CardDescription>
-          </CardHeader>
-          <CardContent className="px-5 pb-5 sm:px-6">
             <DataTable
               rows={filteredRows}
               allRowsCount={rows.length}
               columns={visibleColumns}
               rowHref={(row) => partyDetailHref(row)}
-              rowKey={(row) => `${row.kind}-${row.id || row.code || row.name}`}
+              rowKey={(row) =>
+                `${row.kind}-${row.id || row.code || row.name}`
+              }
               emptyTitle={t.noDataTitle}
               emptyDescription={t.noDataDesc}
               noResultsTitle={t.noResultsTitle}
@@ -1917,6 +2562,109 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
             />
           </CardContent>
         </Card>
+        <AlertDialog
+          open={Boolean(statusConfirmTarget)}
+          onOpenChange={(open) => {
+            const isBusy = Boolean(
+              statusConfirmTarget &&
+                statusChangingId ===
+                  `${statusConfirmTarget.kind}-${statusConfirmTarget.id}`,
+            );
+            if (!open && !isBusy) {
+              setStatusConfirmTarget(null);
+            }
+          }}
+        >
+          <AlertDialogContent
+            dir={dir}
+            className="sm:max-w-[480px]"
+          >
+            <AlertDialogHeader className="text-start">
+              <div
+                className={cn(
+                  "mb-2 flex h-11 w-11 items-center justify-center rounded-full",
+                  statusConfirmTarget?.status === "active"
+                    ? "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400"
+                    : "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400",
+                )}
+              >
+                {statusConfirmTarget?.status === "active" ? (
+                  <PowerOff className="h-5 w-5" />
+                ) : (
+                  <Power className="h-5 w-5" />
+                )}
+              </div>
+              <AlertDialogTitle>
+                {statusConfirmTarget?.status === "active"
+                  ? a.confirmDeactivateTitle
+                  : a.confirmActivateTitle}
+              </AlertDialogTitle>
+              <AlertDialogDescription className="leading-6">
+                {statusConfirmTarget?.status === "active"
+                  ? a.confirmDeactivateDesc
+                  : a.confirmActivateDesc}
+                {statusConfirmTarget ? (
+                  <span className="mt-3 block rounded-md border bg-muted/30 px-3 py-2 text-foreground">
+                    <span className="font-semibold">
+                      {statusConfirmTarget.name}
+                    </span>
+                    {statusConfirmTarget.code ? (
+                      <span
+                        dir="ltr"
+                        lang="en"
+                        className="ms-2 font-mono text-xs text-muted-foreground"
+                      >
+                        {statusConfirmTarget.code}
+                      </span>
+                    ) : null}
+                  </span>
+                ) : null}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="gap-2">
+              <AlertDialogCancel
+                disabled={Boolean(
+                  statusConfirmTarget &&
+                    statusChangingId ===
+                      `${statusConfirmTarget.kind}-${statusConfirmTarget.id}`,
+                )}
+              >
+                {a.cancel}
+              </AlertDialogCancel>
+              <AlertDialogAction
+                disabled={
+                  !statusConfirmTarget ||
+                  statusChangingId ===
+                    `${statusConfirmTarget.kind}-${statusConfirmTarget.id}`
+                }
+                onClick={(event) => {
+                  event.preventDefault();
+                  if (statusConfirmTarget) {
+                    void handleStatusToggle(statusConfirmTarget);
+                  }
+                }}
+                className={cn(
+                  statusConfirmTarget?.status === "active"
+                    ? "!bg-red-600 !text-white hover:!bg-red-700 focus-visible:!ring-red-600"
+                    : "!bg-emerald-600 !text-white hover:!bg-emerald-700 focus-visible:!ring-emerald-600",
+                )}
+              >
+                {statusConfirmTarget &&
+                statusChangingId ===
+                  `${statusConfirmTarget.kind}-${statusConfirmTarget.id}` ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : statusConfirmTarget?.status === "active" ? (
+                  <PowerOff className="h-4 w-4" />
+                ) : (
+                  <Power className="h-4 w-4" />
+                )}
+                {statusConfirmTarget?.status === "active"
+                  ? a.confirmDeactivateAction
+                  : a.confirmActivateAction}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <Dialog open={dialogOpen} onOpenChange={(open) => { if (!saving) setDialogOpen(open); }}>
           <DialogContent dir={dir} className="overflow-hidden rounded-2xl border-slate-200 bg-white p-0 shadow-2xl sm:max-w-[560px]">
             <div className="h-1.5 bg-slate-950" />
@@ -2075,11 +2823,11 @@ export function CompanyPartiesPage({ variant }: { variant: PageVariant }) {
               ) : null}
             </form>
             <DialogFooter className="gap-2 border-t bg-white px-5 py-4 sm:justify-start">
-              <Button type="submit" form="party-form" className="rounded-xl bg-slate-950 text-white shadow-sm hover:bg-slate-800" disabled={saving}>
+              <Button type="submit" form="party-form" disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {saving ? a.saving : a.save}
               </Button>
-              <Button type="button" variant="outline" className="rounded-xl bg-white" onClick={() => setDialogOpen(false)} disabled={saving}>
+              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
                 {a.cancel}
               </Button>
             </DialogFooter>
