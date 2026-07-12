@@ -27,6 +27,7 @@ import {
   ArrowUpDown,
   ArrowUpRight,
   Banknote,
+  CalendarDays,
   CheckCircle2,
   CreditCard,
   FileSpreadsheet,
@@ -38,7 +39,6 @@ import {
   RotateCcw,
   Search,
   ShieldCheck,
-  Sparkles,
   TriangleAlert,
   Wallet,
   WalletCards,
@@ -46,6 +46,7 @@ import {
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Card,
   CardContent,
@@ -54,6 +55,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -906,11 +912,101 @@ function sortTransactions(rows: TreasuryTransactionRecord[], sort: SortKey) {
     return rowDateValue(b.date) - rowDateValue(a.date);
   });
 }
-function MoneyValue({ value, label }: { value: number; label: string }) {
+function parseIsoDate(value: string) {
+  if (!value) return undefined;
+  const [year, month, day] = value
+    .slice(0, 10)
+    .split("-")
+    .map(Number);
+  if (!year || !month || !day) {
+    return undefined;
+  }
+  const date = new Date(year, month - 1, day);
+  return Number.isNaN(date.getTime())
+    ? undefined
+    : date;
+}
+function dateToIso(value?: Date) {
+  if (!value) return "";
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+function DatePickerField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const selected = parseIsoDate(value);
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold tabular-nums">
-      <Image src="/currency/sar.svg" alt={label} width={14} height={14} className="h-3.5 w-3.5" />
-      <span>{formatMoney(value)}</span>
+    <Popover
+      open={open}
+      onOpenChange={setOpen}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          aria-label={label}
+          title={label}
+          className="h-9 w-full justify-start bg-background px-3 text-start font-normal shadow-none sm:w-[150px]"
+        >
+          <CalendarDays className="me-2 h-4 w-4 shrink-0 text-muted-foreground" />
+          <span
+            dir="ltr"
+            lang="en"
+            className="truncate tabular-nums"
+          >
+            {value || label}
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-auto p-0"
+        align="start"
+      >
+        <Calendar
+          mode="single"
+          selected={selected}
+          onSelect={(date) => {
+            onChange(dateToIso(date));
+            setOpen(false);
+          }}
+          initialFocus
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+function MoneyValue({
+  value,
+  label,
+}: {
+  value: number;
+  label: string;
+}) {
+  return (
+    <span dir="ltr" lang="en" className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold">
+      <span
+        dir="ltr"
+        lang="en"
+        className="tabular-nums"
+      >
+        {formatMoney(value)}
+      </span>
+      <Image
+        src="/currency/sar.svg"
+        alt={label}
+        width={14}
+        height={14}
+        className="h-3.5 w-3.5 shrink-0"
+      />
     </span>
   );
 }
@@ -940,43 +1036,68 @@ function KpiCard({
   title: string;
   value: number;
   description: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
+  href?: string;
+  icon: React.ComponentType<{
+    className?: string;
+  }>;
   money?: boolean;
   t: (typeof translations)[Locale];
 }) {
+  const content = (
+    <>
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
+        <div className="min-w-0">
+          <CardDescription className="truncate text-sm">
+            {title}
+          </CardDescription>
+          <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
+            {money ? (
+              <MoneyValue
+                value={value}
+                label={t.sar}
+              />
+            ) : (
+              formatInteger(value)
+            )}
+          </CardTitle>
+        </div>
+        <span className="rounded-lg border bg-background p-2.5 text-muted-foreground transition group-hover:border-foreground/20 group-hover:text-foreground">
+          <Icon className="h-5 w-5" />
+        </span>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <p className="line-clamp-2 text-xs text-muted-foreground">
+          {description}
+        </p>
+      </CardContent>
+    </>
+  );
   return (
-    <Card className="group overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <Link href={href} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
-          <div className="min-w-0">
-            <CardDescription className="truncate text-sm">{title}</CardDescription>
-            <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
-              {money ? <MoneyValue value={value} label={t.sar} /> : formatInteger(value)}
-            </CardTitle>
-          </div>
-          <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
-            <Icon className="h-5 w-5" />
-          </span>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
-        </CardContent>
-      </Link>
+    <Card className="group overflow-hidden rounded-lg border bg-card shadow-none transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-sm">
+      {href ? (
+        <Link
+          href={href}
+          className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {content}
+        </Link>
+      ) : (
+        content
+      )}
     </Card>
   );
 }
 function DashboardSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border bg-card p-6 shadow-sm">
+      <div className="rounded-lg border bg-card p-6 shadow-sm">
         <Skeleton className="h-5 w-40" />
         <Skeleton className="mt-3 h-8 w-72" />
         <Skeleton className="mt-3 h-4 w-full max-w-2xl" />
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 8 }).map((_, index) => (
-          <Card key={index} className="rounded-2xl">
+          <Card key={index} className="rounded-lg">
             <CardHeader>
               <Skeleton className="h-4 w-28" />
               <Skeleton className="h-8 w-20" />
@@ -987,7 +1108,7 @@ function DashboardSkeleton() {
           </Card>
         ))}
       </div>
-      <Card className="rounded-2xl">
+      <Card className="rounded-lg">
         <CardHeader>
           <Skeleton className="h-6 w-52" />
           <Skeleton className="h-4 w-80" />
@@ -1066,7 +1187,7 @@ function DataTable<T extends { id: string }>({
   const router = useRouter();
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-2xl border bg-background">
+      <div className="overflow-hidden rounded-lg border bg-background">
         <div className="overflow-x-auto">
           <Table className="min-w-[1080px] table-fixed">
             <TableHeader>
@@ -1638,7 +1759,7 @@ export default function CompanyTreasuryPage() {
   }
   if (loading) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+      <main dir={dir} className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
         <div className="mx-auto max-w-[1500px]">
           <DashboardSkeleton />
         </div>
@@ -1647,8 +1768,8 @@ export default function CompanyTreasuryPage() {
   }
   if (error) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-        <Card className="mx-auto max-w-[900px] rounded-3xl border-destructive/30 shadow-sm">
+      <main dir={dir} className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
+        <Card className="mx-auto max-w-[900px] rounded-lg border-destructive/30 shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-destructive">
               <TriangleAlert className="h-5 w-5" />
@@ -1667,42 +1788,83 @@ export default function CompanyTreasuryPage() {
     );
   }
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-[1500px] space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
-          <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-              <div className="max-w-3xl">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  {t.moduleBadge}
-                </div>
-                <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{t.title}</h1>
-                <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">{t.subtitle}</p>
-                {companyName ? (
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    <span className="rounded-full border bg-background px-3 py-1">{companyName}</span>
-                  </div>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => void loadDashboard({ silent: true })} disabled={refreshing}>
-                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  {t.refresh}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
-                  <FileSpreadsheet className="h-4 w-4" />
-                  {t.export}
-                </Button>
-                <Button className="rounded-xl" onClick={printPage}>
-                  <Printer className="h-4 w-4" />
-                  {t.print}
-                </Button>
-              </div>
-            </div>
+    <main dir={dir} className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1500px] space-y-5">
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 space-y-1 text-start">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground lg:text-3xl">
+              {t.title}
+            </h1>
+            <p className="max-w-4xl text-sm leading-6 text-muted-foreground">
+              {t.subtitle}
+            </p>
+            <nav
+              aria-label={t.moduleBadge}
+              className="flex flex-wrap items-center gap-5 pt-2"
+            >
+              <Link
+                href="/company/treasury"
+                aria-current="page"
+                className="border-b-2 border-foreground pb-1 text-sm font-semibold text-foreground"
+              >
+                {locale === "ar"
+                  ? "الخزينة"
+                  : "Treasury"}
+              </Link>
+              <Link
+                href="/company/treasury/cashboxes"
+                className="border-b-2 border-transparent pb-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {locale === "ar"
+                  ? "الصناديق"
+                  : "Cashboxes"}
+              </Link>
+              <Link
+                href="/company/treasury/bank-accounts"
+                className="border-b-2 border-transparent pb-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {locale === "ar"
+                  ? "الحسابات البنكية"
+                  : "Bank accounts"}
+              </Link>
+            </nav>
           </div>
-        </section>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                void loadDashboard({
+                  silent: true,
+                })
+              }
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {t.refresh}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={exportExcel}
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              {t.export}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={printPage}
+            >
+              <Printer className="h-4 w-4" />
+              {t.print}
+            </Button>
+          </div>
+        </header>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {kpiCards.map((card) => (
             <KpiCard
@@ -1718,23 +1880,23 @@ export default function CompanyTreasuryPage() {
           ))}
         </div>
         <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-          <Card className="rounded-2xl shadow-sm">
-            <CardHeader>
-              <CardTitle>{t.shortcutsTitle}</CardTitle>
+          <Card className="overflow-hidden rounded-lg border bg-card shadow-none">
+            <CardHeader className="px-5 py-4 sm:px-6">
+              <CardTitle className="text-base">{t.shortcutsTitle}</CardTitle>
               <CardDescription>{t.shortcutsDesc}</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-3">
+            <CardContent className="grid gap-3 px-5 pb-5 sm:px-6">
               {shortcuts.map((item) => {
                 const Icon = item.icon;
                 return (
                   <Link
-                    key={item.href}
+                    key={`${item.href}-${item.titleEn}`}
                     href={item.href}
-                    className="group rounded-2xl border bg-background p-4 transition hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-sm"
+                    className="group flex items-center justify-between gap-4 rounded-lg border bg-background p-4 transition hover:-translate-y-0.5 hover:bg-muted/40 hover:shadow-sm"
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex min-w-0 items-start gap-3">
-                        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+                    <div className="flex w-full items-center justify-between gap-4">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="rounded-lg border bg-background p-2.5 text-muted-foreground transition group-hover:border-foreground/20 group-hover:text-foreground">
                           <Icon className="h-5 w-5" />
                         </span>
                         <div className="min-w-0">
@@ -1742,9 +1904,6 @@ export default function CompanyTreasuryPage() {
                             <h3 className="font-semibold text-foreground">
                               {locale === "ar" ? item.titleAr : item.titleEn}
                             </h3>
-                            <Badge variant="outline" className="rounded-full bg-muted/30 text-[11px]">
-                              {locale === "ar" ? item.badgeAr : item.badgeEn}
-                            </Badge>
                           </div>
                           <p className="mt-1 line-clamp-2 text-sm leading-6 text-muted-foreground">
                             {locale === "ar" ? item.descAr : item.descEn}
@@ -1760,41 +1919,41 @@ export default function CompanyTreasuryPage() {
               })}
             </CardContent>
           </Card>
-          <Card className="rounded-2xl shadow-sm">
-            <CardHeader>
-              <CardTitle>{t.summaryTitle}</CardTitle>
+          <Card className="rounded-lg border bg-card shadow-none">
+            <CardHeader className="px-5 py-4 sm:px-6">
+              <CardTitle className="text-base">{t.summaryTitle}</CardTitle>
               <CardDescription>{t.summaryDesc}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 px-5 pb-5 sm:px-6">
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border bg-background p-4">
+                <div className="rounded-lg border bg-background p-4">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">{t.activeAccounts}</p>
-                    <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-background text-muted-foreground"><ShieldCheck className="h-4 w-4" /></span>
                   </div>
                   <p className="mt-3 text-2xl font-bold tabular-nums">{formatInteger(stats.activeAccounts)}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{t.accounts}: {formatInteger(stats.totalAccounts)}</p>
                 </div>
-                <div className="rounded-2xl border bg-background p-4">
+                <div className="rounded-lg border bg-background p-4">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">{t.draftTransactions}</p>
-                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-background text-muted-foreground"><FileText className="h-4 w-4" /></span>
                   </div>
                   <p className="mt-3 text-2xl font-bold tabular-nums">{formatInteger(stats.draftTransactions)}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{t.transactions}</p>
                 </div>
-                <div className="rounded-2xl border bg-background p-4">
+                <div className="rounded-lg border bg-background p-4">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">{t.postedTransactions}</p>
-                    <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-background text-muted-foreground"><CheckCircle2 className="h-4 w-4" /></span>
                   </div>
                   <p className="mt-3 text-2xl font-bold tabular-nums">{formatInteger(stats.postedTransactions)}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{t.posted}</p>
                 </div>
-                <div className="rounded-2xl border bg-background p-4">
+                <div className="rounded-lg border bg-background p-4">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">{t.cancelledTransactions}</p>
-                    <TriangleAlert className="h-4 w-4 text-muted-foreground" />
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-background text-muted-foreground"><TriangleAlert className="h-4 w-4" /></span>
                   </div>
                   <p className="mt-3 text-2xl font-bold tabular-nums">{formatInteger(stats.cancelledTransactions)}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{t.cancelled}</p>
@@ -1803,13 +1962,39 @@ export default function CompanyTreasuryPage() {
             </CardContent>
           </Card>
         </div>
-        <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
-            <CardTitle>{t.latestAccounts}</CardTitle>
-            <CardDescription>{t.latestAccountsDesc}</CardDescription>
+        <Card className="rounded-lg border bg-card shadow-none">
+          <CardHeader className="px-5 pt-5 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <CardTitle>
+                  {t.latestAccounts}
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  {t.latestAccountsDesc}
+                </CardDescription>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={exportExcel}
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  {t.export}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={printPage}
+                >
+                  <Printer className="h-4 w-4" />
+                  {t.print}
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="relative min-w-0 flex-1">
                   <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -1817,24 +2002,24 @@ export default function CompanyTreasuryPage() {
                     value={accountSearch}
                     onChange={(event) => setAccountSearch(event.target.value)}
                     placeholder={t.accountSearchPlaceholder}
-                    className="h-10 rounded-xl bg-background ps-9"
+                    className="h-9 rounded-lg bg-background ps-9 shadow-none"
                   />
                 </div>
                 <Select value={accountStatus} onValueChange={(value) => setAccountStatus(value as StatusFilter)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[150px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background shadow-none sm:w-[150px]">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
                     <SelectItem value="all">{t.all}</SelectItem>
                     <SelectItem value="active">{t.active}</SelectItem>
                     <SelectItem value="inactive">{t.inactive}</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={accountType} onValueChange={(value) => setAccountType(value as AccountTypeFilter)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[160px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background shadow-none sm:w-[160px]">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
                     {accountTypeFilters.map((item) => (
                       <SelectItem key={item} value={item}>
                         {accountTypeLabel(item, locale)}
@@ -1845,18 +2030,18 @@ export default function CompanyTreasuryPage() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Select value={accountSort} onValueChange={(value) => setAccountSort(value as SortKey)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[170px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background shadow-none sm:w-[170px]">
                     <ArrowUpDown className="h-4 w-4" />
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
                     <SelectItem value="amount_high">{t.amountHigh}</SelectItem>
                     <SelectItem value="amount_low">{t.amountLow}</SelectItem>
                     <SelectItem value="name">{t.nameSort}</SelectItem>
                     <SelectItem value="number">{t.numberSort}</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={resetAccountFilters}>
+                <Button variant="outline" className="h-9 rounded-lg bg-background shadow-none" onClick={resetAccountFilters}>
                   <RotateCcw className="h-4 w-4" />
                   {t.reset}
                 </Button>
@@ -1881,13 +2066,39 @@ export default function CompanyTreasuryPage() {
             />
           </CardContent>
         </Card>
-        <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
-            <CardTitle>{t.latestTransactions}</CardTitle>
-            <CardDescription>{t.latestTransactionsDesc}</CardDescription>
+        <Card className="overflow-hidden rounded-lg border bg-card shadow-none">
+          <CardHeader className="px-5 pt-5 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <CardTitle>
+                  {t.latestTransactions}
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  {t.latestTransactionsDesc}
+                </CardDescription>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={exportExcel}
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  {t.export}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={printPage}
+                >
+                  <Printer className="h-4 w-4" />
+                  {t.print}
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="relative min-w-0 flex-1">
                   <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -1895,14 +2106,14 @@ export default function CompanyTreasuryPage() {
                     value={transactionSearch}
                     onChange={(event) => setTransactionSearch(event.target.value)}
                     placeholder={t.transactionSearchPlaceholder}
-                    className="h-10 rounded-xl bg-background ps-9"
+                    className="h-9 rounded-lg bg-background ps-9 shadow-none"
                   />
                 </div>
                 <Select value={transactionStatus} onValueChange={(value) => setTransactionStatus(value as StatusFilter)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[150px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background shadow-none sm:w-[150px]">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
                     {statusFilters.map((item) => (
                       <SelectItem key={item} value={item}>
                         {statusLabel(item, locale)}
@@ -1911,10 +2122,10 @@ export default function CompanyTreasuryPage() {
                   </SelectContent>
                 </Select>
                 <Select value={transactionType} onValueChange={(value) => setTransactionType(value as TransactionTypeFilter)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[160px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background shadow-none sm:w-[160px]">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
                     {transactionTypeFilters.map((item) => (
                       <SelectItem key={item} value={item}>
                         {transactionTypeLabel(item, locale)}
@@ -1924,30 +2135,48 @@ export default function CompanyTreasuryPage() {
                 </Select>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <div className="flex h-10 items-center gap-2 rounded-xl border bg-background px-3">
-                  <span className="text-xs text-muted-foreground">{t.from}</span>
-                  <Input
-                    type="date"
-                    value={transactionDateFrom}
-                    onChange={(event) => setTransactionDateFrom(event.target.value)}
-                    className="h-8 w-[135px] border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
-                  />
-                </div>
-                <div className="flex h-10 items-center gap-2 rounded-xl border bg-background px-3">
-                  <span className="text-xs text-muted-foreground">{t.to}</span>
-                  <Input
-                    type="date"
-                    value={transactionDateTo}
-                    onChange={(event) => setTransactionDateTo(event.target.value)}
-                    className="h-8 w-[135px] border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
-                  />
-                </div>
+                <DatePickerField
+                  label={
+                    locale === "ar"
+                      ? "من تاريخ"
+                      : "From date"
+                  }
+                  value={transactionDateFrom}
+                  onChange={(value) => {
+                    setTransactionDateFrom(value);
+                    if (
+                      transactionDateTo &&
+                      value &&
+                      value > transactionDateTo
+                    ) {
+                      setTransactionDateTo(value);
+                    }
+                  }}
+                />
+                <DatePickerField
+                  label={
+                    locale === "ar"
+                      ? "إلى تاريخ"
+                      : "To date"
+                  }
+                  value={transactionDateTo}
+                  onChange={(value) => {
+                    setTransactionDateTo(value);
+                    if (
+                      transactionDateFrom &&
+                      value &&
+                      value < transactionDateFrom
+                    ) {
+                      setTransactionDateFrom(value);
+                    }
+                  }}
+                />
                 <Select value={transactionSort} onValueChange={(value) => setTransactionSort(value as SortKey)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[160px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background shadow-none sm:w-[160px]">
                     <ArrowUpDown className="h-4 w-4" />
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
                     <SelectItem value="newest">{t.newest}</SelectItem>
                     <SelectItem value="oldest">{t.oldest}</SelectItem>
                     <SelectItem value="amount_high">{t.amountHigh}</SelectItem>
@@ -1955,7 +2184,7 @@ export default function CompanyTreasuryPage() {
                     <SelectItem value="number">{t.numberSort}</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={resetTransactionFilters}>
+                <Button variant="outline" className="h-9 rounded-lg bg-background shadow-none" onClick={resetTransactionFilters}>
                   <RotateCcw className="h-4 w-4" />
                   {t.reset}
                 </Button>

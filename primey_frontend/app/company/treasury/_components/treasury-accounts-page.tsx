@@ -26,7 +26,6 @@ import {
   ArrowUpDown,
   Banknote,
   CheckCircle2,
-  ChevronLeft,
   Edit3,
   FileSpreadsheet,
   Landmark,
@@ -37,7 +36,6 @@ import {
   RotateCcw,
   Search,
   ShieldCheck,
-  Sparkles,
   ToggleLeft,
   ToggleRight,
   TriangleAlert,
@@ -46,6 +44,16 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -202,7 +210,14 @@ const translations = {
     tryAgain: "إعادة المحاولة",
     created: "تم إنشاء الحساب بنجاح.",
     updated: "تم تحديث الحساب بنجاح.",
-    statusUpdated: "تم تحديث حالة الحساب.",
+    activateSuccess: "تم تفعيل الحساب بنجاح.",
+    deactivateSuccess: "تم تعطيل الحساب بنجاح.",
+    activateConfirmTitle: "تأكيد تفعيل الحساب",
+    deactivateConfirmTitle: "تأكيد تعطيل الحساب",
+    activateConfirmDesc: "سيتم تفعيل الحساب وإتاحته للعمليات الجديدة.",
+    deactivateConfirmDesc: "سيتم تعطيل الحساب ومنع استخدامه في العمليات الجديدة مع الاحتفاظ بسجلاته السابقة.",
+    confirmActivate: "تأكيد التفعيل",
+    confirmDeactivate: "تأكيد التعطيل",
     validationRequired: "أدخل اسم الحساب والكود.",
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
@@ -283,7 +298,14 @@ const translations = {
     tryAgain: "Try again",
     created: "Account created successfully.",
     updated: "Account updated successfully.",
-    statusUpdated: "Account status updated.",
+    activateSuccess: "Account activated successfully.",
+    deactivateSuccess: "Account deactivated successfully.",
+    activateConfirmTitle: "Confirm account activation",
+    deactivateConfirmTitle: "Confirm account deactivation",
+    activateConfirmDesc: "The account will be activated and available for new operations.",
+    deactivateConfirmDesc: "The account will be disabled for new operations while previous records remain available.",
+    confirmActivate: "Confirm activation",
+    confirmDeactivate: "Confirm deactivation",
     validationRequired: "Enter account name and code.",
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
@@ -524,11 +546,29 @@ function sortRows(rows: TreasuryAccountRecord[], sort: SortKey) {
     return a.name.localeCompare(b.name);
   });
 }
-function MoneyValue({ value, label }: { value: number; label: string }) {
+function MoneyValue({
+  value,
+  label,
+}: {
+  value: number;
+  label: string;
+}) {
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold tabular-nums">
-      <Image src="/currency/sar.svg" alt={label} width={14} height={14} className="h-3.5 w-3.5" />
-      <span>{formatMoney(value)}</span>
+    <span dir="ltr" lang="en" className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold">
+      <span
+        dir="ltr"
+        lang="en"
+        className="tabular-nums"
+      >
+        {formatMoney(value)}
+      </span>
+      <Image
+        src="/currency/sar.svg"
+        alt={label}
+        width={14}
+        height={14}
+        className="h-3.5 w-3.5 shrink-0"
+      />
     </span>
   );
 }
@@ -551,6 +591,7 @@ function KpiCard({
   title,
   value,
   description,
+  href,
   icon: Icon,
   money,
   t,
@@ -558,40 +599,68 @@ function KpiCard({
   title: string;
   value: number;
   description: string;
-  icon: React.ComponentType<{ className?: string }>;
+  href?: string;
+  icon: React.ComponentType<{
+    className?: string;
+  }>;
   money?: boolean;
   t: (typeof translations)[Locale];
 }) {
-  return (
-    <Card className="group overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+  const content = (
+    <>
       <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
         <div className="min-w-0">
-          <CardDescription className="truncate text-sm">{title}</CardDescription>
+          <CardDescription className="truncate text-sm">
+            {title}
+          </CardDescription>
           <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
-            {money ? <MoneyValue value={value} label={t.sar} /> : formatInteger(value)}
+            {money ? (
+              <MoneyValue
+                value={value}
+                label={t.sar}
+              />
+            ) : (
+              formatInteger(value)
+            )}
           </CardTitle>
         </div>
-        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+        <span className="rounded-lg border bg-background p-2.5 text-muted-foreground transition group-hover:border-foreground/20 group-hover:text-foreground">
           <Icon className="h-5 w-5" />
         </span>
       </CardHeader>
       <CardContent className="pt-0">
-        <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
+        <p className="line-clamp-2 text-xs text-muted-foreground">
+          {description}
+        </p>
       </CardContent>
+    </>
+  );
+  return (
+    <Card className="group overflow-hidden rounded-lg border bg-card shadow-none transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-sm">
+      {href ? (
+        <Link
+          href={href}
+          className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {content}
+        </Link>
+      ) : (
+        content
+      )}
     </Card>
   );
 }
 function DashboardSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border bg-card p-6 shadow-sm">
+      <div className="rounded-lg border bg-card p-6 shadow-sm">
         <Skeleton className="h-5 w-40" />
         <Skeleton className="mt-3 h-8 w-72" />
         <Skeleton className="mt-3 h-4 w-full max-w-2xl" />
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
-          <Card key={index} className="rounded-2xl">
+          <Card key={index} className="rounded-lg">
             <CardHeader>
               <Skeleton className="h-4 w-28" />
               <Skeleton className="h-8 w-20" />
@@ -602,7 +671,7 @@ function DashboardSkeleton() {
           </Card>
         ))}
       </div>
-      <Card className="rounded-2xl">
+      <Card className="rounded-lg">
         <CardHeader>
           <Skeleton className="h-6 w-52" />
           <Skeleton className="h-4 w-80" />
@@ -681,7 +750,7 @@ function DataTable<T extends { id: string }>({
   const router = useRouter();
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-2xl border bg-background">
+      <div className="overflow-hidden rounded-lg border bg-background">
         <div className="overflow-x-auto">
           <Table className="min-w-[1080px] table-fixed">
             <TableHeader>
@@ -705,7 +774,7 @@ function DataTable<T extends { id: string }>({
                   <TableRow
                     key={rowKey(row)}
                     className={cn(
-                      "h-[68px] transition-colors",
+                      "h-[62px] transition-colors",
                       rowHref?.(row)
                         ? "cursor-pointer hover:bg-muted/40"
                         : "",
@@ -727,7 +796,7 @@ function DataTable<T extends { id: string }>({
                     {columns.map((column) => (
                       <TableCell
                         key={column.key}
-                        className={cn("h-[68px] overflow-hidden px-4 text-start align-middle", column.className)}
+                        className={cn("h-[62px] overflow-hidden px-4 text-start align-middle", column.className)}
                       >
                         {column.render(row)}
                       </TableCell>
@@ -782,7 +851,7 @@ function AccountFormCard({
   const isBank = variant === "bankAccounts";
   const title = mode === "create" ? config.addLabel : config.editLabel;
   return (
-    <Card className="rounded-2xl shadow-sm">
+    <Card className="rounded-xl shadow-none">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         <CardDescription>{mode === "create" ? t.formCreateDesc : t.formEditDesc}</CardDescription>
@@ -794,7 +863,7 @@ function AccountFormCard({
             <Input
               value={form.name}
               onChange={(event) => onChange({ name: event.target.value })}
-              className="h-10 rounded-xl bg-background"
+              className="h-9 rounded-lg bg-background shadow-none"
             />
           </label>
           <label className="space-y-2">
@@ -802,7 +871,7 @@ function AccountFormCard({
             <Input
               value={form.code}
               onChange={(event) => onChange({ code: event.target.value })}
-              className="h-10 rounded-xl bg-background font-mono tabular-nums"
+              className="h-9 rounded-lg bg-background shadow-none font-mono tabular-nums"
             />
           </label>
           <label className="space-y-2">
@@ -812,7 +881,7 @@ function AccountFormCard({
               value={form.openingBalance}
               onChange={(event) => onChange({ openingBalance: event.target.value })}
               disabled={mode === "edit"}
-              className="h-10 rounded-xl bg-background tabular-nums"
+              className="h-9 rounded-lg bg-background shadow-none tabular-nums"
             />
           </label>
           <label className="flex h-[68px] items-center gap-3 rounded-xl border bg-background px-3">
@@ -831,7 +900,7 @@ function AccountFormCard({
                 <Input
                   value={form.bankName}
                   onChange={(event) => onChange({ bankName: event.target.value })}
-                  className="h-10 rounded-xl bg-background"
+                  className="h-9 rounded-lg bg-background shadow-none"
                 />
               </label>
               <label className="space-y-2">
@@ -839,7 +908,7 @@ function AccountFormCard({
                 <Input
                   value={form.bankAccountNumber}
                   onChange={(event) => onChange({ bankAccountNumber: event.target.value })}
-                  className="h-10 rounded-xl bg-background tabular-nums"
+                  className="h-9 rounded-lg bg-background shadow-none tabular-nums"
                 />
               </label>
               <label className="space-y-2 md:col-span-2">
@@ -847,7 +916,7 @@ function AccountFormCard({
                 <Input
                   value={form.iban}
                   onChange={(event) => onChange({ iban: event.target.value.toUpperCase() })}
-                  className="h-10 rounded-xl bg-background font-mono tabular-nums"
+                  className="h-9 rounded-lg bg-background shadow-none font-mono tabular-nums"
                 />
               </label>
             </>
@@ -888,6 +957,8 @@ export function TreasuryAccountsPage({ variant }: { variant: PageVariant }) {
   const [search, setSearch] = React.useState("");
   const [status, setStatus] = React.useState<StatusFilter>("all");
   const [sort, setSort] = React.useState<SortKey>("balance_high");
+  const [statusConfirmTarget, setStatusConfirmTarget] =
+    React.useState<TreasuryAccountRecord | null>(null);
   const t = translations[locale];
   const dir = locale === "ar" ? "rtl" : "ltr";
   const config = getConfig(variant, locale);
@@ -909,7 +980,13 @@ export function TreasuryAccountsPage({ variant }: { variant: PageVariant }) {
     };
   }, []);
   const loadRows = React.useCallback(
-    async ({ silent = false }: { silent?: boolean } = {}) => {
+    async ({
+      silent = false,
+      notify = false,
+    }: {
+      silent?: boolean;
+      notify?: boolean;
+    } = {}) => {
       try {
         if (!silent) setLoading(true);
         setRefreshing(true);
@@ -923,11 +1000,11 @@ export function TreasuryAccountsPage({ variant }: { variant: PageVariant }) {
         const payload = await fetchJson<unknown>(makeApiUrl(API_PATH, params));
         const normalizedRows = extractArray(payload).map((item) => normalizeAccount(item, config.apiType));
         setRows(normalizedRows);
-        if (silent) toast.success(t.refresh);
+        if (notify) toast.success(t.refresh);
       } catch (caughtError) {
         const message = caughtError instanceof Error ? caughtError.message : t.errorDesc;
         setError(message);
-        if (silent) toast.error(message);
+        if (notify) toast.error(message);
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -1056,25 +1133,52 @@ export function TreasuryAccountsPage({ variant }: { variant: PageVariant }) {
       setSaving(false);
     }
   }
-  async function toggleStatus(row: TreasuryAccountRecord) {
+  async function executeStatusChange() {
+    if (!statusConfirmTarget) return;
+    const row = statusConfirmTarget;
+    const activating = row.status !== "active";
     setSaving(true);
     try {
-      if (row.status === "active") {
-        await fetchJson(makeApiUrl(`${API_PATH}${row.id}/?action=deactivate`), {
-          method: "POST",
-          body: JSON.stringify({ action: "deactivate" }),
-        });
+      if (!activating) {
+        await fetchJson(
+          makeApiUrl(
+            `${API_PATH}${row.id}/?action=deactivate`,
+          ),
+          {
+            method: "POST",
+            body: JSON.stringify({
+              action: "deactivate",
+            }),
+          },
+        );
       } else {
-        await fetchJson(makeApiUrl(`${API_PATH}${row.id}/`), {
-          method: "PATCH",
-          body: JSON.stringify({ status: "ACTIVE" }),
-        });
+        await fetchJson(
+          makeApiUrl(`${API_PATH}${row.id}/`),
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              status: "ACTIVE",
+            }),
+          },
+        );
       }
-      toast.success(t.statusUpdated);
-      await loadRows({ silent: true });
+      toast.success(
+        activating
+          ? t.activateSuccess
+          : t.deactivateSuccess,
+      );
+      setStatusConfirmTarget(null);
+      await loadRows({
+        silent: true,
+      });
     } catch (caughtError) {
-      const message = caughtError instanceof Error ? caughtError.message : t.apiUnsupported;
-      toast.error(message || t.apiUnsupported);
+      const message =
+        caughtError instanceof Error
+          ? caughtError.message
+          : t.apiUnsupported;
+      toast.error(
+        message || t.apiUnsupported,
+      );
     } finally {
       setSaving(false);
     }
@@ -1131,6 +1235,144 @@ export function TreasuryAccountsPage({ variant }: { variant: PageVariant }) {
       return;
     }
     window.print();
+  }
+  function printTable() {
+    if (!filteredRows.length) {
+      toast.warning(t.printEmpty);
+      return;
+    }
+    const popup = window.open(
+      "",
+      "_blank",
+      "width=1200,height=800",
+    );
+    if (!popup) {
+      toast.error(t.apiUnsupported);
+      return;
+    }
+    const bodyRows = filteredRows
+      .map(
+        (row) => `
+          <tr>
+            <td>${escapeHtml(row.code)}</td>
+            <td>${escapeHtml(row.name)}</td>
+            <td>${escapeHtml(
+              formatMoney(row.currentBalance),
+            )}</td>
+            <td>${escapeHtml(
+              formatMoney(row.openingBalance),
+            )}</td>
+            <td>${escapeHtml(
+              row.status === "active"
+                ? t.active
+                : t.inactive,
+            )}</td>
+            <td>${escapeHtml(
+              row.bankName || "—",
+            )}</td>
+            <td>${escapeHtml(
+              row.iban ||
+                row.bankAccountNumber ||
+                "—",
+            )}</td>
+            <td>${escapeHtml(
+              formatDate(row.updatedAt),
+            )}</td>
+          </tr>`,
+      )
+      .join("");
+    popup.document.write(`
+      <!doctype html>
+      <html lang="${locale}" dir="${dir}">
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(
+            config.tableTitle,
+          )}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              padding: 24px;
+              color: #111;
+            }
+            h1 {
+              font-size: 22px;
+              margin: 0 0 6px;
+            }
+            p {
+              color: #666;
+              margin: 0 0 18px;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              font-size: 12px;
+            }
+            th,
+            td {
+              border: 1px solid #bbb;
+              padding: 8px;
+              text-align: start;
+            }
+            th {
+              background: #f3f4f6;
+            }
+            @page {
+              size: landscape;
+              margin: 12mm;
+            }
+          </style>
+        </head>
+        <body>
+          <h1>${escapeHtml(
+            config.tableTitle,
+          )}</h1>
+          <p>${escapeHtml(
+            config.tableDesc,
+          )}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>${escapeHtml(t.code)}</th>
+                <th>${escapeHtml(
+                  t.accountName,
+                )}</th>
+                <th>${escapeHtml(
+                  t.currentBalance,
+                )}</th>
+                <th>${escapeHtml(
+                  t.openingBalance,
+                )}</th>
+                <th>${escapeHtml(
+                  t.status,
+                )}</th>
+                <th>${escapeHtml(
+                  t.bankName,
+                )}</th>
+                <th>${escapeHtml(
+                  t.iban,
+                )}</th>
+                <th>${escapeHtml(
+                  t.newest,
+                )}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${bodyRows}
+            </tbody>
+          </table>
+          <script>
+            window.onload = () => {
+              window.print();
+              window.onafterprint = () => {
+                window.close();
+              };
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    popup.document.close();
   }
   const columns: DataColumn<TreasuryAccountRecord>[] = [
 
@@ -1227,15 +1469,23 @@ export function TreasuryAccountsPage({ variant }: { variant: PageVariant }) {
               {accountDetailHref(row) ? (
                 <DropdownMenuSeparator />
               ) : null}
-              <DropdownMenuItem onClick={() => openEdit(row)} className="flex items-center gap-2">
-                <Edit3 className="h-4 w-4" />
+              <DropdownMenuItem onClick={() => openEdit(row)} className="flex items-center gap-2 text-amber-700 hover:bg-amber-50 hover:text-amber-800 focus:bg-amber-50 focus:text-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/40"
+                  >
+                    <Edit3 className="h-4 w-4" />
                 {locale === "ar" ? "تعديل" : "Edit"}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 disabled={saving}
-                onClick={() => void toggleStatus(row)}
-                className="flex items-center gap-2"
+                onClick={() =>
+                  setStatusConfirmTarget(row)
+                }
+                className={cn(
+                  "flex items-center gap-2",
+                  row.status === "active"
+                    ? "text-rose-600 focus:text-rose-600"
+                    : "text-emerald-700 focus:text-emerald-700",
+                )}
               >
                 {row.status === "active" ? <ToggleLeft className="h-4 w-4" /> : <ToggleRight className="h-4 w-4" />}
                 {row.status === "active" ? t.deactivate : t.activate}
@@ -1248,7 +1498,7 @@ export function TreasuryAccountsPage({ variant }: { variant: PageVariant }) {
   ];
   if (loading) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+      <main dir={dir} className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
         <div className="mx-auto max-w-[1500px]">
           <DashboardSkeleton />
         </div>
@@ -1257,8 +1507,8 @@ export function TreasuryAccountsPage({ variant }: { variant: PageVariant }) {
   }
   if (error) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-        <Card className="mx-auto max-w-[900px] rounded-3xl border-destructive/30 shadow-sm">
+      <main dir={dir} className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
+        <Card className="mx-auto max-w-[900px] rounded-lg border-destructive/30 shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-destructive">
               <TriangleAlert className="h-5 w-5" />
@@ -1277,49 +1527,105 @@ export function TreasuryAccountsPage({ variant }: { variant: PageVariant }) {
     );
   }
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-[1500px] space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
-          <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-              <div className="max-w-3xl">
-                <Link
-                  href="/company/treasury"
-                  className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground transition hover:text-foreground"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                  {t.back}
-                </Link>
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  {t.moduleBadge}
-                </div>
-                <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{config.title}</h1>
-                <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">{config.subtitle}</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => void loadRows({ silent: true })} disabled={refreshing}>
-                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  {t.refresh}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
-                  <FileSpreadsheet className="h-4 w-4" />
-                  {t.export}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={printPage}>
-                  <Printer className="h-4 w-4" />
-                  {t.print}
-                </Button>
-                <Button className="rounded-xl" onClick={openCreate}>
-                  <Plus className="h-4 w-4" />
-                  {config.addLabel}
-                </Button>
-              </div>
-            </div>
+    <main dir={dir} className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1500px] space-y-5">
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 space-y-1 text-start">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground lg:text-3xl">
+              {config.title}
+            </h1>
+            <p className="max-w-4xl text-sm leading-6 text-muted-foreground">
+              {config.subtitle}
+            </p>
+            <nav
+              aria-label={t.moduleBadge}
+              className="flex flex-wrap items-center gap-5 pt-2"
+            >
+              <Link
+                href="/company/treasury"
+                className="border-b-2 border-transparent pb-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {locale === "ar"
+                  ? "الخزينة"
+                  : "Treasury"}
+              </Link>
+              <Link
+                href="/company/treasury/cashboxes"
+                aria-current={
+                  variant === "cashboxes"
+                    ? "page"
+                    : undefined
+                }
+                className={cn(
+                  "border-b-2 pb-1 text-sm transition-colors",
+                  variant === "cashboxes"
+                    ? "border-foreground font-semibold text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t.cashboxesTitle}
+              </Link>
+              <Link
+                href="/company/treasury/bank-accounts"
+                aria-current={
+                  variant === "bankAccounts"
+                    ? "page"
+                    : undefined
+                }
+                className={cn(
+                  "border-b-2 pb-1 text-sm transition-colors",
+                  variant === "bankAccounts"
+                    ? "border-foreground font-semibold text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t.bankAccountsTitle}
+              </Link>
+            </nav>
           </div>
-        </section>
-
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                void loadRows({
+                  silent: true,
+                })
+              }
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {t.refresh}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={exportExcel}
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              {t.export}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={printPage}
+            >
+              <Printer className="h-4 w-4" />
+              {t.print}
+            </Button>
+            <Button
+              type="button"
+              onClick={openCreate}
+            >
+              <Plus className="h-4 w-4" />
+              {config.addLabel}
+            </Button>
+          </div>
+        </header>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <KpiCard title={t.totalAccounts} value={stats.total} description={config.title} icon={PageIcon} t={t} />
           <KpiCard title={t.activeAccounts} value={stats.active} description={t.active} icon={ShieldCheck} t={t} />
@@ -1338,13 +1644,132 @@ export function TreasuryAccountsPage({ variant }: { variant: PageVariant }) {
             onCancel={closeForm}
           />
         ) : null}
-        <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
-            <CardTitle>{config.tableTitle}</CardTitle>
-            <CardDescription>{config.tableDesc}</CardDescription>
+        <AlertDialog
+          open={Boolean(statusConfirmTarget)}
+          onOpenChange={(open) => {
+            if (!open && !saving) {
+              setStatusConfirmTarget(null);
+            }
+          }}
+        >
+          <AlertDialogContent
+            dir={dir}
+            className="sm:max-w-[480px]"
+          >
+            <AlertDialogHeader className="text-start">
+              <div
+                className={cn(
+                  "mb-2 flex h-11 w-11 items-center justify-center rounded-full",
+                  statusConfirmTarget?.status === "active"
+                    ? "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400"
+                    : "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400",
+                )}
+              >
+                {statusConfirmTarget?.status ===
+                "active" ? (
+                  <ToggleLeft className="h-5 w-5" />
+                ) : (
+                  <ToggleRight className="h-5 w-5" />
+                )}
+              </div>
+              <AlertDialogTitle>
+                {statusConfirmTarget?.status ===
+                "active"
+                  ? t.deactivateConfirmTitle
+                  : t.activateConfirmTitle}
+              </AlertDialogTitle>
+              <AlertDialogDescription className="leading-6">
+                {statusConfirmTarget?.status ===
+                "active"
+                  ? t.deactivateConfirmDesc
+                  : t.activateConfirmDesc}
+                {statusConfirmTarget ? (
+                  <span className="mt-3 block rounded-md border bg-muted/30 px-3 py-2 text-foreground">
+                    <span className="font-semibold">
+                      {statusConfirmTarget.name}
+                    </span>
+                    {statusConfirmTarget.code ? (
+                      <span
+                        dir="ltr"
+                        lang="en"
+                        className="ms-2 font-mono text-xs text-muted-foreground"
+                      >
+                        {statusConfirmTarget.code}
+                      </span>
+                    ) : null}
+                  </span>
+                ) : null}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="gap-2">
+              <AlertDialogCancel
+                disabled={saving}
+              >
+                {t.cancel}
+              </AlertDialogCancel>
+              <AlertDialogAction
+                disabled={
+                  !statusConfirmTarget ||
+                  saving
+                }
+                onClick={(event) => {
+                  event.preventDefault();
+                  void executeStatusChange();
+                }}
+                className={cn(
+                  statusConfirmTarget?.status ===
+                    "active"
+                    ? "!bg-red-600 !text-white hover:!bg-red-700 focus-visible:!ring-red-600"
+                    : "!bg-emerald-600 !text-white hover:!bg-emerald-700 focus-visible:!ring-emerald-600",
+                )}
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : statusConfirmTarget?.status ===
+                  "active" ? (
+                  <ToggleLeft className="h-4 w-4" />
+                ) : (
+                  <ToggleRight className="h-4 w-4" />
+                )}
+                {statusConfirmTarget?.status ===
+                "active"
+                  ? t.confirmDeactivate
+                  : t.confirmActivate}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+        <Card className="rounded-xl shadow-none">
+          <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>
+                {config.tableTitle}
+              </CardTitle>
+              <CardDescription className="mt-1">
+                {config.tableDesc}
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                className="rounded-lg bg-background"
+                onClick={exportExcel}
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                {t.export}
+              </Button>
+              <Button
+                variant="outline"
+                className="rounded-lg bg-background"
+                onClick={printTable}
+              >
+                <Printer className="h-4 w-4" />
+                {t.print}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="relative min-w-0 flex-1">
                   <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -1352,14 +1777,14 @@ export function TreasuryAccountsPage({ variant }: { variant: PageVariant }) {
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder={config.searchPlaceholder}
-                    className="h-10 rounded-xl bg-background ps-9"
+                    className="h-9 rounded-lg bg-background ps-9 shadow-none"
                   />
                 </div>
                 <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[150px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background shadow-none sm:w-[150px]">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
                     <SelectItem value="all">{t.all}</SelectItem>
                     <SelectItem value="active">{t.active}</SelectItem>
                     <SelectItem value="inactive">{t.inactive}</SelectItem>
@@ -1368,11 +1793,11 @@ export function TreasuryAccountsPage({ variant }: { variant: PageVariant }) {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[170px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background shadow-none sm:w-[170px]">
                     <ArrowUpDown className="h-4 w-4" />
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
                     <SelectItem value="balance_high">{t.balanceHigh}</SelectItem>
                     <SelectItem value="balance_low">{t.balanceLow}</SelectItem>
                     <SelectItem value="name">{t.nameSort}</SelectItem>
@@ -1380,7 +1805,7 @@ export function TreasuryAccountsPage({ variant }: { variant: PageVariant }) {
                     <SelectItem value="updated">{t.newest}</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={resetFilters}>
+                <Button variant="outline" className="h-9 rounded-lg bg-background shadow-none" onClick={resetFilters}>
                   <RotateCcw className="h-4 w-4" />
                   {t.reset}
                 </Button>
