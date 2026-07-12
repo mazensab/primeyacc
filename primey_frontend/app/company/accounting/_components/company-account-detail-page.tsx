@@ -14,7 +14,7 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   Activity,
   ArrowRight,
@@ -25,17 +25,21 @@ import {
   CircleAlert,
   CircleDollarSign,
   ExternalLink,
+  FileSpreadsheet,
   FileText,
   Hash,
   Landmark,
   Layers3,
   Loader2,
+  MoreVertical,
   Printer,
+  ReceiptText,
   RefreshCw,
   ShieldCheck,
   Sparkles,
   TableProperties,
   TriangleAlert,
+  WalletCards,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -47,6 +51,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -57,6 +68,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 type Locale = "ar" | "en";
+type DetailTab = "ledger" | "journal" | "payments";
 type ApiRecord = Record<string, unknown>;
 type AccountDetailRecord = {
   id: string;
@@ -100,6 +112,16 @@ const translations = {
     back: "العودة لدليل الحسابات",
     refresh: "تحديث",
     print: "طباعة",
+    export: "تصدير Excel",
+    exportReady: "تم تجهيز ملف Excel بنجاح.",
+    printReady: "تم تجهيز صفحة الطباعة.",
+    printBlocked:
+      "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة.",
+    noExportRows: "لا توجد بيانات في هذا الجدول للتصدير.",
+    noPrintRows: "لا توجد بيانات في هذا الجدول للطباعة.",
+    generatedAt: "تم الإنشاء في",
+    actions: "الإجراءات",
+    records: "سجلات الحساب",
     refreshed: "تم تحديث بيانات الحساب.",
     status: "الحالة",
     active: "نشط",
@@ -159,6 +181,16 @@ const translations = {
     back: "Back to chart of accounts",
     refresh: "Refresh",
     print: "Print",
+    export: "Export Excel",
+    exportReady: "Excel file prepared successfully.",
+    printReady: "Print page prepared.",
+    printBlocked:
+      "The print window could not be opened. Allow pop-ups and try again.",
+    noExportRows: "There is no data in this table to export.",
+    noPrintRows: "There is no data in this table to print.",
+    generatedAt: "Generated at",
+    actions: "Actions",
+    records: "Account records",
     refreshed: "Account details refreshed.",
     status: "Status",
     active: "Active",
@@ -263,11 +295,50 @@ function formatMoney(value: unknown) {
     maximumFractionDigits: 2,
   }).format(toNumber(value));
 }
+
+function formatInteger(value: unknown) {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 0,
+  }).format(Math.round(toNumber(value)));
+}
+function formatReportDateTime() {
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(new Date());
+}
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function MoneyValue({ value }: { value: unknown }) {
   return (
-    <span className="inline-flex items-center gap-1 font-semibold tabular-nums">
-      <span>{formatMoney(value)}</span>
-      <Image src="/currency/sar.svg" alt="SAR" width={14} height={14} className="inline-block" />
+    <span
+      className="inline-flex items-center gap-1 whitespace-nowrap font-semibold tabular-nums"
+    >
+      <span
+        dir="ltr"
+        lang="en"
+      >
+        {formatMoney(value)}
+      </span>
+      <Image
+        src="/currency/sar.svg"
+        alt="SAR"
+        width={14}
+        height={14}
+        className="h-3.5 w-3.5 shrink-0"
+      />
     </span>
   );
 }
@@ -637,6 +708,9 @@ function normalizeRelatedRow(value: unknown, hrefBase = "", account?: AccountDet
     "—",
   );
   const accountMatches = account ? relatedRecordBelongsToAccount(value, account) : true;
+  const routeValue = hrefBase.includes("/journal-entries")
+    ? number
+    : id;
   return {
     id,
     number,
@@ -690,7 +764,10 @@ function normalizeRelatedRow(value: unknown, hrefBase = "", account?: AccountDet
         record.closing_balance ||
         "0.00",
     ),
-    href: id && hrefBase ? `${hrefBase}/${encodeURIComponent(id)}` : "",
+    href:
+      routeValue && routeValue !== "—" && hrefBase
+        ? `${hrefBase}/${encodeURIComponent(routeValue)}`
+        : "",
     accountMatches,
   };
 }
@@ -765,7 +842,11 @@ async function fetchMatchingJournalEntries(
             matched.push({
               ...detailRow,
               id: detailRow.id || entryId,
-              href: `${hrefBase}/${encodeURIComponent(entryId)}`,
+              href: `${hrefBase}/${encodeURIComponent(
+                detailRow.number && detailRow.number !== "—"
+                  ? detailRow.number
+                  : entryId,
+              )}`,
             });
           }
         } catch {
@@ -908,6 +989,35 @@ function pickAccountingReference(record: Record<string, unknown>) {
     .filter((item) => item && item !== "—");
   return candidates[0] || "";
 }
+
+function voucherDetailHref(
+  number: string,
+  accountCode: string,
+) {
+  const normalized = normalizeText(number).toUpperCase();
+  if (/^CP-\d{4}-\d+$/i.test(normalized)) {
+    return `/company/treasury/receipt-vouchers/${encodeURIComponent(
+      normalized,
+    )}`;
+  }
+  if (/^SP-\d{4}-\d+$/i.test(normalized)) {
+    return `/company/treasury/payment-vouchers/${encodeURIComponent(
+      normalized,
+    )}`;
+  }
+  const searchValue =
+    normalized && normalized !== "—"
+      ? normalized
+      : accountCode;
+  if (!searchValue) {
+    return "/company/payments";
+  }
+  return `/company/payments?account_code=${encodeURIComponent(
+    accountCode,
+  )}&search=${encodeURIComponent(
+    searchValue,
+  )}&q=${encodeURIComponent(searchValue)}`;
+}
 function normalizePaymentRelatedRow(value: unknown, account: AccountDetailRecord): RelatedRow {
   const record = asRecord(value);
   const id = normalizeText(record.id || record.payment_id || record.voucher_id || record.pk || record.uuid);
@@ -946,7 +1056,7 @@ function normalizePaymentRelatedRow(value: unknown, account: AccountDetailRecord
     status && status !== "—" ? status : "",
     accountingReference,
   ].filter(Boolean);
-  const searchValue = number && number !== "—" ? number : account.code;
+  const href = voucherDetailHref(number, account.code);
   return {
     id,
     number,
@@ -963,9 +1073,7 @@ function normalizePaymentRelatedRow(value: unknown, account: AccountDetailRecord
     debit: isOutflow ? "0.00" : amount,
     credit: isOutflow ? amount : "0.00",
     balance: "0.00",
-    href: searchValue
-      ? `/company/payments?account_code=${encodeURIComponent(account.code)}&search=${encodeURIComponent(searchValue)}&q=${encodeURIComponent(searchValue)}`
-      : "/company/payments",
+    href,
     accountMatches: paymentRecordBelongsToAccount(value, account),
   };
 }
@@ -1003,7 +1111,7 @@ function deriveOriginalVoucherRowsFromAccountRows(rows: RelatedRow[], account: A
         description: row.description,
         debit: isOutflow ? "0.00" : row.debit,
         credit: isOutflow ? row.credit || row.debit : row.credit,
-        href: `/company/payments?account_code=${encodeURIComponent(account.code)}&search=${encodeURIComponent(ref)}&q=${encodeURIComponent(ref)}`,
+        href: voucherDetailHref(ref, account.code),
         accountMatches: true,
       });
     }
@@ -1028,7 +1136,8 @@ async function fetchMatchingPaymentRows(account: AccountDetailRecord) {
   return uniquePaymentRows(matched);
 }
 
-function InfoCard({
+
+function KpiCard({
   title,
   value,
   description,
@@ -1036,29 +1145,33 @@ function InfoCard({
 }: {
   title: string;
   value: React.ReactNode;
-  description?: string;
+  description: string;
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <Card className="rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <Card className="group rounded-lg border bg-card shadow-none transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-sm">
       <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
         <div className="min-w-0">
-          <CardDescription className="truncate text-sm">{title}</CardDescription>
-          <CardTitle className="mt-2 truncate text-lg font-bold tracking-tight">{value}</CardTitle>
+          <CardDescription className="truncate text-sm">
+            {title}
+          </CardDescription>
+          <CardTitle className="mt-2 text-2xl font-bold tracking-tight">
+            {value}
+          </CardTitle>
         </div>
-        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
+        <span className="rounded-lg border bg-background p-2.5 text-muted-foreground transition group-hover:border-foreground/20 group-hover:text-foreground">
           <Icon className="h-5 w-5" />
         </span>
       </CardHeader>
-      {description ? (
-        <CardContent className="pt-0">
-          <p className="truncate text-xs text-muted-foreground">{description}</p>
-        </CardContent>
-      ) : null}
+      <CardContent className="pt-0">
+        <p className="line-clamp-2 text-xs text-muted-foreground">
+          {description}
+        </p>
+      </CardContent>
     </Card>
   );
 }
-function DetailRow({
+function DetailField({
   label,
   value,
   icon: Icon,
@@ -1068,14 +1181,68 @@ function DetailRow({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <div className="flex items-start gap-3 rounded-2xl border bg-background p-4">
-      <span className="rounded-xl bg-muted p-2 text-muted-foreground">
+    <div className="flex min-h-[74px] items-start gap-3 rounded-lg border bg-background p-4">
+      <span className="rounded-lg border bg-muted/30 p-2 text-muted-foreground">
         <Icon className="h-4 w-4" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <div className="mt-1 break-words text-sm font-medium text-foreground">{value}</div>
+        <p className="text-xs text-muted-foreground">
+          {label}
+        </p>
+        <div className="mt-1 break-words text-sm font-medium text-foreground">
+          {value}
+        </div>
       </div>
+    </div>
+  );
+}
+function EmptyTableState({
+  text,
+}: {
+  text: string;
+}) {
+  return (
+    <div className="flex min-h-52 flex-col items-center justify-center gap-3 rounded-lg border bg-background px-6 py-10 text-center">
+      <span className="rounded-full bg-muted p-4 text-muted-foreground">
+        <FileText className="h-6 w-6" />
+      </span>
+      <p className="text-sm text-muted-foreground">
+        {text}
+      </p>
+    </div>
+  );
+}
+function TableHeaderActions({
+  onExport,
+  onPrint,
+  exportLabel,
+  printLabel,
+}: {
+  onExport: () => void;
+  onPrint: () => void;
+  exportLabel: string;
+  printLabel: string;
+}) {
+  return (
+    <div className="flex shrink-0 flex-wrap items-center gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onExport}
+      >
+        <FileSpreadsheet className="h-4 w-4" />
+        {exportLabel}
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onPrint}
+      >
+        <Printer className="h-4 w-4" />
+        {printLabel}
+      </Button>
     </div>
   );
 }
@@ -1085,69 +1252,138 @@ function RelatedTable({
   rows,
   locale,
   emptyText,
+  onExport,
+  onPrint,
 }: {
   title: string;
   description: string;
   rows: RelatedRow[];
   locale: Locale;
   emptyText: string;
+  onExport: () => void;
+  onPrint: () => void;
 }) {
+  const router = useRouter();
   const t = translations[locale];
   return (
-    <Card className="rounded-2xl shadow-sm">
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <CardTitle className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-muted-foreground" />
-            {title}
-          </CardTitle>
-          <CardDescription>{description}</CardDescription>
+    <Card className="overflow-hidden rounded-lg border bg-card shadow-none">
+      <CardHeader className="px-5 pt-5 sm:px-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <BookOpen className="h-5 w-5 text-muted-foreground" />
+              {title}
+              <Badge
+                variant="outline"
+                className="rounded-full tabular-nums"
+              >
+                {formatInteger(rows.length)}
+              </Badge>
+            </CardTitle>
+            <CardDescription className="mt-1">
+              {description}
+            </CardDescription>
+          </div>
+          <TableHeaderActions
+            onExport={onExport}
+            onPrint={onPrint}
+            exportLabel={t.export}
+            printLabel={t.print}
+          />
         </div>
-        <Badge variant="outline" className="w-fit rounded-full">{rows.length}</Badge>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-5 pb-5 sm:px-6">
         {rows.length ? (
-          <div className="overflow-x-auto rounded-2xl border bg-background">
-            <Table className="min-w-[820px]">
-              <TableHeader>
-                <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableHead className="px-4 py-3 text-start text-xs">{t.document}</TableHead>
-                  <TableHead className="px-4 py-3 text-start text-xs">{t.date}</TableHead>
-                  <TableHead className="px-4 py-3 text-start text-xs">{t.description}</TableHead>
-                  <TableHead className="px-4 py-3 text-start text-xs">{t.debit}</TableHead>
-                  <TableHead className="px-4 py-3 text-start text-xs">{t.credit}</TableHead>
-                  <TableHead className="px-4 py-3 text-start text-xs">{t.balance}</TableHead>
-                  <TableHead className="px-4 py-3 text-center text-xs">{t.open}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => (
-                  <TableRow key={`${row.id}-${row.number}`}>
-                    <TableCell className="px-4 py-3 font-medium">{row.number}</TableCell>
-                    <TableCell className="px-4 py-3 text-muted-foreground">{formatDate(row.date)}</TableCell>
-                    <TableCell className="px-4 py-3 text-muted-foreground">{row.description || "—"}</TableCell>
-                    <TableCell className="px-4 py-3"><MoneyValue value={row.debit} /></TableCell>
-                    <TableCell className="px-4 py-3"><MoneyValue value={row.credit} /></TableCell>
-                    <TableCell className="px-4 py-3"><MoneyValue value={row.balance} /></TableCell>
-                    <TableCell className="px-4 py-3 text-center">
-                      {row.href ? (
-                        <Button asChild size="sm" variant="outline" className="h-8 rounded-lg bg-background">
-                          <Link href={row.href}>
-                            <ExternalLink className="h-3.5 w-3.5" />
-                            {t.open}
-                          </Link>
-                        </Button>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
+          <div className="overflow-hidden rounded-lg border bg-background">
+            <div className="overflow-x-auto">
+              <Table className="min-w-[980px] table-fixed">
+                <TableHeader>
+                  <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
+                    <TableHead className="w-[180px] px-4 text-start text-xs font-semibold">
+                      {t.document}
+                    </TableHead>
+                    <TableHead className="w-[130px] px-4 text-start text-xs font-semibold">
+                      {t.date}
+                    </TableHead>
+                    <TableHead className="px-4 text-start text-xs font-semibold">
+                      {t.description}
+                    </TableHead>
+                    <TableHead className="w-[145px] px-4 text-start text-xs font-semibold">
+                      {t.debit}
+                    </TableHead>
+                    <TableHead className="w-[145px] px-4 text-start text-xs font-semibold">
+                      {t.credit}
+                    </TableHead>
+                    <TableHead className="w-[145px] px-4 text-start text-xs font-semibold">
+                      {t.balance}
+                    </TableHead>
+                    <TableHead className="w-[90px] px-4 text-center text-xs font-semibold">
+                      {t.open}
+                    </TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((row, index) => (
+                    <TableRow
+                      key={`${row.id}-${row.number}-${index}`}
+                      className={
+                        row.href
+                          ? "h-[62px] cursor-pointer hover:bg-muted/35"
+                          : "h-[62px]"
+                      }
+                      onClick={() => {
+                        if (row.href) {
+                          router.push(row.href);
+                        }
+                      }}
+                    >
+                      <TableCell className="px-4 font-semibold tabular-nums">
+                        {row.number}
+                      </TableCell>
+                      <TableCell className="px-4 text-muted-foreground tabular-nums">
+                        {formatDate(row.date)}
+                      </TableCell>
+                      <TableCell className="truncate px-4 text-muted-foreground">
+                        {row.description || "—"}
+                      </TableCell>
+                      <TableCell className="px-4">
+                        <MoneyValue value={row.debit} />
+                      </TableCell>
+                      <TableCell className="px-4">
+                        <MoneyValue value={row.credit} />
+                      </TableCell>
+                      <TableCell className="px-4">
+                        <MoneyValue value={row.balance} />
+                      </TableCell>
+                      <TableCell className="px-4 text-center">
+                        {row.href ? (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            aria-label={t.open}
+                            title={t.open}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              router.push(row.href);
+                            }}
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <span className="text-muted-foreground">
+                            —
+                          </span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         ) : (
-          <p className="rounded-2xl border bg-background p-4 text-sm text-muted-foreground">{emptyText}</p>
+          <EmptyTableState text={emptyText} />
         )}
       </CardContent>
     </Card>
@@ -1156,15 +1392,20 @@ function RelatedTable({
 function DetailSkeleton() {
   return (
     <main className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-      <div className="space-y-6">
-        <Card className="rounded-3xl p-6">
-          <Skeleton className="h-5 w-40" />
-          <Skeleton className="mt-3 h-9 w-72" />
-          <Skeleton className="mt-3 h-4 w-full max-w-3xl" />
+      <div className="mx-auto max-w-[1500px] space-y-5">
+        <Card className="rounded-lg border bg-card shadow-none">
+          <CardHeader>
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-9 w-80" />
+            <Skeleton className="h-4 w-full max-w-3xl" />
+          </CardHeader>
         </Card>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => (
-            <Card key={index} className="rounded-2xl">
+            <Card
+              key={index}
+              className="rounded-lg border bg-card shadow-none"
+            >
               <CardHeader>
                 <Skeleton className="h-4 w-28" />
                 <Skeleton className="h-8 w-32" />
@@ -1172,6 +1413,11 @@ function DetailSkeleton() {
             </Card>
           ))}
         </div>
+        <Card className="rounded-lg border bg-card shadow-none">
+          <CardContent className="p-6">
+            <Skeleton className="h-96 w-full" />
+          </CardContent>
+        </Card>
       </div>
     </main>
   );
@@ -1187,6 +1433,8 @@ export function CompanyAccountDetailPage() {
   const [ledgerRows, setLedgerRows] = React.useState<RelatedRow[]>([]);
   const [journalRows, setJournalRows] = React.useState<RelatedRow[]>([]);
   const [paymentRows, setPaymentRows] = React.useState<RelatedRow[]>([]);
+  const [activeTab, setActiveTab] =
+    React.useState<DetailTab>("ledger");
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -1254,7 +1502,7 @@ export function CompanyAccountDetailPage() {
         ].filter(Boolean) as string[];
         const ledger = await fetchFirstAccountCollection(
           ledgerUrls,
-          "/company/accounting/ledger",
+          "/company/accounting/journal-entries",
           normalized,
         );
         const journals = await fetchMatchingJournalEntries(
@@ -1284,6 +1532,356 @@ export function CompanyAccountDetailPage() {
   }, [loadAccount]);
   function fallback(value: string | null | undefined) {
     return normalizeText(value, t.notAvailable);
+  }
+
+  function approvedReportStyles(
+    align: "right" | "left",
+  ) {
+    return `
+      body {
+        font-family: Arial, sans-serif;
+        color: #111827;
+        margin: 0;
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+      }
+      h2 {
+        margin: 20px 0 8px;
+        font-size: 16px;
+      }
+      .subtitle {
+        margin: 0 0 6px;
+        color: #4b5563;
+      }
+      .meta {
+        margin: 0 0 16px;
+        color: #6b7280;
+        font-size: 11px;
+      }
+      .summary {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 14px;
+      }
+      .summary td {
+        border: 1px solid #000;
+        padding: 8px;
+        text-align: ${align};
+      }
+      table.data {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+      table.data th,
+      table.data td {
+        border: 1px solid #000;
+        padding: 7px;
+        text-align: ${align};
+        vertical-align: top;
+        overflow-wrap: anywhere;
+      }
+      table.data th {
+        background: #f3f4f6;
+        font-weight: 700;
+      }
+      .number,
+      .text-value {
+        direction: ltr;
+        unicode-bidi: plaintext;
+        font-variant-numeric: tabular-nums;
+      }
+      .number {
+        white-space: nowrap;
+      }
+    `;
+  }
+  function approvedRowsTableHtml(
+    rows: RelatedRow[],
+  ) {
+    const body = rows
+      .map(
+        (row) => `
+          <tr>
+            <td>${escapeHtml(row.number)}</td>
+            <td class="text-value">${escapeHtml(
+              formatDate(row.date),
+            )}</td>
+            <td>${escapeHtml(row.description || "—")}</td>
+            <td class="number">${escapeHtml(
+              formatMoney(row.debit),
+            )}</td>
+            <td class="number">${escapeHtml(
+              formatMoney(row.credit),
+            )}</td>
+            <td class="number">${escapeHtml(
+              formatMoney(row.balance),
+            )}</td>
+          </tr>
+        `,
+      )
+      .join("");
+    return `
+      <table class="data">
+        <thead>
+          <tr>
+            <th>${escapeHtml(t.document)}</th>
+            <th>${escapeHtml(t.date)}</th>
+            <th>${escapeHtml(t.description)}</th>
+            <th>${escapeHtml(t.debit)}</th>
+            <th>${escapeHtml(t.credit)}</th>
+            <th>${escapeHtml(t.balance)}</th>
+          </tr>
+        </thead>
+        <tbody>${body}</tbody>
+      </table>
+    `;
+  }
+  function downloadApprovedAccountExcel(
+    titleText: string,
+    bodyHtml: string,
+    filename: string,
+  ) {
+    const align =
+      locale === "ar"
+        ? "right"
+        : "left";
+    const html = `
+      <!doctype html>
+      <html dir="${dir}" lang="${locale}">
+        <head>
+          <meta charset="utf-8" />
+          <style>
+            ${approvedReportStyles(align)}
+          </style>
+        </head>
+        <body>
+          <h1>${escapeHtml(titleText)}</h1>
+          <p class="subtitle">
+            ${escapeHtml(account?.name || "")}
+          </p>
+          <p class="meta">
+            ${escapeHtml(t.generatedAt)}:
+            ${escapeHtml(formatReportDateTime())}
+          </p>
+          ${bodyHtml}
+        </body>
+      </html>
+    `;
+    const blob = new Blob(
+      ["\uFEFF", html],
+      {
+        type:
+          "application/vnd.ms-excel;charset=utf-8;",
+      },
+    );
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    toast.success(t.exportReady);
+  }
+  function openApprovedAccountPrint(
+    titleText: string,
+    bodyHtml: string,
+  ) {
+    const printWindow = window.open(
+      "",
+      "_blank",
+      "width=1400,height=900",
+    );
+    if (!printWindow) {
+      toast.error(t.printBlocked);
+      return;
+    }
+    const align =
+      locale === "ar"
+        ? "right"
+        : "left";
+    printWindow.opener = null;
+    printWindow.document.write(`
+      <!doctype html>
+      <html dir="${dir}" lang="${locale}">
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(titleText)}</title>
+          <style>
+            @page {
+              size: A4 landscape;
+              margin: 10mm;
+            }
+            * {
+              box-sizing: border-box;
+            }
+            ${approvedReportStyles(align)}
+          </style>
+        </head>
+        <body>
+          <h1>${escapeHtml(titleText)}</h1>
+          <p class="subtitle">
+            ${escapeHtml(account?.name || "")}
+          </p>
+          <p class="meta">
+            ${escapeHtml(t.generatedAt)}:
+            ${escapeHtml(formatReportDateTime())}
+          </p>
+          ${bodyHtml}
+          <script>
+            window.onload = function () {
+              window.focus();
+              window.print();
+            };
+            window.onafterprint = function () {
+              window.close();
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    toast.success(t.printReady);
+  }
+  function exportAccountRows(
+    rows: RelatedRow[],
+    titleText: string,
+    suffix: string,
+  ) {
+    if (!rows.length) {
+      toast.warning(t.noExportRows);
+      return;
+    }
+    downloadApprovedAccountExcel(
+      titleText,
+      approvedRowsTableHtml(rows),
+      `primeyacc-account-${account?.code || id}-${suffix}-${new Date()
+        .toISOString()
+        .slice(0, 10)}.xls`,
+    );
+  }
+  function printAccountRows(
+    rows: RelatedRow[],
+    titleText: string,
+  ) {
+    if (!rows.length) {
+      toast.warning(t.noPrintRows);
+      return;
+    }
+    openApprovedAccountPrint(
+      titleText,
+      approvedRowsTableHtml(rows),
+    );
+  }
+  function approvedFullReportHtml() {
+    if (!account) {
+      return "";
+    }
+    const summary = `
+      <table class="summary">
+        <tr>
+          <td>
+            <strong>${escapeHtml(t.code)}</strong>
+            <br />
+            ${escapeHtml(account.code)}
+          </td>
+          <td>
+            <strong>${escapeHtml(t.status)}</strong>
+            <br />
+            ${escapeHtml(t[account.status])}
+          </td>
+          <td>
+            <strong>${escapeHtml(t.currentBalance)}</strong>
+            <br />
+            <span class="number">
+              ${escapeHtml(formatMoney(account.currentBalance))}
+            </span>
+          </td>
+          <td>
+            <strong>${escapeHtml(t.openingBalance)}</strong>
+            <br />
+            <span class="number">
+              ${escapeHtml(formatMoney(account.openingBalance))}
+            </span>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <strong>${escapeHtml(t.accountType)}</strong>
+            <br />
+            ${escapeHtml(account.accountType)}
+          </td>
+          <td>
+            <strong>${escapeHtml(t.normalBalance)}</strong>
+            <br />
+            ${escapeHtml(account.normalBalance)}
+          </td>
+          <td>
+            <strong>${escapeHtml(t.debitTotal)}</strong>
+            <br />
+            <span class="number">
+              ${escapeHtml(formatMoney(account.debitTotal))}
+            </span>
+          </td>
+          <td>
+            <strong>${escapeHtml(t.creditTotal)}</strong>
+            <br />
+            <span class="number">
+              ${escapeHtml(formatMoney(account.creditTotal))}
+            </span>
+          </td>
+        </tr>
+      </table>
+    `;
+    const ledgerSection = ledgerRows.length
+      ? `
+          <h2>${escapeHtml(t.ledger)}</h2>
+          ${approvedRowsTableHtml(ledgerRows)}
+        `
+      : "";
+    const journalSection = journalRows.length
+      ? `
+          <h2>${escapeHtml(t.journalEntries)}</h2>
+          ${approvedRowsTableHtml(journalRows)}
+        `
+      : "";
+    const paymentSection = paymentRows.length
+      ? `
+          <h2>${escapeHtml(paymentTitle)}</h2>
+          ${approvedRowsTableHtml(paymentRows)}
+        `
+      : "";
+    return `
+      ${summary}
+      ${ledgerSection}
+      ${journalSection}
+      ${paymentSection}
+    `;
+  }
+  function exportApprovedFullReport() {
+    if (!account) {
+      return;
+    }
+    downloadApprovedAccountExcel(
+      account.name,
+      approvedFullReportHtml(),
+      `primeyacc-account-${account.code}-${new Date()
+        .toISOString()
+        .slice(0, 10)}.xls`,
+    );
+  }
+  function printApprovedFullReport() {
+    if (!account) {
+      return;
+    }
+    openApprovedAccountPrint(
+      account.name,
+      approvedFullReportHtml(),
+    );
   }
   if (loading) return <DetailSkeleton />;
   if (error) {
@@ -1331,91 +1929,379 @@ export function CompanyAccountDetailPage() {
       </main>
     );
   }
+const paymentTitle =
+    locale === "ar"
+      ? "السندات الأصلية والمدفوعات"
+      : "Original vouchers and payments";
+  const paymentDescription =
+    locale === "ar"
+      ? "سندات القبض والصرف الأصلية المرتبطة بهذا الحساب فقط، وليس أرقام القيود المحاسبية."
+      : "Original receipt and payment vouchers linked only to this account, not journal references.";
+  const tabs: Array<{
+    key: DetailTab;
+    label: string;
+    count: number;
+  }> = [
+    {
+      key: "ledger",
+      label: t.ledger,
+      count: ledgerRows.length,
+    },
+    {
+      key: "journal",
+      label: t.journalEntries,
+      count: journalRows.length,
+    },
+    {
+      key: "payments",
+      label: paymentTitle,
+      count: paymentRows.length,
+    },
+  ];
+  const currentRows =
+    activeTab === "ledger"
+      ? ledgerRows
+      : activeTab === "journal"
+        ? journalRows
+        : paymentRows;
+  const currentTitle =
+    activeTab === "ledger"
+      ? t.ledger
+      : activeTab === "journal"
+        ? t.journalEntries
+        : paymentTitle;
+  const currentDescription =
+    activeTab === "ledger"
+      ? t.ledgerDesc
+      : activeTab === "journal"
+        ? t.journalEntriesDesc
+        : paymentDescription;
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-      <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
-          <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-              <div className="max-w-4xl">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+    <main
+      dir={dir}
+      className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8"
+      data-primey-account-detail="PRIMEY_ACCOUNT_DETAIL_APPROVED_V2"
+    >
+      <div className="mx-auto max-w-[1500px] space-y-5">
+        <Card className="rounded-lg border bg-card shadow-none">
+          <CardHeader className="px-5 py-5 sm:px-6">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0 space-y-2 text-start">
+                <div className="inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
+                  <BookOpen className="h-3.5 w-3.5" />
                   {t.badge}
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                  <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                  <h1 className="text-2xl font-bold tracking-tight lg:text-3xl">
                     {account.name}
                   </h1>
-                  <StatusBadge value={account.status} locale={locale} />
+                  <StatusBadge
+                    value={account.status}
+                    locale={locale}
+                  />
                 </div>
-                <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">{t.subtitle}</p>
+                <p className="max-w-4xl text-sm leading-6 text-muted-foreground">
+                  {t.subtitle}
+                </p>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                  <span
+                    dir="ltr"
+                    lang="en"
+                    className="font-mono tabular-nums"
+                  >
+                    {account.code}
+                  </span>
+                  <span>•</span>
+                  <span>{account.accountType}</span>
+                  <span>•</span>
+                  <span>
+                    {account.isGroup
+                      ? t.isGroup
+                      : t.isLeaf}
+                  </span>
+                </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button asChild variant="outline" className="rounded-xl bg-background">
-                  <Link href={accountReportHref("/company/accounting/chart-of-accounts", account)}>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Button
+                  asChild
+                  variant="outline"
+                >
+                  <Link
+                    href={accountReportHref(
+                      "/company/accounting/chart-of-accounts",
+                      account,
+                    )}
+                  >
                     <BackIcon className="h-4 w-4" />
                     {t.back}
                   </Link>
                 </Button>
                 <Button
+                  type="button"
                   variant="outline"
-                  className="rounded-xl bg-background"
-                  onClick={() => void loadAccount({ silent: true })}
+                  onClick={() =>
+                    void loadAccount({
+                      silent: true,
+                    })
+                  }
                   disabled={refreshing}
                 >
-                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  {refreshing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
                   {t.refresh}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => window.print()}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={exportApprovedFullReport}
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  {t.export}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={printApprovedFullReport}
+                >
                   <Printer className="h-4 w-4" />
                   {t.print}
                 </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label={t.actions}
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align={
+                      locale === "ar"
+                        ? "start"
+                        : "end"
+                    }
+                    className="w-56"
+                  >
+                    <DropdownMenuItem asChild>
+                      <Link
+                        href={accountReportHref(
+                          "/company/accounting/ledger",
+                          account,
+                        )}
+                      >
+                        <BookOpen className="h-4 w-4" />
+                        {t.ledgerReport}
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link
+                        href={accountReportHref(
+                          "/company/accounting/journal-entries",
+                          account,
+                        )}
+                      >
+                        <FileText className="h-4 w-4" />
+                        {t.journalEntriesPage}
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link
+                        href={accountReportHref(
+                          "/company/accounting/trial-balance",
+                          account,
+                        )}
+                      >
+                        <Activity className="h-4 w-4" />
+                        {t.trialBalance}
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link
+                        href={accountReportHref(
+                          "/company/payments",
+                          account,
+                        )}
+                      >
+                        <WalletCards className="h-4 w-4" />
+                        {paymentTitle}
+                      </Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
-          </div>
-        </section>
+          </CardHeader>
+        </Card>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <InfoCard title={t.status} value={<StatusBadge value={account.status} locale={locale} />} description={t.accountInfo} icon={ShieldCheck} />
-          <InfoCard title={t.currentBalance} value={<MoneyValue value={account.currentBalance} />} description={t.balances} icon={Landmark} />
-          <InfoCard title={t.debitTotal} value={<MoneyValue value={account.debitTotal} />} description={t.balances} icon={CircleDollarSign} />
-          <InfoCard title={t.creditTotal} value={<MoneyValue value={account.creditTotal} />} description={t.balances} icon={CircleDollarSign} />
+          <KpiCard
+            title={t.currentBalance}
+            value={
+              <MoneyValue
+                value={account.currentBalance}
+              />
+            }
+            description={t.balancesDesc}
+            icon={Landmark}
+          />
+          <KpiCard
+            title={t.openingBalance}
+            value={
+              <MoneyValue
+                value={account.openingBalance}
+              />
+            }
+            description={t.balancesDesc}
+            icon={ReceiptText}
+          />
+          <KpiCard
+            title={t.debitTotal}
+            value={
+              <MoneyValue
+                value={account.debitTotal}
+              />
+            }
+            description={t.balancesDesc}
+            icon={CircleDollarSign}
+          />
+          <KpiCard
+            title={t.creditTotal}
+            value={
+              <MoneyValue
+                value={account.creditTotal}
+              />
+            }
+            description={t.balancesDesc}
+            icon={CircleDollarSign}
+          />
         </div>
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="space-y-6">
-            <Card className="rounded-2xl shadow-sm">
-              <CardHeader>
-                <CardTitle>{t.accountInfo}</CardTitle>
-                <CardDescription>{t.accountInfoDesc}</CardDescription>
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_330px]">
+          <div className="space-y-5">
+            <Card className="rounded-lg border bg-card shadow-none">
+              <CardHeader className="px-5 pt-5 sm:px-6">
+                <CardTitle className="text-base">
+                  {t.accountInfo}
+                </CardTitle>
+                <CardDescription>
+                  {t.accountInfoDesc}
+                </CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-4 md:grid-cols-2">
-                <DetailRow label={t.code} value={fallback(account.code)} icon={Hash} />
-                <DetailRow label={t.name} value={fallback(account.name)} icon={TableProperties} />
-                <DetailRow label={t.nameAr} value={fallback(account.nameAr)} icon={FileText} />
-                <DetailRow label={t.nameEn} value={fallback(account.nameEn)} icon={FileText} />
-                <DetailRow label={t.accountType} value={fallback(account.accountType)} icon={Layers3} />
-                <DetailRow label={t.normalBalance} value={fallback(account.normalBalance)} icon={BadgeCheck} />
-                <DetailRow label={t.level} value={fallback(account.level)} icon={Layers3} />
-                <DetailRow label={account.isGroup ? t.isGroup : t.isLeaf} value={account.isGroup ? t.isGroup : t.isLeaf} icon={BookOpen} />
-                <DetailRow label={t.createdAt} value={formatDate(account.createdAt)} icon={CalendarDays} />
-                <DetailRow label={t.updatedAt} value={formatDate(account.updatedAt)} icon={CalendarDays} />
+              <CardContent className="grid gap-3 px-5 pb-5 sm:px-6 md:grid-cols-2">
+                <DetailField
+                  label={t.code}
+                  value={
+                    <span
+                      dir="ltr"
+                      lang="en"
+                      className="font-mono tabular-nums"
+                    >
+                      {fallback(account.code)}
+                    </span>
+                  }
+                  icon={Hash}
+                />
+                <DetailField
+                  label={t.name}
+                  value={fallback(account.name)}
+                  icon={TableProperties}
+                />
+                <DetailField
+                  label={t.nameAr}
+                  value={fallback(account.nameAr)}
+                  icon={FileText}
+                />
+                <DetailField
+                  label={t.nameEn}
+                  value={fallback(account.nameEn)}
+                  icon={FileText}
+                />
+                <DetailField
+                  label={t.accountType}
+                  value={fallback(account.accountType)}
+                  icon={Layers3}
+                />
+                <DetailField
+                  label={t.normalBalance}
+                  value={fallback(account.normalBalance)}
+                  icon={BadgeCheck}
+                />
+                <DetailField
+                  label={t.level}
+                  value={fallback(account.level)}
+                  icon={Layers3}
+                />
+                <DetailField
+                  label={
+                    account.isGroup
+                      ? t.isGroup
+                      : t.isLeaf
+                  }
+                  value={
+                    account.isGroup
+                      ? t.isGroup
+                      : t.isLeaf
+                  }
+                  icon={BookOpen}
+                />
+                <DetailField
+                  label={t.status}
+                  value={
+                    <StatusBadge
+                      value={account.status}
+                      locale={locale}
+                    />
+                  }
+                  icon={ShieldCheck}
+                />
+                <DetailField
+                  label={t.createdAt}
+                  value={formatDate(account.createdAt)}
+                  icon={CalendarDays}
+                />
+                <DetailField
+                  label={t.updatedAt}
+                  value={formatDate(account.updatedAt)}
+                  icon={CalendarDays}
+                />
+                <DetailField
+                  label={t.description}
+                  value={fallback(account.description)}
+                  icon={FileText}
+                />
               </CardContent>
             </Card>
-            <Card className="rounded-2xl shadow-sm">
-              <CardHeader>
-                <CardTitle>{t.structure}</CardTitle>
-                <CardDescription>{t.structureDesc}</CardDescription>
+            <Card className="rounded-lg border bg-card shadow-none">
+              <CardHeader className="px-5 pt-5 sm:px-6">
+                <CardTitle className="text-base">
+                  {t.structure}
+                </CardTitle>
+                <CardDescription>
+                  {t.structureDesc}
+                </CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-4 md:grid-cols-2">
-                <DetailRow
+              <CardContent className="grid gap-3 px-5 pb-5 sm:px-6 md:grid-cols-2">
+                <DetailField
                   label={t.parent}
                   value={
                     account.parentId ? (
                       <Link
-                        href={`/company/accounting/chart-of-accounts/${encodeURIComponent(account.parentId)}`}
-                        className="text-primary underline-offset-4 hover:underline"
+                        href={`/company/accounting/chart-of-accounts/${encodeURIComponent(
+                          account.parentId,
+                        )}`}
+                        className="font-medium text-primary underline-offset-4 hover:underline"
                       >
-                        {[account.parentCode, account.parentName].filter(Boolean).join(" — ")}
+                        {[
+                          account.parentCode,
+                          account.parentName,
+                        ]
+                          .filter(Boolean)
+                          .join(" — ")}
                       </Link>
                     ) : (
                       t.notAvailable
@@ -1423,81 +2309,154 @@ export function CompanyAccountDetailPage() {
                   }
                   icon={Layers3}
                 />
-                <DetailRow label={t.childrenCount} value={account.childrenCount} icon={Layers3} />
+                <DetailField
+                  label={t.childrenCount}
+                  value={
+                    <span
+                      dir="ltr"
+                      lang="en"
+                      className="tabular-nums"
+                    >
+                      {formatInteger(
+                        account.childrenCount,
+                      )}
+                    </span>
+                  }
+                  icon={Layers3}
+                />
               </CardContent>
             </Card>
-            <Card className="rounded-2xl shadow-sm">
-              <CardHeader>
-                <CardTitle>{t.balances}</CardTitle>
-                <CardDescription>{t.balancesDesc}</CardDescription>
+            <Card className="rounded-lg border bg-card shadow-none">
+              <CardHeader className="px-5 pt-5 sm:px-6">
+                <CardTitle className="text-base">
+                  {t.balances}
+                </CardTitle>
+                <CardDescription>
+                  {t.balancesDesc}
+                </CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-4 md:grid-cols-4">
-                <DetailRow label={t.openingBalance} value={<MoneyValue value={account.openingBalance} />} icon={Landmark} />
-                <DetailRow label={t.currentBalance} value={<MoneyValue value={account.currentBalance} />} icon={Landmark} />
-                <DetailRow label={t.debitTotal} value={<MoneyValue value={account.debitTotal} />} icon={CircleDollarSign} />
-                <DetailRow label={t.creditTotal} value={<MoneyValue value={account.creditTotal} />} icon={CircleDollarSign} />
+              <CardContent className="grid gap-3 px-5 pb-5 sm:px-6 md:grid-cols-2 xl:grid-cols-4">
+                <DetailField
+                  label={t.openingBalance}
+                  value={
+                    <MoneyValue
+                      value={account.openingBalance}
+                    />
+                  }
+                  icon={Landmark}
+                />
+                <DetailField
+                  label={t.currentBalance}
+                  value={
+                    <MoneyValue
+                      value={account.currentBalance}
+                    />
+                  }
+                  icon={Landmark}
+                />
+                <DetailField
+                  label={t.debitTotal}
+                  value={
+                    <MoneyValue
+                      value={account.debitTotal}
+                    />
+                  }
+                  icon={CircleDollarSign}
+                />
+                <DetailField
+                  label={t.creditTotal}
+                  value={
+                    <MoneyValue
+                      value={account.creditTotal}
+                    />
+                  }
+                  icon={CircleDollarSign}
+                />
               </CardContent>
             </Card>
-            <RelatedTable
-              title={t.ledger}
-              description={t.ledgerDesc}
-              rows={ledgerRows}
-              locale={locale}
-              emptyText={t.noRows}
-            />
-            <RelatedTable
-              title={t.journalEntries}
-              description={t.journalEntriesDesc}
-              rows={journalRows}
-              locale={locale}
-              emptyText={t.noRows}
-            />
-
-            <RelatedTable
-              title={locale === "ar" ? "السندات الأصلية والمدفوعات" : "Original vouchers and payments"}
-              description={
-                locale === "ar"
-                  ? "سندات القبض والصرف الأصلية المرتبطة بهذا الحساب فقط، وليس أرقام القيود المحاسبية."
-                  : "Original receipt and payment vouchers linked only to this account, not journal references."
-              }
-              rows={paymentRows}
-              locale={locale}
-              emptyText={t.noRows}
-            />
           </div>
-          <aside className="space-y-6">
-            <Card className="rounded-2xl shadow-sm xl:sticky xl:top-6">
-              <CardHeader>
-                <CardTitle>{t.quickLinks}</CardTitle>
-                <CardDescription>{t.quickLinksDesc}</CardDescription>
+          <aside className="space-y-5">
+            <Card className="rounded-lg border bg-card shadow-none xl:sticky xl:top-6">
+              <CardHeader className="px-5 pt-5">
+                <CardTitle className="text-base">
+                  {t.quickLinks}
+                </CardTitle>
+                <CardDescription>
+                  {t.quickLinksDesc}
+                </CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-2">
-                <Button asChild variant="outline" className="justify-start rounded-xl bg-background">
-                  <Link href={accountReportHref("/company/accounting/ledger", account)}>
+              <CardContent className="grid gap-2 px-5 pb-5">
+                <Button
+                  asChild
+                  variant="outline"
+                  className="justify-start bg-background"
+                >
+                  <Link
+                    href={accountReportHref(
+                      "/company/accounting/ledger",
+                      account,
+                    )}
+                  >
                     <BookOpen className="h-4 w-4" />
                     {t.ledgerReport}
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="justify-start rounded-xl bg-background">
-                  <Link href={accountReportHref("/company/accounting/trial-balance", account)}>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="justify-start bg-background"
+                >
+                  <Link
+                    href={accountReportHref(
+                      "/company/accounting/trial-balance",
+                      account,
+                    )}
+                  >
                     <Activity className="h-4 w-4" />
                     {t.trialBalance}
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="justify-start rounded-xl bg-background">
-                  <Link href={accountReportHref("/company/accounting/journal-entries", account)}>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="justify-start bg-background"
+                >
+                  <Link
+                    href={accountReportHref(
+                      "/company/accounting/journal-entries",
+                      account,
+                    )}
+                  >
                     <FileText className="h-4 w-4" />
                     {t.journalEntriesPage}
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="justify-start rounded-xl bg-background">
-                  <Link href={accountReportHref("/company/payments", account)}>
-                    <CircleDollarSign className="h-4 w-4" />
-                    {locale === "ar" ? "المدفوعات والسندات" : "Payments and vouchers"}
+                <Button
+                  asChild
+                  variant="outline"
+                  className="justify-start bg-background"
+                >
+                  <Link
+                    href={accountReportHref(
+                      "/company/payments",
+                      account,
+                    )}
+                  >
+                    <WalletCards className="h-4 w-4" />
+                    {paymentTitle}
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="justify-start rounded-xl bg-background">
-                  <Link href={accountReportHref("/company/accounting/chart-of-accounts", account)}>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="justify-start bg-background"
+                >
+                  <Link
+                    href={accountReportHref(
+                      "/company/accounting/chart-of-accounts",
+                      account,
+                    )}
+                  >
                     <TableProperties className="h-4 w-4" />
                     {t.chart}
                   </Link>
@@ -1506,6 +2465,75 @@ export function CompanyAccountDetailPage() {
             </Card>
           </aside>
         </div>
+        <Card className="rounded-lg border bg-card shadow-none">
+          <CardHeader className="px-5 pt-5 sm:px-6">
+            <CardTitle className="text-base">
+              {t.records}
+            </CardTitle>
+            <CardDescription>
+              {t.subtitle}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-5 pb-5 sm:px-6">
+            <div
+              role="tablist"
+              aria-label={t.records}
+              className="flex flex-wrap gap-2 border-b pb-3"
+            >
+              {tabs.map((tab) => (
+                <Button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={
+                    activeTab === tab.key
+                  }
+                  variant={
+                    activeTab === tab.key
+                      ? "default"
+                      : "outline"
+                  }
+                  size="sm"
+                  onClick={() =>
+                    setActiveTab(tab.key)
+                  }
+                >
+                  {tab.label}
+                  <Badge
+                    variant="outline"
+                    className={
+                      activeTab === tab.key
+                        ? "ms-1 rounded-full border-white/30 text-white tabular-nums"
+                        : "ms-1 rounded-full tabular-nums"
+                    }
+                  >
+                    {formatInteger(tab.count)}
+                  </Badge>
+                </Button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+        <RelatedTable
+          title={currentTitle}
+          description={currentDescription}
+          rows={currentRows}
+          locale={locale}
+          emptyText={t.noRows}
+          onExport={() =>
+            exportAccountRows(
+              currentRows,
+              currentTitle,
+              activeTab,
+            )
+          }
+          onPrint={() =>
+            printAccountRows(
+              currentRows,
+              currentTitle,
+            )
+          }
+        />
       </div>
     </main>
   );

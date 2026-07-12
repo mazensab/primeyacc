@@ -859,11 +859,14 @@ function escapeHtml(value: unknown) {
 function MoneyValue({ value, label }: { value: unknown; label?: string }) {
   return (
     <span
-      dir="ltr"
-      lang="en"
       className="inline-flex items-center gap-1 whitespace-nowrap font-semibold tabular-nums"
     >
-      <span>{formatMoney(value)}</span>
+      <span
+        dir="ltr"
+        lang="en"
+      >
+        {formatMoney(value)}
+      </span>
       <Image
         src="/currency/sar.svg"
         alt={label || "SAR"}
@@ -1588,8 +1591,35 @@ export function CompanyPartyDetailPage({ kind }: { kind: PartyKind }) {
     `;
   }
 
+  function normalizeExcelTextCells(tableHtml: string) {
+    // PRIMEY_EXCEL_TEXT_CELLS_V1
+    const container = document.createElement("div");
+    container.innerHTML = tableHtml;
+    const excelTextStyle = "mso-number-format:'\\@';";
+    container
+      .querySelectorAll<HTMLElement>(".text-value")
+      .forEach((element) => {
+        const cell = element.closest("td, th") as HTMLElement | null;
+        const target = cell || element;
+        const currentStyle = target.getAttribute("style") || "";
+        if (!currentStyle.includes("mso-number-format")) {
+          const trimmedStyle = currentStyle.trim();
+          const separator =
+            trimmedStyle && !trimmedStyle.endsWith(";")
+              ? ";"
+              : "";
+          target.setAttribute(
+            "style",
+            `${currentStyle}${separator}${excelTextStyle}`,
+          );
+        }
+        target.classList.add("excel-text");
+      });
+    return container.innerHTML;
+  }
   function downloadExcel(titleText: string, tableHtml: string, filename: string) {
     const align = locale === "ar" ? "right" : "left";
+    const excelTableHtml = normalizeExcelTextCells(tableHtml);
     const html = `
       <!doctype html>
       <html dir="${dir}" lang="${locale}">
@@ -1600,7 +1630,7 @@ export function CompanyPartyDetailPage({ kind }: { kind: PartyKind }) {
           <p class="meta">${escapeHtml(t.generatedAt)}: ${escapeHtml(
             formatReportDateTime(),
           )}</p>
-          ${tableHtml}
+          ${excelTableHtml}
         </body>
       </html>
     `;
@@ -1729,64 +1759,367 @@ export function CompanyPartyDetailPage({ kind }: { kind: PartyKind }) {
 
   function fullReportHtml() {
     if (!party) return "";
-    const summary = `
+    // PRIMEY_PARTY_FULL_REPORT_V2
+    const partyType =
+      party.partyKind === "ORGANIZATION"
+        ? t.organization
+        : t.individual;
+    const emptySection = `
+      <div class="empty">
+        ${escapeHtml(t.noRows)}
+      </div>
+    `;
+    const totalDebit = ledgerRows.reduce(
+      (total, row) => total + row.debit,
+      0,
+    );
+    const totalCredit = ledgerRows.reduce(
+      (total, row) => total + row.credit,
+      0,
+    );
+    const finalStatementBalance = ledgerRows.length
+      ? ledgerRows[ledgerRows.length - 1].balance
+      : party.balance;
+    const identitySection = `
+      <h2>${escapeHtml(t.identity)}</h2>
       <table class="summary">
         <tr>
-          <td><strong>${escapeHtml(t.code)}</strong><br />${escapeHtml(party.code || "—")}</td>
-          <td><strong>${escapeHtml(t.status)}</strong><br />${escapeHtml(
-            statusLabel(party.status, locale),
-          )}</td>
-          <td><strong>${escapeHtml(t.balance)}</strong><br />${escapeHtml(
-            formatMoney(party.balance),
-          )}</td>
-          <td><strong>${escapeHtml(t.creditLimit)}</strong><br />${escapeHtml(
-            formatMoney(party.creditLimit),
-          )}</td>
+          <td>
+            <strong>${escapeHtml(t.businessName)}</strong>
+            <br />
+            ${escapeHtml(party.displayName || "—")}
+          </td>
+          <td>
+            <strong>${escapeHtml(t.legalName)}</strong>
+            <br />
+            ${escapeHtml(party.legalName || "—")}
+          </td>
+          <td>
+            <strong>${escapeHtml(t.code)}</strong>
+            <br />
+            <span class="text-value">
+              ${escapeHtml(party.code || "—")}
+            </span>
+          </td>
+          <td>
+            <strong>${escapeHtml(t.partyKind)}</strong>
+            <br />
+            ${escapeHtml(partyType)}
+          </td>
         </tr>
         <tr>
-          <td><strong>${escapeHtml(t.mobile)}</strong><br />${escapeHtml(
-            party.mobile || "—",
-          )}</td>
-          <td><strong>${escapeHtml(t.email)}</strong><br />${escapeHtml(
-            party.email || "—",
-          )}</td>
-          <td><strong>${escapeHtml(t.taxNumber)}</strong><br />${escapeHtml(
-            party.taxNumber || "—",
-          )}</td>
-          <td><strong>${escapeHtml(t.updatedAt)}</strong><br />${escapeHtml(
-            formatDate(party.updatedAt),
-          )}</td>
+          <td>
+            <strong>${escapeHtml(t.status)}</strong>
+            <br />
+            ${escapeHtml(statusLabel(party.status, locale))}
+          </td>
+          <td>
+            <strong>${escapeHtml(t.commercialRegistration)}</strong>
+            <br />
+            <span class="text-value">
+              ${escapeHtml(party.commercialRegistration || "—")}
+            </span>
+          </td>
+          <td>
+            <strong>${escapeHtml(t.taxNumber)}</strong>
+            <br />
+            <span class="text-value">
+              ${escapeHtml(party.taxNumber || "—")}
+            </span>
+          </td>
+          <td>
+            <strong>${escapeHtml(t.createdAt)}</strong>
+            <br />
+            <span class="text-value">
+              ${escapeHtml(formatDate(party.createdAt))}
+            </span>
+          </td>
+        </tr>
+        <tr>
+          <td colspan="4">
+            <strong>${escapeHtml(t.updatedAt)}</strong>
+            <br />
+            <span class="text-value">
+              ${escapeHtml(formatDate(party.updatedAt))}
+            </span>
+          </td>
         </tr>
       </table>
     `;
-    const docs = documents.length
-      ? `<h2>${escapeHtml(
-          isCustomer ? t.customerDocuments : t.supplierDocuments,
-        )}</h2>${documentTableHtml(documents)}`
-      : "";
-    const pay = payments.length
-      ? `<h2>${escapeHtml(
-          isCustomer ? t.customerPayments : t.supplierPayments,
-        )}</h2>${documentTableHtml(payments)}`
-      : "";
-    const ledger = ledgerRows.length
-      ? `<h2>${escapeHtml(t.ledger)}</h2>${ledgerTableHtml(ledgerRows)}`
-      : "";
-    return `${summary}${docs}${pay}${ledger}`;
+    const contactSection = `
+      <h2>${escapeHtml(t.contact)}</h2>
+      <table class="summary">
+        <tr>
+          <td>
+            <strong>${escapeHtml(t.contactPerson)}</strong>
+            <br />
+            ${escapeHtml(party.contactPerson || "—")}
+          </td>
+          <td>
+            <strong>${escapeHtml(t.mobile)}</strong>
+            <br />
+            <span class="text-value">
+              ${escapeHtml(party.mobile || "—")}
+            </span>
+          </td>
+          <td>
+            <strong>${escapeHtml(t.phone)}</strong>
+            <br />
+            <span class="text-value">
+              ${escapeHtml(party.phone || "—")}
+            </span>
+          </td>
+          <td>
+            <strong>${escapeHtml(t.whatsapp)}</strong>
+            <br />
+            <span class="text-value">
+              ${escapeHtml(party.whatsapp || "—")}
+            </span>
+          </td>
+        </tr>
+        <tr>
+          <td colspan="4">
+            <strong>${escapeHtml(t.email)}</strong>
+            <br />
+            <span class="text-value">
+              ${escapeHtml(party.email || "—")}
+            </span>
+          </td>
+        </tr>
+      </table>
+    `;
+    const financeSection = `
+      <h2>${escapeHtml(t.finance)}</h2>
+      <table class="summary">
+        <tr>
+          <td>
+            <strong>${escapeHtml(t.balance)}</strong>
+            <br />
+            <span class="number">
+              ${escapeHtml(formatMoney(party.balance))}
+            </span>
+          </td>
+          <td>
+            <strong>${escapeHtml(t.openingBalance)}</strong>
+            <br />
+            <span class="number">
+              ${escapeHtml(formatMoney(party.openingBalance))}
+            </span>
+          </td>
+          <td>
+            <strong>${escapeHtml(t.creditLimit)}</strong>
+            <br />
+            <span class="number">
+              ${escapeHtml(formatMoney(party.creditLimit))}
+            </span>
+          </td>
+          <td>
+            <strong>${escapeHtml(t.invoiceCount)}</strong>
+            <br />
+            <span class="number">
+              ${escapeHtml(formatInteger(documents.length))}
+            </span>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <strong>${escapeHtml(t.paymentCount)}</strong>
+            <br />
+            <span class="number">
+              ${escapeHtml(formatInteger(payments.length))}
+            </span>
+          </td>
+          <td>
+            <strong>${escapeHtml(t.rowsCount)} — ${escapeHtml(t.ledger)}</strong>
+            <br />
+            <span class="number">
+              ${escapeHtml(formatInteger(ledgerRows.length))}
+            </span>
+          </td>
+          <td>
+            <strong>${escapeHtml(t.debit)}</strong>
+            <br />
+            <span class="number">
+              ${escapeHtml(formatMoney(totalDebit))}
+            </span>
+          </td>
+          <td>
+            <strong>${escapeHtml(t.credit)}</strong>
+            <br />
+            <span class="number">
+              ${escapeHtml(formatMoney(totalCredit))}
+            </span>
+          </td>
+        </tr>
+      </table>
+    `;
+    const addressSection =
+      party.partyKind === "ORGANIZATION"
+        ? `
+          <h2>${escapeHtml(t.nationalAddress)}</h2>
+          <table class="summary">
+            <tr>
+              <td>
+                <strong>${escapeHtml(t.city)}</strong>
+                <br />
+                ${escapeHtml(party.city || "—")}
+              </td>
+              <td>
+                <strong>${escapeHtml(t.district)}</strong>
+                <br />
+                ${escapeHtml(party.district || "—")}
+              </td>
+              <td>
+                <strong>${escapeHtml(t.street)}</strong>
+                <br />
+                ${escapeHtml(party.street || "—")}
+              </td>
+              <td>
+                <strong>${escapeHtml(t.buildingNumber)}</strong>
+                <br />
+                <span class="text-value">
+                  ${escapeHtml(party.buildingNumber || "—")}
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>${escapeHtml(t.additionalNumber)}</strong>
+                <br />
+                <span class="text-value">
+                  ${escapeHtml(party.additionalNumber || "—")}
+                </span>
+              </td>
+              <td>
+                <strong>${escapeHtml(t.postalCode)}</strong>
+                <br />
+                <span class="text-value">
+                  ${escapeHtml(party.postalCode || "—")}
+                </span>
+              </td>
+              <td>
+                <strong>${escapeHtml(t.shortAddress)}</strong>
+                <br />
+                ${escapeHtml(party.shortAddress || "—")}
+              </td>
+              <td>
+                <strong>${escapeHtml(t.addressLine)}</strong>
+                <br />
+                ${escapeHtml(party.addressLine || "—")}
+              </td>
+            </tr>
+          </table>
+        `
+        : "";
+    const notesSection = `
+      <h2>${escapeHtml(t.notes)}</h2>
+      <table class="summary">
+        <tr>
+          <td>
+            ${escapeHtml(party.notes || "—")}
+          </td>
+        </tr>
+      </table>
+    `;
+    const statementSection = `
+      <h2>${escapeHtml(t.statement)}</h2>
+      <table class="summary">
+        <tr>
+          <td>
+            <strong>${escapeHtml(t.openingBalance)}</strong>
+            <br />
+            <span class="number">
+              ${escapeHtml(formatMoney(party.openingBalance))}
+            </span>
+          </td>
+          <td>
+            <strong>${escapeHtml(t.debit)}</strong>
+            <br />
+            <span class="number">
+              ${escapeHtml(formatMoney(totalDebit))}
+            </span>
+          </td>
+          <td>
+            <strong>${escapeHtml(t.credit)}</strong>
+            <br />
+            <span class="number">
+              ${escapeHtml(formatMoney(totalCredit))}
+            </span>
+          </td>
+          <td>
+            <strong>${escapeHtml(t.runningBalance)}</strong>
+            <br />
+            <span class="number">
+              ${escapeHtml(formatMoney(finalStatementBalance))}
+            </span>
+          </td>
+        </tr>
+      </table>
+    `;
+    const documentTitle = isCustomer
+      ? t.customerDocuments
+      : t.supplierDocuments;
+    const paymentTitle = isCustomer
+      ? t.customerPayments
+      : t.supplierPayments;
+    const documentsSection = `
+      <h2>${escapeHtml(documentTitle)}</h2>
+      ${
+        documents.length
+          ? documentTableHtml(documents)
+          : emptySection
+      }
+    `;
+    const paymentsSection = `
+      <h2>${escapeHtml(paymentTitle)}</h2>
+      ${
+        payments.length
+          ? documentTableHtml(payments)
+          : emptySection
+      }
+    `;
+    const ledgerSection = `
+      <h2>${escapeHtml(t.ledger)}</h2>
+      ${
+        ledgerRows.length
+          ? ledgerTableHtml(ledgerRows)
+          : emptySection
+      }
+    `;
+    return `
+      ${identitySection}
+      ${contactSection}
+      ${financeSection}
+      ${addressSection}
+      ${notesSection}
+      ${statementSection}
+      ${documentsSection}
+      ${paymentsSection}
+      ${ledgerSection}
+    `;
   }
-
   function exportFullReport() {
     if (!party) return;
+    const reportTitle = isCustomer
+      ? t.customerTitle
+      : t.supplierTitle;
     downloadExcel(
-      party.displayName || title,
+      reportTitle,
       fullReportHtml(),
-      `primeyacc-${kind}-${id}-${new Date().toISOString().slice(0, 10)}.xls`,
+      `primeyacc-${kind}-${id}-full-${new Date()
+        .toISOString()
+        .slice(0, 10)}.xls`,
     );
   }
-
   function printFullReport() {
     if (!party) return;
-    openPrintReport(party.displayName || title, fullReportHtml());
+    const reportTitle = isCustomer
+      ? t.customerTitle
+      : t.supplierTitle;
+    openPrintReport(
+      reportTitle,
+      fullReportHtml(),
+    );
   }
 
   if (loading) return <DetailSkeleton />;
