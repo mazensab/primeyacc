@@ -554,7 +554,7 @@ function MoneyValue({
   label: string;
 }) {
   return (
-    <span dir="ltr" lang="en" className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold">
+    <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold">
       <span
         dir="ltr"
         lang="en"
@@ -1183,196 +1183,284 @@ export function TreasuryAccountsPage({ variant }: { variant: PageVariant }) {
       setSaving(false);
     }
   }
-  function exportExcel() {
-    if (!filteredRows.length) {
-      toast.warning(t.exportEmpty);
-      return;
-    }
-    const rowsForExport = [
-      [config.title],
-      [t.generatedAt, new Date().toLocaleString()],
-      [],
-      [t.code, t.accountName, t.currentBalance, t.openingBalance, t.status, t.bankName, t.bankAccountNumber, t.iban, t.defaultAccount, t.notes],
-      ...filteredRows.map((row) => [
-        row.code,
-        row.name,
+  // PRIMEY_APPROVED_REPORT_OUTPUT_V5
+  function buildApprovedAccountReport() {
+    const accountingLabel =
+      locale === "ar"
+        ? "الحساب المحاسبي"
+        : "Accounting account";
+    const updatedLabel =
+      locale === "ar"
+        ? "آخر تحديث"
+        : "Updated at";
+    return {
+      headers: [
+        t.accountName,
+        t.currentBalance,
+        t.openingBalance,
+        t.status,
+        accountingLabel,
+        t.bankName,
+        t.bankAccountNumber,
+        t.iban,
+        t.defaultAccount,
+        updatedLabel,
+      ],
+      rows: filteredRows.map((row) => [
+        `${row.code} — ${row.name}`,
         formatMoney(row.currentBalance),
         formatMoney(row.openingBalance),
-        row.status === "active" ? t.active : t.inactive,
-        row.bankName,
-        row.bankAccountNumber,
-        row.iban,
-        row.isDefault ? t.defaultAccount : "",
-        row.notes,
+        row.status === "active"
+          ? t.active
+          : t.inactive,
+        row.accountingAccountCode
+          ? `${row.accountingAccountCode} — ${row.accountingAccountName || ""}`
+          : "—",
+        row.bankName || "—",
+        row.bankAccountNumber || "—",
+        row.iban || "—",
+        row.isDefault
+          ? t.defaultAccount
+          : "—",
+        formatDate(row.updatedAt),
       ]),
-    ];
-    const html = `
-      <html dir="${dir}" lang="${locale}">
-        <head><meta charset="utf-8" /></head>
-        <body>
-          <table border="1">
-            ${rowsForExport
-              .map(
-                (row) =>
-                  `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`,
-              )
-              .join("")}
-          </table>
-        </body>
-      </html>
-    `;
-    const blob = new Blob(["\uFEFF", html], { type: "application/vnd.ms-excel;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${variant}-${new Date().toISOString().slice(0, 10)}.xls`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    };
   }
-  function printPage() {
-    if (!filteredRows.length) {
-      toast.warning(t.printEmpty);
-      return;
-    }
-    window.print();
-  }
-  function printTable() {
-    if (!filteredRows.length) {
-      toast.warning(t.printEmpty);
-      return;
-    }
-    const popup = window.open(
-      "",
-      "_blank",
-      "width=1200,height=800",
-    );
-    if (!popup) {
-      toast.error(t.apiUnsupported);
-      return;
-    }
-    const bodyRows = filteredRows
+  function approvedAccountReportDocument(
+    printMode: boolean,
+  ) {
+    const report = buildApprovedAccountReport();
+    const generatedAt = new Intl.DateTimeFormat(
+      "en-US",
+      {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      },
+    ).format(new Date());
+    const alignment =
+      locale === "ar" ? "right" : "left";
+    const recordsLabel =
+      locale === "ar" ? "عدد السجلات" : "Records";
+    const bodyRows = report.rows
       .map(
         (row) => `
           <tr>
-            <td>${escapeHtml(row.code)}</td>
-            <td>${escapeHtml(row.name)}</td>
-            <td>${escapeHtml(
-              formatMoney(row.currentBalance),
-            )}</td>
-            <td>${escapeHtml(
-              formatMoney(row.openingBalance),
-            )}</td>
-            <td>${escapeHtml(
-              row.status === "active"
-                ? t.active
-                : t.inactive,
-            )}</td>
-            <td>${escapeHtml(
-              row.bankName || "—",
-            )}</td>
-            <td>${escapeHtml(
-              row.iban ||
-                row.bankAccountNumber ||
-                "—",
-            )}</td>
-            <td>${escapeHtml(
-              formatDate(row.updatedAt),
-            )}</td>
-          </tr>`,
+            ${row
+              .map(
+                (cell) =>
+                  `<td>${escapeHtml(cell)}</td>`,
+              )
+              .join("")}
+          </tr>
+        `,
       )
       .join("");
-    popup.document.write(`
+    return `
       <!doctype html>
-      <html lang="${locale}" dir="${dir}">
+      <html dir="${dir}" lang="${locale}">
         <head>
           <meta charset="utf-8" />
-          <title>${escapeHtml(
-            config.tableTitle,
-          )}</title>
+          <title>${escapeHtml(config.tableTitle)}</title>
           <style>
+            ${
+              printMode
+                ? `
+                  @page {
+                    size: A4 landscape;
+                    margin: 10mm;
+                  }
+                `
+                : ""
+            }
+            * {
+              box-sizing: border-box;
+            }
             body {
+              margin: 0;
+              padding: ${printMode ? "0" : "18px"};
+              direction: ${dir};
+              color: #111827;
               font-family: Arial, sans-serif;
-              padding: 24px;
-              color: #111;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .report-header {
+              display: flex;
+              align-items: flex-start;
+              justify-content: space-between;
+              gap: 24px;
+              margin-bottom: 14px;
+              padding-bottom: 12px;
+              border-bottom: 2px solid #111827;
             }
             h1 {
-              font-size: 22px;
               margin: 0 0 6px;
+              font-size: 23px;
+              font-weight: 700;
             }
-            p {
-              color: #666;
-              margin: 0 0 18px;
+            .subtitle {
+              margin: 0;
+              color: #4b5563;
+              font-size: 11px;
+            }
+            .meta {
+              color: #6b7280;
+              font-size: 10px;
+              line-height: 1.8;
+              text-align: ${alignment};
+              white-space: nowrap;
             }
             table {
               width: 100%;
               border-collapse: collapse;
-              font-size: 12px;
+              table-layout: fixed;
+              direction: ${dir};
+              font-size: ${printMode ? "8.5px" : "11px"};
+            }
+            thead {
+              display: table-header-group;
+            }
+            tr {
+              break-inside: avoid;
+              page-break-inside: avoid;
             }
             th,
             td {
-              border: 1px solid #bbb;
-              padding: 8px;
-              text-align: start;
+              border: 1px solid #000000;
+              padding: ${printMode ? "5px" : "7px"};
+              text-align: ${alignment};
+              vertical-align: top;
+              white-space: normal;
+              overflow-wrap: anywhere;
+              mso-number-format: "\\@";
             }
             th {
-              background: #f3f4f6;
-            }
-            @page {
-              size: landscape;
-              margin: 12mm;
+              background: #f3f4f6 !important;
+              font-weight: 700;
             }
           </style>
         </head>
         <body>
-          <h1>${escapeHtml(
-            config.tableTitle,
-          )}</h1>
-          <p>${escapeHtml(
-            config.tableDesc,
-          )}</p>
+          <header class="report-header">
+            <div>
+              <h1>${escapeHtml(config.tableTitle)}</h1>
+              <p class="subtitle">
+                ${escapeHtml(config.tableDesc)}
+              </p>
+            </div>
+            <div class="meta">
+              <div>
+                ${escapeHtml(t.generatedAt)}:
+                ${escapeHtml(generatedAt)}
+              </div>
+              <div>
+                ${escapeHtml(recordsLabel)}:
+                ${escapeHtml(formatInteger(report.rows.length))}
+              </div>
+            </div>
+          </header>
           <table>
             <thead>
               <tr>
-                <th>${escapeHtml(t.code)}</th>
-                <th>${escapeHtml(
-                  t.accountName,
-                )}</th>
-                <th>${escapeHtml(
-                  t.currentBalance,
-                )}</th>
-                <th>${escapeHtml(
-                  t.openingBalance,
-                )}</th>
-                <th>${escapeHtml(
-                  t.status,
-                )}</th>
-                <th>${escapeHtml(
-                  t.bankName,
-                )}</th>
-                <th>${escapeHtml(
-                  t.iban,
-                )}</th>
-                <th>${escapeHtml(
-                  t.newest,
-                )}</th>
+                ${report.headers
+                  .map(
+                    (header) =>
+                      `<th>${escapeHtml(header)}</th>`,
+                  )
+                  .join("")}
               </tr>
             </thead>
             <tbody>
               ${bodyRows}
             </tbody>
           </table>
-          <script>
-            window.onload = () => {
-              window.print();
-              window.onafterprint = () => {
-                window.close();
-              };
-            };
-          </script>
+          ${
+            printMode
+              ? `
+                <script>
+                  window.onload = function () {
+                    window.focus();
+                    window.print();
+                  };
+                  window.onafterprint = function () {
+                    window.close();
+                  };
+                </script>
+              `
+              : ""
+          }
         </body>
       </html>
-    `);
-    popup.document.close();
+    `;
+  }
+  function exportExcel() {
+    const report = buildApprovedAccountReport();
+    if (!report.rows.length) {
+      toast.warning(t.exportEmpty);
+      return;
+    }
+    const html = approvedAccountReportDocument(false);
+    const blob = new Blob(
+      ["\uFEFF", html],
+      {
+        type:
+          "application/vnd.ms-excel;charset=utf-8;",
+      },
+    );
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download =
+      `${variant}-${new Date()
+        .toISOString()
+        .slice(0, 10)}.xls`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    toast.success(
+      locale === "ar"
+        ? "تم تجهيز ملف Excel بنجاح."
+        : "Excel file prepared successfully.",
+    );
+  }
+  function printPage() {
+    const report = buildApprovedAccountReport();
+    if (!report.rows.length) {
+      toast.warning(t.printEmpty);
+      return;
+    }
+    const printWindow = window.open(
+      "",
+      "_blank",
+      "width=1400,height=900",
+    );
+    if (!printWindow) {
+      toast.error(
+        locale === "ar"
+          ? "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة."
+          : "The print window could not be opened. Allow pop-ups and try again.",
+      );
+      return;
+    }
+    printWindow.opener = null;
+    printWindow.document.write(
+      approvedAccountReportDocument(true),
+    );
+    printWindow.document.close();
+    toast.success(
+      locale === "ar"
+        ? "تم تجهيز صفحة الطباعة."
+        : "Print page prepared.",
+    );
+  }
+  function printTable() {
+    printPage();
   }
   const columns: DataColumn<TreasuryAccountRecord>[] = [
 

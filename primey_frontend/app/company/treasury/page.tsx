@@ -992,7 +992,7 @@ function MoneyValue({
   label: string;
 }) {
   return (
-    <span dir="ltr" lang="en" className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold">
+    <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold">
       <span
         dir="ltr"
         lang="en"
@@ -1723,39 +1723,284 @@ export default function CompanyTreasuryPage() {
       },
     ];
   }
-  function exportExcel() {
-    const sections = buildExportSections();
-    const totalRows = sections.reduce((sum, section) => sum + section.rows.length, 0);
-    if (!totalRows) {
-      toast.warning(t.exportEmpty);
-      return;
-    }
-    const html = `
+  // PRIMEY_APPROVED_REPORT_OUTPUT_V5
+  function approvedTreasuryReportDocument(
+    reportTitle: string,
+    sections: ReturnType<typeof buildExportSections>,
+    printMode: boolean,
+  ) {
+    const totalRows = sections.reduce(
+      (sum, section) => sum + section.rows.length,
+      0,
+    );
+    const generatedAt = new Intl.DateTimeFormat(
+      "en-US",
+      {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      },
+    ).format(new Date());
+    const alignment =
+      locale === "ar" ? "right" : "left";
+    const recordsLabel =
+      locale === "ar" ? "عدد السجلات" : "Records";
+    return `
+      <!doctype html>
       <html dir="${dir}" lang="${locale}">
-        <head><meta charset="utf-8" /></head>
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(reportTitle)}</title>
+          <style>
+            ${
+              printMode
+                ? `
+                  @page {
+                    size: A4 landscape;
+                    margin: 10mm;
+                  }
+                `
+                : ""
+            }
+            * {
+              box-sizing: border-box;
+            }
+            body {
+              margin: 0;
+              padding: ${printMode ? "0" : "18px"};
+              direction: ${dir};
+              color: #111827;
+              font-family: Arial, sans-serif;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .report-header {
+              display: flex;
+              align-items: flex-start;
+              justify-content: space-between;
+              gap: 24px;
+              margin-bottom: 14px;
+              padding-bottom: 12px;
+              border-bottom: 2px solid #111827;
+            }
+            h1 {
+              margin: 0 0 6px;
+              font-size: 23px;
+              font-weight: 700;
+            }
+            .subtitle {
+              margin: 0;
+              color: #4b5563;
+              font-size: 11px;
+            }
+            .meta {
+              color: #6b7280;
+              font-size: 10px;
+              line-height: 1.8;
+              text-align: ${alignment};
+              white-space: nowrap;
+            }
+            h2 {
+              margin: 16px 0 7px;
+              font-size: 15px;
+              break-after: avoid;
+              page-break-after: avoid;
+            }
+            table {
+              width: 100%;
+              margin-bottom: 16px;
+              border-collapse: collapse;
+              table-layout: fixed;
+              direction: ${dir};
+              font-size: ${printMode ? "9px" : "11px"};
+            }
+            thead {
+              display: table-header-group;
+            }
+            tr {
+              break-inside: avoid;
+              page-break-inside: avoid;
+            }
+            th,
+            td {
+              border: 1px solid #000000;
+              padding: ${printMode ? "5px" : "7px"};
+              text-align: ${alignment};
+              vertical-align: top;
+              white-space: normal;
+              overflow-wrap: anywhere;
+              mso-number-format: "\\@";
+            }
+            th {
+              background: #f3f4f6 !important;
+              font-weight: 700;
+            }
+          </style>
+        </head>
         <body>
-          <h1>${escapeHtml(t.title)}</h1>
-          <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString())}</p>
-          <p>${escapeHtml(companyName || t.unknown)}</p>
+          <header class="report-header">
+            <div>
+              <h1>${escapeHtml(reportTitle)}</h1>
+              <p class="subtitle">
+                ${escapeHtml(companyName || t.unknown)}
+              </p>
+            </div>
+            <div class="meta">
+              <div>
+                ${escapeHtml(t.generatedAt)}:
+                ${escapeHtml(generatedAt)}
+              </div>
+              <div>
+                ${escapeHtml(recordsLabel)}:
+                ${escapeHtml(formatInteger(totalRows))}
+              </div>
+            </div>
+          </header>
           ${tableHtmlForSections(sections)}
+          ${
+            printMode
+              ? `
+                <script>
+                  window.onload = function () {
+                    window.focus();
+                    window.print();
+                  };
+                  window.onafterprint = function () {
+                    window.close();
+                  };
+                </script>
+              `
+              : ""
+          }
         </body>
       </html>
     `;
-    const blob = new Blob(["\uFEFF", html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+  }
+  function downloadApprovedTreasuryExcel(
+    reportTitle: string,
+    filename: string,
+    sections: ReturnType<typeof buildExportSections>,
+  ) {
+    const hasRows = sections.some(
+      (section) => section.rows.length > 0,
+    );
+    if (!hasRows) {
+      toast.warning(t.exportEmpty);
+      return;
+    }
+    const html = approvedTreasuryReportDocument(
+      reportTitle,
+      sections,
+      false,
+    );
+    const blob = new Blob(
+      ["\uFEFF", html],
+      {
+        type:
+          "application/vnd.ms-excel;charset=utf-8;",
+      },
+    );
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `company-treasury-dashboard-${new Date().toISOString().slice(0, 10)}.xls`;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
     anchor.click();
+    anchor.remove();
     URL.revokeObjectURL(url);
-    toast.success(t.export);
+    toast.success(
+      locale === "ar"
+        ? "تم تجهيز ملف Excel بنجاح."
+        : "Excel file prepared successfully.",
+    );
   }
-  function printPage() {
-    if (!filteredAccounts.length && !filteredTransactions.length) {
+  function openApprovedTreasuryPrint(
+    reportTitle: string,
+    sections: ReturnType<typeof buildExportSections>,
+  ) {
+    const hasRows = sections.some(
+      (section) => section.rows.length > 0,
+    );
+    if (!hasRows) {
       toast.warning(t.printEmpty);
       return;
     }
-    window.print();
+    const printWindow = window.open(
+      "",
+      "_blank",
+      "width=1400,height=900",
+    );
+    if (!printWindow) {
+      toast.error(
+        locale === "ar"
+          ? "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة."
+          : "The print window could not be opened. Allow pop-ups and try again.",
+      );
+      return;
+    }
+    printWindow.opener = null;
+    printWindow.document.write(
+      approvedTreasuryReportDocument(
+        reportTitle,
+        sections,
+        true,
+      ),
+    );
+    printWindow.document.close();
+    toast.success(
+      locale === "ar"
+        ? "تم تجهيز صفحة الطباعة."
+        : "Print page prepared.",
+    );
+  }
+  function exportExcel() {
+    downloadApprovedTreasuryExcel(
+      t.title,
+      `company-treasury-dashboard-${new Date()
+        .toISOString()
+        .slice(0, 10)}.xls`,
+      buildExportSections(),
+    );
+  }
+  function printPage() {
+    openApprovedTreasuryPrint(
+      t.title,
+      buildExportSections(),
+    );
+  }
+  function exportApprovedAccountsTable() {
+    downloadApprovedTreasuryExcel(
+      t.latestAccounts,
+      `treasury-accounts-${new Date()
+        .toISOString()
+        .slice(0, 10)}.xls`,
+      buildExportSections().slice(0, 1),
+    );
+  }
+  function printApprovedAccountsTable() {
+    openApprovedTreasuryPrint(
+      t.latestAccounts,
+      buildExportSections().slice(0, 1),
+    );
+  }
+  function exportApprovedTransactionsTable() {
+    downloadApprovedTreasuryExcel(
+      t.latestTransactions,
+      `treasury-transactions-${new Date()
+        .toISOString()
+        .slice(0, 10)}.xls`,
+      buildExportSections().slice(1, 2),
+    );
+  }
+  function printApprovedTransactionsTable() {
+    openApprovedTreasuryPrint(
+      t.latestTransactions,
+      buildExportSections().slice(1, 2),
+    );
   }
   if (loading) {
     return (
@@ -1977,7 +2222,7 @@ export default function CompanyTreasuryPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={exportExcel}
+                  onClick={exportApprovedAccountsTable}
                 >
                   <FileSpreadsheet className="h-4 w-4" />
                   {t.export}
@@ -1985,7 +2230,7 @@ export default function CompanyTreasuryPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={printPage}
+                  onClick={printApprovedAccountsTable}
                 >
                   <Printer className="h-4 w-4" />
                   {t.print}
@@ -2081,7 +2326,7 @@ export default function CompanyTreasuryPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={exportExcel}
+                  onClick={exportApprovedTransactionsTable}
                 >
                   <FileSpreadsheet className="h-4 w-4" />
                   {t.export}
@@ -2089,7 +2334,7 @@ export default function CompanyTreasuryPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={printPage}
+                  onClick={printApprovedTransactionsTable}
                 >
                   <Printer className="h-4 w-4" />
                   {t.print}
