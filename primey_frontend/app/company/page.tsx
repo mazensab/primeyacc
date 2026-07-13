@@ -1,54 +1,50 @@
 "use client";
+
 /* ============================================================
    📂 primey_frontend/app/company/page.tsx
-   🧠 Mhamcloud — Company Dashboard
+   🧠 PrimeyAcc — Company Dashboard
    ------------------------------------------------------------
-   ✅ Same approved system dashboard pattern
-   ✅ Company workspace only
-   ✅ Activity-aware company overview
-   ✅ Clickable KPI cards
-   ✅ Separate full-width tables:
-      - Latest sales invoices
-      - Latest treasury payments
-      - Activity records: stock/products by available API
-   ✅ Real API only, no fake demo data
-   ✅ Excel .xls + Web print
-   ✅ Skeleton loading
-   ✅ Error / Empty states
+   ✅ PrimeyAcc Approved Design
+   ✅ Real company APIs only
+   ✅ Correct receipt/payment/treasury data
+   ✅ Clickable document rows and ⋮ actions
+   ✅ Table-level Excel and print actions
+   ✅ Shared Calendar filters
+   ✅ English digits and SAR icon after the number
    ✅ sonner toast
-   ✅ RTL/LTR through primey-locale
-   ✅ English numbers/money always
-   ✅ SAR icon from /currency/sar.svg
-   ✅ No localhost hardcoding
+   ✅ NEXT_PUBLIC_API_URL only
 ============================================================ */
+
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-  Activity,
+  ArrowDownLeft,
   ArrowUpDown,
-  Boxes,
-  Building2,
-  CheckCircle2,
-  CreditCard,
+  ArrowUpRight,
+  CalendarDays,
+  ExternalLink,
   FileSpreadsheet,
   FileText,
+  Landmark,
   Loader2,
-  Package,
+  MoreVertical,
   Printer,
+  ReceiptText,
   RefreshCw,
   RotateCcw,
   Search,
-  ShieldCheck,
   ShoppingCart,
-  Sparkles,
   TriangleAlert,
   Users,
-  Wallet,
+  WalletCards,
 } from "lucide-react";
 import { toast } from "sonner";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Card,
   CardContent,
@@ -56,7 +52,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -73,354 +80,388 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+
 type Locale = "ar" | "en";
 type ApiRecord = Record<string, unknown>;
 type ApiResponse = ApiRecord | ApiRecord[];
-type SortKey = "newest" | "oldest" | "amount_high" | "amount_low" | "name";
-type StatusFilter =
-  | "all"
-  | "active"
-  | "inactive"
-  | "draft"
-  | "posted"
-  | "confirmed"
-  | "paid"
-  | "unpaid"
-  | "partial"
-  | "pending"
-  | "failed"
-  | "cancelled"
-  | "void"
-  | "refunded";
+type VoucherKind = "receipt" | "payment";
+type VoucherStatus = "draft" | "confirmed" | "cancelled";
+type TransactionStatus = "draft" | "posted" | "cancelled";
+type TransactionType = "inflow" | "outflow" | "transfer" | "adjustment";
+type SortKey = "newest" | "oldest" | "amount_high" | "amount_low" | "number" | "name";
+type KindFilter = "all" | VoucherKind;
+type TransactionTypeFilter = "all" | TransactionType;
+
 type DashboardStats = {
   salesTotal: number;
   salesInvoices: number;
-  paymentAmount: number;
-  payments: number;
+  receiptTotal: number;
+  paymentTotal: number;
   customers: number;
   suppliers: number;
-  products: number;
-  stockItems: number;
+  vouchers: number;
+  netFlow: number;
 };
+
 type SalesInvoiceRecord = {
   id: string;
   number: string;
-  customer_name: string;
+  customerName: string;
   status: string;
   amount: number;
-  issue_date: string | null;
-  created_at: string | null;
+  date: string | null;
 };
-type PaymentRecord = {
+
+type VoucherRecord = {
   id: string;
-  reference: string;
-  party_name: string;
+  kind: VoucherKind;
+  number: string;
+  partyName: string;
+  partyPhone: string;
+  treasuryAccountName: string;
   method: string;
-  status: string;
+  status: VoucherStatus;
   amount: number;
-  paid_at: string | null;
-  created_at: string | null;
+  date: string | null;
+  reference: string;
+  transactionNumber: string;
+  accountingEntryNumber: string;
 };
-type ActivityRecord = {
+
+type TreasuryTransactionRecord = {
   id: string;
-  name: string;
-  sku: string;
-  category: string;
-  quantity: number;
-  status: string;
-  updated_at: string | null;
+  number: string;
+  date: string | null;
+  accountName: string;
+  accountCode: string;
+  accountingAccountId: string;
+  accountingEntryNumber: string;
+  sourceType: string;
+  sourceNumber: string;
+  reference: string;
+  description: string;
+  type: TransactionType;
+  status: TransactionStatus;
+  amount: number;
 };
+
 type DataColumn<T> = {
   key: string;
   label: string;
   className?: string;
   render: (row: T) => React.ReactNode;
 };
-const API_ENDPOINTS = {
-  whoami: ["/api/auth/whoami/"],
-  customers: ["/api/company/customers/"],
-  suppliers: ["/api/company/suppliers/"],
-  products: ["/api/company/products/"],
-  salesInvoices: ["/api/company/sales/invoices/"],
-  purchaseBills: ["/api/company/purchases/bills/"],
-  /*
-   * Inventory stock summary is not exposed yet in the current company API.
-   * Until the inventory module page is reviewed, use company products as the
-   * activity/stock snapshot source to avoid false 404 noise.
-   */
-  stockSummary: ["/api/company/products/"],
-  /*
-   * Treasury payments endpoint is not available yet.
-   * Keep it optional so the dashboard remains clean and does not show a false
-   * partial-warning while the treasury module is not reviewed.
-   */
-  treasuryPayments: [],
+
+type ExportColumn<T> = {
+  label: string;
+  value: (row: T) => string | number;
+};
+
+const ENDPOINTS = {
+  whoami: "/api/auth/whoami/",
+  customers: "/api/company/customers/",
+  suppliers: "/api/company/suppliers/",
+  salesInvoices: "/api/company/sales/invoices/",
+  receipts: "/api/company/treasury/customer-payments/",
+  payments: "/api/company/treasury/supplier-payments/",
+  transactions: "/api/company/treasury/transactions/",
 } as const;
+
 const translations = {
   ar: {
+    badge: "مساحة الشركة",
     title: "لوحة الشركة",
     subtitle:
-      "مركز تشغيل الشركة الحالية لمتابعة المبيعات، الخزينة، العملاء، الموردين، المنتجات، والمخزون حسب الباقة والصلاحيات والنشاط.",
+      "مركز متابعة الشركة الحالية للمبيعات، العملاء، الموردين، سندات القبض والصرف، وحركات الخزينة.",
+    currentCompany: "الشركة الحالية",
+    activity: "النشاط",
+    unknown: "غير محدد",
     refresh: "تحديث",
     export: "تصدير Excel",
     print: "طباعة",
     reset: "إعادة ضبط",
     search: "بحث",
     all: "الكل",
-    from: "من",
-    to: "إلى",
-    sort: "الترتيب",
+    from: "من تاريخ",
+    to: "إلى تاريخ",
     newest: "الأحدث",
     oldest: "الأقدم",
     amountHigh: "الأعلى مبلغًا",
     amountLow: "الأقل مبلغًا",
+    numberSort: "الرقم",
     nameSort: "الاسم",
-    open: "فتح",
-    showing: "عرض",
-    rows: "صفوف",
-    of: "من",
-    sar: "ر.س",
-    unknown: "غير محدد",
-    companyHealth: "مساحة الشركة",
-    connectedToLiveApis: "متصل بواجهات الشركة الحقيقية",
-    partialWarningTitle: "تم تحميل الصفحة جزئيًا",
-    partialWarningDesc: "بعض واجهات الشركة لم تعد بيانات صالحة، لذلك تظهر الأقسام المتاحة فقط.",
     salesTotal: "إجمالي المبيعات",
     salesInvoices: "فواتير المبيعات",
-    paymentAmount: "إجمالي التحصيل",
-    payments: "مدفوعات الخزينة",
+    receiptTotal: "إجمالي المقبوضات",
+    paymentTotal: "إجمالي المصروفات",
     customers: "العملاء",
     suppliers: "الموردون",
-    products: "المنتجات والخدمات",
-    stockItems: "عناصر المخزون",
-    sales: "المبيعات",
-    treasury: "الخزينة",
-    parties: "الأطراف",
-    catalog: "الكتالوج",
-    inventory: "المخزون",
-    latestSalesInvoices: "آخر فواتير المبيعات",
-    latestSalesInvoicesDesc: "أحدث فواتير المبيعات الخاصة بالشركة الحالية.",
-    latestPayments: "آخر مدفوعات الخزينة",
-    latestPaymentsDesc: "أحدث عمليات القبض أو الصرف المتاحة من واجهات الشركة.",
-    activityRecords: "آخر بيانات النشاط",
-    activityRecordsDesc: "بيانات تشغيلية حسب نشاط الشركة والواجهات المتاحة، مثل المخزون أو المنتجات.",
-    invoiceSearchPlaceholder: "ابحث برقم الفاتورة أو العميل أو الحالة...",
-    paymentSearchPlaceholder: "ابحث بالمرجع أو الطرف أو الطريقة أو الحالة...",
-    activitySearchPlaceholder: "ابحث باسم المنتج أو الكود أو التصنيف أو الحالة...",
+    vouchers: "إجمالي السندات",
+    netFlow: "صافي التدفق",
+    salesDesc: "قيمة فواتير المبيعات المتاحة",
+    invoicesDesc: "عدد فواتير المبيعات",
+    receiptsDesc: "إجمالي سندات القبض",
+    paymentsDesc: "إجمالي سندات الصرف",
+    customersDesc: "عدد العملاء المسجلين",
+    suppliersDesc: "عدد الموردين المسجلين",
+    vouchersDesc: "سندات القبض والصرف",
+    netFlowDesc: "المقبوضات ناقص المصروفات",
+    invoicesTitle: "آخر فواتير المبيعات",
+    invoicesSubtitle: "أحدث فواتير المبيعات الخاصة بالشركة الحالية.",
+    vouchersTitle: "آخر سندات القبض والصرف",
+    vouchersSubtitle: "أحدث السندات المسجلة والمرتبطة بحسابات الخزينة.",
+    transactionsTitle: "آخر حركات الخزينة",
+    transactionsSubtitle: "أحدث الحركات المرتبطة بالسندات والحسابات والقيود المحاسبية.",
+    invoiceSearch: "ابحث برقم الفاتورة أو العميل أو الحالة...",
+    voucherSearch: "ابحث برقم السند أو الطرف أو الحساب أو المرجع...",
+    transactionSearch: "ابحث برقم الحركة أو الحساب أو المصدر أو المرجع...",
     invoice: "الفاتورة",
     customer: "العميل",
-    issueDate: "التاريخ",
+    date: "التاريخ",
     amount: "المبلغ",
     status: "الحالة",
-    reference: "المرجع",
+    kind: "النوع",
+    voucher: "رقم السند",
     party: "الطرف",
     method: "الطريقة",
-    paidAt: "تاريخ الدفع",
-    item: "العنصر",
-    sku: "الكود",
-    category: "التصنيف",
-    quantity: "الكمية",
-    updatedAt: "آخر تحديث",
-    active: "نشط",
-    inactive: "غير نشط",
+    treasuryAccount: "حساب الخزينة",
+    transaction: "رقم الحركة",
+    source: "المصدر",
+    accounting: "المحاسبة",
+    actions: "الإجراءات",
+    receiptVoucher: "سند قبض",
+    paymentVoucher: "سند صرف",
+    inflow: "وارد",
+    outflow: "صادر",
+    transfer: "تحويل",
+    adjustment: "تسوية",
     draft: "مسودة",
-    posted: "مرحل",
     confirmed: "مؤكد",
+    posted: "مرحل",
+    cancelled: "ملغي",
     paid: "مدفوع",
     unpaid: "غير مدفوع",
     partial: "جزئي",
     pending: "معلق",
-    failed: "فشل",
-    cancelled: "ملغي",
-    void: "ملغي",
-    refunded: "مسترد",
-    noDataTitle: "لا توجد بيانات",
-    noDataDesc: "ستظهر البيانات هنا عند توفرها من API.",
-    noResultsTitle: "لا توجد نتائج مطابقة",
-    noResultsDesc: "غيّر البحث أو الفلاتر لعرض نتائج أخرى.",
+    active: "نشط",
+    inactive: "غير نشط",
+    openDetails: "فتح التفاصيل",
+    printVoucher: "طباعة السند",
+    openSales: "فتح فواتير المبيعات",
+    showing: "عرض",
+    of: "من",
+    rows: "صفوف",
+    noInvoices: "لا توجد فواتير مبيعات مسجلة حاليًا.",
+    noVouchers: "لا توجد سندات قبض أو صرف مسجلة حاليًا.",
+    noTransactions: "لا توجد حركات خزينة مسجلة حاليًا.",
+    noResults: "لا توجد نتائج مطابقة للبحث أو الفلاتر الحالية.",
     errorTitle: "تعذر تحميل لوحة الشركة",
     errorDesc: "تأكد من تسجيل الدخول داخل مساحة الشركة ومن تشغيل الباكند ثم أعد المحاولة.",
     tryAgain: "إعادة المحاولة",
+    partialTitle: "تعذر تحميل بعض السجلات",
+    partialDesc: "تم عرض البيانات المتاحة، ويمكن إعادة التحديث لاحقًا.",
+    refreshed: "تم تحديث لوحة الشركة.",
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
-    printTitle: "تقرير لوحة الشركة",
-    generatedAt: "تاريخ الطباعة",
-    refreshed: "تم تحديث لوحة الشركة.",
-    currentCompany: "الشركة الحالية",
-    activityLabel: "النشاط",
-    genericActivity: "نشاط عام",
-    retailActivity: "تجارة التجزئة",
-    wholesaleActivity: "تجارة الجملة",
-    restaurantActivity: "مطاعم ومقاهي",
-    jewelryActivity: "ذهب ومجوهرات",
-    servicesActivity: "خدمات",
-    manufacturingActivity: "تصنيع",
+    exportReady: "تم تجهيز ملف Excel.",
+    printReady: "تم تجهيز صفحة الطباعة.",
+    printBlocked: "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة.",
+    generatedAt: "تم الإنشاء في",
+    reportTitle: "تقرير لوحة الشركة",
+    sar: "ر.س",
   },
   en: {
+    badge: "Company workspace",
     title: "Company Dashboard",
     subtitle:
-      "Operational center for the current company: sales, treasury, customers, suppliers, products, and inventory by plan, permissions, and activity.",
+      "Monitor the current company sales, customers, suppliers, receipt and payment vouchers, and treasury movements.",
+    currentCompany: "Current company",
+    activity: "Activity",
+    unknown: "Unknown",
     refresh: "Refresh",
     export: "Export Excel",
     print: "Print",
     reset: "Reset",
     search: "Search",
     all: "All",
-    from: "From",
-    to: "To",
-    sort: "Sort",
+    from: "From date",
+    to: "To date",
     newest: "Newest",
     oldest: "Oldest",
     amountHigh: "Highest amount",
     amountLow: "Lowest amount",
+    numberSort: "Number",
     nameSort: "Name",
-    open: "Open",
-    showing: "Showing",
-    rows: "rows",
-    of: "of",
-    sar: "SAR",
-    unknown: "Unknown",
-    companyHealth: "Company workspace",
-    connectedToLiveApis: "Connected to real company APIs",
-    partialWarningTitle: "Partially loaded",
-    partialWarningDesc: "Some company APIs did not return valid data, so only available sections are shown.",
     salesTotal: "Sales total",
     salesInvoices: "Sales invoices",
-    paymentAmount: "Collected amount",
-    payments: "Treasury payments",
+    receiptTotal: "Total receipts",
+    paymentTotal: "Total payments",
     customers: "Customers",
     suppliers: "Suppliers",
-    products: "Products & services",
-    stockItems: "Stock items",
-    sales: "Sales",
-    treasury: "Treasury",
-    parties: "Parties",
-    catalog: "Catalog",
-    inventory: "Inventory",
-    latestSalesInvoices: "Latest sales invoices",
-    latestSalesInvoicesDesc: "Newest sales invoices for the current company.",
-    latestPayments: "Latest treasury payments",
-    latestPaymentsDesc: "Newest receipt or payment transactions available from company APIs.",
-    activityRecords: "Latest activity records",
-    activityRecordsDesc: "Operational data based on company activity and available APIs, such as inventory or products.",
-    invoiceSearchPlaceholder: "Search by invoice number, customer, or status...",
-    paymentSearchPlaceholder: "Search by reference, party, method, or status...",
-    activitySearchPlaceholder: "Search by product name, code, category, or status...",
+    vouchers: "Total vouchers",
+    netFlow: "Net cash flow",
+    salesDesc: "Available sales invoice value",
+    invoicesDesc: "Sales invoice count",
+    receiptsDesc: "Receipt voucher total",
+    paymentsDesc: "Payment voucher total",
+    customersDesc: "Registered customers",
+    suppliersDesc: "Registered suppliers",
+    vouchersDesc: "Receipt and payment vouchers",
+    netFlowDesc: "Receipts minus payments",
+    invoicesTitle: "Latest sales invoices",
+    invoicesSubtitle: "Newest sales invoices for the current company.",
+    vouchersTitle: "Latest receipt and payment vouchers",
+    vouchersSubtitle: "Newest vouchers linked to treasury accounts.",
+    transactionsTitle: "Latest treasury transactions",
+    transactionsSubtitle: "Newest movements linked to vouchers, accounts, and journal entries.",
+    invoiceSearch: "Search by invoice number, customer, or status...",
+    voucherSearch: "Search by voucher number, party, account, or reference...",
+    transactionSearch: "Search by movement number, account, source, or reference...",
     invoice: "Invoice",
     customer: "Customer",
-    issueDate: "Date",
+    date: "Date",
     amount: "Amount",
     status: "Status",
-    reference: "Reference",
+    kind: "Type",
+    voucher: "Voucher No.",
     party: "Party",
     method: "Method",
-    paidAt: "Paid at",
-    item: "Item",
-    sku: "Code",
-    category: "Category",
-    quantity: "Quantity",
-    updatedAt: "Updated at",
-    active: "Active",
-    inactive: "Inactive",
+    treasuryAccount: "Treasury account",
+    transaction: "Movement No.",
+    source: "Source",
+    accounting: "Accounting",
+    actions: "Actions",
+    receiptVoucher: "Receipt voucher",
+    paymentVoucher: "Payment voucher",
+    inflow: "Inflow",
+    outflow: "Outflow",
+    transfer: "Transfer",
+    adjustment: "Adjustment",
     draft: "Draft",
-    posted: "Posted",
     confirmed: "Confirmed",
+    posted: "Posted",
+    cancelled: "Cancelled",
     paid: "Paid",
     unpaid: "Unpaid",
     partial: "Partial",
     pending: "Pending",
-    failed: "Failed",
-    cancelled: "Cancelled",
-    void: "Void",
-    refunded: "Refunded",
-    noDataTitle: "No data",
-    noDataDesc: "Data will appear here when returned by the API.",
-    noResultsTitle: "No matching results",
-    noResultsDesc: "Change the search or filters to show other results.",
+    active: "Active",
+    inactive: "Inactive",
+    openDetails: "Open details",
+    printVoucher: "Print voucher",
+    openSales: "Open sales invoices",
+    showing: "Showing",
+    of: "of",
+    rows: "rows",
+    noInvoices: "No sales invoices are currently recorded.",
+    noVouchers: "No receipt or payment vouchers are currently recorded.",
+    noTransactions: "No treasury movements are currently recorded.",
+    noResults: "No records match the current search or filters.",
     errorTitle: "Could not load company dashboard",
-    errorDesc: "Make sure you are signed in to a company workspace and the backend is running, then try again.",
+    errorDesc: "Make sure you are signed in to the company workspace and the backend is running, then try again.",
     tryAgain: "Try again",
+    partialTitle: "Some records could not be loaded",
+    partialDesc: "Available data is shown. Refresh again later.",
+    refreshed: "Company dashboard refreshed.",
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
-    printTitle: "Company Dashboard Report",
+    exportReady: "Excel file prepared.",
+    printReady: "Print page prepared.",
+    printBlocked: "The print window could not be opened. Allow pop-ups and try again.",
     generatedAt: "Generated at",
-    refreshed: "Company dashboard refreshed.",
-    currentCompany: "Current company",
-    activityLabel: "Activity",
-    genericActivity: "General activity",
-    retailActivity: "Retail",
-    wholesaleActivity: "Wholesale",
-    restaurantActivity: "Restaurants & Cafes",
-    jewelryActivity: "Gold & Jewelry",
-    servicesActivity: "Services",
-    manufacturingActivity: "Manufacturing",
+    reportTitle: "Company Dashboard Report",
+    sar: "SAR",
   },
 } as const;
-const statusFilters: StatusFilter[] = [
-  "all",
-  "active",
-  "inactive",
-  "draft",
-  "posted",
-  "confirmed",
-  "paid",
-  "unpaid",
-  "partial",
-  "pending",
-  "failed",
-  "cancelled",
-  "void",
-  "refunded",
-];
+
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
+
 function isRecord(value: unknown): value is ApiRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
 function asRecord(value: unknown): ApiRecord {
   return isRecord(value) ? value : {};
 }
-function normalizeText(value: unknown, fallback = "") {
+
+function text(value: unknown, fallback = "") {
   if (value === null || value === undefined) return fallback;
   return String(value).trim() || fallback;
 }
-function toNumber(value: unknown, fallback = 0) {
+
+function numberValue(value: unknown, fallback = 0) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
-    const parsed = Number(value.replace(/,/g, ""));
+    const parsed = Number(value.replace(/[^\d.-]/g, ""));
     return Number.isFinite(parsed) ? parsed : fallback;
   }
   return fallback;
 }
-function formatInteger(value: unknown) {
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(
-    Math.round(toNumber(value)),
-  );
-}
+
 function formatMoney(value: unknown) {
   return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(toNumber(value));
+  }).format(numberValue(value));
 }
-function formatQuantity(value: unknown) {
-  return new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: 3,
-  }).format(toNumber(value));
+
+function reportMoney(value: unknown, locale: Locale) {
+  const currency = locale === "ar" ? "ر.س" : "SAR";
+
+  /*
+   * إبقاء الرقم أولا ثم العملة في العربية والإنجليزية
+   * داخل الطباعة وExcel.
+   */
+  return `\u202A${formatMoney(value)}\u00A0${currency}\u202C`;
 }
+
+function transactionSourceLabel(value: string, locale: Locale) {
+  const normalized = value.trim().toUpperCase();
+
+  if (normalized.includes("CUSTOMER_PAYMENT")) {
+    return locale === "ar" ? "دفعة عميل" : "Customer payment";
+  }
+
+  if (normalized.includes("SUPPLIER_PAYMENT")) {
+    return locale === "ar" ? "دفعة مورد" : "Supplier payment";
+  }
+
+  if (normalized.includes("TRANSFER")) {
+    return locale === "ar" ? "تحويل خزينة" : "Treasury transfer";
+  }
+
+  if (normalized.includes("ADJUSTMENT")) {
+    return locale === "ar" ? "تسوية خزينة" : "Treasury adjustment";
+  }
+
+  return value || "—";
+}
+
+function formatInteger(value: unknown) {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(
+    Math.round(numberValue(value)),
+  );
+}
+
 function formatDate(value: string | null | undefined) {
   if (!value) return "—";
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return String(value).slice(0, 10);
+  if (Number.isNaN(parsed.getTime())) return value.slice(0, 10) || "—";
   return parsed.toISOString().slice(0, 10);
 }
-function formatDateTime(value: string | null | undefined) {
-  if (!value) return "—";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return String(value).replace("T", " ").slice(0, 16);
-  return parsed.toISOString().replace("T", " ").slice(0, 16);
+
+function reportDateTime() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  const hours = String(now.getHours()).padStart(2, "0");
+  const minutes = String(now.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
+
 function escapeHtml(value: unknown) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -429,31 +470,27 @@ function escapeHtml(value: unknown) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+
 function getInitialLocale(): Locale {
   if (typeof window === "undefined") return "ar";
   return window.localStorage.getItem("primey-locale") === "en" ? "en" : "ar";
 }
-function getApiBaseUrl() {
-  const envBase =
-    typeof process !== "undefined"
-      ? (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "").replace(
-          /\/+$/,
-          "",
-        )
-      : "";
-  if (envBase.endsWith("/api")) return envBase.slice(0, -4);
-  return envBase;
+
+function apiBase() {
+  const value = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/+$/, "");
+  return value.endsWith("/api") ? value.slice(0, -4) : value;
 }
-function makeApiUrl(path: string, params?: URLSearchParams) {
+
+function apiUrl(path: string, params?: URLSearchParams) {
   const query = params?.toString();
-  return `${getApiBaseUrl()}${path}${query ? `?${query}` : ""}`;
+  return `${apiBase()}${path}${query ? `?${query}` : ""}`;
 }
-async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(url, {
+
+async function fetchJson<T>(path: string, params?: URLSearchParams, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(apiUrl(path, params), {
     method: "GET",
     credentials: "include",
     cache: "no-store",
-    redirect: "follow",
     signal,
     headers: {
       Accept: "application/json",
@@ -462,344 +499,360 @@ async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   });
   const contentType = response.headers.get("content-type") || "";
   const rawText = await response.text();
-  let payload: unknown = null;
+  let payload: unknown = {};
   if (rawText && contentType.includes("application/json")) {
     try {
       payload = JSON.parse(rawText) as unknown;
     } catch {
-      payload = null;
+      payload = {};
     }
   }
   if (!response.ok) {
     const record = asRecord(payload);
-    const message =
-      normalizeText(record.message) ||
-      normalizeText(record.detail) ||
-      normalizeText(record.error) ||
-      `Request failed with status ${response.status}`;
-    throw new Error(message);
+    throw new Error(
+      text(record.message) ||
+        text(record.detail) ||
+        text(record.error) ||
+        `HTTP ${response.status}`,
+    );
   }
-  return (payload || {}) as T;
-}
-async function fetchFirstJson<T>(
-  paths: readonly string[],
-  params?: URLSearchParams,
-  signal?: AbortSignal,
-): Promise<T> {
-  let lastError: unknown = null;
-  for (const path of paths) {
-    try {
-      return await fetchJson<T>(makeApiUrl(path, params), signal);
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  if (lastError instanceof Error) {
-    throw lastError;
-  }
-  throw new Error("No API endpoint returned a valid response.");
-}async function fetchOptionalFirstJson<T>(
-  paths: readonly string[],
-  params?: URLSearchParams,
-  signal?: AbortSignal,
-): Promise<T> {
-  if (!paths.length) {
-    return {} as T;
-  }
-  try {
-    return await fetchFirstJson<T>(paths, params, signal);
-  } catch {
-    return {} as T;
-  }
-}function findFirstArray(payload: unknown, depth = 0): unknown[] {
-  if (depth > 6) return [];
-  if (Array.isArray(payload)) return payload;
-  const record = asRecord(payload);
-  if (!Object.keys(record).length) return [];
-  const preferredKeys = [
-    "results",
-    "items",
-    "records",
-    "rows",
-    "data",
-    "customers",
-    "suppliers",
-    "products",
-    "services",
-    "invoices",
-    "sales_invoices",
-    "salesInvoices",
-    "bills",
-    "purchase_bills",
-    "purchaseBills",
-    "payments",
-    "stock",
-    "stock_items",
-    "stockItems",
-    "stock_summary",
-    "stockSummary",
-  ];
-  for (const key of preferredKeys) {
-    const value = record[key];
-    if (Array.isArray(value)) {
-      return value;
-    }
-    if (isRecord(value)) {
-      const nested = findFirstArray(value, depth + 1);
-      if (nested.length) return nested;
-    }
-  }
-  for (const value of Object.values(record)) {
-    if (Array.isArray(value) && (value.length === 0 || value.some(isRecord))) {
-      return value;
-    }
-    if (isRecord(value)) {
-      const nested = findFirstArray(value, depth + 1);
-      if (nested.length) return nested;
-    }
-  }
-  return [];
-}
-function extractArray(payload: unknown): unknown[] {
-  return findFirstArray(payload);
+  return payload as T;
 }
 
-function extractSummary(payload: unknown): ApiRecord {
-  const record = asRecord(payload);
-  const dataRecord = asRecord(record.data);
-  const metaRecord = asRecord(record.meta);
-  return {
-    ...asRecord(record.summary),
-    ...asRecord(dataRecord.summary),
-    ...asRecord(metaRecord.summary),
-    ...record,
-    ...dataRecord,
+function extractArray(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) return payload;
+  const visited = new Set<unknown>();
+  const walk = (value: unknown, depth = 0): unknown[] => {
+    if (Array.isArray(value)) return value;
+    if (!isRecord(value) || depth > 6 || visited.has(value)) return [];
+    visited.add(value);
+    const preferred = [
+      value.results,
+      value.items,
+      value.records,
+      value.rows,
+      value.data,
+      value.result,
+      value.payments,
+      value.transactions,
+      value.invoices,
+    ];
+    for (const candidate of preferred) {
+      if (Array.isArray(candidate)) return candidate;
+    }
+    for (const candidate of preferred) {
+      const nested = walk(candidate, depth + 1);
+      if (nested.length) return nested;
+    }
+    return [];
   };
+  return walk(payload);
 }
-function findFirstCount(payload: unknown, depth = 0): number | null {
-  if (depth > 6) return null;
-  const record = asRecord(payload);
-  if (!Object.keys(record).length) return null;
-  const countKeys = [
-    "count",
-    "total",
-    "total_count",
-    "totalCount",
-    "records_total",
-    "recordsTotal",
-    "filtered_count",
-    "filteredCount",
-  ];
-  for (const key of countKeys) {
-    if (Object.prototype.hasOwnProperty.call(record, key)) {
-      const value = toNumber(record[key], Number.NaN);
-      if (Number.isFinite(value)) return value;
-    }
-  }
-  const preferredContainers = ["meta", "pagination", "page", "summary", "data"];
-  for (const key of preferredContainers) {
-    const value = record[key];
-    if (isRecord(value)) {
-      const nested = findFirstCount(value, depth + 1);
-      if (nested !== null) return nested;
-    }
-  }
-  return null;
-}
+
 function extractCount(payload: unknown) {
-  const explicitCount = findFirstCount(payload);
-  if (explicitCount !== null) {
-    return explicitCount;
+  const record = asRecord(payload);
+  const data = asRecord(record.data);
+  const meta = asRecord(record.meta);
+  const candidates = [
+    record.count,
+    record.total,
+    record.total_count,
+    data.count,
+    data.total,
+    meta.count,
+    meta.total,
+  ];
+  for (const candidate of candidates) {
+    const parsed = numberValue(candidate, Number.NaN);
+    if (Number.isFinite(parsed)) return parsed;
   }
   return extractArray(payload).length;
 }
 
-function normalizeNestedName(value: unknown, keys: string[] = ["name", "title", "full_name"]) {
-  if (typeof value === "string") return value;
-  const record = asRecord(value);
-  for (const key of keys) {
-    const text = normalizeText(record[key]);
-    if (text) return text;
-  }
-  return "";
-}
-function normalizeStatus(record: ApiRecord, fallback = "active") {
-  const status = normalizeText(
-    record.status || record.state || record.lifecycle_status || record.payment_status,
-  );
-  if (status) return status.toLowerCase();
-  if (typeof record.is_active === "boolean") {
-    return record.is_active ? "active" : "inactive";
-  }
-  return fallback;
-}
-function normalizeSalesInvoice(value: unknown): SalesInvoiceRecord {
-  const record = asRecord(value);
-  const customer = record.customer || record.party || record.client;
-  return {
-    id: normalizeText(record.id || record.uuid || record.pk || record.number || record.invoice_number),
-    number: normalizeText(record.number || record.invoice_number || record.code || record.reference),
-    customer_name:
-      normalizeText(record.customer_name || record.party_name || record.client_name) ||
-      normalizeNestedName(customer, ["name", "display_name", "full_name", "email"]),
-    status: normalizeStatus(record, "draft"),
-    amount: toNumber(record.total_amount || record.grand_total || record.net_total || record.total || record.amount),
-    issue_date:
-      normalizeText(record.issue_date || record.invoice_date || record.date || record.posted_at || record.created_at) ||
-      null,
-    created_at: normalizeText(record.created_at || record.created || record.inserted_at) || null,
-  };
-}
-function normalizePayment(value: unknown): PaymentRecord {
-  const record = asRecord(value);
-  const party = record.party || record.customer || record.supplier || record.contact;
-  const method = record.method || record.payment_method || record.gateway;
-  return {
-    id: normalizeText(record.id || record.uuid || record.pk || record.reference || record.payment_number),
-    reference: normalizeText(
-      record.reference || record.reference_number || record.payment_number || record.voucher_number || record.transaction_id,
-    ),
-    party_name:
-      normalizeText(record.party_name || record.customer_name || record.supplier_name) ||
-      normalizeNestedName(party, ["name", "display_name", "full_name", "email"]),
-    method:
-      normalizeText(record.method_name || record.payment_method_name || record.gateway_name) ||
-      normalizeNestedName(method, ["name", "title", "code"]) ||
-      normalizeText(record.method || record.payment_method),
-    status: normalizeStatus(record, "pending"),
-    amount: toNumber(record.amount || record.total_amount || record.paid_amount || record.net_amount || record.value),
-    paid_at:
-      normalizeText(record.paid_at || record.confirmed_at || record.payment_date || record.date || record.created_at) ||
-      null,
-    created_at: normalizeText(record.created_at || record.created || record.inserted_at) || null,
-  };
-}
-function normalizeActivity(value: unknown): ActivityRecord {
-  const record = asRecord(value);
-  const product = record.product || record.item || record.stock_item;
-  const category = record.category || record.product_category;
-  return {
-    id: normalizeText(record.id || record.uuid || record.pk || record.product_id || record.sku || record.code),
-    name:
-      normalizeText(record.name || record.product_name || record.item_name || record.title) ||
-      normalizeNestedName(product, ["name", "title", "sku", "code"]),
-    sku:
-      normalizeText(record.sku || record.code || record.product_code || record.barcode) ||
-      normalizeNestedName(product, ["sku", "code", "barcode"]),
-    category:
-      normalizeText(record.category_name || record.group_name) ||
-      normalizeNestedName(category, ["name", "title", "code"]),
-    quantity: toNumber(record.quantity || record.available_quantity || record.balance || record.qty || record.stock_balance),
-    status: normalizeStatus(record, "active"),
-    updated_at:
-      normalizeText(record.updated_at || record.last_movement_at || record.created_at || record.created || record.inserted_at) ||
-      null,
-  };
-}
-function getCompanyRecord(authPayload: unknown) {
-  const auth = asRecord(authPayload);
+function getCompanyRecord(payload: unknown) {
+  const record = asRecord(payload);
   const candidates = [
-    auth.company,
-    auth.current_company,
-    auth.active_company,
-    auth.workspace_company,
-    auth.tenant,
+    record.company,
+    record.current_company,
+    record.active_company,
+    record.workspace_company,
+    record.tenant,
   ];
   for (const candidate of candidates) {
     if (isRecord(candidate)) return candidate;
   }
   return {};
 }
-function getCompanyName(authPayload: unknown, fallback: string) {
-  const auth = asRecord(authPayload);
-  const company = getCompanyRecord(authPayload);
+
+function getCompanyName(payload: unknown, fallback: string) {
+  const record = asRecord(payload);
+  const company = getCompanyRecord(payload);
   return (
-    normalizeText(company.name || company.legal_name || company.commercial_name) ||
-    normalizeText(auth.company_name || auth.current_company_name || auth.tenant_name) ||
+    text(company.name || company.legal_name || company.commercial_name) ||
+    text(record.company_name || record.current_company_name || record.tenant_name) ||
     fallback
   );
 }
-function getActivityCode(authPayload: unknown) {
-  const auth = asRecord(authPayload);
-  const company = getCompanyRecord(authPayload);
-  const activity = company.activity_profile || company.activity || auth.activity_profile || auth.activity;
-  const raw =
-    normalizeText(activity) ||
-    normalizeNestedName(activity, ["code", "name", "title"]) ||
-    normalizeText(company.activity_code || company.business_activity || auth.activity_code);
-  return raw.toUpperCase();
+
+function getActivityName(payload: unknown, fallback: string) {
+  const record = asRecord(payload);
+  const company = getCompanyRecord(payload);
+  const activity = company.activity_profile || company.activity || record.activity_profile || record.activity;
+  if (typeof activity === "string") return activity;
+  const activityRecord = asRecord(activity);
+  return text(
+    activityRecord.name_ar ||
+      activityRecord.name ||
+      activityRecord.title ||
+      company.activity_name ||
+      record.activity_name,
+    fallback,
+  );
 }
-function getActivityLabel(authPayload: unknown, locale: Locale) {
+
+function normalizeVoucherStatus(value: unknown): VoucherStatus {
+  const normalized = text(value).toUpperCase();
+  if (normalized === "CONFIRMED" || normalized === "POSTED") return "confirmed";
+  if (normalized === "CANCELLED" || normalized === "CANCELED" || normalized === "REVERSED") {
+    return "cancelled";
+  }
+  return "draft";
+}
+
+function normalizeTransactionStatus(value: unknown): TransactionStatus {
+  const normalized = text(value).toUpperCase();
+  if (normalized === "POSTED" || normalized === "CONFIRMED") return "posted";
+  if (normalized === "CANCELLED" || normalized === "CANCELED" || normalized === "REVERSED") {
+    return "cancelled";
+  }
+  return "draft";
+}
+
+function normalizeTransactionType(value: unknown): TransactionType {
+  const normalized = text(value).toUpperCase();
+  if (normalized === "OUTFLOW") return "outflow";
+  if (normalized === "TRANSFER") return "transfer";
+  if (normalized === "ADJUSTMENT") return "adjustment";
+  return "inflow";
+}
+
+function normalizeInvoice(value: unknown): SalesInvoiceRecord {
+  const record = asRecord(value);
+  const customer = asRecord(record.customer || record.party || record.client);
+  return {
+    id: text(record.id || record.uuid || record.pk || record.invoice_number || record.number),
+    number: text(record.invoice_number || record.number || record.code || record.reference, "—"),
+    customerName:
+      text(record.customer_name || record.party_name || record.client_name) ||
+      text(customer.name || customer.display_name || customer.full_name, "—"),
+    status: text(record.status || record.state || record.payment_status, "draft").toLowerCase(),
+    amount: numberValue(
+      record.total_amount || record.grand_total || record.net_total || record.total || record.amount,
+    ),
+    date:
+      text(record.issue_date || record.invoice_date || record.date || record.created_at) || null,
+  };
+}
+
+function normalizeVoucher(value: unknown, kind: VoucherKind): VoucherRecord {
+  const record = asRecord(value);
+  const isReceipt = kind === "receipt";
+  return {
+    id: `${kind}-${text(record.id || record.pk || record.uuid || record.payment_number)}`,
+    kind,
+    number: text(record.payment_number || record.number || record.reference, "—"),
+    partyName: text(isReceipt ? record.customer_name : record.supplier_name, "—"),
+    partyPhone: text(isReceipt ? record.customer_phone : record.supplier_phone),
+    treasuryAccountName: text(record.treasury_account_name, "—"),
+    method: text(record.payment_method_label || record.payment_method, "—"),
+    status: normalizeVoucherStatus(record.status),
+    amount: numberValue(record.amount),
+    date: text(record.payment_date || record.date || record.created_at) || null,
+    reference: text(record.reference),
+    transactionNumber: text(record.treasury_transaction_number),
+    accountingEntryNumber: text(record.accounting_entry_number),
+  };
+}
+
+function normalizeTransaction(value: unknown): TreasuryTransactionRecord {
+  const record = asRecord(value);
+  const account = asRecord(record.account || record.treasury_account);
+  return {
+    id: text(record.id || record.uuid || record.pk || record.transaction_number),
+    number: text(record.transaction_number || record.number || record.reference, "—"),
+    date: text(record.transaction_date || record.date || record.created_at) || null,
+    accountName: text(record.account_name || account.name, "—"),
+    accountCode: text(record.account_code || account.code),
+    accountingAccountId: text(
+      record.accounting_account_id || account.accounting_account_id || asRecord(account.accounting_account).id,
+    ),
+    accountingEntryNumber: text(record.accounting_entry_number),
+    sourceType: text(record.source_type),
+    sourceNumber: text(
+      record.source_number || record.payment_number || record.voucher_number || record.source_reference,
+    ),
+    reference: text(record.reference),
+    description: text(record.description || record.notes),
+    type: normalizeTransactionType(record.transaction_type || record.type),
+    status: normalizeTransactionStatus(record.status),
+    amount: numberValue(record.amount),
+  };
+}
+
+function statusLabel(value: string, locale: Locale) {
   const t = translations[locale];
-  const code = getActivityCode(authPayload);
-  if (code.includes("RETAIL")) return t.retailActivity;
-  if (code.includes("WHOLESALE")) return t.wholesaleActivity;
-  if (code.includes("RESTAURANT")) return t.restaurantActivity;
-  if (code.includes("JEWELRY")) return t.jewelryActivity;
-  if (code.includes("SERVICES")) return t.servicesActivity;
-  if (code.includes("MANUFACTURING")) return t.manufacturingActivity;
-  return t.genericActivity;
-}
-function getStatusLabel(value: string, locale: Locale) {
-  const key = value.toLowerCase().replace(/[^a-z_]/g, "") as keyof (typeof translations)["ar"];
-  const fallback = normalizeText(value, translations[locale].unknown);
-  return normalizeText(translations[locale][key], fallback);
-}
-function getBadgeClass(value: string) {
   const normalized = value.toLowerCase();
-  if (["active", "paid", "confirmed", "posted", "success"].includes(normalized)) {
+  if (normalized === "confirmed") return t.confirmed;
+  if (normalized === "posted") return t.posted;
+  if (normalized === "cancelled" || normalized === "canceled" || normalized === "reversed") return t.cancelled;
+  if (normalized === "paid") return t.paid;
+  if (normalized === "unpaid") return t.unpaid;
+  if (normalized === "partial") return t.partial;
+  if (normalized === "pending") return t.pending;
+  if (normalized === "active") return t.active;
+  if (normalized === "inactive") return t.inactive;
+  return t.draft;
+}
+
+function transactionTypeLabel(value: TransactionType, locale: Locale) {
+  const t = translations[locale];
+  if (value === "outflow") return t.outflow;
+  if (value === "transfer") return t.transfer;
+  if (value === "adjustment") return t.adjustment;
+  return t.inflow;
+}
+
+function badgeClass(value: string) {
+  const normalized = value.toLowerCase();
+  if (["confirmed", "posted", "paid", "active", "inflow"].includes(normalized)) {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
-  if (["pending", "partial", "draft", "processing", "unpaid"].includes(normalized)) {
+  if (["draft", "pending", "partial", "unpaid", "transfer", "adjustment"].includes(normalized)) {
     return "border-amber-200 bg-amber-50 text-amber-700";
   }
-  if (["failed", "cancelled", "void", "inactive", "refunded"].includes(normalized)) {
+  if (["cancelled", "canceled", "reversed", "inactive", "outflow"].includes(normalized)) {
     return "border-rose-200 bg-rose-50 text-rose-700";
   }
-  return "border-slate-200 bg-slate-50 text-slate-700";
+  return "border-border bg-muted/30 text-muted-foreground";
 }
-function rowDateValue(value: string | null | undefined) {
+
+function rowTime(value: string | null | undefined) {
   if (!value) return 0;
   const parsed = new Date(value).getTime();
   return Number.isFinite(parsed) ? parsed : 0;
 }
-function isWithinDate(dateValue: string | null, from: string, to: string) {
-  const normalized = formatDate(dateValue);
+
+function isWithinDate(value: string | null, from: string, to: string) {
+  const normalized = formatDate(value);
   if (normalized === "—") return !from && !to;
   if (from && normalized < from) return false;
   if (to && normalized > to) return false;
   return true;
 }
+
 function sortRows<T>(
   rows: T[],
   sort: SortKey,
   getDate: (row: T) => string | null,
   getAmount: (row: T) => number,
+  getNumber: (row: T) => string,
   getName: (row: T) => string,
 ) {
   return [...rows].sort((a, b) => {
-    if (sort === "oldest") return rowDateValue(getDate(a)) - rowDateValue(getDate(b));
+    if (sort === "oldest") return rowTime(getDate(a)) - rowTime(getDate(b));
     if (sort === "amount_high") return getAmount(b) - getAmount(a);
     if (sort === "amount_low") return getAmount(a) - getAmount(b);
+    if (sort === "number") return getNumber(a).localeCompare(getNumber(b), undefined, { numeric: true });
     if (sort === "name") return getName(a).localeCompare(getName(b));
-    return rowDateValue(getDate(b)) - rowDateValue(getDate(a));
+    return rowTime(getDate(b)) - rowTime(getDate(a));
   });
 }
+
+function parseIsoDate(value: string) {
+  if (!value) return undefined;
+  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
+  if (!year || !month || !day) return undefined;
+  const parsed = new Date(year, month - 1, day);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+function dateToIso(value?: Date) {
+  if (!value) return "";
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function DatePickerField({
+  label,
+  value,
+  onChange,
+  locale,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  locale: Locale;
+}) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-9 w-full justify-start bg-background px-3 text-start font-normal shadow-none sm:w-[150px]"
+        >
+          <CalendarDays className="me-2 h-4 w-4 shrink-0 text-muted-foreground" />
+          <span dir="ltr" lang="en" className="truncate tabular-nums">
+            {value || label}
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align={locale === "ar" ? "end" : "start"}>
+        <Calendar
+          mode="single"
+          selected={parseIsoDate(value)}
+          onSelect={(date: Date | undefined) => {
+            onChange(dateToIso(date));
+            setOpen(false);
+          }}
+          initialFocus
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function MoneyValue({ value, label }: { value: number; label: string }) {
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold tabular-nums">
-      <Image src="/currency/sar.svg" alt={label} width={14} height={14} className="h-3.5 w-3.5" />
-      <span>{formatMoney(value)}</span>
+    <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold">
+      <span dir="ltr" lang="en" className="tabular-nums">
+        {formatMoney(value)}
+      </span>
+      <Image
+        src="/currency/sar.svg"
+        alt={label}
+        width={14}
+        height={14}
+        className="h-3.5 w-3.5 shrink-0"
+      />
     </span>
   );
 }
+
 function StatusBadge({ value, label }: { value: string; label: string }) {
   return (
-    <Badge variant="outline" className={cn("whitespace-nowrap rounded-full px-2.5 py-1 text-xs", getBadgeClass(value))}>
+    <Badge
+      variant="outline"
+      className={cn("whitespace-nowrap rounded-full px-2.5 py-1 text-xs", badgeClass(value))}
+    >
       {label}
     </Badge>
   );
 }
+
 function KpiCard({
   title,
   value,
@@ -807,7 +860,7 @@ function KpiCard({
   href,
   icon: Icon,
   money,
-  t,
+  currencyLabel,
 }: {
   title: string;
   value: number;
@@ -815,19 +868,19 @@ function KpiCard({
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   money?: boolean;
-  t: (typeof translations)[Locale];
+  currencyLabel: string;
 }) {
   return (
-    <Card className="group overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <Card className="group overflow-hidden rounded-lg border bg-card shadow-none transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-sm">
       <Link href={href} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
           <div className="min-w-0">
             <CardDescription className="truncate text-sm">{title}</CardDescription>
             <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
-              {money ? <MoneyValue value={value} label={t.sar} /> : formatInteger(value)}
+              {money ? <MoneyValue value={value} label={currencyLabel} /> : formatInteger(value)}
             </CardTitle>
           </div>
-          <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+          <span className="rounded-lg border bg-background p-2.5 text-muted-foreground transition group-hover:border-foreground/20 group-hover:text-foreground">
             <Icon className="h-5 w-5" />
           </span>
         </CardHeader>
@@ -838,20 +891,28 @@ function KpiCard({
     </Card>
   );
 }
+
 function DashboardSkeleton() {
   return (
-    <div className="mx-auto max-w-[1500px] space-y-6">
-      <div className="rounded-3xl border bg-card p-6 shadow-sm">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="mt-3 h-8 w-72" />
-        <Skeleton className="mt-3 h-4 w-full max-w-2xl" />
+    <div className="mx-auto max-w-[1500px] space-y-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-72" />
+          <Skeleton className="h-4 w-full max-w-3xl" />
+          <Skeleton className="h-7 w-72" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-9 w-24" />
+          <Skeleton className="h-9 w-28" />
+          <Skeleton className="h-9 w-24" />
+        </div>
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 8 }).map((_, index) => (
-          <Card key={index} className="rounded-2xl">
+          <Card key={index} className="rounded-lg border shadow-none">
             <CardHeader>
               <Skeleton className="h-4 w-28" />
-              <Skeleton className="h-8 w-20" />
+              <Skeleton className="h-8 w-24" />
             </CardHeader>
             <CardContent>
               <Skeleton className="h-4 w-full" />
@@ -860,7 +921,7 @@ function DashboardSkeleton() {
         ))}
       </div>
       {Array.from({ length: 3 }).map((_, index) => (
-        <Card key={index} className="rounded-2xl">
+        <Card key={index} className="rounded-lg border shadow-none">
           <CardHeader>
             <Skeleton className="h-6 w-52" />
             <Skeleton className="h-4 w-80" />
@@ -873,30 +934,26 @@ function DashboardSkeleton() {
     </div>
   );
 }
-function EmptyTableState({
-  title,
-  description,
-  showReset,
+
+function EmptyState({
+  textValue,
+  filtered,
   onReset,
   resetLabel,
 }: {
-  title: string;
-  description: string;
-  showReset?: boolean;
-  onReset?: () => void;
+  textValue: string;
+  filtered: boolean;
+  onReset: () => void;
   resetLabel: string;
 }) {
   return (
-    <div className="flex h-full min-h-64 flex-col items-center justify-center gap-3 px-6 py-10 text-center">
+    <div className="flex min-h-64 flex-col items-center justify-center gap-3 px-6 py-10 text-center">
       <div className="rounded-full bg-muted p-4 text-muted-foreground">
         <Search className="h-6 w-6" />
       </div>
-      <div>
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-      </div>
-      {showReset && onReset ? (
-        <Button variant="outline" size="sm" onClick={onReset} className="rounded-lg">
+      <p className="text-sm font-semibold">{textValue}</p>
+      {filtered ? (
+        <Button variant="outline" size="sm" onClick={onReset}>
           <RotateCcw className="h-4 w-4" />
           {resetLabel}
         </Button>
@@ -904,12 +961,17 @@ function EmptyTableState({
     </div>
   );
 }
+
 function FiltersBar({
   search,
   onSearchChange,
-  searchPlaceholder,
+  placeholder,
   status,
   onStatusChange,
+  statusOptions,
+  kind,
+  onKindChange,
+  kindOptions,
   sort,
   onSortChange,
   dateFrom,
@@ -917,14 +979,17 @@ function FiltersBar({
   dateTo,
   onDateToChange,
   onReset,
-  t,
   locale,
 }: {
   search: string;
   onSearchChange: (value: string) => void;
-  searchPlaceholder: string;
-  status: StatusFilter;
-  onStatusChange: (value: StatusFilter) => void;
+  placeholder: string;
+  status: string;
+  onStatusChange: (value: string) => void;
+  statusOptions: Array<{ value: string; label: string }>;
+  kind?: string;
+  onKindChange?: (value: string) => void;
+  kindOptions?: Array<{ value: string; label: string }>;
   sort: SortKey;
   onSortChange: (value: SortKey) => void;
   dateFrom: string;
@@ -932,117 +997,105 @@ function FiltersBar({
   dateTo: string;
   onDateToChange: (value: string) => void;
   onReset: () => void;
-  t: (typeof translations)[Locale];
   locale: Locale;
 }) {
+  const t = translations[locale];
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
-      <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(event) => onSearchChange(event.target.value)}
-            placeholder={searchPlaceholder}
-            className="h-10 rounded-xl ps-9"
-          />
-        </div>
-        <Select value={status} onValueChange={(value) => onStatusChange(value as StatusFilter)}>
-          <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[150px]">
+    <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-2 lg:flex-row lg:items-center">
+      <div className="relative min-w-0 flex-1">
+        <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(event: React.ChangeEvent<HTMLInputElement>) => onSearchChange(event.target.value)}
+          placeholder={placeholder}
+          className="h-9 bg-background ps-9 shadow-none"
+        />
+      </div>
+      {kindOptions?.length && onKindChange ? (
+        <Select value={kind || "all"} onValueChange={onKindChange}>
+          <SelectTrigger className="h-9 w-full bg-background shadow-none sm:w-[145px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {statusFilters.map((item) => (
-              <SelectItem key={item} value={item}>
-                {item === "all" ? t.all : getStatusLabel(item, locale)}
+            {kindOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex h-10 items-center gap-2 rounded-xl border bg-background px-3">
-          <span className="text-xs text-muted-foreground">{t.from}</span>
-          <Input
-            type="date"
-            value={dateFrom}
-            onChange={(event) => onDateFromChange(event.target.value)}
-            className="h-8 w-[135px] border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
-          />
-        </div>
-        <div className="flex h-10 items-center gap-2 rounded-xl border bg-background px-3">
-          <span className="text-xs text-muted-foreground">{t.to}</span>
-          <Input
-            type="date"
-            value={dateTo}
-            onChange={(event) => onDateToChange(event.target.value)}
-            className="h-8 w-[135px] border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
-          />
-        </div>
-        <Select value={sort} onValueChange={(value) => onSortChange(value as SortKey)}>
-          <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[160px]">
-            <ArrowUpDown className="h-4 w-4" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="newest">{t.newest}</SelectItem>
-            <SelectItem value="oldest">{t.oldest}</SelectItem>
-            <SelectItem value="amount_high">{t.amountHigh}</SelectItem>
-            <SelectItem value="amount_low">{t.amountLow}</SelectItem>
-            <SelectItem value="name">{t.nameSort}</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={onReset}>
-          <RotateCcw className="h-4 w-4" />
-          {t.reset}
-        </Button>
-      </div>
+      ) : null}
+      <Select value={status} onValueChange={onStatusChange}>
+        <SelectTrigger className="h-9 w-full bg-background shadow-none sm:w-[145px]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {statusOptions.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <DatePickerField label={t.from} value={dateFrom} onChange={onDateFromChange} locale={locale} />
+      <DatePickerField label={t.to} value={dateTo} onChange={onDateToChange} locale={locale} />
+      <Select value={sort} onValueChange={(value: string) => onSortChange(value as SortKey)}>
+        <SelectTrigger className="h-9 w-full bg-background shadow-none sm:w-[145px]">
+          <ArrowUpDown className="me-2 h-4 w-4" />
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="newest">{t.newest}</SelectItem>
+          <SelectItem value="oldest">{t.oldest}</SelectItem>
+          <SelectItem value="amount_high">{t.amountHigh}</SelectItem>
+          <SelectItem value="amount_low">{t.amountLow}</SelectItem>
+          <SelectItem value="number">{t.numberSort}</SelectItem>
+          <SelectItem value="name">{t.nameSort}</SelectItem>
+        </SelectContent>
+      </Select>
+      <Button variant="outline" size="sm" onClick={onReset} className="h-9 bg-background">
+        <RotateCcw className="h-4 w-4" />
+        {t.reset}
+      </Button>
     </div>
   );
 }
+
 function DataTable<T extends { id: string }>({
   rows,
-  allRowsCount,
+  totalRows,
   columns,
   rowKey,
-  emptyTitle,
-  emptyDescription,
-  noResultsTitle,
-  noResultsDescription,
-  hasFilters,
+  rowHref,
+  emptyText,
+  filtered,
   onReset,
-  resetLabel,
-  showingLabel,
-  ofLabel,
-  rowsLabel,
+  locale,
 }: {
   rows: T[];
-  allRowsCount: number;
+  totalRows: number;
   columns: DataColumn<T>[];
   rowKey: (row: T) => string;
-  emptyTitle: string;
-  emptyDescription: string;
-  noResultsTitle: string;
-  noResultsDescription: string;
-  hasFilters: boolean;
+  rowHref?: (row: T) => string;
+  emptyText: string;
+  filtered: boolean;
   onReset: () => void;
-  resetLabel: string;
-  showingLabel: string;
-  ofLabel: string;
-  rowsLabel: string;
+  locale: Locale;
 }) {
+  const router = useRouter();
+  const t = translations[locale];
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-2xl border bg-background">
+      <div className="overflow-hidden rounded-lg border bg-background">
         <div className="overflow-x-auto">
-          <Table className="min-w-[1080px] table-fixed">
+          <Table className="min-w-[1120px] table-fixed">
             <TableHeader>
               <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
                 {columns.map((column) => (
                   <TableHead
                     key={column.key}
                     className={cn(
-                      "h-11 whitespace-nowrap px-4 text-right text-xs font-semibold text-muted-foreground",
+                      "h-11 whitespace-nowrap px-4 text-start text-xs font-semibold text-muted-foreground",
                       column.className,
                     )}
                   >
@@ -1053,27 +1106,44 @@ function DataTable<T extends { id: string }>({
             </TableHeader>
             <TableBody>
               {rows.length ? (
-                rows.map((row) => (
-                  <TableRow key={rowKey(row)} className="h-[62px]">
-                    {columns.map((column) => (
-                      <TableCell
-                        key={column.key}
-                        className={cn("h-[62px] overflow-hidden px-4 text-right align-middle", column.className)}
-                      >
-                        {column.render(row)}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
+                rows.map((row) => {
+                  const href = rowHref?.(row) || "";
+                  return (
+                    <TableRow
+                      key={rowKey(row)}
+                      className={cn(
+                        "h-[64px] transition-colors",
+                        href ? "cursor-pointer hover:bg-muted/40" : "",
+                      )}
+                      onClick={(event: React.MouseEvent<HTMLTableRowElement>) => {
+                        if (!href) return;
+                        const target = event.target as HTMLElement;
+                        if (target.closest("button, a, input, select, textarea, [role='menuitem']")) return;
+                        router.push(href);
+                      }}
+                    >
+                      {columns.map((column) => (
+                        <TableCell
+                          key={column.key}
+                          className={cn(
+                            "h-[64px] overflow-hidden px-4 text-start align-middle",
+                            column.className,
+                          )}
+                        >
+                          {column.render(row)}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  );
+                })
               ) : (
                 <TableRow>
                   <TableCell colSpan={columns.length} className="h-72">
-                    <EmptyTableState
-                      title={hasFilters ? noResultsTitle : emptyTitle}
-                      description={hasFilters ? noResultsDescription : emptyDescription}
-                      showReset={hasFilters}
+                    <EmptyState
+                      textValue={filtered ? t.noResults : emptyText}
+                      filtered={filtered}
                       onReset={onReset}
-                      resetLabel={resetLabel}
+                      resetLabel={t.reset}
                     />
                   </TableCell>
                 </TableRow>
@@ -1083,78 +1153,493 @@ function DataTable<T extends { id: string }>({
         </div>
       </div>
       <div className="text-sm text-muted-foreground">
-        {showingLabel} <span className="font-medium text-foreground tabular-nums">{formatInteger(rows.length)}</span> {ofLabel}{" "}
-        <span className="font-medium text-foreground tabular-nums">{formatInteger(allRowsCount)}</span> {rowsLabel}
+        {t.showing}{" "}
+        <span className="font-medium text-foreground tabular-nums">{formatInteger(rows.length)}</span>{" "}
+        {t.of}{" "}
+        <span className="font-medium text-foreground tabular-nums">{formatInteger(totalRows)}</span>{" "}
+        {t.rows}
       </div>
     </div>
   );
 }
-function tableHtmlForSections(
-  sections: Array<{
-    title: string;
-    headers: string[];
-    rows: string[][];
-  }>,
+
+function buildTableHtml<T>(
+  columns: ExportColumn<T>[],
+  rows: T[],
 ) {
-  return sections
+  // PRIMEY_COMPANY_DASHBOARD_REPORTS_FIXED_V4
+  const head = columns
     .map(
-      (section) => `
-        <h2>${escapeHtml(section.title)}</h2>
-        <table>
-          <thead>
-            <tr>${section.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>
-          </thead>
-          <tbody>
-            ${
-              section.rows.length
-                ? section.rows
-                    .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
-                    .join("")
-                : `<tr><td colspan="${section.headers.length}">—</td></tr>`
-            }
-          </tbody>
-        </table>
-      `,
+      (column) =>
+        `<th class="excel-text" style="mso-number-format:'\\@';">${escapeHtml(
+          column.label,
+        )}</th>`,
     )
     .join("");
+
+  const emptyLabel =
+    typeof document !== "undefined" &&
+    document.documentElement.lang === "en"
+      ? "No data"
+      : "لا توجد بيانات";
+
+  const body = rows.length
+    ? rows
+        .map(
+          (row) =>
+            `<tr>${columns
+              .map(
+                (column) =>
+                  `<td class="excel-text" style="mso-number-format:'\\@';">${escapeHtml(
+                    column.value(row),
+                  )}</td>`,
+              )
+              .join("")}</tr>`,
+        )
+        .join("")
+    : `<tr>
+        <td
+          class="empty-row excel-text"
+          style="mso-number-format:'\\@';"
+          colspan="${Math.max(columns.length, 1)}"
+        >
+          ${escapeHtml(emptyLabel)}
+        </td>
+      </tr>`;
+
+  return `
+    <table class="data-table">
+      <thead>
+        <tr>${head}</tr>
+      </thead>
+      <tbody>${body}</tbody>
+    </table>
+  `;
 }
+
+function downloadExcelFile(
+  filename: string,
+  title: string,
+  html: string,
+  locale: Locale,
+) {
+  const direction = locale === "ar" ? "rtl" : "ltr";
+  const alignment = locale === "ar" ? "right" : "left";
+
+  const sheetName =
+    title
+      .replace(/[\\/:?*\[\]]/g, " ")
+      .trim()
+      .slice(0, 31) || (locale === "ar" ? "التقرير" : "Report");
+  const rightToLeftWorksheet =
+    locale === "ar" ? "<x:DisplayRightToLeft />" : "";
+
+  const documentHtml = `
+    <!doctype html>
+    <html
+      dir="${direction}"
+      lang="${locale}"
+      xmlns:x="urn:schemas-microsoft-com:office:excel"
+    >
+      <head>
+        <meta charset="UTF-8" />
+
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>${escapeHtml(sheetName)}</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayGridlines />
+                  ${rightToLeftWorksheet}
+                  <x:Selected />
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+
+        <style>
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            margin: 0;
+            padding: 10px;
+            color: #111827;
+            direction: ${direction};
+            font-family: Tahoma, Arial, sans-serif;
+            font-size: 11px;
+          }
+
+          h1 {
+            margin: 0 0 14px;
+            font-size: 22px;
+            font-weight: 700;
+            text-align: ${alignment};
+          }
+
+          h2 {
+            margin: 18px 0 8px;
+            font-size: 16px;
+            font-weight: 700;
+            text-align: ${alignment};
+          }
+
+          .section {
+            margin-top: 18px;
+          }
+
+          .summary-table {
+            width: 100%;
+            margin-bottom: 18px;
+            border-collapse: collapse;
+            table-layout: fixed;
+          }
+
+          .summary-table td {
+            width: 25%;
+            border: 1px solid #000000;
+            padding: 8px;
+            text-align: ${alignment};
+            vertical-align: top;
+            mso-number-format: "\\@";
+          }
+
+          .summary-table span {
+            display: block;
+            color: #4b5563;
+          }
+
+          .summary-table b {
+            display: block;
+            margin-top: 5px;
+            direction: ltr;
+            font-size: 14px;
+            font-weight: 700;
+            white-space: nowrap;
+            mso-number-format: "\\@";
+          }
+
+          .data-table {
+            width: 100%;
+            margin-bottom: 22px;
+            border-collapse: collapse;
+            table-layout: auto;
+          }
+
+          .data-table th,
+          .data-table td {
+            border: 1px solid #000000;
+            padding: 7px 6px;
+            text-align: ${alignment};
+            vertical-align: middle;
+            white-space: normal;
+            mso-number-format: "\\@";
+          }
+
+          .data-table th {
+            background: #e5e7eb;
+            font-weight: 700;
+          }
+
+          .excel-text {
+            mso-number-format: "\\@";
+          }
+
+          .empty-row {
+            padding: 14px !important;
+            color: #6b7280;
+            text-align: center !important;
+          }
+        </style>
+      </head>
+
+      <body>
+        <h1>${escapeHtml(title)}</h1>
+        ${html}
+      </body>
+    </html>
+  `;
+
+  const blob = new Blob(
+    ["\uFEFF", documentHtml],
+    {
+      type: "application/vnd.ms-excel;charset=utf-8;",
+    },
+  );
+
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+
+  anchor.href = url;
+  anchor.download = `${filename}-${new Date()
+    .toISOString()
+    .slice(0, 10)}.xls`;
+
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+
+  window.setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 1000);
+}
+
+function openPrintWindow(
+  title: string,
+  subtitle: string,
+  html: string,
+  locale: Locale,
+) {
+  /*
+   * لا نضع noopener داخل window.open لأن Chromium قد يعيد null
+   * رغم إنشاء نافذة about:blank.
+   */
+  const win = window.open(
+    "",
+    "_blank",
+    "width=1400,height=900",
+  );
+
+  if (!win) return false;
+
+  win.opener = null;
+
+  const direction = locale === "ar" ? "rtl" : "ltr";
+  const alignment = locale === "ar" ? "right" : "left";
+
+  win.document.open();
+
+  win.document.write(`
+    <!doctype html>
+    <html dir="${direction}" lang="${locale}">
+      <head>
+        <meta charset="UTF-8" />
+        <title>${escapeHtml(title)}</title>
+
+        <style>
+          @page {
+            size: A4 landscape;
+            margin: 8mm;
+          }
+
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            margin: 0;
+            color: #000000;
+            direction: ${direction};
+            font-family: Tahoma, Arial, sans-serif;
+            font-size: 11px;
+          }
+
+          h1 {
+            margin: 0 0 5px;
+            font-size: 22px;
+            font-weight: 700;
+            text-align: ${alignment};
+          }
+
+          h2 {
+            margin: 16px 0 7px;
+            font-size: 15px;
+            font-weight: 700;
+            text-align: ${alignment};
+            break-after: avoid;
+            page-break-after: avoid;
+          }
+
+          p {
+            margin: 0 0 12px;
+            color: #4b5563;
+            font-size: 10px;
+            text-align: ${alignment};
+          }
+
+          .section {
+            margin-top: 16px;
+          }
+
+          .summary-table {
+            width: 100%;
+            margin: 12px 0 16px;
+            border-collapse: collapse;
+            table-layout: fixed;
+          }
+
+          .summary-table td {
+            width: 25%;
+            border: 1px solid #000000;
+            padding: 7px;
+            text-align: ${alignment};
+            vertical-align: top;
+          }
+
+          .summary-table span {
+            display: block;
+            color: #4b5563;
+          }
+
+          .summary-table b {
+            display: block;
+            margin-top: 4px;
+            direction: ltr;
+            font-size: 13px;
+            font-weight: 700;
+            white-space: nowrap;
+          }
+
+          .data-table {
+            width: 100%;
+            margin-bottom: 16px;
+            border-collapse: collapse;
+            table-layout: fixed;
+            font-size: 9px;
+          }
+
+          .data-table thead {
+            display: table-header-group;
+          }
+
+          .data-table tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          .data-table th,
+          .data-table td {
+            border: 1px solid #000000;
+            padding: 5px;
+            text-align: ${alignment};
+            vertical-align: middle;
+            overflow-wrap: anywhere;
+          }
+
+          .data-table th {
+            background: #e5e7eb !important;
+            font-weight: 700;
+          }
+
+          .empty-row {
+            padding: 14px !important;
+            color: #6b7280;
+            text-align: center !important;
+          }
+        </style>
+      </head>
+
+      <body>
+        <h1>${escapeHtml(title)}</h1>
+        <p>${escapeHtml(subtitle)}</p>
+        ${html}
+      </body>
+    </html>
+  `);
+
+  win.document.close();
+
+  win.onafterprint = () => {
+    win.close();
+  };
+
+  win.setTimeout(() => {
+    win.focus();
+    win.print();
+  }, 350);
+
+  return true;
+}
+
+function extractVoucherNumber(...values: string[]) {
+  for (const value of values) {
+    const match = value.match(/\b(?:CP|SP)-\d{4}-\d{6}\b/i);
+    if (match) return match[0].toUpperCase();
+  }
+  return "";
+}
+
+function voucherHref(row: VoucherRecord) {
+  const base =
+    row.kind === "payment"
+      ? "/company/treasury/payment-vouchers"
+      : "/company/treasury/receipt-vouchers";
+  return row.number && row.number !== "—" ? `${base}/${encodeURIComponent(row.number)}` : base;
+}
+
+function transactionHref(row: TreasuryTransactionRecord) {
+  const sourceType = row.sourceType.toUpperCase();
+  const sourceNumber =
+    row.sourceNumber || extractVoucherNumber(row.reference, row.description, row.number);
+  if (sourceNumber.startsWith("CP-") || sourceType.includes("CUSTOMER_PAYMENT")) {
+    return sourceNumber
+      ? `/company/treasury/receipt-vouchers/${encodeURIComponent(sourceNumber)}`
+      : "/company/treasury/receipt-vouchers";
+  }
+  if (sourceNumber.startsWith("SP-") || sourceType.includes("SUPPLIER_PAYMENT")) {
+    return sourceNumber
+      ? `/company/treasury/payment-vouchers/${encodeURIComponent(sourceNumber)}`
+      : "/company/treasury/payment-vouchers";
+  }
+  if (row.accountingEntryNumber) {
+    return `/company/accounting/journal-entries/${encodeURIComponent(row.accountingEntryNumber)}`;
+  }
+  if (row.accountingAccountId) {
+    return `/company/accounting/chart-of-accounts/${encodeURIComponent(row.accountingAccountId)}`;
+  }
+  return "";
+}
+
 export default function CompanyDashboardPage() {
+  const router = useRouter();
   const [locale, setLocale] = React.useState<Locale>("ar");
   const [authPayload, setAuthPayload] = React.useState<ApiResponse>({});
   const [stats, setStats] = React.useState<DashboardStats>({
     salesTotal: 0,
     salesInvoices: 0,
-    paymentAmount: 0,
-    payments: 0,
+    receiptTotal: 0,
+    paymentTotal: 0,
     customers: 0,
     suppliers: 0,
-    products: 0,
-    stockItems: 0,
+    vouchers: 0,
+    netFlow: 0,
   });
-  const [salesInvoices, setSalesInvoices] = React.useState<SalesInvoiceRecord[]>([]);
-  const [payments, setPayments] = React.useState<PaymentRecord[]>([]);
-  const [activityRows, setActivityRows] = React.useState<ActivityRecord[]>([]);
+  const [invoices, setInvoices] = React.useState<SalesInvoiceRecord[]>([]);
+  const [vouchers, setVouchers] = React.useState<VoucherRecord[]>([]);
+  const [transactions, setTransactions] = React.useState<TreasuryTransactionRecord[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState("");
   const [warnings, setWarnings] = React.useState<string[]>([]);
+
   const [invoiceSearch, setInvoiceSearch] = React.useState("");
-  const [invoiceStatus, setInvoiceStatus] = React.useState<StatusFilter>("all");
+  const [invoiceStatus, setInvoiceStatus] = React.useState("all");
   const [invoiceSort, setInvoiceSort] = React.useState<SortKey>("newest");
-  const [invoiceDateFrom, setInvoiceDateFrom] = React.useState("");
-  const [invoiceDateTo, setInvoiceDateTo] = React.useState("");
-  const [paymentSearch, setPaymentSearch] = React.useState("");
-  const [paymentStatus, setPaymentStatus] = React.useState<StatusFilter>("all");
-  const [paymentSort, setPaymentSort] = React.useState<SortKey>("newest");
-  const [paymentDateFrom, setPaymentDateFrom] = React.useState("");
-  const [paymentDateTo, setPaymentDateTo] = React.useState("");
-  const [activitySearch, setActivitySearch] = React.useState("");
-  const [activityStatus, setActivityStatus] = React.useState<StatusFilter>("all");
-  const [activitySort, setActivitySort] = React.useState<SortKey>("newest");
-  const [activityDateFrom, setActivityDateFrom] = React.useState("");
-  const [activityDateTo, setActivityDateTo] = React.useState("");
+  const [invoiceFrom, setInvoiceFrom] = React.useState("");
+  const [invoiceTo, setInvoiceTo] = React.useState("");
+
+  const [voucherSearch, setVoucherSearch] = React.useState("");
+  const [voucherStatus, setVoucherStatus] = React.useState("all");
+  const [voucherKind, setVoucherKind] = React.useState<KindFilter>("all");
+  const [voucherSort, setVoucherSort] = React.useState<SortKey>("newest");
+  const [voucherFrom, setVoucherFrom] = React.useState("");
+  const [voucherTo, setVoucherTo] = React.useState("");
+
+  const [transactionSearch, setTransactionSearch] = React.useState("");
+  const [transactionStatus, setTransactionStatus] = React.useState("all");
+  const [transactionType, setTransactionType] = React.useState<TransactionTypeFilter>("all");
+  const [transactionSort, setTransactionSort] = React.useState<SortKey>("newest");
+  const [transactionFrom, setTransactionFrom] = React.useState("");
+  const [transactionTo, setTransactionTo] = React.useState("");
+
   const t = translations[locale];
   const dir = locale === "ar" ? "rtl" : "ltr";
+
   React.useEffect(() => {
     const applyLocale = () => {
       const nextLocale = getInitialLocale();
@@ -1171,402 +1656,576 @@ export default function CompanyDashboardPage() {
       window.removeEventListener("primey-locale-changed", applyLocale);
     };
   }, []);
+
   const loadDashboard = React.useCallback(
-    async ({ silent = false }: { silent?: boolean } = {}) => {
-      const controller = new AbortController();
+    async ({
+      silent = false,
+      signal,
+    }: {
+      silent?: boolean;
+      signal?: AbortSignal;
+    } = {}) => {
       try {
         if (!silent) setLoading(true);
         setRefreshing(true);
         setError("");
         setWarnings([]);
-        const rowsParams = new URLSearchParams({ page: "1", page_size: "12", ordering: "-created_at" });
+        const params = new URLSearchParams({ page: "1", page_size: "200", ordering: "-created_at" });
         const results = await Promise.allSettled([
-          fetchFirstJson<ApiResponse>(API_ENDPOINTS.whoami, undefined, controller.signal),
-          fetchFirstJson<ApiResponse>(API_ENDPOINTS.customers, rowsParams, controller.signal),
-          fetchFirstJson<ApiResponse>(API_ENDPOINTS.suppliers, rowsParams, controller.signal),
-          fetchFirstJson<ApiResponse>(API_ENDPOINTS.products, rowsParams, controller.signal),
-          fetchFirstJson<ApiResponse>(API_ENDPOINTS.salesInvoices, rowsParams, controller.signal),
-          fetchFirstJson<ApiResponse>(API_ENDPOINTS.purchaseBills, rowsParams, controller.signal),
-          fetchFirstJson<ApiResponse>(API_ENDPOINTS.stockSummary, rowsParams, controller.signal),
-          fetchOptionalFirstJson<ApiResponse>(API_ENDPOINTS.treasuryPayments, rowsParams, controller.signal),
+          fetchJson<ApiResponse>(ENDPOINTS.whoami, undefined, signal),
+          fetchJson<ApiResponse>(ENDPOINTS.customers, params, signal),
+          fetchJson<ApiResponse>(ENDPOINTS.suppliers, params, signal),
+          fetchJson<ApiResponse>(ENDPOINTS.receipts, params, signal),
+          fetchJson<ApiResponse>(ENDPOINTS.payments, params, signal),
+          fetchJson<ApiResponse>(ENDPOINTS.transactions, params, signal),
+          fetchJson<ApiResponse>(ENDPOINTS.salesInvoices, params, signal),
         ]);
-        const failedMessages = results
-          .filter((result): result is PromiseRejectedResult => result.status === "rejected")
-          .map((result) => normalizeText(result.reason instanceof Error ? result.reason.message : result.reason));
-        const [
-          authResult,
-          customersResult,
-          suppliersResult,
-          productsResult,
-          salesResult,
-          purchaseBillsResult,
-          stockResult,
-          paymentsResult,
-        ] = results.map((result) => (result.status === "fulfilled" ? result.value : {}));
-        const salesRows = extractArray(salesResult).map(normalizeSalesInvoice);
-        const paymentRows = extractArray(paymentsResult).map(normalizePayment);
-        const stockRows = extractArray(stockResult).map(normalizeActivity);
-        const productRows = extractArray(productsResult).map(normalizeActivity);
-        const activityData = stockRows.length ? stockRows : productRows;
-        const salesSummary = extractSummary(salesResult);
-        const paymentsSummary = extractSummary(paymentsResult);
-        setAuthPayload(authResult);
-        setSalesInvoices(salesRows);
-        setPayments(paymentRows);
-        setActivityRows(activityData);
+
+        const authResult = results[0];
+        if (authResult.status === "rejected") {
+          throw authResult.reason instanceof Error ? authResult.reason : new Error(t.errorDesc);
+        }
+
+        const valueAt = (index: number): ApiResponse =>
+          results[index]?.status === "fulfilled"
+            ? (results[index] as PromiseFulfilledResult<ApiResponse>).value
+            : {};
+
+        const auth = valueAt(0);
+        const customersPayload = valueAt(1);
+        const suppliersPayload = valueAt(2);
+        const receiptsPayload = valueAt(3);
+        const paymentsPayload = valueAt(4);
+        const transactionsPayload = valueAt(5);
+        const invoicesPayload = valueAt(6);
+
+        const receiptRows = extractArray(receiptsPayload).map((row) => normalizeVoucher(row, "receipt"));
+        const paymentRows = extractArray(paymentsPayload).map((row) => normalizeVoucher(row, "payment"));
+        const voucherRows = [...receiptRows, ...paymentRows];
+        const invoiceRows = extractArray(invoicesPayload).map(normalizeInvoice);
+        const transactionRows = extractArray(transactionsPayload).map(normalizeTransaction);
+        const receiptTotal = receiptRows.reduce((sum, row) => sum + row.amount, 0);
+        const paymentTotal = paymentRows.reduce((sum, row) => sum + row.amount, 0);
+
+        setAuthPayload(auth);
+        setInvoices(invoiceRows);
+        setVouchers(voucherRows);
+        setTransactions(transactionRows);
         setStats({
-          salesTotal: toNumber(
-            salesSummary.total_amount ?? salesSummary.amount_total ?? salesSummary.sales_total,
-            salesRows.reduce((sum, item) => sum + item.amount, 0),
-          ),
-          salesInvoices: extractCount(salesResult),
-          paymentAmount: toNumber(
-            paymentsSummary.total_amount ?? paymentsSummary.amount_total ?? paymentsSummary.paid_amount,
-            paymentRows.reduce((sum, item) => sum + item.amount, 0),
-          ),
-          payments: extractCount(paymentsResult),
-          customers: extractCount(customersResult),
-          suppliers: extractCount(suppliersResult),
-          products: extractCount(productsResult),
-          stockItems: extractCount(stockResult),
+          salesTotal: invoiceRows.reduce((sum, row) => sum + row.amount, 0),
+          salesInvoices: extractCount(invoicesPayload),
+          receiptTotal,
+          paymentTotal,
+          customers: extractCount(customersPayload),
+          suppliers: extractCount(suppliersPayload),
+          vouchers: extractCount(receiptsPayload) + extractCount(paymentsPayload),
+          netFlow: receiptTotal - paymentTotal,
         });
-        setWarnings(failedMessages.filter(Boolean));
-        const fulfilledCount = results.filter((result) => result.status === "fulfilled").length;
-        if (fulfilledCount === 0) {
-          throw new Error(failedMessages[0] || t.errorDesc);
-        }
-        if (failedMessages.length && !silent) {
-          toast.warning(t.partialWarningTitle);
-        }
-        if (silent && failedMessages.length) {
-          toast.warning(t.partialWarningTitle);
-        } else if (silent) {
-          toast.success(t.refreshed);
-        }
+
+        const requiredFailures = results
+          .slice(1, 6)
+          .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+          .map((result) =>
+            text(result.reason instanceof Error ? result.reason.message : result.reason),
+          )
+          .filter(Boolean);
+        setWarnings(requiredFailures);
+
+        if (silent && requiredFailures.length) toast.warning(t.partialTitle);
+        else if (silent) toast.success(t.refreshed);
       } catch (caughtError) {
+        if (signal?.aborted) return;
         const message = caughtError instanceof Error ? caughtError.message : t.errorDesc;
         setError(message);
         if (silent) toast.error(message);
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (!signal?.aborted) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
-      return () => controller.abort();
     },
-    [t.errorDesc, t.partialWarningTitle, t.refreshed],
+    [t.errorDesc, t.partialTitle, t.refreshed],
   );
+
   React.useEffect(() => {
-    void loadDashboard();
+    const controller = new AbortController();
+    void loadDashboard({ signal: controller.signal });
+    return () => controller.abort();
   }, [loadDashboard]);
-  const resetInvoiceFilters = React.useCallback(() => {
+
+  const resetInvoices = React.useCallback(() => {
     setInvoiceSearch("");
     setInvoiceStatus("all");
     setInvoiceSort("newest");
-    setInvoiceDateFrom("");
-    setInvoiceDateTo("");
+    setInvoiceFrom("");
+    setInvoiceTo("");
   }, []);
-  const resetPaymentFilters = React.useCallback(() => {
-    setPaymentSearch("");
-    setPaymentStatus("all");
-    setPaymentSort("newest");
-    setPaymentDateFrom("");
-    setPaymentDateTo("");
+
+  const resetVouchers = React.useCallback(() => {
+    setVoucherSearch("");
+    setVoucherStatus("all");
+    setVoucherKind("all");
+    setVoucherSort("newest");
+    setVoucherFrom("");
+    setVoucherTo("");
   }, []);
-  const resetActivityFilters = React.useCallback(() => {
-    setActivitySearch("");
-    setActivityStatus("all");
-    setActivitySort("newest");
-    setActivityDateFrom("");
-    setActivityDateTo("");
+
+  const resetTransactions = React.useCallback(() => {
+    setTransactionSearch("");
+    setTransactionStatus("all");
+    setTransactionType("all");
+    setTransactionSort("newest");
+    setTransactionFrom("");
+    setTransactionTo("");
   }, []);
+
   const filteredInvoices = React.useMemo(() => {
     const needle = invoiceSearch.trim().toLowerCase();
-    const rows = salesInvoices.filter((invoice) => {
-      const haystack = [invoice.number, invoice.customer_name, invoice.status, invoice.amount].join(" ").toLowerCase();
+    const rows = invoices.filter((row) => {
+      const haystack = [row.number, row.customerName, row.status, row.amount].join(" ").toLowerCase();
       if (needle && !haystack.includes(needle)) return false;
-      if (invoiceStatus !== "all" && invoice.status !== invoiceStatus) return false;
-      return isWithinDate(invoice.issue_date || invoice.created_at, invoiceDateFrom, invoiceDateTo);
+      if (invoiceStatus !== "all" && row.status !== invoiceStatus) return false;
+      return isWithinDate(row.date, invoiceFrom, invoiceTo);
     });
-    return sortRows(rows, invoiceSort, (row) => row.issue_date || row.created_at, (row) => row.amount, (row) => row.customer_name);
-  }, [invoiceDateFrom, invoiceDateTo, invoiceSearch, invoiceSort, invoiceStatus, salesInvoices]);
-  const filteredPayments = React.useMemo(() => {
-    const needle = paymentSearch.trim().toLowerCase();
-    const rows = payments.filter((payment) => {
-      const haystack = [payment.reference, payment.party_name, payment.method, payment.status, payment.amount]
+    return sortRows(rows, invoiceSort, (row) => row.date, (row) => row.amount, (row) => row.number, (row) => row.customerName);
+  }, [invoiceFrom, invoiceSearch, invoiceSort, invoiceStatus, invoiceTo, invoices]);
+
+  const filteredVouchers = React.useMemo(() => {
+    const needle = voucherSearch.trim().toLowerCase();
+    const rows = vouchers.filter((row) => {
+      const haystack = [
+        row.number,
+        row.partyName,
+        row.partyPhone,
+        row.treasuryAccountName,
+        row.method,
+        row.reference,
+        row.transactionNumber,
+        row.accountingEntryNumber,
+        row.status,
+        row.kind,
+        row.amount,
+      ]
         .join(" ")
         .toLowerCase();
       if (needle && !haystack.includes(needle)) return false;
-      if (paymentStatus !== "all" && payment.status !== paymentStatus) return false;
-      return isWithinDate(payment.paid_at || payment.created_at, paymentDateFrom, paymentDateTo);
+      if (voucherStatus !== "all" && row.status !== voucherStatus) return false;
+      if (voucherKind !== "all" && row.kind !== voucherKind) return false;
+      return isWithinDate(row.date, voucherFrom, voucherTo);
     });
-    return sortRows(rows, paymentSort, (row) => row.paid_at || row.created_at, (row) => row.amount, (row) => row.party_name);
-  }, [paymentDateFrom, paymentDateTo, paymentSearch, paymentSort, paymentStatus, payments]);
-  const filteredActivity = React.useMemo(() => {
-    const needle = activitySearch.trim().toLowerCase();
-    const rows = activityRows.filter((item) => {
-      const haystack = [item.name, item.sku, item.category, item.status, item.quantity].join(" ").toLowerCase();
+    return sortRows(rows, voucherSort, (row) => row.date, (row) => row.amount, (row) => row.number, (row) => row.partyName);
+  }, [voucherFrom, voucherKind, voucherSearch, voucherSort, voucherStatus, voucherTo, vouchers]);
+
+  const filteredTransactions = React.useMemo(() => {
+    const needle = transactionSearch.trim().toLowerCase();
+    const rows = transactions.filter((row) => {
+      const haystack = [
+        row.number,
+        row.accountName,
+        row.accountCode,
+        row.sourceType,
+        row.sourceNumber,
+        row.reference,
+        row.description,
+        row.accountingEntryNumber,
+        row.type,
+        row.status,
+        row.amount,
+      ]
+        .join(" ")
+        .toLowerCase();
       if (needle && !haystack.includes(needle)) return false;
-      if (activityStatus !== "all" && item.status !== activityStatus) return false;
-      return isWithinDate(item.updated_at, activityDateFrom, activityDateTo);
+      if (transactionStatus !== "all" && row.status !== transactionStatus) return false;
+      if (transactionType !== "all" && row.type !== transactionType) return false;
+      return isWithinDate(row.date, transactionFrom, transactionTo);
     });
-    return sortRows(rows, activitySort, (row) => row.updated_at, (row) => row.quantity, (row) => row.name);
-  }, [activityDateFrom, activityDateTo, activityRows, activitySearch, activitySort, activityStatus]);
-  const hasInvoiceFilters = Boolean(invoiceSearch || invoiceStatus !== "all" || invoiceDateFrom || invoiceDateTo || invoiceSort !== "newest");
-  const hasPaymentFilters = Boolean(paymentSearch || paymentStatus !== "all" || paymentDateFrom || paymentDateTo || paymentSort !== "newest");
-  const hasActivityFilters = Boolean(activitySearch || activityStatus !== "all" || activityDateFrom || activityDateTo || activitySort !== "newest");
+    return sortRows(rows, transactionSort, (row) => row.date, (row) => row.amount, (row) => row.number, (row) => row.accountName);
+  }, [transactionFrom, transactionSearch, transactionSort, transactionStatus, transactionTo, transactionType, transactions]);
+
+  const invoiceFiltered = Boolean(invoiceSearch || invoiceStatus !== "all" || invoiceFrom || invoiceTo || invoiceSort !== "newest");
+  const voucherFiltered = Boolean(voucherSearch || voucherStatus !== "all" || voucherKind !== "all" || voucherFrom || voucherTo || voucherSort !== "newest");
+  const transactionFiltered = Boolean(transactionSearch || transactionStatus !== "all" || transactionType !== "all" || transactionFrom || transactionTo || transactionSort !== "newest");
+
+  const invoiceExportColumns = React.useMemo<ExportColumn<SalesInvoiceRecord>[]>(
+    () => [
+      { label: t.invoice, value: (row) => row.number },
+      { label: t.customer, value: (row) => row.customerName },
+      { label: t.date, value: (row) => formatDate(row.date) },
+      { label: t.amount, value: (row) => reportMoney(row.amount, locale) },
+      { label: t.status, value: (row) => statusLabel(row.status, locale) },
+    ],
+    [locale, t.amount, t.customer, t.date, t.invoice, t.status],
+  );
+
+  const voucherExportColumns = React.useMemo<ExportColumn<VoucherRecord>[]>(
+    () => [
+      { label: t.kind, value: (row) => (row.kind === "receipt" ? t.receiptVoucher : t.paymentVoucher) },
+      { label: t.voucher, value: (row) => row.number },
+      { label: t.party, value: (row) => row.partyName },
+      { label: t.date, value: (row) => formatDate(row.date) },
+      { label: t.amount, value: (row) => reportMoney(row.amount, locale) },
+      { label: t.status, value: (row) => statusLabel(row.status, locale) },
+      { label: t.treasuryAccount, value: (row) => row.treasuryAccountName },
+      { label: t.transaction, value: (row) => row.transactionNumber || "—" },
+      { label: t.accounting, value: (row) => row.accountingEntryNumber || "—" },
+    ],
+    [locale, t.accounting, t.amount, t.date, t.kind, t.party, t.paymentVoucher, t.receiptVoucher, t.status, t.transaction, t.treasuryAccount, t.voucher],
+  );
+
+  const transactionExportColumns = React.useMemo<ExportColumn<TreasuryTransactionRecord>[]>(
+    () => [
+      { label: t.transaction, value: (row) => row.number },
+      { label: t.date, value: (row) => formatDate(row.date) },
+      { label: t.treasuryAccount, value: (row) => row.accountName },
+      { label: t.kind, value: (row) => transactionTypeLabel(row.type, locale) },
+      { label: t.amount, value: (row) => reportMoney(row.amount, locale) },
+      { label: t.status, value: (row) => statusLabel(row.status, locale) },
+      { label: t.source, value: (row) => row.sourceNumber || transactionSourceLabel(row.sourceType, locale) },
+      { label: t.accounting, value: (row) => row.accountingEntryNumber || "—" },
+    ],
+    [locale, t.accounting, t.amount, t.date, t.kind, t.source, t.status, t.transaction, t.treasuryAccount],
+  );
+
+  const printVoucher = React.useCallback(
+    (row: VoucherRecord) => {
+      const href = voucherHref(row);
+      const separator = href.includes("?") ? "&" : "?";
+      const printWindow = window.open(
+        `${href}${separator}print=voucher`,
+        "_blank",
+        "width=1400,height=900",
+      );
+
+      if (!printWindow) {
+        toast.error(t.printBlocked);
+        return;
+      }
+
+      printWindow.opener = null;
+    },
+    [t.printBlocked],
+  );
+
   const invoiceColumns = React.useMemo<DataColumn<SalesInvoiceRecord>[]>(
     () => [
       {
         key: "invoice",
         label: t.invoice,
         className: "w-[210px]",
-        render: (invoice) => (
-          <div className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-foreground">{invoice.number || t.unknown}</span>
-            <span className="block truncate text-xs text-muted-foreground">#{invoice.id || "—"}</span>
-          </div>
-        ),
+        render: (row) => <span className="font-semibold tabular-nums">{row.number}</span>,
       },
       {
         key: "customer",
         label: t.customer,
-        className: "w-[240px]",
-        render: (invoice) => <span className="truncate text-sm text-muted-foreground">{invoice.customer_name || "—"}</span>,
+        className: "w-[260px]",
+        render: (row) => <span className="truncate">{row.customerName}</span>,
       },
       {
         key: "date",
-        label: t.issueDate,
+        label: t.date,
         className: "w-[150px]",
-        render: (invoice) => <span className="text-sm tabular-nums text-muted-foreground">{formatDate(invoice.issue_date)}</span>,
+        render: (row) => <span dir="ltr" lang="en" className="tabular-nums">{formatDate(row.date)}</span>,
       },
       {
         key: "amount",
         label: t.amount,
-        className: "w-[160px]",
-        render: (invoice) => <MoneyValue value={invoice.amount} label={t.sar} />,
+        className: "w-[170px]",
+        render: (row) => <MoneyValue value={row.amount} label={t.sar} />,
       },
       {
         key: "status",
         label: t.status,
-        className: "w-[140px]",
-        render: (invoice) => <StatusBadge value={invoice.status} label={getStatusLabel(invoice.status, locale)} />,
+        className: "w-[150px]",
+        render: (row) => <StatusBadge value={row.status} label={statusLabel(row.status, locale)} />,
       },
       {
-        key: "open",
-        label: t.open,
-        className: "w-[90px]",
-        render: (invoice) => (
-          <Button asChild variant="ghost" size="sm" className="rounded-lg">
-            <Link href={invoice.id ? `/company/sales/invoices/${invoice.id}` : "/company/sales/invoices"}>{t.open}</Link>
-          </Button>
+        key: "actions",
+        label: t.actions,
+        className: "w-[110px]",
+        render: () => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label={t.actions}>
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align={locale === "ar" ? "start" : "end"}>
+              <DropdownMenuItem asChild>
+                <Link href="/company/sales/invoices">
+                  <ExternalLink className="h-4 w-4" />
+                  {t.openSales}
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ),
       },
     ],
-    [locale, t],
+    [locale, t.actions, t.amount, t.customer, t.date, t.invoice, t.openSales, t.sar, t.status],
   );
-  const paymentColumns = React.useMemo<DataColumn<PaymentRecord>[]>(
+
+  const voucherColumns = React.useMemo<DataColumn<VoucherRecord>[]>(
     () => [
       {
-        key: "reference",
-        label: t.reference,
-        className: "w-[220px]",
-        render: (payment) => (
-          <div className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-foreground">{payment.reference || t.unknown}</span>
-            <span className="block truncate text-xs text-muted-foreground">#{payment.id || "—"}</span>
-          </div>
+        key: "kind",
+        label: t.kind,
+        className: "w-[150px]",
+        render: (row) => (
+          <StatusBadge
+            value={row.kind === "receipt" ? "confirmed" : "cancelled"}
+            label={row.kind === "receipt" ? t.receiptVoucher : t.paymentVoucher}
+          />
         ),
+      },
+      {
+        key: "voucher",
+        label: t.voucher,
+        className: "w-[190px]",
+        render: (row) => <span className="font-semibold tabular-nums">{row.number}</span>,
       },
       {
         key: "party",
         label: t.party,
         className: "w-[220px]",
-        render: (payment) => <span className="truncate text-sm text-muted-foreground">{payment.party_name || "—"}</span>,
-      },
-      {
-        key: "method",
-        label: t.method,
-        className: "w-[170px]",
-        render: (payment) => <span className="truncate text-sm text-muted-foreground">{payment.method || "—"}</span>,
-      },
-      {
-        key: "amount",
-        label: t.amount,
-        className: "w-[160px]",
-        render: (payment) => <MoneyValue value={payment.amount} label={t.sar} />,
-      },
-      {
-        key: "paid_at",
-        label: t.paidAt,
-        className: "w-[160px]",
-        render: (payment) => <span className="text-sm tabular-nums text-muted-foreground">{formatDate(payment.paid_at)}</span>,
-      },
-      {
-        key: "status",
-        label: t.status,
-        className: "w-[140px]",
-        render: (payment) => <StatusBadge value={payment.status} label={getStatusLabel(payment.status, locale)} />,
-      },
-    ],
-    [locale, t],
-  );
-  const activityColumns = React.useMemo<DataColumn<ActivityRecord>[]>(
-    () => [
-      {
-        key: "item",
-        label: t.item,
-        className: "w-[260px]",
-        render: (item) => (
+        render: (row) => (
           <div className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-foreground">{item.name || t.unknown}</span>
-            <span className="block truncate text-xs text-muted-foreground">#{item.id || "—"}</span>
+            <p className="truncate font-medium">{row.partyName}</p>
+            {row.partyPhone ? <p className="truncate text-xs text-muted-foreground">{row.partyPhone}</p> : null}
           </div>
         ),
       },
       {
-        key: "sku",
-        label: t.sku,
-        className: "w-[160px]",
-        render: (item) => <span className="truncate text-sm tabular-nums text-muted-foreground">{item.sku || "—"}</span>,
+        key: "date",
+        label: t.date,
+        className: "w-[135px]",
+        render: (row) => <span dir="ltr" lang="en" className="tabular-nums">{formatDate(row.date)}</span>,
       },
       {
-        key: "category",
-        label: t.category,
-        className: "w-[200px]",
-        render: (item) => <span className="truncate text-sm text-muted-foreground">{item.category || "—"}</span>,
-      },
-      {
-        key: "quantity",
-        label: t.quantity,
+        key: "amount",
+        label: t.amount,
         className: "w-[150px]",
-        render: (item) => <span className="text-sm font-semibold tabular-nums">{formatQuantity(item.quantity)}</span>,
-      },
-      {
-        key: "updated",
-        label: t.updatedAt,
-        className: "w-[170px]",
-        render: (item) => <span className="text-sm tabular-nums text-muted-foreground">{formatDate(item.updated_at)}</span>,
+        render: (row) => <MoneyValue value={row.amount} label={t.sar} />,
       },
       {
         key: "status",
         label: t.status,
-        className: "w-[140px]",
-        render: (item) => <StatusBadge value={item.status} label={getStatusLabel(item.status, locale)} />,
+        className: "w-[135px]",
+        render: (row) => <StatusBadge value={row.status} label={statusLabel(row.status, locale)} />,
+      },
+      {
+        key: "treasury",
+        label: t.treasuryAccount,
+        className: "w-[220px]",
+        render: (row) => <span className="truncate">{row.treasuryAccountName}</span>,
+      },
+      {
+        key: "actions",
+        label: t.actions,
+        className: "w-[110px]",
+        render: (row) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label={t.actions} onClick={(event: React.MouseEvent<HTMLButtonElement>) => event.stopPropagation()}>
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align={locale === "ar" ? "start" : "end"}>
+              <DropdownMenuItem onSelect={() => router.push(voucherHref(row))}>
+                <ExternalLink className="h-4 w-4" />
+                {t.openDetails}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => printVoucher(row)}>
+                <Printer className="h-4 w-4" />
+                {t.printVoucher}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ),
       },
     ],
-    [locale, t],
+    [locale, printVoucher, router, t.actions, t.amount, t.date, t.kind, t.openDetails, t.party, t.paymentVoucher, t.printVoucher, t.receiptVoucher, t.sar, t.status, t.treasuryAccount, t.voucher],
   );
-  function buildExportSections() {
-    return [
+
+  const transactionColumns = React.useMemo<DataColumn<TreasuryTransactionRecord>[]>(
+    () => [
       {
-        title: t.latestSalesInvoices,
-        headers: [t.invoice, t.customer, t.issueDate, t.amount, t.status],
-        rows: filteredInvoices.map((invoice) => [
-          invoice.number,
-          invoice.customer_name,
-          formatDate(invoice.issue_date),
-          formatMoney(invoice.amount),
-          getStatusLabel(invoice.status, locale),
-        ]),
+        key: "number",
+        label: t.transaction,
+        className: "w-[190px]",
+        render: (row) => <span className="font-semibold tabular-nums">{row.number}</span>,
       },
       {
-        title: t.latestPayments,
-        headers: [t.reference, t.party, t.method, t.amount, t.status],
-        rows: filteredPayments.map((payment) => [
-          payment.reference,
-          payment.party_name,
-          payment.method,
-          formatMoney(payment.amount),
-          getStatusLabel(payment.status, locale),
-        ]),
+        key: "date",
+        label: t.date,
+        className: "w-[135px]",
+        render: (row) => <span dir="ltr" lang="en" className="tabular-nums">{formatDate(row.date)}</span>,
       },
       {
-        title: t.activityRecords,
-        headers: [t.item, t.sku, t.category, t.quantity, t.status],
-        rows: filteredActivity.map((item) => [
-          item.name,
-          item.sku,
-          item.category,
-          formatQuantity(item.quantity),
-          getStatusLabel(item.status, locale),
-        ]),
+        key: "account",
+        label: t.treasuryAccount,
+        className: "w-[240px]",
+        render: (row) => (
+          <div className="min-w-0">
+            <p className="truncate font-medium">{row.accountName}</p>
+            {row.accountCode ? <p className="truncate text-xs text-muted-foreground">{row.accountCode}</p> : null}
+          </div>
+        ),
       },
-    ];
-  }
-  function exportExcel() {
-    const sections = buildExportSections();
-    const totalRows = sections.reduce((sum, section) => sum + section.rows.length, 0);
-    if (!totalRows) {
-      toast.error(t.exportEmpty);
-      return;
+      {
+        key: "type",
+        label: t.kind,
+        className: "w-[130px]",
+        render: (row) => <StatusBadge value={row.type} label={transactionTypeLabel(row.type, locale)} />,
+      },
+      {
+        key: "amount",
+        label: t.amount,
+        className: "w-[150px]",
+        render: (row) => <MoneyValue value={row.amount} label={t.sar} />,
+      },
+      {
+        key: "status",
+        label: t.status,
+        className: "w-[130px]",
+        render: (row) => <StatusBadge value={row.status} label={statusLabel(row.status, locale)} />,
+      },
+      {
+        key: "source",
+        label: t.source,
+        className: "w-[210px]",
+        render: (row) => <span className="truncate">{row.sourceNumber || transactionSourceLabel(row.sourceType, locale)}</span>,
+      },
+      {
+        key: "actions",
+        label: t.actions,
+        className: "w-[110px]",
+        render: (row) => {
+          const href = transactionHref(row);
+          return href ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label={t.actions} onClick={(event: React.MouseEvent<HTMLButtonElement>) => event.stopPropagation()}>
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align={locale === "ar" ? "start" : "end"}>
+                <DropdownMenuItem onSelect={() => router.push(href)}>
+                  <ExternalLink className="h-4 w-4" />
+                  {t.openDetails}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          );
+        },
+      },
+    ],
+    [locale, router, t.actions, t.amount, t.date, t.kind, t.openDetails, t.sar, t.source, t.status, t.transaction, t.treasuryAccount],
+  );
+
+  const exportInvoices = React.useCallback(() => {
+    if (!filteredInvoices.length) return toast.error(t.exportEmpty);
+    downloadExcelFile("company-sales-invoices", t.invoicesTitle, buildTableHtml(invoiceExportColumns, filteredInvoices), locale);
+    toast.success(t.exportReady);
+  }, [filteredInvoices, invoiceExportColumns, locale, t.exportEmpty, t.exportReady, t.invoicesTitle]);
+
+  const exportVouchers = React.useCallback(() => {
+    if (!filteredVouchers.length) return toast.error(t.exportEmpty);
+    downloadExcelFile("company-vouchers", t.vouchersTitle, buildTableHtml(voucherExportColumns, filteredVouchers), locale);
+    toast.success(t.exportReady);
+  }, [filteredVouchers, locale, t.exportEmpty, t.exportReady, t.vouchersTitle, voucherExportColumns]);
+
+  const exportTransactions = React.useCallback(() => {
+    if (!filteredTransactions.length) return toast.error(t.exportEmpty);
+    downloadExcelFile("company-treasury-transactions", t.transactionsTitle, buildTableHtml(transactionExportColumns, filteredTransactions), locale);
+    toast.success(t.exportReady);
+  }, [filteredTransactions, locale, t.exportEmpty, t.exportReady, t.transactionsTitle, transactionExportColumns]);
+
+  const printInvoices = React.useCallback(() => {
+    if (!filteredInvoices.length) return toast.error(t.printEmpty);
+    const ok = openPrintWindow(t.invoicesTitle, `${t.generatedAt}: ${reportDateTime()}`, buildTableHtml(invoiceExportColumns, filteredInvoices), locale);
+    if (!ok) toast.error(t.printBlocked);
+    else toast.success(t.printReady);
+  }, [filteredInvoices, invoiceExportColumns, locale, t.generatedAt, t.invoicesTitle, t.printBlocked, t.printEmpty, t.printReady]);
+
+  const printVouchers = React.useCallback(() => {
+    if (!filteredVouchers.length) return toast.error(t.printEmpty);
+    const ok = openPrintWindow(t.vouchersTitle, `${t.generatedAt}: ${reportDateTime()}`, buildTableHtml(voucherExportColumns, filteredVouchers), locale);
+    if (!ok) toast.error(t.printBlocked);
+    else toast.success(t.printReady);
+  }, [filteredVouchers, locale, t.generatedAt, t.printBlocked, t.printEmpty, t.printReady, t.vouchersTitle, voucherExportColumns]);
+
+  const printTransactions = React.useCallback(() => {
+    if (!filteredTransactions.length) return toast.error(t.printEmpty);
+    const ok = openPrintWindow(t.transactionsTitle, `${t.generatedAt}: ${reportDateTime()}`, buildTableHtml(transactionExportColumns, filteredTransactions), locale);
+    if (!ok) toast.error(t.printBlocked);
+    else toast.success(t.printReady);
+  }, [filteredTransactions, locale, t.generatedAt, t.printBlocked, t.printEmpty, t.printReady, t.transactionsTitle, transactionExportColumns]);
+
+  const summaryHtml = React.useMemo(
+    () => `<table class="summary-table">
+      <tbody>
+        <tr>
+          <td><span>${escapeHtml(t.salesTotal)}</span><b>${escapeHtml(reportMoney(stats.salesTotal, locale))}</b></td>
+          <td><span>${escapeHtml(t.salesInvoices)}</span><b>${escapeHtml(formatInteger(stats.salesInvoices))}</b></td>
+          <td><span>${escapeHtml(t.receiptTotal)}</span><b>${escapeHtml(reportMoney(stats.receiptTotal, locale))}</b></td>
+          <td><span>${escapeHtml(t.paymentTotal)}</span><b>${escapeHtml(reportMoney(stats.paymentTotal, locale))}</b></td>
+        </tr>
+        <tr>
+          <td><span>${escapeHtml(t.customers)}</span><b>${escapeHtml(formatInteger(stats.customers))}</b></td>
+          <td><span>${escapeHtml(t.suppliers)}</span><b>${escapeHtml(formatInteger(stats.suppliers))}</b></td>
+          <td><span>${escapeHtml(t.vouchers)}</span><b>${escapeHtml(formatInteger(stats.vouchers))}</b></td>
+          <td><span>${escapeHtml(t.netFlow)}</span><b>${escapeHtml(reportMoney(stats.netFlow, locale))}</b></td>
+        </tr>
+      </tbody>
+    </table>`,
+    [locale, stats, t.customers, t.netFlow, t.paymentTotal, t.receiptTotal, t.salesInvoices, t.salesTotal, t.suppliers, t.vouchers],
+  );
+
+  const dashboardSectionsHtml = React.useMemo(
+    () => `${summaryHtml}
+      <div class="section"><h2>${escapeHtml(t.invoicesTitle)}</h2>${buildTableHtml(invoiceExportColumns, filteredInvoices)}</div>
+      <div class="section"><h2>${escapeHtml(t.vouchersTitle)}</h2>${buildTableHtml(voucherExportColumns, filteredVouchers)}</div>
+      <div class="section"><h2>${escapeHtml(t.transactionsTitle)}</h2>${buildTableHtml(transactionExportColumns, filteredTransactions)}</div>`,
+    [filteredInvoices, filteredTransactions, filteredVouchers, invoiceExportColumns, summaryHtml, t.invoicesTitle, t.transactionsTitle, t.vouchersTitle, transactionExportColumns, voucherExportColumns],
+  );
+
+  const exportDashboard = React.useCallback(() => {
+    if (!filteredInvoices.length && !filteredVouchers.length && !filteredTransactions.length) {
+      return toast.error(t.exportEmpty);
     }
-    const html = `
-      <html dir="${dir}" lang="${locale}">
-        <head><meta charset="utf-8" /></head>
-        <body>
-          <h1>${escapeHtml(t.printTitle)}</h1>
-          <p>${escapeHtml(t.currentCompany)}: ${escapeHtml(getCompanyName(authPayload, t.unknown))}</p>
-          <p>${escapeHtml(t.activityLabel)}: ${escapeHtml(getActivityLabel(authPayload, locale))}</p>
-          ${tableHtmlForSections(sections)}
-        </body>
-      </html>`;
-    const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `company-dashboard-${new Date().toISOString().slice(0, 10)}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-  }
-  function printPage() {
-    const sections = buildExportSections();
-    const totalRows = sections.reduce((sum, section) => sum + section.rows.length, 0);
-    if (!totalRows) {
-      toast.error(t.printEmpty);
-      return;
+    downloadExcelFile("company-dashboard", t.reportTitle, dashboardSectionsHtml, locale);
+    toast.success(t.exportReady);
+  }, [dashboardSectionsHtml, filteredInvoices.length, filteredTransactions.length, filteredVouchers.length, locale, t.exportEmpty, t.exportReady, t.reportTitle]);
+
+  const printDashboard = React.useCallback(() => {
+    if (!filteredInvoices.length && !filteredVouchers.length && !filteredTransactions.length) {
+      return toast.error(t.printEmpty);
     }
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1200,height=800");
-    if (!printWindow) return;
-    printWindow.document.write(`
-      <!doctype html>
-      <html dir="${dir}" lang="${locale}">
-        <head>
-          <meta charset="utf-8" />
-          <title>${escapeHtml(t.printTitle)}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 24px; color: #0f172a; }
-            h1 { margin: 0 0 8px; font-size: 24px; }
-            h2 { margin: 24px 0 10px; font-size: 18px; }
-            p { color: #64748b; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            th, td { border: 1px solid #cbd5e1; padding: 8px; font-size: 12px; text-align: ${dir === "rtl" ? "right" : "left"}; }
-            th { background: #f1f5f9; }
-          </style>
-        </head>
-        <body>
-          <h1>${escapeHtml(t.printTitle)}</h1>
-          <p>${escapeHtml(t.currentCompany)}: ${escapeHtml(getCompanyName(authPayload, t.unknown))}</p>
-          <p>${escapeHtml(t.activityLabel)}: ${escapeHtml(getActivityLabel(authPayload, locale))}</p>
-          <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString())}</p>
-          ${tableHtmlForSections(sections)}
-          <script>window.onload = function () { window.print(); };</script>
-        </body>
-      </html>`);
-    printWindow.document.close();
-  }
+    const ok = openPrintWindow(
+      t.reportTitle,
+      `${getCompanyName(authPayload, t.unknown)} — ${t.generatedAt}: ${reportDateTime()}`,
+      dashboardSectionsHtml,
+      locale,
+    );
+    if (!ok) toast.error(t.printBlocked);
+    else toast.success(t.printReady);
+  }, [authPayload, dashboardSectionsHtml, filteredInvoices.length, filteredTransactions.length, filteredVouchers.length, locale, t.generatedAt, t.printBlocked, t.printEmpty, t.printReady, t.reportTitle, t.unknown]);
+
   if (loading) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+      <main dir={dir} className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
         <DashboardSkeleton />
       </main>
     );
   }
+
   if (error) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-        <Card className="mx-auto max-w-3xl rounded-3xl border-destructive/30 bg-card shadow-sm">
+      <main dir={dir} className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
+        <Card className="mx-auto max-w-3xl rounded-lg border-destructive/30 shadow-none">
           <CardHeader className="text-center">
             <div className="mx-auto mb-2 rounded-full bg-destructive/10 p-4 text-destructive">
               <TriangleAlert className="h-8 w-8" />
@@ -1575,8 +2234,8 @@ export default function CompanyDashboardPage() {
             <CardDescription>{t.errorDesc}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-center">
-            <p className="rounded-2xl bg-muted px-4 py-3 text-sm text-muted-foreground">{error}</p>
-            <Button onClick={() => void loadDashboard({ silent: true })} className="rounded-xl">
+            <p className="rounded-lg bg-muted px-4 py-3 text-sm text-muted-foreground">{error}</p>
+            <Button onClick={() => void loadDashboard({ silent: true })}>
               <RefreshCw className="h-4 w-4" />
               {t.tryAgain}
             </Button>
@@ -1585,184 +2244,243 @@ export default function CompanyDashboardPage() {
       </main>
     );
   }
+
+  const invoiceStatusOptions = [
+    { value: "all", label: t.all },
+    { value: "draft", label: t.draft },
+    { value: "confirmed", label: t.confirmed },
+    { value: "posted", label: t.posted },
+    { value: "paid", label: t.paid },
+    { value: "unpaid", label: t.unpaid },
+    { value: "partial", label: t.partial },
+    { value: "cancelled", label: t.cancelled },
+  ];
+  const voucherStatusOptions = [
+    { value: "all", label: t.all },
+    { value: "draft", label: t.draft },
+    { value: "confirmed", label: t.confirmed },
+    { value: "cancelled", label: t.cancelled },
+  ];
+  const transactionStatusOptions = [
+    { value: "all", label: t.all },
+    { value: "draft", label: t.draft },
+    { value: "posted", label: t.posted },
+    { value: "cancelled", label: t.cancelled },
+  ];
+
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-[1500px] space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
-          <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-              <div className="max-w-3xl">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  {t.companyHealth}
-                </div>
-                <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{t.title}</h1>
-                <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">{t.subtitle}</p>
-                <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                  <span className="rounded-full border bg-background px-3 py-1">
-                    {t.currentCompany}: {getCompanyName(authPayload, t.unknown)}
-                  </span>
-                  <span className="rounded-full border bg-background px-3 py-1">
-                    {t.activityLabel}: {getActivityLabel(authPayload, locale)}
-                  </span>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => void loadDashboard({ silent: true })} disabled={refreshing}>
-                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  {t.refresh}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
-                  <FileSpreadsheet className="h-4 w-4" />
-                  {t.export}
-                </Button>
-                <Button className="rounded-xl" onClick={printPage}>
-                  <Printer className="h-4 w-4" />
-                  {t.print}
-                </Button>
-              </div>
+    <main dir={dir} className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1500px] space-y-5">
+        <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-4xl">
+            <Badge variant="outline" className="mb-3 rounded-full bg-background px-3 py-1 text-xs">
+              {t.badge}
+            </Badge>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{t.title}</h1>
+            <p className="mt-2 text-sm leading-7 text-muted-foreground sm:text-base">{t.subtitle}</p>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <span className="rounded-full border bg-background px-3 py-1">
+                {t.currentCompany}: {getCompanyName(authPayload, t.unknown)}
+              </span>
+              <span className="rounded-full border bg-background px-3 py-1">
+                {t.activity}: {getActivityName(authPayload, t.unknown)}
+              </span>
             </div>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={() => void loadDashboard({ silent: true })} disabled={refreshing}>
+              {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {t.refresh}
+            </Button>
+            <Button variant="outline" onClick={exportDashboard}>
+              <FileSpreadsheet className="h-4 w-4" />
+              {t.export}
+            </Button>
+            <Button variant="outline" onClick={printDashboard}>
+              <Printer className="h-4 w-4" />
+              {t.print}
+            </Button>
+          </div>
         </section>
+
         {warnings.length ? (
-          <Card className="rounded-2xl border-amber-200 bg-amber-50 text-amber-950 shadow-sm">
-            <CardContent className="flex gap-3 p-4">
+          <Card className="rounded-lg border-amber-200 bg-amber-50 shadow-none">
+            <CardContent className="flex gap-3 p-4 text-amber-950">
               <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0" />
               <div>
-                <p className="text-sm font-semibold">{t.partialWarningTitle}</p>
-                <p className="mt-1 text-sm opacity-80">{t.partialWarningDesc}</p>
+                <p className="text-sm font-semibold">{t.partialTitle}</p>
+                <p className="mt-1 text-sm opacity-80">{t.partialDesc}</p>
               </div>
             </CardContent>
           </Card>
         ) : null}
+
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard title={t.salesTotal} value={stats.salesTotal} description={t.connectedToLiveApis} href="/company/sales/invoices" icon={ShoppingCart} money t={t} />
-          <KpiCard title={t.salesInvoices} value={stats.salesInvoices} description={t.sales} href="/company/sales/invoices" icon={FileText} t={t} />
-          <KpiCard title={t.paymentAmount} value={stats.paymentAmount} description={t.treasury} href="/company/treasury" icon={Wallet} money t={t} />
-          <KpiCard title={t.payments} value={stats.payments} description={t.connectedToLiveApis} href="/company/payments" icon={CreditCard} t={t} />
-          <KpiCard title={t.customers} value={stats.customers} description={t.parties} href="/company/customers" icon={Users} t={t} />
-          <KpiCard title={t.suppliers} value={stats.suppliers} description={t.parties} href="/company/suppliers" icon={Building2} t={t} />
-          <KpiCard title={t.products} value={stats.products} description={t.catalog} href="/company/products" icon={Boxes} t={t} />
-          <KpiCard title={t.stockItems} value={stats.stockItems} description={t.inventory} href="/company/inventory" icon={Package} t={t} />
+          <KpiCard title={t.salesTotal} value={stats.salesTotal} description={t.salesDesc} href="/company/sales/invoices" icon={ShoppingCart} money currencyLabel={t.sar} />
+          <KpiCard title={t.salesInvoices} value={stats.salesInvoices} description={t.invoicesDesc} href="/company/sales/invoices" icon={FileText} currencyLabel={t.sar} />
+          <KpiCard title={t.receiptTotal} value={stats.receiptTotal} description={t.receiptsDesc} href="/company/treasury/receipt-vouchers" icon={ArrowDownLeft} money currencyLabel={t.sar} />
+          <KpiCard title={t.paymentTotal} value={stats.paymentTotal} description={t.paymentsDesc} href="/company/treasury/payment-vouchers" icon={ArrowUpRight} money currencyLabel={t.sar} />
+          <KpiCard title={t.customers} value={stats.customers} description={t.customersDesc} href="/company/customers" icon={Users} currencyLabel={t.sar} />
+          <KpiCard title={t.suppliers} value={stats.suppliers} description={t.suppliersDesc} href="/company/suppliers" icon={Landmark} currencyLabel={t.sar} />
+          <KpiCard title={t.vouchers} value={stats.vouchers} description={t.vouchersDesc} href="/company/payments" icon={ReceiptText} currencyLabel={t.sar} />
+          <KpiCard title={t.netFlow} value={stats.netFlow} description={t.netFlowDesc} href="/company/treasury" icon={WalletCards} money currencyLabel={t.sar} />
         </div>
-        <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
-            <CardTitle>{t.latestSalesInvoices}</CardTitle>
-            <CardDescription>{t.latestSalesInvoicesDesc}</CardDescription>
+
+        <Card className="rounded-lg border shadow-none">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>{t.invoicesTitle}</CardTitle>
+              <CardDescription className="mt-1">{t.invoicesSubtitle}</CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={exportInvoices}>
+                <FileSpreadsheet className="h-4 w-4" />
+                {t.export}
+              </Button>
+              <Button variant="outline" size="sm" onClick={printInvoices}>
+                <Printer className="h-4 w-4" />
+                {t.print}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <FiltersBar
               search={invoiceSearch}
               onSearchChange={setInvoiceSearch}
-              searchPlaceholder={t.invoiceSearchPlaceholder}
+              placeholder={t.invoiceSearch}
               status={invoiceStatus}
               onStatusChange={setInvoiceStatus}
+              statusOptions={invoiceStatusOptions}
               sort={invoiceSort}
               onSortChange={setInvoiceSort}
-              dateFrom={invoiceDateFrom}
-              onDateFromChange={setInvoiceDateFrom}
-              dateTo={invoiceDateTo}
-              onDateToChange={setInvoiceDateTo}
-              onReset={resetInvoiceFilters}
-              t={t}
+              dateFrom={invoiceFrom}
+              onDateFromChange={setInvoiceFrom}
+              dateTo={invoiceTo}
+              onDateToChange={setInvoiceTo}
+              onReset={resetInvoices}
               locale={locale}
             />
-            <DataTable
+            <DataTable<SalesInvoiceRecord>
               rows={filteredInvoices}
-              allRowsCount={salesInvoices.length}
+              totalRows={invoices.length}
               columns={invoiceColumns}
               rowKey={(row) => row.id || row.number}
-              emptyTitle={t.noDataTitle}
-              emptyDescription={t.noDataDesc}
-              noResultsTitle={t.noResultsTitle}
-              noResultsDescription={t.noResultsDesc}
-              hasFilters={hasInvoiceFilters}
-              onReset={resetInvoiceFilters}
-              resetLabel={t.reset}
-              showingLabel={t.showing}
-              ofLabel={t.of}
-              rowsLabel={t.rows}
+              emptyText={t.noInvoices}
+              filtered={invoiceFiltered}
+              onReset={resetInvoices}
+              locale={locale}
             />
           </CardContent>
         </Card>
-        <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
-            <CardTitle>{t.latestPayments}</CardTitle>
-            <CardDescription>{t.latestPaymentsDesc}</CardDescription>
+
+        <Card className="rounded-lg border shadow-none">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>{t.vouchersTitle}</CardTitle>
+              <CardDescription className="mt-1">{t.vouchersSubtitle}</CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={exportVouchers}>
+                <FileSpreadsheet className="h-4 w-4" />
+                {t.export}
+              </Button>
+              <Button variant="outline" size="sm" onClick={printVouchers}>
+                <Printer className="h-4 w-4" />
+                {t.print}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <FiltersBar
-              search={paymentSearch}
-              onSearchChange={setPaymentSearch}
-              searchPlaceholder={t.paymentSearchPlaceholder}
-              status={paymentStatus}
-              onStatusChange={setPaymentStatus}
-              sort={paymentSort}
-              onSortChange={setPaymentSort}
-              dateFrom={paymentDateFrom}
-              onDateFromChange={setPaymentDateFrom}
-              dateTo={paymentDateTo}
-              onDateToChange={setPaymentDateTo}
-              onReset={resetPaymentFilters}
-              t={t}
+              search={voucherSearch}
+              onSearchChange={setVoucherSearch}
+              placeholder={t.voucherSearch}
+              status={voucherStatus}
+              onStatusChange={setVoucherStatus}
+              statusOptions={voucherStatusOptions}
+              kind={voucherKind}
+              onKindChange={(value) => setVoucherKind(value as KindFilter)}
+              kindOptions={[
+                { value: "all", label: t.all },
+                { value: "receipt", label: t.receiptVoucher },
+                { value: "payment", label: t.paymentVoucher },
+              ]}
+              sort={voucherSort}
+              onSortChange={setVoucherSort}
+              dateFrom={voucherFrom}
+              onDateFromChange={setVoucherFrom}
+              dateTo={voucherTo}
+              onDateToChange={setVoucherTo}
+              onReset={resetVouchers}
               locale={locale}
             />
-            <DataTable
-              rows={filteredPayments}
-              allRowsCount={payments.length}
-              columns={paymentColumns}
-              rowKey={(row) => row.id || row.reference}
-              emptyTitle={t.noDataTitle}
-              emptyDescription={t.noDataDesc}
-              noResultsTitle={t.noResultsTitle}
-              noResultsDescription={t.noResultsDesc}
-              hasFilters={hasPaymentFilters}
-              onReset={resetPaymentFilters}
-              resetLabel={t.reset}
-              showingLabel={t.showing}
-              ofLabel={t.of}
-              rowsLabel={t.rows}
+            <DataTable<VoucherRecord>
+              rows={filteredVouchers}
+              totalRows={vouchers.length}
+              columns={voucherColumns}
+              rowKey={(row) => row.id || row.number}
+              rowHref={voucherHref}
+              emptyText={t.noVouchers}
+              filtered={voucherFiltered}
+              onReset={resetVouchers}
+              locale={locale}
             />
           </CardContent>
         </Card>
-        <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
-            <CardTitle>{t.activityRecords}</CardTitle>
-            <CardDescription>{t.activityRecordsDesc}</CardDescription>
+
+        <Card className="rounded-lg border shadow-none">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>{t.transactionsTitle}</CardTitle>
+              <CardDescription className="mt-1">{t.transactionsSubtitle}</CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={exportTransactions}>
+                <FileSpreadsheet className="h-4 w-4" />
+                {t.export}
+              </Button>
+              <Button variant="outline" size="sm" onClick={printTransactions}>
+                <Printer className="h-4 w-4" />
+                {t.print}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <FiltersBar
-              search={activitySearch}
-              onSearchChange={setActivitySearch}
-              searchPlaceholder={t.activitySearchPlaceholder}
-              status={activityStatus}
-              onStatusChange={setActivityStatus}
-              sort={activitySort}
-              onSortChange={setActivitySort}
-              dateFrom={activityDateFrom}
-              onDateFromChange={setActivityDateFrom}
-              dateTo={activityDateTo}
-              onDateToChange={setActivityDateTo}
-              onReset={resetActivityFilters}
-              t={t}
+              search={transactionSearch}
+              onSearchChange={setTransactionSearch}
+              placeholder={t.transactionSearch}
+              status={transactionStatus}
+              onStatusChange={setTransactionStatus}
+              statusOptions={transactionStatusOptions}
+              kind={transactionType}
+              onKindChange={(value) => setTransactionType(value as TransactionTypeFilter)}
+              kindOptions={[
+                { value: "all", label: t.all },
+                { value: "inflow", label: t.inflow },
+                { value: "outflow", label: t.outflow },
+                { value: "transfer", label: t.transfer },
+                { value: "adjustment", label: t.adjustment },
+              ]}
+              sort={transactionSort}
+              onSortChange={setTransactionSort}
+              dateFrom={transactionFrom}
+              onDateFromChange={setTransactionFrom}
+              dateTo={transactionTo}
+              onDateToChange={setTransactionTo}
+              onReset={resetTransactions}
               locale={locale}
             />
-            <DataTable
-              rows={filteredActivity}
-              allRowsCount={activityRows.length}
-              columns={activityColumns}
-              rowKey={(row) => row.id || row.sku || row.name}
-              emptyTitle={t.noDataTitle}
-              emptyDescription={t.noDataDesc}
-              noResultsTitle={t.noResultsTitle}
-              noResultsDescription={t.noResultsDesc}
-              hasFilters={hasActivityFilters}
-              onReset={resetActivityFilters}
-              resetLabel={t.reset}
-              showingLabel={t.showing}
-              ofLabel={t.of}
-              rowsLabel={t.rows}
+            <DataTable<TreasuryTransactionRecord>
+              rows={filteredTransactions}
+              totalRows={transactions.length}
+              columns={transactionColumns}
+              rowKey={(row) => row.id || row.number}
+              rowHref={transactionHref}
+              emptyText={t.noTransactions}
+              filtered={transactionFiltered}
+              onReset={resetTransactions}
+              locale={locale}
             />
           </CardContent>
         </Card>
