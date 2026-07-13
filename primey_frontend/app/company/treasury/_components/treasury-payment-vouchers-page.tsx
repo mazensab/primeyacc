@@ -3,7 +3,7 @@
    📂 primey_frontend/app/company/treasury/_components/treasury-payment-vouchers-page.tsx
    🧠 PrimeyAcc — Company Treasury Payment Vouchers Shared Page
    ------------------------------------------------------------
-   ✅ Approved Premium company operational pattern
+   ✅ PrimeyAcc Approved Design
    ✅ Real API only, no fake demo data
    ✅ Company scoped API through backend session
    ✅ Receipt vouchers and payment vouchers pages
@@ -16,20 +16,18 @@
    ✅ RTL/LTR through primey-locale
    ✅ English numbers/money always
    ✅ SAR icon from /currency/sar.svg
-   ✅ No localhost hardcoding except safe dev fallback
+   ✅ NEXT_PUBLIC_API_URL only
 ============================================================ */
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import {
-  AlertTriangle,
   ArrowDownLeft,
   ArrowUpDown,
   ArrowUpRight,
   CalendarIcon,
   CheckCircle2,
-  ChevronLeft,
   CircleX,
   Edit3,
   FileSpreadsheet,
@@ -41,13 +39,21 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
-  Sparkles,
   TriangleAlert,
-  WalletCards,
   MoreVertical,
   ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -58,7 +64,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Card,
   CardContent,
@@ -87,9 +97,11 @@ type Locale = "ar" | "en";
 type VoucherVariant = "receipt" | "payment";
 type CounterpartyType = "CUSTOMER" | "SUPPLIER" | "EMPLOYEE" | "OTHER";
 type ApiRecord = Record<string, unknown>;
-type SortKey = "newest" | "oldest" | "amount_high" | "amount_low" | "number" | "party";
+type SortKey =
+  "newest" | "oldest" | "amount_high" | "amount_low" | "number" | "party";
 type StatusFilter = "all" | "draft" | "confirmed" | "cancelled";
-type MethodFilter = "all" | "CASH" | "BANK_TRANSFER" | "CARD" | "WALLET" | "CHECK" | "OTHER";
+type MethodFilter =
+  "all" | "CASH" | "BANK_TRANSFER" | "CARD" | "WALLET" | "CHECK" | "OTHER";
 type TreasuryAccountOption = {
   id: string;
   name: string;
@@ -248,7 +260,8 @@ const emptyForm: VoucherFormState = {
   linkedDocumentDate: "",
   linkedDocumentAmount: "",
   linkedDocumentBalance: "",
-  linkedDocumentStatus: "",};
+  linkedDocumentStatus: "",
+};
 const translations = {
   ar: {
     back: "الخزينة والمدفوعات",
@@ -262,6 +275,9 @@ const translations = {
     refresh: "تحديث",
     export: "تصدير Excel",
     print: "طباعة",
+    printVoucher: "طباعة السند",
+    printBlocked:
+      "تعذر فتح نافذة طباعة السند. اسمح بالنوافذ المنبثقة ثم أعد المحاولة.",
     addReceipt: "إضافة سند قبض",
     addPayment: "إضافة سند صرف",
     editReceipt: "تعديل سند قبض",
@@ -299,19 +315,17 @@ const translations = {
     draftVouchers: "مسودات",
     confirmedVouchers: "مؤكدة",
     cancelledVouchers: "ملغاة",
-    operationalHintTitle: "صفحة تشغيلية",
-    receiptOperationalHint:
-      "يمكن إنشاء سند قبض كمسودة أو تأكيده. التأكيد هو الذي ينشئ حركة واردة ويحدّث الخزينة بأمان.",
-    paymentOperationalHint:
-      "يمكن إنشاء سند صرف كمسودة أو تأكيده. التأكيد هو الذي ينشئ حركة صادرة ويحدّث الخزينة بأمان.",
     formCreateDesc: "أدخل بيانات السند، ويمكن حفظه كمسودة أو تأكيده مباشرة.",
-    formEditDesc: "يمكن تعديل المسودة فقط. السندات المؤكدة أو الملغاة لا تعدل مباشرة.",
+    formEditDesc:
+      "يمكن تعديل المسودة فقط. السندات المؤكدة أو الملغاة لا تعدل مباشرة.",
     tableTitleReceipt: "قائمة سندات القبض",
     tableTitlePayment: "قائمة سندات الصرف",
     tableDescReceipt: "أحدث سندات قبض العملاء الخاصة بالشركة الحالية.",
     tableDescPayment: "أحدث سندات صرف الموردين الخاصة بالشركة الحالية.",
-    searchPlaceholderReceipt: "ابحث برقم السند أو العميل أو المرجع أو الفاتورة...",
-    searchPlaceholderPayment: "ابحث برقم السند أو المورد أو المرجع أو الفاتورة...",
+    searchPlaceholderReceipt:
+      "ابحث برقم السند أو العميل أو المرجع أو الفاتورة...",
+    searchPlaceholderPayment:
+      "ابحث برقم السند أو المورد أو المرجع أو الفاتورة...",
     voucherNo: "رقم السند",
     party: "الطرف",
     customerName: "اسم العميل",
@@ -331,7 +345,8 @@ const translations = {
     treasuryMovement: "حركة الخزينة",
     actions: "الإجراءات",
     confirmNow: "تأكيد مباشرة",
-    noTreasuryAccounts: "لا توجد حسابات خزينة نشطة. أضف صندوقًا أو حسابًا بنكيًا أولًا.",
+    noTreasuryAccounts:
+      "لا توجد حسابات خزينة نشطة. أضف صندوقًا أو حسابًا بنكيًا أولًا.",
     showing: "عرض",
     of: "من",
     rows: "صفوف",
@@ -351,6 +366,14 @@ const translations = {
     updated: "تم تحديث السند بنجاح.",
     confirmedDone: "تم تأكيد السند بنجاح.",
     cancelledDone: "تم إلغاء السند بنجاح.",
+    confirmTitle: "تأكيد السند",
+    confirmDescription:
+      "سيتم تأكيد السند وإنشاء أثره في الخزينة والمحاسبة وفق قواعد النظام.",
+    confirmAction: "تأكيد السند",
+    cancelTitle: "تأكيد إلغاء السند",
+    cancelDescription:
+      "سيتم إلغاء السند وتنفيذ العكس الآمن عند وجود أثر محاسبي، مع الاحتفاظ بالسجل.",
+    cancelAction: "إلغاء السند",
     cancelReasonPrompt: "اكتب سبب الإلغاء",
     validationRequired: "اختر حساب الخزينة وأدخل المبلغ واسم الطرف.",
     exportEmpty: "لا توجد بيانات للتصدير.",
@@ -370,6 +393,9 @@ const translations = {
     refresh: "Refresh",
     export: "Export Excel",
     print: "Print",
+    printVoucher: "Print voucher",
+    printBlocked:
+      "The voucher print window could not be opened. Allow pop-ups and try again.",
     addReceipt: "Add receipt voucher",
     addPayment: "Add payment voucher",
     editReceipt: "Edit receipt voucher",
@@ -407,19 +433,20 @@ const translations = {
     draftVouchers: "Draft",
     confirmedVouchers: "Confirmed",
     cancelledVouchers: "Cancelled",
-    operationalHintTitle: "Operational page",
-    receiptOperationalHint:
-      "A receipt voucher can be saved as draft or confirmed. Confirmation creates an inflow and updates treasury safely.",
-    paymentOperationalHint:
-      "A payment voucher can be saved as draft or confirmed. Confirmation creates an outflow and updates treasury safely.",
-    formCreateDesc: "Enter voucher details, then save as draft or confirm immediately.",
-    formEditDesc: "Only draft vouchers can be edited. Confirmed or cancelled vouchers are not directly edited.",
+    formCreateDesc:
+      "Enter voucher details, then save as draft or confirm immediately.",
+    formEditDesc:
+      "Only draft vouchers can be edited. Confirmed or cancelled vouchers are not directly edited.",
     tableTitleReceipt: "Receipt vouchers list",
     tableTitlePayment: "Payment vouchers list",
-    tableDescReceipt: "Newest customer receipt vouchers for the current company.",
-    tableDescPayment: "Newest supplier payment vouchers for the current company.",
-    searchPlaceholderReceipt: "Search by voucher number, customer, reference, or invoice...",
-    searchPlaceholderPayment: "Search by voucher number, supplier, reference, or bill...",
+    tableDescReceipt:
+      "Newest customer receipt vouchers for the current company.",
+    tableDescPayment:
+      "Newest supplier payment vouchers for the current company.",
+    searchPlaceholderReceipt:
+      "Search by voucher number, customer, reference, or invoice...",
+    searchPlaceholderPayment:
+      "Search by voucher number, supplier, reference, or bill...",
     voucherNo: "Voucher No.",
     party: "Party",
     customerName: "Customer name",
@@ -439,7 +466,8 @@ const translations = {
     treasuryMovement: "Treasury movement",
     actions: "Actions",
     confirmNow: "Confirm immediately",
-    noTreasuryAccounts: "No active treasury accounts. Add a cashbox or bank account first.",
+    noTreasuryAccounts:
+      "No active treasury accounts. Add a cashbox or bank account first.",
     showing: "Showing",
     of: "of",
     rows: "rows",
@@ -453,14 +481,24 @@ const translations = {
     noResultsDesc: "Change the search or filters to show other results.",
     errorTitleReceipt: "Could not load receipt vouchers",
     errorTitlePayment: "Could not load payment vouchers",
-    errorDesc: "Make sure you are signed in to the company and the backend is running, then try again.",
+    errorDesc:
+      "Make sure you are signed in to the company and the backend is running, then try again.",
     tryAgain: "Try again",
     created: "Voucher created successfully.",
     updated: "Voucher updated successfully.",
     confirmedDone: "Voucher confirmed successfully.",
     cancelledDone: "Voucher cancelled successfully.",
+    confirmTitle: "Confirm voucher",
+    confirmDescription:
+      "The voucher will be confirmed and posted to treasury and accounting according to system rules.",
+    confirmAction: "Confirm voucher",
+    cancelTitle: "Confirm voucher cancellation",
+    cancelDescription:
+      "The voucher will be cancelled with safe reversal when an accounting effect exists, while preserving the record.",
+    cancelAction: "Cancel voucher",
     cancelReasonPrompt: "Enter cancellation reason",
-    validationRequired: "Select treasury account, enter amount, and party name.",
+    validationRequired:
+      "Select treasury account, enter amount, and party name.",
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
     generatedAt: "Generated at",
@@ -505,6 +543,14 @@ function formatDate(value: string | null | undefined) {
   if (Number.isNaN(parsed.getTime())) return String(value).slice(0, 10);
   return parsed.toISOString().slice(0, 10);
 }
+function formatReportDateTime(value = new Date()) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  const hours = String(value.getHours()).padStart(2, "0");
+  const minutes = String(value.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
 function escapeHtml(value: unknown) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -513,18 +559,13 @@ function escapeHtml(value: unknown) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
-function voucherDetailHref(
-  variant: VoucherVariant,
-  row: VoucherRecord,
-) {
+function voucherDetailHref(variant: VoucherVariant, row: VoucherRecord) {
   const base =
     variant === "receipt"
       ? "/company/treasury/receipt-vouchers"
       : "/company/treasury/payment-vouchers";
   const identifier = row.paymentNumber || row.id;
-  return identifier
-    ? `${base}/${encodeURIComponent(identifier)}`
-    : base;
+  return identifier ? `${base}/${encodeURIComponent(identifier)}` : base;
 }
 
 function getInitialLocale(): Locale {
@@ -532,17 +573,12 @@ function getInitialLocale(): Locale {
   return window.localStorage.getItem("primey-locale") === "en" ? "en" : "ar";
 }
 function getApiBaseUrl() {
-  const fallbackBase = "http://127.0.0.1:8000";
-  const envBase =
-    typeof process !== "undefined"
-      ? (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "").replace(
-          /\/+$/,
-          "",
-        )
-      : "";
-  if (!envBase) return fallbackBase;
-  if (envBase.endsWith("/api")) return envBase.slice(0, -4);
-  return envBase;
+  const envBase = (
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    ""
+  ).replace(/\/+$/, "");
+  return envBase.endsWith("/api") ? envBase.slice(0, -4) : envBase;
 }
 function makeApiUrl(path: string, params?: URLSearchParams) {
   const query = params?.toString();
@@ -624,11 +660,12 @@ function getConfig(variant: VoucherVariant, locale: Locale) {
     editLabel: isReceipt ? t.editReceipt : t.editPayment,
     tableTitle: isReceipt ? t.tableTitleReceipt : t.tableTitlePayment,
     tableDesc: isReceipt ? t.tableDescReceipt : t.tableDescPayment,
-    searchPlaceholder: isReceipt ? t.searchPlaceholderReceipt : t.searchPlaceholderPayment,
+    searchPlaceholder: isReceipt
+      ? t.searchPlaceholderReceipt
+      : t.searchPlaceholderPayment,
     noDataTitle: isReceipt ? t.noDataTitleReceipt : t.noDataTitlePayment,
     noDataDesc: isReceipt ? t.noDataDescReceipt : t.noDataDescPayment,
     errorTitle: isReceipt ? t.errorTitleReceipt : t.errorTitlePayment,
-    operationalHint: isReceipt ? t.receiptOperationalHint : t.paymentOperationalHint,
     partyNameLabel: isReceipt ? t.customerName : t.supplierName,
     linkedDocumentLabel: isReceipt ? t.salesInvoiceId : t.purchaseBillId,
     icon: isReceipt ? ArrowDownLeft : ArrowUpRight,
@@ -637,7 +674,8 @@ function getConfig(variant: VoucherVariant, locale: Locale) {
 function statusFromApi(value: unknown): VoucherRecord["status"] {
   const normalized = normalizeText(value).toUpperCase();
   if (normalized === "CONFIRMED" || normalized === "POSTED") return "confirmed";
-  if (normalized === "CANCELLED" || normalized === "CANCELED") return "cancelled";
+  if (normalized === "CANCELLED" || normalized === "CANCELED")
+    return "cancelled";
   return "draft";
 }
 function methodLabel(method: MethodFilter, locale: Locale) {
@@ -658,7 +696,8 @@ function statusLabel(status: StatusFilter, locale: Locale) {
   return t.all;
 }
 function getStatusBadgeClass(value: string) {
-  if (value === "confirmed") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (value === "confirmed")
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (value === "draft") return "border-amber-200 bg-amber-50 text-amber-700";
   if (value === "cancelled") return "border-rose-200 bg-rose-50 text-rose-700";
   return "border-border bg-muted/30 text-muted-foreground";
@@ -677,10 +716,14 @@ function isWithinDate(dateValue: string | null, from: string, to: string) {
 }
 function sortRows(rows: VoucherRecord[], sort: SortKey) {
   return [...rows].sort((a, b) => {
-    if (sort === "oldest") return rowDateValue(a.paymentDate) - rowDateValue(b.paymentDate);
+    if (sort === "oldest")
+      return rowDateValue(a.paymentDate) - rowDateValue(b.paymentDate);
     if (sort === "amount_high") return b.amount - a.amount;
     if (sort === "amount_low") return a.amount - b.amount;
-    if (sort === "number") return a.paymentNumber.localeCompare(b.paymentNumber, undefined, { numeric: true });
+    if (sort === "number")
+      return a.paymentNumber.localeCompare(b.paymentNumber, undefined, {
+        numeric: true,
+      });
     if (sort === "party") return a.partyName.localeCompare(b.partyName);
     return rowDateValue(b.paymentDate) - rowDateValue(a.paymentDate);
   });
@@ -696,9 +739,14 @@ function normalizeAccount(value: unknown): TreasuryAccountOption {
     status: normalizeText(record.status, "ACTIVE"),
   };
 }
-function normalizePartySuggestion(value: unknown, variant: VoucherVariant): PartySuggestion {
+function normalizePartySuggestion(
+  value: unknown,
+  variant: VoucherVariant,
+): PartySuggestion {
   const record = asRecord(value);
-  const nestedParty = asRecord(record.party || record.customer || record.supplier);
+  const nestedParty = asRecord(
+    record.party || record.customer || record.supplier,
+  );
   const id = normalizeText(
     record.id ||
       record.pk ||
@@ -743,14 +791,31 @@ function normalizePartySuggestion(value: unknown, variant: VoucherVariant): Part
   );
   return { id, code, name, phone };
 }
-function normalizeLinkedDocumentSuggestion(value: unknown, variant: VoucherVariant): LinkedDocumentSuggestion {
+function normalizeLinkedDocumentSuggestion(
+  value: unknown,
+  variant: VoucherVariant,
+): LinkedDocumentSuggestion {
   const record = asRecord(value);
-  const nested = asRecord(record.document || record.invoice || record.bill || record.result || record.item);
-  const id = normalizeText(record.id || record.pk || record.invoice_id || record.bill_id);
+  const nested = asRecord(
+    record.document ||
+      record.invoice ||
+      record.bill ||
+      record.result ||
+      record.item,
+  );
+  const id = normalizeText(
+    record.id || record.pk || record.invoice_id || record.bill_id,
+  );
   const number = normalizeText(
     variant === "receipt"
-      ? record.invoice_number || record.sales_invoice_number || record.number || record.reference
-      : record.bill_number || record.purchase_bill_number || record.number || record.reference,
+      ? record.invoice_number ||
+          record.sales_invoice_number ||
+          record.number ||
+          record.reference
+      : record.bill_number ||
+          record.purchase_bill_number ||
+          record.number ||
+          record.reference,
     id,
   );
   const partyName = normalizeText(
@@ -759,9 +824,17 @@ function normalizeLinkedDocumentSuggestion(value: unknown, variant: VoucherVaria
       : record.supplier_name || record.party_name || record.vendor_name,
   );
   const status = normalizeText(record.status);
-  const paymentStatus = normalizeText(record.payment_status || record.invoice_payment_status || record.bill_payment_status);
-  const totalAmount = toNumber(record.total_amount || record.total || record.net_amount);
-  const balanceDue = toNumber(record.balance_due || record.remaining_amount || record.due_amount);
+  const paymentStatus = normalizeText(
+    record.payment_status ||
+      record.invoice_payment_status ||
+      record.bill_payment_status,
+  );
+  const totalAmount = toNumber(
+    record.total_amount || record.total || record.net_amount,
+  );
+  const balanceDue = toNumber(
+    record.balance_due || record.remaining_amount || record.due_amount,
+  );
   return {
     id,
     number,
@@ -822,8 +895,12 @@ function normalizeLinkedDocumentSuggestion(value: unknown, variant: VoucherVaria
         nested.due_amount ||
         nested.outstanding_amount,
     ),
-    documentStatus: normalizeText(record.status_display || record.status || nested.status_display || nested.status),
-
+    documentStatus: normalizeText(
+      record.status_display ||
+        record.status ||
+        nested.status_display ||
+        nested.status,
+    ),
   };
 }
 function buildAutocompleteParams(query: string, pageSize = "8") {
@@ -836,8 +913,6 @@ function buildAutocompleteParams(query: string, pageSize = "8") {
   return params;
 }
 
-
-
 function optionalNumericId(value: unknown) {
   const raw = normalizeText(value).trim();
   return /^\d+$/.test(raw) ? raw : null;
@@ -848,15 +923,25 @@ function resolveVoucherCounterpartyName(partyName: unknown, partyId: unknown) {
 function defaultCounterpartyType(variant: VoucherVariant): CounterpartyType {
   return variant === "receipt" ? "CUSTOMER" : "SUPPLIER";
 }
-function normalizeCounterpartyType(value: unknown, variant: VoucherVariant): CounterpartyType {
+function normalizeCounterpartyType(
+  value: unknown,
+  variant: VoucherVariant,
+): CounterpartyType {
   const raw = normalizeText(value).toUpperCase();
-  if (raw === "CUSTOMER" || raw === "SUPPLIER" || raw === "EMPLOYEE" || raw === "OTHER") {
+  if (
+    raw === "CUSTOMER" ||
+    raw === "SUPPLIER" ||
+    raw === "EMPLOYEE" ||
+    raw === "OTHER"
+  ) {
     return raw;
   }
   return defaultCounterpartyType(variant);
 }
 function counterpartyTypeOptions(variant: VoucherVariant): CounterpartyType[] {
-  return variant === "receipt" ? ["CUSTOMER", "OTHER"] : ["SUPPLIER", "EMPLOYEE", "OTHER"];
+  return variant === "receipt"
+    ? ["CUSTOMER", "OTHER"]
+    : ["SUPPLIER", "EMPLOYEE", "OTHER"];
 }
 function counterpartyTypeLabel(value: CounterpartyType, locale: Locale) {
   const labels: Record<CounterpartyType, { ar: string; en: string }> = {
@@ -873,14 +958,21 @@ function needsCounterpartyAccount(type: CounterpartyType) {
 function canUseLinkedDocument(type: CounterpartyType) {
   return type === "CUSTOMER" || type === "SUPPLIER";
 }
-function normalizeAccountingAccountSuggestion(value: unknown): AccountingAccountSuggestion {
+function normalizeAccountingAccountSuggestion(
+  value: unknown,
+): AccountingAccountSuggestion {
   const record = asRecord(value);
   const nested = asRecord(record.account || record.result || record.item);
   return {
     id: normalizeText(record.id || record.pk || nested.id),
     code: normalizeText(record.code || nested.code),
     name: normalizeText(
-      record.name || record.name_ar || record.name_en || nested.name || nested.name_ar || nested.name_en,
+      record.name ||
+        record.name_ar ||
+        record.name_en ||
+        nested.name ||
+        nested.name_ar ||
+        nested.name_en,
       "—",
     ),
     accountType: normalizeText(record.account_type || nested.account_type),
@@ -888,20 +980,38 @@ function normalizeAccountingAccountSuggestion(value: unknown): AccountingAccount
     purpose: normalizeText(record.purpose || nested.purpose),
     isGroup: Boolean(record.is_group ?? nested.is_group),
     isActive: Boolean(record.is_active ?? nested.is_active ?? true),
-    allowManualPosting: Boolean(record.allow_manual_posting ?? nested.allow_manual_posting ?? true),
+    allowManualPosting: Boolean(
+      record.allow_manual_posting ?? nested.allow_manual_posting ?? true,
+    ),
   };
 }
-function normalizeVoucher(value: unknown, variant: VoucherVariant): VoucherRecord {
+function normalizeVoucher(
+  value: unknown,
+  variant: VoucherVariant,
+): VoucherRecord {
   const record = asRecord(value);
   const isReceipt = variant === "receipt";
-  const paymentMethod = normalizeText(record.payment_method, "CASH") as MethodFilter;
+  const paymentMethod = normalizeText(
+    record.payment_method,
+    "CASH",
+  ) as MethodFilter;
   return {
     id: normalizeText(record.id || record.pk || record.uuid),
-    paymentNumber: normalizeText(record.payment_number || record.number || record.reference, "—"),
+    paymentNumber: normalizeText(
+      record.payment_number || record.number || record.reference,
+      "—",
+    ),
     partyId: normalizeText(isReceipt ? record.customer_id : record.supplier_id),
-    partyName: normalizeText(isReceipt ? record.customer_name : record.supplier_name, "—"),
-    partyPhone: normalizeText(isReceipt ? record.customer_phone : record.supplier_phone),
-    linkedDocumentId: normalizeText(isReceipt ? record.sales_invoice_id : record.purchase_bill_id),
+    partyName: normalizeText(
+      isReceipt ? record.customer_name : record.supplier_name,
+      "—",
+    ),
+    partyPhone: normalizeText(
+      isReceipt ? record.customer_phone : record.supplier_phone,
+    ),
+    linkedDocumentId: normalizeText(
+      isReceipt ? record.sales_invoice_id : record.purchase_bill_id,
+    ),
     linkedDocumentNumber: normalizeText(
       isReceipt
         ? record.sales_invoice_number || record.invoice_number
@@ -941,25 +1051,40 @@ function normalizeVoucher(value: unknown, variant: VoucherVariant): VoucherRecor
         record.due_amount ||
         record.outstanding_amount,
     ),
-    linkedDocumentStatus: normalizeText(isReceipt ? record.invoice_status : record.bill_status),
+    linkedDocumentStatus: normalizeText(
+      isReceipt ? record.invoice_status : record.bill_status,
+    ),
     linkedDocumentPaymentStatus: normalizeText(
       isReceipt ? record.invoice_payment_status : record.bill_payment_status,
     ),
     treasuryAccountId: normalizeText(record.treasury_account_id),
     treasuryAccountName: normalizeText(record.treasury_account_name, "—"),
     treasuryAccountType: normalizeText(record.treasury_account_type),
-    treasuryAccountingAccountId: normalizeText(record.treasury_accounting_account_id),
-    treasuryAccountingAccountCode: normalizeText(record.treasury_accounting_account_code),
-    treasuryAccountingAccountName: normalizeText(record.treasury_accounting_account_name),
+    treasuryAccountingAccountId: normalizeText(
+      record.treasury_accounting_account_id,
+    ),
+    treasuryAccountingAccountCode: normalizeText(
+      record.treasury_accounting_account_code,
+    ),
+    treasuryAccountingAccountName: normalizeText(
+      record.treasury_accounting_account_name,
+    ),
     treasuryTransactionId: normalizeText(record.treasury_transaction_id),
-    treasuryTransactionNumber: normalizeText(record.treasury_transaction_number),
-    treasuryTransactionStatus: normalizeText(record.treasury_transaction_status),
+    treasuryTransactionNumber: normalizeText(
+      record.treasury_transaction_number,
+    ),
+    treasuryTransactionStatus: normalizeText(
+      record.treasury_transaction_status,
+    ),
     treasuryTransactionType: normalizeText(record.treasury_transaction_type),
     accountingEntryId: normalizeText(record.accounting_entry_id),
     accountingEntryNumber: normalizeText(record.accounting_entry_number),
     accountingEntryStatus: normalizeText(record.accounting_entry_status),
     isAccountingPosted: Boolean(record.is_accounting_posted),
-    counterpartyType: normalizeCounterpartyType(record.counterparty_type || record.party_type, variant),
+    counterpartyType: normalizeCounterpartyType(
+      record.counterparty_type || record.party_type,
+      variant,
+    ),
     counterpartyAccountId: normalizeText(record.counterparty_account_id),
     counterpartyAccountCode: normalizeText(record.counterparty_account_code),
     counterpartyAccountName: normalizeText(record.counterparty_account_name),
@@ -1005,31 +1130,42 @@ function VoucherDatePicker({
   placeholder?: string;
   compact?: boolean;
 }) {
+  const [open, setOpen] = React.useState(false);
   const selectedDate = parseVoucherDate(value);
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           type="button"
           variant="outline"
+          aria-label={placeholder}
+          title={placeholder}
           className={cn(
-            "justify-start rounded-xl bg-background text-start font-normal tabular-nums",
-            compact
-              ? "h-8 w-[140px] border-0 px-0 text-xs shadow-none hover:bg-transparent"
-              : "h-10 w-full",
+            "h-9 justify-start bg-background px-3 text-start font-normal shadow-none",
+            compact ? "w-[150px]" : "w-full",
             !value && "text-muted-foreground",
           )}
         >
-          <CalendarIcon className="me-2 h-4 w-4 text-muted-foreground" />
-          <span>{value || placeholder || (locale === "ar" ? "اختر التاريخ" : "Select date")}</span>
+          <CalendarIcon className="me-2 h-4 w-4 shrink-0 text-muted-foreground" />
+          <span dir="ltr" lang="en" className="truncate tabular-nums">
+            {value ||
+              placeholder ||
+              (locale === "ar" ? "اختر التاريخ" : "Select date")}
+          </span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align={locale === "ar" ? "end" : "start"}>
+      <PopoverContent
+        className="w-auto p-0"
+        align={locale === "ar" ? "end" : "start"}
+      >
         <Calendar
           mode="single"
           selected={selectedDate}
           onSelect={(date) => {
-            if (date) onChange(formatVoucherDate(date));
+            if (date) {
+              onChange(formatVoucherDate(date));
+              setOpen(false);
+            }
           }}
           initialFocus
         />
@@ -1040,14 +1176,26 @@ function VoucherDatePicker({
 function MoneyValue({ value, label }: { value: number; label: string }) {
   return (
     <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold tabular-nums">
-      <Image src="/currency/sar.svg" alt={label} width={14} height={14} className="h-3.5 w-3.5" />
       <span>{formatMoney(value)}</span>
+      <Image
+        src="/currency/sar.svg"
+        alt={label}
+        width={14}
+        height={14}
+        className="h-3.5 w-3.5"
+      />
     </span>
   );
 }
 function StatusBadge({ value, label }: { value: string; label: string }) {
   return (
-    <Badge variant="outline" className={cn("whitespace-nowrap rounded-full px-2.5 py-1 text-xs", getStatusBadgeClass(value))}>
+    <Badge
+      variant="outline"
+      className={cn(
+        "whitespace-nowrap rounded-full px-2.5 py-1 text-xs",
+        getStatusBadgeClass(value),
+      )}
+    >
       {label}
     </Badge>
   );
@@ -1068,35 +1216,50 @@ function KpiCard({
   t: (typeof translations)[Locale];
 }) {
   return (
-    <Card className="group overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <Card className="group overflow-hidden rounded-lg border bg-card shadow-none transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-sm">
       <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
         <div className="min-w-0">
-          <CardDescription className="truncate text-sm">{title}</CardDescription>
+          <CardDescription className="truncate text-sm">
+            {title}
+          </CardDescription>
           <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
-            {money ? <MoneyValue value={value} label={t.sar} /> : formatInteger(value)}
+            {money ? (
+              <MoneyValue value={value} label={t.sar} />
+            ) : (
+              formatInteger(value)
+            )}
           </CardTitle>
         </div>
-        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+        <span className="rounded-lg border bg-background p-2.5 text-muted-foreground transition group-hover:border-foreground/20 group-hover:text-foreground">
           <Icon className="h-5 w-5" />
         </span>
       </CardHeader>
       <CardContent className="pt-0">
-        <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
+        <p className="line-clamp-2 text-xs text-muted-foreground">
+          {description}
+        </p>
       </CardContent>
     </Card>
   );
 }
 function DashboardSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="rounded-3xl border bg-card p-6 shadow-sm">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="mt-3 h-8 w-72" />
-        <Skeleton className="mt-3 h-4 w-full max-w-2xl" />
+    <div className="space-y-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-72" />
+          <Skeleton className="h-4 w-full max-w-3xl" />
+          <Skeleton className="h-7 w-64" />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="h-9 w-28" />
+          ))}
+        </div>
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
-          <Card key={index} className="rounded-2xl">
+          <Card key={index} className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <Skeleton className="h-4 w-28" />
               <Skeleton className="h-8 w-20" />
@@ -1107,7 +1270,7 @@ function DashboardSkeleton() {
           </Card>
         ))}
       </div>
-      <Card className="rounded-2xl">
+      <Card className="rounded-lg border bg-card shadow-none">
         <CardHeader>
           <Skeleton className="h-6 w-52" />
           <Skeleton className="h-4 w-80" />
@@ -1142,7 +1305,12 @@ function EmptyTableState({
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>
       {showReset && onReset ? (
-        <Button variant="outline" size="sm" onClick={onReset} className="rounded-lg">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onReset}
+          className="rounded-lg"
+        >
           <RotateCcw className="h-4 w-4" />
           {resetLabel}
         </Button>
@@ -1185,9 +1353,9 @@ function DataTable<T extends { id: string }>({
 }) {
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-2xl border bg-background">
+      <div className="overflow-hidden rounded-lg border bg-background">
         <div className="overflow-x-auto">
-          <Table className="min-w-[1280px] table-fixed">
+          <Table className="min-w-[1120px] table-fixed">
             <TableHeader>
               <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
                 {columns.map((column) => (
@@ -1208,17 +1376,29 @@ function DataTable<T extends { id: string }>({
                 rows.map((row) => (
                   <TableRow
                     key={rowKey(row)}
-                    className={`h-[72px] transition-colors ${onRowClick ? "cursor-pointer hover:bg-muted/40" : ""}`}
+                    className={cn(
+                      "h-[64px] transition-colors",
+                      onRowClick ? "cursor-pointer hover:bg-muted/40" : "",
+                    )}
                     onClick={(event) => {
                       const target = event.target as HTMLElement;
-                      if (target.closest("button, a, input, select, textarea, [role='menuitem']")) return;
+                      if (
+                        target.closest(
+                          "button, a, input, select, textarea, [role='menuitem']",
+                        )
+                      ) {
+                        return;
+                      }
                       onRowClick?.(row);
                     }}
                   >
                     {columns.map((column) => (
                       <TableCell
                         key={column.key}
-                        className={cn("h-[72px] overflow-hidden px-4 text-start align-middle", column.className)}
+                        className={cn(
+                          "h-[64px] overflow-hidden px-4 text-start align-middle",
+                          column.className,
+                        )}
                       >
                         {column.render(row)}
                       </TableCell>
@@ -1227,10 +1407,12 @@ function DataTable<T extends { id: string }>({
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={columns.length} className="h-80">
+                  <TableCell colSpan={columns.length} className="h-72">
                     <EmptyTableState
                       title={hasFilters ? noResultsTitle : emptyTitle}
-                      description={hasFilters ? noResultsDescription : emptyDescription}
+                      description={
+                        hasFilters ? noResultsDescription : emptyDescription
+                      }
                       showReset={hasFilters}
                       onReset={onReset}
                       resetLabel={resetLabel}
@@ -1243,8 +1425,15 @@ function DataTable<T extends { id: string }>({
         </div>
       </div>
       <div className="text-sm text-muted-foreground">
-        {showingLabel} <span className="font-medium text-foreground tabular-nums">{formatInteger(rows.length)}</span> {ofLabel}{" "}
-        <span className="font-medium text-foreground tabular-nums">{formatInteger(allRowsCount)}</span> {rowsLabel}
+        {showingLabel}{" "}
+        <span className="font-medium text-foreground tabular-nums">
+          {formatInteger(rows.length)}
+        </span>{" "}
+        {ofLabel}{" "}
+        <span className="font-medium text-foreground tabular-nums">
+          {formatInteger(allRowsCount)}
+        </span>{" "}
+        {rowsLabel}
       </div>
     </div>
   );
@@ -1261,26 +1450,41 @@ function formatLinkedDocumentAmount(value: string) {
     maximumFractionDigits: 2,
   })} SAR`;
 }
-function formatLinkedDocumentInput(option: LinkedDocumentSuggestion, variant: VoucherVariant, locale: Locale) {
+function formatLinkedDocumentInput(
+  option: LinkedDocumentSuggestion,
+  variant: VoucherVariant,
+  locale: Locale,
+) {
   const number = option.documentNumber || option.id;
   const date = option.documentDate;
   const amount = formatLinkedDocumentAmount(option.documentAmount);
-  const label = variant === "receipt"
-    ? locale === "ar" ? "فاتورة مبيعات" : "Sales invoice"
-    : locale === "ar" ? "فاتورة مشتريات" : "Purchase bill";
+  const label =
+    variant === "receipt"
+      ? locale === "ar"
+        ? "فاتورة مبيعات"
+        : "Sales invoice"
+      : locale === "ar"
+        ? "فاتورة مشتريات"
+        : "Purchase bill";
   return [label, number, date, amount].filter(Boolean).join(" • ");
 }
-function buildLinkedDocumentNote(option: LinkedDocumentSuggestion, variant: VoucherVariant, locale: Locale) {
+function buildLinkedDocumentNote(
+  option: LinkedDocumentSuggestion,
+  variant: VoucherVariant,
+  locale: Locale,
+) {
   const number = option.documentNumber || option.id || "—";
   const date = option.documentDate || "—";
   const amount = formatLinkedDocumentAmount(option.documentAmount) || "—";
   const balance = formatLinkedDocumentAmount(option.documentBalance) || "—";
   const status = option.documentStatus || "—";
   if (locale === "ar") {
-    const label = variant === "receipt" ? "فاتورة مبيعات مرتبطة" : "فاتورة مشتريات مرتبطة";
+    const label =
+      variant === "receipt" ? "فاتورة مبيعات مرتبطة" : "فاتورة مشتريات مرتبطة";
     return `[${label}] الرقم: ${number} | التاريخ: ${date} | المبلغ: ${amount} | المتبقي: ${balance} | الحالة: ${status}`;
   }
-  const label = variant === "receipt" ? "Linked sales invoice" : "Linked purchase bill";
+  const label =
+    variant === "receipt" ? "Linked sales invoice" : "Linked purchase bill";
   return `[${label}] No: ${number} | Date: ${date} | Amount: ${amount} | Balance: ${balance} | Status: ${status}`;
 }
 function appendLinkedDocumentNote(currentNotes: string, nextNote: string) {
@@ -1292,13 +1496,20 @@ function appendLinkedDocumentNote(currentNotes: string, nextNote: string) {
   ];
   const cleaned = normalizeText(currentNotes)
     .split("\n")
-    .filter((line) => !blockedPrefixes.some((prefix) => line.trim().startsWith(prefix)))
+    .filter(
+      (line) =>
+        !blockedPrefixes.some((prefix) => line.trim().startsWith(prefix)),
+    )
     .join("\n")
     .trim();
   return [cleaned, nextNote].filter(Boolean).join("\n");
 }
 
-function moveAutocompleteIndex(current: number, size: number, direction: 1 | -1) {
+function moveAutocompleteIndex(
+  current: number,
+  size: number,
+  direction: 1 | -1,
+) {
   if (size <= 0) return -1;
   if (current < 0) return direction > 0 ? 0 : size - 1;
   return (current + direction + size) % size;
@@ -1335,70 +1546,92 @@ function VoucherFormCard({
 }) {
   const t = translations[locale];
   const config = getConfig(variant, locale);
-  const selectedCounterpartyType = form.counterpartyType || defaultCounterpartyType(variant);
-  const counterpartyNeedsAccount = needsCounterpartyAccount(selectedCounterpartyType);
-  const [partyQuery, setPartyQuery] = React.useState(form.partyName || form.partyId);
+  const selectedCounterpartyType =
+    form.counterpartyType || defaultCounterpartyType(variant);
+  const counterpartyNeedsAccount = needsCounterpartyAccount(
+    selectedCounterpartyType,
+  );
+  const [partyQuery, setPartyQuery] = React.useState(
+    form.partyName || form.partyId,
+  );
   const [partyOptions, setPartyOptions] = React.useState<PartySuggestion[]>([]);
   const [partyLoading, setPartyLoading] = React.useState(false);
-  const [documentQuery, setDocumentQuery] = React.useState(form.linkedDocumentId);
-  const [documentOptions, setDocumentOptions] = React.useState<LinkedDocumentSuggestion[]>([]);
+  const [documentQuery, setDocumentQuery] = React.useState(
+    form.linkedDocumentId,
+  );
+  const [documentOptions, setDocumentOptions] = React.useState<
+    LinkedDocumentSuggestion[]
+  >([]);
   const [documentLoading, setDocumentLoading] = React.useState(false);
   const [accountQuery, setAccountQuery] = React.useState(
-    form.counterpartyAccountName || form.counterpartyAccountCode || form.counterpartyAccountId,
+    form.counterpartyAccountName ||
+      form.counterpartyAccountCode ||
+      form.counterpartyAccountId,
   );
-  const [accountOptions, setAccountOptions] = React.useState<AccountingAccountSuggestion[]>([]);
+  const [accountOptions, setAccountOptions] = React.useState<
+    AccountingAccountSuggestion[]
+  >([]);
   const [accountLoading, setAccountLoading] = React.useState(false);
   const [partyActiveIndex, setPartyActiveIndex] = React.useState(-1);
   const [documentActiveIndex, setDocumentActiveIndex] = React.useState(-1);
   const [accountActiveIndex, setAccountActiveIndex] = React.useState(-1);
 
-  const selectPartyOption = React.useCallback((option: PartySuggestion) => {
-    const nextName = option.name || option.id;
-    setPartyQuery(nextName);
-    setPartyOptions([]);
-    setPartyActiveIndex(-1);
-    setDocumentQuery("");
-    setDocumentOptions([]);
-    setDocumentActiveIndex(-1);
-    onChange({
-      partyId: option.id,
-      partyName: nextName,
-      partyPhone: option.phone,
-      linkedDocumentId: "",
-      linkedDocumentNumber: "",
-      linkedDocumentDate: "",
-      linkedDocumentAmount: "",
-      linkedDocumentBalance: "",
-      linkedDocumentStatus: "",
-    });
-  }, [onChange]);
-  const selectLinkedDocumentOption = React.useCallback((option: LinkedDocumentSuggestion) => {
-    setDocumentQuery(formatLinkedDocumentInput(option, variant, locale));
-    setDocumentOptions([]);
-    setDocumentActiveIndex(-1);
-    onChange({
-      linkedDocumentId: option.id,
-      linkedDocumentNumber: option.documentNumber,
-      linkedDocumentDate: option.documentDate,
-      linkedDocumentAmount: option.documentAmount,
-      linkedDocumentBalance: option.documentBalance,
-      linkedDocumentStatus: option.documentStatus,
-      notes: appendLinkedDocumentNote(
-        form.notes,
-        buildLinkedDocumentNote(option, variant, locale),
-      ),
-    });
-  }, [form.notes, locale, onChange, variant]);
-  const selectAccountOption = React.useCallback((option: AccountingAccountSuggestion) => {
-    setAccountQuery(`${option.code} — ${option.name}`);
-    setAccountOptions([]);
-    setAccountActiveIndex(-1);
-    onChange({
-      counterpartyAccountId: option.id,
-      counterpartyAccountCode: option.code,
-      counterpartyAccountName: option.name,
-    });
-  }, [onChange]);
+  const selectPartyOption = React.useCallback(
+    (option: PartySuggestion) => {
+      const nextName = option.name || option.id;
+      setPartyQuery(nextName);
+      setPartyOptions([]);
+      setPartyActiveIndex(-1);
+      setDocumentQuery("");
+      setDocumentOptions([]);
+      setDocumentActiveIndex(-1);
+      onChange({
+        partyId: option.id,
+        partyName: nextName,
+        partyPhone: option.phone,
+        linkedDocumentId: "",
+        linkedDocumentNumber: "",
+        linkedDocumentDate: "",
+        linkedDocumentAmount: "",
+        linkedDocumentBalance: "",
+        linkedDocumentStatus: "",
+      });
+    },
+    [onChange],
+  );
+  const selectLinkedDocumentOption = React.useCallback(
+    (option: LinkedDocumentSuggestion) => {
+      setDocumentQuery(formatLinkedDocumentInput(option, variant, locale));
+      setDocumentOptions([]);
+      setDocumentActiveIndex(-1);
+      onChange({
+        linkedDocumentId: option.id,
+        linkedDocumentNumber: option.documentNumber,
+        linkedDocumentDate: option.documentDate,
+        linkedDocumentAmount: option.documentAmount,
+        linkedDocumentBalance: option.documentBalance,
+        linkedDocumentStatus: option.documentStatus,
+        notes: appendLinkedDocumentNote(
+          form.notes,
+          buildLinkedDocumentNote(option, variant, locale),
+        ),
+      });
+    },
+    [form.notes, locale, onChange, variant],
+  );
+  const selectAccountOption = React.useCallback(
+    (option: AccountingAccountSuggestion) => {
+      setAccountQuery(`${option.code} — ${option.name}`);
+      setAccountOptions([]);
+      setAccountActiveIndex(-1);
+      onChange({
+        counterpartyAccountId: option.id,
+        counterpartyAccountCode: option.code,
+        counterpartyAccountName: option.name,
+      });
+    },
+    [onChange],
+  );
   React.useEffect(() => {
     setPartyActiveIndex(partyOptions.length ? 0 : -1);
   }, [partyOptions.length, partyQuery]);
@@ -1408,84 +1641,108 @@ function VoucherFormCard({
   React.useEffect(() => {
     setAccountActiveIndex(accountOptions.length ? 0 : -1);
   }, [accountOptions.length, accountQuery]);
-  const handlePartyKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!partyOptions.length) return;
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setPartyActiveIndex((current) => moveAutocompleteIndex(current, partyOptions.length, 1));
-      return;
-    }
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setPartyActiveIndex((current) => moveAutocompleteIndex(current, partyOptions.length, -1));
-      return;
-    }
-    if (event.key === "Enter") {
-      const option = partyOptions[partyActiveIndex >= 0 ? partyActiveIndex : 0];
-      if (option) {
+  const handlePartyKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (!partyOptions.length) return;
+      if (event.key === "ArrowDown") {
         event.preventDefault();
-        selectPartyOption(option);
+        setPartyActiveIndex((current) =>
+          moveAutocompleteIndex(current, partyOptions.length, 1),
+        );
+        return;
       }
-      return;
-    }
-    if (event.key === "Escape") {
-      event.preventDefault();
-      setPartyOptions([]);
-      setPartyActiveIndex(-1);
-    }
-  }, [partyActiveIndex, partyOptions, selectPartyOption]);
-  const handleDocumentKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!documentOptions.length) return;
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setDocumentActiveIndex((current) => moveAutocompleteIndex(current, documentOptions.length, 1));
-      return;
-    }
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setDocumentActiveIndex((current) => moveAutocompleteIndex(current, documentOptions.length, -1));
-      return;
-    }
-    if (event.key === "Enter") {
-      const option = documentOptions[documentActiveIndex >= 0 ? documentActiveIndex : 0];
-      if (option) {
+      if (event.key === "ArrowUp") {
         event.preventDefault();
-        selectLinkedDocumentOption(option);
+        setPartyActiveIndex((current) =>
+          moveAutocompleteIndex(current, partyOptions.length, -1),
+        );
+        return;
       }
-      return;
-    }
-    if (event.key === "Escape") {
-      event.preventDefault();
-      setDocumentOptions([]);
-      setDocumentActiveIndex(-1);
-    }
-  }, [documentActiveIndex, documentOptions, selectLinkedDocumentOption]);
-  const handleAccountKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!accountOptions.length) return;
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setAccountActiveIndex((current) => moveAutocompleteIndex(current, accountOptions.length, 1));
-      return;
-    }
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setAccountActiveIndex((current) => moveAutocompleteIndex(current, accountOptions.length, -1));
-      return;
-    }
-    if (event.key === "Enter") {
-      const option = accountOptions[accountActiveIndex >= 0 ? accountActiveIndex : 0];
-      if (option) {
+      if (event.key === "Enter") {
+        const option =
+          partyOptions[partyActiveIndex >= 0 ? partyActiveIndex : 0];
+        if (option) {
+          event.preventDefault();
+          selectPartyOption(option);
+        }
+        return;
+      }
+      if (event.key === "Escape") {
         event.preventDefault();
-        selectAccountOption(option);
+        setPartyOptions([]);
+        setPartyActiveIndex(-1);
       }
-      return;
-    }
-    if (event.key === "Escape") {
-      event.preventDefault();
-      setAccountOptions([]);
-      setAccountActiveIndex(-1);
-    }
-  }, [accountActiveIndex, accountOptions, selectAccountOption]);
+    },
+    [partyActiveIndex, partyOptions, selectPartyOption],
+  );
+  const handleDocumentKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (!documentOptions.length) return;
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setDocumentActiveIndex((current) =>
+          moveAutocompleteIndex(current, documentOptions.length, 1),
+        );
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setDocumentActiveIndex((current) =>
+          moveAutocompleteIndex(current, documentOptions.length, -1),
+        );
+        return;
+      }
+      if (event.key === "Enter") {
+        const option =
+          documentOptions[documentActiveIndex >= 0 ? documentActiveIndex : 0];
+        if (option) {
+          event.preventDefault();
+          selectLinkedDocumentOption(option);
+        }
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setDocumentOptions([]);
+        setDocumentActiveIndex(-1);
+      }
+    },
+    [documentActiveIndex, documentOptions, selectLinkedDocumentOption],
+  );
+  const handleAccountKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (!accountOptions.length) return;
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setAccountActiveIndex((current) =>
+          moveAutocompleteIndex(current, accountOptions.length, 1),
+        );
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setAccountActiveIndex((current) =>
+          moveAutocompleteIndex(current, accountOptions.length, -1),
+        );
+        return;
+      }
+      if (event.key === "Enter") {
+        const option =
+          accountOptions[accountActiveIndex >= 0 ? accountActiveIndex : 0];
+        if (option) {
+          event.preventDefault();
+          selectAccountOption(option);
+        }
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setAccountOptions([]);
+        setAccountActiveIndex(-1);
+      }
+    },
+    [accountActiveIndex, accountOptions, selectAccountOption],
+  );
   React.useEffect(() => {
     setPartyQuery(form.partyName || form.partyId);
     setDocumentQuery(form.linkedDocumentId);
@@ -1500,7 +1757,12 @@ function VoucherFormCard({
     }
     let cancelled = false;
     const timeout = window.setTimeout(() => {
-      const endpoint = selectedCounterpartyType === "EMPLOYEE" ? API_PATHS.employees : variant === "receipt" ? API_PATHS.customers : API_PATHS.suppliers;
+      const endpoint =
+        selectedCounterpartyType === "EMPLOYEE"
+          ? API_PATHS.employees
+          : variant === "receipt"
+            ? API_PATHS.customers
+            : API_PATHS.suppliers;
       const params = buildAutocompleteParams(query);
       setPartyLoading(true);
       void fetchJson<unknown>(makeApiUrl(endpoint, params))
@@ -1519,7 +1781,7 @@ function VoucherFormCard({
           if (!cancelled) setPartyLoading(false);
         });
     }, 250);
-  return () => {
+    return () => {
       cancelled = true;
       window.clearTimeout(timeout);
     };
@@ -1532,7 +1794,10 @@ function VoucherFormCard({
     }
     let cancelled = false;
     const timeout = window.setTimeout(() => {
-      const endpoint = variant === "receipt" ? API_PATHS.salesInvoices : API_PATHS.purchaseBills;
+      const endpoint =
+        variant === "receipt"
+          ? API_PATHS.salesInvoices
+          : API_PATHS.purchaseBills;
       const params = buildAutocompleteParams(query);
       if (form.partyId) {
         if (variant === "receipt") {
@@ -1566,8 +1831,16 @@ function VoucherFormCard({
   const title = mode === "create" ? config.addLabel : config.editLabel;
 
   React.useEffect(() => {
-    setAccountQuery(form.counterpartyAccountName || form.counterpartyAccountCode || form.counterpartyAccountId);
-  }, [form.counterpartyAccountCode, form.counterpartyAccountId, form.counterpartyAccountName]);
+    setAccountQuery(
+      form.counterpartyAccountName ||
+        form.counterpartyAccountCode ||
+        form.counterpartyAccountId,
+    );
+  }, [
+    form.counterpartyAccountCode,
+    form.counterpartyAccountId,
+    form.counterpartyAccountName,
+  ]);
   React.useEffect(() => {
     let cancelled = false;
     async function loadAccounts() {
@@ -1582,10 +1855,18 @@ function VoucherFormCard({
         params.set("is_group", "false");
         params.set("active", "true");
         params.set("is_active", "true");
-        const payload = await fetchJson<unknown>(makeApiUrl(API_PATHS.accountingAccounts, params));
+        const payload = await fetchJson<unknown>(
+          makeApiUrl(API_PATHS.accountingAccounts, params),
+        );
         const options = extractArray(payload)
           .map(normalizeAccountingAccountSuggestion)
-          .filter((option) => option.id && !option.isGroup && option.isActive && option.allowManualPosting);
+          .filter(
+            (option) =>
+              option.id &&
+              !option.isGroup &&
+              option.isActive &&
+              option.allowManualPosting,
+          );
         if (!cancelled) setAccountOptions(options);
       } catch {
         if (!cancelled) setAccountOptions([]);
@@ -1600,14 +1881,16 @@ function VoucherFormCard({
     };
   }, [accountQuery, counterpartyNeedsAccount]);
   return (
-    <Card className="rounded-2xl shadow-sm">
+    <Card className="rounded-lg border bg-card shadow-none">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
-        <CardDescription>{mode === "create" ? t.formCreateDesc : t.formEditDesc}</CardDescription>
+        <CardDescription>
+          {mode === "create" ? t.formCreateDesc : t.formEditDesc}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {!accounts.length ? (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
             {t.noTreasuryAccounts}
           </div>
         ) : null}
@@ -1618,7 +1901,7 @@ function VoucherFormCard({
               value={form.treasuryAccountId || undefined}
               onValueChange={(value) => onChange({ treasuryAccountId: value })}
             >
-              <SelectTrigger className="h-10 rounded-xl bg-background">
+              <SelectTrigger className="h-9 rounded-lg bg-background">
                 <SelectValue placeholder={t.treasuryAccount} />
               </SelectTrigger>
               <SelectContent>
@@ -1638,29 +1921,35 @@ function VoucherFormCard({
               step="0.01"
               value={form.amount}
               onChange={(event) => onChange({ amount: event.target.value })}
-              className="h-10 rounded-xl bg-background tabular-nums"
+              className="h-9 rounded-lg bg-background tabular-nums"
             />
           </label>
           <label className="space-y-2">
             <span className="text-sm font-medium">{t.method}</span>
             <Select
               value={form.paymentMethod}
-              onValueChange={(value) => onChange({ paymentMethod: value as MethodFilter })}
+              onValueChange={(value) =>
+                onChange({ paymentMethod: value as MethodFilter })
+              }
             >
-              <SelectTrigger className="h-10 rounded-xl bg-background">
+              <SelectTrigger className="h-9 rounded-lg bg-background">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {paymentMethods.filter((item) => item !== "all").map((method) => (
-                  <SelectItem key={method} value={method}>
-                    {methodLabel(method, locale)}
-                  </SelectItem>
-                ))}
+                {paymentMethods
+                  .filter((item) => item !== "all")
+                  .map((method) => (
+                    <SelectItem key={method} value={method}>
+                      {methodLabel(method, locale)}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </label>
           <label className="space-y-2">
-            <span className="text-sm font-medium">{locale === "ar" ? "نوع الطرف" : "Counterparty type"}</span>
+            <span className="text-sm font-medium">
+              {locale === "ar" ? "نوع الطرف" : "Counterparty type"}
+            </span>
             <Select
               value={selectedCounterpartyType}
               onValueChange={(value) => {
@@ -1682,7 +1971,7 @@ function VoucherFormCard({
                 });
               }}
             >
-              <SelectTrigger className="h-10 rounded-xl bg-background">
+              <SelectTrigger className="h-9 rounded-lg bg-background">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1733,7 +2022,7 @@ function VoucherFormCard({
                       ? "ابحث باسم المورد أو رقمه أو جواله..."
                       : "Search supplier by name, number, or phone..."
                 }
-                className="h-10 rounded-xl bg-background ps-9"
+                className="h-9 rounded-lg bg-background ps-9"
               />
             </div>
             {(partyLoading || partyOptions.length > 0) && partyQuery.trim() ? (
@@ -1744,38 +2033,46 @@ function VoucherFormCard({
                     {locale === "ar" ? "جاري البحث..." : "Searching..."}
                   </div>
                 ) : null}
-                {!partyLoading && partyOptions.length ? (
-                  partyOptions.map((option, index) => (
-                    <button
-                      key={`${option.id || option.name}-${index}`}
-                      type="button"
-                      className={autocompleteOptionClass(index === partyActiveIndex)}
-                      onMouseDown={(event) => event.preventDefault()}
-                          onMouseEnter={() => setPartyActiveIndex(index)}
-                          onFocus={() => setPartyActiveIndex(index)}
-                      onClick={() => {
-                        setPartyQuery(option.name);
-                        setPartyOptions([]);
-                        setDocumentQuery("");
-                        setDocumentOptions([]);
-                        onChange({
-                          partyId: option.id,
-                          partyName: option.name,
-                          partyPhone: option.phone,
-                          linkedDocumentId: "",
-                        });
-                      }}
-                    >
-                      <span className="text-sm font-medium text-foreground">{option.name}</span>
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {[option.code, option.phone, option.id].filter(Boolean).join(" • ") || "—"}
-                      </span>
-                    </button>
-                  ))
-                ) : null}
+                {!partyLoading && partyOptions.length
+                  ? partyOptions.map((option, index) => (
+                      <button
+                        key={`${option.id || option.name}-${index}`}
+                        type="button"
+                        className={autocompleteOptionClass(
+                          index === partyActiveIndex,
+                        )}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onMouseEnter={() => setPartyActiveIndex(index)}
+                        onFocus={() => setPartyActiveIndex(index)}
+                        onClick={() => {
+                          setPartyQuery(option.name);
+                          setPartyOptions([]);
+                          setDocumentQuery("");
+                          setDocumentOptions([]);
+                          onChange({
+                            partyId: option.id,
+                            partyName: option.name,
+                            partyPhone: option.phone,
+                            linkedDocumentId: "",
+                          });
+                        }}
+                      >
+                        <span className="text-sm font-medium text-foreground">
+                          {option.name}
+                        </span>
+                        <span className="text-xs text-muted-foreground tabular-nums">
+                          {[option.code, option.phone, option.id]
+                            .filter(Boolean)
+                            .join(" • ") || "—"}
+                        </span>
+                      </button>
+                    ))
+                  : null}
                 {!partyLoading && !partyOptions.length && !form.partyId ? (
                   <div className="px-3 py-2 text-xs text-muted-foreground">
-                    {locale === "ar" ? "لا توجد نتائج مطابقة" : "No matching results"}
+                    {locale === "ar"
+                      ? "لا توجد نتائج مطابقة"
+                      : "No matching results"}
                   </div>
                 ) : null}
               </div>
@@ -1786,7 +2083,7 @@ function VoucherFormCard({
             <Input
               value={form.partyPhone}
               onChange={(event) => onChange({ partyPhone: event.target.value })}
-              className="h-10 rounded-xl bg-background tabular-nums"
+              className="h-9 rounded-lg bg-background tabular-nums"
             />
           </label>
           <label className="space-y-2">
@@ -1794,11 +2091,13 @@ function VoucherFormCard({
             <Input
               value={form.partyId}
               onChange={(event) => onChange({ partyId: event.target.value })}
-              className="h-10 rounded-xl bg-background tabular-nums"
+              className="h-9 rounded-lg bg-background tabular-nums"
             />
           </label>
           <div className="relative space-y-2">
-            <span className="text-sm font-medium">{config.linkedDocumentLabel}</span>
+            <span className="text-sm font-medium">
+              {config.linkedDocumentLabel}
+            </span>
             <div className="relative">
               <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -1818,10 +2117,11 @@ function VoucherFormCard({
                       ? "ابحث برقم فاتورة المشتريات..."
                       : "Search purchase bill number..."
                 }
-                className="h-10 rounded-xl bg-background ps-9 tabular-nums"
+                className="h-9 rounded-lg bg-background ps-9 tabular-nums"
               />
             </div>
-            {(documentLoading || documentOptions.length > 0) && documentQuery.trim() ? (
+            {(documentLoading || documentOptions.length > 0) &&
+            documentQuery.trim() ? (
               <div className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-xl border bg-background p-1 shadow-lg">
                 {documentLoading ? (
                   <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
@@ -1829,50 +2129,62 @@ function VoucherFormCard({
                     {locale === "ar" ? "جاري البحث..." : "Searching..."}
                   </div>
                 ) : null}
-                {!documentLoading && documentOptions.length ? (
-                  documentOptions.map((option, index) => (
-                    <button
-                      key={`${option.id || option.number}-${index}`}
-                      type="button"
-                      className={autocompleteOptionClass(index === documentActiveIndex)}
-                      onMouseDown={(event) => event.preventDefault()}
-                          onMouseEnter={() => setDocumentActiveIndex(index)}
-                          onFocus={() => setDocumentActiveIndex(index)}
-                      onClick={() => {
-                        setDocumentQuery(option.number || option.id);
-                        setDocumentOptions([]);
-                        onChange({
-                          linkedDocumentId: option.id,
-                              linkedDocumentNumber: option.documentNumber,
-                              linkedDocumentDate: option.documentDate,
-                              linkedDocumentAmount: option.documentAmount,
-                              linkedDocumentBalance: option.documentBalance,
-                              linkedDocumentStatus: option.documentStatus,
-                              notes: appendLinkedDocumentNote(
-                                form.notes,
-                                buildLinkedDocumentNote(option, variant, locale),
-                              ),
-                          partyName: form.partyName || option.partyName,
-                        });
-                      }}
-                    >
-                      <span className="text-sm font-medium text-foreground tabular-nums">{option.number}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {[option.partyName, option.paymentStatus || option.status]
-                          .filter(Boolean)
-                          .join(" • ") || "—"}
-                      </span>
-                      {option.balanceDue > 0 ? (
-                        <span className="text-[11px] text-muted-foreground tabular-nums">
-                          {locale === "ar" ? "المتبقي" : "Due"}: {formatMoney(option.balanceDue)}
+                {!documentLoading && documentOptions.length
+                  ? documentOptions.map((option, index) => (
+                      <button
+                        key={`${option.id || option.number}-${index}`}
+                        type="button"
+                        className={autocompleteOptionClass(
+                          index === documentActiveIndex,
+                        )}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onMouseEnter={() => setDocumentActiveIndex(index)}
+                        onFocus={() => setDocumentActiveIndex(index)}
+                        onClick={() => {
+                          setDocumentQuery(option.number || option.id);
+                          setDocumentOptions([]);
+                          onChange({
+                            linkedDocumentId: option.id,
+                            linkedDocumentNumber: option.documentNumber,
+                            linkedDocumentDate: option.documentDate,
+                            linkedDocumentAmount: option.documentAmount,
+                            linkedDocumentBalance: option.documentBalance,
+                            linkedDocumentStatus: option.documentStatus,
+                            notes: appendLinkedDocumentNote(
+                              form.notes,
+                              buildLinkedDocumentNote(option, variant, locale),
+                            ),
+                            partyName: form.partyName || option.partyName,
+                          });
+                        }}
+                      >
+                        <span className="text-sm font-medium text-foreground tabular-nums">
+                          {option.number}
                         </span>
-                      ) : null}
-                    </button>
-                  ))
-                ) : null}
-                {!documentLoading && !documentOptions.length && !form.linkedDocumentId ? (
+                        <span className="text-xs text-muted-foreground">
+                          {[
+                            option.partyName,
+                            option.paymentStatus || option.status,
+                          ]
+                            .filter(Boolean)
+                            .join(" • ") || "—"}
+                        </span>
+                        {option.balanceDue > 0 ? (
+                          <span className="text-[11px] text-muted-foreground tabular-nums">
+                            {locale === "ar" ? "المتبقي" : "Due"}:{" "}
+                            {formatMoney(option.balanceDue)}
+                          </span>
+                        ) : null}
+                      </button>
+                    ))
+                  : null}
+                {!documentLoading &&
+                !documentOptions.length &&
+                !form.linkedDocumentId ? (
                   <div className="px-3 py-2 text-xs text-muted-foreground">
-                    {locale === "ar" ? "لا توجد نتائج مطابقة" : "No matching results"}
+                    {locale === "ar"
+                      ? "لا توجد نتائج مطابقة"
+                      : "No matching results"}
                   </div>
                 ) : null}
               </div>
@@ -1881,7 +2193,9 @@ function VoucherFormCard({
           {counterpartyNeedsAccount ? (
             <label className="space-y-2 md:col-span-2">
               <span className="text-sm font-medium">
-                {locale === "ar" ? "حساب الطرف المحاسبي" : "Counterparty accounting account"}
+                {locale === "ar"
+                  ? "حساب الطرف المحاسبي"
+                  : "Counterparty accounting account"}
               </span>
               <div className="relative">
                 <Input
@@ -1900,46 +2214,63 @@ function VoucherFormCard({
                       ? "ابحث برقم أو اسم الحساب المحاسبي..."
                       : "Search by account code or name..."
                   }
-                  className="h-10 rounded-xl bg-background"
+                  className="h-9 rounded-lg bg-background"
                 />
-                {accountQuery.trim() && (accountLoading || accountOptions.length || !form.counterpartyAccountId) ? (
+                {accountQuery.trim() &&
+                (accountLoading ||
+                  accountOptions.length ||
+                  !form.counterpartyAccountId) ? (
                   <div className="absolute z-50 mt-2 max-h-64 w-full overflow-auto rounded-xl border bg-popover p-1 shadow-xl">
                     {accountLoading ? (
                       <div className="px-3 py-2 text-xs text-muted-foreground">
                         {locale === "ar" ? "جاري البحث..." : "Searching..."}
                       </div>
                     ) : null}
-                    {!accountLoading && accountOptions.length ? (
-                      accountOptions.map((option, index) => (
-                        <button
-                          key={option.id}
-                          type="button"
-                          className={autocompleteOptionClass(index === accountActiveIndex)}
-                          onMouseDown={(event) => event.preventDefault()}
-                          onMouseEnter={() => setAccountActiveIndex(index)}
-                          onFocus={() => setAccountActiveIndex(index)}
-                          onClick={() => {
-                            setAccountQuery(`${option.code} — ${option.name}`);
-                            setAccountOptions([]);
-                            onChange({
-                              counterpartyAccountId: option.id,
-                              counterpartyAccountCode: option.code,
-                              counterpartyAccountName: option.name,
-                            });
-                          }}
-                        >
-                          <span className="text-sm font-medium tabular-nums">
-                            {option.code} — {option.name}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {[option.accountType, option.nature, option.purpose].filter(Boolean).join(" • ") || "—"}
-                          </span>
-                        </button>
-                      ))
-                    ) : null}
-                    {!accountLoading && !accountOptions.length && !form.counterpartyAccountId ? (
+                    {!accountLoading && accountOptions.length
+                      ? accountOptions.map((option, index) => (
+                          <button
+                            key={option.id}
+                            type="button"
+                            className={autocompleteOptionClass(
+                              index === accountActiveIndex,
+                            )}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onMouseEnter={() => setAccountActiveIndex(index)}
+                            onFocus={() => setAccountActiveIndex(index)}
+                            onClick={() => {
+                              setAccountQuery(
+                                `${option.code} — ${option.name}`,
+                              );
+                              setAccountOptions([]);
+                              onChange({
+                                counterpartyAccountId: option.id,
+                                counterpartyAccountCode: option.code,
+                                counterpartyAccountName: option.name,
+                              });
+                            }}
+                          >
+                            <span className="text-sm font-medium tabular-nums">
+                              {option.code} — {option.name}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {[
+                                option.accountType,
+                                option.nature,
+                                option.purpose,
+                              ]
+                                .filter(Boolean)
+                                .join(" • ") || "—"}
+                            </span>
+                          </button>
+                        ))
+                      : null}
+                    {!accountLoading &&
+                    !accountOptions.length &&
+                    !form.counterpartyAccountId ? (
                       <div className="px-3 py-2 text-xs text-muted-foreground">
-                        {locale === "ar" ? "لا توجد نتائج مطابقة" : "No matching accounts"}
+                        {locale === "ar"
+                          ? "لا توجد نتائج مطابقة"
+                          : "No matching accounts"}
                       </div>
                     ) : null}
                   </div>
@@ -1953,19 +2284,25 @@ function VoucherFormCard({
             </label>
           ) : null}
           <label className="space-y-2 md:col-span-2">
-            <span className="text-sm font-medium">{locale === "ar" ? "مرجع خارجي اختياري" : "Optional external reference"}</span>
+            <span className="text-sm font-medium">
+              {locale === "ar"
+                ? "مرجع خارجي اختياري"
+                : "Optional external reference"}
+            </span>
             <Input
               value={form.reference}
               onChange={(event) => onChange({ reference: event.target.value })}
-              className="h-10 rounded-xl bg-background"
+              className="h-9 rounded-lg bg-background"
             />
           </label>
           <label className="space-y-2 md:col-span-2">
             <span className="text-sm font-medium">{t.description}</span>
             <Input
               value={form.description}
-              onChange={(event) => onChange({ description: event.target.value })}
-              className="h-10 rounded-xl bg-background"
+              onChange={(event) =>
+                onChange({ description: event.target.value })
+              }
+              className="h-9 rounded-lg bg-background"
             />
           </label>
           <label className="space-y-2 md:col-span-2 xl:col-span-4">
@@ -1982,7 +2319,9 @@ function VoucherFormCard({
               <input
                 type="checkbox"
                 checked={form.confirmNow}
-                onChange={(event) => onChange({ confirmNow: event.target.checked })}
+                onChange={(event) =>
+                  onChange({ confirmNow: event.target.checked })
+                }
                 className="h-4 w-4"
               />
               <span className="text-sm font-medium">{t.confirmNow}</span>
@@ -1990,11 +2329,26 @@ function VoucherFormCard({
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" className="rounded-xl" onClick={onSubmit} disabled={saving || !accounts.length}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+          <Button
+            type="button"
+            className="rounded-lg"
+            onClick={onSubmit}
+            disabled={saving || !accounts.length}
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4" />
+            )}
             {saving ? t.saving : t.save}
           </Button>
-          <Button type="button" variant="outline" className="rounded-xl bg-background" onClick={onCancel} disabled={saving}>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-lg bg-background"
+            onClick={onCancel}
+            disabled={saving}
+          >
             {t.cancel}
           </Button>
         </div>
@@ -2002,7 +2356,11 @@ function VoucherFormCard({
     </Card>
   );
 }
-export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVariant }) {
+export function TreasuryPaymentVouchersPage({
+  variant,
+}: {
+  variant: VoucherVariant;
+}) {
   const router = useRouter();
   const [locale, setLocale] = React.useState<Locale>("ar");
   const [rows, setRows] = React.useState<VoucherRecord[]>([]);
@@ -2014,7 +2372,11 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
   const [formVisible, setFormVisible] = React.useState(false);
   const [mode, setMode] = React.useState<"create" | "edit">("create");
   const [form, setForm] = React.useState<VoucherFormState>(emptyForm);
-  const [cancelTarget, setCancelTarget] = React.useState<VoucherRecord | null>(null);
+  const [confirmTarget, setConfirmTarget] =
+    React.useState<VoucherRecord | null>(null);
+  const [cancelTarget, setCancelTarget] = React.useState<VoucherRecord | null>(
+    null,
+  );
   const [cancelReason, setCancelReason] = React.useState("");
   const [search, setSearch] = React.useState("");
   const [status, setStatus] = React.useState<StatusFilter>("all");
@@ -2063,7 +2425,9 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
           fetchJson<unknown>(makeApiUrl(config.apiPath, voucherParams)),
           fetchJson<unknown>(makeApiUrl(API_PATHS.accounts, accountsParams)),
         ]);
-        const voucherRows = extractArray(voucherPayload).map((item) => normalizeVoucher(item, variant));
+        const voucherRows = extractArray(voucherPayload).map((item) =>
+          normalizeVoucher(item, variant),
+        );
         const accountRows = extractArray(accountsPayload)
           .map(normalizeAccount)
           .filter((account) => account.id && account.status !== "INACTIVE");
@@ -2071,7 +2435,8 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
         setAccounts(accountRows);
         if (silent) toast.success(t.refresh);
       } catch (caughtError) {
-        const message = caughtError instanceof Error ? caughtError.message : t.errorDesc;
+        const message =
+          caughtError instanceof Error ? caughtError.message : t.errorDesc;
         setError(message);
         if (silent) toast.error(message);
       } finally {
@@ -2124,7 +2489,14 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
     });
     return sortRows(filtered, sort);
   }, [dateFrom, dateTo, method, rows, search, sort, status]);
-  const hasFilters = Boolean(search || status !== "all" || method !== "all" || sort !== "newest" || dateFrom || dateTo);
+  const hasFilters = Boolean(
+    search ||
+    status !== "all" ||
+    method !== "all" ||
+    sort !== "newest" ||
+    dateFrom ||
+    dateTo,
+  );
   function resetFilters() {
     setSearch("");
     setStatus("all");
@@ -2155,7 +2527,10 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
       treasuryAccountId: row.treasuryAccountId,
       amount: String(row.amount || ""),
       paymentMethod: row.paymentMethod || "CASH",
-      paymentDate: formatDate(row.paymentDate) === "—" ? new Date().toISOString().slice(0, 10) : formatDate(row.paymentDate),
+      paymentDate:
+        formatDate(row.paymentDate) === "—"
+          ? new Date().toISOString().slice(0, 10)
+          : formatDate(row.paymentDate),
       partyId: row.partyId,
       partyName: row.partyName === "—" ? "" : row.partyName,
       partyPhone: row.partyPhone,
@@ -2165,7 +2540,8 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
       linkedDocumentAmount: row.linkedDocumentAmount,
       linkedDocumentBalance: row.linkedDocumentBalance,
       linkedDocumentStatus: row.linkedDocumentStatus,
-      counterpartyType: row.counterpartyType || defaultCounterpartyType(variant),
+      counterpartyType:
+        row.counterpartyType || defaultCounterpartyType(variant),
       counterpartyAccountId: row.counterpartyAccountId,
       counterpartyAccountCode: row.counterpartyAccountCode,
       counterpartyAccountName: row.counterpartyAccountName,
@@ -2181,12 +2557,18 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
     setForm(emptyForm);
     setFormVisible(false);
   }
-    function buildPayload() {
-    const selectedType = form.counterpartyType || defaultCounterpartyType(variant);
+  function buildPayload() {
+    const selectedType =
+      form.counterpartyType || defaultCounterpartyType(variant);
     const accountRequired = needsCounterpartyAccount(selectedType);
     const documentAllowed = canUseLinkedDocument(selectedType);
-    const linkedDocumentId = documentAllowed ? form.linkedDocumentId.trim() : "";
-    const counterpartyName = resolveVoucherCounterpartyName(form.partyName, form.partyId);
+    const linkedDocumentId = documentAllowed
+      ? form.linkedDocumentId.trim()
+      : "";
+    const counterpartyName = resolveVoucherCounterpartyName(
+      form.partyName,
+      form.partyId,
+    );
     const counterpartyId = optionalNumericId(form.partyId);
     const commonPayload: ApiRecord = {
       treasury_account_id: form.treasuryAccountId,
@@ -2202,7 +2584,9 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
       counterparty_id: counterpartyId,
       counterparty_name: counterpartyName,
       counterparty_phone: form.partyPhone.trim(),
-      counterparty_account_id: accountRequired ? form.counterpartyAccountId.trim() || null : null,
+      counterparty_account_id: accountRequired
+        ? form.counterpartyAccountId.trim() || null
+        : null,
     };
     if (mode === "create" && form.confirmNow) {
       commonPayload.status = "CONFIRMED";
@@ -2212,33 +2596,53 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
     if (variant === "receipt") {
       return {
         ...commonPayload,
-        customer_id: selectedType === "CUSTOMER" ? optionalNumericId(form.partyId) : null,
+        customer_id:
+          selectedType === "CUSTOMER" ? optionalNumericId(form.partyId) : null,
         customer_name: counterpartyName,
         customer_phone: form.partyPhone.trim(),
-        sales_invoice_id: selectedType === "CUSTOMER" ? linkedDocumentId || null : null,
-        invoice_id: selectedType === "CUSTOMER" ? linkedDocumentId || null : null,
+        sales_invoice_id:
+          selectedType === "CUSTOMER" ? linkedDocumentId || null : null,
+        invoice_id:
+          selectedType === "CUSTOMER" ? linkedDocumentId || null : null,
       };
     }
     return {
       ...commonPayload,
-      supplier_id: selectedType === "SUPPLIER" ? optionalNumericId(form.partyId) : null,
+      supplier_id:
+        selectedType === "SUPPLIER" ? optionalNumericId(form.partyId) : null,
       supplier_name: counterpartyName,
       supplier_phone: form.partyPhone.trim(),
-      purchase_bill_id: selectedType === "SUPPLIER" ? linkedDocumentId || null : null,
+      purchase_bill_id:
+        selectedType === "SUPPLIER" ? linkedDocumentId || null : null,
       bill_id: selectedType === "SUPPLIER" ? linkedDocumentId || null : null,
     };
   }
 
   async function submitForm() {
     const payload = buildPayload();
-    const selectedType = form.counterpartyType || defaultCounterpartyType(variant);
-    const counterpartyName = resolveVoucherCounterpartyName(form.partyName, form.partyId);
-    if (!form.treasuryAccountId || toNumber(form.amount) <= 0 || !counterpartyName) {
+    const selectedType =
+      form.counterpartyType || defaultCounterpartyType(variant);
+    const counterpartyName = resolveVoucherCounterpartyName(
+      form.partyName,
+      form.partyId,
+    );
+    if (
+      !form.treasuryAccountId ||
+      toNumber(form.amount) <= 0 ||
+      !counterpartyName
+    ) {
       toast.warning(t.validationRequired);
       return;
     }
-    if (needsCounterpartyAccount(selectedType) && !form.counterpartyAccountId.trim()) {
-      toast.warning(locale === "ar" ? "اختر حساب الطرف المحاسبي." : "Select the counterparty accounting account.");
+    if (
+      needsCounterpartyAccount(selectedType) &&
+      !form.counterpartyAccountId.trim()
+    ) {
+      toast.warning(
+        locale === "ar"
+          ? "اختر حساب الطرف المحاسبي."
+          : "Select the counterparty accounting account.",
+      );
       return;
     }
     setSaving(true);
@@ -2259,24 +2663,35 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
       closeForm();
       await loadData({ silent: true });
     } catch (caughtError) {
-      const message = caughtError instanceof Error ? caughtError.message : t.apiUnsupported;
+      const message =
+        caughtError instanceof Error ? caughtError.message : t.apiUnsupported;
       toast.error(message || t.apiUnsupported);
     } finally {
       setSaving(false);
     }
   }
-  async function confirmVoucher(row: VoucherRecord) {
+  function confirmVoucher(row: VoucherRecord) {
     if (row.status !== "draft") return;
+    setConfirmTarget(row);
+  }
+
+  async function submitConfirmVoucher() {
+    if (!confirmTarget || confirmTarget.status !== "draft") return;
     setSaving(true);
     try {
-      await fetchJson(makeApiUrl(`${config.apiPath}${row.id}/confirm/`), {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
+      await fetchJson(
+        makeApiUrl(`${config.apiPath}${confirmTarget.id}/confirm/`),
+        {
+          method: "POST",
+          body: JSON.stringify({}),
+        },
+      );
       toast.success(t.confirmedDone);
+      setConfirmTarget(null);
       await loadData({ silent: true });
     } catch (caughtError) {
-      const message = caughtError instanceof Error ? caughtError.message : t.apiUnsupported;
+      const message =
+        caughtError instanceof Error ? caughtError.message : t.apiUnsupported;
       toast.error(message || t.apiUnsupported);
     } finally {
       setSaving(false);
@@ -2291,85 +2706,443 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
     if (!cancelTarget) return;
     setSaving(true);
     try {
-      await fetchJson(makeApiUrl(`${config.apiPath}${cancelTarget.id}/cancel/`), {
-        method: "POST",
-        body: JSON.stringify({ reason: cancelReason.trim() }),
-      });
+      await fetchJson(
+        makeApiUrl(`${config.apiPath}${cancelTarget.id}/cancel/`),
+        {
+          method: "POST",
+          body: JSON.stringify({ reason: cancelReason.trim() }),
+        },
+      );
       toast.success(t.cancelledDone);
       setCancelTarget(null);
       setCancelReason("");
       await loadData({ silent: true });
     } catch (caughtError) {
-      const message = caughtError instanceof Error ? caughtError.message : t.apiUnsupported;
+      const message =
+        caughtError instanceof Error ? caughtError.message : t.apiUnsupported;
       toast.error(message || t.apiUnsupported);
     } finally {
       setSaving(false);
     }
   }
 
-  function exportExcel() {
+  function buildReportDocument(
+    mode: "excel" | "print",
+    includeSummary = true,
+  ) {
+    const reportTitle = includeSummary ? config.title : config.tableTitle;
+    const reportSubtitle = includeSummary ? config.subtitle : config.tableDesc;
+    const generatedAt = formatReportDateTime();
+    const filterParts = [
+      search.trim() ? `${t.search}: ${search.trim()}` : "",
+      status !== "all" ? `${t.status}: ${statusLabel(status, locale)}` : "",
+      method !== "all" ? `${t.method}: ${methodLabel(method, locale)}` : "",
+      dateFrom ? `${t.from}: ${dateFrom}` : "",
+      dateTo ? `${t.to}: ${dateTo}` : "",
+    ].filter(Boolean);
+    const summaryItems = includeSummary
+      ? [
+          [t.totalVouchers, formatInteger(stats.total)],
+          [t.totalAmount, formatMoney(stats.amount)],
+          [t.confirmedVouchers, formatInteger(stats.confirmed)],
+          [t.draftVouchers, formatInteger(stats.draft)],
+          [t.cancelledVouchers, formatInteger(stats.cancelled)],
+        ]
+      : [];
+    const summaryMarkup = summaryItems.length
+      ? mode === "print"
+        ? `<div class="summary-grid">${summaryItems
+            .map(
+              ([label, value]) =>
+                `<div class="summary-item"><div class="summary-label">${escapeHtml(
+                  label,
+                )}</div><div class="summary-value">${escapeHtml(
+                  value,
+                )}</div></div>`,
+            )
+            .join("")}</div>`
+        : `<table class="summary"><tbody><tr>${summaryItems
+            .map(
+              ([label, value]) =>
+                `<td><div class="summary-label">${escapeHtml(
+                  label,
+                )}</div><div class="summary-value">${escapeHtml(
+                  value,
+                )}</div></td>`,
+            )
+            .join("")}</tr></tbody></table>`
+      : "";
+    const bodyRows = filteredRows
+      .map(
+        (row) => `
+          <tr>
+            <td class="text">${escapeHtml(row.paymentNumber)}</td>
+            <td>${escapeHtml(row.partyName)}</td>
+            <td class="text">${escapeHtml(
+              row.linkedDocumentNumber || row.linkedDocumentId || "—",
+            )}</td>
+            <td>${escapeHtml(row.treasuryAccountName)}</td>
+            <td class="number">${escapeHtml(formatMoney(row.amount))}</td>
+            <td>${escapeHtml(methodLabel(row.paymentMethod, locale))}</td>
+            <td>${escapeHtml(statusLabel(row.status, locale))}</td>
+            <td class="text">${escapeHtml(formatDate(row.paymentDate))}</td>
+            <td class="text">${escapeHtml(
+              [
+                row.accountingEntryNumber,
+                row.treasuryAccountingAccountCode ||
+                  row.treasuryAccountingAccountName,
+              ]
+                .filter(Boolean)
+                .join(" / ") || "—",
+            )}</td>
+            <td class="text">${escapeHtml(
+              row.treasuryTransactionNumber || "—",
+            )}</td>
+          </tr>`,
+      )
+      .join("");
+    const officeXml =
+      mode === "excel"
+        ? `<!--[if gte mso 9]>
+          <xml>
+            <x:ExcelWorkbook>
+              <x:ExcelWorksheets>
+                <x:ExcelWorksheet>
+                  <x:Name>${escapeHtml(reportTitle.slice(0, 31))}</x:Name>
+                  <x:WorksheetOptions>
+                    ${locale === "ar" ? "<x:DisplayRightToLeft/>" : ""}
+                    <x:FreezePanes/>
+                    <x:FrozenNoSplit/>
+                    <x:SplitHorizontal>1</x:SplitHorizontal>
+                    <x:TopRowBottomPane>1</x:TopRowBottomPane>
+                    <x:FitToPage/>
+                    <x:Print>
+                      <x:ValidPrinterInfo/>
+                      <x:HorizontalResolution>600</x:HorizontalResolution>
+                      <x:VerticalResolution>600</x:VerticalResolution>
+                    </x:Print>
+                    <x:Selected/>
+                  </x:WorksheetOptions>
+                </x:ExcelWorksheet>
+              </x:ExcelWorksheets>
+            </x:ExcelWorkbook>
+          </xml>
+        <![endif]-->`
+        : "";
+    return `<!doctype html>
+      <html
+        lang="${locale}"
+        dir="${dir}"
+        xmlns:o="urn:schemas-microsoft-com:office:office"
+        xmlns:x="urn:schemas-microsoft-com:office:excel"
+        xmlns="http://www.w3.org/TR/REC-html40"
+      >
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(reportTitle)}</title>
+          ${officeXml}
+          <style>
+            * { box-sizing: border-box; }
+            html,
+            body {
+              width: 100%;
+              margin: 0;
+              background: #fff;
+            }
+            body {
+              font-family: Tahoma, Arial, sans-serif;
+              color: #111;
+              padding: ${mode === "print" ? "0" : "8px"};
+              font-size: 12px;
+            }
+            .report-sheet {
+              width: ${mode === "print" ? "100%" : "1320px"};
+              max-width: none;
+              margin: 0 auto;
+            }
+            .report-header {
+              border-bottom: 2px solid #111;
+              margin-bottom: 12px;
+              padding-bottom: 9px;
+            }
+            h1 {
+              margin: 0;
+              font-size: ${mode === "print" ? "24px" : "22px"};
+              font-weight: 700;
+              line-height: 1.25;
+            }
+            .subtitle {
+              margin: 5px 0 0;
+              color: #4b5563;
+              line-height: 1.6;
+              font-size: ${mode === "print" ? "11px" : "12px"};
+            }
+            .meta {
+              display: flex;
+              justify-content: space-between;
+              gap: 16px;
+              margin-top: 7px;
+              color: #4b5563;
+              font-size: 10px;
+            }
+            .filters {
+              margin: 7px 0 0;
+              color: #374151;
+              font-size: 10px;
+            }
+            .summary {
+              width: 100%;
+              border-collapse: collapse;
+              table-layout: fixed;
+              margin: 0 0 12px;
+            }
+            .summary td {
+              border: 1px solid #000;
+              padding: 9px 8px;
+              vertical-align: top;
+            }
+            .summary-grid {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 8px;
+              margin: 0 0 12px;
+            }
+            .summary-item {
+              flex: 1 1 22%;
+              min-width: 145px;
+              border: 1px solid #000;
+              padding: 9px 8px;
+              vertical-align: top;
+            }
+            .summary-label {
+              color: #4b5563;
+              font-size: 10px;
+              line-height: 1.35;
+            }
+            .summary-value {
+              margin-top: 4px;
+              font-size: 15px;
+              font-weight: 700;
+              direction: ltr;
+              font-variant-numeric: tabular-nums;
+            }
+            .data {
+              width: 100%;
+              border-collapse: collapse;
+              table-layout: fixed;
+            }
+            .data th,
+            .data td {
+              border: 1px solid #000;
+              padding: ${mode === "print" ? "5px 4px" : "7px 6px"};
+              text-align: start;
+              vertical-align: middle;
+              overflow-wrap: anywhere;
+              word-break: normal;
+              line-height: 1.35;
+            }
+            .data th {
+              background: #e5e7eb;
+              font-weight: 700;
+              white-space: normal;
+              font-size: ${mode === "print" ? "10px" : "11px"};
+            }
+            .data td {
+              font-size: ${mode === "print" ? "9.5px" : "11px"};
+            }
+            .text {
+              mso-number-format: '\\@';
+              direction: ltr;
+              font-variant-numeric: tabular-nums;
+            }
+            .number {
+              mso-number-format: '0.00';
+              direction: ltr;
+              text-align: end;
+              font-variant-numeric: tabular-nums;
+            }
+            @page {
+              size: A4 landscape;
+              margin: 6mm;
+            }
+            @media print {
+              html,
+              body,
+              .report-sheet {
+                width: 100% !important;
+                max-width: none !important;
+              }
+              body {
+                padding: 0 !important;
+              }
+              thead {
+                display: table-header-group;
+              }
+              tr {
+                break-inside: avoid;
+                page-break-inside: avoid;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <main class="report-sheet">
+          <header class="report-header">
+            <h1>${escapeHtml(reportTitle)}</h1>
+            <p class="subtitle">${escapeHtml(reportSubtitle)}</p>
+            <div class="meta">
+              <span>${escapeHtml(t.generatedAt)}: ${escapeHtml(
+                generatedAt,
+              )}</span>
+              <span>
+                ${escapeHtml(t.showing)}
+                ${escapeHtml(formatInteger(filteredRows.length))}
+                ${escapeHtml(t.of)}
+                ${escapeHtml(formatInteger(rows.length))}
+              </span>
+            </div>
+            ${
+              filterParts.length
+                ? `<p class="filters">${escapeHtml(filterParts.join(" | "))}</p>`
+                : ""
+            }
+          </header>
+          ${summaryMarkup}
+          <table class="data">
+            <colgroup>
+              ${
+                mode === "print"
+                  ? `
+                    <col style="width: 12%" />
+                    <col style="width: 12%" />
+                    <col style="width: 9%" />
+                    <col style="width: 14%" />
+                    <col style="width: 8%" />
+                    <col style="width: 7%" />
+                    <col style="width: 7%" />
+                    <col style="width: 8%" />
+                    <col style="width: 14%" />
+                    <col style="width: 9%" />
+                  `
+                  : `
+                    <col style="width: 165px" />
+                    <col style="width: 160px" />
+                    <col style="width: 135px" />
+                    <col style="width: 190px" />
+                    <col style="width: 105px" />
+                    <col style="width: 105px" />
+                    <col style="width: 95px" />
+                    <col style="width: 105px" />
+                    <col style="width: 215px" />
+                    <col style="width: 140px" />
+                  `
+              }
+            </colgroup>
+            <thead>
+              <tr>
+                <th>${escapeHtml(t.voucherNo)}</th>
+                <th>${escapeHtml(t.party)}</th>
+                <th>${escapeHtml(t.linkedDocument)}</th>
+                <th>${escapeHtml(t.treasuryAccount)}</th>
+                <th>${escapeHtml(`${t.amount} (${t.sar})`)}</th>
+                <th>${escapeHtml(t.method)}</th>
+                <th>${escapeHtml(t.status)}</th>
+                <th>${escapeHtml(t.date)}</th>
+                <th>${escapeHtml(t.accounting)}</th>
+                <th>${escapeHtml(t.treasuryMovement)}</th>
+              </tr>
+            </thead>
+            <tbody>${bodyRows}</tbody>
+          </table>
+          ${
+            mode === "print"
+              ? `<script>
+                  window.onload = () => {
+                    window.focus();
+                    window.print();
+                  };
+                  window.onafterprint = () => window.close();
+                <\/script>`
+              : ""
+          }
+          </main>
+        </body>
+      </html>`;
+  }
+
+  function exportExcel(includeSummary = true) {
     if (!filteredRows.length) {
       toast.warning(t.exportEmpty);
       return;
     }
-    const rowsForExport = [
-      [config.title],
-      [t.generatedAt, new Date().toLocaleString()],
-      [],
-      [t.voucherNo, t.party, t.linkedDocument, t.treasuryAccount, t.amount, t.method, t.status, t.date, t.accounting, t.treasuryMovement],
-      ...filteredRows.map((row) => [
-        row.paymentNumber,
-        row.partyName,
-        row.linkedDocumentNumber || row.linkedDocumentId,
-        row.treasuryAccountName,
-        formatMoney(row.amount),
-        methodLabel(row.paymentMethod, locale),
-        statusLabel(row.status, locale),
-        formatDate(row.paymentDate),
-        [
-          row.accountingEntryNumber,
-          row.treasuryAccountingAccountCode || row.treasuryAccountingAccountName,
-        ]
-          .filter(Boolean)
-          .join(" / "),
-        row.treasuryTransactionNumber,
-      ]),
-    ];
-    const html = `
-      <html dir="${dir}" lang="${locale}">
-        <head><meta charset="utf-8" /></head>
-        <body>
-          <table border="1">
-            ${rowsForExport
-              .map(
-                (row) =>
-                  `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`,
-              )
-              .join("")}
-          </table>
-        </body>
-      </html>
-    `;
-    const blob = new Blob(["\uFEFF", html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+    const html = buildReportDocument("excel", includeSummary);
+    const blob = new Blob(["\uFEFF", html], {
+      type: "application/vnd.ms-excel;charset=utf-8;",
+    });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `${variant}-vouchers-${new Date().toISOString().slice(0, 10)}.xls`;
+    anchor.download = `${variant}-vouchers-${new Date()
+      .toISOString()
+      .slice(0, 10)}.xls`;
+    document.body.appendChild(anchor);
     anchor.click();
+    anchor.remove();
     URL.revokeObjectURL(url);
+    toast.success(
+      locale === "ar"
+        ? "تم تجهيز ملف Excel بنجاح."
+        : "Excel file prepared successfully.",
+    );
   }
-  function printPage() {
+
+  function openPrintReport(includeSummary: boolean) {
     if (!filteredRows.length) {
       toast.warning(t.printEmpty);
       return;
     }
-    window.print();
+    const popup = window.open("", "_blank", "width=1400,height=900");
+    if (!popup) {
+      toast.error(t.apiUnsupported);
+      return;
+    }
+    popup.opener = null;
+    popup.document.write(buildReportDocument("print", includeSummary));
+    popup.document.close();
+    toast.success(
+      locale === "ar"
+        ? "تم تجهيز صفحة الطباعة."
+        : "Print page prepared.",
+    );
   }
+
+  function printPage() {
+    openPrintReport(true);
+  }
+
+  function printTable() {
+    openPrintReport(false);
+  }
+
+  function printVoucher(row: VoucherRecord) {
+    const printWindow = window.open(
+      `${voucherDetailHref(variant, row)}?print=voucher`,
+      "_blank",
+    );
+
+    if (!printWindow) {
+      toast.error(t.printBlocked);
+      return;
+    }
+
+    printWindow.opener = null;
+  }
+
   const columns: DataColumn<VoucherRecord>[] = [
     {
       key: "number",
       label: t.voucherNo,
-      className: "w-[190px]",
+      className: "sticky start-0 z-10 w-[170px] bg-inherit",
       render: (row) => (
         <div className="min-w-0">
           <span className="block max-w-full cursor-pointer select-none truncate font-semibold text-foreground">
@@ -2386,66 +3159,92 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
     {
       key: "party",
       label: t.party,
-      className: "w-[220px]",
+      className: "w-[185px]",
       render: (row) => (
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-foreground">{row.partyName}</p>
-          <p className="mt-1 truncate text-xs text-muted-foreground">{row.partyPhone || row.partyId || "—"}</p>
+          <p className="truncate text-sm font-medium text-foreground">
+            {row.partyName}
+          </p>
+          <p className="mt-1 truncate text-xs text-muted-foreground">
+            {row.partyPhone || row.partyId || "—"}
+          </p>
         </div>
       ),
     },
     {
       key: "date",
       label: t.date,
-      className: "w-[130px]",
-      render: (row) => <span className="text-sm tabular-nums text-muted-foreground">{formatDate(row.paymentDate)}</span>,
+      className: "w-[110px]",
+      render: (row) => (
+        <span className="text-sm tabular-nums text-muted-foreground">
+          {formatDate(row.paymentDate)}
+        </span>
+      ),
     },
     {
       key: "amount",
       label: t.amount,
-      className: "w-[150px]",
+      className: "w-[125px]",
       render: (row) => <MoneyValue value={row.amount} label={t.sar} />,
     },
     {
       key: "status",
       label: t.status,
-      className: "w-[140px]",
-      render: (row) => <StatusBadge value={row.status} label={statusLabel(row.status, locale)} />,
+      className: "w-[110px]",
+      render: (row) => (
+        <StatusBadge
+          value={row.status}
+          label={statusLabel(row.status, locale)}
+        />
+      ),
     },
     {
       key: "account",
       label: t.treasuryAccount,
-      className: "w-[210px]",
+      className: "w-[180px]",
       render: (row) => (
         <div className="min-w-0">
-          <p className="truncate text-sm text-muted-foreground">{row.treasuryAccountName}</p>
-          <p className="mt-1 truncate text-xs text-muted-foreground">{methodLabel(row.paymentMethod, locale)}</p>
+          <p className="truncate text-sm text-muted-foreground">
+            {row.treasuryAccountName}
+          </p>
+          <p className="mt-1 truncate text-xs text-muted-foreground">
+            {methodLabel(row.paymentMethod, locale)}
+          </p>
         </div>
       ),
     },
     {
       key: "document",
       label: t.linkedDocument,
-      className: "w-[180px]",
+      className: "w-[150px]",
       render: (row) => (
         <div className="min-w-0">
-          <p className="truncate text-sm text-muted-foreground">{row.linkedDocumentNumber || "—"}</p>
-          <p className="mt-1 truncate text-xs text-muted-foreground">{row.linkedDocumentPaymentStatus || "—"}</p>
+          <p className="truncate text-sm text-muted-foreground">
+            {row.linkedDocumentNumber || "—"}
+          </p>
+          <p className="mt-1 truncate text-xs text-muted-foreground">
+            {row.linkedDocumentPaymentStatus || "—"}
+          </p>
         </div>
       ),
     },
     {
       key: "accounting",
       label: t.accounting,
-      className: "w-[260px]",
+      className: "w-[210px]",
       render: (row) => (
         <div className="min-w-0">
-          <p className="truncate text-sm text-muted-foreground">{row.accountingEntryNumber || "—"}</p>
-          <p className="mt-1 truncate text-xs text-muted-foreground">{row.accountingEntryStatus || "—"}</p>
+          <p className="truncate text-sm text-muted-foreground">
+            {row.accountingEntryNumber || "—"}
+          </p>
+          <p className="mt-1 truncate text-xs text-muted-foreground">
+            {row.accountingEntryStatus || "—"}
+          </p>
           <p className="mt-1 truncate text-[11px] text-muted-foreground tabular-nums">
             {row.treasuryAccountingAccountCode
               ? `${row.treasuryAccountingAccountCode} — ${
-                  row.treasuryAccountingAccountName || (locale === "ar" ? "حساب محاسبي" : "Accounting account")
+                  row.treasuryAccountingAccountName ||
+                  (locale === "ar" ? "حساب محاسبي" : "Accounting account")
                 }`
               : "—"}
           </p>
@@ -2455,16 +3254,31 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
     {
       key: "actions",
       label: t.actions,
-      className: "w-[86px] text-center",
+      className: "sticky end-0 z-10 w-[76px] bg-inherit text-center",
       render: (row) => (
-        <div className="flex items-center justify-center" onClick={(event) => event.stopPropagation()}>
+        <div
+          className="flex items-center justify-center"
+          onClick={(event) => event.stopPropagation()}
+        >
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-xl bg-background">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 bg-background"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <MoreVertical className="h-4 w-4" />
+                )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align={locale === "ar" ? "start" : "end"} className="w-44 rounded-xl">
+            <DropdownMenuContent
+              align={locale === "ar" ? "start" : "end"}
+              className="w-44"
+            >
               <DropdownMenuItem
                 onClick={() => router.push(voucherDetailHref(variant, row))}
                 className="flex items-center gap-2"
@@ -2472,19 +3286,26 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
                 <ExternalLink className="h-4 w-4" />
                 {locale === "ar" ? "فتح التفاصيل" : "Open details"}
               </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => printVoucher(row)}
+                className="flex items-center gap-2"
+              >
+                <Printer className="h-4 w-4" />
+                {t.printVoucher}
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 disabled={saving || row.status !== "draft"}
                 onClick={() => openEdit(row)}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 text-amber-700 focus:text-amber-700"
               >
                 <Edit3 className="h-4 w-4" />
                 {locale === "ar" ? "تعديل" : "Edit"}
               </DropdownMenuItem>
               <DropdownMenuItem
                 disabled={saving || row.status !== "draft"}
-                onClick={() => void confirmVoucher(row)}
-                className="flex items-center gap-2"
+                onClick={() => confirmVoucher(row)}
+                className="flex items-center gap-2 text-emerald-700 focus:text-emerald-700"
               >
                 <CheckCircle2 className="h-4 w-4" />
                 {t.confirm}
@@ -2506,7 +3327,10 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
   ];
   if (loading) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+      <main
+        dir={dir}
+        className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8"
+      >
         <div className="mx-auto max-w-[1500px]">
           <DashboardSkeleton />
         </div>
@@ -2515,8 +3339,11 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
   }
   if (error) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-        <Card className="mx-auto max-w-[900px] rounded-3xl border-destructive/30 shadow-sm">
+      <main
+        dir={dir}
+        className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8"
+      >
+        <Card className="mx-auto max-w-[900px] rounded-lg border-destructive/30 bg-card shadow-none">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-destructive">
               <TriangleAlert className="h-5 w-5" />
@@ -2525,8 +3352,16 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
             <CardDescription>{error || t.errorDesc}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => void loadData()} className="rounded-xl" disabled={refreshing}>
-              {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            <Button
+              onClick={() => void loadData()}
+              className="rounded-lg"
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
               {t.tryAgain}
             </Button>
           </CardContent>
@@ -2535,54 +3370,124 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
     );
   }
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main
+      dir={dir}
+      className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8"
+    >
       <div className="mx-auto max-w-[1500px] space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
-          <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-              <div className="max-w-3xl">
-                <Link
-                  href="/company/treasury"
-                  className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground transition hover:text-foreground"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                  {t.back}
-                </Link>
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  {t.moduleBadge}
-                </div>
-                <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{config.title}</h1>
-                <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">{config.subtitle}</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => void loadData({ silent: true })} disabled={refreshing}>
-                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  {t.refresh}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
-                  <FileSpreadsheet className="h-4 w-4" />
-                  {t.export}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={printPage}>
-                  <Printer className="h-4 w-4" />
-                  {t.print}
-                </Button>
-                <Button className="rounded-xl" onClick={openCreate}>
-                  <Plus className="h-4 w-4" />
-                  {config.addLabel}
-                </Button>
-              </div>
-            </div>
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 space-y-1 text-start">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground lg:text-3xl">
+              {config.title}
+            </h1>
+            <p className="max-w-4xl text-sm leading-6 text-muted-foreground">
+              {config.subtitle}
+            </p>
+            <nav
+              aria-label={t.moduleBadge}
+              className="flex flex-wrap items-center gap-5 pt-2"
+            >
+              <Link
+                href="/company/treasury"
+                className="border-b-2 border-transparent pb-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {locale === "ar" ? "الخزينة" : "Treasury"}
+              </Link>
+              <Link
+                href="/company/treasury/receipt-vouchers"
+                aria-current={variant === "receipt" ? "page" : undefined}
+                className={cn(
+                  "border-b-2 pb-1 text-sm transition-colors",
+                  variant === "receipt"
+                    ? "border-foreground font-semibold text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t.receiptTitle}
+              </Link>
+              <Link
+                href="/company/treasury/payment-vouchers"
+                aria-current={variant === "payment" ? "page" : undefined}
+                className={cn(
+                  "border-b-2 pb-1 text-sm transition-colors",
+                  variant === "payment"
+                    ? "border-foreground font-semibold text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t.paymentTitle}
+              </Link>
+              <Link
+                href="/company/payments"
+                className="border-b-2 border-transparent pb-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {locale === "ar" ? "المدفوعات" : "Payments"}
+              </Link>
+            </nav>
           </div>
-        </section>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void loadData({ silent: true })}
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {t.refresh}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => exportExcel(true)}
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              {t.export}
+            </Button>
+            <Button type="button" variant="outline" onClick={printPage}>
+              <Printer className="h-4 w-4" />
+              {t.print}
+            </Button>
+            <Button type="button" onClick={openCreate}>
+              <Plus className="h-4 w-4" />
+              {config.addLabel}
+            </Button>
+          </div>
+        </header>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard title={t.totalVouchers} value={stats.total} description={config.title} icon={ReceiptText} t={t} />
-          <KpiCard title={t.totalAmount} value={stats.amount} description={t.amount} icon={PageIcon} money t={t} />
-          <KpiCard title={t.confirmedVouchers} value={stats.confirmed} description={t.confirmed} icon={CheckCircle2} t={t} />
-          <KpiCard title={t.draftVouchers} value={stats.draft} description={t.draft} icon={FileText} t={t} />
+          <KpiCard
+            title={t.totalVouchers}
+            value={stats.total}
+            description={config.title}
+            icon={ReceiptText}
+            t={t}
+          />
+          <KpiCard
+            title={t.totalAmount}
+            value={stats.amount}
+            description={t.amount}
+            icon={PageIcon}
+            money
+            t={t}
+          />
+          <KpiCard
+            title={t.confirmedVouchers}
+            value={stats.confirmed}
+            description={t.confirmed}
+            icon={CheckCircle2}
+            t={t}
+          />
+          <KpiCard
+            title={t.draftVouchers}
+            value={stats.draft}
+            description={t.draft}
+            icon={FileText}
+            t={t}
+          />
         </div>
         {formVisible ? (
           <VoucherFormCard
@@ -2592,73 +3497,146 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
             accounts={accounts}
             saving={saving}
             locale={locale}
-            onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
+            onChange={(patch) =>
+              setForm((current) => ({ ...current, ...patch }))
+            }
             onSubmit={() => void submitForm()}
             onCancel={closeForm}
           />
         ) : null}
-        {cancelTarget ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-            <Card className="w-full max-w-lg rounded-2xl border-amber-200 shadow-xl">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <AlertTriangle className="h-5 w-5 text-amber-600" />
-                  {locale === "ar" ? "تأكيد إلغاء السند" : "Confirm voucher cancellation"}
-                </CardTitle>
-                <CardDescription>
-                  {locale === "ar"
-                    ? "سيتم إلغاء السند من خلال إجراء آمن داخل النظام، وليس من نافذة المتصفح."
-                    : "The voucher will be cancelled using an in-page controlled action, not a browser prompt."}
+        <AlertDialog
+          open={Boolean(confirmTarget)}
+          onOpenChange={(open) => {
+            if (!open && !saving) setConfirmTarget(null);
+          }}
+        >
+          <AlertDialogContent dir={dir}>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t.confirmTitle}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t.confirmDescription}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+              <span className="font-medium">{t.voucherNo}: </span>
+              <span dir="ltr" lang="en" className="font-mono tabular-nums">
+                {confirmTarget?.paymentNumber || confirmTarget?.id || "—"}
+              </span>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={saving}>
+                {t.cancel}
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(event) => {
+                  event.preventDefault();
+                  void submitConfirmVoucher();
+                }}
+                disabled={saving}
+                className="bg-emerald-600 text-white hover:bg-emerald-700"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                {t.confirmAction}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog
+          open={Boolean(cancelTarget)}
+          onOpenChange={(open) => {
+            if (!open && !saving) {
+              setCancelTarget(null);
+              setCancelReason("");
+            }
+          }}
+        >
+          <AlertDialogContent dir={dir}>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t.cancelTitle}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t.cancelDescription}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-3">
+              <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                <span className="font-medium">{t.voucherNo}: </span>
+                <span dir="ltr" lang="en" className="font-mono tabular-nums">
+                  {cancelTarget?.paymentNumber || cancelTarget?.id || "—"}
+                </span>
+              </div>
+              <label className="space-y-2">
+                <span className="text-sm font-medium">
+                  {t.cancelReasonPrompt}
+                </span>
+                <textarea
+                  value={cancelReason}
+                  onChange={(event) => setCancelReason(event.target.value)}
+                  rows={3}
+                  className="min-h-24 w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={saving}>
+                {t.cancel}
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(event) => {
+                  event.preventDefault();
+                  void submitCancelVoucher();
+                }}
+                disabled={saving}
+                className="bg-rose-600 text-white hover:bg-rose-700"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CircleX className="h-4 w-4" />
+                )}
+                {t.cancelAction}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <Card className="rounded-lg border bg-card shadow-none">
+          <CardHeader className="px-5 pt-5 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <CardTitle>{config.tableTitle}</CardTitle>
+                <CardDescription className="mt-1">
+                  {config.tableDesc}
                 </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="rounded-xl border bg-muted/30 p-3 text-sm">
-                  <span className="font-medium">{t.voucherNo}: </span>
-                  <span className="tabular-nums">{cancelTarget.paymentNumber || cancelTarget.id}</span>
-                </div>
-                <label className="space-y-2">
-                  <span className="text-sm font-medium">{t.cancelReasonPrompt}</span>
-                  <textarea
-                    value={cancelReason}
-                    onChange={(event) => setCancelReason(event.target.value)}
-                    rows={3}
-                    className="min-h-24 w-full rounded-xl border bg-background px-3 py-2 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                </label>
-                <div className="flex flex-wrap justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="rounded-xl bg-background"
-                    onClick={() => {
-                      setCancelTarget(null);
-                      setCancelReason("");
-                    }}
-                    disabled={saving}
-                  >
-                    {t.cancel}
-                  </Button>
-                  <Button
-                    type="button"
-                    className="rounded-xl bg-rose-600 text-white hover:bg-rose-700"
-                    onClick={() => void submitCancelVoucher()}
-                    disabled={saving}
-                  >
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
-                    {locale === "ar" ? "إلغاء السند" : "Cancel voucher"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        ) : null}
-        <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
-            <CardTitle>{config.tableTitle}</CardTitle>
-            <CardDescription>{config.tableDesc}</CardDescription>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-lg bg-background"
+                  onClick={() => exportExcel(false)}
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  {t.export}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-lg bg-background"
+                  onClick={printTable}
+                >
+                  <Printer className="h-4 w-4" />
+                  {t.print}
+                </Button>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
+          <CardContent className="space-y-4 px-5 pb-5 sm:px-6">
+            <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="relative min-w-0 flex-1">
                   <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -2666,11 +3644,14 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder={config.searchPlaceholder}
-                    className="h-10 rounded-xl bg-background ps-9"
+                    className="h-9 rounded-lg bg-background ps-9"
                   />
                 </div>
-                <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[150px]">
+                <Select
+                  value={status}
+                  onValueChange={(value) => setStatus(value as StatusFilter)}
+                >
+                  <SelectTrigger className="h-9 rounded-lg bg-background sm:w-[150px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -2680,8 +3661,11 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
                     <SelectItem value="cancelled">{t.cancelled}</SelectItem>
                   </SelectContent>
                 </Select>
-                <Select value={method} onValueChange={(value) => setMethod(value as MethodFilter)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[170px]">
+                <Select
+                  value={method}
+                  onValueChange={(value) => setMethod(value as MethodFilter)}
+                >
+                  <SelectTrigger className="h-9 rounded-lg bg-background sm:w-[170px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -2694,8 +3678,10 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
                 </Select>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <div className="flex h-10 items-center gap-2 rounded-xl border bg-background px-3">
-                  <span className="text-xs text-muted-foreground">{t.from}</span>
+                <div className="flex h-9 items-center gap-2 rounded-lg border bg-background px-2">
+                  <span className="text-xs text-muted-foreground">
+                    {t.from}
+                  </span>
                   <VoucherDatePicker
                     value={dateFrom}
                     onChange={setDateFrom}
@@ -2704,7 +3690,7 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
                     compact
                   />
                 </div>
-                <div className="flex h-10 items-center gap-2 rounded-xl border bg-background px-3">
+                <div className="flex h-9 items-center gap-2 rounded-lg border bg-background px-2">
                   <span className="text-xs text-muted-foreground">{t.to}</span>
                   <VoucherDatePicker
                     value={dateTo}
@@ -2714,8 +3700,11 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
                     compact
                   />
                 </div>
-                <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[160px]">
+                <Select
+                  value={sort}
+                  onValueChange={(value) => setSort(value as SortKey)}
+                >
+                  <SelectTrigger className="h-9 rounded-lg bg-background sm:w-[160px]">
                     <ArrowUpDown className="h-4 w-4" />
                     <SelectValue />
                   </SelectTrigger>
@@ -2728,7 +3717,11 @@ export function TreasuryPaymentVouchersPage({ variant }: { variant: VoucherVaria
                     <SelectItem value="party">{t.partySort}</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={resetFilters}>
+                <Button
+                  variant="outline"
+                  className="h-9 rounded-lg bg-background"
+                  onClick={resetFilters}
+                >
                   <RotateCcw className="h-4 w-4" />
                   {t.reset}
                 </Button>
