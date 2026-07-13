@@ -386,35 +386,51 @@ function asRecord(value: unknown): ApiRecord {
   return isRecord(value) ? value : {};
 }
 
+function toEnglishDigits(value: unknown) {
+  // PRIMEY_ENGLISH_DIGITS_REPORTS_V1
+  return String(value ?? "")
+    .replace(/[٠-٩]/g, (digit) =>
+      String(digit.charCodeAt(0) - "٠".charCodeAt(0)),
+    )
+    .replace(/[۰-۹]/g, (digit) =>
+      String(digit.charCodeAt(0) - "۰".charCodeAt(0)),
+    )
+    .replaceAll("٫", ".")
+    .replaceAll("٬", ",");
+}
+
 function text(value: unknown, fallback = "") {
   if (value === null || value === undefined) return fallback;
-  return String(value).trim() || fallback;
+  return toEnglishDigits(value).trim() || fallback;
 }
 
 function numberValue(value: unknown, fallback = 0) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
+
   if (typeof value === "string") {
-    const parsed = Number(value.replace(/[^\d.-]/g, ""));
+    const normalized = toEnglishDigits(value).replaceAll(",", "");
+    const parsed = Number(normalized.replace(/[^\d.-]/g, ""));
     return Number.isFinite(parsed) ? parsed : fallback;
   }
+
   return fallback;
 }
 
 function formatMoney(value: unknown) {
-  return new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(numberValue(value));
+  return toEnglishDigits(
+    new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(numberValue(value)),
+  );
 }
 
-function reportMoney(value: unknown, locale: Locale) {
-  const currency = locale === "ar" ? "ر.س" : "SAR";
-
+function reportMoney(value: unknown) {
   /*
-   * إبقاء الرقم أولا ثم العملة في العربية والإنجليزية
-   * داخل الطباعة وExcel.
+   * Print and Excel reports use English digits and numeric values only.
+   * No currency abbreviation or currency icon is included.
    */
-  return `\u202A${formatMoney(value)}\u00A0${currency}\u202C`;
+  return formatMoney(value);
 }
 
 function transactionSourceLabel(value: string, locale: Locale) {
@@ -440,15 +456,23 @@ function transactionSourceLabel(value: string, locale: Locale) {
 }
 
 function formatInteger(value: unknown) {
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(
-    Math.round(numberValue(value)),
+  return toEnglishDigits(
+    new Intl.NumberFormat("en-US", {
+      maximumFractionDigits: 0,
+    }).format(Math.round(numberValue(value))),
   );
 }
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "—";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value.slice(0, 10) || "—";
+
+  const normalized = toEnglishDigits(value);
+  const parsed = new Date(normalized);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return normalized.slice(0, 10) || "—";
+  }
+
   return parsed.toISOString().slice(0, 10);
 }
 
@@ -463,7 +487,7 @@ function reportDateTime() {
 }
 
 function escapeHtml(value: unknown) {
-  return String(value ?? "")
+  return toEnglishDigits(value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -770,8 +794,15 @@ function sortRows<T>(
 
 function parseIsoDate(value: string) {
   if (!value) return undefined;
-  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
+
+  const normalized = toEnglishDigits(value);
+  const [year, month, day] = normalized
+    .slice(0, 10)
+    .split("-")
+    .map(Number);
+
   if (!year || !month || !day) return undefined;
+
   const parsed = new Date(year, month - 1, day);
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
@@ -1324,6 +1355,22 @@ function downloadExcelFile(
             mso-number-format: "\\@";
           }
 
+          .excel-summary-table .summary-label-row td {
+            color: #4b5563;
+            font-weight: 400;
+          }
+
+          .excel-summary-table .summary-value-row td {
+            direction: ltr;
+            unicode-bidi: embed;
+            text-align: center;
+            font-family: Arial, Tahoma, sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            white-space: nowrap;
+            mso-number-format: "\\@";
+          }
+
           .data-table {
             width: 100%;
             margin-bottom: 22px;
@@ -1852,7 +1899,7 @@ export default function CompanyDashboardPage() {
       { label: t.invoice, value: (row) => row.number },
       { label: t.customer, value: (row) => row.customerName },
       { label: t.date, value: (row) => formatDate(row.date) },
-      { label: t.amount, value: (row) => reportMoney(row.amount, locale) },
+      { label: t.amount, value: (row) => reportMoney(row.amount) },
       { label: t.status, value: (row) => statusLabel(row.status, locale) },
     ],
     [locale, t.amount, t.customer, t.date, t.invoice, t.status],
@@ -1864,7 +1911,7 @@ export default function CompanyDashboardPage() {
       { label: t.voucher, value: (row) => row.number },
       { label: t.party, value: (row) => row.partyName },
       { label: t.date, value: (row) => formatDate(row.date) },
-      { label: t.amount, value: (row) => reportMoney(row.amount, locale) },
+      { label: t.amount, value: (row) => reportMoney(row.amount) },
       { label: t.status, value: (row) => statusLabel(row.status, locale) },
       { label: t.treasuryAccount, value: (row) => row.treasuryAccountName },
       { label: t.transaction, value: (row) => row.transactionNumber || "—" },
@@ -1879,7 +1926,7 @@ export default function CompanyDashboardPage() {
       { label: t.date, value: (row) => formatDate(row.date) },
       { label: t.treasuryAccount, value: (row) => row.accountName },
       { label: t.kind, value: (row) => transactionTypeLabel(row.type, locale) },
-      { label: t.amount, value: (row) => reportMoney(row.amount, locale) },
+      { label: t.amount, value: (row) => reportMoney(row.amount) },
       { label: t.status, value: (row) => statusLabel(row.status, locale) },
       { label: t.source, value: (row) => row.sourceNumber || transactionSourceLabel(row.sourceType, locale) },
       { label: t.accounting, value: (row) => row.accountingEntryNumber || "—" },
@@ -2164,41 +2211,82 @@ export default function CompanyDashboardPage() {
     else toast.success(t.printReady);
   }, [filteredTransactions, locale, t.generatedAt, t.printBlocked, t.printEmpty, t.printReady, t.transactionsTitle, transactionExportColumns]);
 
-  const summaryHtml = React.useMemo(
+  const printSummaryHtml = React.useMemo(
     () => `<table class="summary-table">
       <tbody>
         <tr>
-          <td><span>${escapeHtml(t.salesTotal)}</span><b>${escapeHtml(reportMoney(stats.salesTotal, locale))}</b></td>
+          <td><span>${escapeHtml(t.salesTotal)}</span><b>${escapeHtml(reportMoney(stats.salesTotal))}</b></td>
           <td><span>${escapeHtml(t.salesInvoices)}</span><b>${escapeHtml(formatInteger(stats.salesInvoices))}</b></td>
-          <td><span>${escapeHtml(t.receiptTotal)}</span><b>${escapeHtml(reportMoney(stats.receiptTotal, locale))}</b></td>
-          <td><span>${escapeHtml(t.paymentTotal)}</span><b>${escapeHtml(reportMoney(stats.paymentTotal, locale))}</b></td>
+          <td><span>${escapeHtml(t.receiptTotal)}</span><b>${escapeHtml(reportMoney(stats.receiptTotal))}</b></td>
+          <td><span>${escapeHtml(t.paymentTotal)}</span><b>${escapeHtml(reportMoney(stats.paymentTotal))}</b></td>
         </tr>
         <tr>
           <td><span>${escapeHtml(t.customers)}</span><b>${escapeHtml(formatInteger(stats.customers))}</b></td>
           <td><span>${escapeHtml(t.suppliers)}</span><b>${escapeHtml(formatInteger(stats.suppliers))}</b></td>
           <td><span>${escapeHtml(t.vouchers)}</span><b>${escapeHtml(formatInteger(stats.vouchers))}</b></td>
-          <td><span>${escapeHtml(t.netFlow)}</span><b>${escapeHtml(reportMoney(stats.netFlow, locale))}</b></td>
+          <td><span>${escapeHtml(t.netFlow)}</span><b>${escapeHtml(reportMoney(stats.netFlow))}</b></td>
         </tr>
       </tbody>
     </table>`,
     [locale, stats, t.customers, t.netFlow, t.paymentTotal, t.receiptTotal, t.salesInvoices, t.salesTotal, t.suppliers, t.vouchers],
   );
 
-  const dashboardSectionsHtml = React.useMemo(
-    () => `${summaryHtml}
-      <div class="section"><h2>${escapeHtml(t.invoicesTitle)}</h2>${buildTableHtml(invoiceExportColumns, filteredInvoices)}</div>
+  const excelSummaryHtml = React.useMemo(
+    () => `<table class="summary-table excel-summary-table">
+      <tbody>
+        <tr class="summary-label-row">
+          <td>${escapeHtml(t.salesTotal)}</td>
+          <td>${escapeHtml(t.salesInvoices)}</td>
+          <td>${escapeHtml(t.receiptTotal)}</td>
+          <td>${escapeHtml(t.paymentTotal)}</td>
+        </tr>
+        <tr class="summary-value-row">
+          <td class="summary-value excel-text" dir="ltr" lang="en" style="mso-number-format:'\\@';">&#8206;${escapeHtml(reportMoney(stats.salesTotal))}&#8206;</td>
+          <td class="summary-value excel-text" dir="ltr" lang="en" style="mso-number-format:'\\@';">&#8206;${escapeHtml(formatInteger(stats.salesInvoices))}&#8206;</td>
+          <td class="summary-value excel-text" dir="ltr" lang="en" style="mso-number-format:'\\@';">&#8206;${escapeHtml(reportMoney(stats.receiptTotal))}&#8206;</td>
+          <td class="summary-value excel-text" dir="ltr" lang="en" style="mso-number-format:'\\@';">&#8206;${escapeHtml(reportMoney(stats.paymentTotal))}&#8206;</td>
+        </tr>
+        <tr class="summary-label-row">
+          <td>${escapeHtml(t.customers)}</td>
+          <td>${escapeHtml(t.suppliers)}</td>
+          <td>${escapeHtml(t.vouchers)}</td>
+          <td>${escapeHtml(t.netFlow)}</td>
+        </tr>
+        <tr class="summary-value-row">
+          <td class="summary-value excel-text" dir="ltr" lang="en" style="mso-number-format:'\\@';">&#8206;${escapeHtml(formatInteger(stats.customers))}&#8206;</td>
+          <td class="summary-value excel-text" dir="ltr" lang="en" style="mso-number-format:'\\@';">&#8206;${escapeHtml(formatInteger(stats.suppliers))}&#8206;</td>
+          <td class="summary-value excel-text" dir="ltr" lang="en" style="mso-number-format:'\\@';">&#8206;${escapeHtml(formatInteger(stats.vouchers))}&#8206;</td>
+          <td class="summary-value excel-text" dir="ltr" lang="en" style="mso-number-format:'\\@';">&#8206;${escapeHtml(reportMoney(stats.netFlow))}&#8206;</td>
+        </tr>
+      </tbody>
+    </table>`,
+    [locale, stats, t.customers, t.netFlow, t.paymentTotal, t.receiptTotal, t.salesInvoices, t.salesTotal, t.suppliers, t.vouchers],
+  );
+
+  const dashboardTableSectionsHtml = React.useMemo(
+    () => `<div class="section"><h2>${escapeHtml(t.invoicesTitle)}</h2>${buildTableHtml(invoiceExportColumns, filteredInvoices)}</div>
       <div class="section"><h2>${escapeHtml(t.vouchersTitle)}</h2>${buildTableHtml(voucherExportColumns, filteredVouchers)}</div>
       <div class="section"><h2>${escapeHtml(t.transactionsTitle)}</h2>${buildTableHtml(transactionExportColumns, filteredTransactions)}</div>`,
-    [filteredInvoices, filteredTransactions, filteredVouchers, invoiceExportColumns, summaryHtml, t.invoicesTitle, t.transactionsTitle, t.vouchersTitle, transactionExportColumns, voucherExportColumns],
+    [filteredInvoices, filteredTransactions, filteredVouchers, invoiceExportColumns, t.invoicesTitle, t.transactionsTitle, t.vouchersTitle, transactionExportColumns, voucherExportColumns],
+  );
+
+  const dashboardExcelSectionsHtml = React.useMemo(
+    () => `${excelSummaryHtml}${dashboardTableSectionsHtml}`,
+    [dashboardTableSectionsHtml, excelSummaryHtml],
+  );
+
+  const dashboardPrintSectionsHtml = React.useMemo(
+    () => `${printSummaryHtml}${dashboardTableSectionsHtml}`,
+    [dashboardTableSectionsHtml, printSummaryHtml],
   );
 
   const exportDashboard = React.useCallback(() => {
     if (!filteredInvoices.length && !filteredVouchers.length && !filteredTransactions.length) {
       return toast.error(t.exportEmpty);
     }
-    downloadExcelFile("company-dashboard", t.reportTitle, dashboardSectionsHtml, locale);
+    downloadExcelFile("company-dashboard", t.reportTitle, dashboardExcelSectionsHtml, locale);
     toast.success(t.exportReady);
-  }, [dashboardSectionsHtml, filteredInvoices.length, filteredTransactions.length, filteredVouchers.length, locale, t.exportEmpty, t.exportReady, t.reportTitle]);
+  }, [dashboardExcelSectionsHtml, filteredInvoices.length, filteredTransactions.length, filteredVouchers.length, locale, t.exportEmpty, t.exportReady, t.reportTitle]);
 
   const printDashboard = React.useCallback(() => {
     if (!filteredInvoices.length && !filteredVouchers.length && !filteredTransactions.length) {
@@ -2207,12 +2295,12 @@ export default function CompanyDashboardPage() {
     const ok = openPrintWindow(
       t.reportTitle,
       `${getCompanyName(authPayload, t.unknown)} — ${t.generatedAt}: ${reportDateTime()}`,
-      dashboardSectionsHtml,
+      dashboardPrintSectionsHtml,
       locale,
     );
     if (!ok) toast.error(t.printBlocked);
     else toast.success(t.printReady);
-  }, [authPayload, dashboardSectionsHtml, filteredInvoices.length, filteredTransactions.length, filteredVouchers.length, locale, t.generatedAt, t.printBlocked, t.printEmpty, t.printReady, t.reportTitle, t.unknown]);
+  }, [authPayload, dashboardPrintSectionsHtml, filteredInvoices.length, filteredTransactions.length, filteredVouchers.length, locale, t.generatedAt, t.printBlocked, t.printEmpty, t.printReady, t.reportTitle, t.unknown]);
 
   if (loading) {
     return (
