@@ -1,6 +1,6 @@
-﻿// ============================================================
+// ============================================================
 // 📂 app/company/accounting/cost-centers/page.tsx
-// 🧠 Mhamcloud | Company Accounting Cost Centers
+// 🧠 PrimeyAcc | Company Accounting Cost Centers
 // ------------------------------------------------------------
 // ✅ Approved company dashboard premium pattern
 // ✅ Real API only
@@ -20,6 +20,7 @@ import {
   FolderTree,
   Layers3,
   Loader2,
+  MoreVertical,
   Power,
   PowerOff,
   Printer,
@@ -42,6 +43,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Card,
   CardContent,
@@ -110,6 +118,14 @@ const translations = {
     refresh: "تحديث",
     export: "تصدير Excel",
     print: "طباعة",
+    companyFallback: "الشركة الحالية",
+    printBlocked: "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم حاول مجددًا.",
+    printEmpty: "لا توجد مراكز تكلفة مطابقة للطباعة.",
+    printReady: "تم تجهيز تقرير مراكز التكلفة للطباعة.",
+    generatedAt: "تاريخ التجهيز",
+    searchLabel: "البحث",
+    filtersApplied: "الفلاتر المطبقة",
+    noFilters: "بدون فلاتر إضافية",
     reset: "إعادة ضبط",
     total: "إجمالي المراكز",
     active: "نشطة",
@@ -171,6 +187,7 @@ const translations = {
     loadFailed: "تعذر تحميل مراكز التكلفة.",
     saveSuccess: "تم حفظ مركز التكلفة بنجاح.",
     statusSuccess: "تم تحديث حالة مركز التكلفة بنجاح.",
+    updatingStatus: "جارٍ تحديث الحالة...",
     actionFailed: "تعذر تنفيذ العملية.",
     required: "الاسم مطلوب.",
     ACTIVE: "نشط",
@@ -188,6 +205,14 @@ const translations = {
     refresh: "Refresh",
     export: "Export Excel",
     print: "Print",
+    companyFallback: "Current Company",
+    printBlocked: "The print window could not be opened. Allow pop-ups and try again.",
+    printEmpty: "There are no matching cost centers to print.",
+    printReady: "The cost centers report is ready to print.",
+    generatedAt: "Generated at",
+    searchLabel: "Search",
+    filtersApplied: "Applied filters",
+    noFilters: "No additional filters",
     reset: "Reset",
     total: "Total centers",
     active: "Active",
@@ -249,6 +274,7 @@ const translations = {
     loadFailed: "Could not load cost centers.",
     saveSuccess: "Cost center saved successfully.",
     statusSuccess: "Cost center status updated successfully.",
+    updatingStatus: "Updating status...",
     actionFailed: "Action failed.",
     required: "Name is required.",
     ACTIVE: "Active",
@@ -262,11 +288,7 @@ function getInitialLocale(): Locale {
   return window.localStorage.getItem("primey-locale") === "en" ? "en" : "ar";
 }
 function apiBase() {
-  const value = (
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    ""
-  ).replace(/\/+$/, "");
+  const value = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/+$/, "");
   return value.endsWith("/api") ? value.slice(0, -4) : value;
 }
 function apiUrl(path: string) {
@@ -330,6 +352,72 @@ function numberValue(value: unknown) {
 function formatInteger(value: number) {
   return Math.trunc(value || 0).toLocaleString("en-US");
 }
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+function extractCompanyName(
+  payload: unknown,
+  locale: Locale,
+  fallback: string,
+) {
+  const source = record(payload);
+  const data = record(source.data);
+  const membership = record(source.membership || data.membership);
+  const candidates = [
+    source.company,
+    source.current_company,
+    source.active_company,
+    source.workspace_company,
+    data.company,
+    data.current_company,
+    data.active_company,
+    data.workspace_company,
+    membership.company,
+  ];
+  for (const candidate of candidates) {
+    const company = record(candidate);
+    const localizedName =
+      locale === "ar"
+        ? company.name_ar ||
+          company.legal_name_ar ||
+          company.commercial_name_ar
+        : company.name_en ||
+          company.legal_name_en ||
+          company.commercial_name_en;
+    const result = text(
+      localizedName ||
+        company.legal_name ||
+        company.commercial_name ||
+        company.company_name ||
+        company.display_name ||
+        company.name,
+    );
+    if (result) return result;
+  }
+  return text(
+    source.company_name ||
+      source.current_company_name ||
+      source.active_company_name ||
+      data.company_name ||
+      data.current_company_name ||
+      data.active_company_name,
+  ) || fallback;
+}
+function formatDateTime(value: Date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(value);
+}
 function normalizeCostCenter(value: unknown): CostCenter {
   const row = record(value);
   return {
@@ -378,19 +466,19 @@ function KpiCard({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <Card className="group h-[128px] overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 p-5 pb-2">
+    <Card className="group rounded-lg border bg-card shadow-none transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-sm">
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
         <div className="min-w-0">
           <CardDescription className="truncate text-sm">{title}</CardDescription>
-          <CardTitle className="mt-2 text-2xl font-black tracking-tight tabular-nums">
+          <CardTitle className="mt-2 text-xl font-bold tracking-tight tabular-nums">
             {formatInteger(value)}
           </CardTitle>
         </div>
-        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+        <span className="rounded-lg border bg-background p-2.5 text-muted-foreground transition group-hover:border-foreground/20 group-hover:text-foreground">
           <Icon className="h-5 w-5" />
         </span>
       </CardHeader>
-      <CardContent className="px-5 pt-0">
+      <CardContent className="pt-0">
         <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
       </CardContent>
     </Card>
@@ -408,7 +496,9 @@ export default function CompanyAccountingCostCentersPage() {
   const [sort, setSort] = React.useState<SortKey>("code");
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
+  const [statusUpdating, setStatusUpdating] = React.useState(false);
   const [actionTarget, setActionTarget] = React.useState<CostCenter | null>(null);
+  const [companyName, setCompanyName] = React.useState("");
   React.useEffect(() => {
     const applyLocale = () => {
       const next = getInitialLocale();
@@ -425,6 +515,22 @@ export default function CompanyAccountingCostCentersPage() {
       window.removeEventListener("primey-locale-changed", applyLocale);
     };
   }, []);
+  React.useEffect(() => {
+    let active = true;
+    void fetchJson<unknown>("/api/auth/whoami/")
+      .then((payload) => {
+        if (!active) return;
+        setCompanyName(
+          extractCompanyName(payload, locale, translations[locale].companyFallback),
+        );
+      })
+      .catch(() => {
+        if (active) setCompanyName(translations[locale].companyFallback);
+      });
+    return () => {
+      active = false;
+    };
+  }, [locale]);
   const stats = React.useMemo(() => {
     return {
       total: costCenters.length,
@@ -534,127 +640,321 @@ export default function CompanyAccountingCostCentersPage() {
     }
   }
   async function changeStatus(costCenter: CostCenter) {
-    const nextAction = costCenter.status === "ACTIVE" ? "deactivate" : "activate";
+    const nextAction =
+      costCenter.status === "ACTIVE" ? "deactivate" : "activate";
+    setStatusUpdating(true);
     try {
-      await fetchJson(`/api/company/accounting/cost-centers/${costCenter.id}/${nextAction}/`, {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
+      await fetchJson(
+        `/api/company/accounting/cost-centers/${costCenter.id}/${nextAction}/`,
+        {
+          method: "POST",
+          body: JSON.stringify({}),
+        },
+      );
       toast.success(t.statusSuccess);
       setActionTarget(null);
       await loadCostCenters();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t.actionFailed);
+    } finally {
+      setStatusUpdating(false);
     }
   }
+  function filterSummary() {
+    const values: string[] = [];
+    if (search.trim()) values.push(`${t.searchLabel}: ${search.trim()}`);
+    if (status !== "all") {
+      values.push(status === "ACTIVE" ? t.activeOnly : t.inactiveOnly);
+    }
+    if (type !== "all") {
+      values.push(type === "group" ? t.groupOnly : t.postableOnly);
+    }
+    values.push(
+      sort === "code"
+        ? t.sortCode
+        : sort === "name"
+          ? t.sortName
+          : t.sortLevel,
+    );
+    return values.length ? values.join(" · ") : t.noFilters;
+  }
+  function buildCostCentersDocument(mode: "excel" | "print") {
+    const rows = filteredCostCenters
+      .map(
+        (item) => `
+          <tr>
+            <td>${escapeHtml(item.code)}</td>
+            <td>${escapeHtml(item.name)}</td>
+            <td>${escapeHtml(item.nameEn || "—")}</td>
+            <td>${escapeHtml(
+              item.parentCode
+                ? `${item.parentCode} — ${item.parentName}`
+                : t.noParent,
+            )}</td>
+            <td>${escapeHtml(formatInteger(item.level))}</td>
+            <td>${escapeHtml(item.isGroup ? t.group : t.leaf)}</td>
+            <td>${escapeHtml(
+              item.status === "ACTIVE" ? t.ACTIVE : t.INACTIVE,
+            )}</td>
+            <td>${escapeHtml(item.canPost ? t.yes : t.no)}</td>
+            <td>${escapeHtml(item.description || "—")}</td>
+          </tr>`,
+      )
+      .join("");
+    const isPrint = mode === "print";
+    return `<!doctype html>
+      <html lang="${locale}" dir="${dir}">
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(t.tableTitle)}</title>
+          <style>
+            @page { size: A4 landscape; margin: 10mm; }
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              color: #000;
+              background: #fff;
+              font-family: Tahoma, Arial, sans-serif;
+              font-size: 10px;
+            }
+            .report { width: 100%; }
+            .head {
+              display: flex;
+              align-items: flex-start;
+              justify-content: space-between;
+              gap: 16px;
+              margin-bottom: 10px;
+            }
+            .company {
+              font-size: 13px;
+              font-weight: 700;
+              line-height: 1.6;
+            }
+            h1 { margin: 3px 0 0; font-size: 20px; }
+            .meta {
+              min-width: 235px;
+              border: 1px solid #000;
+              padding: 7px 9px;
+              line-height: 1.8;
+            }
+            .filters {
+              margin: 0 0 9px;
+              border: 1px solid #000;
+              padding: 7px 9px;
+              line-height: 1.7;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              table-layout: fixed;
+            }
+            thead { display: table-header-group; }
+            tr { break-inside: avoid; }
+            th, td {
+              border: 1px solid #000;
+              padding: 6px 5px;
+              vertical-align: top;
+              overflow-wrap: anywhere;
+            }
+            th {
+              background: #f1f1f1;
+              font-weight: 700;
+              text-align: ${locale === "ar" ? "right" : "left"};
+            }
+            td:nth-child(1),
+            td:nth-child(5) {
+              direction: ltr;
+              text-align: center;
+              font-variant-numeric: tabular-nums;
+            }
+            .footer {
+              display: flex;
+              justify-content: space-between;
+              gap: 12px;
+              margin-top: 8px;
+              font-size: 9px;
+            }
+            ${isPrint ? "" : ".footer { display: none; }"}
+          </style>
+        </head>
+        <body>
+          <section class="report">
+            <div class="head">
+              <div>
+                <div class="company">${escapeHtml(
+                  companyName || t.companyFallback,
+                )}</div>
+                <h1>${escapeHtml(t.tableTitle)}</h1>
+              </div>
+              <div class="meta">
+                <div><strong>${escapeHtml(t.total)}:</strong> ${escapeHtml(
+                  formatInteger(filteredCostCenters.length),
+                )}</div>
+                <div><strong>${escapeHtml(t.generatedAt)}:</strong> ${escapeHtml(
+                  formatDateTime(new Date()),
+                )}</div>
+              </div>
+            </div>
+            <div class="filters">
+              <strong>${escapeHtml(t.filtersApplied)}:</strong>
+              ${escapeHtml(filterSummary())}
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>${escapeHtml(t.code)}</th>
+                  <th>${escapeHtml(t.name)}</th>
+                  <th>${escapeHtml(t.nameEn)}</th>
+                  <th>${escapeHtml(t.parent)}</th>
+                  <th>${escapeHtml(t.level)}</th>
+                  <th>${escapeHtml(t.type)}</th>
+                  <th>${escapeHtml(t.status)}</th>
+                  <th>${escapeHtml(t.canPost)}</th>
+                  <th>${escapeHtml(t.description)}</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+            <div class="footer">
+              <span>${escapeHtml(companyName || t.companyFallback)}</span>
+              <span>${escapeHtml(formatDateTime(new Date()))}</span>
+            </div>
+          </section>
+        </body>
+      </html>`;
+  }
   function exportExcel() {
-    const headers = [
-      t.code,
-      t.name,
-      t.nameEn,
-      t.parent,
-      t.level,
-      t.type,
-      t.status,
-      t.canPost,
-      t.description,
-    ];
-    const rows = filteredCostCenters.map((item) => [
-      item.code,
-      item.name,
-      item.nameEn,
-      item.parentCode ? `${item.parentCode} — ${item.parentName}` : t.noParent,
-      String(item.level),
-      item.isGroup ? t.group : t.leaf,
-      item.status === "ACTIVE" ? t.ACTIVE : t.INACTIVE,
-      item.canPost ? t.yes : t.no,
-      item.description,
-    ]);
-    const html = `<html><head><meta charset="utf-8" /></head><body><table border="1"><thead><tr>${headers
-      .map((header) => `<th>${header}</th>`)
-      .join("")}</tr></thead><tbody>${rows
-      .map((row) => `<tr>${row.map((cell) => `<td>${String(cell).replaceAll("<", "&lt;")}</td>`).join("")}</tr>`)
-      .join("")}</tbody></table></body></html>`;
-    const blob = new Blob(["\ufeff", html], {
-      type: "application/vnd.ms-excel;charset=utf-8;",
-    });
+    if (!filteredCostCenters.length) {
+      toast.error(t.printEmpty);
+      return;
+    }
+    const blob = new Blob(
+      ["\ufeff", buildCostCentersDocument("excel")],
+      { type: "application/vnd.ms-excel;charset=utf-8;" },
+    );
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "cost-centers.xls";
+    anchor.download = `cost-centers-${new Date().toISOString().slice(0, 10)}.xls`;
     anchor.click();
     URL.revokeObjectURL(url);
   }
+  function printCostCenters() {
+    if (!filteredCostCenters.length) {
+      toast.error(t.printEmpty);
+      return;
+    }
+    const popup = window.open("", "_blank", "width=1500,height=950");
+    if (!popup) {
+      toast.error(t.printBlocked);
+      return;
+    }
+    popup.opener = null;
+    popup.document.open();
+    popup.document.write(buildCostCentersDocument("print"));
+    popup.document.close();
+    popup.onafterprint = () => popup.close();
+    window.setTimeout(() => {
+      popup.focus();
+      popup.print();
+    }, 300);
+    toast.success(t.printReady);
+  }
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1500px] space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
-          <div className="relative min-h-[154px] p-5 sm:p-7">
-            <div className="absolute inset-x-0 top-0 h-[5px] bg-slate-950" />
-            <div className="flex h-full flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="max-w-4xl">
-                <div className="mb-2 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  {t.badge}
-                </div>
-                <h1 className="text-3xl font-black tracking-tight sm:text-4xl">{t.title}</h1>
-                <p className="mt-2 max-w-4xl text-sm leading-7 text-muted-foreground">{t.subtitle}</p>
-                <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                  <Link href="/company/accounting" className="rounded-full border bg-background px-3 py-1 transition hover:bg-muted">
-                    <ArrowLeft className="inline h-3.5 w-3.5" /> {t.accountingDashboard}
-                  </Link>
-                  <Link href="/company/accounting/journal-entries" className="rounded-full border bg-background px-3 py-1 transition hover:bg-muted">
-                    {t.journalEntries}
-                  </Link>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button className="rounded-xl bg-slate-950 text-white shadow-sm hover:bg-slate-800" onClick={() => window.print()}>
-                  <Printer className="h-4 w-4" />
-                  {t.print}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background shadow-sm hover:bg-muted/70" onClick={exportExcel}>
-                  <FileSpreadsheet className="h-4 w-4" />
-                  {t.export}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background shadow-sm hover:bg-muted/70" onClick={() => void loadCostCenters()}>
-                  <RefreshCw className="h-4 w-4" />
-                  {t.refresh}
-                </Button>
-              </div>
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-4xl">
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              {t.badge}
+            </div>
+            <h1 className="text-3xl font-black tracking-tight">{t.title}</h1>
+            <p className="mt-2 max-w-4xl text-sm leading-7 text-muted-foreground">
+              {t.subtitle}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <Button asChild type="button" variant="outline" size="sm">
+                <Link href="/company/accounting">
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  {t.accountingDashboard}
+                </Link>
+              </Button>
+              <Button asChild type="button" variant="outline" size="sm">
+                <Link href="/company/accounting/journal-entries">
+                  {t.journalEntries}
+                </Link>
+              </Button>
             </div>
           </div>
-        </section>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" onClick={printCostCenters}>
+              <Printer className="h-4 w-4" />
+              {t.print}
+            </Button>
+            <Button type="button" variant="outline" onClick={exportExcel}>
+              <FileSpreadsheet className="h-4 w-4" />
+              {t.export}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void loadCostCenters()}
+              disabled={loading}
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {t.refresh}
+            </Button>
+          </div>
+        </header>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <KpiCard title={t.total} value={stats.total} description={t.totalDesc} icon={FolderTree} />
           <KpiCard title={t.active} value={stats.active} description={t.activeDesc} icon={CheckCircle2} />
           <KpiCard title={t.groups} value={stats.groups} description={t.groupsDesc} icon={Layers3} />
           <KpiCard title={t.postable} value={stats.postable} description={t.postableDesc} icon={Power} />
         </div>
-        <Card className="rounded-2xl border-border/70 bg-card shadow-sm transition hover:shadow-md">
-          <CardHeader className="px-5 py-4 sm:px-6">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <Card className="rounded-lg border bg-card shadow-none">
+          <CardHeader className="px-5 pt-5 sm:px-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <CardTitle>{form.id ? t.formEdit : t.formCreate}</CardTitle>
+                <CardTitle className="text-base">
+                  {form.id ? t.formEdit : t.formCreate}
+                </CardTitle>
                 <CardDescription className="mt-1">{t.formDesc}</CardDescription>
               </div>
-              {form.id ? (
-                <Button variant="outline" className="rounded-xl bg-background" onClick={resetForm}>
-                  <RotateCcw className="h-4 w-4" />
-                  {t.cancelEdit}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={() => void submitForm()}
+                  disabled={saving}
+                >
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  {saving ? t.saving : t.save}
                 </Button>
-              ) : null}
+                <Button type="button" variant="outline" onClick={resetForm}>
+                  <RotateCcw className="h-4 w-4" />
+                  {form.id ? t.cancelEdit : t.reset}
+                </Button>
+              </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4 px-5 pb-5 sm:px-6 sm:pb-5">
-            <div className="grid gap-3 rounded-2xl border bg-muted/20 p-3 lg:grid-cols-[140px_1fr_1fr_220px_150px_150px]">
+          <CardContent className="space-y-4 px-5 pb-5 sm:px-6">
+            <div className="grid gap-4 rounded-lg border bg-background p-4 md:grid-cols-2 xl:grid-cols-[150px_1fr_1fr_220px_160px_160px]">
               <label className="space-y-2">
                 <span className="text-xs font-medium text-muted-foreground">{t.code}</span>
                 <Input
                   value={form.id ? form.code : t.autoCode}
                   readOnly
                   placeholder={t.codePlaceholder}
-                  className="h-9 rounded-xl bg-muted/40 font-mono text-sm font-bold tabular-nums text-muted-foreground"
+                  className="h-10 bg-muted/40 font-mono text-sm font-bold tabular-nums text-muted-foreground"
                 />
               </label>
               <label className="space-y-2">
@@ -665,7 +965,7 @@ export default function CompanyAccountingCostCentersPage() {
                     setForm((current) => ({ ...current, name: event.target.value }))
                   }
                   placeholder={t.namePlaceholder}
-                  className="h-9 rounded-xl bg-background"
+                  className="h-10 bg-background"
                 />
               </label>
               <label className="space-y-2">
@@ -676,7 +976,7 @@ export default function CompanyAccountingCostCentersPage() {
                     setForm((current) => ({ ...current, nameEn: event.target.value }))
                   }
                   placeholder={t.nameEnPlaceholder}
-                  className="h-9 rounded-xl bg-background"
+                  className="h-10 bg-background"
                 />
               </label>
               <label className="space-y-2">
@@ -690,10 +990,10 @@ export default function CompanyAccountingCostCentersPage() {
                     }))
                   }
                 >
-                  <SelectTrigger className="h-9 rounded-xl bg-background">
+                  <SelectTrigger className="h-10 bg-background">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[min(70vh,420px)] overflow-y-auto overscroll-contain">
                     <SelectItem value={NO_PARENT}>{t.noParent}</SelectItem>
                     {groupOptions.map((item) => (
                       <SelectItem key={item.id} value={String(item.id)}>
@@ -711,7 +1011,7 @@ export default function CompanyAccountingCostCentersPage() {
                     setForm((current) => ({ ...current, isGroup: value === "group" }))
                   }
                 >
-                  <SelectTrigger className="h-9 rounded-xl bg-background">
+                  <SelectTrigger className="h-10 bg-background">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -731,7 +1031,7 @@ export default function CompanyAccountingCostCentersPage() {
                     }))
                   }
                 >
-                  <SelectTrigger className="h-9 rounded-xl bg-background">
+                  <SelectTrigger className="h-10 bg-background">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -741,50 +1041,60 @@ export default function CompanyAccountingCostCentersPage() {
                 </Select>
               </label>
             </div>
-            <div className="grid gap-3 lg:grid-cols-[1fr_160px]">
-              <label className="space-y-2">
-                <span className="text-xs font-medium text-muted-foreground">{t.description}</span>
-                <textarea
-                  value={form.description}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, description: event.target.value }))
-                  }
-                  placeholder={t.descriptionPlaceholder}
-                  className="min-h-[72px] w-full resize-none rounded-xl border bg-background px-3 py-2 text-sm outline-none transition placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                />
-              </label>
-              <div className="flex items-end">
-                <Button
-                  className="h-10 w-full rounded-xl bg-slate-950 text-white hover:bg-slate-800"
-                  onClick={() => void submitForm()}
-                  disabled={saving}
-                >
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  {saving ? t.saving : t.save}
+            <label className="space-y-2">
+              <span className="text-xs font-medium text-muted-foreground">
+                {t.description}
+              </span>
+              <textarea
+                value={form.description}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    description: event.target.value,
+                  }))
+                }
+                placeholder={t.descriptionPlaceholder}
+                className="min-h-[92px] w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none transition placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
+              />
+            </label>
+          </CardContent>
+        </Card>
+        <Card className="rounded-lg border bg-card shadow-none">
+          <CardHeader className="px-5 pt-5 sm:px-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-base">{t.tableTitle}</CardTitle>
+                  <Badge variant="outline" className="rounded-full">
+                    {formatInteger(filteredCostCenters.length)}
+                  </Badge>
+                </div>
+                <CardDescription className="mt-1">{t.tableDesc}</CardDescription>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" onClick={printCostCenters}>
+                  <Printer className="h-4 w-4" />
+                  {t.print}
+                </Button>
+                <Button type="button" variant="outline" onClick={exportExcel}>
+                  <FileSpreadsheet className="h-4 w-4" />
+                  {t.export}
                 </Button>
               </div>
             </div>
-          </CardContent>
-        </Card>
-        <Card className="rounded-2xl border-border/70 bg-card shadow-sm transition hover:shadow-md">
-          <CardHeader className="px-5 py-4 sm:px-6">
-            <div>
-              <CardTitle>{t.tableTitle}</CardTitle>
-              <CardDescription className="mt-1">{t.tableDesc}</CardDescription>
-            </div>
-            <div className="mt-4 flex flex-col gap-3 rounded-2xl border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="mt-4 flex flex-col gap-3 rounded-lg border bg-background p-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="relative min-w-0 flex-1">
                 <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder={t.searchPlaceholder}
-                  className="h-10 rounded-xl bg-background ps-9"
+                  className="h-10 bg-background ps-9"
                 />
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[145px]">
+                  <SelectTrigger className="h-10 bg-background sm:w-[145px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -794,7 +1104,7 @@ export default function CompanyAccountingCostCentersPage() {
                   </SelectContent>
                 </Select>
                 <Select value={type} onValueChange={(value) => setType(value as TypeFilter)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[150px]">
+                  <SelectTrigger className="h-10 bg-background sm:w-[150px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -804,7 +1114,7 @@ export default function CompanyAccountingCostCentersPage() {
                   </SelectContent>
                 </Select>
                 <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[160px]">
+                  <SelectTrigger className="h-10 bg-background sm:w-[160px]">
                     <ArrowUpDown className="h-4 w-4" />
                     <SelectValue />
                   </SelectTrigger>
@@ -814,7 +1124,7 @@ export default function CompanyAccountingCostCentersPage() {
                     <SelectItem value="level">{t.sortLevel}</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={resetFilters}>
+                <Button variant="outline" className="h-10 bg-background" onClick={resetFilters}>
                   <RotateCcw className="h-4 w-4" />
                   {t.reset}
                 </Button>
@@ -829,12 +1139,12 @@ export default function CompanyAccountingCostCentersPage() {
                 ))}
               </div>
             ) : filteredCostCenters.length ? (
-              <div className="overflow-hidden rounded-2xl border">
+              <div className="overflow-hidden rounded-lg border">
                 <div className="overflow-x-auto">
                   <Table className="min-w-[1120px] table-fixed">
                     <TableHeader>
                       <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
-                        <TableHead className="w-[130px] text-start">{t.code}</TableHead>
+                        <TableHead className="sticky start-0 z-20 w-[130px] bg-muted/40 text-start">{t.code}</TableHead>
                         <TableHead className="text-start">{t.name}</TableHead>
                         <TableHead className="text-start">{t.nameEn}</TableHead>
                         <TableHead className="w-[220px] text-start">{t.parent}</TableHead>
@@ -842,13 +1152,13 @@ export default function CompanyAccountingCostCentersPage() {
                         <TableHead className="w-[130px] text-center">{t.type}</TableHead>
                         <TableHead className="w-[130px] text-center">{t.status}</TableHead>
                         <TableHead className="w-[130px] text-center">{t.canPost}</TableHead>
-                        <TableHead className="w-[210px] text-center">{t.actions}</TableHead>
+                        <TableHead className="sticky end-0 z-20 w-[84px] bg-muted/40 text-center">{t.actions}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredCostCenters.map((item) => (
-                        <TableRow key={item.id} className="h-[58px] bg-card hover:bg-muted/30">
-                          <TableCell className="font-mono font-black tabular-nums">{item.code}</TableCell>
+                        <TableRow key={item.id} className="group h-[58px] bg-card hover:bg-muted/30">
+                          <TableCell className="sticky start-0 z-10 bg-card font-mono font-black tabular-nums group-hover:bg-muted/30">{item.code}</TableCell>
                           <TableCell className="font-semibold">{item.name}</TableCell>
                           <TableCell className="text-muted-foreground">{item.nameEn || "—"}</TableCell>
                           <TableCell>
@@ -878,25 +1188,53 @@ export default function CompanyAccountingCostCentersPage() {
                               </Badge>
                             )}
                           </TableCell>
-                          <TableCell>
-                            <div className="flex items-center justify-center gap-2">
-                              <Button variant="outline" size="sm" className="rounded-lg bg-background" onClick={() => editCostCenter(item)}>
-                                <Edit3 className="h-4 w-4" />
-                                {t.edit}
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="rounded-lg bg-background"
-                                onClick={() => setActionTarget(item)}
-                              >
-                                {item.status === "ACTIVE" ? (
-                                  <PowerOff className="h-4 w-4" />
-                                ) : (
-                                  <Power className="h-4 w-4" />
-                                )}
-                                {item.status === "ACTIVE" ? t.deactivate : t.activate}
-                              </Button>
+                          <TableCell className="sticky end-0 z-10 bg-card group-hover:bg-muted/30">
+                            <div
+                              className="flex items-center justify-center"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    aria-label={t.actions}
+                                  >
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                  align={locale === "ar" ? "start" : "end"}
+                                  className="w-44"
+                                >
+                                  <DropdownMenuItem
+                                    className="text-amber-700 focus:bg-amber-50 focus:text-amber-800"
+                                    onClick={() => editCostCenter(item)}
+                                  >
+                                    <Edit3 className="h-4 w-4" />
+                                    {t.edit}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className={
+                                      item.status === "ACTIVE"
+                                        ? "text-red-600 focus:bg-red-50 focus:text-red-700"
+                                        : "text-emerald-700 focus:bg-emerald-50 focus:text-emerald-800"
+                                    }
+                                    onClick={() => setActionTarget(item)}
+                                  >
+                                    {item.status === "ACTIVE" ? (
+                                      <PowerOff className="h-4 w-4" />
+                                    ) : (
+                                      <Power className="h-4 w-4" />
+                                    )}
+                                    {item.status === "ACTIVE"
+                                      ? t.deactivate
+                                      : t.activate}
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -906,7 +1244,7 @@ export default function CompanyAccountingCostCentersPage() {
                 </div>
               </div>
             ) : (
-              <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed bg-muted/20 px-6 py-10 text-center">
+              <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-muted/20 px-6 py-10 text-center">
                 <Search className="h-7 w-7 text-muted-foreground" />
                 <div>
                   <h3 className="text-sm font-semibold">{t.emptyTitle}</h3>
@@ -923,41 +1261,107 @@ export default function CompanyAccountingCostCentersPage() {
         <AlertDialog
           open={Boolean(actionTarget)}
           onOpenChange={(open) => {
-            if (!open) setActionTarget(null);
+            if (!open && !statusUpdating) {
+              setActionTarget(null);
+            }
           }}
         >
-          <AlertDialogContent dir={dir} className="rounded-2xl border bg-card shadow-2xl sm:max-w-[520px]">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="text-xl font-black">
-                {actionTarget?.status === "ACTIVE" ? t.confirmDeactivate : t.confirmActivate}
-              </AlertDialogTitle>
-              <AlertDialogDescription className="leading-7">
-                {actionTarget?.status === "ACTIVE" ? t.deactivateDesc : t.activateDesc}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            {actionTarget ? (
-              <div className="grid gap-3 rounded-2xl border bg-muted/20 p-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-slate-200 bg-slate-50/90 px-3 py-2 shadow-inner">
-                  <p className="text-xs text-muted-foreground">{t.code}</p>
-                  <p className="mt-1 font-mono text-sm font-black tabular-nums">{actionTarget.code}</p>
+          <AlertDialogContent
+            dir={dir}
+            className="overflow-hidden rounded-xl border bg-background p-0 shadow-2xl sm:max-w-[520px]"
+          >
+            <div className="px-6 pb-4 pt-6">
+              <AlertDialogHeader className="text-start">
+                <div className="flex items-start gap-3">
+                  <span
+                    className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${
+                      actionTarget?.status === "ACTIVE"
+                        ? "border-rose-100 bg-rose-50 text-rose-600"
+                        : "border-emerald-100 bg-emerald-50 text-emerald-600"
+                    }`}
+                  >
+                    {actionTarget?.status === "ACTIVE" ? (
+                      <PowerOff className="h-4 w-4" />
+                    ) : (
+                      <Power className="h-4 w-4" />
+                    )}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <AlertDialogTitle
+                      className={`text-lg font-black ${
+                        actionTarget?.status === "ACTIVE"
+                          ? "text-rose-600"
+                          : "text-emerald-700"
+                      }`}
+                    >
+                      {actionTarget?.status === "ACTIVE"
+                        ? t.confirmDeactivate
+                        : t.confirmActivate}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription className="mt-2 leading-7 text-muted-foreground">
+                      {actionTarget?.status === "ACTIVE"
+                        ? t.deactivateDesc
+                        : t.activateDesc}
+                    </AlertDialogDescription>
+                  </div>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50/90 px-3 py-2 shadow-inner">
-                  <p className="text-xs text-muted-foreground">{t.name}</p>
-                  <p className="mt-1 text-sm font-black">{actionTarget.name}</p>
+              </AlertDialogHeader>
+            </div>
+            {actionTarget ? (
+              <div className="px-6 pb-5">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border bg-background px-3 py-3">
+                    <p className="text-xs text-muted-foreground">
+                      {t.code}
+                    </p>
+                    <p className="mt-1 font-mono text-sm font-black tabular-nums">
+                      {actionTarget.code}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border bg-background px-3 py-3">
+                    <p className="text-xs text-muted-foreground">
+                      {t.name}
+                    </p>
+                    <p className="mt-1 text-sm font-black">
+                      {actionTarget.name}
+                    </p>
+                  </div>
                 </div>
               </div>
             ) : null}
-            <AlertDialogFooter className="gap-2 sm:justify-start">
-              <AlertDialogCancel className="rounded-xl bg-background">{t.cancel}</AlertDialogCancel>
+            <AlertDialogFooter className="gap-2 border-t bg-muted/20 px-6 py-4 sm:justify-start">
+              <AlertDialogCancel
+                className="bg-background"
+                disabled={statusUpdating}
+              >
+                {t.cancel}
+              </AlertDialogCancel>
               <AlertDialogAction
-                className="rounded-xl bg-slate-950 text-white hover:bg-slate-800"
-                onClick={() => {
+                className={
+                  actionTarget?.status === "ACTIVE"
+                    ? "bg-rose-600 text-white hover:bg-rose-700 focus-visible:ring-rose-600"
+                    : "bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-600"
+                }
+                disabled={statusUpdating}
+                onClick={(event) => {
+                  event.preventDefault();
                   if (actionTarget) {
                     void changeStatus(actionTarget);
                   }
                 }}
               >
-                {t.confirm}
+                {statusUpdating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : actionTarget?.status === "ACTIVE" ? (
+                  <PowerOff className="h-4 w-4" />
+                ) : (
+                  <Power className="h-4 w-4" />
+                )}
+                {statusUpdating
+                  ? t.updatingStatus
+                  : actionTarget?.status === "ACTIVE"
+                    ? t.deactivate
+                    : t.activate}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -19,8 +19,8 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-  Activity,
   ArrowDownLeft,
   ArrowUpDown,
   ArrowUpRight,
@@ -29,23 +29,26 @@ import {
   BarChart3,
   BookOpen,
   Calculator,
+  CalendarDays,
   CheckCircle2,
   CircleDollarSign,
+  ExternalLink,
   FileSpreadsheet,
   Landmark,
   Layers3,
   Loader2,
+  MoreVertical,
   Printer,
   RefreshCw,
   RotateCcw,
   Search,
-  Sparkles,
   TriangleAlert,
   WalletCards,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Card,
   CardContent,
@@ -54,6 +57,18 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -437,6 +452,72 @@ function formatDate(value: string | null | undefined) {
   if (Number.isNaN(parsed.getTime())) return String(value).slice(0, 10);
   return parsed.toISOString().slice(0, 10);
 }
+function parseIsoDate(value: string) {
+  if (!value) return undefined;
+  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+}
+function dateToIso(value?: Date) {
+  if (!value) return "";
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+function formatReportDateTime(value = new Date()) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  const hours = String(value.getHours()).padStart(2, "0");
+  const minutes = String(value.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
+function DatePickerField({
+  value,
+  onChange,
+  placeholder,
+  locale,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  locale: Locale;
+}) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className={cn(
+            "h-9 w-full justify-start rounded-lg bg-background px-3 text-start font-normal shadow-none sm:w-[150px]",
+            !value && "text-muted-foreground",
+          )}
+        >
+          <CalendarDays className="me-2 h-4 w-4 shrink-0 text-muted-foreground" />
+          <span dir="ltr" lang="en" className="truncate tabular-nums">
+            {value || placeholder}
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align={locale === "ar" ? "end" : "start"}>
+        <Calendar
+          mode="single"
+          selected={parseIsoDate(value)}
+          onSelect={(date) => {
+            if (date) {
+              onChange(dateToIso(date));
+              setOpen(false);
+            }
+          }}
+          initialFocus
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
 function escapeHtml(value: unknown) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -450,18 +531,16 @@ function getInitialLocale(): Locale {
   return window.localStorage.getItem("primey-locale") === "en" ? "en" : "ar";
 }
 function getApiBaseUrl() {
-  const fallbackBase = "http://127.0.0.1:8000";
   const envBase =
     typeof process !== "undefined"
-      ? (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "").replace(
-          /\/+$/,
-          "",
-        )
+      ? (process.env.NEXT_PUBLIC_API_URL || "").trim().replace(/\/+$/, "")
       : "";
 
-  if (!envBase) return fallbackBase;
-  if (envBase.endsWith("/api")) return envBase.slice(0, -4);
-  return envBase;
+  if (!envBase) {
+    throw new Error("NEXT_PUBLIC_API_URL is not configured.");
+  }
+
+  return envBase.endsWith("/api") ? envBase.slice(0, -4) : envBase;
 }
 function makeApiUrl(path: string, params?: URLSearchParams) {
   const query = params?.toString();
@@ -602,10 +681,23 @@ function rowDateValue(value: string | null | undefined) {
 }
 function getStatusLabel(value: string, locale: Locale) {
   const normalized = value.toLowerCase();
-  if (normalized.includes("post") || value.includes("مرح")) return locale === "ar" ? "مرحّل" : "Posted";
-  if (normalized.includes("draft") || value.includes("مسودة")) return locale === "ar" ? "مسودة" : "Draft";
-  if (normalized.includes("cancel") || value.includes("ملغ")) return locale === "ar" ? "ملغي" : "Cancelled";
-  if (normalized.includes("active") || value.includes("نشط")) return locale === "ar" ? "نشط" : "Active";
+
+  if (normalized.includes("revers")) {
+    return locale === "ar" ? "معكوس" : "Reversed";
+  }
+  if (normalized.includes("post") || value.includes("مرح")) {
+    return locale === "ar" ? "مرحّل" : "Posted";
+  }
+  if (normalized.includes("draft") || value.includes("مسودة")) {
+    return locale === "ar" ? "مسودة" : "Draft";
+  }
+  if (normalized.includes("cancel") || value.includes("ملغ")) {
+    return locale === "ar" ? "ملغي" : "Cancelled";
+  }
+  if (normalized.includes("active") || value.includes("نشط")) {
+    return locale === "ar" ? "نشط" : "Active";
+  }
+
   return value || "—";
 }
 function getBadgeClass(value: string) {
@@ -616,10 +708,14 @@ function getBadgeClass(value: string) {
   if (normalized.includes("draft")) {
     return "border-amber-200 bg-amber-50 text-amber-700";
   }
-  if (normalized.includes("cancel") || normalized.includes("unbalanced")) {
+  if (
+    normalized.includes("cancel") ||
+    normalized.includes("unbalanced") ||
+    normalized.includes("revers")
+  ) {
     return "border-red-200 bg-red-50 text-red-700";
   }
-  return "border-border bg-muted/30 text-muted-foreground";
+  return "border-border bg-background text-muted-foreground";
 }
 function normalizeJournal(value: unknown, index: number): JournalRecord {
   const record = asRecord(value);
@@ -755,9 +851,17 @@ function sortRows(rows: JournalRecord[], sort: SortKey) {
 }
 function MoneyValue({ value, label }: { value: number; label: string }) {
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold tabular-nums">
-      <Image src="/currency/sar.svg" alt={label} width={14} height={14} className="h-3.5 w-3.5" />
-      <span>{formatMoney(value)}</span>
+    <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold">
+      <span dir="ltr" lang="en" className="tabular-nums">
+        {formatMoney(value)}
+      </span>
+      <Image
+        src="/currency/sar.svg"
+        alt={label}
+        width={14}
+        height={14}
+        className="h-3.5 w-3.5 shrink-0"
+      />
     </span>
   );
 }
@@ -786,7 +890,7 @@ function KpiCard({
   t: (typeof translations)[Locale];
 }) {
   return (
-    <Card className="group overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <Card className="group overflow-hidden rounded-lg border bg-card shadow-none transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-sm">
       <Link href={href} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
           <div className="min-w-0">
@@ -795,7 +899,7 @@ function KpiCard({
               {money ? <MoneyValue value={value} label={t.sar} /> : formatInteger(value)}
             </CardTitle>
           </div>
-          <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+          <span className="rounded-lg border bg-background p-2.5 text-muted-foreground transition group-hover:border-foreground/20 group-hover:text-foreground">
             <Icon className="h-5 w-5" />
           </span>
         </CardHeader>
@@ -809,14 +913,14 @@ function KpiCard({
 function DashboardSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border bg-card p-6 shadow-sm">
+      <div className="rounded-lg border bg-card p-6 shadow-sm">
         <Skeleton className="h-5 w-40" />
         <Skeleton className="mt-3 h-8 w-72" />
         <Skeleton className="mt-3 h-4 w-full max-w-2xl" />
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 8 }).map((_, index) => (
-          <Card key={index} className="rounded-2xl">
+          <Card key={index} className="rounded-lg">
             <CardHeader>
               <Skeleton className="h-4 w-28" />
               <Skeleton className="h-8 w-20" />
@@ -827,7 +931,7 @@ function DashboardSkeleton() {
           </Card>
         ))}
       </div>
-      <Card className="rounded-2xl">
+      <Card className="rounded-lg">
         <CardHeader>
           <Skeleton className="h-6 w-52" />
           <Skeleton className="h-4 w-80" />
@@ -862,7 +966,7 @@ function EmptyTableState({
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>
       {showReset && onReset ? (
-        <Button variant="outline" size="sm" onClick={onReset} className="rounded-lg">
+        <Button type="button" variant="outline" size="sm" onClick={onReset}>
           <RotateCcw className="h-4 w-4" />
           {resetLabel}
         </Button>
@@ -883,6 +987,7 @@ function FiltersBar({
   dateTo,
   onDateToChange,
   onReset,
+  locale,
   t,
 }: {
   search: string;
@@ -897,67 +1002,32 @@ function FiltersBar({
   dateTo: string;
   onDateToChange: (value: string) => void;
   onReset: () => void;
+  locale: Locale;
   t: (typeof translations)[Locale];
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
+    <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
       <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(event) => onSearchChange(event.target.value)}
-            placeholder={searchPlaceholder}
-            className="h-10 rounded-xl bg-background ps-9"
-          />
+          <Input value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder={searchPlaceholder} className="h-9 rounded-lg bg-background ps-9" />
         </div>
         <Select value={status} onValueChange={(value) => onStatusChange(value as StatusFilter)}>
-          <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[150px]">
-            <SelectValue />
-          </SelectTrigger>
+          <SelectTrigger className="h-9 rounded-lg bg-background sm:w-[150px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             {statusFilters.map((item) => (
               <SelectItem key={item} value={item}>
-                {item === "all"
-                  ? t.all
-                  : item === "posted"
-                    ? t.posted
-                    : item === "draft"
-                      ? t.draft
-                      : item === "cancelled"
-                        ? t.cancelled
-                        : item === "balanced"
-                          ? t.balanced
-                          : t.notBalanced}
+                {item === "all" ? t.all : item === "posted" ? t.posted : item === "draft" ? t.draft : item === "cancelled" ? t.cancelled : item === "balanced" ? t.balanced : t.notBalanced}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex h-10 items-center gap-2 rounded-xl border bg-background px-3">
-          <span className="text-xs text-muted-foreground">{t.from}</span>
-          <Input
-            type="date"
-            value={dateFrom}
-            onChange={(event) => onDateFromChange(event.target.value)}
-            className="h-8 w-[135px] border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
-          />
-        </div>
-        <div className="flex h-10 items-center gap-2 rounded-xl border bg-background px-3">
-          <span className="text-xs text-muted-foreground">{t.to}</span>
-          <Input
-            type="date"
-            value={dateTo}
-            onChange={(event) => onDateToChange(event.target.value)}
-            className="h-8 w-[135px] border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
-          />
-        </div>
+        <DatePickerField value={dateFrom} onChange={onDateFromChange} placeholder={locale === "ar" ? "من تاريخ" : "From date"} locale={locale} />
+        <DatePickerField value={dateTo} onChange={onDateToChange} placeholder={locale === "ar" ? "إلى تاريخ" : "To date"} locale={locale} />
         <Select value={sort} onValueChange={(value) => onSortChange(value as SortKey)}>
-          <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[160px]">
-            <ArrowUpDown className="h-4 w-4" />
-            <SelectValue />
-          </SelectTrigger>
+          <SelectTrigger className="h-9 rounded-lg bg-background sm:w-[160px]"><ArrowUpDown className="h-4 w-4" /><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="newest">{t.newest}</SelectItem>
             <SelectItem value="oldest">{t.oldest}</SelectItem>
@@ -966,9 +1036,8 @@ function FiltersBar({
             <SelectItem value="number">{t.numberSort}</SelectItem>
           </SelectContent>
         </Select>
-        <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={onReset}>
-          <RotateCcw className="h-4 w-4" />
-          {t.reset}
+        <Button type="button" variant="outline" onClick={onReset}>
+          <RotateCcw className="h-4 w-4" />{t.reset}
         </Button>
       </div>
     </div>
@@ -989,6 +1058,7 @@ function DataTable<T extends { id: string }>({
   showingLabel,
   ofLabel,
   rowsLabel,
+  onRowOpen,
 }: {
   rows: T[];
   allRowsCount: number;
@@ -1004,10 +1074,11 @@ function DataTable<T extends { id: string }>({
   showingLabel: string;
   ofLabel: string;
   rowsLabel: string;
+  onRowOpen?: (row: T) => void;
 }) {
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-2xl border bg-background">
+      <div className="overflow-hidden rounded-lg border bg-background">
         <div className="overflow-x-auto">
           <Table className="min-w-[960px] table-fixed">
             <TableHeader>
@@ -1016,7 +1087,7 @@ function DataTable<T extends { id: string }>({
                   <TableHead
                     key={column.key}
                     className={cn(
-                      "h-11 whitespace-nowrap px-4 text-right text-xs font-semibold text-muted-foreground",
+                      "h-11 whitespace-nowrap px-4 text-start text-xs font-semibold text-muted-foreground",
                       column.className,
                     )}
                   >
@@ -1028,11 +1099,18 @@ function DataTable<T extends { id: string }>({
             <TableBody>
               {rows.length ? (
                 rows.map((row) => (
-                  <TableRow key={rowKey(row)} className="h-[62px]">
+                  <TableRow
+                    key={rowKey(row)}
+                    onClick={onRowOpen ? () => onRowOpen(row) : undefined}
+                    className={cn(
+                      "h-[64px]",
+                      onRowOpen && "cursor-pointer hover:bg-muted/35",
+                    )}
+                  >
                     {columns.map((column) => (
                       <TableCell
                         key={column.key}
-                        className={cn("h-[62px] overflow-hidden px-4 text-right align-middle", column.className)}
+                        className={cn("h-[64px] overflow-hidden px-4 text-start align-middle", column.className)}
                       >
                         {column.render(row)}
                       </TableCell>
@@ -1064,13 +1142,13 @@ function DataTable<T extends { id: string }>({
   );
 }
 export default function CompanyAccountingPage() {
+  const router = useRouter();
   const [locale, setLocale] = React.useState<Locale>("ar");
   const [stats, setStats] = React.useState<DashboardStats>(emptyStats);
   const [entries, setEntries] = React.useState<JournalRecord[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState("");
-  const [warnings, setWarnings] = React.useState<string[]>([]);
   const [entrySearch, setEntrySearch] = React.useState("");
   const [entryStatus, setEntryStatus] = React.useState<StatusFilter>("all");
   const [entrySort, setEntrySort] = React.useState<SortKey>("newest");
@@ -1101,7 +1179,6 @@ export default function CompanyAccountingPage() {
         if (!silent) setLoading(true);
         setRefreshing(true);
         setError("");
-        setWarnings([]);
         const reportParams = new URLSearchParams();
         if (entryDateFrom) reportParams.set("date_from", entryDateFrom);
         if (entryDateTo) reportParams.set("date_to", entryDateTo);
@@ -1136,16 +1213,12 @@ export default function CompanyAccountingPage() {
         );
         setEntries(journalRows);
         const hasPartialData = failedMessages.length > 0 && failedMessages.length < results.length;
-        setWarnings(hasPartialData ? failedMessages.filter(Boolean) : []);
 
         if (hasPartialData && !silent) {
           toast.warning(t.partialWarningTitle);
         }
         if (failedMessages.length === results.length) {
-          setStats(emptyStats);
-          setEntries([]);
-          setWarnings([]);
-          return;
+          throw new Error(failedMessages[0] || t.errorDesc);
         }
 
         if (silent) toast.success(t.refreshed);
@@ -1242,18 +1315,29 @@ export default function CompanyAccountingPage() {
       icon: BookOpen,
     },
   ];
+  const openEntryDetails = React.useCallback(
+    (row: JournalRecord) => {
+      if (!row.number || row.number === "—") return;
+
+      router.push(
+        `/company/accounting/journal-entries/${encodeURIComponent(row.number)}`,
+      );
+    },
+    [router],
+  );
+
   const entryColumns: DataColumn<JournalRecord>[] = [
     {
       key: "number",
       label: t.entryNo,
-      className: "w-[170px]",
-      render: (row) => <span className="font-semibold text-foreground">{row.number}</span>,
+      className: "sticky start-0 z-10 w-[175px] bg-inherit",
+      render: (row) => <span dir="ltr" lang="en" className="block truncate font-semibold text-foreground">{row.number}</span>,
     },
     {
       key: "date",
       label: t.date,
-      className: "w-[140px]",
-      render: (row) => <span className="text-sm text-muted-foreground tabular-nums">{formatDate(row.date)}</span>,
+      className: "w-[125px]",
+      render: (row) => <span dir="ltr" lang="en" className="text-sm tabular-nums text-muted-foreground">{formatDate(row.date)}</span>,
     },
     {
       key: "description",
@@ -1263,69 +1347,757 @@ export default function CompanyAccountingPage() {
     {
       key: "status",
       label: t.status,
-      className: "w-[140px]",
+      className: "w-[125px]",
       render: (row) => <StatusBadge value={row.status} label={getStatusLabel(row.status, locale)} />,
     },
     {
       key: "amount",
       label: t.amount,
-      className: "w-[150px]",
+      className: "w-[135px]",
       render: (row) => <MoneyValue value={row.amount} label={t.sar} />,
     },
+    {
+      key: "actions",
+      label: locale === "ar" ? "الإجراءات" : "Actions",
+      className: "sticky end-0 z-10 w-[76px] bg-inherit text-center",
+      render: (row) => (
+        <div className="flex items-center justify-center" onClick={(event) => event.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={
+                  locale === "ar"
+                    ? "إجراءات القيد"
+                    : "Entry actions"
+                }
+                title={
+                  locale === "ar"
+                    ? "إجراءات القيد"
+                    : "Entry actions"
+                }
+              >
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align={locale === "ar" ? "start" : "end"} className="w-44">
+              <DropdownMenuItem onClick={() => openEntryDetails(row)}>
+                <ExternalLink className="h-4 w-4" />{locale === "ar" ? "فتح التفاصيل" : "Open details"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => openPrintReport(locale === "ar" ? `القيد ${row.number}` : `Entry ${row.number}`, [row], false)}>
+                <Printer className="h-4 w-4" />{locale === "ar" ? "طباعة القيد" : "Print entry"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    },
   ];
+
+  function buildEntriesTableHtml(
+    reportRows: JournalRecord[],
+    mode: "excel" | "print",
+  ) {
+    const excelMode = mode === "excel";
+    const body = reportRows.length
+      ? reportRows
+          .map(
+            (row) => `<tr>
+              <td
+                class="report-text"
+                lang="en-US"
+              >&#8203;${escapeHtml(row.number)}</td>
+              <td
+                class="report-text"
+                lang="en-US"
+              >&#8203;${escapeHtml(formatDate(row.date))}</td>
+              <td class="description-cell">
+                ${escapeHtml(row.description)}
+              </td>
+              <td class="status-cell">
+                ${escapeHtml(
+                  getStatusLabel(row.status, locale),
+                )}
+              </td>
+              <td
+                class="number"
+                lang="en-US"
+                ${excelMode ? `x:num="${row.amount}"` : ""}
+              >${escapeHtml(formatMoney(row.amount))}</td>
+            </tr>`,
+          )
+          .join("")
+      : `<tr>
+          <td
+            colspan="5"
+            class="empty-cell"
+          >
+            ${escapeHtml(t.noDataTitle)}
+          </td>
+        </tr>`;
+    return `<table class="data">
+      <colgroup>
+        ${
+          excelMode
+            ? `
+              <col style="width: 180px;" />
+              <col style="width: 130px;" />
+              <col style="width: 460px;" />
+              <col style="width: 130px;" />
+              <col style="width: 130px;" />
+            `
+            : `
+              <col style="width: 18%;" />
+              <col style="width: 14%;" />
+              <col style="width: 40%;" />
+              <col style="width: 14%;" />
+              <col style="width: 14%;" />
+            `
+        }
+      </colgroup>
+      <thead>
+        <tr>
+          <th>${escapeHtml(t.entryNo)}</th>
+          <th>${escapeHtml(t.date)}</th>
+          <th>${escapeHtml(t.description)}</th>
+          <th>${escapeHtml(t.status)}</th>
+          <th>${escapeHtml(t.amount)}</th>
+        </tr>
+      </thead>
+      <tbody>${body}</tbody>
+    </table>`;
+  }
+  function buildAccountingReport(
+    title: string,
+    reportRows: JournalRecord[],
+    includeSummary: boolean,
+    mode: "excel" | "print",
+  ) {
+    const generatedAt = formatReportDateTime();
+    const excelMode = mode === "excel";
+    const summary = includeSummary
+      ? `<table class="summary">
+          <tbody>
+            <tr>
+              <th>${escapeHtml(t.totalAssets)}</th>
+              <td
+                class="number"
+                ${excelMode ? `x:num="${stats.assets}"` : ""}
+              >
+                ${escapeHtml(formatMoney(stats.assets))}
+              </td>
+              <th>${escapeHtml(t.liabilities)}</th>
+              <td
+                class="number"
+                ${excelMode ? `x:num="${stats.liabilities}"` : ""}
+              >
+                ${escapeHtml(formatMoney(stats.liabilities))}
+              </td>
+            </tr>
+            <tr>
+              <th>${escapeHtml(t.equity)}</th>
+              <td
+                class="number"
+                ${excelMode ? `x:num="${stats.equity}"` : ""}
+              >
+                ${escapeHtml(formatMoney(stats.equity))}
+              </td>
+              <th>${escapeHtml(t.revenue)}</th>
+              <td
+                class="number"
+                ${excelMode ? `x:num="${stats.revenue}"` : ""}
+              >
+                ${escapeHtml(formatMoney(stats.revenue))}
+              </td>
+            </tr>
+            <tr>
+              <th>${escapeHtml(t.expenses)}</th>
+              <td
+                class="number"
+                ${excelMode ? `x:num="${stats.expenses}"` : ""}
+              >
+                ${escapeHtml(formatMoney(stats.expenses))}
+              </td>
+              <th>${escapeHtml(t.netIncome)}</th>
+              <td
+                class="number"
+                ${excelMode ? `x:num="${stats.netIncome}"` : ""}
+              >
+                ${escapeHtml(formatMoney(stats.netIncome))}
+              </td>
+            </tr>
+            <tr>
+              <th>${escapeHtml(t.cashFlow)}</th>
+              <td
+                class="number"
+                ${excelMode ? `x:num="${stats.cashFlow}"` : ""}
+              >
+                ${escapeHtml(formatMoney(stats.cashFlow))}
+              </td>
+              <th>${escapeHtml(t.accounts)}</th>
+              <td
+                class="integer"
+                ${excelMode ? `x:num="${stats.accounts}"` : ""}
+              >
+                ${escapeHtml(formatInteger(stats.accounts))}
+              </td>
+            </tr>
+            <tr>
+              <th>${escapeHtml(t.debit)}</th>
+              <td
+                class="number"
+                ${excelMode ? `x:num="${stats.trialDebit}"` : ""}
+              >
+                ${escapeHtml(formatMoney(stats.trialDebit))}
+              </td>
+              <th>${escapeHtml(t.credit)}</th>
+              <td
+                class="number"
+                ${excelMode ? `x:num="${stats.trialCredit}"` : ""}
+              >
+                ${escapeHtml(formatMoney(stats.trialCredit))}
+              </td>
+            </tr>
+          </tbody>
+        </table>`
+      : "";
+    const officeXml = excelMode
+      ? `<!--[if gte mso 9]>
+          <xml>
+            <x:ExcelWorkbook>
+              <x:ExcelWorksheets>
+                <x:ExcelWorksheet>
+                  <x:Name>
+                    ${escapeHtml(title.slice(0, 31))}
+                  </x:Name>
+                  <x:WorksheetOptions>
+                    ${
+                      locale === "ar"
+                        ? "<x:DisplayRightToLeft/>"
+                        : ""
+                    }
+                    <x:FreezePanes/>
+                    <x:FrozenNoSplit/>
+                    <x:SplitHorizontal>1</x:SplitHorizontal>
+                    <x:TopRowBottomPane>1</x:TopRowBottomPane>
+                    <x:FitToPage/>
+                    <x:Selected/>
+                  </x:WorksheetOptions>
+                </x:ExcelWorksheet>
+              </x:ExcelWorksheets>
+            </x:ExcelWorkbook>
+          </xml>
+        <![endif]-->`
+      : "";
+    return `<!doctype html>
+      <html
+        lang="${locale}"
+        dir="${dir}"
+        xmlns:o="urn:schemas-microsoft-com:office:office"
+        xmlns:x="urn:schemas-microsoft-com:office:excel"
+        xmlns="http://www.w3.org/TR/REC-html40"
+      >
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(title)}</title>
+          ${officeXml}
+          <style>
+            * {
+              box-sizing: border-box;
+            }
+            html,
+            body {
+              width: 100%;
+              margin: 0;
+              background: #ffffff;
+            }
+            body {
+              margin: 0;
+              padding: ${excelMode ? "8px" : "0"};
+              color: #111827;
+              font-family: Tahoma, Arial, sans-serif;
+              font-size: 12px;
+            }
+            .report-sheet {
+              width: ${excelMode ? "1030px" : "100%"};
+              max-width: none;
+              margin: 0 auto;
+            }
+            .report-header {
+              margin-bottom: 12px;
+              padding-bottom: 9px;
+              border-bottom: 2px solid #111827;
+            }
+            h1 {
+              margin: 0;
+              font-size: 24px;
+              line-height: 1.25;
+            }
+            h2 {
+              margin: 16px 0 8px;
+              font-size: 16px;
+              line-height: 1.4;
+            }
+            .meta {
+              margin-top: 7px;
+              color: #4b5563;
+              font-size: 10px;
+            }
+            table {
+              border-collapse: collapse;
+              table-layout: fixed;
+            }
+            .summary,
+            .data {
+              width: ${excelMode ? "1030px" : "100%"};
+            }
+            th,
+            td {
+              border: 1px solid #000000;
+              padding: ${excelMode ? "7px 8px" : "5px 4px"};
+              text-align: start;
+              vertical-align: middle;
+              overflow-wrap: anywhere;
+            }
+            th {
+              background: #e5e7eb;
+              color: #111827;
+              font-weight: 700;
+            }
+            .summary {
+              margin-bottom: 12px;
+            }
+            .summary th {
+              width: 18%;
+              color: #4b5563;
+              font-size: 10px;
+            }
+            .summary td {
+              width: 32%;
+              font-size: 13px;
+              font-weight: 700;
+            }
+            .report-text,
+            .number,
+            .integer {
+              direction: ltr;
+              unicode-bidi: plaintext;
+              font-family: Arial, Tahoma, sans-serif;
+              font-variant-numeric: tabular-nums;
+              white-space: nowrap;
+            }
+            .report-text {
+              mso-number-format: "\\@";
+            }
+            .number {
+              mso-number-format: "0.00";
+              text-align: end;
+            }
+            .integer {
+              mso-number-format: "0";
+              text-align: end;
+            }
+            .description-cell {
+              white-space: normal;
+              overflow-wrap: anywhere;
+            }
+            .status-cell {
+              white-space: nowrap;
+            }
+            .empty-cell {
+              padding: 20px;
+              text-align: center;
+              color: #6b7280;
+            }
+            @page {
+              size: A4 landscape;
+              margin: 8mm;
+            }
+            @media print {
+              html,
+              body,
+              .report-sheet,
+              .summary,
+              .data {
+                width: 100% !important;
+                max-width: none !important;
+              }
+              body {
+                padding: 0 !important;
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+              }
+              thead {
+                display: table-header-group;
+              }
+              tr {
+                break-inside: avoid;
+                page-break-inside: avoid;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <main class="report-sheet">
+            <header class="report-header">
+              <h1>${escapeHtml(title)}</h1>
+              <div class="meta">
+                ${escapeHtml(t.generatedAt)}:
+                <span
+                  class="report-text"
+                  lang="en-US"
+                >
+                  &#8203;${escapeHtml(generatedAt)}
+                </span>
+              </div>
+            </header>
+            ${summary}
+            ${
+              includeSummary
+                ? `<h2>${escapeHtml(t.latestEntries)}</h2>`
+                : ""
+            }
+            ${buildEntriesTableHtml(reportRows, mode)}
+          </main>
+        </body>
+      </html>`;
+  }
+  function downloadExcelReport(
+    filename: string,
+    title: string,
+    reportRows: JournalRecord[],
+    includeSummary: boolean,
+  ) {
+    const reportHtml = buildAccountingReport(
+      title,
+      reportRows,
+      includeSummary,
+      "excel",
+    );
+    const blob = new Blob(
+      ["\uFEFF", reportHtml],
+      {
+        type: "application/vnd.ms-excel;charset=utf-8;",
+      },
+    );
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    toast.success(t.export);
+  }
+  function openPrintReport(
+    title: string,
+    reportRows: JournalRecord[],
+    includeSummary: boolean,
+  ) {
+    const printWindow = window.open(
+      "",
+      "_blank",
+      "width=1400,height=900",
+    );
+    if (!printWindow) {
+      toast.error(
+        locale === "ar"
+          ? "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة."
+          : "Could not open the print window. Allow pop-ups and try again.",
+      );
+      return;
+    }
+    printWindow.opener = null;
+    printWindow.document.open();
+    printWindow.document.write(
+      buildAccountingReport(
+        title,
+        reportRows,
+        includeSummary,
+        "print",
+      ),
+    );
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.onafterprint = () => {
+      printWindow.close();
+    };
+    window.setTimeout(() => {
+      printWindow.print();
+    }, 250);
+  }
   function exportExcel() {
     if (!entries.length && !stats.accounts) {
       toast.warning(t.exportEmpty);
       return;
     }
-    const rows = [
-      [t.title],
-      [t.generatedAt, new Date().toLocaleString()],
-      [],
-      [t.totalAssets, formatMoney(stats.assets)],
-      [t.liabilities, formatMoney(stats.liabilities)],
-      [t.equity, formatMoney(stats.equity)],
-      [t.revenue, formatMoney(stats.revenue)],
-      [t.expenses, formatMoney(stats.expenses)],
-      [t.netIncome, formatMoney(stats.netIncome)],
-      [t.cashFlow, formatMoney(stats.cashFlow)],
-      [t.accounts, formatInteger(stats.accounts)],
-      [t.journalEntries, formatInteger(stats.journalEntries)],
-      [t.debit, formatMoney(stats.trialDebit)],
-      [t.credit, formatMoney(stats.trialCredit)],
-      [t.trialBalance, balanceLabel],
-      [],
-      [t.entryNo, t.date, t.description, t.status, t.amount],
-      ...filteredEntries.map((row) => [
-        row.number,
-        formatDate(row.date),
-        row.description,
-        getStatusLabel(row.status, locale),
-        formatMoney(row.amount),
-      ]),
-    ];
-    const html = `
-      <html>
-        <head><meta charset="utf-8" /></head>
+
+    downloadExcelReport(
+      "company-accounting-dashboard.xls",
+      t.printTitle,
+      filteredEntries,
+      true,
+    );
+  }
+
+  function buildEntriesExcelDocument(
+    title: string,
+    reportRows: JournalRecord[],
+  ) {
+    const generatedAt = formatReportDateTime();
+    const dir = locale === "ar" ? "rtl" : "ltr";
+    const sheetName = title.slice(0, 31);
+    const rowsHtml = reportRows
+      .map(
+        (row) => `<tr>
+          <td
+            class="text-cell"
+            lang="en-US"
+          >
+            &#8203;${escapeHtml(row.number)}
+          </td>
+          <td
+            class="text-cell"
+            lang="en-US"
+          >
+            &#8203;${escapeHtml(formatDate(row.date))}
+          </td>
+          <td class="description-cell">
+            ${escapeHtml(row.description || "—")}
+          </td>
+          <td class="status-cell">
+            ${escapeHtml(
+              getStatusLabel(
+                row.status,
+                locale,
+              ),
+            )}
+          </td>
+          <td
+            class="number-cell"
+            lang="en-US"
+            x:num="${row.amount}"
+          >
+            ${escapeHtml(formatMoney(row.amount))}
+          </td>
+        </tr>`,
+      )
+      .join("");
+    const officeXml = `<!--[if gte mso 9]>
+      <xml>
+        <x:ExcelWorkbook>
+          <x:ExcelWorksheets>
+            <x:ExcelWorksheet>
+              <x:Name>
+                ${escapeHtml(sheetName)}
+              </x:Name>
+              <x:WorksheetOptions>
+                ${
+                  locale === "ar"
+                    ? "<x:DisplayRightToLeft/>"
+                    : ""
+                }
+                <x:FreezePanes/>
+                <x:FrozenNoSplit/>
+                <x:SplitHorizontal>3</x:SplitHorizontal>
+                <x:TopRowBottomPane>3</x:TopRowBottomPane>
+                <x:FitToPage/>
+                <x:Selected/>
+              </x:WorksheetOptions>
+            </x:ExcelWorksheet>
+          </x:ExcelWorksheets>
+        </x:ExcelWorkbook>
+      </xml>
+    <![endif]-->`;
+    return `<!doctype html>
+      <html
+        lang="${locale}"
+        dir="${dir}"
+        xmlns:o="urn:schemas-microsoft-com:office:office"
+        xmlns:x="urn:schemas-microsoft-com:office:excel"
+        xmlns="http://www.w3.org/TR/REC-html40"
+      >
+        <head>
+          <meta charset="utf-8" />
+          <title>
+            ${escapeHtml(title)}
+          </title>
+          ${officeXml}
+          <style>
+            * {
+              box-sizing: border-box;
+            }
+            html,
+            body {
+              margin: 0;
+              background: #ffffff;
+            }
+            body {
+              padding: 8px;
+              color: #111827;
+              font-family: Tahoma, Arial, sans-serif;
+              font-size: 12px;
+            }
+            table {
+              width: 1030px;
+              border-collapse: collapse;
+              table-layout: fixed;
+            }
+            th,
+            td {
+              border: 1px solid #000000;
+              padding: 7px 8px;
+              text-align: start;
+              vertical-align: middle;
+            }
+            .title-cell {
+              height: 38px;
+              border: 0;
+              padding: 0 0 8px;
+              font-size: 24px;
+              font-weight: 700;
+            }
+            .meta-cell {
+              height: 28px;
+              border: 0;
+              padding: 0 0 12px;
+              color: #4b5563;
+              font-size: 10px;
+            }
+            .header-cell {
+              background: #e5e7eb;
+              color: #111827;
+              font-weight: 700;
+              white-space: nowrap;
+            }
+            .entry-number {
+              width: 180px;
+            }
+            .entry-date {
+              width: 130px;
+            }
+            .entry-description {
+              width: 460px;
+            }
+            .entry-status {
+              width: 130px;
+            }
+            .entry-amount {
+              width: 130px;
+            }
+            .text-cell,
+            .number-cell {
+              direction: ltr;
+              unicode-bidi: plaintext;
+              font-family: Arial, Tahoma, sans-serif;
+              font-variant-numeric: tabular-nums;
+              white-space: nowrap;
+            }
+            .text-cell {
+              mso-number-format: "\\@";
+            }
+            .number-cell {
+              mso-number-format: "0.00";
+              text-align: end;
+            }
+            .description-cell {
+              white-space: normal;
+              overflow-wrap: anywhere;
+            }
+            .status-cell {
+              white-space: nowrap;
+            }
+          </style>
+        </head>
         <body>
-          <table border="1">
-            ${rows
-              .map(
-                (row) =>
-                  `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`,
-              )
-              .join("")}
+          <table>
+            <thead>
+              <tr>
+                <th
+                  class="title-cell"
+                  colspan="5"
+                >
+                  ${escapeHtml(title)}
+                </th>
+              </tr>
+              <tr>
+                <td
+                  class="meta-cell"
+                  colspan="5"
+                >
+                  ${escapeHtml(t.generatedAt)}:
+                  <span
+                    class="text-cell"
+                    lang="en-US"
+                  >
+                    &#8203;${escapeHtml(generatedAt)}
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <th class="header-cell entry-number">
+                  ${escapeHtml(t.entryNo)}
+                </th>
+                <th class="header-cell entry-date">
+                  ${escapeHtml(t.date)}
+                </th>
+                <th class="header-cell entry-description">
+                  ${escapeHtml(t.description)}
+                </th>
+                <th class="header-cell entry-status">
+                  ${escapeHtml(t.status)}
+                </th>
+                <th class="header-cell entry-amount">
+                  ${escapeHtml(t.amount)}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
           </table>
         </body>
-      </html>
-    `;
-    const blob = new Blob(["\uFEFF", html], { type: "application/vnd.ms-excel;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
+      </html>`;
+  }
+  function exportEntriesExcel() {
+    if (!filteredEntries.length) {
+      toast.warning(t.exportEmpty);
+      return;
+    }
+    const reportHtml =
+      buildEntriesExcelDocument(
+        t.latestEntries,
+        filteredEntries,
+      );
+    const blob = new Blob(
+      [
+        "\uFEFF",
+        reportHtml,
+      ],
+      {
+        type:
+          "application/vnd.ms-excel;charset=utf-8;",
+      },
+    );
+    const url =
+      URL.createObjectURL(blob);
+    const anchor =
+      document.createElement("a");
     anchor.href = url;
-    anchor.download = "company-accounting-dashboard.xls";
+    anchor.download =
+      "company-journal-entries.xls";
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
     anchor.click();
-    URL.revokeObjectURL(url);
+    anchor.remove();
+    window.setTimeout(
+      () => URL.revokeObjectURL(url),
+      0,
+    );
     toast.success(t.export);
   }
   function printPage() {
@@ -1333,11 +2105,22 @@ export default function CompanyAccountingPage() {
       toast.warning(t.printEmpty);
       return;
     }
-    window.print();
+
+    openPrintReport(t.printTitle, filteredEntries, true);
   }
+
+  function printEntries() {
+    if (!filteredEntries.length) {
+      toast.warning(t.printEmpty);
+      return;
+    }
+
+    openPrintReport(t.latestEntries, filteredEntries, false);
+  }
+
   if (loading) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+      <main dir={dir} className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
         <div className="mx-auto max-w-[1500px]">
           <DashboardSkeleton />
         </div>
@@ -1346,8 +2129,8 @@ export default function CompanyAccountingPage() {
   }
   if (error) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-        <Card className="mx-auto max-w-[900px] rounded-3xl border-destructive/30 shadow-sm">
+      <main dir={dir} className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
+        <Card className="mx-auto max-w-[900px] rounded-lg border-destructive/30 shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-destructive">
               <TriangleAlert className="h-5 w-5" />
@@ -1356,7 +2139,7 @@ export default function CompanyAccountingPage() {
             <CardDescription>{error || t.errorDesc}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => void loadDashboard()} className="rounded-xl" disabled={refreshing}>
+            <Button type="button" onClick={() => void loadDashboard()} disabled={refreshing}>
               {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               {t.tryAgain}
             </Button>
@@ -1366,57 +2149,35 @@ export default function CompanyAccountingPage() {
     );
   }
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1500px] space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
-          <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-              <div className="max-w-3xl">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  {t.moduleBadge}
-                </div>
-                <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{t.title}</h1>
-                <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">{t.subtitle}</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => void loadDashboard({ silent: true })} disabled={refreshing}>
-                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  {t.refresh}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
-                  <FileSpreadsheet className="h-4 w-4" />
-                  {t.export}
-                </Button>
-                <Button className="rounded-xl" onClick={printPage}>
-                  <Printer className="h-4 w-4" />
-                  {t.print}
-                </Button>
-              </div>
-            </div>
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 space-y-1 text-start">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground lg:text-3xl">{t.title}</h1>
+            <p className="max-w-4xl text-sm leading-6 text-muted-foreground">{t.subtitle}</p>
+            <nav aria-label={t.title} className="flex flex-wrap items-center gap-5 pt-2">
+              <Link href="/company/accounting" aria-current="page" className="border-b-2 border-foreground pb-1 text-sm font-semibold text-foreground">
+                {locale === "ar" ? "لوحة الحسابات" : "Accounting dashboard"}
+              </Link>
+              <Link href="/company/accounting/chart-of-accounts" className="border-b-2 border-transparent pb-1 text-sm text-muted-foreground transition-colors hover:text-foreground">
+                {locale === "ar" ? "دليل الحسابات" : "Chart of accounts"}
+              </Link>
+              <Link href="/company/accounting/journal-entries" className="border-b-2 border-transparent pb-1 text-sm text-muted-foreground transition-colors hover:text-foreground">
+                {locale === "ar" ? "القيود اليومية" : "Journal entries"}
+              </Link>
+              <Link href="/company/accounting/cost-centers" className="border-b-2 border-transparent pb-1 text-sm text-muted-foreground transition-colors hover:text-foreground">
+                {locale === "ar" ? "مراكز التكلفة" : "Cost centers"}
+              </Link>
+            </nav>
           </div>
-        </section>
-        {warnings.length ? (
-          <Card className="rounded-2xl border-amber-200 bg-amber-50 text-amber-950 shadow-sm">
-            <CardContent className="flex gap-3 p-4">
-              <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0" />
-              <div>
-                <p className="text-sm font-semibold">{t.partialWarningTitle}</p>
-                <p className="mt-1 text-sm opacity-80">{t.partialWarningDesc}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-        <Card className="rounded-2xl border-amber-200/70 bg-amber-50/70 text-amber-950 shadow-sm">
-          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-            <TriangleAlert className="h-5 w-5 shrink-0" />
-            <div>
-              <p className="text-sm font-semibold">{t.readOnlyTitle}</p>
-              <p className="mt-1 text-sm opacity-80">{t.readOnlyDesc}</p>
-            </div>
-          </CardContent>
-        </Card>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" onClick={() => void loadDashboard({ silent: true })} disabled={refreshing}>
+              <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />{t.refresh}
+            </Button>
+            <Button type="button" variant="outline" onClick={exportExcel}><FileSpreadsheet className="h-4 w-4" />{t.export}</Button>
+            <Button type="button" variant="outline" onClick={printPage}><Printer className="h-4 w-4" />{t.print}</Button>
+          </div>
+        </header>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {kpiCards.map((card) => (
             <KpiCard
@@ -1431,24 +2192,24 @@ export default function CompanyAccountingPage() {
             />
           ))}
         </div>
-        <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-          <Card className="rounded-2xl shadow-sm">
+        <div className="space-y-6">
+          <Card className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <CardTitle>{t.shortcutsTitle}</CardTitle>
               <CardDescription>{t.shortcutsDesc}</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-3">
+            <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {shortcuts.map((item) => {
                 const Icon = item.icon;
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="group rounded-2xl border bg-background p-4 transition hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-sm"
+                    className="group rounded-lg border bg-background p-4 transition hover:-translate-y-0.5 hover:bg-muted/40 hover:shadow-sm"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex min-w-0 items-start gap-3">
-                        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+                        <span className="rounded-lg border bg-background p-2.5 text-muted-foreground transition group-hover:border-foreground/20 group-hover:text-foreground">
                           <Icon className="h-5 w-5" />
                         </span>
                         <div className="min-w-0">
@@ -1456,7 +2217,7 @@ export default function CompanyAccountingPage() {
                             <h3 className="font-semibold text-foreground">
                               {locale === "ar" ? item.titleAr : item.titleEn}
                             </h3>
-                            <Badge variant="outline" className="rounded-full bg-muted/30 text-[11px]">
+                            <Badge variant="outline" className="rounded-full bg-background text-[11px]">
                               {locale === "ar" ? item.badgeAr : item.badgeEn}
                             </Badge>
                           </div>
@@ -1465,16 +2226,14 @@ export default function CompanyAccountingPage() {
                           </p>
                         </div>
                       </div>
-                      <span className="text-xs font-semibold text-muted-foreground transition group-hover:text-primary">
-                        {t.open}
-                      </span>
+                      <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
                     </div>
                   </Link>
                 );
               })}
             </CardContent>
           </Card>
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <CardTitle>{t.summaryTitle}</CardTitle>
               <CardDescription>
@@ -1483,7 +2242,7 @@ export default function CompanyAccountingPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border bg-background p-4">
+                <div className="rounded-lg border bg-background p-4">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">{t.debit}</p>
                     <Banknote className="h-4 w-4 text-muted-foreground" />
@@ -1492,7 +2251,7 @@ export default function CompanyAccountingPage() {
                     <MoneyValue value={stats.trialDebit} label={t.sar} />
                   </p>
                 </div>
-                <div className="rounded-2xl border bg-background p-4">
+                <div className="rounded-lg border bg-background p-4">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">{t.credit}</p>
                     <Banknote className="h-4 w-4 text-muted-foreground" />
@@ -1501,7 +2260,7 @@ export default function CompanyAccountingPage() {
                     <MoneyValue value={stats.trialCredit} label={t.sar} />
                   </p>
                 </div>
-                <div className="rounded-2xl border bg-background p-4">
+                <div className="rounded-lg border bg-background p-4">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">{t.journalEntries}</p>
                     <Calculator className="h-4 w-4 text-muted-foreground" />
@@ -1511,7 +2270,7 @@ export default function CompanyAccountingPage() {
                     {t.postedEntries}: {formatInteger(stats.postedEntries)} · {t.draftEntries}: {formatInteger(stats.draftEntries)}
                   </p>
                 </div>
-                <div className="rounded-2xl border bg-background p-4">
+                <div className="rounded-lg border bg-background p-4">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">{t.trialBalance}</p>
                     <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
@@ -1523,12 +2282,36 @@ export default function CompanyAccountingPage() {
             </CardContent>
           </Card>
         </div>
-        <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
-            <CardTitle>{t.latestEntries}</CardTitle>
-            <CardDescription>{t.latestEntriesDesc}</CardDescription>
+        <Card className="overflow-hidden rounded-lg border bg-card shadow-none">
+          <CardHeader className="px-5 pt-5 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 text-start">
+                <CardTitle>{t.latestEntries}</CardTitle>
+                <CardDescription className="mt-1">
+                  {t.latestEntriesDesc}
+                </CardDescription>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={exportEntriesExcel}
+                >
+                  <FileSpreadsheet />
+                  {t.export}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={printEntries}
+                >
+                  <Printer />
+                  {t.print}
+                </Button>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 px-5 pb-5 sm:px-6">
             <FiltersBar
               search={entrySearch}
               onSearchChange={setEntrySearch}
@@ -1542,6 +2325,7 @@ export default function CompanyAccountingPage() {
               dateTo={entryDateTo}
               onDateToChange={setEntryDateTo}
               onReset={resetEntryFilters}
+              locale={locale}
               t={t}
             />
             <DataTable
@@ -1559,6 +2343,7 @@ export default function CompanyAccountingPage() {
               showingLabel={t.showing}
               ofLabel={t.of}
               rowsLabel={t.rows}
+              onRowOpen={openEntryDetails}
             />
           </CardContent>
         </Card>

@@ -124,18 +124,12 @@ type InboxReplyPayload = {
   conversation?: InboxConversation;
 };
 type StatusFilter = "all" | "OPEN" | "CLOSED" | "ARCHIVED" | "SPAM";
-type QuickAction = {
-  title: string;
-  description: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-};
 const API_ROOT = "/api/company/whatsapp/conversations/";
 const translations = {
   ar: {
     badge: "التواصل والإشعارات",
     title: "صندوق محادثات واتساب الشركة",
-    desc: "متابعة المحادثات الواردة والرد عليها مباشرة من داخل Mhamcloud باستخدام اتصال واتساب الرسمي للنظام.",
+    desc: "متابعة محادثات واتساب الواردة والرد عليها مباشرة من مساحة الشركة باستخدام الاتصال الرسمي للنظام.",
     settings: "إعدادات واتساب",
     settingsDesc: "إدارة الاتصال، QR، Pairing Code، وحالة الجلسة.",
     templates: "قوالب واتساب",
@@ -174,9 +168,11 @@ const translations = {
     emptyMessages: "لا توجد رسائل في هذه المحادثة.",
     media: "رسالة وسائط",
     latest: "آخر نشاط",
-    fromLiveApi: "من واجهات الشركة الحقيقية",
-    actionsTitle: "صفحات واتساب الشركة",
-    actionsDesc: "تنقل سريع بين صفحات واتساب الأساسية بنفس نمط إدارة المنصة.",
+    totalDesc: "جميع محادثات واتساب المسجلة داخل مساحة الشركة.",
+    unreadDesc: "المحادثات التي تتطلب المراجعة أو الرد.",
+    resolvedDesc: "المحادثات التي تم إنهاؤها ومعالجتها.",
+    openCountDesc: "المحادثات المفتوحة قيد المتابعة.",
+    reset: "إعادة ضبط",
     audio: "صوت",
     image: "صورة",
     video: "فيديو",
@@ -190,7 +186,7 @@ const translations = {
   en: {
     badge: "Communication & Notifications",
     title: "Company WhatsApp Inbox",
-    desc: "Monitor inbound conversations and reply directly from Mhamcloud using the official company WhatsApp connection.",
+    desc: "Monitor inbound WhatsApp conversations and reply directly from the company workspace using the official connection.",
     settings: "WhatsApp Settings",
     settingsDesc: "Manage connection, QR, Pairing Code, and session status.",
     templates: "WhatsApp Templates",
@@ -229,9 +225,11 @@ const translations = {
     emptyMessages: "No messages in this conversation.",
     media: "Media message",
     latest: "Latest activity",
-    fromLiveApi: "From real company workspace APIs",
-    actionsTitle: "Company WhatsApp pages",
-    actionsDesc: "Quick navigation between core WhatsApp pages using the approved platform style.",
+    totalDesc: "All WhatsApp conversations recorded in the company workspace.",
+    unreadDesc: "Conversations that need review or a reply.",
+    resolvedDesc: "Conversations that have been completed and resolved.",
+    openCountDesc: "Open conversations currently being followed up.",
+    reset: "Reset",
     audio: "Audio",
     image: "Image",
     video: "Video",
@@ -394,7 +392,7 @@ function KpiCard({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <Card className="overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <Card className="rounded-2xl border-border/70 bg-card shadow-sm">
       <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
         <div className="min-w-0">
           <CardDescription className="truncate text-sm">{title}</CardDescription>
@@ -402,46 +400,25 @@ function KpiCard({
             {formatInteger(value)}
           </CardTitle>
         </div>
-        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
+        <span className="rounded-xl border bg-background p-2.5 text-muted-foreground">
           <Icon className="h-5 w-5" />
         </span>
       </CardHeader>
       <CardContent className="pt-0">
-        <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
+        <p className="line-clamp-2 text-xs leading-6 text-muted-foreground">{description}</p>
       </CardContent>
-    </Card>
-  );
-}
-function QuickActionCard({ action }: { action: QuickAction }) {
-  const Icon = action.icon;
-  return (
-    <Card className="group rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <Link
-        href={action.href}
-        className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
-          <div className="min-w-0">
-            <CardTitle className="text-base">{action.title}</CardTitle>
-            <CardDescription className="mt-2 line-clamp-2">{action.description}</CardDescription>
-          </div>
-          <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
-            <Icon className="h-5 w-5" />
-          </span>
-        </CardHeader>
-      </Link>
     </Card>
   );
 }
 function InboxSkeleton({ locale }: { locale: Locale }) {
   const dir = locale === "ar" ? "rtl" : "ltr";
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8" dir={dir}>
-      <div className="w-full space-y-6">
-        <div className="rounded-3xl border bg-card p-6 shadow-sm">
+    <main className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8" dir={dir}>
+      <div className="mx-auto w-full max-w-[1500px] space-y-6">
+        <div className="space-y-3 py-2">
           <Skeleton className="h-5 w-40" />
-          <Skeleton className="mt-3 h-8 w-72" />
-          <Skeleton className="mt-3 h-4 w-full max-w-3xl" />
+          <Skeleton className="h-9 w-72" />
+          <Skeleton className="h-4 w-full max-w-3xl" />
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => (
@@ -582,385 +559,433 @@ export default function CompanyWhatsAppInboxView() {
       setSending(false);
     }
   }
-  const quickActions: QuickAction[] = [
-    {
-      title: t.settings,
-      description: t.settingsDesc,
-      href: "/company/whatsapp/settings",
-      icon: Settings2,
-    },
-    {
-      title: t.templates,
-      description: t.templatesDesc,
-      href: "/company/whatsapp/templates",
-      icon: FileText,
-    },
-    {
-      title: t.logs,
-      description: t.logsDesc,
-      href: "/company/whatsapp/messages",
-      icon: SendHorizontal,
-    },
-  ];
   if (loadingConversations && conversations.length === 0) {
     return <InboxSkeleton locale={locale} />;
   }
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8" dir={dir}>
-      <div className="w-full space-y-6">
-        <Card className="overflow-hidden rounded-3xl border-border/70 bg-card shadow-sm">
-          <CardHeader className="gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className={cn("min-w-0 space-y-3", alignClass)}>
-              <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
-                <MessageCircle className="h-3.5 w-3.5" />
-                {t.badge}
-              </Badge>
-              <div>
-                <CardTitle className="text-3xl font-bold tracking-tight md:text-4xl">
-                  {t.title}
-                </CardTitle>
-                <CardDescription className="mt-3 max-w-3xl text-sm leading-7">
-                  {t.desc}
-                </CardDescription>
-              </div>
+    <main className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8" dir={dir}>
+      <div className="mx-auto w-full max-w-[1500px] space-y-6">
+        <section className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className={cn("min-w-0 space-y-3", alignClass)}>
+            <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
+              <MessageCircle className="h-3.5 w-3.5" />
+              {t.badge}
+            </Badge>
+
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight md:text-4xl">{t.title}</h1>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-muted-foreground">
+                {t.desc}
+              </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-              <Button
-                type="button"
-                onClick={handleRefresh}
-                disabled={loadingConversations || loadingMessages}
-                className="rounded-lg"
-              >
-                {loadingConversations || loadingMessages ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4" />
-                )}
-                {t.refresh}
-              </Button>
-              <Button asChild variant="outline" className="rounded-lg bg-card">
-                <Link href="/company/whatsapp/messages">
-                  <SendHorizontal className="h-4 w-4" />
-                  {t.logs}
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="rounded-lg bg-card">
-                <Link href="/company/whatsapp/templates">
-                  <FileText className="h-4 w-4" />
-                  {t.templates}
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="rounded-lg bg-card">
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button asChild variant="outline">
                 <Link href="/company/whatsapp/settings">
-                  <Settings2 className="h-4 w-4" />
+                  <Settings2 />
                   {t.settings}
                 </Link>
               </Button>
+              <Button asChild variant="outline">
+                <Link href="/company/whatsapp/templates">
+                  <FileText />
+                  {t.templates}
+                </Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/company/whatsapp/messages">
+                  <SendHorizontal />
+                  {t.logs}
+                </Link>
+              </Button>
             </div>
-          </CardHeader>
-        </Card>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              onClick={handleRefresh}
+              disabled={loadingConversations || loadingMessages}
+            >
+              {loadingConversations || loadingMessages ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <RefreshCw />
+              )}
+              {t.refresh}
+            </Button>
+          </div>
+        </section>
+
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <KpiCard
             title={t.total}
             value={summary.total_conversations || conversations.length || 0}
-            description={t.fromLiveApi}
+            description={t.totalDesc}
             icon={Inbox}
           />
           <KpiCard
             title={t.unread}
             value={summary.unread_conversations || 0}
-            description={t.fromLiveApi}
+            description={t.unreadDesc}
             icon={AlertCircle}
           />
           <KpiCard
             title={t.resolved}
             value={summary.resolved_conversations || 0}
-            description={t.fromLiveApi}
+            description={t.resolvedDesc}
             icon={CheckCircle2}
           />
           <KpiCard
             title={t.openCount}
             value={summary.open_conversations || 0}
-            description={t.fromLiveApi}
+            description={t.openCountDesc}
             icon={Wifi}
           />
         </div>
-        <Card className="rounded-2xl border-border/70 bg-card shadow-sm">
-          <CardHeader className={alignClass}>
-            <CardTitle className="text-lg">{t.actionsTitle}</CardTitle>
-            <CardDescription>{t.actionsDesc}</CardDescription>
+
+        <Card className="overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm">
+          <CardHeader className={cn("gap-4 border-b border-border/70", alignClass)}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <CardTitle className="text-lg">{t.conversations}</CardTitle>
+                  <Badge variant="outline" className="rounded-full">
+                    {formatInteger(summary.total_conversations || conversations.length || 0)}
+                  </Badge>
+                </div>
+                <CardDescription className="mt-2">
+                  {t.selectConversationDesc}
+                </CardDescription>
+              </div>
+
+              <Badge variant="outline" className="w-fit rounded-full">
+                <Inbox className="h-3.5 w-3.5" />
+                {formatInteger(summary.unread_conversations || 0)} {t.unread}
+              </Badge>
+            </div>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-3">
-            {quickActions.map((action) => (
-              <QuickActionCard key={action.href} action={action} />
-            ))}
-          </CardContent>
-        </Card>
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-          <Card className="rounded-2xl border-border/70 bg-card shadow-sm">
-            {!selectedConversation ? (
-              <CardContent className="flex min-h-[640px] flex-col items-center justify-center gap-3 px-6 py-10 text-center">
-                <div className="rounded-full bg-muted p-4 text-muted-foreground">
-                  <MessageCircle className="h-7 w-7" />
-                </div>
-                <div>
-                  <h3 className="text-base font-semibold text-foreground">{t.selectConversation}</h3>
-                  <p className="mt-1 max-w-md text-sm leading-7 text-muted-foreground">
-                    {t.selectConversationDesc}
-                  </p>
-                </div>
-              </CardContent>
-            ) : (
-              <>
-                <CardHeader className={cn("border-b border-border/70", alignClass)}>
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="space-y-3">
-                      <Badge
-                        variant="outline"
-                        className={cn("w-fit rounded-full px-3 py-1", statusClass(selectedConversation.status))}
-                      >
-                        {statusLabel(selectedConversation.status, locale)}
-                      </Badge>
-                      <div>
-                        <CardTitle className="text-2xl">
-                          {displayName(selectedConversation)}
-                        </CardTitle>
-                        <CardDescription className="mt-3 grid gap-1 text-xs md:grid-cols-2">
-                          <span>
-                            <span className="font-semibold text-foreground">{t.phone}: </span>
-                            {displayPhone(selectedConversation)}
-                          </span>
-                          <span>
-                            <span className="font-semibold text-foreground">{t.latest}: </span>
-                            {formatDate(selectedConversation.last_message_at)}
-                          </span>
-                          <span className="md:col-span-2">
-                            <span className="font-semibold text-foreground">{t.jid}: </span>
-                            {displayJid(selectedConversation)}
-                          </span>
-                        </CardDescription>
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => void loadMessages(selectedConversation.id)}
-                      className="rounded-lg bg-card"
-                    >
-                      {loadingMessages ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <RefreshCw className="h-4 w-4" />
-                      )}
-                      {t.refresh}
-                    </Button>
+
+          <CardContent className="space-y-4 p-4 sm:p-5">
+            <form
+              onSubmit={handleSearch}
+              className="grid gap-2 rounded-xl border border-border/70 bg-muted/20 p-3 md:grid-cols-[minmax(0,1fr)_180px_auto_auto]"
+            >
+              <div className="relative">
+                <Search
+                  className={cn(
+                    "absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground",
+                    locale === "ar" ? "right-3" : "left-3",
+                  )}
+                />
+                <Input
+                  value={searchInput}
+                  onChange={(event) => setSearchInput(event.target.value)}
+                  placeholder={t.searchPlaceholder}
+                  className={cn(
+                    locale === "ar" ? "pr-10 text-right" : "pl-10 text-left",
+                  )}
+                />
+              </div>
+
+              <Select
+                value={status}
+                onValueChange={(value) => setStatus(value as StatusFilter)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t.all} />
+                </SelectTrigger>
+                <SelectContent align={locale === "ar" ? "end" : "start"}>
+                  <SelectItem value="all">{t.all}</SelectItem>
+                  <SelectItem value="OPEN">{t.open}</SelectItem>
+                  <SelectItem value="CLOSED">{t.closed}</SelectItem>
+                  <SelectItem value="ARCHIVED">{t.archived}</SelectItem>
+                  <SelectItem value="SPAM">{t.spam}</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button type="submit">
+                <Search />
+                {t.search}
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setSearchInput("");
+                  setSearch("");
+                  setStatus("all");
+                }}
+              >
+                <RefreshCw />
+                {t.reset}
+              </Button>
+            </form>
+
+            <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+              <section className="overflow-hidden rounded-xl border border-border/70 bg-background xl:h-[720px]">
+                <div className="flex items-center justify-between gap-3 border-b border-border/70 p-4">
+                  <div className={alignClass}>
+                    <h2 className="text-sm font-semibold">{t.conversations}</h2>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {formatInteger(conversations.length)} {t.conversationCount}
+                    </p>
                   </div>
-                </CardHeader>
-                <CardContent className="flex min-h-[520px] flex-col gap-4 bg-muted/20 p-5">
-                  {loadingMessages ? (
-                    <div className="flex min-h-[420px] items-center justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    </div>
-                  ) : messages.length === 0 ? (
-                    <div className="flex min-h-[420px] flex-col items-center justify-center gap-3 text-center">
-                      <div className="rounded-full bg-muted p-4 text-muted-foreground">
-                        <MessageCircle className="h-6 w-6" />
+                  <span className="rounded-xl border bg-muted/30 p-2 text-muted-foreground">
+                    <Inbox className="h-4 w-4" />
+                  </span>
+                </div>
+
+                <div className="flex max-h-[650px] flex-col gap-2 overflow-y-auto p-3">
+                  {loadingConversations ? (
+                    Array.from({ length: 4 }).map((_, index) => (
+                      <div key={index} className="rounded-xl border p-4">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="mt-2 h-3 w-24" />
+                        <Skeleton className="mt-4 h-10 w-full" />
                       </div>
-                      <h3 className="text-sm font-semibold text-foreground">{t.emptyMessages}</h3>
+                    ))
+                  ) : conversations.length === 0 ? (
+                    <div className="flex min-h-64 flex-col items-center justify-center gap-3 px-6 py-10 text-center">
+                      <div className="rounded-full bg-muted p-4 text-muted-foreground">
+                        <Inbox className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-semibold text-foreground">
+                          {t.noConversations}
+                        </h3>
+                        <p className="mt-1 text-sm leading-7 text-muted-foreground">
+                          {t.noConversationsDesc}
+                        </p>
+                      </div>
                     </div>
                   ) : (
-                    <div className="flex flex-col gap-4">
-                      {messages.map((message) => {
-                        const outbound = message.direction === "OUTBOUND";
-                        return (
-                          <div
-                            key={message.id}
-                            className={cn("flex", outbound ? "justify-start" : "justify-end")}
-                          >
-                            <div
-                              className={cn(
-                                "max-w-[78%] rounded-2xl border px-4 py-3 shadow-sm",
-                                outbound
-                                  ? "border-primary bg-primary text-primary-foreground"
-                                  : "border-border bg-card",
-                              )}
-                            >
-                              <div className="mb-2 flex items-center justify-between gap-5 text-[11px] opacity-80">
-                                <span>{directionLabel(message.direction, locale)}</span>
-                                <span>{deliveryStatusLabel(message.status, locale)}</span>
+                    conversations.map((conversation) => {
+                      const isActive = conversation.id === selectedId;
+                      const unread = conversation.unread_count || 0;
+
+                      return (
+                        <button
+                          key={conversation.id}
+                          type="button"
+                          onClick={() => setSelectedId(conversation.id)}
+                          className={cn(
+                            "w-full rounded-xl border p-3 transition-colors hover:bg-muted/40",
+                            alignClass,
+                            isActive
+                              ? "border-foreground/20 bg-muted/60"
+                              : "border-border/70 bg-background",
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div
+                                className={cn(
+                                  "flex items-center gap-2",
+                                  locale === "ar" ? "justify-end" : "justify-start",
+                                )}
+                              >
+                                <p className="truncate text-sm font-semibold">
+                                  {displayName(conversation)}
+                                </p>
+                                <UserRound className="h-4 w-4 shrink-0 text-muted-foreground" />
                               </div>
-                              <p className="whitespace-pre-wrap text-sm leading-7">
-                                {messageText(message, locale)}
-                              </p>
-                              <p className="mt-3 text-[11px] opacity-70">
-                                {formatDate(message.sent_at || message.received_at || message.created_at)}
+                              <p className="mt-1 truncate text-xs text-muted-foreground">
+                                {displayPhone(conversation)}
                               </p>
                             </div>
+
+                            {unread > 0 ? (
+                              <span className="rounded-full bg-primary px-2 py-1 text-xs font-bold text-primary-foreground">
+                                {formatInteger(unread)}
+                              </span>
+                            ) : null}
                           </div>
-                        );
-                      })}
-                    </div>
+
+                          <p className="mt-3 line-clamp-2 text-xs leading-6 text-muted-foreground">
+                            {conversation.last_message_preview
+                              ? safeText(conversation.last_message_preview)
+                              : t.media}
+                          </p>
+
+                          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                            <span>
+                              {formatDate(
+                                conversation.last_message_at || conversation.updated_at,
+                              )}
+                            </span>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "rounded-full px-2.5 py-1",
+                                statusClass(conversation.status),
+                              )}
+                            >
+                              {statusLabel(conversation.status, locale)}
+                            </Badge>
+                          </div>
+                        </button>
+                      );
+                    })
                   )}
-                </CardContent>
-                <div className="border-t border-border/70 p-5">
-                  <form onSubmit={handleReply} className="flex flex-col gap-3 lg:flex-row lg:items-end">
-                    <textarea
-                      value={reply}
-                      onChange={(event) => setReply(event.target.value)}
-                      placeholder={t.messagePlaceholder}
-                      rows={3}
-                      className={cn(
-                        "min-h-24 flex-1 resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm leading-7 outline-none transition focus:border-primary",
-                        alignClass,
-                      )}
-                    />
-                    <Button
-                      type="submit"
-                      disabled={sending || !reply.trim()}
-                      className="min-h-12 rounded-lg px-5"
-                    >
-                      {sending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <SendHorizontal className="h-4 w-4" />
-                      )}
-                      {sending ? t.sending : t.send}
-                    </Button>
-                  </form>
                 </div>
-              </>
-            )}
-          </Card>
-          <Card className="rounded-2xl border-border/70 bg-card shadow-sm">
-            <CardHeader className={alignClass}>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <CardTitle className="text-lg">{t.conversations}</CardTitle>
-                  <CardDescription className="mt-1">
-                    {formatInteger(summary.total_conversations || conversations.length || 0)} {t.conversationCount}
-                  </CardDescription>
-                </div>
-                <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
-                  <Inbox className="h-5 w-5" />
-                </span>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <form onSubmit={handleSearch} className="space-y-3">
-                <div className="relative">
-                  <Search
-                    className={cn(
-                      "absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground",
-                      locale === "ar" ? "right-3" : "left-3",
-                    )}
-                  />
-                  <Input
-                    value={searchInput}
-                    onChange={(event) => setSearchInput(event.target.value)}
-                    placeholder={t.searchPlaceholder}
-                    className={cn(
-                      "h-11 rounded-xl",
-                      locale === "ar" ? "pr-10 text-right" : "pl-10 text-left",
-                    )}
-                  />
-                </div>
-                <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
-                  <Button type="submit" className="h-11 rounded-lg px-5">
-                    {t.search}
-                  </Button>
-                  <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
-                    <SelectTrigger className="h-11 rounded-xl">
-                      <SelectValue placeholder={t.all} />
-                    </SelectTrigger>
-                    <SelectContent align={locale === "ar" ? "end" : "start"}>
-                      <SelectItem value="all">{t.all}</SelectItem>
-                      <SelectItem value="OPEN">{t.open}</SelectItem>
-                      <SelectItem value="CLOSED">{t.closed}</SelectItem>
-                      <SelectItem value="ARCHIVED">{t.archived}</SelectItem>
-                      <SelectItem value="SPAM">{t.spam}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </form>
-              <div className="flex max-h-[650px] flex-col gap-3 overflow-y-auto pe-1">
-                {loadingConversations ? (
-                  Array.from({ length: 4 }).map((_, index) => (
-                    <Card key={index} className="rounded-2xl">
-                      <CardHeader>
-                        <Skeleton className="h-4 w-32" />
-                        <Skeleton className="h-3 w-24" />
-                      </CardHeader>
-                      <CardContent>
-                        <Skeleton className="h-12 w-full" />
-                      </CardContent>
-                    </Card>
-                  ))
-                ) : conversations.length === 0 ? (
-                  <div className="flex min-h-64 flex-col items-center justify-center gap-3 px-6 py-10 text-center">
+              </section>
+
+              <section className="flex min-h-[620px] flex-col overflow-hidden rounded-xl border border-border/70 bg-background xl:h-[720px]">
+                {!selectedConversation ? (
+                  <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-10 text-center">
                     <div className="rounded-full bg-muted p-4 text-muted-foreground">
-                      <Inbox className="h-6 w-6" />
+                      <MessageCircle className="h-7 w-7" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-semibold text-foreground">{t.noConversations}</h3>
-                      <p className="mt-1 text-sm leading-7 text-muted-foreground">
-                        {t.noConversationsDesc}
+                      <h3 className="text-base font-semibold text-foreground">
+                        {t.selectConversation}
+                      </h3>
+                      <p className="mt-1 max-w-md text-sm leading-7 text-muted-foreground">
+                        {t.selectConversationDesc}
                       </p>
                     </div>
                   </div>
                 ) : (
-                  conversations.map((conversation) => {
-                    const isActive = conversation.id === selectedId;
-                    const unread = conversation.unread_count || 0;
-                    return (
-                      <button
-                        key={conversation.id}
-                        type="button"
-                        onClick={() => setSelectedId(conversation.id)}
-                        className={cn(
-                          "rounded-2xl border p-4 transition hover:-translate-y-0.5 hover:shadow-md",
-                          alignClass,
-                          isActive
-                            ? "border-primary/60 bg-muted shadow-sm"
-                            : "border-border/70 bg-card shadow-sm",
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <div className={cn("flex items-center gap-2", locale === "ar" ? "justify-end" : "justify-start")}>
-                              <p className="truncate text-sm font-bold">
-                                {displayName(conversation)}
-                              </p>
-                              <UserRound className="h-4 w-4 shrink-0 text-muted-foreground" />
-                            </div>
-                            <p className="mt-1 truncate text-xs text-muted-foreground">
-                              {displayPhone(conversation)}
-                            </p>
+                  <>
+                    <div className={cn("border-b border-border/70 p-4", alignClass)}>
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h2 className="truncate text-lg font-semibold">
+                              {displayName(selectedConversation)}
+                            </h2>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "rounded-full",
+                                statusClass(selectedConversation.status),
+                              )}
+                            >
+                              {statusLabel(selectedConversation.status, locale)}
+                            </Badge>
                           </div>
-                          {unread > 0 ? (
-                            <span className="rounded-full bg-primary px-2 py-1 text-xs font-bold text-primary-foreground">
-                              {formatInteger(unread)}
+
+                          <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+                            <span>
+                              <span className="font-medium text-foreground">{t.phone}: </span>
+                              {displayPhone(selectedConversation)}
                             </span>
-                          ) : null}
+                            <span>
+                              <span className="font-medium text-foreground">{t.jid}: </span>
+                              {displayJid(selectedConversation)}
+                            </span>
+                            <span>
+                              <span className="font-medium text-foreground">{t.latest}: </span>
+                              {formatDate(selectedConversation.last_message_at)}
+                            </span>
+                          </div>
                         </div>
-                        <p className="mt-4 line-clamp-2 text-sm leading-7 text-muted-foreground">
-                          {conversation.last_message_preview
-                            ? safeText(conversation.last_message_preview)
-                            : t.media}
-                        </p>
-                        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                          <span>{formatDate(conversation.last_message_at || conversation.updated_at)}</span>
-                          <Badge variant="outline" className={cn("rounded-full px-2.5 py-1", statusClass(conversation.status))}>
-                            {statusLabel(conversation.status, locale)}
-                          </Badge>
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => void loadMessages(selectedConversation.id)}
+                        >
+                          {loadingMessages ? (
+                            <Loader2 className="animate-spin" />
+                          ) : (
+                            <RefreshCw />
+                          )}
+                          {t.refresh}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="min-h-0 flex-1 overflow-y-auto bg-muted/20 p-4">
+                      {loadingMessages ? (
+                        <div className="flex h-full min-h-[360px] items-center justify-center">
+                          <Loader2 className="h-8 w-8 animate-spin text-primary" />
                         </div>
-                      </button>
-                    );
-                  })
+                      ) : messages.length === 0 ? (
+                        <div className="flex h-full min-h-[360px] flex-col items-center justify-center gap-3 text-center">
+                          <div className="rounded-full bg-muted p-4 text-muted-foreground">
+                            <MessageCircle className="h-6 w-6" />
+                          </div>
+                          <h3 className="text-sm font-semibold text-foreground">
+                            {t.emptyMessages}
+                          </h3>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-3">
+                          {messages.map((message) => {
+                            const outbound = message.direction === "OUTBOUND";
+
+                            return (
+                              <div
+                                key={message.id}
+                                className={cn(
+                                  "flex",
+                                  outbound ? "justify-start" : "justify-end",
+                                )}
+                              >
+                                <div
+                                  className={cn(
+                                    "max-w-[82%] rounded-2xl border px-4 py-3 shadow-sm",
+                                    outbound
+                                      ? "border-primary bg-primary text-primary-foreground"
+                                      : "border-border bg-background",
+                                  )}
+                                >
+                                  <div className="mb-2 flex items-center justify-between gap-5 text-[11px] opacity-80">
+                                    <span>{directionLabel(message.direction, locale)}</span>
+                                    <span>{deliveryStatusLabel(message.status, locale)}</span>
+                                  </div>
+                                  <p className="whitespace-pre-wrap text-sm leading-7">
+                                    {messageText(message, locale)}
+                                  </p>
+                                  <p className="mt-3 text-[11px] opacity-70">
+                                    {formatDate(
+                                      message.sent_at ||
+                                        message.received_at ||
+                                        message.created_at,
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="border-t border-border/70 p-4">
+                      <form
+                        onSubmit={handleReply}
+                        className="flex flex-col gap-3 lg:flex-row lg:items-end"
+                      >
+                        <textarea
+                          value={reply}
+                          onChange={(event) => setReply(event.target.value)}
+                          placeholder={t.messagePlaceholder}
+                          rows={3}
+                          className={cn(
+                            "min-h-24 flex-1 resize-none rounded-xl border border-input bg-background px-3 py-2 text-sm leading-7 shadow-sm outline-none transition focus-visible:ring-1 focus-visible:ring-ring",
+                            alignClass,
+                          )}
+                        />
+                        <Button type="submit" disabled={sending || !reply.trim()}>
+                          {sending ? (
+                            <Loader2 className="animate-spin" />
+                          ) : (
+                            <SendHorizontal />
+                          )}
+                          {sending ? t.sending : t.send}
+                        </Button>
+                      </form>
+                    </div>
+                  </>
                 )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              </section>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </main>
   );

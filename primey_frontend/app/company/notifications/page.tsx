@@ -19,7 +19,6 @@
 ============================================================ */
 
 import * as React from "react";
-import Link from "next/link";
 import {
   AlertTriangle,
   ArrowUpDown,
@@ -27,14 +26,13 @@ import {
   BellRing,
   CheckCheck,
   CheckCircle2,
-  Clock3,
-  Download,
   Eye,
   FileSpreadsheet,
   Filter,
   Loader2,
   Mail,
   MessageCircle,
+  MoreVertical,
   Printer,
   RefreshCw,
   RotateCcw,
@@ -45,6 +43,16 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,6 +62,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -80,6 +95,7 @@ type SortKey = "newest" | "oldest" | "priority";
 type ChannelFilter = "all" | "IN_APP" | "EMAIL" | "WHATSAPP" | "SYSTEM";
 type TypeFilter = "all" | "INFO" | "SUCCESS" | "WARNING" | "ERROR";
 type PriorityFilter = "all" | "LOW" | "NORMAL" | "HIGH" | "URGENT";
+type NotificationDocumentMode = "full" | "table";
 
 type CompanyNotification = {
   id: string;
@@ -177,6 +193,23 @@ const translations = {
     normal: "عادية",
     high: "عالية",
     urgent: "عاجلة",
+    companyFallback: "الشركة",
+    fullReportTitle: "تقرير إشعارات الشركة",
+    tableReportTitle: "قائمة إشعارات الشركة",
+    generatedFor: "المنشأة",
+    filtersApplied: "الفلاتر المطبقة",
+    noFilters: "بدون فلاتر إضافية",
+    fullPrintReady: "تم تجهيز تقرير إشعارات الشركة للطباعة.",
+    tablePrintReady: "تم تجهيز قائمة إشعارات الشركة للطباعة.",
+    fullExported: "تم تصدير تقرير إشعارات الشركة إلى Excel.",
+    tableExported: "تم تصدير قائمة إشعارات الشركة إلى Excel.",
+    popupBlocked:
+      "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة.",
+    confirmMarkAllTitle: "تعليم جميع الإشعارات كمقروءة",
+    confirmMarkAllDesc:
+      "سيتم تعليم جميع الإشعارات غير المقروءة داخل مساحة الشركة الحالية كمقروءة.",
+    cancel: "إلغاء",
+    confirm: "تأكيد",
   },
   en: {
     eyebrow: "Messaging & Notifications",
@@ -253,6 +286,23 @@ const translations = {
     normal: "Normal",
     high: "High",
     urgent: "Urgent",
+    companyFallback: "Company",
+    fullReportTitle: "Company Notifications Report",
+    tableReportTitle: "Company Notifications List",
+    generatedFor: "Company",
+    filtersApplied: "Applied filters",
+    noFilters: "No additional filters",
+    fullPrintReady: "Company notifications report is ready to print.",
+    tablePrintReady: "Company notifications list is ready to print.",
+    fullExported: "Company notifications report exported to Excel.",
+    tableExported: "Company notifications list exported to Excel.",
+    popupBlocked:
+      "The print window could not be opened. Allow pop-ups and try again.",
+    confirmMarkAllTitle: "Mark all notifications as read",
+    confirmMarkAllDesc:
+      "All unread notifications in the current company workspace will be marked as read.",
+    cancel: "Cancel",
+    confirm: "Confirm",
   },
 } as const;
 
@@ -294,16 +344,20 @@ function formatInteger(value: unknown) {
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
+
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return String(value).replace("T", " ").slice(0, 16);
-  return new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(parsed);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value).replace("T", " ").slice(0, 16);
+  }
+
+  const year = String(parsed.getFullYear()).padStart(4, "0");
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const hour = String(parsed.getHours()).padStart(2, "0");
+  const minute = String(parsed.getMinutes()).padStart(2, "0");
+
+  return `${year}-${month}-${day} ${hour}:${minute}`;
 }
 
 function escapeHtml(value: unknown) {
@@ -323,10 +377,7 @@ function getInitialLocale(): Locale {
 function getApiBaseUrl() {
   const envBase =
     typeof process !== "undefined"
-      ? (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "").replace(
-          /\/+$/,
-          "",
-        )
+      ? (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/+$/, "")
       : "";
 
   if (envBase.endsWith("/api")) return envBase.slice(0, -4);
@@ -452,6 +503,22 @@ function normalizeNotification(value: unknown): CompanyNotification {
   };
 }
 
+function extractCompanyName(payload: unknown) {
+  const record = asRecord(payload);
+  const company = asRecord(record.company);
+  const profile = asRecord(record.profile);
+
+  return normalizeText(
+    company.name_ar ||
+      company.name ||
+      company.legal_name ||
+      record.company_name ||
+      record.companyName ||
+      profile.company_name ||
+      profile.companyName,
+  );
+}
+
 function getChannelLabel(value: string, locale: Locale) {
   const t = translations[locale];
 
@@ -563,20 +630,21 @@ function KpiCard({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <Card className="group overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
+    <Card className="group rounded-lg border bg-card shadow-none">
+      <CardContent className="flex min-h-[128px] items-start justify-between gap-4 p-5">
         <div className="min-w-0">
-          <CardDescription className="truncate text-sm">{title}</CardDescription>
-          <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
+          <p className="text-sm text-muted-foreground">{title}</p>
+          <p className="mt-2 text-xl font-black tracking-tight tabular-nums">
             {formatInteger(value)}
-          </CardTitle>
+          </p>
+          <p className="mt-6 line-clamp-2 text-xs text-muted-foreground">
+            {description}
+          </p>
         </div>
-        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+
+        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border bg-background text-muted-foreground transition-colors group-hover:text-foreground">
           <Icon className="h-5 w-5" />
         </span>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
       </CardContent>
     </Card>
   );
@@ -584,32 +652,35 @@ function KpiCard({
 
 function DashboardSkeleton() {
   return (
-    <div className="mx-auto max-w-[1500px] space-y-6">
-      <div className="rounded-3xl border bg-card p-6 shadow-sm">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="mt-3 h-8 w-72" />
-        <Skeleton className="mt-3 h-4 w-full max-w-2xl" />
+    <div className="mx-auto max-w-[1500px] space-y-5">
+      <div className="flex flex-col gap-4 py-2 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-3">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-9 w-72" />
+          <Skeleton className="h-4 w-full max-w-2xl" />
+        </div>
+        <Skeleton className="h-10 w-80" />
       </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
-          <Card key={index} className="rounded-2xl">
-            <CardHeader>
+          <Card key={index} className="rounded-lg border bg-card shadow-none">
+            <CardContent className="space-y-4 p-5">
               <Skeleton className="h-4 w-28" />
-              <Skeleton className="h-8 w-20" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-7 w-20" />
+              <Skeleton className="h-3 w-full" />
             </CardContent>
           </Card>
         ))}
       </div>
-      <Card className="rounded-2xl">
+
+      <Card className="rounded-lg border bg-card shadow-none">
         <CardHeader>
           <Skeleton className="h-6 w-52" />
           <Skeleton className="h-4 w-80" />
         </CardHeader>
         <CardContent>
-          <Skeleton className="h-96 w-full" />
+          <Skeleton className="h-[480px] w-full" />
         </CardContent>
       </Card>
     </div>
@@ -630,17 +701,19 @@ function EmptyState({
   onReset?: () => void;
 }) {
   return (
-    <div className="flex h-full min-h-64 flex-col items-center justify-center gap-3 px-6 py-10 text-center">
-      <div className="rounded-full bg-muted p-4 text-muted-foreground">
-        <Search className="h-6 w-6" />
-      </div>
+    <div className="flex min-h-64 flex-col items-center justify-center gap-3 px-6 py-10 text-center">
+      <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border bg-background text-muted-foreground">
+        <Search className="h-5 w-5" />
+      </span>
+
       <div>
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>
+
       {showReset && onReset ? (
-        <Button variant="outline" size="sm" onClick={onReset} className="rounded-lg">
-          <RotateCcw className="h-4 w-4" />
+        <Button type="button" variant="outline" onClick={onReset}>
+          <RotateCcw />
           {resetLabel}
         </Button>
       ) : null}
@@ -650,22 +723,29 @@ function EmptyState({
 
 export default function CompanyNotificationsPage() {
   const [locale, setLocale] = React.useState<Locale>("ar");
+  const [companyName, setCompanyName] = React.useState("");
   const [state, setState] = React.useState<ApiState>({
     count: 0,
     unreadCount: 0,
     notifications: [],
   });
-  const [selected, setSelected] = React.useState<CompanyNotification | null>(null);
+  const [selected, setSelected] =
+    React.useState<CompanyNotification | null>(null);
+  const [markAllReadOpen, setMarkAllReadOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [actionLoading, setActionLoading] = React.useState(false);
   const [error, setError] = React.useState("");
 
   const [search, setSearch] = React.useState("");
-  const [readFilter, setReadFilter] = React.useState<ReadFilter>("all");
-  const [channelFilter, setChannelFilter] = React.useState<ChannelFilter>("all");
-  const [typeFilter, setTypeFilter] = React.useState<TypeFilter>("all");
-  const [priorityFilter, setPriorityFilter] = React.useState<PriorityFilter>("all");
+  const [readFilter, setReadFilter] =
+    React.useState<ReadFilter>("all");
+  const [channelFilter, setChannelFilter] =
+    React.useState<ChannelFilter>("all");
+  const [typeFilter, setTypeFilter] =
+    React.useState<TypeFilter>("all");
+  const [priorityFilter, setPriorityFilter] =
+    React.useState<PriorityFilter>("all");
   const [sourceFilter, setSourceFilter] = React.useState("");
   const [sort, setSort] = React.useState<SortKey>("newest");
 
@@ -677,8 +757,10 @@ export default function CompanyNotificationsPage() {
       const nextLocale = getInitialLocale();
       setLocale(nextLocale);
       document.documentElement.lang = nextLocale;
-      document.documentElement.dir = nextLocale === "ar" ? "rtl" : "ltr";
-      document.body.dir = nextLocale === "ar" ? "rtl" : "ltr";
+      document.documentElement.dir =
+        nextLocale === "ar" ? "rtl" : "ltr";
+      document.body.dir =
+        nextLocale === "ar" ? "rtl" : "ltr";
     };
 
     applyLocale();
@@ -687,7 +769,27 @@ export default function CompanyNotificationsPage() {
 
     return () => {
       window.removeEventListener("storage", applyLocale);
-      window.removeEventListener("primey-locale-changed", applyLocale);
+      window.removeEventListener(
+        "primey-locale-changed",
+        applyLocale,
+      );
+    };
+  }, []);
+
+  React.useEffect(() => {
+    let active = true;
+
+    void fetchJson<unknown>(makeApiUrl("/api/auth/whoami/"))
+      .then((payload) => {
+        if (!active) return;
+        setCompanyName(extractCompanyName(payload));
+      })
+      .catch(() => {
+        if (active) setCompanyName("");
+      });
+
+    return () => {
+      active = false;
     };
   }, []);
 
@@ -706,8 +808,12 @@ export default function CompanyNotificationsPage() {
         const listPayload = await fetchJson<ApiRecord>(
           makeApiUrl("/api/company/notifications/", params),
         );
-        const rows = extractArray(listPayload).map(normalizeNotification);
-        const unreadCount = rows.filter((row) => !row.isRead).length;
+        const rows = extractArray(listPayload).map(
+          normalizeNotification,
+        );
+        const unreadCount = rows.filter(
+          (row) => !row.isRead,
+        ).length;
 
         setState({
           count: extractCount(listPayload, rows),
@@ -715,14 +821,22 @@ export default function CompanyNotificationsPage() {
           notifications: rows,
         });
 
-        if (selected) {
-          setSelected(rows.find((row) => row.id === selected.id) || null);
-        }
+        setSelected((current) => {
+          if (!current) return null;
+          return (
+            rows.find((row) => row.id === current.id) || null
+          );
+        });
 
         if (silent) toast.success(t.loaded);
       } catch (caughtError) {
-        const message = caughtError instanceof Error ? caughtError.message : t.errorDesc;
+        const message =
+          caughtError instanceof Error
+            ? caughtError.message
+            : t.errorDesc;
+
         setError(message);
+
         if (silent) toast.error(message);
       } finally {
         setLoading(false);
@@ -763,32 +877,89 @@ export default function CompanyNotificationsPage() {
         .toLowerCase();
 
       if (needle && !haystack.includes(needle)) return false;
-      if (readFilter === "read" && !notification.isRead) return false;
-      if (readFilter === "unread" && notification.isRead) return false;
-      if (channelFilter !== "all" && notification.channel !== channelFilter) return false;
-      if (typeFilter !== "all" && notification.notificationType !== typeFilter) return false;
-      if (priorityFilter !== "all" && notification.priority !== priorityFilter) return false;
+      if (readFilter === "read" && !notification.isRead) {
+        return false;
+      }
+      if (readFilter === "unread" && notification.isRead) {
+        return false;
+      }
+      if (
+        channelFilter !== "all" &&
+        notification.channel !== channelFilter
+      ) {
+        return false;
+      }
+      if (
+        typeFilter !== "all" &&
+        notification.notificationType !== typeFilter
+      ) {
+        return false;
+      }
+      if (
+        priorityFilter !== "all" &&
+        notification.priority !== priorityFilter
+      ) {
+        return false;
+      }
+
       if (sourceFilter.trim()) {
-        const sourceNeedle = sourceFilter.trim().toLowerCase();
-        const sourceHaystack = [notification.sourceType, notification.sourceId]
+        const sourceNeedle = sourceFilter
+          .trim()
+          .toLowerCase();
+        const sourceHaystack = [
+          notification.sourceType,
+          notification.sourceId,
+        ]
           .join(" ")
           .toLowerCase();
-        if (!sourceHaystack.includes(sourceNeedle)) return false;
+
+        if (!sourceHaystack.includes(sourceNeedle)) {
+          return false;
+        }
       }
+
       return true;
     });
 
     return [...rows].sort((a, b) => {
-      if (sort === "oldest") return rowDateValue(a.createdAt) - rowDateValue(b.createdAt);
-      if (sort === "priority") return priorityWeight(b.priority) - priorityWeight(a.priority);
-      return rowDateValue(b.createdAt) - rowDateValue(a.createdAt);
-    });
-  }, [search, sort, state.notifications]);
+      if (sort === "oldest") {
+        return (
+          rowDateValue(a.createdAt) -
+          rowDateValue(b.createdAt)
+        );
+      }
 
-  const readCount = Math.max(state.count - state.unreadCount, 0);
+      if (sort === "priority") {
+        return (
+          priorityWeight(b.priority) -
+          priorityWeight(a.priority)
+        );
+      }
+
+      return (
+        rowDateValue(b.createdAt) -
+        rowDateValue(a.createdAt)
+      );
+    });
+  }, [
+    channelFilter,
+    priorityFilter,
+    readFilter,
+    search,
+    sort,
+    sourceFilter,
+    state.notifications,
+    typeFilter,
+  ]);
+
+  const readCount = Math.max(
+    state.count - state.unreadCount,
+    0,
+  );
   const urgentCount = state.notifications.filter((item) =>
     ["HIGH", "URGENT"].includes(item.priority),
   ).length;
+
   const hasFilters = Boolean(
     search ||
       readFilter !== "all" ||
@@ -799,20 +970,374 @@ export default function CompanyNotificationsPage() {
       sort !== "newest",
   );
 
-  async function markOneRead(notification: CompanyNotification) {
+  const filterSummary = React.useMemo(() => {
+    const parts: string[] = [];
+
+    if (search.trim()) {
+      parts.push(`${t.search}: ${search.trim()}`);
+    }
+
+    if (readFilter !== "all") {
+      parts.push(
+        `${t.status}: ${
+          readFilter === "read" ? t.read : t.unread
+        }`,
+      );
+    }
+
+    if (channelFilter !== "all") {
+      parts.push(
+        `${t.channel}: ${getChannelLabel(
+          channelFilter,
+          locale,
+        )}`,
+      );
+    }
+
+    if (typeFilter !== "all") {
+      parts.push(
+        `${t.type}: ${getTypeLabel(typeFilter, locale)}`,
+      );
+    }
+
+    if (priorityFilter !== "all") {
+      parts.push(
+        `${t.priority}: ${getPriorityLabel(
+          priorityFilter,
+          locale,
+        )}`,
+      );
+    }
+
+    if (sourceFilter.trim()) {
+      parts.push(`${t.source}: ${sourceFilter.trim()}`);
+    }
+
+    if (sort !== "newest") {
+      parts.push(
+        `${t.sort}: ${
+          sort === "oldest" ? t.oldest : t.prioritySort
+        }`,
+      );
+    }
+
+    return parts.length ? parts.join(" • ") : t.noFilters;
+  }, [
+    channelFilter,
+    locale,
+    priorityFilter,
+    readFilter,
+    search,
+    sort,
+    sourceFilter,
+    t,
+    typeFilter,
+  ]);
+
+  const buildNotificationsDocument = React.useCallback(
+    (mode: NotificationDocumentMode) => {
+      const reportTitle =
+        mode === "full"
+          ? t.fullReportTitle
+          : t.tableReportTitle;
+      const safeCompanyName =
+        companyName || t.companyFallback;
+      const generatedAt = formatDateTime(
+        new Date().toISOString(),
+      );
+      const textAlign =
+        dir === "rtl" ? "right" : "left";
+      const summary =
+        mode === "full"
+          ? `
+            <table class="summary-table">
+              <tbody>
+                <tr>
+                  <th>${escapeHtml(
+                    t.totalNotifications,
+                  )}</th>
+                  <td>${escapeHtml(
+                    formatInteger(state.count),
+                  )}</td>
+                  <th>${escapeHtml(
+                    t.unreadNotifications,
+                  )}</th>
+                  <td>${escapeHtml(
+                    formatInteger(state.unreadCount),
+                  )}</td>
+                </tr>
+                <tr>
+                  <th>${escapeHtml(
+                    t.readNotifications,
+                  )}</th>
+                  <td>${escapeHtml(
+                    formatInteger(readCount),
+                  )}</td>
+                  <th>${escapeHtml(
+                    t.urgentNotifications,
+                  )}</th>
+                  <td>${escapeHtml(
+                    formatInteger(urgentCount),
+                  )}</td>
+                </tr>
+              </tbody>
+            </table>
+          `
+          : "";
+
+      return `
+        <!doctype html>
+        <html dir="${dir}" lang="${locale}">
+          <head>
+            <meta charset="utf-8" />
+            <title>${escapeHtml(reportTitle)}</title>
+            <style>
+              @page {
+                size: A4 landscape;
+                margin: 10mm;
+              }
+
+              * {
+                box-sizing: border-box;
+              }
+
+              body {
+                margin: 0;
+                color: #111827;
+                background: #ffffff;
+                font-family: Tahoma, Arial, sans-serif;
+                direction: ${dir};
+              }
+
+              .report {
+                width: 100%;
+              }
+
+              .company-name {
+                margin: 0;
+                font-size: 13px;
+                font-weight: 700;
+              }
+
+              h1 {
+                margin: 4px 0 0;
+                font-size: 24px;
+                line-height: 1.25;
+              }
+
+              .meta {
+                margin-top: 6px;
+                color: #4b5563;
+                font-size: 11px;
+                line-height: 1.7;
+              }
+
+              .filter-box {
+                margin-top: 10px;
+                padding: 7px 9px;
+                border: 1px solid #000000;
+                font-size: 10px;
+                line-height: 1.6;
+              }
+
+              table {
+                width: 100%;
+                margin-top: 10px;
+                border-collapse: collapse;
+                table-layout: fixed;
+              }
+
+              th,
+              td {
+                border: 1px solid #000000;
+                padding: 6px 7px;
+                font-size: 10px;
+                line-height: 1.45;
+                text-align: ${textAlign};
+                vertical-align: middle;
+                word-break: break-word;
+              }
+
+              th {
+                background: #f3f4f6;
+                font-weight: 700;
+              }
+
+              .summary-table th,
+              .summary-table td {
+                font-size: 11px;
+              }
+
+              .summary-table td {
+                font-weight: 700;
+                text-align: center;
+              }
+
+              .footer {
+                margin-top: 7px;
+                color: #4b5563;
+                font-size: 9px;
+              }
+
+              @media print {
+                body {
+                  print-color-adjust: exact;
+                  -webkit-print-color-adjust: exact;
+                }
+              }
+            </style>
+          </head>
+          <body>
+            <main class="report">
+              <p class="company-name">
+                ${escapeHtml(safeCompanyName)}
+              </p>
+              <h1>${escapeHtml(reportTitle)}</h1>
+              <div class="meta">
+                ${escapeHtml(t.generatedFor)}:
+                ${escapeHtml(safeCompanyName)}
+                &nbsp;•&nbsp;
+                ${escapeHtml(t.generatedAt)}:
+                ${escapeHtml(generatedAt)}
+                &nbsp;•&nbsp;
+                ${escapeHtml(t.showing)}:
+                ${escapeHtml(
+                  formatInteger(filteredRows.length),
+                )}
+              </div>
+
+              ${summary}
+
+              <div class="filter-box">
+                <strong>${escapeHtml(
+                  t.filtersApplied,
+                )}:</strong>
+                ${escapeHtml(filterSummary)}
+              </div>
+
+              ${tableHtmlForNotifications(
+                filteredRows,
+                locale,
+              )}
+
+              <div class="footer">
+                ${escapeHtml(safeCompanyName)}
+                &nbsp;•&nbsp;
+                ${escapeHtml(generatedAt)}
+              </div>
+            </main>
+          </body>
+        </html>
+      `;
+    },
+    [
+      companyName,
+      dir,
+      filterSummary,
+      filteredRows,
+      locale,
+      readCount,
+      state.count,
+      state.unreadCount,
+      t,
+      urgentCount,
+    ],
+  );
+
+  function downloadNotifications(
+    mode: NotificationDocumentMode,
+  ) {
+    if (!filteredRows.length) {
+      toast.error(t.exportEmpty);
+      return;
+    }
+
+    const documentHtml =
+      buildNotificationsDocument(mode);
+    const blob = new Blob([documentHtml], {
+      type: "application/vnd.ms-excel;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const date = new Date().toISOString().slice(0, 10);
+
+    link.href = url;
+    link.download =
+      mode === "full"
+        ? `company-notifications-${date}.xls`
+        : `company-notifications-table-${date}.xls`;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+
+    toast.success(
+      mode === "full"
+        ? t.fullExported
+        : t.tableExported,
+    );
+  }
+
+  function printNotifications(
+    mode: NotificationDocumentMode,
+  ) {
+    if (!filteredRows.length) {
+      toast.error(t.printEmpty);
+      return;
+    }
+
+    const printWindow = window.open("", "_blank");
+
+    if (!printWindow) {
+      toast.error(t.popupBlocked);
+      return;
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(
+      buildNotificationsDocument(mode),
+    );
+    printWindow.document.close();
+
+    printWindow.onafterprint = () => {
+      printWindow.close();
+    };
+
+    window.setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+    }, 300);
+
+    toast.success(
+      mode === "full"
+        ? t.fullPrintReady
+        : t.tablePrintReady,
+    );
+  }
+
+  async function markOneRead(
+    notification: CompanyNotification,
+  ) {
     if (!notification.id || notification.isRead) return;
 
     try {
       setActionLoading(true);
+
       await fetchJson<ApiRecord>(
-        makeApiUrl(`/api/company/notifications/${notification.id}/read/`),
+        makeApiUrl(
+          `/api/company/notifications/${notification.id}/read/`,
+        ),
         { method: "POST" },
       );
 
       toast.success(t.markedRead);
       await loadNotifications({ silent: false });
     } catch (caughtError) {
-      const message = caughtError instanceof Error ? caughtError.message : t.errorDesc;
+      const message =
+        caughtError instanceof Error
+          ? caughtError.message
+          : t.errorDesc;
       toast.error(message);
     } finally {
       setActionLoading(false);
@@ -822,23 +1347,32 @@ export default function CompanyNotificationsPage() {
   async function markAllRead() {
     try {
       setActionLoading(true);
+
       await fetchJson<ApiRecord>(
-        makeApiUrl("/api/company/notifications/mark-all-read/"),
+        makeApiUrl(
+          "/api/company/notifications/mark-all-read/",
+        ),
         { method: "POST" },
       );
 
       toast.success(t.markedAllRead);
+      setMarkAllReadOpen(false);
       await loadNotifications({ silent: false });
     } catch (caughtError) {
-      const message = caughtError instanceof Error ? caughtError.message : t.errorDesc;
+      const message =
+        caughtError instanceof Error
+          ? caughtError.message
+          : t.errorDesc;
       toast.error(message);
     } finally {
       setActionLoading(false);
     }
   }
+
   async function createTestNotification() {
     try {
       setActionLoading(true);
+
       const payload = await fetchJson<ApiRecord>(
         makeApiUrl("/api/company/notifications/test/"),
         {
@@ -850,85 +1384,37 @@ export default function CompanyNotificationsPage() {
         },
       );
       const notificationPayload =
-        payload.notification || payload.data || payload.result || payload;
-      const notification = normalizeNotification(notificationPayload);
+        payload.notification ||
+        payload.data ||
+        payload.result ||
+        payload;
+      const notification =
+        normalizeNotification(notificationPayload);
+
       toast.success(t.testCreated);
+
       if (notification.id) {
         setSelected(notification);
       }
+
       await loadNotifications({ silent: false });
     } catch (caughtError) {
-      const message = caughtError instanceof Error ? caughtError.message : t.errorDesc;
+      const message =
+        caughtError instanceof Error
+          ? caughtError.message
+          : t.errorDesc;
       toast.error(message);
     } finally {
       setActionLoading(false);
     }
-  }  function exportExcel() {
-    if (!filteredRows.length) {
-      toast.error(t.exportEmpty);
-      return;
-    }
-
-    const html = `
-      <html dir="${dir}" lang="${locale}">
-        <head><meta charset="utf-8" /></head>
-        <body>
-          <h1>${escapeHtml(t.printTitle)}</h1>
-          ${tableHtmlForNotifications(filteredRows, locale)}
-        </body>
-      </html>
-    `;
-
-    const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-
-    link.href = url;
-    link.download = `company-notifications-${new Date().toISOString().slice(0, 10)}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-  }
-
-  function printPage() {
-    if (!filteredRows.length) {
-      toast.error(t.printEmpty);
-      return;
-    }
-
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1200,height=800");
-    if (!printWindow) return;
-
-    printWindow.document.write(`
-      <!doctype html>
-      <html dir="${dir}" lang="${locale}">
-        <head>
-          <meta charset="utf-8" />
-          <title>${escapeHtml(t.printTitle)}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 24px; color: #0f172a; }
-            h1 { margin: 0 0 8px; font-size: 24px; }
-            p { color: #64748b; }
-            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-            th, td { border: 1px solid #cbd5e1; padding: 8px; font-size: 12px; text-align: ${dir === "rtl" ? "right" : "left"}; }
-            th { background: #f1f5f9; }
-          </style>
-        </head>
-        <body>
-          <h1>${escapeHtml(t.printTitle)}</h1>
-          <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString("en-US"))}</p>
-          ${tableHtmlForNotifications(filteredRows, locale)}
-          <script>window.onload = function () { window.print(); };</script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
   }
 
   if (loading) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+      <main
+        dir={dir}
+        className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8"
+      >
         <DashboardSkeleton />
       </main>
     );
@@ -936,19 +1422,31 @@ export default function CompanyNotificationsPage() {
 
   if (error) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-        <Card className="mx-auto max-w-3xl rounded-3xl border-destructive/30 bg-card shadow-sm">
+      <main
+        dir={dir}
+        className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8"
+      >
+        <Card className="mx-auto max-w-3xl rounded-lg border-destructive/30 bg-card shadow-none">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-2 rounded-full bg-destructive/10 p-4 text-destructive">
-              <TriangleAlert className="h-8 w-8" />
-            </div>
+            <span className="mx-auto mb-2 inline-flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <TriangleAlert className="h-7 w-7" />
+            </span>
             <CardTitle>{t.errorTitle}</CardTitle>
             <CardDescription>{t.errorDesc}</CardDescription>
           </CardHeader>
+
           <CardContent className="space-y-4 text-center">
-            <p className="rounded-2xl bg-muted px-4 py-3 text-sm text-muted-foreground">{error}</p>
-            <Button onClick={() => void loadNotifications({ silent: true })} className="rounded-xl">
-              <RefreshCw className="h-4 w-4" />
+            <p className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+              {error}
+            </p>
+
+            <Button
+              type="button"
+              onClick={() =>
+                void loadNotifications({ silent: true })
+              }
+            >
+              <RefreshCw />
               {t.tryAgain}
             </Button>
           </CardContent>
@@ -958,62 +1456,103 @@ export default function CompanyNotificationsPage() {
   }
 
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-[1500px] space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
-          <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-              <div className="max-w-3xl">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  {t.eyebrow}
-                </div>
-                <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{t.title}</h1>
-                <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">{t.subtitle}</p>
-              </div>
+    <main
+      dir={dir}
+      className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8"
+    >
+      <div className="mx-auto max-w-[1500px] space-y-5">
+        <header className="flex flex-col gap-4 py-2 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
+            <Badge
+              variant="outline"
+              className="mb-3 gap-2 rounded-full bg-background font-normal"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {t.eyebrow}
+            </Badge>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="outline"
-                  className="rounded-xl bg-background"
-                  onClick={() => void loadNotifications({ silent: true })}
-                  disabled={refreshing}
-                >
-                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  {t.refresh}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="rounded-xl bg-background"
-                  onClick={() => void markAllRead()}
-                  disabled={actionLoading || !state.unreadCount}
-                >
-                  {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
-                  {t.markAllRead}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="rounded-xl bg-background"
-                  onClick={() => void createTestNotification()}
-                  disabled={actionLoading}
-                >
-                  {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  {t.createTest}
-                </Button>                <Button variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
-                  <FileSpreadsheet className="h-4 w-4" />
-                  {t.exportExcel}
-                </Button>
-                <Button className="rounded-xl" onClick={printPage}>
-                  <Printer className="h-4 w-4" />
-                  {t.print}
-                </Button>
-              </div>
-            </div>
+            <h1 className="text-3xl font-black tracking-tight">
+              {t.title}
+            </h1>
+
+            <p className="mt-2 text-sm leading-7 text-muted-foreground">
+              {t.subtitle}
+            </p>
           </div>
-        </section>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                void loadNotifications({ silent: true })
+              }
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <RefreshCw />
+              )}
+              {t.refresh}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setMarkAllReadOpen(true)}
+              disabled={
+                actionLoading || !state.unreadCount
+              }
+            >
+              {actionLoading ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <CheckCheck />
+              )}
+              {t.markAllRead}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                void createTestNotification()
+              }
+              disabled={actionLoading}
+            >
+              {actionLoading ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <Sparkles />
+              )}
+              {t.createTest}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                downloadNotifications("full")
+              }
+            >
+              <FileSpreadsheet />
+              {t.exportExcel}
+            </Button>
+
+            <Button
+              type="button"
+              onClick={() =>
+                printNotifications("full")
+              }
+            >
+              <Printer />
+              {t.print}
+            </Button>
+          </div>
+        </header>
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <KpiCard
             title={t.totalNotifications}
             value={state.count}
@@ -1040,349 +1579,668 @@ export default function CompanyNotificationsPage() {
           />
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[1.45fr_0.75fr]">
-          <Card className="rounded-2xl shadow-sm">
-            <CardHeader>
-              <CardTitle>{t.listTitle}</CardTitle>
-              <CardDescription>{t.listDescription}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-3">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-                  <div className="relative min-w-0 flex-1">
-                    <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                      placeholder={t.search}
-                      className="h-10 rounded-xl ps-9"
-                    />
-                  </div>
+        <Card className="overflow-hidden rounded-lg border bg-card shadow-none">
+          <CardHeader className="gap-4 border-b p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <CardTitle className="text-base font-bold">
+                    {t.listTitle}
+                  </CardTitle>
 
-                  <Select value={readFilter} onValueChange={(value) => setReadFilter(value as ReadFilter)}>
-                    <SelectTrigger className="h-10 rounded-xl bg-background lg:w-[150px]">
-                      <Filter className="h-4 w-4" />
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t.all}</SelectItem>
-                      <SelectItem value="unread">{t.unread}</SelectItem>
-                      <SelectItem value="read">{t.read}</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Badge
+                    variant="outline"
+                    className="rounded-full bg-background font-normal tabular-nums"
+                  >
+                    {formatInteger(filteredRows.length)}
+                  </Badge>
 
-                  <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
-                    <SelectTrigger className="h-10 rounded-xl bg-background lg:w-[150px]">
-                      <ArrowUpDown className="h-4 w-4" />
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="newest">{t.newest}</SelectItem>
-                      <SelectItem value="oldest">{t.oldest}</SelectItem>
-                      <SelectItem value="priority">{t.prioritySort}</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={resetFilters}>
-                    <RotateCcw className="h-4 w-4" />
-                    {t.reset}
-                  </Button>
+                  {state.unreadCount ? (
+                    <Badge
+                      variant="outline"
+                      className="rounded-full border-amber-200 bg-amber-50 font-normal text-amber-700"
+                    >
+                      {t.unread}:{" "}
+                      {formatInteger(state.unreadCount)}
+                    </Badge>
+                  ) : null}
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <Select value={channelFilter} onValueChange={(value) => setChannelFilter(value as ChannelFilter)}>
-                    <SelectTrigger className="h-10 rounded-xl bg-background">
-                      <SelectValue placeholder={t.channel} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CHANNELS.map((item) => (
-                        <SelectItem key={item} value={item}>
-                          {item === "all" ? t.all : getChannelLabel(item, locale)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <CardDescription className="mt-2">
+                  {t.listDescription}
+                </CardDescription>
+              </div>
 
-                  <Select value={typeFilter} onValueChange={(value) => setTypeFilter(value as TypeFilter)}>
-                    <SelectTrigger className="h-10 rounded-xl bg-background">
-                      <SelectValue placeholder={t.type} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TYPES.map((item) => (
-                        <SelectItem key={item} value={item}>
-                          {item === "all" ? t.all : getTypeLabel(item, locale)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    downloadNotifications("table")
+                  }
+                >
+                  <FileSpreadsheet />
+                  {t.exportExcel}
+                </Button>
 
-                  <Select value={priorityFilter} onValueChange={(value) => setPriorityFilter(value as PriorityFilter)}>
-                    <SelectTrigger className="h-10 rounded-xl bg-background">
-                      <SelectValue placeholder={t.priority} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PRIORITIES.map((item) => (
-                        <SelectItem key={item} value={item}>
-                          {item === "all" ? t.all : getPriorityLabel(item, locale)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    printNotifications("table")
+                  }
+                >
+                  <Printer />
+                  {t.print}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
 
+          <CardContent className="space-y-4 p-5">
+            <div className="space-y-3 rounded-lg border bg-background p-3">
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_160px_160px_auto]">
+                <div className="relative min-w-0">
+                  <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    value={sourceFilter}
-                    onChange={(event) => setSourceFilter(event.target.value)}
-                    placeholder={t.source}
-                    className="h-10 rounded-xl bg-background"
+                    value={search}
+                    onChange={(event) =>
+                      setSearch(event.target.value)
+                    }
+                    placeholder={t.search}
+                    className="ps-9"
                   />
                 </div>
+
+                <Select
+                  value={readFilter}
+                  onValueChange={(value) =>
+                    setReadFilter(value as ReadFilter)
+                  }
+                >
+                  <SelectTrigger>
+                    <Filter className="h-4 w-4" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
+                      {t.all}
+                    </SelectItem>
+                    <SelectItem value="unread">
+                      {t.unread}
+                    </SelectItem>
+                    <SelectItem value="read">
+                      {t.read}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={sort}
+                  onValueChange={(value) =>
+                    setSort(value as SortKey)
+                  }
+                >
+                  <SelectTrigger>
+                    <ArrowUpDown className="h-4 w-4" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="newest">
+                      {t.newest}
+                    </SelectItem>
+                    <SelectItem value="oldest">
+                      {t.oldest}
+                    </SelectItem>
+                    <SelectItem value="priority">
+                      {t.prioritySort}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={resetFilters}
+                >
+                  <RotateCcw />
+                  {t.reset}
+                </Button>
               </div>
 
-              <div className="overflow-hidden rounded-2xl border bg-background">
-                <div className="overflow-x-auto">
-                  <Table className="min-w-[1180px] table-fixed">
-                    <TableHeader>
-                      <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
-                        <TableHead className="w-[240px] px-4 text-right text-xs font-semibold text-muted-foreground">
-                          {t.titleColumn}
-                        </TableHead>
-                        <TableHead className="w-[320px] px-4 text-right text-xs font-semibold text-muted-foreground">
-                          {t.messageColumn}
-                        </TableHead>
-                        <TableHead className="w-[120px] px-4 text-right text-xs font-semibold text-muted-foreground">
-                          {t.status}
-                        </TableHead>
-                        <TableHead className="w-[130px] px-4 text-right text-xs font-semibold text-muted-foreground">
-                          {t.channel}
-                        </TableHead>
-                        <TableHead className="w-[120px] px-4 text-right text-xs font-semibold text-muted-foreground">
-                          {t.type}
-                        </TableHead>
-                        <TableHead className="w-[120px] px-4 text-right text-xs font-semibold text-muted-foreground">
-                          {t.priority}
-                        </TableHead>
-                        <TableHead className="w-[160px] px-4 text-right text-xs font-semibold text-muted-foreground">
-                          {t.createdAt}
-                        </TableHead>
-                        <TableHead className="w-[150px] px-4 text-right text-xs font-semibold text-muted-foreground">
-                          {t.actions}
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredRows.length ? (
-                        filteredRows.map((notification) => (
-                          <TableRow key={notification.id} className="h-[68px]">
-                            <TableCell className="px-4">
-                              <div className="min-w-0">
-                                <span className="block truncate text-sm font-semibold">
-                                  {notification.title || t.unknown}
-                                </span>
-                                <span className="block truncate text-xs text-muted-foreground">
-                                  #{notification.id || "—"}
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="px-4">
-                              <p className="line-clamp-2 text-sm text-muted-foreground">
-                                {notification.message || "—"}
-                              </p>
-                            </TableCell>
-                            <TableCell className="px-4">
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  "rounded-full px-2.5 py-1 text-xs",
-                                  notification.isRead
-                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                    : "border-amber-200 bg-amber-50 text-amber-700",
-                                )}
-                              >
-                                {notification.isRead ? t.read : t.unread}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="px-4 text-sm text-muted-foreground">
-                              <span className="inline-flex items-center gap-2">
-                                {notification.channel === "EMAIL" ? (
-                                  <Mail className="h-4 w-4" />
-                                ) : notification.channel === "WHATSAPP" ? (
-                                  <MessageCircle className="h-4 w-4" />
-                                ) : (
-                                  <Bell className="h-4 w-4" />
-                                )}
-                                {getChannelLabel(notification.channel, locale)}
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <Select
+                  value={channelFilter}
+                  onValueChange={(value) =>
+                    setChannelFilter(
+                      value as ChannelFilter,
+                    )
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={t.channel}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CHANNELS.map((item) => (
+                      <SelectItem
+                        key={item}
+                        value={item}
+                      >
+                        {item === "all"
+                          ? t.all
+                          : getChannelLabel(
+                              item,
+                              locale,
+                            )}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={typeFilter}
+                  onValueChange={(value) =>
+                    setTypeFilter(value as TypeFilter)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t.type} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TYPES.map((item) => (
+                      <SelectItem
+                        key={item}
+                        value={item}
+                      >
+                        {item === "all"
+                          ? t.all
+                          : getTypeLabel(item, locale)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={priorityFilter}
+                  onValueChange={(value) =>
+                    setPriorityFilter(
+                      value as PriorityFilter,
+                    )
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={t.priority}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRIORITIES.map((item) => (
+                      <SelectItem
+                        key={item}
+                        value={item}
+                      >
+                        {item === "all"
+                          ? t.all
+                          : getPriorityLabel(
+                              item,
+                              locale,
+                            )}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Input
+                  value={sourceFilter}
+                  onChange={(event) =>
+                    setSourceFilter(event.target.value)
+                  }
+                  placeholder={t.source}
+                />
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-lg border bg-background">
+              <div className="overflow-x-auto">
+                <Table className="min-w-[1120px] table-fixed">
+                  <TableHeader>
+                    <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
+                      <TableHead className="sticky start-0 z-20 w-[230px] bg-muted/40 px-4 text-start text-xs font-semibold text-muted-foreground">
+                        {t.titleColumn}
+                      </TableHead>
+                      <TableHead className="w-[300px] px-4 text-start text-xs font-semibold text-muted-foreground">
+                        {t.messageColumn}
+                      </TableHead>
+                      <TableHead className="w-[115px] px-4 text-start text-xs font-semibold text-muted-foreground">
+                        {t.status}
+                      </TableHead>
+                      <TableHead className="w-[125px] px-4 text-start text-xs font-semibold text-muted-foreground">
+                        {t.channel}
+                      </TableHead>
+                      <TableHead className="w-[110px] px-4 text-start text-xs font-semibold text-muted-foreground">
+                        {t.type}
+                      </TableHead>
+                      <TableHead className="w-[110px] px-4 text-start text-xs font-semibold text-muted-foreground">
+                        {t.priority}
+                      </TableHead>
+                      <TableHead className="w-[155px] px-4 text-start text-xs font-semibold text-muted-foreground">
+                        {t.createdAt}
+                      </TableHead>
+                      <TableHead className="w-[72px] px-4 text-center text-xs font-semibold text-muted-foreground">
+                        {t.actions}
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+
+                  <TableBody>
+                    {filteredRows.length ? (
+                      filteredRows.map((notification) => (
+                        <TableRow
+                          key={notification.id}
+                          className={cn(
+                            "h-[64px] cursor-pointer transition-colors hover:bg-muted/30",
+                            selected?.id ===
+                              notification.id &&
+                              "bg-muted/40",
+                          )}
+                          onClick={() =>
+                            setSelected(notification)
+                          }
+                        >
+                          <TableCell
+                            className={cn(
+                              "sticky start-0 z-10 bg-background px-4",
+                              selected?.id ===
+                                notification.id &&
+                                "bg-muted/40",
+                            )}
+                          >
+                            <div className="min-w-0">
+                              <span className="block truncate text-sm font-semibold">
+                                {notification.title ||
+                                  t.unknown}
                               </span>
-                            </TableCell>
-                            <TableCell className="px-4">
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  "rounded-full px-2.5 py-1 text-xs",
-                                  getTypeBadgeClass(notification.notificationType),
-                                )}
-                              >
-                                {getTypeLabel(notification.notificationType, locale)}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="px-4">
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  "rounded-full px-2.5 py-1 text-xs",
-                                  getPriorityBadgeClass(notification.priority),
-                                )}
-                              >
-                                {getPriorityLabel(notification.priority, locale)}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="px-4 text-sm tabular-nums text-muted-foreground">
-                              {formatDateTime(notification.createdAt)}
-                            </TableCell>
-                            <TableCell className="px-4">
-                              <div className="flex items-center gap-2">
+                              <span className="block truncate text-xs text-muted-foreground">
+                                #
+                                {notification.id || "—"}
+                              </span>
+                            </div>
+                          </TableCell>
+
+                          <TableCell className="px-4">
+                            <p className="line-clamp-2 text-sm text-muted-foreground">
+                              {notification.message || "—"}
+                            </p>
+                          </TableCell>
+
+                          <TableCell className="px-4">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "rounded-full px-2.5 py-1 text-xs",
+                                notification.isRead
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                  : "border-amber-200 bg-amber-50 text-amber-700",
+                              )}
+                            >
+                              {notification.isRead
+                                ? t.read
+                                : t.unread}
+                            </Badge>
+                          </TableCell>
+
+                          <TableCell className="px-4 text-sm text-muted-foreground">
+                            <span className="inline-flex items-center gap-2">
+                              {notification.channel ===
+                              "EMAIL" ? (
+                                <Mail className="h-4 w-4" />
+                              ) : notification.channel ===
+                                "WHATSAPP" ? (
+                                <MessageCircle className="h-4 w-4" />
+                              ) : (
+                                <Bell className="h-4 w-4" />
+                              )}
+                              {getChannelLabel(
+                                notification.channel,
+                                locale,
+                              )}
+                            </span>
+                          </TableCell>
+
+                          <TableCell className="px-4">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "rounded-full px-2.5 py-1 text-xs",
+                                getTypeBadgeClass(
+                                  notification.notificationType,
+                                ),
+                              )}
+                            >
+                              {getTypeLabel(
+                                notification.notificationType,
+                                locale,
+                              )}
+                            </Badge>
+                          </TableCell>
+
+                          <TableCell className="px-4">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "rounded-full px-2.5 py-1 text-xs",
+                                getPriorityBadgeClass(
+                                  notification.priority,
+                                ),
+                              )}
+                            >
+                              {getPriorityLabel(
+                                notification.priority,
+                                locale,
+                              )}
+                            </Badge>
+                          </TableCell>
+
+                          <TableCell className="px-4 text-sm tabular-nums text-muted-foreground">
+                            {formatDateTime(
+                              notification.createdAt,
+                            )}
+                          </TableCell>
+
+                          <TableCell
+                            className="px-4 text-center"
+                            onClick={(event) =>
+                              event.stopPropagation()
+                            }
+                          >
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
                                 <Button
+                                  type="button"
                                   variant="ghost"
-                                  size="sm"
-                                  className="rounded-lg"
-                                  onClick={() => setSelected(notification)}
+                                  size="icon"
+                                  aria-label={t.actions}
                                 >
-                                  <Eye className="h-4 w-4" />
+                                  <MoreVertical />
+                                </Button>
+                              </DropdownMenuTrigger>
+
+                              <DropdownMenuContent
+                                align="end"
+                                className="min-w-44"
+                              >
+                                <DropdownMenuItem
+                                  onSelect={() =>
+                                    setSelected(
+                                      notification,
+                                    )
+                                  }
+                                >
+                                  <Eye />
                                   {t.open}
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="rounded-lg"
-                                  onClick={() => void markOneRead(notification)}
-                                  disabled={actionLoading || notification.isRead}
+                                </DropdownMenuItem>
+
+                                <DropdownMenuSeparator />
+
+                                <DropdownMenuItem
+                                  className="text-emerald-700 focus:text-emerald-700"
+                                  disabled={
+                                    actionLoading ||
+                                    notification.isRead
+                                  }
+                                  onSelect={() =>
+                                    void markOneRead(
+                                      notification,
+                                    )
+                                  }
                                 >
-                                  <CheckCircle2 className="h-4 w-4" />
+                                  <CheckCircle2 />
                                   {t.markRead}
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      ) : (
-                        <TableRow>
-                          <TableCell colSpan={8} className="h-80">
-                            <EmptyState
-                              title={hasFilters ? t.noResultsTitle : t.noDataTitle}
-                              description={hasFilters ? t.noResultsDesc : t.noDataDesc}
-                              resetLabel={t.reset}
-                              showReset={hasFilters}
-                              onReset={resetFilters}
-                            />
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell
+                          colSpan={8}
+                          className="h-72"
+                        >
+                          <EmptyState
+                            title={
+                              hasFilters
+                                ? t.noResultsTitle
+                                : t.noDataTitle
+                            }
+                            description={
+                              hasFilters
+                                ? t.noResultsDesc
+                                : t.noDataDesc
+                            }
+                            resetLabel={t.reset}
+                            showReset={hasFilters}
+                            onReset={resetFilters}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+
+            <div className="text-sm text-muted-foreground">
+              {t.showing}{" "}
+              <span className="font-medium text-foreground tabular-nums">
+                {formatInteger(filteredRows.length)}
+              </span>{" "}
+              {t.of}{" "}
+              <span className="font-medium text-foreground tabular-nums">
+                {formatInteger(state.count)}
+              </span>{" "}
+              {t.rows}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-lg border bg-card shadow-none">
+          <CardHeader className="gap-4 border-b p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <CardTitle className="text-base font-bold">
+                    {t.detailTitle}
+                  </CardTitle>
+
+                  {selected ? (
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "rounded-full px-2.5 py-1 text-xs",
+                        selected.isRead
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border-amber-200 bg-amber-50 text-amber-700",
                       )}
-                    </TableBody>
-                  </Table>
+                    >
+                      {selected.isRead
+                        ? t.read
+                        : t.unread}
+                    </Badge>
+                  ) : null}
                 </div>
+
+                <CardDescription className="mt-2">
+                  {t.detailDescription}
+                </CardDescription>
               </div>
 
-              <div className="text-sm text-muted-foreground">
-                {t.showing}{" "}
-                <span className="font-medium text-foreground tabular-nums">
-                  {formatInteger(filteredRows.length)}
-                </span>{" "}
-                {t.of}{" "}
-                <span className="font-medium text-foreground tabular-nums">
-                  {formatInteger(state.count)}
-                </span>{" "}
-                {t.rows}
+              {selected && !selected.isRead ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    void markOneRead(selected)
+                  }
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <CheckCircle2 />
+                  )}
+                  {t.markRead}
+                </Button>
+              ) : null}
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-5">
+            {selected ? (
+              <div className="space-y-4">
+                <div className="rounded-lg border bg-muted/20 p-4">
+                  <h3 className="text-lg font-bold">
+                    {selected.title || t.unknown}
+                  </h3>
+                  <p className="mt-2 text-sm leading-7 text-muted-foreground">
+                    {selected.message || "—"}
+                  </p>
+                </div>
+
+                <div className="grid overflow-hidden rounded-lg border sm:grid-cols-2 xl:grid-cols-4">
+                  {[
+                    [t.id, selected.id || "—"],
+                    [
+                      t.channel,
+                      getChannelLabel(
+                        selected.channel,
+                        locale,
+                      ),
+                    ],
+                    [
+                      t.type,
+                      getTypeLabel(
+                        selected.notificationType,
+                        locale,
+                      ),
+                    ],
+                    [
+                      t.priority,
+                      getPriorityLabel(
+                        selected.priority,
+                        locale,
+                      ),
+                    ],
+                    [
+                      t.source,
+                      selected.sourceType || "—",
+                    ],
+                    [
+                      `${t.source} ID`,
+                      selected.sourceId || "—",
+                    ],
+                    [
+                      t.createdAt,
+                      formatDateTime(selected.createdAt),
+                    ],
+                    [
+                      t.readAt,
+                      formatDateTime(selected.readAt),
+                    ],
+                  ].map(([label, value]) => (
+                    <div
+                      key={label}
+                      className="border-b p-4 last:border-b-0 sm:border-e sm:[&:nth-child(2n)]:border-e-0 xl:[&:nth-child(2n)]:border-e xl:[&:nth-child(4n)]:border-e-0 xl:[&:nth-last-child(-n+4)]:border-b-0"
+                    >
+                      <p className="text-xs text-muted-foreground">
+                        {label}
+                      </p>
+                      <p className="mt-2 truncate text-sm font-medium tabular-nums">
+                        {value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </CardContent>
-          </Card>
+            ) : (
+              <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-muted/20 p-6 text-center">
+                <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border bg-background text-muted-foreground">
+                  <ShieldCheck className="h-6 w-6" />
+                </span>
 
-          <Card className="rounded-2xl shadow-sm">
-            <CardHeader>
-              <CardTitle>{t.detailTitle}</CardTitle>
-              <CardDescription>{t.detailDescription}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {selected ? (
-                <div className="space-y-4">
-                  <div className="rounded-2xl border bg-muted/20 p-4">
-                    <div className="mb-3 flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-lg font-semibold">{selected.title || t.unknown}</h3>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {selected.message || "—"}
-                        </p>
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "rounded-full px-2.5 py-1 text-xs",
-                          selected.isRead
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                            : "border-amber-200 bg-amber-50 text-amber-700",
-                        )}
-                      >
-                        {selected.isRead ? t.read : t.unread}
-                      </Badge>
-                    </div>
-
-                    <div className="grid gap-3 text-sm">
-                      <div className="flex items-center justify-between gap-3 border-t pt-3">
-                        <span className="text-muted-foreground">{t.id}</span>
-                        <span className="font-medium tabular-nums">{selected.id || "—"}</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-3 border-t pt-3">
-                        <span className="text-muted-foreground">{t.channel}</span>
-                        <span>{getChannelLabel(selected.channel, locale)}</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-3 border-t pt-3">
-                        <span className="text-muted-foreground">{t.type}</span>
-                        <span>{getTypeLabel(selected.notificationType, locale)}</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-3 border-t pt-3">
-                        <span className="text-muted-foreground">{t.priority}</span>
-                        <span>{getPriorityLabel(selected.priority, locale)}</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-3 border-t pt-3">
-                        <span className="text-muted-foreground">{t.source}</span>
-                        <span className="truncate">{selected.sourceType || "—"}</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-3 border-t pt-3">
-                        <span className="text-muted-foreground">{t.createdAt}</span>
-                        <span className="tabular-nums">{formatDateTime(selected.createdAt)}</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-3 border-t pt-3">
-                        <span className="text-muted-foreground">{t.readAt}</span>
-                        <span className="tabular-nums">{formatDateTime(selected.readAt)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Button
-                    className="w-full rounded-xl"
-                    onClick={() => void markOneRead(selected)}
-                    disabled={actionLoading || selected.isRead}
-                  >
-                    {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                    {t.markRead}
-                  </Button>
-
-                  <Button asChild variant="outline" className="w-full rounded-xl bg-background">
-                    <Link href="/company">{t.eyebrow}</Link>
-                  </Button>
+                <div>
+                  <h3 className="text-sm font-semibold">
+                    {t.noSelection}
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {t.detailDescription}
+                  </p>
                 </div>
-              ) : (
-                <div className="flex min-h-[360px] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed bg-muted/20 p-6 text-center">
-                  <div className="rounded-full bg-background p-4 text-muted-foreground">
-                    <ShieldCheck className="h-7 w-7" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold">{t.noSelection}</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">{t.detailDescription}</p>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <AlertDialog
+          open={markAllReadOpen}
+          onOpenChange={(open) => {
+            if (!actionLoading) {
+              setMarkAllReadOpen(open);
+            }
+          }}
+        >
+          <AlertDialogContent
+            dir={dir}
+            className="sm:max-w-[500px]"
+          >
+            <AlertDialogHeader className="text-start">
+              <span className="mb-2 inline-flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                <CheckCheck className="h-5 w-5" />
+              </span>
+
+              <AlertDialogTitle>
+                {t.confirmMarkAllTitle}
+              </AlertDialogTitle>
+
+              <AlertDialogDescription className="leading-7">
+                {t.confirmMarkAllDesc}
+                <span className="mt-3 block rounded-lg border bg-muted/30 px-3 py-2 text-foreground">
+                  {t.unreadNotifications}:{" "}
+                  <strong className="tabular-nums">
+                    {formatInteger(state.unreadCount)}
+                  </strong>
+                </span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+
+            <AlertDialogFooter className="gap-2">
+              <AlertDialogCancel
+                disabled={actionLoading}
+              >
+                {t.cancel}
+              </AlertDialogCancel>
+
+              <AlertDialogAction
+                disabled={actionLoading}
+                onClick={(event) => {
+                  event.preventDefault();
+                  void markAllRead();
+                }}
+                className="!bg-emerald-600 !text-white hover:!bg-emerald-700 focus-visible:!ring-emerald-600"
+              >
+                {actionLoading ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <CheckCheck />
+                )}
+                {t.confirm}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </main>
   );

@@ -271,11 +271,7 @@ function yearStartIso() {
   return `${now.getFullYear()}-01-01`;
 }
 function apiBase() {
-  const value = (
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    ""
-  ).replace(/\/+$/, "");
+  const value = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/+$/, "");
   return value.endsWith("/api") ? value.slice(0, -4) : value;
 }
 function apiUrl(path: string) {
@@ -410,8 +406,14 @@ function MoneyValue({
 }) {
   return (
     <span className={cn("inline-flex items-center gap-1 whitespace-nowrap tabular-nums", className)}>
-      <Image src="/currency/sar.svg" alt={label} width={14} height={14} className="h-3.5 w-3.5" />
       <span>{value < 0 ? "-" : ""}{formatMoney(value)}</span>
+      <Image
+        src="/currency/sar.svg"
+        alt={label}
+        width={14}
+        height={14}
+        className="h-3.5 w-3.5 shrink-0"
+      />
     </span>
   );
 }
@@ -525,8 +527,33 @@ function normalizeSummary(value: unknown): LedgerSummary {
     closing_balance: numberValue(record.closing_balance),
   };
 }
-function csvCell(value: unknown) {
-  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+type LedgerDocumentMode = "full" | "table";
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+function extractCompanyName(payload: unknown) {
+  const root = asRecord(payload);
+  const company = asRecord(
+    root.company ||
+      root.current_company ||
+      root.company_profile ||
+      root.tenant,
+  );
+  return text(
+    company.name ||
+      company.company_name ||
+      company.legal_name ||
+      root.company_name ||
+      root.tenant_name,
+  );
+}
+function documentMoney(value: number) {
+  return `${value < 0 ? "-" : ""}${formatMoney(value)}`;
 }
 function KpiCard({
   title,
@@ -544,53 +571,49 @@ function KpiCard({
   t: (typeof translations)[Locale];
 }) {
   return (
-    <Card className="rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
+    <Card className="group rounded-lg border bg-card shadow-none">
+      <CardContent className="flex min-h-[132px] items-start justify-between gap-4 p-5">
         <div className="min-w-0">
-          <CardDescription className="truncate text-sm">{title}</CardDescription>
-          <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
+          <p className="text-sm text-muted-foreground">{title}</p>
+          <div className="mt-2 text-2xl font-black tracking-tight tabular-nums">
             {money ? (
-              <MoneyValue value={value} label={t.sar} className="text-2xl font-bold" />
+              <MoneyValue value={value} label={t.sar} className="text-2xl font-black" />
             ) : (
               formatInteger(value)
             )}
-          </CardTitle>
+          </div>
+          <p className="mt-5 line-clamp-2 text-xs leading-5 text-muted-foreground">
+            {description}
+          </p>
         </div>
-        <span className="rounded-2xl bg-muted p-2.5 text-muted-foreground">
-          <Icon className="h-5 w-5" />
+        <span className="rounded-lg border bg-background p-2 text-muted-foreground">
+          <Icon className="h-4 w-4" />
         </span>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <p className="text-xs text-muted-foreground">{description}</p>
       </CardContent>
     </Card>
   );
 }
 function LedgerSkeleton() {
   return (
-    <div className="mx-auto max-w-[1500px] space-y-6">
-      <div className="rounded-3xl border bg-card p-6 shadow-sm">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="mt-3 h-8 w-72" />
-        <Skeleton className="mt-3 h-4 w-full max-w-2xl" />
+    <div className="mx-auto max-w-[1500px] space-y-5">
+      <div className="flex flex-col gap-4 py-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-3">
+          <Skeleton className="h-6 w-36" />
+          <Skeleton className="h-10 w-72" />
+          <Skeleton className="h-4 w-full max-w-2xl" />
+        </div>
+        <Skeleton className="h-10 w-72" />
       </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
-          <Card key={index} className="rounded-2xl">
-            <CardHeader>
-              <Skeleton className="h-4 w-28" />
-              <Skeleton className="h-8 w-20" />
-            </CardHeader>
-          </Card>
+          <Skeleton key={index} className="h-[132px] rounded-lg" />
         ))}
       </div>
-      <Card className="rounded-2xl">
-        <CardHeader>
-          <Skeleton className="h-6 w-48" />
-          <Skeleton className="h-4 w-80" />
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-96 w-full" />
+      <Card className="rounded-lg border shadow-none">
+        <CardContent className="space-y-4 p-5">
+          <Skeleton className="h-7 w-52" />
+          <Skeleton className="h-28 w-full rounded-lg" />
+          <Skeleton className="h-96 w-full rounded-lg" />
         </CardContent>
       </Card>
     </div>
@@ -602,6 +625,7 @@ export default function CompanyAccountingLedgerPage() {
   const [loading, setLoading] = React.useState(true);
   const [accountsLoading, setAccountsLoading] = React.useState(true);
   const [error, setError] = React.useState("");
+  const [companyName, setCompanyName] = React.useState("");
   const [accounts, setAccounts] = React.useState<AccountOption[]>([]);
   const [sections, setSections] = React.useState<LedgerSection[]>([]);
   const [summary, setSummary] = React.useState<LedgerSummary>({
@@ -618,9 +642,10 @@ export default function CompanyAccountingLedgerPage() {
   const [accountCode, setAccountCode] = React.useState("all");
   const [dateFrom, setDateFrom] = React.useState(yearStartIso());
   const [dateTo, setDateTo] = React.useState(todayIso());
-  const [search, setSearch] = React.useState("")
+  const [search, setSearch] = React.useState("");
+  const [sort, setSort] = React.useState<SortKey>("date");
+
   React.useEffect(() => {
-    // primeyAccountQueryPrefill: open reports already filtered by the selected account.
     const params = new URLSearchParams(window.location.search);
     const query =
       params.get("account_code") ||
@@ -629,31 +654,75 @@ export default function CompanyAccountingLedgerPage() {
       params.get("account") ||
       params.get("account_id") ||
       "";
-    if (query.trim()) {
-      setSearch(query.trim());
-    }
+    if (query.trim()) setSearch(query.trim());
   }, []);
-;
-  const [sort, setSort] = React.useState<SortKey>("date");
+
   React.useEffect(() => {
-    const initial = getInitialLocale();
-    setLocale(initial);
-    const onStorage = () => setLocale(getInitialLocale());
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    const syncLocale = () => setLocale(getInitialLocale());
+    syncLocale();
+    window.addEventListener("storage", syncLocale);
+    window.addEventListener("primey-locale-change", syncLocale as EventListener);
+    return () => {
+      window.removeEventListener("storage", syncLocale);
+      window.removeEventListener("primey-locale-change", syncLocale as EventListener);
+    };
   }, []);
+
   const t = translations[locale];
   const isRtl = locale === "ar";
-  const openLedgerLineDocument = React.useCallback((line: LedgerLine) => {
-    const href = ledgerDocumentHref(line);
-    if (href) {
-      router.push(href);
+  const extra = locale === "ar"
+    ? {
+        reportTitle: "تقرير دفتر الأستاذ",
+        totalLinesDesc: "عدد الحركات المرحلة المعروضة في التقرير",
+        totalDebitDesc: "إجمالي الجانب المدين خلال الفترة",
+        totalCreditDesc: "إجمالي الجانب الدائن خلال الفترة",
+        netBalanceDesc: "الفرق بين إجمالي المدين وإجمالي الدائن",
+        totalMovement: "إجمالي الحركة",
+        appliedFilters: "الفلاتر المطبقة",
+        companyFallback: "الشركة",
+        fullReportExported: "تم تجهيز تقرير دفتر الأستاذ الكامل بصيغة Excel.",
+        tableReportExported: "تم تجهيز سجل دفتر الأستاذ بصيغة Excel.",
+        fullReportPrintReady: "تم تجهيز تقرير دفتر الأستاذ للطباعة.",
+        tableReportPrintReady: "تم تجهيز سجل دفتر الأستاذ للطباعة.",
+      }
+    : {
+        reportTitle: "General Ledger Report",
+        totalLinesDesc: "Number of posted movements displayed in the report",
+        totalDebitDesc: "Total debit side during the selected period",
+        totalCreditDesc: "Total credit side during the selected period",
+        netBalanceDesc: "Difference between total debit and total credit",
+        totalMovement: "Movement total",
+        appliedFilters: "Applied filters",
+        companyFallback: "Company",
+        fullReportExported: "The full ledger report Excel file is ready.",
+        tableReportExported: "The ledger register Excel file is ready.",
+        fullReportPrintReady: "The full ledger report is ready to print.",
+        tableReportPrintReady: "The ledger register is ready to print.",
+      };
+
+  const openLedgerLineDocument = React.useCallback(
+    (line: LedgerLine) => {
+      const href = ledgerDocumentHref(line);
+      if (href) router.push(href);
+    },
+    [router],
+  );
+
+  const loadCompany = React.useCallback(async () => {
+    try {
+      const payload = await fetchJson<unknown>("/api/auth/whoami/");
+      setCompanyName(extractCompanyName(payload));
+    } catch {
+      setCompanyName("");
     }
-  }, [router]);
+  }, []);
+
   const loadAccounts = React.useCallback(async () => {
     setAccountsLoading(true);
     try {
-      const payload = await fetchJson<unknown>("/api/company/accounting/accounts/?page_size=1000");
+      const payload = await fetchJson<unknown>(
+        "/api/company/accounting/accounts/?page_size=1000",
+      );
       const rows = extractArray(payload, ["results", "items", "accounts", "data"])
         .map(normalizeAccount)
         .filter((account) => account.code);
@@ -664,6 +733,7 @@ export default function CompanyAccountingLedgerPage() {
       setAccountsLoading(false);
     }
   }, []);
+
   const loadLedger = React.useCallback(async () => {
     setLoading(true);
     setError("");
@@ -679,11 +749,16 @@ export default function CompanyAccountingLedgerPage() {
       const payload = await fetchJson<ApiRecord>(
         `/api/company/accounting/reports/ledger/?${params.toString()}`,
       );
-      const normalizedSections = extractArray(payload, ["sections", "groups", "accounts"])
+      const normalizedSections = extractArray(payload, [
+        "sections",
+        "groups",
+        "accounts",
+      ])
         .map(normalizeSection)
         .filter((section) => section.account.code);
       setSections(normalizedSections);
       setSummary(normalizeSummary(payload.summary));
+      return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : t.loadFailed;
       setError(message || t.loadFailed);
@@ -697,34 +772,95 @@ export default function CompanyAccountingLedgerPage() {
         opening_balance: 0,
         closing_balance: 0,
       });
+      return false;
     } finally {
       setLoading(false);
     }
   }, [accountCode, dateFrom, dateTo, level, reportType, search, t.loadFailed]);
+
   React.useEffect(() => {
+    void loadCompany();
     void loadAccounts();
-  }, [loadAccounts]);
+  }, [loadAccounts, loadCompany]);
+
   React.useEffect(() => {
     void loadLedger();
   }, [loadLedger]);
+
   const sortedSections = React.useMemo(() => {
     const copy = [...sections];
     if (sort === "account") {
       return copy.sort((a, b) => a.account.code.localeCompare(b.account.code));
     }
     if (sort === "amount") {
-      return copy.sort((a, b) => Math.abs(b.closing_balance) - Math.abs(a.closing_balance));
+      return copy.sort(
+        (a, b) => Math.abs(b.closing_balance) - Math.abs(a.closing_balance),
+      );
     }
     return copy.map((section) => ({
       ...section,
       lines: [...section.lines].sort((a, b) => {
-        if (sort === "entry") return a.entry_number.localeCompare(b.entry_number);
+        if (sort === "entry") {
+          return a.entry_number.localeCompare(b.entry_number);
+        }
         const dateCompare = a.date.localeCompare(b.date);
         if (dateCompare !== 0) return dateCompare;
         return a.entry_number.localeCompare(b.entry_number);
       }),
     }));
   }, [sections, sort]);
+
+  const displayedLines = React.useMemo(
+    () => sortedSections.reduce((total, section) => total + section.lines.length, 0),
+    [sortedSections],
+  );
+
+  const selectedAccountLabel = React.useMemo(() => {
+    if (accountCode === "all") return t.allAccounts;
+    const account = accounts.find((item) => item.code === accountCode);
+    if (!account) return accountCode;
+    const name = locale === "en" && account.name_en ? account.name_en : account.name;
+    return `${account.code} — ${name}`;
+  }, [accountCode, accounts, locale, t.allAccounts]);
+
+  const appliedFiltersText = React.useMemo(() => {
+    const reportLabel =
+      reportType === "general" ? t.generalLedger : t.accountsLedger;
+    const parts = [
+      `${t.dateFrom}: ${dateFrom || "—"}`,
+      `${t.dateTo}: ${dateTo || "—"}`,
+      `${t.reportType}: ${reportLabel}`,
+      `${t.account}: ${selectedAccountLabel}`,
+      `${t.sort}: ${
+        sort === "account"
+          ? t.sortAccount
+          : sort === "entry"
+            ? t.sortEntry
+            : sort === "amount"
+              ? t.sortAmount
+              : t.sortDate
+      }`,
+    ];
+    if (reportType === "general") {
+      parts.push(
+        `${t.accountLevel}: ${
+          level === "2" ? t.level2 : level === "3" ? t.level3 : t.allGroups
+        }`,
+      );
+    }
+    if (search.trim()) parts.push(`${t.searchPlaceholder}: ${search.trim()}`);
+    return parts.join(" • ");
+  }, [
+    dateFrom,
+    dateTo,
+    level,
+    reportType,
+    search,
+    selectedAccountLabel,
+    sort,
+    t,
+  ]);
+
   const resetFilters = React.useCallback(() => {
     setReportType("accounts");
     setLevel("2");
@@ -734,478 +870,856 @@ export default function CompanyAccountingLedgerPage() {
     setSearch("");
     setSort("date");
   }, []);
-  const exportExcel = React.useCallback(() => {
-    if (!sortedSections.length) {
-      toast.error(t.exportEmpty);
-      return;
-    }
-    const rows: string[] = [];
-    rows.push(
-      [
-        t.accountHeader,
-        t.date,
-        t.operationNumber,
-        t.referenceNumber,
-        t.definition,
-        t.debit,
-        t.credit,
-        t.balance,
-        t.status,
-      ].map(csvCell).join(","),
-    );
-    for (const section of sortedSections) {
-      rows.push(
-        [
-          `${section.account.code} - ${locale === "en" && section.account.name_en ? section.account.name_en : section.account.name}`,
-          "",
-          "",
-          "",
-          t.openingLine,
-          "",
-          "",
-          `${formatMoney(section.opening_balance)} ${balanceSideLabel(section.opening_balance_side, locale)}`,
-          "",
-        ].map(csvCell).join(","),
-      );
-      for (const line of section.lines) {
-        rows.push(
-          [
-            `${line.account_code} - ${locale === "en" && line.account_name_en ? line.account_name_en : line.account_name}`,
-            formatDate(line.date),
-            line.entry_number,
-            line.reference_number,
-            line.description || line.cost_center_name,
-            line.debit ? formatMoney(line.debit) : "",
-            line.credit ? formatMoney(line.credit) : "",
-            line.balance < 0 ? `-${formatMoney(line.balance)}` : formatMoney(line.balance),
-            t.posted,
-          ].map(csvCell).join(","),
-        );
-      }
-      rows.push(
-        [
-          "",
-          "",
-          "",
-          "",
-          t.totalOperation,
-          formatMoney(section.period_debit),
-          formatMoney(section.period_credit),
-          `${formatMoney(section.closing_balance)} ${balanceSideLabel(section.closing_balance_side, locale)}`,
-          "",
-        ].map(csvCell).join(","),
-      );
-    }
-    const blob = new Blob([`\ufeff${rows.join("\n")}`], {
-      type: "application/vnd.ms-excel;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `ledger-${dateFrom || "from"}-${dateTo || "to"}.xls`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  }, [dateFrom, dateTo, locale, sortedSections, t]);
-  const printReport = React.useCallback(() => {
-    if (!sortedSections.length) {
-      toast.error(t.printEmpty);
-      return;
-    }
-    const html = `
-      <html dir="${isRtl ? "rtl" : "ltr"}" lang="${locale}">
-        <head>
-          <meta charset="utf-8" />
-          <title>${t.title}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 24px; color: #111827; }
-            h1 { margin: 0 0 4px; font-size: 24px; }
-            .meta { color: #6b7280; margin-bottom: 20px; font-size: 12px; }
-            .section { margin-top: 22px; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
-            .section-head { display: flex; justify-content: space-between; gap: 16px; padding: 12px 14px; background: #f9fafb; font-weight: 700; }
-            table { width: 100%; border-collapse: collapse; font-size: 12px; }
-            th, td { border-top: 1px solid #e5e7eb; padding: 8px; text-align: ${isRtl ? "right" : "left"}; }
-            th { background: #f3f4f6; }
-            .num { direction: ltr; text-align: right; font-variant-numeric: tabular-nums; }
-            .total { font-weight: 700; background: #f9fafb; }
-          </style>
-        </head>
-        <body>
-          <h1>${t.title}</h1>
-          <div class="meta">${t.generatedAt}: ${new Date().toLocaleString("en-US")} | ${dateFrom} - ${dateTo}</div>
-          ${sortedSections
-            .map((section) => `
-              <div class="section">
-                <div class="section-head">
-                  <span>${section.account.code} - ${locale === "en" && section.account.name_en ? section.account.name_en : section.account.name}</span>
-                  <span>${t.closingBalance}: ${section.closing_balance < 0 ? "-" : ""}${formatMoney(section.closing_balance)} ${balanceSideLabel(section.closing_balance_side, locale)}</span>
+
+  const refreshLedger = React.useCallback(async () => {
+    const ok = await loadLedger();
+    if (ok) toast.success(t.refreshed);
+  }, [loadLedger, t.refreshed]);
+
+  const buildLedgerDocument = React.useCallback(
+    (mode: LedgerDocumentMode) => {
+      const direction = isRtl ? "rtl" : "ltr";
+      const reportHeading = mode === "full" ? extra.reportTitle : t.registerTitle;
+      const company = escapeHtml(companyName || extra.companyFallback);
+      const sectionTables = sortedSections
+        .map((section) => {
+          const accountName =
+            locale === "en" && section.account.name_en
+              ? section.account.name_en
+              : section.account.name;
+          const movements = section.lines.length
+            ? section.lines
+                .map(
+                  (line) => `
+                    <tr>
+                      <td class="date">${escapeHtml(formatDate(line.date))}</td>
+                      <td class="ref">${escapeHtml(line.reference_number || line.entry_number || "—")}</td>
+                      <td>${escapeHtml(line.cost_center_code || line.cost_center_name || "—")}</td>
+                      <td>${escapeHtml(line.description || line.source || "—")}</td>
+                      <td class="num">${line.debit ? documentMoney(line.debit) : "—"}</td>
+                      <td class="num">${line.credit ? documentMoney(line.credit) : "—"}</td>
+                      <td class="num">${documentMoney(line.balance)}</td>
+                      <td>${escapeHtml(t.posted)}</td>
+                    </tr>`,
+                )
+                .join("")
+            : `<tr><td colspan="8" class="empty">${escapeHtml(t.noMovements)}</td></tr>`;
+          return `
+            <section class="account-section">
+              <div class="account-heading">
+                <div>
+                  <strong>${escapeHtml(section.account.code)} — ${escapeHtml(accountName)}</strong>
+                  <span>${escapeHtml(t.totalLines)}: ${formatInteger(section.line_count || section.lines.length)}</span>
                 </div>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>${t.date}</th>
-                      <th>${t.referenceNumber}</th>
-                      <th>${t.definition}</th>
-                      <th>${t.debit}</th>
-                      <th>${t.credit}</th>
-                      <th>${t.balance}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td></td><td></td><td>${t.openingLine}</td>
-                      <td class="num"></td><td class="num"></td>
-                      <td class="num">${section.opening_balance < 0 ? "-" : ""}${formatMoney(section.opening_balance)}</td>
-                    </tr>
-                    ${section.lines.map((line) => `
-                      <tr>
-                        <td>${formatDate(line.date)}</td>
-                        <td>${line.reference_number}</td>
-                        <td>${line.description || line.cost_center_name || ""}</td>
-                        <td class="num">${line.debit ? formatMoney(line.debit) : ""}</td>
-                        <td class="num">${line.credit ? formatMoney(line.credit) : ""}</td>
-                        <td class="num">${line.balance < 0 ? "-" : ""}${formatMoney(line.balance)}</td>
-                      </tr>
-                    `).join("")}
-                    <tr class="total">
-                      <td></td><td></td><td>${t.totalOperation}</td>
-                      <td class="num">${formatMoney(section.period_debit)}</td>
-                      <td class="num">${formatMoney(section.period_credit)}</td>
-                      <td class="num">${section.closing_balance < 0 ? "-" : ""}${formatMoney(section.closing_balance)}</td>
-                    </tr>
-                  </tbody>
-                </table>
+                <div class="account-meta">
+                  <span>${escapeHtml(t.openingBalance)}: ${documentMoney(section.opening_balance)} ${escapeHtml(balanceSideLabel(section.opening_balance_side, locale))}</span>
+                  <span>${escapeHtml(t.closingBalance)}: ${documentMoney(section.closing_balance)} ${escapeHtml(balanceSideLabel(section.closing_balance_side, locale))}</span>
+                </div>
               </div>
-            `).join("")}
-        </body>
-      </html>
-    `;
-    const printWindow = window.open("", "_blank", "noopener,noreferrer");
-    if (!printWindow) return;
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-  }, [dateFrom, dateTo, isRtl, locale, sortedSections, t]);
-  if (loading && !sections.length) {
-    return <LedgerSkeleton />;
-  }
+              <table>
+                <thead>
+                  <tr>
+                    <th>${escapeHtml(t.date)}</th>
+                    <th>${escapeHtml(t.referenceNumber)}</th>
+                    <th>${escapeHtml(t.costCenter)}</th>
+                    <th>${escapeHtml(t.definition)}</th>
+                    <th>${escapeHtml(t.debit)}</th>
+                    <th>${escapeHtml(t.credit)}</th>
+                    <th>${escapeHtml(t.balance)}</th>
+                    <th>${escapeHtml(t.status)}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="opening-row">
+                    <td>—</td><td>—</td><td>—</td>
+                    <td>${escapeHtml(t.openingLine)}</td>
+                    <td class="num">—</td><td class="num">—</td>
+                    <td class="num">${documentMoney(section.opening_balance)}</td>
+                    <td>${escapeHtml(balanceSideLabel(section.opening_balance_side, locale))}</td>
+                  </tr>
+                  ${movements}
+                  <tr class="total-row">
+                    <td></td><td></td><td></td>
+                    <td>${escapeHtml(extra.totalMovement)}</td>
+                    <td class="num">${documentMoney(section.period_debit)}</td>
+                    <td class="num">${documentMoney(section.period_credit)}</td>
+                    <td class="num">${documentMoney(section.period_balance)}</td>
+                    <td></td>
+                  </tr>
+                  <tr class="closing-row">
+                    <td></td><td></td><td></td>
+                    <td>${escapeHtml(t.closingBalance)}</td>
+                    <td class="num"></td><td class="num"></td>
+                    <td class="num">${documentMoney(section.closing_balance)}</td>
+                    <td>${escapeHtml(balanceSideLabel(section.closing_balance_side, locale))}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>`;
+        })
+        .join("");
+      const summaryBlock =
+        mode === "full"
+          ? `
+            <table class="summary-table">
+              <tbody>
+                <tr>
+                  <th>${escapeHtml(t.totalSections)}</th>
+                  <td class="num">${formatInteger(sortedSections.length)}</td>
+                  <th>${escapeHtml(t.totalLines)}</th>
+                  <td class="num">${formatInteger(displayedLines)}</td>
+                </tr>
+                <tr>
+                  <th>${escapeHtml(t.totalDebit)}</th>
+                  <td class="num">${documentMoney(summary.total_debit)}</td>
+                  <th>${escapeHtml(t.totalCredit)}</th>
+                  <td class="num">${documentMoney(summary.total_credit)}</td>
+                </tr>
+                <tr>
+                  <th>${escapeHtml(t.netBalance)}</th>
+                  <td class="num">${documentMoney(summary.net_balance)}</td>
+                  <th>${escapeHtml(t.closingBalance)}</th>
+                  <td class="num">${documentMoney(summary.closing_balance)}</td>
+                </tr>
+              </tbody>
+            </table>`
+          : "";
+      return `<!doctype html>
+<html dir="${direction}" lang="${locale}">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(reportHeading)}</title>
+  <style>
+    @page { size: A4 landscape; margin: 9mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #111827; background: #fff; font-family: Tahoma, Arial, sans-serif; font-size: 10px; }
+    .report { width: 100%; }
+    .company { font-size: 11px; font-weight: 700; }
+    h1 { margin: 2px 0 4px; font-size: 20px; line-height: 1.2; }
+    .meta { margin-bottom: 8px; color: #374151; font-size: 9px; line-height: 1.7; }
+    .filters { border: 1px solid #000; padding: 5px 7px; margin-bottom: 8px; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th, td { border: 1px solid #000; padding: 4px 5px; vertical-align: middle; text-align: ${isRtl ? "right" : "left"}; }
+    th { background: #f3f4f6; font-weight: 700; }
+    .num { direction: ltr; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+    .date, .ref { direction: ltr; font-variant-numeric: tabular-nums; }
+    .summary-table { margin-bottom: 9px; }
+    .summary-table th { width: 22%; }
+    .summary-table td { width: 28%; }
+    .account-section { break-inside: avoid; margin-top: 9px; }
+    .account-heading { display: flex; justify-content: space-between; gap: 12px; border: 1px solid #000; border-bottom: 0; padding: 6px 7px; background: #f9fafb; }
+    .account-heading strong { display: block; font-size: 11px; }
+    .account-heading span { display: block; margin-top: 2px; color: #4b5563; font-size: 8px; }
+    .account-meta { display: flex; gap: 14px; text-align: end; }
+    .opening-row { background: #f8fafc; }
+    .total-row { background: #f1f5f9; font-weight: 700; }
+    .closing-row { background: #e5e7eb; border-top: 2px solid #64748b; font-weight: 700; }
+    .empty { padding: 18px; text-align: center; color: #6b7280; }
+    .footer { margin-top: 7px; text-align: ${isRtl ? "left" : "right"}; color: #4b5563; font-size: 8px; }
+    @media print {
+      .account-section { break-inside: avoid-page; }
+      thead { display: table-header-group; }
+    }
+  </style>
+</head>
+<body>
+  <main class="report">
+    <div class="company">${company}</div>
+    <h1>${escapeHtml(reportHeading)}</h1>
+    <div class="meta">${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString("en-GB"))}</div>
+    <div class="filters"><strong>${escapeHtml(extra.appliedFilters)}:</strong> ${escapeHtml(appliedFiltersText)}</div>
+    ${summaryBlock}
+    ${sectionTables}
+    <div class="footer">${company} — ${escapeHtml(new Date().toLocaleString("en-GB"))}</div>
+  </main>
+</body>
+</html>`;
+    },
+    [
+      appliedFiltersText,
+      companyName,
+      displayedLines,
+      isRtl,
+      locale,
+      sortedSections,
+      summary,
+      t,
+    ],
+  );
+
+  const printLedger = React.useCallback(
+    (mode: LedgerDocumentMode) => {
+      if (!sortedSections.length) {
+        toast.error(t.printEmpty);
+        return;
+      }
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) {
+        toast.error(
+          locale === "ar"
+            ? "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة."
+            : "The print window could not be opened. Allow pop-ups and try again.",
+        );
+        return;
+      }
+      printWindow.document.open();
+      printWindow.document.write(buildLedgerDocument(mode));
+      printWindow.document.close();
+      printWindow.onafterprint = () => {
+        printWindow.close();
+      };
+      window.setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+      }, 300);
+      toast.success(
+        mode === "full"
+          ? extra.fullReportPrintReady
+          : extra.tableReportPrintReady,
+      );
+    },
+    [
+      buildLedgerDocument,
+      extra.fullReportPrintReady,
+      extra.tableReportPrintReady,
+      locale,
+      sortedSections.length,
+      t.printEmpty,
+    ],
+  );
+
+  const downloadLedger = React.useCallback(
+    (mode: LedgerDocumentMode) => {
+      if (!sortedSections.length) {
+        toast.error(t.exportEmpty);
+        return;
+      }
+      const html = buildLedgerDocument(mode);
+      const blob = new Blob([`\ufeff${html}`], {
+        type: "application/vnd.ms-excel;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${mode === "full" ? "ledger" : "ledger-table"}-${dateFrom || "from"}-${dateTo || "to"}.xls`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      toast.success(
+        mode === "full" ? extra.fullReportExported : extra.tableReportExported,
+      );
+    },
+    [buildLedgerDocument, dateFrom, dateTo, sortedSections.length, t],
+  );
+
+  if (loading && !sections.length) return <LedgerSkeleton />;
+
   return (
-    <div dir={isRtl ? "rtl" : "ltr"} className="mx-auto max-w-[1500px] space-y-6">
-      <Card className="overflow-hidden rounded-3xl border-border/70 bg-card shadow-sm">
-        <div className="h-1.5 bg-slate-950" />
-        <CardHeader className="gap-4 p-6 md:flex md:flex-row md:items-start md:justify-between">
-          <div className="max-w-3xl space-y-3">
-            <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              {t.badge}
-            </Badge>
-            <div>
-              <CardTitle className="text-3xl font-bold tracking-tight">{t.title}</CardTitle>
-              <CardDescription className="mt-2 text-sm leading-7">{t.subtitle}</CardDescription>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild variant="outline" size="sm" className="rounded-full">
-                <Link href="/company/accounting">
-                  <ChevronLeft className="h-4 w-4" />
-                  {t.dashboard}
-                </Link>
-              </Button>
-              <Button asChild variant="outline" size="sm" className="rounded-full">
-                <Link href="/company/accounting/journal-entries">{t.journalEntries}</Link>
-              </Button>
-              <Button asChild variant="outline" size="sm" className="rounded-full">
-                <Link href="/company/accounting/chart-of-accounts">{t.chartOfAccounts}</Link>
-              </Button>
-            </div>
+    <div
+      dir={isRtl ? "rtl" : "ltr"}
+      className="mx-auto max-w-[1500px] space-y-5"
+    >
+      <header className="flex flex-col gap-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="max-w-3xl space-y-3">
+          <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
+            <ShieldCheck className="h-3.5 w-3.5" />
+            {t.badge}
+          </Badge>
+          <div>
+            <h1 className="text-3xl font-black tracking-tight">{t.title}</h1>
+            <p className="mt-2 text-sm leading-7 text-muted-foreground">
+              {t.subtitle}
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => void loadLedger()} className="rounded-xl" disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              {t.refresh}
+            <Button asChild variant="outline" size="sm" className="rounded-lg">
+              <Link href="/company/accounting">
+                <ChevronLeft className="h-4 w-4" />
+                {t.dashboard}
+              </Link>
             </Button>
-            <Button variant="outline" onClick={exportExcel} className="rounded-xl">
-              <FileSpreadsheet className="h-4 w-4" />
+            <Button asChild variant="outline" size="sm" className="rounded-lg">
+              <Link href="/company/accounting/journal-entries">
+                {t.journalEntries}
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="rounded-lg">
+              <Link href="/company/accounting/chart-of-accounts">
+                {t.chartOfAccounts}
+              </Link>
+            </Button>
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void refreshLedger()}
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <RefreshCw />
+            )}
+            {t.refresh}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => downloadLedger("full")}
+          >
+            <FileSpreadsheet />
+            {t.export}
+          </Button>
+          <Button
+            type="button"
+            onClick={() => printLedger("full")}
+          >
+            <Printer />
+            {t.print}
+          </Button>
+        </div>
+      </header>
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <KpiCard
+          title={t.totalLines}
+          value={displayedLines || summary.total_lines}
+          description={extra.totalLinesDesc}
+          icon={BookOpen}
+          t={t}
+        />
+        <KpiCard
+          title={t.totalDebit}
+          value={summary.total_debit}
+          money
+          description={extra.totalDebitDesc}
+          icon={BookOpen}
+          t={t}
+        />
+        <KpiCard
+          title={t.totalCredit}
+          value={summary.total_credit}
+          money
+          description={extra.totalCreditDesc}
+          icon={BookOpen}
+          t={t}
+        />
+        <KpiCard
+          title={t.netBalance}
+          value={summary.net_balance}
+          money
+          description={extra.netBalanceDesc}
+          icon={ArrowUpDown}
+          t={t}
+        />
+      </div>
+
+      <Card className="rounded-lg border bg-card shadow-none">
+        <CardHeader className="gap-4 p-5 md:flex md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="text-lg">{t.registerTitle}</CardTitle>
+              <Badge variant="outline" className="rounded-full tabular-nums">
+                {formatInteger(sortedSections.length)}
+              </Badge>
+              <Badge variant="outline" className="rounded-full">
+                {reportType === "general" ? t.generalLedger : t.accountsLedger}
+              </Badge>
+            </div>
+            <CardDescription className="mt-2 leading-6">
+              {t.registerDesc}
+            </CardDescription>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => downloadLedger("table")}
+            >
+              <FileSpreadsheet />
               {t.export}
             </Button>
-            <Button onClick={printReport} className="rounded-xl bg-slate-950 text-white hover:bg-slate-800">
-              <Printer className="h-4 w-4" />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => printLedger("table")}
+            >
+              <Printer />
               {t.print}
             </Button>
           </div>
         </CardHeader>
-      </Card>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard title={t.totalLines} value={summary.total_lines} description={t.registerDesc} icon={BookOpen} t={t} />
-        <KpiCard title={t.totalDebit} value={summary.total_debit} money description={t.totalDebit} icon={BookOpen} t={t} />
-        <KpiCard title={t.totalCredit} value={summary.total_credit} money description={t.totalCredit} icon={BookOpen} t={t} />
-        <KpiCard title={t.netBalance} value={summary.net_balance} money description={t.netBalance} icon={ArrowUpDown} t={t} />
-      </div>
-      <Card className="rounded-2xl border-border/70 shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-lg">{t.filtersTitle}</CardTitle>
-          <CardDescription>{t.filtersDesc}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-            <div className="space-y-2">
-              <label className="text-xs text-muted-foreground">{t.reportType}</label>
-              <Select value={reportType} onValueChange={(value) => setReportType(value as ReportType)}>
-                <SelectTrigger className="rounded-xl">
+        <CardContent className="space-y-4 p-5 pt-0">
+          <div className="rounded-lg border bg-muted/10 p-3">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">
+                  {t.reportType}
+                </label>
+                <Select
+                  value={reportType}
+                  onValueChange={(value) => setReportType(value as ReportType)}
+                >
+                  <SelectTrigger className="rounded-lg">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
+                    <SelectItem value="accounts">{t.accountsLedger}</SelectItem>
+                    <SelectItem value="general">{t.generalLedger}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">
+                  {t.accountLevel}
+                </label>
+                <Select
+                  value={level}
+                  onValueChange={setLevel}
+                  disabled={reportType !== "general"}
+                >
+                  <SelectTrigger className="rounded-lg">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
+                    <SelectItem value="2">{t.level2}</SelectItem>
+                    <SelectItem value="3">{t.level3}</SelectItem>
+                    <SelectItem value="all">{t.allGroups}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2 xl:col-span-2">
+                <label className="text-xs text-muted-foreground">
+                  {t.account}
+                </label>
+                <Select
+                  value={accountCode}
+                  onValueChange={setAccountCode}
+                  disabled={accountsLoading}
+                >
+                  <SelectTrigger className="rounded-lg">
+                    <SelectValue placeholder={t.allAccounts} />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
+                    <SelectItem value="all">{t.allAccounts}</SelectItem>
+                    {accounts.map((account) => (
+                      <SelectItem
+                        key={account.id || account.code}
+                        value={account.code}
+                      >
+                        {account.code} — {locale === "en" && account.name_en
+                          ? account.name_en
+                          : account.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <DatePickerField
+                label={t.dateFrom}
+                value={dateFrom}
+                onChange={setDateFrom}
+              />
+              <DatePickerField
+                label={t.dateTo}
+                value={dateTo}
+                onChange={setDateTo}
+              />
+            </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto_auto]">
+              <div className="relative">
+                <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder={t.searchPlaceholder}
+                  className="rounded-lg ps-9"
+                />
+              </div>
+              <Select
+                value={sort}
+                onValueChange={(value) => setSort(value as SortKey)}
+              >
+                <SelectTrigger className="w-full rounded-lg md:w-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
-                  <SelectItem value="accounts">{t.accountsLedger}</SelectItem>
-                  <SelectItem value="general">{t.generalLedger}</SelectItem>
+                  <SelectItem value="date">{t.sortDate}</SelectItem>
+                  <SelectItem value="account">{t.sortAccount}</SelectItem>
+                  <SelectItem value="entry">{t.sortEntry}</SelectItem>
+                  <SelectItem value="amount">{t.sortAmount}</SelectItem>
                 </SelectContent>
               </Select>
+              <Button
+                variant="outline"
+                onClick={resetFilters}
+                className="rounded-lg"
+              >
+                <RotateCcw className="h-4 w-4" />
+                {t.reset}
+              </Button>
             </div>
-            <div className="space-y-2">
-              <label className="text-xs text-muted-foreground">{t.accountLevel}</label>
-              <Select value={level} onValueChange={setLevel} disabled={reportType !== "general"}>
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
-                  <SelectItem value="2">{t.level2}</SelectItem>
-                  <SelectItem value="3">{t.level3}</SelectItem>
-                  <SelectItem value="all">{t.allGroups}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2 xl:col-span-2">
-              <label className="text-xs text-muted-foreground">{t.account}</label>
-              <Select value={accountCode} onValueChange={setAccountCode} disabled={accountsLoading}>
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue placeholder={t.allAccounts} />
-                </SelectTrigger>
-                <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
-                  <SelectItem value="all">{t.allAccounts}</SelectItem>
-                  {accounts.map((account) => (
-                    <SelectItem key={account.id || account.code} value={account.code}>
-                      {account.code} — {locale === "en" && account.name_en ? account.name_en : account.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <DatePickerField
-              label={t.dateFrom}
-              value={dateFrom}
-              onChange={setDateFrom}
-            />
-            <DatePickerField
-              label={t.dateTo}
-              value={dateTo}
-              onChange={setDateTo}
-            />
           </div>
-          <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
-            <div className="relative">
-              <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t.searchPlaceholder} className="rounded-xl ps-9" />
-            </div>
-            <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
-              <SelectTrigger className="w-full rounded-xl md:w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
-                <SelectItem value="date">{t.sortDate}</SelectItem>
-                <SelectItem value="account">{t.sortAccount}</SelectItem>
-                <SelectItem value="entry">{t.sortEntry}</SelectItem>
-                <SelectItem value="amount">{t.sortAmount}</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="outline" onClick={resetFilters} className="rounded-xl">
-              <RotateCcw className="h-4 w-4" />
-              {t.reset}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-      <Card className="rounded-2xl border-border/70 shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-lg">{t.registerTitle}</CardTitle>
-          <CardDescription>{t.registerDesc}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+
           {error ? (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
               {error}
             </div>
           ) : null}
+
           {!loading && !sortedSections.length ? (
-            <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed p-8 text-center">
+            <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-lg border border-dashed p-8 text-center">
               <Search className="h-8 w-8 text-muted-foreground" />
               <div>
                 <h3 className="font-semibold">{t.emptyTitle}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">{t.emptyDesc}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {t.emptyDesc}
+                </p>
               </div>
-              <Button variant="outline" onClick={resetFilters} className="rounded-xl">
+              <Button
+                variant="outline"
+                onClick={resetFilters}
+                className="rounded-lg"
+              >
                 <RotateCcw className="h-4 w-4" />
                 {t.reset}
               </Button>
             </div>
           ) : null}
-          {sortedSections.map((section) => (
-            <div key={section.account.code} className="overflow-hidden rounded-2xl border">
-              <div className="flex flex-col gap-3 bg-muted/35 p-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <div className="text-base font-bold">
-                    {section.account.code} — {locale === "en" && section.account.name_en ? section.account.name_en : section.account.name}
+
+          {sortedSections.map((section) => {
+            const accountName =
+              locale === "en" && section.account.name_en
+                ? section.account.name_en
+                : section.account.name;
+            return (
+              <div
+                key={section.account.code}
+                className="overflow-hidden rounded-lg border"
+              >
+                <div className="flex flex-col gap-3 border-b bg-muted/20 p-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <div className="text-base font-bold">
+                      {section.account.code} — {accountName}
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span>
+                        {t.openingBalance}: {" "}
+                        <MoneyValue
+                          value={section.opening_balance}
+                          label={t.sar}
+                        />
+                      </span>
+                      <Badge variant="outline" className="rounded-full">
+                        {balanceSideLabel(section.opening_balance_side, locale)}
+                      </Badge>
+                      <span>•</span>
+                      <span>
+                        {t.totalLines}: {formatInteger(section.line_count)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    <span>{t.openingBalance}: <MoneyValue value={section.opening_balance} label={t.sar} /> {balanceSideLabel(section.opening_balance_side, locale)}</span>
-                    <span>•</span>
-                    <span>{t.totalLines}: {formatInteger(section.line_count)}</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className="rounded-full">
+                      {t.totalDebit}: {" "}
+                      <MoneyValue
+                        value={section.period_debit}
+                        label={t.sar}
+                        className="ms-1"
+                      />
+                    </Badge>
+                    <Badge variant="outline" className="rounded-full">
+                      {t.totalCredit}: {" "}
+                      <MoneyValue
+                        value={section.period_credit}
+                        label={t.sar}
+                        className="ms-1"
+                      />
+                    </Badge>
+                    <Badge
+                      variant="outline"
+                      className="rounded-full bg-slate-100 text-slate-700"
+                    >
+                      {t.closingBalance}: {" "}
+                      <MoneyValue
+                        value={section.closing_balance}
+                        label={t.sar}
+                        className="ms-1"
+                      />
+                      <span className="ms-1">
+                        {balanceSideLabel(section.closing_balance_side, locale)}
+                      </span>
+                    </Badge>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" className="rounded-full">
-                    {t.totalDebit}: <MoneyValue value={section.period_debit} label={t.sar} className="ms-1" />
-                  </Badge>
-                  <Badge variant="outline" className="rounded-full">
-                    {t.totalCredit}: <MoneyValue value={section.period_credit} label={t.sar} className="ms-1" />
-                  </Badge>
-                  <Badge className="rounded-full bg-slate-950 text-white">
-                    {t.closingBalance}: <MoneyValue value={section.closing_balance} label={t.sar} className="ms-1" />
-                    <span className="ms-1">{balanceSideLabel(section.closing_balance_side, locale)}</span>
-                  </Badge>
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <Table className="min-w-[1180px] table-fixed">
-                  <colgroup>
-                    <col className="w-[130px]" />
-                    <col className="w-[190px]" />
-                    <col className="w-[150px]" />
-                    <col className="w-[330px]" />
-                    <col className="w-[125px]" />
-                    <col className="w-[125px]" />
-                    <col className="w-[145px]" />
-                    <col className="w-[120px]" />
-                  </colgroup>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="whitespace-nowrap px-4 text-start">{t.date}</TableHead>
-                      <TableHead className="whitespace-nowrap px-4 text-start">{t.referenceNumber}</TableHead>
-                      <TableHead className="whitespace-nowrap px-4 text-start">{t.costCenter}</TableHead>
-                      <TableHead className="whitespace-nowrap px-4 text-start">{t.definition}</TableHead>
-                      <TableHead className="whitespace-nowrap px-4 text-end">{t.debit}</TableHead>
-                      <TableHead className="whitespace-nowrap px-4 text-end">{t.credit}</TableHead>
-                      <TableHead className="whitespace-nowrap px-4 text-end">{t.balance}</TableHead>
-                      <TableHead className="whitespace-nowrap px-4 text-center">{t.status}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <TableRow className="bg-muted/20">
-                      <TableCell className="px-4 text-start text-muted-foreground">—</TableCell>
-                      <TableCell className="px-4 text-start text-muted-foreground">—</TableCell>
-                      <TableCell className="px-4 text-start text-muted-foreground">—</TableCell>
-                      <TableCell className="px-4 text-start font-medium">{t.openingLine}</TableCell>
-                      <TableCell className="px-4 text-end text-muted-foreground">—</TableCell>
-                      <TableCell className="px-4 text-end text-muted-foreground">—</TableCell>
-                      <TableCell className="px-4 text-end font-semibold">
-                        <MoneyValue value={section.opening_balance} label={t.sar} />
-                      </TableCell>
-                      <TableCell className="px-4 text-center">
-                        <Badge variant="outline" className="rounded-full">{balanceSideLabel(section.opening_balance_side, locale)}</Badge>
-                      </TableCell>
-                    </TableRow>
-                    {section.lines.length ? section.lines.map((line) => {
-                      const documentHref = ledgerDocumentHref(line);
-                      const referenceHref = ledgerReferenceHref(line);
-                      const sourceDocumentNumber = ledgerSourceDocumentNumber(line);
-                      const sourceDocumentHref = hrefForLedgerDocumentNumber(sourceDocumentNumber);
-                      return (
-                        <TableRow
-                          key={line.id}
-                          role={documentHref ? "button" : undefined}
-                          tabIndex={documentHref ? 0 : undefined}
-                          title={documentHref ? (locale === "ar" ? "اضغط لفتح المستند أو تفاصيل القيد" : "Click to open document or entry details") : undefined}
-                          onClick={() => openLedgerLineDocument(line)}
-                          onKeyDown={(event) => {
-                            if (documentHref && (event.key === "Enter" || event.key === " ")) {
-                              event.preventDefault();
-                              openLedgerLineDocument(line);
-                            }
-                          }}
-                          className={cn("transition-colors hover:bg-muted/30", documentHref && "cursor-pointer")}
-                        >
-                        <TableCell className="whitespace-nowrap px-4 text-start tabular-nums" dir="ltr" lang="en">
-                          {formatDate(line.date)}
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[1180px] table-fixed">
+                    <colgroup>
+                      <col className="w-[130px]" />
+                      <col className="w-[190px]" />
+                      <col className="w-[150px]" />
+                      <col className="w-[330px]" />
+                      <col className="w-[125px]" />
+                      <col className="w-[125px]" />
+                      <col className="w-[145px]" />
+                      <col className="w-[120px]" />
+                    </colgroup>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="whitespace-nowrap px-4 text-start">
+                          {t.date}
+                        </TableHead>
+                        <TableHead className="whitespace-nowrap px-4 text-start">
+                          {t.referenceNumber}
+                        </TableHead>
+                        <TableHead className="whitespace-nowrap px-4 text-start">
+                          {t.costCenter}
+                        </TableHead>
+                        <TableHead className="whitespace-nowrap px-4 text-start">
+                          {t.definition}
+                        </TableHead>
+                        <TableHead className="whitespace-nowrap px-4 text-end">
+                          {t.debit}
+                        </TableHead>
+                        <TableHead className="whitespace-nowrap px-4 text-end">
+                          {t.credit}
+                        </TableHead>
+                        <TableHead className="whitespace-nowrap px-4 text-end">
+                          {t.balance}
+                        </TableHead>
+                        <TableHead className="whitespace-nowrap px-4 text-center">
+                          {t.status}
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow className="bg-muted/20">
+                        <TableCell className="px-4 text-start text-muted-foreground">
+                          —
                         </TableCell>
-                        <TableCell className="whitespace-nowrap px-4 text-start font-medium tabular-nums" dir="ltr" lang="en">
-                          {referenceHref ? (
-                            <Link
-                              href={referenceHref}
-                              onClick={(event) => event.stopPropagation()}
-                              className="inline-flex max-w-full rounded-lg px-2 py-1 font-semibold text-slate-950 transition hover:bg-slate-100 hover:underline"
-                              title={locale === "ar" ? "فتح تفاصيل القيد" : "Open journal entry details"}
-                            >
-                              {line.reference_number || ledgerReferenceDocumentNumber(line) || "—"}
-                            </Link>
-                          ) : (
-                            line.reference_number || "—"
-                          )}
+                        <TableCell className="px-4 text-start text-muted-foreground">
+                          —
                         </TableCell>
-                        <TableCell className="whitespace-nowrap px-4 text-start">
-                          {line.cost_center_code || line.cost_center_name || "—"}
+                        <TableCell className="px-4 text-start text-muted-foreground">
+                          —
                         </TableCell>
-                        <TableCell className="px-4 text-start">
-                          <div className="truncate" title={line.description || line.source || "—"}>
-                            {line.description || line.source || "—"}
-                          </div>
-                          {sourceDocumentHref ? (
-                            <Link
-                              href={sourceDocumentHref}
-                              onClick={(event) => event.stopPropagation()}
-                              className="mt-1 inline-flex w-fit rounded-full border border-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-100 hover:underline"
-                              dir="ltr"
-                              lang="en"
-                              title={locale === "ar" ? "فتح تفاصيل السند الأصلي" : "Open source voucher details"}
-                            >
-                              {sourceDocumentNumber}
-                            </Link>
-                          ) : null}
+                        <TableCell className="px-4 text-start font-medium">
+                          {t.openingLine}
                         </TableCell>
-                        <TableCell className="px-4 text-end">
-                          {line.debit ? <MoneyValue value={line.debit} label={t.sar} /> : "—"}
+                        <TableCell className="px-4 text-end text-muted-foreground">
+                          —
                         </TableCell>
-                        <TableCell className="px-4 text-end">
-                          {line.credit ? <MoneyValue value={line.credit} label={t.sar} /> : "—"}
+                        <TableCell className="px-4 text-end text-muted-foreground">
+                          —
                         </TableCell>
-                        <TableCell className="px-4 text-end font-medium">
-                          <MoneyValue value={line.balance} label={t.sar} />
+                        <TableCell className="px-4 text-end font-semibold">
+                          <MoneyValue
+                            value={section.opening_balance}
+                            label={t.sar}
+                          />
                         </TableCell>
                         <TableCell className="px-4 text-center">
-                          <Badge variant="outline" className="rounded-full border-emerald-200 bg-emerald-50 text-emerald-700">
-                            {t.posted}
+                          <Badge variant="outline" className="rounded-full">
+                            {balanceSideLabel(
+                              section.opening_balance_side,
+                              locale,
+                            )}
                           </Badge>
                         </TableCell>
                       </TableRow>
-                      );
-                    }) : (
-                      <TableRow>
-                        <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
-                          {t.noMovements}
+
+                      {section.lines.length ? (
+                        section.lines.map((line) => {
+                          const documentHref = ledgerDocumentHref(line);
+                          const referenceHref = ledgerReferenceHref(line);
+                          const sourceDocumentNumber =
+                            ledgerSourceDocumentNumber(line);
+                          const sourceDocumentHref =
+                            hrefForLedgerDocumentNumber(sourceDocumentNumber);
+                          return (
+                            <TableRow
+                              key={line.id}
+                              role={documentHref ? "button" : undefined}
+                              tabIndex={documentHref ? 0 : undefined}
+                              title={
+                                documentHref
+                                  ? locale === "ar"
+                                    ? "اضغط لفتح المستند أو تفاصيل القيد"
+                                    : "Click to open document or entry details"
+                                  : undefined
+                              }
+                              onClick={() => openLedgerLineDocument(line)}
+                              onKeyDown={(event) => {
+                                if (
+                                  documentHref &&
+                                  (event.key === "Enter" || event.key === " ")
+                                ) {
+                                  event.preventDefault();
+                                  openLedgerLineDocument(line);
+                                }
+                              }}
+                              className={cn(
+                                "transition-colors hover:bg-muted/30",
+                                documentHref && "cursor-pointer",
+                              )}
+                            >
+                              <TableCell
+                                className="whitespace-nowrap px-4 text-start tabular-nums"
+                                dir="ltr"
+                                lang="en"
+                              >
+                                {formatDate(line.date)}
+                              </TableCell>
+                              <TableCell
+                                className="whitespace-nowrap px-4 text-start font-medium tabular-nums"
+                                dir="ltr"
+                                lang="en"
+                              >
+                                {referenceHref ? (
+                                  <Link
+                                    href={referenceHref}
+                                    onClick={(event) => event.stopPropagation()}
+                                    className="inline-flex max-w-full rounded-lg px-2 py-1 font-semibold text-slate-950 transition hover:bg-slate-100 hover:underline"
+                                    title={
+                                      locale === "ar"
+                                        ? "فتح تفاصيل القيد"
+                                        : "Open journal entry details"
+                                    }
+                                  >
+                                    {line.reference_number ||
+                                      ledgerReferenceDocumentNumber(line) ||
+                                      "—"}
+                                  </Link>
+                                ) : (
+                                  line.reference_number || "—"
+                                )}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap px-4 text-start">
+                                {line.cost_center_code ||
+                                  line.cost_center_name ||
+                                  "—"}
+                              </TableCell>
+                              <TableCell className="px-4 text-start">
+                                <div
+                                  className="truncate"
+                                  title={line.description || line.source || "—"}
+                                >
+                                  {line.description || line.source || "—"}
+                                </div>
+                                {sourceDocumentHref ? (
+                                  <Link
+                                    href={sourceDocumentHref}
+                                    onClick={(event) => event.stopPropagation()}
+                                    className="mt-1 inline-flex w-fit rounded-full border border-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-100 hover:underline"
+                                    dir="ltr"
+                                    lang="en"
+                                    title={
+                                      locale === "ar"
+                                        ? "فتح تفاصيل السند الأصلي"
+                                        : "Open source voucher details"
+                                    }
+                                  >
+                                    {sourceDocumentNumber}
+                                  </Link>
+                                ) : null}
+                              </TableCell>
+                              <TableCell className="px-4 text-end">
+                                {line.debit ? (
+                                  <MoneyValue value={line.debit} label={t.sar} />
+                                ) : (
+                                  "—"
+                                )}
+                              </TableCell>
+                              <TableCell className="px-4 text-end">
+                                {line.credit ? (
+                                  <MoneyValue value={line.credit} label={t.sar} />
+                                ) : (
+                                  "—"
+                                )}
+                              </TableCell>
+                              <TableCell className="px-4 text-end font-medium">
+                                <MoneyValue value={line.balance} label={t.sar} />
+                              </TableCell>
+                              <TableCell className="px-4 text-center">
+                                <Badge
+                                  variant="outline"
+                                  className="rounded-full border-emerald-200 bg-emerald-50 text-emerald-700"
+                                >
+                                  {t.posted}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      ) : (
+                        <TableRow>
+                          <TableCell
+                            colSpan={8}
+                            className="h-24 text-center text-muted-foreground"
+                          >
+                            {t.noMovements}
+                          </TableCell>
+                        </TableRow>
+                      )}
+
+                      <TableRow className="bg-slate-50 font-bold">
+                        <TableCell />
+                        <TableCell />
+                        <TableCell />
+                        <TableCell className="px-4 text-start">
+                          {extra.totalMovement}
+                        </TableCell>
+                        <TableCell className="px-4 text-end">
+                          <MoneyValue
+                            value={section.period_debit}
+                            label={t.sar}
+                          />
+                        </TableCell>
+                        <TableCell className="px-4 text-end">
+                          <MoneyValue
+                            value={section.period_credit}
+                            label={t.sar}
+                          />
+                        </TableCell>
+                        <TableCell className="px-4 text-end">
+                          <MoneyValue
+                            value={section.period_balance}
+                            label={t.sar}
+                          />
+                        </TableCell>
+                        <TableCell />
+                      </TableRow>
+                      <TableRow className="border-t-2 border-slate-300 bg-slate-100 font-bold">
+                        <TableCell />
+                        <TableCell />
+                        <TableCell />
+                        <TableCell className="px-4 text-start">
+                          {t.closingBalance}
+                        </TableCell>
+                        <TableCell />
+                        <TableCell />
+                        <TableCell className="px-4 text-end">
+                          <MoneyValue
+                            value={section.closing_balance}
+                            label={t.sar}
+                          />
+                        </TableCell>
+                        <TableCell className="px-4 text-center">
+                          {balanceSideLabel(
+                            section.closing_balance_side,
+                            locale,
+                          )}
                         </TableCell>
                       </TableRow>
-                    )}
-                    <TableRow className="bg-muted/30 font-bold">
-                      <TableCell />
-                      <TableCell />
-                      <TableCell />
-                      <TableCell className="px-4 text-start">{t.totalOperation}</TableCell>
-                      <TableCell className="px-4 text-end"><MoneyValue value={section.period_debit} label={t.sar} /></TableCell>
-                      <TableCell className="px-4 text-end"><MoneyValue value={section.period_credit} label={t.sar} /></TableCell>
-                      <TableCell className="px-4 text-end"><MoneyValue value={section.closing_balance} label={t.sar} /></TableCell>
-                      <TableCell className="px-4 text-center">{balanceSideLabel(section.closing_balance_side, locale)}</TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </CardContent>
       </Card>
     </div>

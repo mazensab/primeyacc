@@ -971,24 +971,36 @@ const companyNavItems: NavGroup[] = [
           },
           {
             title: { ar: "الفروع", en: "Branches" },
-            href: "/company/branches",
+            href: "/company/settings/branches",
+            aliases: ["/company/branches"],
             icon: Briefcase,
             permission: PERMISSIONS.PROVIDER_WORKSPACE_VIEW,
             workspaces: ["company"],
           },
           {
             title: { ar: "مستخدمو الشركة", en: "Company Users" },
-            href: "/company/users",
-            aliases: ["/center/users", "/provider/users"],
+            href: "/company/settings/users",
+            aliases: [
+              "/company/users",
+              "/center/users",
+              "/provider/users",
+            ],
             icon: UserCog,
-            anyPermissions: [PERMISSIONS.PROVIDER_USERS_VIEW, PERMISSIONS.USERS_VIEW],
+            anyPermissions: [
+              PERMISSIONS.PROVIDER_USERS_VIEW,
+              PERMISSIONS.USERS_VIEW,
+            ],
             workspaces: ["company"],
           },
           {
             title: { ar: "صلاحيات الشركة", en: "Company Permissions" },
-            href: "/company/permissions",
+            href: "/company/settings/permissions",
+            aliases: ["/company/permissions"],
             icon: ShieldCheck,
-            anyPermissions: [PERMISSIONS.PROVIDER_USERS_VIEW, PERMISSIONS.USERS_VIEW],
+            anyPermissions: [
+              PERMISSIONS.PROVIDER_USERS_VIEW,
+              PERMISSIONS.USERS_VIEW,
+            ],
             workspaces: ["company"],
           },
           {

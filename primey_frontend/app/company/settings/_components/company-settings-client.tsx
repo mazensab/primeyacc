@@ -30,11 +30,44 @@ import {
   UserRoundCog,
   UsersRound,
   XCircle,
+  FileSpreadsheet,
+  MoreVertical,
+  Pencil,
+  Power,
+  PowerOff,
+  Printer,
+  RotateCcw,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Card as UiCard,
   CardContent,
@@ -43,7 +76,23 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 type Locale = "ar" | "en";
 type ApiRecord = Record<string, unknown>;
 const API_BASE = (
@@ -539,155 +588,410 @@ function SearchBox({
     paymentMethods: 0,
     taxReady: false,
   });
+
   const load = useCallback(async () => {
-    setLoading(true);
-    const results = await Promise.allSettled([
-      apiRequest<unknown>("/api/company/profile/"),
-      apiRequest<unknown>("/api/company/settings/"),
-      apiRequest<unknown>("/api/company/branches/"),
-      apiRequest<unknown>("/api/company/users/"),
-      apiRequest<unknown>("/api/company/payments/methods/"),
-      Promise.all([apiRequest<unknown>("/api/company/profile/"), apiRequest<unknown>("/api/company/settings/").catch(() => null)]),
-    ]);
-    setStats({
-      profileReady: results[0].status === "fulfilled" && Object.keys(asRecord(results[0].value)).length > 0,
-      generalSettingsReady: results[1].status === "fulfilled" && Object.keys(asRecord(results[1].value)).length > 0,
-      branches: results[2].status === "fulfilled" ? normalizeList(results[2].value).length : 0,
-      users: results[3].status === "fulfilled" ? normalizeList(results[3].value).length : 0,
-      paymentMethods: results[4].status === "fulfilled" ? normalizeList(results[4].value).length : 0,
-      taxReady: results[5].status === "fulfilled" && Object.keys(asRecord(results[5].value)).length > 0,
-    });
-    setLastSync(formatEnglishDateTime(new Date()));
-    setLoading(false);
+    try {
+      setLoading(true);
+
+      const results = await Promise.allSettled([
+        apiRequest<unknown>("/api/company/profile/"),
+        apiRequest<unknown>("/api/company/settings/"),
+        apiRequest<unknown>("/api/company/branches/"),
+        apiRequest<unknown>("/api/company/users/"),
+        apiRequest<unknown>("/api/company/payments/methods/"),
+      ]);
+
+      const profilePayload =
+        results[0].status === "fulfilled" ? results[0].value : null;
+      const settingsPayload =
+        results[1].status === "fulfilled" ? results[1].value : null;
+      const profileRecords = getProfileSourceRecords(profilePayload, null);
+      const settingsRecords = getGeneralSettingsRecords(settingsPayload);
+      const taxRecords = [...settingsRecords, ...profileRecords];
+      const taxNumber = getFirstText(taxRecords, [
+        "tax_number",
+        "vat_number",
+        "tax_id",
+        "vat_registration_number",
+      ]);
+      const vatRegistered = getFirstBool(
+        taxRecords,
+        ["is_vat_registered", "vat_registered"],
+        Boolean(taxNumber),
+      );
+
+      setStats({
+        profileReady: profileRecords.length > 0,
+        generalSettingsReady: settingsRecords.length > 0,
+        branches:
+          results[2].status === "fulfilled"
+            ? normalizeList(results[2].value).length
+            : 0,
+        users:
+          results[3].status === "fulfilled"
+            ? normalizeList(results[3].value).length
+            : 0,
+        paymentMethods:
+          results[4].status === "fulfilled"
+            ? normalizeList(results[4].value).length
+            : 0,
+        taxReady: Boolean(taxNumber) || vatRegistered,
+      });
+
+      if (results.every((result) => result.status === "rejected")) {
+        toast.error(
+          rtl
+            ? "تعذر تحديث بيانات إعدادات الشركة."
+            : "Could not refresh company settings data.",
+        );
+      }
+
+      setLastSync(formatEnglishDateTime(new Date()));
+    } finally {
+      setLoading(false);
+    }
   }, [rtl]);
+
   useEffect(() => {
     void load();
   }, [load]);
+
   const pages = useMemo(
     () => [
       {
         href: "/company/settings/company-profile",
         title: rtl ? "ملف الشركة" : "Company profile",
-        description: rtl ? "بيانات الشركة الأساسية والتواصل والعنوان." : "Basic company identity, contact, and address.",
+        description: rtl
+          ? "بيانات الشركة الأساسية والتواصل والعنوان."
+          : "Basic company identity, contact, and address.",
         icon: Building2,
       },
       {
         href: "/company/settings/general",
         title: rtl ? "الإعدادات العامة" : "General settings",
-        description: rtl ? "اللغة، المنطقة الزمنية، السنة المالية، وإعدادات التشغيل." : "Language, timezone, fiscal year, and operating preferences.",
+        description: rtl
+          ? "اللغة، المنطقة الزمنية، السنة المالية، وإعدادات التشغيل."
+          : "Language, timezone, fiscal year, and operating preferences.",
         icon: SlidersHorizontal,
       },
       {
         href: "/company/settings/branches",
         title: rtl ? "الفروع" : "Branches",
-        description: rtl ? "إدارة فروع الشركة ونطاق استخدامها داخل العمليات." : "Manage company branches used across operations.",
+        description: rtl
+          ? "إدارة فروع الشركة ونطاق استخدامها داخل العمليات."
+          : "Manage company branches used across operations.",
         icon: Store,
       },
       {
         href: "/company/settings/users",
         title: rtl ? "مستخدمو الشركة" : "Company users",
-        description: rtl ? "إضافة المستخدمين وربطهم بالأدوار والفروع." : "Add users and assign roles and branches.",
+        description: rtl
+          ? "إضافة المستخدمين وربطهم بالأدوار والفروع."
+          : "Add users and assign roles and branches.",
         icon: UsersRound,
       },
       {
         href: "/company/settings/permissions",
         title: rtl ? "صلاحيات الشركة" : "Company permissions",
-        description: rtl ? "مراجعة وتحديث صلاحيات الأدوار داخل الشركة." : "Review and update role permissions inside the company.",
+        description: rtl
+          ? "مراجعة وتحديث صلاحيات الأدوار داخل الشركة."
+          : "Review and update role permissions inside the company.",
         icon: LockKeyhole,
       },
       {
         href: "/company/settings/tax",
         title: rtl ? "إعدادات الضريبة" : "Tax settings",
-        description: rtl ? "الرقم الضريبي، التسجيل في ضريبة القيمة المضافة، ونسبة VAT." : "VAT registration, tax number, and tax rate.",
+        description: rtl
+          ? "الرقم الضريبي، التسجيل في ضريبة القيمة المضافة، ونسبة VAT."
+          : "VAT registration, tax number, and tax rate.",
         icon: FileText,
       },
       {
         href: "/company/settings/payment-methods",
         title: rtl ? "طرق الدفع" : "Payment methods",
-        description: rtl ? "إدارة طرق الدفع المتاحة في الفواتير ونقاط البيع." : "Manage payment methods for invoices and POS.",
+        description: rtl
+          ? "إدارة طرق الدفع المتاحة في الفواتير ونقاط البيع."
+          : "Manage payment methods for invoices and POS.",
         icon: CreditCard,
       },
       {
         href: "/company/notifications",
         title: rtl ? "إشعارات الشركة" : "Company notifications",
-        description: rtl ? "متابعة إشعارات الشركة والتنبيهات التشغيلية." : "Review company notifications and operational alerts.",
+        description: rtl
+          ? "متابعة إشعارات الشركة والتنبيهات التشغيلية."
+          : "Review company notifications and operational alerts.",
         icon: ShieldCheck,
       },
       {
         href: "/company/whatsapp/settings",
         title: rtl ? "إعدادات واتساب" : "WhatsApp settings",
-        description: rtl ? "إعداد اتصال واتساب الخاص بالشركة الحالية." : "Configure WhatsApp connection for the current company.",
+        description: rtl
+          ? "إعداد اتصال واتساب الخاص بالشركة الحالية."
+          : "Configure WhatsApp connection for the current company.",
         icon: Settings2,
       },
     ],
     [rtl],
   );
+
+  const summaryCards = useMemo(
+    () => [
+      {
+        label: rtl ? "ملف الشركة" : "Company profile",
+        value: stats.profileReady
+          ? rtl
+            ? "جاهز"
+            : "Ready"
+          : rtl
+            ? "غير مكتمل"
+            : "Pending",
+        hint: rtl
+          ? "بيانات الشركة الأساسية المسجلة حاليًا."
+          : "Current company identity information.",
+        icon: Building2,
+      },
+      {
+        label: rtl ? "الإعدادات العامة" : "General settings",
+        value: stats.generalSettingsReady
+          ? rtl
+            ? "جاهزة"
+            : "Ready"
+          : rtl
+            ? "غير مكتملة"
+            : "Pending",
+        hint: rtl
+          ? "إعدادات اللغة والتشغيل والسنة المالية."
+          : "Language, operations, and fiscal settings.",
+        icon: SlidersHorizontal,
+      },
+      {
+        label: rtl ? "الفروع" : "Branches",
+        value: stats.branches,
+        hint: rtl ? "فروع مسجلة داخل الشركة." : "Registered company branches.",
+        icon: Store,
+      },
+      {
+        label: rtl ? "المستخدمون" : "Users",
+        value: stats.users,
+        hint: rtl ? "مستخدمون مرتبطون بالشركة." : "Users assigned to the company.",
+        icon: UsersRound,
+      },
+      {
+        label: rtl ? "طرق الدفع" : "Payment methods",
+        value: stats.paymentMethods,
+        hint: rtl
+          ? "طرق دفع مهيأة للفواتير ونقاط البيع."
+          : "Payment methods for invoices and POS.",
+        icon: CreditCard,
+      },
+      {
+        label: rtl ? "الضريبة" : "Tax",
+        value: stats.taxReady
+          ? rtl
+            ? "مكتملة"
+            : "Ready"
+          : rtl
+            ? "غير مكتملة"
+            : "Pending",
+        hint: rtl
+          ? "حالة التسجيل والرقم الضريبي."
+          : "VAT registration and tax number status.",
+        icon: FileText,
+      },
+    ],
+    [rtl, stats],
+  );
+
   return (
-    <PageShell
-      title={rtl ? "إعدادات الشركة" : "Company settings"}
-      description={
-        rtl
-          ? "مركز تشغيل إعدادات الشركة الحالية: الملف، الفروع، المستخدمين، الصلاحيات، الضريبة وطرق الدفع."
-          : "Operational settings center for the current company: profile, branches, users, permissions, tax, and payment methods."
-      }
-      icon={Settings2}
-      actions={
-        <SecondaryButton onClick={() => void load()} disabled={loading}>
-          <RefreshCcw className="h-4 w-4" />
-          {rtl ? "تحديث" : "Refresh"}
-        </SecondaryButton>
-      }
+    <main
+      dir={rtl ? "rtl" : "ltr"}
+      className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8"
     >
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <StatCard
-          label={rtl ? "ملف الشركة" : "Profile"}
-          value={stats.profileReady ? (rtl ? "جاهز" : "Ready") : (rtl ? "غير مكتمل" : "Pending")}
-          hint={rtl ? "من API الشركة الحالية" : "From current company API"}
-          icon={Building2}
-        />
-        <StatCard
-          label={rtl ? "الإعدادات العامة" : "General settings"}
-          value={stats.generalSettingsReady ? (rtl ? "جاهزة" : "Ready") : (rtl ? "غير مكتملة" : "Pending")}
-          hint={rtl ? "إعدادات التشغيل" : "Operating settings"}
-          icon={SlidersHorizontal}
-        />
-        <StatCard label={rtl ? "الفروع" : "Branches"} value={stats.branches} hint={rtl ? "فرع مسجل" : "Registered branches"} icon={Store} />
-        <StatCard label={rtl ? "المستخدمون" : "Users"} value={stats.users} hint={rtl ? "مستخدم داخل الشركة" : "Company users"} icon={UsersRound} />
-        <StatCard label={rtl ? "طرق الدفع" : "Payment methods"} value={stats.paymentMethods} hint={rtl ? "طريقة دفع" : "Payment methods"} icon={CreditCard} />
-        <StatCard
-          label={rtl ? "الضريبة" : "Tax"}
-          value={stats.taxReady ? (rtl ? "مفعّلة" : "Ready") : (rtl ? "غير مكتملة" : "Pending")}
-          hint={rtl ? "إعداد VAT" : "VAT setup"}
-          icon={FileText}
-        />
-      </section>
-      <Card title={rtl ? "صفحات إعدادات الشركة" : "Company settings pages"} description={lastSync ? `${rtl ? "آخر تحديث" : "Last sync"}: ${lastSync}` : undefined}>
-        {loading ? (
-          <LoadingBlock />
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {pages.map((page) => {
-              const Icon = page.icon;
-              return (
-                <Link
-                  key={page.href}
-                  href={page.href}
-                  className="group flex h-full min-h-[160px] flex-col justify-between rounded-2xl border bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                >
-                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <h3 className="text-base font-bold text-foreground">{page.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{page.description}</p>
-                </Link>
-              );
-            })}
+      <div className="mx-auto max-w-[1500px] space-y-6">
+        <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-4xl">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
+              <Settings2 className="h-3.5 w-3.5" />
+              {rtl ? "إعدادات الشركة" : "Company settings"}
+            </div>
+
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+              {rtl ? "إعدادات الشركة" : "Company settings"}
+            </h1>
+
+            <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">
+              {rtl
+                ? "مركز تشغيل إعدادات الشركة الحالية: الملف، الفروع، المستخدمون، الصلاحيات، الضريبة وطرق الدفع."
+                : "Operational settings center for the current company: profile, branches, users, permissions, tax, and payment methods."}
+            </p>
           </div>
-        )}
-      </Card>
-    </PageShell>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void load()}
+              disabled={loading}
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCcw className="h-4 w-4" />
+              )}
+              {rtl ? "تحديث" : "Refresh"}
+            </Button>
+
+            <Button asChild type="button" variant="outline">
+              <Link href="/company">
+                <Building2 className="h-4 w-4" />
+                {rtl ? "لوحة الشركة" : "Company dashboard"}
+              </Link>
+            </Button>
+          </div>
+        </header>
+
+        <section
+          aria-busy={loading}
+          className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+        >
+          {loading
+            ? Array.from({ length: 6 }).map((_, index) => (
+                <UiCard
+                  key={`settings-summary-loading-${index}`}
+                  className="min-h-[150px] rounded-2xl border bg-card shadow-none"
+                >
+                  <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-3">
+                    <div className="min-w-0 flex-1 space-y-3">
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-8 w-24" />
+                    </div>
+                    <Skeleton className="h-10 w-10 rounded-xl" />
+                  </CardHeader>
+                  <CardContent>
+                    <Skeleton className="h-3 w-40" />
+                  </CardContent>
+                </UiCard>
+              ))
+            : summaryCards.map((item) => {
+                const Icon = item.icon;
+
+                return (
+                  <UiCard
+                    key={item.label}
+                    className="min-h-[150px] rounded-2xl border bg-card shadow-none"
+                  >
+                    <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-3">
+                      <div className="min-w-0">
+                        <CardDescription className="text-sm">
+                          {item.label}
+                        </CardDescription>
+                        <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
+                          {typeof item.value === "number"
+                            ? formatInteger(item.value)
+                            : item.value}
+                        </CardTitle>
+                      </div>
+
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-background text-muted-foreground">
+                        <Icon className="h-5 w-5" />
+                      </span>
+                    </CardHeader>
+
+                    <CardContent className="pt-1">
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        {item.hint}
+                      </p>
+                    </CardContent>
+                  </UiCard>
+                );
+              })}
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border bg-card shadow-none">
+          <div className="flex flex-col gap-4 border-b px-5 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-bold tracking-tight">
+                  {rtl
+                    ? "صفحات إعدادات الشركة"
+                    : "Company settings pages"}
+                </h2>
+                <Badge
+                  variant="outline"
+                  className="rounded-full bg-background px-2.5 py-1 text-xs"
+                >
+                  {formatInteger(pages.length)}
+                </Badge>
+              </div>
+
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {rtl
+                  ? "انتقال مباشر إلى صفحات الإعدادات التشغيلية الخاصة بالشركة الحالية."
+                  : "Open the operational settings pages for the current company."}
+              </p>
+            </div>
+
+            {lastSync ? (
+              <p className="text-xs tabular-nums text-muted-foreground">
+                {rtl ? "آخر تحديث" : "Last sync"}: {lastSync}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="p-5 sm:p-6">
+            {loading ? (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 9 }).map((_, index) => (
+                  <div
+                    key={`settings-page-loading-${index}`}
+                    className="min-h-[132px] rounded-2xl border bg-background p-5"
+                  >
+                    <div className="flex items-start gap-4">
+                      <Skeleton className="h-10 w-10 shrink-0 rounded-xl" />
+                      <div className="min-w-0 flex-1 space-y-3">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-full" />
+                        <Skeleton className="h-3 w-3/4" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {pages.map((page) => {
+                  const Icon = page.icon;
+
+                  return (
+                    <Link
+                      key={page.href}
+                      href={page.href}
+                      className="group flex min-h-[132px] items-start gap-4 rounded-2xl border bg-background p-5 transition-colors hover:border-foreground/20 hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-card text-muted-foreground transition-colors group-hover:text-foreground">
+                        <Icon className="h-5 w-5" />
+                      </span>
+
+                      <span className="min-w-0">
+                        <span className="block text-sm font-bold text-foreground">
+                          {page.title}
+                        </span>
+                        <span className="mt-2 block text-sm leading-6 text-muted-foreground">
+                          {page.description}
+                        </span>
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+    </main>
   );
 }
+
 type CompanyProfileForm = {
   name: string;
   commercial_registration: string;
@@ -974,97 +1278,481 @@ export function CompanyProfilePage() {
     }
   };
   return (
-    <PageShell
-      title={rtl ? "ملف الشركة" : "Company profile"}
-      description={rtl ? "تحديث بيانات الشركة، الشعار، والعنوان الوطني." : "Update company details, logo, and national address."}
-      icon={Building2}
-      actions={
-        <PrimaryButton onClick={() => void save()} disabled={saving}>
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          {rtl ? "حفظ" : "Save"}
-        </PrimaryButton>
-      }
+    <main
+      data-primey-profile-approved="true"
+      dir={rtl ? "rtl" : "ltr"}
+      className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8"
     >
-      {loading ? (
-        <LoadingBlock />
-      ) : (
-        <div className="space-y-6">
-          <section className="grid gap-6 xl:grid-cols-[1fr_340px]">
-            <ProfileSectionCard title={rtl ? "بيانات الشركة" : "Company information"} icon={Building2}>
-              <div className="grid gap-4 md:grid-cols-2">
-                <TextInput label={rtl ? "اسم الشركة" : "Company name"} value={form.name} onChange={(value) => setField("name", value)} required />
-                <TextInput label={rtl ? "السجل التجاري" : "Commercial registration"} value={form.commercial_registration} onChange={(value) => setField("commercial_registration", value)} />
-                <TextInput label={rtl ? "الرقم الضريبي" : "Tax number"} value={form.tax_number} onChange={(value) => setField("tax_number", value)} />
-                <TextInput label={rtl ? "رقم التواصل" : "Phone"} value={form.phone} onChange={(value) => setField("phone", value)} />
-                <TextInput label={rtl ? "البريد الإلكتروني" : "Email"} value={form.email} onChange={(value) => setField("email", value)} type="email" />
-                <TextInput label={rtl ? "الموقع الإلكتروني" : "Website"} value={form.website} onChange={(value) => setField("website", value)} />
-              </div>
-            </ProfileSectionCard>
-            <ProfileSectionCard
-              title={rtl ? "شعار الشركة" : "Company logo"}
-              description={rtl ? "يظهر في المستندات وصفحات الشركة." : "Shown in documents and company pages."}
-              icon={Building2}
+      <div className="mx-auto max-w-[1500px] space-y-6">
+        <header className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
+              <Building2 className="h-3.5 w-3.5" />
+              {rtl ? "إعدادات الشركة" : "Company settings"}
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+              {rtl ? "ملف الشركة" : "Company profile"}
+            </h1>
+            <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">
+              {rtl
+                ? "تحديث بيانات الشركة الرسمية ومعلومات التواصل والشعار والعنوان الوطني."
+                : "Update official company information, contact details, logo, and national address."}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <span className="rounded-full border bg-background px-3 py-1">
+                {rtl ? "مساحة الشركة" : "Company workspace"}
+              </span>
+              <span className="rounded-full border bg-background px-3 py-1">
+                {rtl ? "بيانات رسمية" : "Official information"}
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              asChild
+              type="button"
+              variant="outline"
+              className="rounded-xl"
             >
-              <div className="flex min-h-[250px] flex-col items-center justify-center gap-4 text-center">
-                <div
-                  className="flex h-32 w-32 items-center justify-center rounded-3xl border bg-muted/30 bg-contain bg-center bg-no-repeat shadow-sm"
-                  style={logoPreview ? { backgroundImage: `url(${logoPreview})` } : undefined}
-                >
-                  {!logoPreview ? <Building2 className="h-11 w-11 text-muted-foreground" /> : null}
+              <Link href="/company/settings">
+                <Settings2 className="h-4 w-4" />
+                {rtl ? "مركز الإعدادات" : "Settings center"}
+              </Link>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl"
+              disabled={loading || saving}
+              onClick={() => void load()}
+            >
+              <RefreshCcw
+                className={`h-4 w-4 ${
+                  loading ? "animate-spin" : ""
+                }`}
+              />
+              {rtl ? "إعادة ضبط" : "Reset"}
+            </Button>
+            <Button
+              type="button"
+              className="rounded-xl"
+              disabled={loading || saving}
+              onClick={() => void save()}
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              {saving
+                ? rtl
+                  ? "جارٍ الحفظ..."
+                  : "Saving..."
+                : rtl
+                  ? "حفظ"
+                  : "Save"}
+            </Button>
+          </div>
+        </header>
+        {loading ? (
+          <div className="space-y-6">
+            <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <UiCard className="rounded-2xl border bg-card shadow-none">
+                <CardContent className="space-y-5 p-6">
+                  <Skeleton className="h-6 w-40" />
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {Array.from({ length: 6 }).map(
+                      (_, index) => (
+                        <div
+                          key={`profile-field-${index}`}
+                          className="space-y-2"
+                        >
+                          <Skeleton className="h-4 w-24" />
+                          <Skeleton className="h-11 w-full rounded-xl" />
+                        </div>
+                      ),
+                    )}
+                  </div>
+                </CardContent>
+              </UiCard>
+              <UiCard className="rounded-2xl border bg-card shadow-none">
+                <CardContent className="flex min-h-[320px] flex-col items-center justify-center gap-4 p-6">
+                  <Skeleton className="h-32 w-32 rounded-3xl" />
+                  <Skeleton className="h-10 w-36 rounded-xl" />
+                  <Skeleton className="h-4 w-44" />
+                </CardContent>
+              </UiCard>
+            </section>
+            <UiCard className="rounded-2xl border bg-card shadow-none">
+              <CardContent className="space-y-5 p-6">
+                <Skeleton className="h-6 w-36" />
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  {Array.from({ length: 9 }).map(
+                    (_, index) => (
+                      <div
+                        key={`address-field-${index}`}
+                        className="space-y-2"
+                      >
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-11 w-full rounded-xl" />
+                      </div>
+                    ),
+                  )}
                 </div>
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  <input
-                    id="company-logo-upload"
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                    className="hidden"
-                    onChange={(event) => onLogoChange(event.target.files?.[0])}
+              </CardContent>
+            </UiCard>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <UiCard className="h-full overflow-hidden rounded-2xl border bg-card shadow-none">
+                <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+                  <div className="min-w-0">
+                    <CardTitle className="text-base font-bold tracking-tight">
+                      {rtl
+                        ? "بيانات الشركة"
+                        : "Company information"}
+                    </CardTitle>
+                    <CardDescription className="mt-1 text-sm leading-6">
+                      {rtl
+                        ? "البيانات النظامية ووسائل التواصل المعتمدة للشركة."
+                        : "Official registration and contact information for the company."}
+                    </CardDescription>
+                  </div>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-background text-muted-foreground">
+                    <Building2 className="h-5 w-5" />
+                  </span>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <TextInput
+                      label={
+                        rtl
+                          ? "اسم الشركة"
+                          : "Company name"
+                      }
+                      value={form.name}
+                      onChange={(value) =>
+                        setField("name", value)
+                      }
+                      required
+                    />
+                    <TextInput
+                      label={
+                        rtl
+                          ? "السجل التجاري"
+                          : "Commercial registration"
+                      }
+                      value={
+                        form.commercial_registration
+                      }
+                      onChange={(value) =>
+                        setField(
+                          "commercial_registration",
+                          value,
+                        )
+                      }
+                    />
+                    <TextInput
+                      label={
+                        rtl
+                          ? "الرقم الضريبي"
+                          : "Tax number"
+                      }
+                      value={form.tax_number}
+                      onChange={(value) =>
+                        setField("tax_number", value)
+                      }
+                    />
+                    <TextInput
+                      label={
+                        rtl
+                          ? "رقم التواصل"
+                          : "Phone"
+                      }
+                      value={form.phone}
+                      type="tel"
+                      onChange={(value) =>
+                        setField("phone", value)
+                      }
+                    />
+                    <TextInput
+                      label={
+                        rtl
+                          ? "البريد الإلكتروني"
+                          : "Email"
+                      }
+                      value={form.email}
+                      type="email"
+                      onChange={(value) =>
+                        setField("email", value)
+                      }
+                    />
+                    <TextInput
+                      label={
+                        rtl
+                          ? "الموقع الإلكتروني"
+                          : "Website"
+                      }
+                      value={form.website}
+                      type="url"
+                      onChange={(value) =>
+                        setField("website", value)
+                      }
+                    />
+                  </div>
+                </CardContent>
+              </UiCard>
+              <UiCard className="h-full overflow-hidden rounded-2xl border bg-card shadow-none">
+                <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+                  <div className="min-w-0">
+                    <CardTitle className="text-base font-bold tracking-tight">
+                      {rtl
+                        ? "شعار الشركة"
+                        : "Company logo"}
+                    </CardTitle>
+                    <CardDescription className="mt-1 text-sm leading-6">
+                      {rtl
+                        ? "يظهر في المستندات وصفحات الشركة."
+                        : "Displayed in company pages and documents."}
+                    </CardDescription>
+                  </div>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-background text-muted-foreground">
+                    <Building2 className="h-5 w-5" />
+                  </span>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex min-h-[250px] flex-col items-center justify-center gap-4 text-center">
+                    <div
+                      className="flex h-36 w-36 items-center justify-center rounded-3xl border bg-muted/20 bg-contain bg-center bg-no-repeat"
+                      style={
+                        logoPreview
+                          ? {
+                              backgroundImage: `url(${logoPreview})`,
+                            }
+                          : undefined
+                      }
+                    >
+                      {!logoPreview ? (
+                        <Building2 className="h-11 w-11 text-muted-foreground" />
+                      ) : null}
+                    </div>
+                    <input
+                      id="company-logo-upload"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                      className="hidden"
+                      onChange={(event) =>
+                        onLogoChange(
+                          event.target.files?.[0],
+                        )
+                      }
+                    />
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl"
+                        onClick={() =>
+                          document
+                            .getElementById(
+                              "company-logo-upload",
+                            )
+                            ?.click()
+                        }
+                      >
+                        <Plus className="h-4 w-4" />
+                        {rtl
+                          ? "تغيير الشعار"
+                          : "Change logo"}
+                      </Button>
+                      {logoFile ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="rounded-xl"
+                          onClick={resetLogoChange}
+                        >
+                          {rtl
+                            ? "إلغاء التغيير"
+                            : "Cancel change"}
+                        </Button>
+                      ) : null}
+                    </div>
+                    <p className="max-w-xs text-xs leading-6 text-muted-foreground">
+                      {rtl
+                        ? "PNG أو JPG أو WebP أو SVG، وبحد أعلى 2MB."
+                        : "PNG, JPG, WebP, or SVG with a maximum size of 2MB."}
+                    </p>
+                  </div>
+                </CardContent>
+              </UiCard>
+            </section>
+            <UiCard className="overflow-hidden rounded-2xl border bg-card shadow-none">
+              <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+                <div className="min-w-0">
+                  <CardTitle className="text-base font-bold tracking-tight">
+                    {rtl
+                      ? "العنوان الوطني"
+                      : "National address"}
+                  </CardTitle>
+                  <CardDescription className="mt-1 text-sm leading-6">
+                    {rtl
+                      ? "يستخدم في المستندات والفواتير الرسمية."
+                      : "Used in official documents and invoices."}
+                  </CardDescription>
+                </div>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-background text-muted-foreground">
+                  <Landmark className="h-5 w-5" />
+                </span>
+              </CardHeader>
+              <CardContent className="space-y-5 pt-0">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <TextInput
+                    label={rtl ? "المدينة" : "City"}
+                    value={form.city}
+                    onChange={(value) =>
+                      setField("city", value)
+                    }
                   />
-                  <label
-                    htmlFor="company-logo-upload"
-                    className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl border bg-background px-4 text-sm font-semibold shadow-sm transition hover:bg-muted"
-                  >
-                    <Plus className="h-4 w-4" />
-                    {rtl ? "تغيير الشعار" : "Change logo"}
-                  </label>
-                  {logoFile ? (
-                    <Button type="button" variant="ghost" className="h-10 rounded-xl" onClick={resetLogoChange}>
-                      {rtl ? "إلغاء" : "Cancel"}
-                    </Button>
-                  ) : null}
+                  <TextInput
+                    label={rtl ? "الحي" : "District"}
+                    value={form.district}
+                    onChange={(value) =>
+                      setField("district", value)
+                    }
+                  />
+                  <TextInput
+                    label={rtl ? "الشارع" : "Street"}
+                    value={form.street}
+                    onChange={(value) =>
+                      setField("street", value)
+                    }
+                  />
+                  <TextInput
+                    label={
+                      rtl
+                        ? "رقم المبنى"
+                        : "Building number"
+                    }
+                    value={form.building_number}
+                    onChange={(value) =>
+                      setField(
+                        "building_number",
+                        value,
+                      )
+                    }
+                  />
+                  <TextInput
+                    label={
+                      rtl
+                        ? "الرمز البريدي"
+                        : "Postal code"
+                    }
+                    value={form.postal_code}
+                    onChange={(value) =>
+                      setField("postal_code", value)
+                    }
+                  />
+                  <TextInput
+                    label={
+                      rtl
+                        ? "الرقم الإضافي"
+                        : "Additional number"
+                    }
+                    value={form.additional_number}
+                    onChange={(value) =>
+                      setField(
+                        "additional_number",
+                        value,
+                      )
+                    }
+                  />
+                  <TextInput
+                    label={
+                      rtl
+                        ? "رقم الوحدة"
+                        : "Unit number"
+                    }
+                    value={form.unit_number}
+                    onChange={(value) =>
+                      setField("unit_number", value)
+                    }
+                  />
+                  <TextInput
+                    label={rtl ? "الدولة" : "Country"}
+                    value={form.country}
+                    onChange={(value) =>
+                      setField("country", value)
+                    }
+                  />
+                  <div className="md:col-span-2 xl:col-span-2">
+                    <TextInput
+                      label={
+                        rtl
+                          ? "العنوان المختصر"
+                          : "Short address"
+                      }
+                      value={form.short_address}
+                      onChange={(value) =>
+                        setField(
+                          "short_address",
+                          value,
+                        )
+                      }
+                    />
+                  </div>
                 </div>
-                <p className="max-w-xs text-xs leading-6 text-muted-foreground">
-                  {rtl ? "PNG, JPG, WebP, SVG — الحد الأعلى 2MB." : "PNG, JPG, WebP, SVG — max 2MB."}
-                </p>
-              </div>
-            </ProfileSectionCard>
-          </section>
-          <ProfileSectionCard
-            title={rtl ? "العنوان الوطني" : "National address"}
-            description={rtl ? "يستخدم في المستندات والفواتير الرسمية." : "Used in official documents and invoices."}
-            icon={Landmark}
-          >
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <TextInput label={rtl ? "المدينة" : "City"} value={form.city} onChange={(value) => setField("city", value)} />
-              <TextInput label={rtl ? "الحي" : "District"} value={form.district} onChange={(value) => setField("district", value)} />
-              <TextInput label={rtl ? "الشارع" : "Street"} value={form.street} onChange={(value) => setField("street", value)} />
-              <TextInput label={rtl ? "رقم المبنى" : "Building number"} value={form.building_number} onChange={(value) => setField("building_number", value)} />
-              <TextInput label={rtl ? "الرمز البريدي" : "Postal code"} value={form.postal_code} onChange={(value) => setField("postal_code", value)} />
-              <TextInput label={rtl ? "الرقم الإضافي" : "Additional number"} value={form.additional_number} onChange={(value) => setField("additional_number", value)} />
-              <TextInput label={rtl ? "رقم الوحدة" : "Unit number"} value={form.unit_number} onChange={(value) => setField("unit_number", value)} />
-              <TextInput label={rtl ? "الدولة" : "Country"} value={form.country} onChange={(value) => setField("country", value)} />
-              <TextInput label={rtl ? "العنوان المختصر" : "Short address"} value={form.short_address} onChange={(value) => setField("short_address", value)} />
+                <div className="rounded-2xl border bg-muted/20 p-4">
+                  <p className="text-xs font-semibold text-muted-foreground">
+                    {rtl
+                      ? "معاينة العنوان"
+                      : "Address preview"}
+                  </p>
+                  <p className="mt-2 break-words text-sm font-medium leading-7 text-foreground">
+                    {buildNationalAddressLine(form) ||
+                      (rtl
+                        ? "لم يتم إدخال العنوان الوطني بعد."
+                        : "No national address entered yet.")}
+                  </p>
+                </div>
+              </CardContent>
+            </UiCard>
+            <div className="flex flex-wrap items-center justify-end gap-2 rounded-2xl border bg-card p-4">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl"
+                disabled={saving}
+                onClick={() => void load()}
+              >
+                <RefreshCcw className="h-4 w-4" />
+                {rtl ? "إعادة ضبط" : "Reset"}
+              </Button>
+              <Button
+                type="button"
+                className="rounded-xl"
+                disabled={saving}
+                onClick={() => void save()}
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                {saving
+                  ? rtl
+                    ? "جارٍ الحفظ..."
+                    : "Saving..."
+                  : rtl
+                    ? "حفظ التغييرات"
+                    : "Save changes"}
+              </Button>
             </div>
-            <div className="mt-5 rounded-2xl border bg-muted/30 p-4">
-              <p className="text-xs font-semibold text-muted-foreground">{rtl ? "معاينة العنوان" : "Address preview"}</p>
-              <p className="mt-2 text-sm font-medium text-foreground">
-                {buildNationalAddressLine(form) || (rtl ? "لم يتم إدخال العنوان الوطني بعد." : "No national address entered yet.")}
-              </p>
-            </div>
-          </ProfileSectionCard>
-        </div>
-      )}
-    </PageShell>
+          </div>
+        )}
+      </div>
+    </main>
   );
 }
 
@@ -1385,6 +2073,19 @@ export function GeneralSettingsPage() {
   );
 }
 
+
+type BranchStatusFilter =
+  | "all"
+  | "active"
+  | "inactive";
+type BranchSortKey =
+  | "name"
+  | "code"
+  | "status";
+type PendingBranchStatus = {
+  row: ApiRecord;
+  nextActive: boolean;
+} | null;
 type BranchForm = {
   name: string;
   code: string;
@@ -1408,68 +2109,104 @@ const emptyBranchForm: BranchForm = {
   is_main: false,
 };
 const branchesAr = {
-  title: "\u0627\u0644\u0641\u0631\u0648\u0639",
-  description: "\u0625\u062f\u0627\u0631\u0629 \u0641\u0631\u0648\u0639 \u0627\u0644\u0634\u0631\u0643\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629 \u0648\u0627\u0633\u062a\u062e\u062f\u0627\u0645\u0647\u0627 \u062f\u0627\u062e\u0644 \u0627\u0644\u0639\u0645\u0644\u064a\u0627\u062a.",
-  refresh: "\u062a\u062d\u062f\u064a\u062b",
-  addBranch: "\u0625\u0636\u0627\u0641\u0629 \u0641\u0631\u0639",
-  editBranch: "\u062a\u0639\u062f\u064a\u0644 \u0641\u0631\u0639",
-  formDescription: "\u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0641\u0631\u0639 \u0627\u0644\u0623\u0633\u0627\u0633\u064a\u0629 \u0648\u062d\u0627\u0644\u062a\u0647 \u0627\u0644\u062a\u0634\u063a\u064a\u0644\u064a\u0629.",
-  listTitle: "\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0641\u0631\u0648\u0639",
-  listDescription: "\u0639\u0631\u0636 \u0648\u0625\u062f\u0627\u0631\u0629 \u0641\u0631\u0648\u0639 \u0627\u0644\u0634\u0631\u0643\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629.",
-  totalBranches: "\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0641\u0631\u0648\u0639",
-  activeBranches: "\u0641\u0631\u0648\u0639 \u0646\u0634\u0637\u0629",
-  inactiveBranches: "\u0641\u0631\u0648\u0639 \u0645\u0639\u0637\u0644\u0629",
-  mainBranches: "\u0641\u0631\u0648\u0639 \u0631\u0626\u064a\u0633\u064a\u0629",
-  totalHint: "\u0641\u0631\u0648\u0639 \u0645\u0633\u062c\u0644\u0629 \u0644\u0644\u0634\u0631\u0643\u0629",
-  activeHint: "\u0645\u062a\u0627\u062d\u0629 \u0644\u0644\u0639\u0645\u0644\u064a\u0627\u062a",
-  inactiveHint: "\u063a\u064a\u0631 \u0645\u062a\u0627\u062d\u0629 \u062d\u0627\u0644\u064a\u0627\u064b",
-  mainHint: "\u0641\u0631\u0639 \u0623\u0633\u0627\u0633\u064a \u0623\u0648 \u0631\u0626\u064a\u0633\u064a",
-  searchPlaceholder: "\u0627\u0628\u062d\u062b \u0628\u0627\u0633\u0645 \u0627\u0644\u0641\u0631\u0639 \u0623\u0648 \u0627\u0644\u0643\u0648\u062f \u0623\u0648 \u0627\u0644\u0645\u062f\u064a\u0646\u0629...",
-  noBranches: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0641\u0631\u0648\u0639",
-  noBranchesDescription: "\u0633\u062a\u0638\u0647\u0631 \u0627\u0644\u0641\u0631\u0648\u0639 \u0647\u0646\u0627 \u0639\u0646\u062f \u0625\u0646\u0634\u0627\u0626\u0647\u0627 \u0623\u0648 \u0639\u0646\u062f \u062a\u0648\u0641\u0631\u0647\u0627 \u0645\u0646 \u0627\u0644\u0640 API.",
-  name: "\u0627\u0633\u0645 \u0627\u0644\u0641\u0631\u0639",
-  code: "\u0643\u0648\u062f \u0627\u0644\u0641\u0631\u0639",
-  phone: "\u0631\u0642\u0645 \u0627\u0644\u062a\u0648\u0627\u0635\u0644",
-  email: "\u0627\u0644\u0628\u0631\u064a\u062f \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a",
-  city: "\u0627\u0644\u0645\u062f\u064a\u0646\u0629",
-  district: "\u0627\u0644\u062d\u064a",
-  address: "\u0627\u0644\u0639\u0646\u0648\u0627\u0646",
-  activeBranch: "\u0641\u0631\u0639 \u0646\u0634\u0637",
-  activeBranchDescription: "\u064a\u0645\u0643\u0646 \u0627\u0633\u062a\u062e\u062f\u0627\u0645\u0647 \u0641\u064a \u0627\u0644\u0645\u0628\u064a\u0639\u0627\u062a \u0648\u0627\u0644\u0645\u062e\u0632\u0648\u0646 \u0648\u0627\u0644\u0639\u0645\u0644\u064a\u0627\u062a.",
-  mainBranch: "\u0641\u0631\u0639 \u0631\u0626\u064a\u0633\u064a",
-  mainBranchDescription: "\u064a\u0633\u062a\u062e\u062f\u0645 \u0643\u0641\u0631\u0639 \u0627\u0641\u062a\u0631\u0627\u0636\u064a \u0639\u0646\u062f \u0627\u0644\u062d\u0627\u062c\u0629.",
-  save: "\u062d\u0641\u0638",
-  cancel: "\u0625\u0644\u063a\u0627\u0621",
-  edit: "\u062a\u0639\u062f\u064a\u0644",
-  activate: "\u062a\u0641\u0639\u064a\u0644",
-  deactivate: "\u062a\u0639\u0637\u064a\u0644",
-  branch: "\u0627\u0644\u0641\u0631\u0639",
-  contact: "\u0627\u0644\u062a\u0648\u0627\u0635\u0644",
-  location: "\u0627\u0644\u0645\u0648\u0642\u0639",
-  status: "\u0627\u0644\u062d\u0627\u0644\u0629",
-  actions: "\u0625\u062c\u0631\u0627\u0621\u0627\u062a",
-  active: "\u0646\u0634\u0637",
-  inactive: "\u063a\u064a\u0631 \u0646\u0634\u0637",
-  main: "\u0631\u0626\u064a\u0633\u064a",
-  nameRequired: "\u0627\u0633\u0645 \u0627\u0644\u0641\u0631\u0639 \u0645\u0637\u0644\u0648\u0628",
-  emailInvalid: "\u0627\u0644\u0628\u0631\u064a\u062f \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a \u063a\u064a\u0631 \u0635\u062d\u064a\u062d",
-  loadError: "\u062a\u0639\u0630\u0631 \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0641\u0631\u0648\u0639",
-  saveError: "\u062a\u0639\u0630\u0631 \u062d\u0641\u0638 \u0627\u0644\u0641\u0631\u0639",
-  statusError: "\u062a\u0639\u0630\u0631 \u062a\u062d\u062f\u064a\u062b \u062d\u0627\u0644\u0629 \u0627\u0644\u0641\u0631\u0639",
-  created: "\u062a\u0645 \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u0641\u0631\u0639",
-  updated: "\u062a\u0645 \u062a\u062d\u062f\u064a\u062b \u0627\u0644\u0641\u0631\u0639",
-  activated: "\u062a\u0645 \u062a\u0641\u0639\u064a\u0644 \u0627\u0644\u0641\u0631\u0639",
-  deactivated: "\u062a\u0645 \u062a\u0639\u0637\u064a\u0644 \u0627\u0644\u0641\u0631\u0639",
+  title: "الفروع",
+  description:
+    "إدارة فروع الشركة الحالية واستخدامها داخل العمليات.",
+  settings: "إعدادات الشركة",
+  settingsCenter: "مركز الإعدادات",
+  refresh: "تحديث",
+  addBranch: "إضافة فرع",
+  editBranch: "تعديل فرع",
+  formDescription:
+    "بيانات الفرع الأساسية وحالته التشغيلية.",
+  listTitle: "قائمة الفروع",
+  listDescription:
+    "عرض وإدارة فروع الشركة الحالية مع البحث والتصفية.",
+  totalBranches: "إجمالي الفروع",
+  activeBranches: "فروع نشطة",
+  inactiveBranches: "فروع معطلة",
+  mainBranches: "فروع رئيسية",
+  totalHint: "فروع مسجلة للشركة",
+  activeHint: "متاحة للعمليات",
+  inactiveHint: "غير متاحة حاليًا",
+  mainHint: "فرع أساسي أو رئيسي",
+  searchPlaceholder:
+    "ابحث باسم الفرع أو الكود أو المدينة...",
+  statusFilter: "الحالة",
+  sortBy: "الترتيب",
+  all: "الكل",
+  sortName: "الاسم",
+  sortCode: "الكود",
+  sortStatus: "الحالة",
+  reset: "إعادة ضبط",
+  exportExcel: "تصدير Excel",
+  print: "طباعة",
+  showing: "عرض",
+  of: "من",
+  noBranches: "لا توجد فروع",
+  noBranchesDescription:
+    "ستظهر الفروع هنا عند إنشائها أو عند توفرها من API.",
+  noResults: "لا توجد نتائج",
+  noResultsDescription:
+    "لا توجد فروع مطابقة للبحث أو التصفية الحالية.",
+  name: "اسم الفرع",
+  code: "كود الفرع",
+  phone: "رقم التواصل",
+  email: "البريد الإلكتروني",
+  city: "المدينة",
+  district: "الحي",
+  address: "العنوان",
+  activeBranch: "فرع نشط",
+  activeBranchDescription:
+    "يمكن استخدامه في المبيعات والمخزون والعمليات.",
+  mainBranch: "فرع رئيسي",
+  mainBranchDescription:
+    "يستخدم كفرع افتراضي عند الحاجة.",
+  save: "حفظ",
+  saving: "جارٍ الحفظ...",
+  cancel: "إلغاء",
+  edit: "تعديل",
+  activate: "تفعيل",
+  deactivate: "تعطيل",
+  branch: "الفرع",
+  contact: "التواصل",
+  location: "الموقع",
+  status: "الحالة",
+  actions: "الإجراءات",
+  active: "نشط",
+  inactive: "غير نشط",
+  main: "رئيسي",
+  confirmActivateTitle: "تفعيل الفرع",
+  confirmDeactivateTitle: "تعطيل الفرع",
+  confirmActivateDescription:
+    "سيصبح الفرع متاحًا للاستخدام داخل العمليات.",
+  confirmDeactivateDescription:
+    "سيتم إيقاف استخدام الفرع داخل العمليات حتى إعادة تفعيله.",
+  nameRequired: "اسم الفرع مطلوب",
+  emailInvalid: "البريد الإلكتروني غير صحيح",
+  loadError: "تعذر تحميل الفروع",
+  saveError: "تعذر حفظ الفرع",
+  statusError: "تعذر تحديث حالة الفرع",
+  created: "تم إنشاء الفرع",
+  updated: "تم تحديث الفرع",
+  activated: "تم تفعيل الفرع",
+  deactivated: "تم تعطيل الفرع",
+  exported: "تم تصدير قائمة الفروع",
 };
 const branchesEn = {
   title: "Branches",
-  description: "Manage current company branches and use them across operations.",
+  description:
+    "Manage current company branches and use them across operations.",
+  settings: "Company settings",
+  settingsCenter: "Settings center",
   refresh: "Refresh",
   addBranch: "Add branch",
   editBranch: "Edit branch",
-  formDescription: "Branch core details and operational status.",
+  formDescription:
+    "Branch core details and operational status.",
   listTitle: "Branches list",
-  listDescription: "View and manage current company branches.",
+  listDescription:
+    "View and manage current company branches with search and filters.",
   totalBranches: "Total branches",
   activeBranches: "Active branches",
   inactiveBranches: "Inactive branches",
@@ -1478,9 +2215,25 @@ const branchesEn = {
   activeHint: "Available for operations",
   inactiveHint: "Currently unavailable",
   mainHint: "Default or primary branch",
-  searchPlaceholder: "Search branch name, code, or city...",
+  searchPlaceholder:
+    "Search branch name, code, or city...",
+  statusFilter: "Status",
+  sortBy: "Sort by",
+  all: "All",
+  sortName: "Name",
+  sortCode: "Code",
+  sortStatus: "Status",
+  reset: "Reset",
+  exportExcel: "Export Excel",
+  print: "Print",
+  showing: "Showing",
+  of: "of",
   noBranches: "No branches",
-  noBranchesDescription: "Branches will appear here when created or returned by the API.",
+  noBranchesDescription:
+    "Branches will appear here when created or returned by the API.",
+  noResults: "No results",
+  noResultsDescription:
+    "No branches match the current search or filters.",
   name: "Branch name",
   code: "Branch code",
   phone: "Phone",
@@ -1489,10 +2242,13 @@ const branchesEn = {
   district: "District",
   address: "Address",
   activeBranch: "Active branch",
-  activeBranchDescription: "Can be used in sales, inventory, and operations.",
+  activeBranchDescription:
+    "Can be used in sales, inventory, and operations.",
   mainBranch: "Main branch",
-  mainBranchDescription: "Used as the default branch when needed.",
+  mainBranchDescription:
+    "Used as the default branch when needed.",
   save: "Save",
+  saving: "Saving...",
   cancel: "Cancel",
   edit: "Edit",
   activate: "Activate",
@@ -1505,6 +2261,12 @@ const branchesEn = {
   active: "Active",
   inactive: "Inactive",
   main: "Main",
+  confirmActivateTitle: "Activate branch",
+  confirmDeactivateTitle: "Deactivate branch",
+  confirmActivateDescription:
+    "The branch will become available for operational use.",
+  confirmDeactivateDescription:
+    "The branch will be unavailable until it is activated again.",
   nameRequired: "Branch name is required",
   emailInvalid: "Invalid email address",
   loadError: "Could not load branches",
@@ -1514,53 +2276,197 @@ const branchesEn = {
   updated: "Branch updated",
   activated: "Branch activated",
   deactivated: "Branch deactivated",
+  exported: "Branches exported",
 };
-function getBranchName(row: ApiRecord): string {
-  return getText(row, ["name", "branch_name", "title"], "-");
+function getBranchName(
+  row: ApiRecord,
+): string {
+  return getText(
+    row,
+    ["name", "branch_name", "title"],
+    "-",
+  );
 }
-function getBranchCode(row: ApiRecord): string {
-  return getText(row, ["code", "branch_code", "reference"], "-");
+function getBranchCode(
+  row: ApiRecord,
+): string {
+  return getText(
+    row,
+    ["code", "branch_code", "reference"],
+    "-",
+  );
 }
-function getBranchActive(row: ApiRecord): boolean {
-  return getBool(row, ["is_active", "active", "enabled"], true);
+function getBranchActive(
+  row: ApiRecord,
+): boolean {
+  return getBool(
+    row,
+    ["is_active", "active", "enabled"],
+    true,
+  );
 }
-function getBranchMain(row: ApiRecord): boolean {
-  return getBool(row, ["is_main", "main", "is_default", "default"], false);
+function getBranchMain(
+  row: ApiRecord,
+): boolean {
+  return getBool(
+    row,
+    [
+      "is_main",
+      "main",
+      "is_default",
+      "default",
+    ],
+    false,
+  );
+}
+function getBranchPhone(
+  row: ApiRecord,
+): string {
+  return getText(
+    row,
+    ["phone", "mobile", "contact_phone"],
+    "-",
+  );
+}
+function getBranchEmail(
+  row: ApiRecord,
+): string {
+  return getText(
+    row,
+    ["email", "contact_email"],
+    "-",
+  );
+}
+function getBranchCity(
+  row: ApiRecord,
+): string {
+  return getText(
+    row,
+    ["city", "city_name"],
+    "-",
+  );
+}
+function getBranchDistrict(
+  row: ApiRecord,
+): string {
+  return getText(
+    row,
+    ["district", "neighborhood", "area"],
+    "-",
+  );
+}
+function escapeBranchHtml(
+  value: unknown,
+): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 export function BranchesPage() {
   const locale = useLocale();
   const rtl = locale === "ar";
   const t = rtl ? branchesAr : branchesEn;
-  const [rows, setRows] = useState<ApiRecord[]>([]);
-  const [query, setQuery] = useState("");
-  const [form, setForm] = useState<BranchForm>(emptyBranchForm);
-  const [editingId, setEditingId] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const setField = <K extends keyof BranchForm>(key: K, value: BranchForm[K]) => {
-    setForm((current) => ({ ...current, [key]: value }));
+  const [rows, setRows] =
+    useState<ApiRecord[]>([]);
+  const [query, setQuery] =
+    useState("");
+  const [
+    statusFilter,
+    setStatusFilter,
+  ] = useState<BranchStatusFilter>(
+    "all",
+  );
+  const [
+    sortKey,
+    setSortKey,
+  ] = useState<BranchSortKey>(
+    "name",
+  );
+  const [form, setForm] =
+    useState<BranchForm>(
+      emptyBranchForm,
+    );
+  const [
+    editingId,
+    setEditingId,
+  ] = useState("");
+  const [
+    formOpen,
+    setFormOpen,
+  ] = useState(false);
+  const [
+    pendingStatus,
+    setPendingStatus,
+  ] = useState<PendingBranchStatus>(
+    null,
+  );
+  const [loading, setLoading] =
+    useState(true);
+  const [saving, setSaving] =
+    useState(false);
+  const [
+    updatingStatus,
+    setUpdatingStatus,
+  ] = useState(false);
+  const setField = <
+    K extends keyof BranchForm,
+  >(
+    key: K,
+    value: BranchForm[K],
+  ) => {
+    setForm((current) => ({
+      ...current,
+      [key]: value,
+    }));
   };
-  const branchStats = useMemo(() => {
-    const active = rows.filter((row) => getBranchActive(row)).length;
-    const main = rows.filter((row) => getBranchMain(row)).length;
-    return {
-      total: rows.length,
-      active,
-      inactive: Math.max(rows.length - active, 0),
-      main,
-    };
-  }, [rows]);
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
-      const payload = await apiRequest<unknown>("/api/company/branches/");
-      setRows(normalizeList(payload));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t.loadError);
-    } finally {
-      setLoading(false);
-    }
-  }, [t.loadError]);
+  const branchStats = useMemo(
+    () => {
+      const active = rows.filter(
+        (row) =>
+          getBranchActive(row),
+      ).length;
+      const main = rows.filter(
+        (row) =>
+          getBranchMain(row),
+      ).length;
+      return {
+        total: rows.length,
+        active,
+        inactive: Math.max(
+          rows.length - active,
+          0,
+        ),
+        main,
+      };
+    },
+    [rows],
+  );
+  const load = useCallback(
+    async () => {
+      try {
+        setLoading(true);
+        const payload =
+          await apiRequest<unknown>(
+            "/api/company/branches/",
+          );
+        setRows(
+          normalizeList(payload),
+        );
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : t.loadError,
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [t.loadError],
+  );
   useEffect(() => {
     void load();
   }, [load]);
@@ -1568,27 +2474,98 @@ export function BranchesPage() {
     setEditingId("");
     setForm(emptyBranchForm);
   };
-  const edit = (row: ApiRecord) => {
-    setEditingId(getRowId(row));
+  const openCreate = () => {
+    resetForm();
+    setFormOpen(true);
+  };
+  const openEdit = (
+    row: ApiRecord,
+  ) => {
+    setEditingId(
+      getRowId(row),
+    );
     setForm({
-      name: getText(row, ["name", "branch_name", "title"]),
-      code: getText(row, ["code", "branch_code", "reference"]),
-      phone: getText(row, ["phone", "mobile", "contact_phone"]),
-      email: getText(row, ["email", "contact_email"]),
-      city: getText(row, ["city", "city_name"]),
-      district: getText(row, ["district", "neighborhood", "area"]),
-      address: getText(row, ["address", "full_address"]),
-      is_active: getBranchActive(row),
-      is_main: getBranchMain(row),
+      name: getText(
+        row,
+        [
+          "name",
+          "branch_name",
+          "title",
+        ],
+      ),
+      code: getText(
+        row,
+        [
+          "code",
+          "branch_code",
+          "reference",
+        ],
+      ),
+      phone: getText(
+        row,
+        [
+          "phone",
+          "mobile",
+          "contact_phone",
+        ],
+      ),
+      email: getText(
+        row,
+        [
+          "email",
+          "contact_email",
+        ],
+      ),
+      city: getText(
+        row,
+        [
+          "city",
+          "city_name",
+        ],
+      ),
+      district: getText(
+        row,
+        [
+          "district",
+          "neighborhood",
+          "area",
+        ],
+      ),
+      address: getText(
+        row,
+        [
+          "address",
+          "full_address",
+        ],
+      ),
+      is_active:
+        getBranchActive(row),
+      is_main:
+        getBranchMain(row),
     });
+    setFormOpen(true);
+  };
+  const closeForm = () => {
+    if (saving) return;
+    setFormOpen(false);
+    resetForm();
   };
   const save = async () => {
     if (!form.name.trim()) {
-      toast.error(t.nameRequired);
+      toast.error(
+        t.nameRequired,
+      );
       return;
     }
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      toast.error(t.emailInvalid);
+    if (
+      form.email &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        form.email,
+      )
+    ) {
+      toast.error(
+        t.emailInvalid,
+      );
       return;
     }
     const payload = {
@@ -1597,190 +2574,1331 @@ export function BranchesPage() {
       phone: form.phone.trim(),
       email: form.email.trim(),
       city: form.city.trim(),
-      district: form.district.trim(),
-      address: form.address.trim(),
-      is_active: form.is_active,
-      is_main: form.is_main,
+      district:
+        form.district.trim(),
+      address:
+        form.address.trim(),
+      is_active:
+        form.is_active,
+      is_main:
+        form.is_main,
     };
     try {
       setSaving(true);
-      await apiRequest(editingId ? `/api/company/branches/${editingId}/` : "/api/company/branches/", {
-        method: editingId ? "PATCH" : "POST",
-        body: JSON.stringify(payload),
-      });
-      toast.success(editingId ? t.updated : t.created);
+      await apiRequest(
+        editingId
+          ? `/api/company/branches/${editingId}/`
+          : "/api/company/branches/",
+        {
+          method: editingId
+            ? "PATCH"
+            : "POST",
+          body: JSON.stringify(
+            payload,
+          ),
+        },
+      );
+      toast.success(
+        editingId
+          ? t.updated
+          : t.created,
+      );
+      setFormOpen(false);
       resetForm();
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t.saveError);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t.saveError,
+      );
     } finally {
       setSaving(false);
     }
   };
-  const toggleActive = async (row: ApiRecord, nextActive: boolean) => {
+  const toggleActive = async (
+    row: ApiRecord,
+    nextActive: boolean,
+  ) => {
     const id = getRowId(row);
     if (!id) return;
     try {
+      setUpdatingStatus(true);
       try {
-        await apiRequest(`/api/company/branches/${id}/${nextActive ? "activate" : "deactivate"}/`, {
-          method: "POST",
-          body: JSON.stringify({}),
-        });
+        await apiRequest(
+          `/api/company/branches/${id}/${
+            nextActive
+              ? "activate"
+              : "deactivate"
+          }/`,
+          {
+            method: "POST",
+            body: JSON.stringify({}),
+          },
+        );
       } catch {
-        await apiRequest(`/api/company/branches/${id}/`, {
-          method: "PATCH",
-          body: JSON.stringify({ is_active: nextActive }),
-        });
+        await apiRequest(
+          `/api/company/branches/${id}/`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              is_active:
+                nextActive,
+            }),
+          },
+        );
       }
-      toast.success(nextActive ? t.activated : t.deactivated);
+      toast.success(
+        nextActive
+          ? t.activated
+          : t.deactivated,
+      );
+      setPendingStatus(null);
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t.statusError);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t.statusError,
+      );
+    } finally {
+      setUpdatingStatus(false);
     }
   };
-  const filteredRows = rows.filter((row) => {
-    const haystack = [
-      getBranchName(row),
-      getBranchCode(row),
-      getText(row, ["phone", "mobile", "contact_phone"]),
-      getText(row, ["email", "contact_email"]),
-      getText(row, ["city", "city_name"]),
-      getText(row, ["district", "neighborhood", "area"]),
-      getText(row, ["address", "full_address"]),
-    ]
-      .join(" ")
-      .toLowerCase();
-    return haystack.includes(query.toLowerCase());
-  });
+  const resetFilters = () => {
+    setQuery("");
+    setStatusFilter("all");
+    setSortKey("name");
+  };
+  const filteredRows = useMemo(
+    () => {
+      const normalizedQuery =
+        query
+          .trim()
+          .toLowerCase();
+      return rows
+        .filter((row) => {
+          const active =
+            getBranchActive(row);
+          if (
+            statusFilter ===
+              "active" &&
+            !active
+          ) {
+            return false;
+          }
+          if (
+            statusFilter ===
+              "inactive" &&
+            active
+          ) {
+            return false;
+          }
+          const haystack = [
+            getBranchName(row),
+            getBranchCode(row),
+            getBranchPhone(row),
+            getBranchEmail(row),
+            getBranchCity(row),
+            getBranchDistrict(row),
+            getText(
+              row,
+              [
+                "address",
+                "full_address",
+              ],
+            ),
+          ]
+            .join(" ")
+            .toLowerCase();
+          return (
+            !normalizedQuery ||
+            haystack.includes(
+              normalizedQuery,
+            )
+          );
+        })
+        .sort((a, b) => {
+          if (
+            sortKey === "code"
+          ) {
+            return getBranchCode(
+              a,
+            ).localeCompare(
+              getBranchCode(b),
+              "en",
+              {
+                numeric: true,
+              },
+            );
+          }
+          if (
+            sortKey === "status"
+          ) {
+            return (
+              Number(
+                getBranchActive(b),
+              ) -
+              Number(
+                getBranchActive(a),
+              )
+            );
+          }
+          return getBranchName(
+            a,
+          ).localeCompare(
+            getBranchName(b),
+            rtl ? "ar" : "en",
+          );
+        });
+    },
+    [
+      query,
+      rows,
+      rtl,
+      sortKey,
+      statusFilter,
+    ],
+  );
+  const buildExportTable = () => {
+    const headers = [
+      t.branch,
+      t.code,
+      t.phone,
+      t.email,
+      t.city,
+      t.district,
+      t.status,
+      t.main,
+    ];
+    const body = filteredRows
+      .map((row) => {
+        const cells = [
+          getBranchName(row),
+          getBranchCode(row),
+          getBranchPhone(row),
+          getBranchEmail(row),
+          getBranchCity(row),
+          getBranchDistrict(row),
+          getBranchActive(row)
+            ? t.active
+            : t.inactive,
+          getBranchMain(row)
+            ? t.main
+            : "-",
+        ];
+        return `<tr>${cells
+          .map(
+            (cell) =>
+              `<td>${escapeBranchHtml(
+                cell,
+              )}</td>`,
+          )
+          .join("")}</tr>`;
+      })
+      .join("");
+    return `
+      <table>
+        <thead>
+          <tr>${headers
+            .map(
+              (header) =>
+                `<th>${escapeBranchHtml(
+                  header,
+                )}</th>`,
+            )
+            .join("")}</tr>
+        </thead>
+        <tbody>${body}</tbody>
+      </table>
+    `;
+  };
+  const exportExcel = () => {
+    if (
+      filteredRows.length === 0
+    ) {
+      return;
+    }
+    const html = `
+      <!doctype html>
+      <html dir="${
+        rtl ? "rtl" : "ltr"
+      }">
+        <head>
+          <meta charset="utf-8" />
+          <style>
+            body {
+              font-family:
+                Tahoma,
+                Arial,
+                sans-serif;
+            }
+            h1 {
+              font-size: 20px;
+              margin-bottom: 16px;
+            }
+            table {
+              border-collapse:
+                collapse;
+              width: 100%;
+            }
+            th,
+            td {
+              border:
+                1px solid #000;
+              padding: 8px;
+              text-align:
+                ${
+                  rtl
+                    ? "right"
+                    : "left"
+                };
+              vertical-align:
+                top;
+            }
+            th {
+              font-weight: 700;
+            }
+          </style>
+        </head>
+        <body>
+          <h1>${
+            escapeBranchHtml(
+              t.listTitle,
+            )
+          }</h1>
+          ${buildExportTable()}
+        </body>
+      </html>
+    `;
+    const blob = new Blob(
+      ["\ufeff", html],
+      {
+        type:
+          "application/vnd.ms-excel;charset=utf-8;",
+      },
+    );
+    const url =
+      URL.createObjectURL(
+        blob,
+      );
+    const anchor =
+      document.createElement(
+        "a",
+      );
+    anchor.href = url;
+    anchor.download =
+      `company-branches-${
+        formatEnglishDateTime(
+          new Date(),
+        ).replace(
+          /[: ]/g,
+          "-",
+        )
+      }.xls`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    toast.success(
+      t.exported,
+    );
+  };
+  const printTable = () => {
+    if (
+      filteredRows.length === 0
+    ) {
+      return;
+    }
+    const printWindow =
+      window.open(
+        "",
+        "_blank",
+      );
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <!doctype html>
+      <html dir="${
+        rtl ? "rtl" : "ltr"
+      }">
+        <head>
+          <meta charset="utf-8" />
+          <title>${
+            escapeBranchHtml(
+              t.listTitle,
+            )
+          }</title>
+          <style>
+            @page {
+              size:
+                A4 landscape;
+              margin: 12mm;
+            }
+            body {
+              font-family:
+                Tahoma,
+                Arial,
+                sans-serif;
+              color: #000;
+              margin: 0;
+            }
+            h1 {
+              font-size: 20px;
+              margin:
+                0 0 6px;
+            }
+            p {
+              font-size: 12px;
+              margin:
+                0 0 14px;
+            }
+            table {
+              border-collapse:
+                collapse;
+              width: 100%;
+              font-size: 11px;
+            }
+            th,
+            td {
+              border:
+                1px solid #000;
+              padding: 6px;
+              text-align:
+                ${
+                  rtl
+                    ? "right"
+                    : "left"
+                };
+              vertical-align:
+                top;
+            }
+            th {
+              font-weight: 700;
+            }
+          </style>
+        </head>
+        <body>
+          <h1>${
+            escapeBranchHtml(
+              t.listTitle,
+            )
+          }</h1>
+          <p>${
+            escapeBranchHtml(
+              `${
+                t.showing
+              } ${
+                formatInteger(
+                  filteredRows.length,
+                )
+              } ${
+                t.of
+              } ${
+                formatInteger(
+                  rows.length,
+                )
+              }`,
+            )
+          }</p>
+          ${buildExportTable()}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.onafterprint =
+      () =>
+        printWindow.close();
+    window.setTimeout(
+      () =>
+        printWindow.print(),
+      250,
+    );
+  };
   return (
-    <PageShell
-      title={t.title}
-      description={t.description}
-      icon={Store}
-      actions={
-        <SecondaryButton onClick={() => void load()} disabled={loading}>
-          <RefreshCcw className="h-4 w-4" />
-          {t.refresh}
-        </SecondaryButton>
+    <main
+      data-primey-branches-approved="true"
+      dir={
+        rtl
+          ? "rtl"
+          : "ltr"
       }
+      className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8"
     >
-      {loading ? (
-        <LoadingBlock />
-      ) : (
-        <div className="space-y-6">
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <StatCard label={t.totalBranches} value={branchStats.total} hint={t.totalHint} icon={Store} />
-            <StatCard label={t.activeBranches} value={branchStats.active} hint={t.activeHint} icon={CheckCircle2} />
-            <StatCard label={t.inactiveBranches} value={branchStats.inactive} hint={t.inactiveHint} icon={XCircle} />
-            <StatCard label={t.mainBranches} value={branchStats.main} hint={t.mainHint} icon={Building2} />
-          </section>
-          <section className="grid gap-6 xl:grid-cols-[520px_minmax(0,1fr)]">
-            <ProfileSectionCard
-              title={editingId ? t.editBranch : t.addBranch}
-              description={t.formDescription}
-              icon={editingId ? Store : Plus}
+      <div className="mx-auto max-w-[1500px] space-y-6">
+        <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-4xl">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
+              <Store className="h-3.5 w-3.5" />
+              {t.settings}
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+              {t.title}
+            </h1>
+            <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">
+              {t.description}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              asChild
+              type="button"
+              variant="outline"
             >
-              <div className="grid gap-4">
-                <TextInput label={t.name} value={form.name} onChange={(value) => setField("name", value)} required />
-                <TextInput label={t.code} value={form.code} onChange={(value) => setField("code", value)} />
-                <TextInput label={t.phone} value={form.phone} onChange={(value) => setField("phone", value)} />
-                <TextInput label={t.email} value={form.email} onChange={(value) => setField("email", value)} type="email" />
-                <TextInput label={t.city} value={form.city} onChange={(value) => setField("city", value)} />
-                <TextInput label={t.district} value={form.district} onChange={(value) => setField("district", value)} />
-                <TextArea label={t.address} value={form.address} onChange={(value) => setField("address", value)} />
-                <ToggleInput
-                  label={t.activeBranch}
-                  description={t.activeBranchDescription}
-                  checked={form.is_active}
-                  onChange={(value) => setField("is_active", value)}
-                />
-                <ToggleInput
-                  label={t.mainBranch}
-                  description={t.mainBranchDescription}
-                  checked={form.is_main}
-                  onChange={(value) => setField("is_main", value)}
-                />
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <PrimaryButton onClick={() => void save()} disabled={saving}>
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                    {t.save}
-                  </PrimaryButton>
-                  {editingId ? <SecondaryButton onClick={resetForm}>{t.cancel}</SecondaryButton> : null}
-                </div>
-              </div>
-            </ProfileSectionCard>
-            <ProfileSectionCard title={t.listTitle} description={t.listDescription} icon={Store}>
-              <div className="mb-4">
-                <SearchBox value={query} onChange={setQuery} placeholder={t.searchPlaceholder} />
-              </div>
-              {filteredRows.length === 0 ? (
-                <EmptyState title={t.noBranches} description={t.noBranchesDescription} />
+              <Link href="/company/settings">
+                <Settings2 className="h-4 w-4" />
+                {t.settingsCenter}
+              </Link>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                void load()
+              }
+              disabled={loading}
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <div className="overflow-hidden rounded-2xl border bg-card">
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[880px] text-sm">
-                      <thead className="border-b bg-muted/40 text-muted-foreground">
-                        <tr>
-                          <th className="px-4 py-3 text-start font-semibold">{t.branch}</th>
-                          <th className="px-4 py-3 text-start font-semibold">{t.contact}</th>
-                          <th className="px-4 py-3 text-start font-semibold">{t.location}</th>
-                          <th className="px-4 py-3 text-start font-semibold">{t.status}</th>
-                          <th className="px-4 py-3 text-start font-semibold">{t.actions}</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {filteredRows.map((row, index) => {
-                          const active = getBranchActive(row);
-                          const main = getBranchMain(row);
+                <RefreshCcw className="h-4 w-4" />
+              )}
+              {t.refresh}
+            </Button>
+            <Button
+              type="button"
+              onClick={
+                openCreate
+              }
+            >
+              <Plus className="h-4 w-4" />
+              {t.addBranch}
+            </Button>
+          </div>
+        </header>
+        <section
+          aria-busy={loading}
+          className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+        >
+          {loading
+            ? Array.from({
+                length: 4,
+              }).map(
+                (
+                  _,
+                  index,
+                ) => (
+                  <UiCard
+                    key={
+                      `branch-stat-loading-${index}`
+                    }
+                    className="min-h-[150px] rounded-2xl border bg-card shadow-none"
+                  >
+                    <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-3">
+                      <div className="min-w-0 flex-1 space-y-3">
+                        <Skeleton className="h-4 w-28" />
+                        <Skeleton className="h-8 w-20" />
+                      </div>
+                      <Skeleton className="h-10 w-10 rounded-xl" />
+                    </CardHeader>
+                    <CardContent>
+                      <Skeleton className="h-3 w-40" />
+                    </CardContent>
+                  </UiCard>
+                ),
+              )
+            : [
+                {
+                  label:
+                    t.totalBranches,
+                  value:
+                    branchStats.total,
+                  hint:
+                    t.totalHint,
+                  icon: Store,
+                },
+                {
+                  label:
+                    t.activeBranches,
+                  value:
+                    branchStats.active,
+                  hint:
+                    t.activeHint,
+                  icon:
+                    CheckCircle2,
+                },
+                {
+                  label:
+                    t.inactiveBranches,
+                  value:
+                    branchStats.inactive,
+                  hint:
+                    t.inactiveHint,
+                  icon:
+                    XCircle,
+                },
+                {
+                  label:
+                    t.mainBranches,
+                  value:
+                    branchStats.main,
+                  hint:
+                    t.mainHint,
+                  icon:
+                    Building2,
+                },
+              ].map((item) => {
+                const Icon =
+                  item.icon;
+                return (
+                  <UiCard
+                    key={
+                      item.label
+                    }
+                    className="min-h-[150px] rounded-2xl border bg-card shadow-none"
+                  >
+                    <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-3">
+                      <div className="min-w-0">
+                        <CardDescription className="text-sm">
+                          {
+                            item.label
+                          }
+                        </CardDescription>
+                        <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
+                          {
+                            formatInteger(
+                              item.value,
+                            )
+                          }
+                        </CardTitle>
+                      </div>
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-background text-muted-foreground">
+                        <Icon className="h-5 w-5" />
+                      </span>
+                    </CardHeader>
+                    <CardContent className="pt-1">
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        {
+                          item.hint
+                        }
+                      </p>
+                    </CardContent>
+                  </UiCard>
+                );
+              })}
+        </section>
+        <UiCard className="overflow-hidden rounded-2xl border bg-card shadow-none">
+          <CardHeader className="flex flex-col gap-4 border-b sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle className="text-base font-bold tracking-tight">
+                  {t.listTitle}
+                </CardTitle>
+                <Badge
+                  variant="outline"
+                  className="rounded-full bg-background px-2.5 py-1 text-xs"
+                >
+                  {
+                    formatInteger(
+                      filteredRows.length,
+                    )
+                  }
+                </Badge>
+              </div>
+              <CardDescription className="mt-2 text-sm leading-6">
+                {
+                  t.listDescription
+                }
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={
+                  exportExcel
+                }
+                disabled={
+                  filteredRows.length ===
+                  0
+                }
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                {t.exportExcel}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={
+                  printTable
+                }
+                disabled={
+                  filteredRows.length ===
+                  0
+                }
+              >
+                <Printer className="h-4 w-4" />
+                {t.print}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4 p-4 sm:p-5">
+            <div className="grid gap-3 rounded-2xl border bg-background p-3 lg:grid-cols-[minmax(0,1fr)_180px_180px_auto]">
+              <SearchBox
+                value={query}
+                onChange={
+                  setQuery
+                }
+                placeholder={
+                  t.searchPlaceholder
+                }
+              />
+              <Select
+                value={
+                  statusFilter
+                }
+                onValueChange={(
+                  value,
+                ) =>
+                  setStatusFilter(
+                    value as BranchStatusFilter,
+                  )
+                }
+              >
+                <SelectTrigger className="h-11 rounded-xl bg-background">
+                  <SelectValue
+                    placeholder={
+                      t.statusFilter
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    {t.all}
+                  </SelectItem>
+                  <SelectItem value="active">
+                    {t.active}
+                  </SelectItem>
+                  <SelectItem value="inactive">
+                    {t.inactive}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={sortKey}
+                onValueChange={(
+                  value,
+                ) =>
+                  setSortKey(
+                    value as BranchSortKey,
+                  )
+                }
+              >
+                <SelectTrigger className="h-11 rounded-xl bg-background">
+                  <SelectValue
+                    placeholder={
+                      t.sortBy
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name">
+                    {
+                      t.sortName
+                    }
+                  </SelectItem>
+                  <SelectItem value="code">
+                    {
+                      t.sortCode
+                    }
+                  </SelectItem>
+                  <SelectItem value="status">
+                    {
+                      t.sortStatus
+                    }
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={
+                  resetFilters
+                }
+                className="h-11"
+              >
+                <RotateCcw className="h-4 w-4" />
+                {t.reset}
+              </Button>
+            </div>
+            {loading ? (
+              <div className="space-y-3 rounded-2xl border p-4">
+                {Array.from({
+                  length: 5,
+                }).map(
+                  (
+                    _,
+                    index,
+                  ) => (
+                    <Skeleton
+                      key={
+                        `branch-row-loading-${index}`
+                      }
+                      className="h-14 w-full rounded-xl"
+                    />
+                  ),
+                )}
+              </div>
+            ) : filteredRows.length ===
+              0 ? (
+              <EmptyState
+                title={
+                  rows.length === 0
+                    ? t.noBranches
+                    : t.noResults
+                }
+                description={
+                  rows.length === 0
+                    ? t.noBranchesDescription
+                    : t.noResultsDescription
+                }
+              />
+            ) : (
+              <div className="overflow-hidden rounded-2xl border">
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[980px]">
+                    <TableHeader>
+                      <TableRow className="bg-muted/30 hover:bg-muted/30">
+                        <TableHead className="sticky start-0 z-20 min-w-[220px] bg-muted/30 text-start">
+                          {
+                            t.branch
+                          }
+                        </TableHead>
+                        <TableHead className="min-w-[220px] text-start">
+                          {
+                            t.contact
+                          }
+                        </TableHead>
+                        <TableHead className="min-w-[200px] text-start">
+                          {
+                            t.location
+                          }
+                        </TableHead>
+                        <TableHead className="min-w-[170px] text-start">
+                          {
+                            t.status
+                          }
+                        </TableHead>
+                        <TableHead className="w-16 text-center">
+                          {
+                            t.actions
+                          }
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredRows.map(
+                        (
+                          row,
+                          index,
+                        ) => {
+                          const active =
+                            getBranchActive(
+                              row,
+                            );
+                          const main =
+                            getBranchMain(
+                              row,
+                            );
                           return (
-                            <tr key={getRowId(row) || index} className="bg-card transition hover:bg-muted/30">
-                              <td className="px-4 py-4">
-                                <p className="font-semibold text-foreground">{getBranchName(row)}</p>
-                                <p className="mt-1 text-xs text-muted-foreground">{getBranchCode(row)}</p>
-                              </td>
-                              <td className="px-4 py-4 text-muted-foreground">
-                                <p>{getText(row, ["phone", "mobile", "contact_phone"], "-")}</p>
-                                <p className="mt-1 text-xs">{getText(row, ["email", "contact_email"], "-")}</p>
-                              </td>
-                              <td className="px-4 py-4 text-muted-foreground">
-                                <p>{getText(row, ["city", "city_name"], "-")}</p>
-                                <p className="mt-1 text-xs">{getText(row, ["district", "neighborhood", "area"], "-")}</p>
-                              </td>
-                              <td className="px-4 py-4">
+                            <TableRow
+                              key={
+                                getRowId(
+                                  row,
+                                ) ||
+                                index
+                              }
+                              className="cursor-pointer"
+                              onClick={() =>
+                                openEdit(
+                                  row,
+                                )
+                              }
+                            >
+                              <TableCell className="sticky start-0 z-10 bg-card">
+                                <p className="font-semibold text-foreground">
+                                  {
+                                    getBranchName(
+                                      row,
+                                    )
+                                  }
+                                </p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {
+                                    getBranchCode(
+                                      row,
+                                    )
+                                  }
+                                </p>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                <p>
+                                  {
+                                    getBranchPhone(
+                                      row,
+                                    )
+                                  }
+                                </p>
+                                <p className="mt-1 text-xs">
+                                  {
+                                    getBranchEmail(
+                                      row,
+                                    )
+                                  }
+                                </p>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                <p>
+                                  {
+                                    getBranchCity(
+                                      row,
+                                    )
+                                  }
+                                </p>
+                                <p className="mt-1 text-xs">
+                                  {
+                                    getBranchDistrict(
+                                      row,
+                                    )
+                                  }
+                                </p>
+                              </TableCell>
+                              <TableCell>
                                 <div className="flex flex-wrap gap-2">
-                                  <StatusPill active={active} />
+                                  <StatusPill
+                                    active={
+                                      active
+                                    }
+                                  />
                                   {main ? (
-                                    <Badge variant="outline" className="rounded-full bg-muted px-2.5 py-1 text-xs">
-                                      {t.main}
+                                    <Badge
+                                      variant="outline"
+                                      className="rounded-full bg-background px-2.5 py-1 text-xs"
+                                    >
+                                      {
+                                        t.main
+                                      }
                                     </Badge>
                                   ) : null}
                                 </div>
-                              </td>
-                              <td className="px-4 py-4">
-                                <div className="flex flex-wrap gap-2">
-                                  <SecondaryButton onClick={() => edit(row)}>{t.edit}</SecondaryButton>
-                                  <SecondaryButton onClick={() => void toggleActive(row, !active)}>
-                                    {active ? t.deactivate : t.activate}
-                                  </SecondaryButton>
-                                </div>
-                              </td>
-                            </tr>
+                              </TableCell>
+                              <TableCell
+                                className="text-center"
+                                onClick={(
+                                  event,
+                                ) =>
+                                  event.stopPropagation()
+                                }
+                              >
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger
+                                    asChild
+                                  >
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      aria-label={
+                                        t.actions
+                                      }
+                                    >
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent
+                                    align={
+                                      rtl
+                                        ? "start"
+                                        : "end"
+                                    }
+                                    className="min-w-44"
+                                  >
+                                    <DropdownMenuItem
+                                      onSelect={() =>
+                                        openEdit(
+                                          row,
+                                        )
+                                      }
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                      {
+                                        t.edit
+                                      }
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      className={
+                                        active
+                                          ? "text-destructive focus:text-destructive"
+                                          : "text-emerald-700 focus:text-emerald-700"
+                                      }
+                                      onSelect={() =>
+                                        setPendingStatus(
+                                          {
+                                            row,
+                                            nextActive:
+                                              !active,
+                                          },
+                                        )
+                                      }
+                                    >
+                                      {active ? (
+                                        <PowerOff className="h-4 w-4" />
+                                      ) : (
+                                        <Power className="h-4 w-4" />
+                                      )}
+                                      {active
+                                        ? t.deactivate
+                                        : t.activate}
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </TableCell>
+                            </TableRow>
                           );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                        },
+                      )}
+                    </TableBody>
+                  </Table>
                 </div>
+              </div>
+            )}
+            <p className="text-xs tabular-nums text-muted-foreground">
+              {t.showing}{" "}
+              {
+                formatInteger(
+                  filteredRows.length,
+                )
+              }{" "}
+              {t.of}{" "}
+              {
+                formatInteger(
+                  rows.length,
+                )
+              }
+            </p>
+          </CardContent>
+        </UiCard>
+      </div>
+      <Dialog
+        open={formOpen}
+        onOpenChange={(
+          open,
+        ) => {
+          if (open) {
+            setFormOpen(
+              true,
+            );
+          } else {
+            closeForm();
+          }
+        }}
+      >
+        <DialogContent
+          dir={
+            rtl
+              ? "rtl"
+              : "ltr"
+          }
+          className="max-h-[90vh] overflow-y-auto sm:max-w-3xl"
+        >
+          <DialogHeader>
+            <DialogTitle>
+              {editingId
+                ? t.editBranch
+                : t.addBranch}
+            </DialogTitle>
+            <DialogDescription>
+              {
+                t.formDescription
+              }
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2 md:grid-cols-2">
+            <TextInput
+              label={t.name}
+              value={
+                form.name
+              }
+              onChange={(
+                value,
+              ) =>
+                setField(
+                  "name",
+                  value,
+                )
+              }
+              required
+            />
+            <TextInput
+              label={t.code}
+              value={
+                form.code
+              }
+              onChange={(
+                value,
+              ) =>
+                setField(
+                  "code",
+                  value,
+                )
+              }
+            />
+            <TextInput
+              label={t.phone}
+              value={
+                form.phone
+              }
+              onChange={(
+                value,
+              ) =>
+                setField(
+                  "phone",
+                  value,
+                )
+              }
+              type="tel"
+            />
+            <TextInput
+              label={t.email}
+              value={
+                form.email
+              }
+              onChange={(
+                value,
+              ) =>
+                setField(
+                  "email",
+                  value,
+                )
+              }
+              type="email"
+            />
+            <TextInput
+              label={t.city}
+              value={
+                form.city
+              }
+              onChange={(
+                value,
+              ) =>
+                setField(
+                  "city",
+                  value,
+                )
+              }
+            />
+            <TextInput
+              label={
+                t.district
+              }
+              value={
+                form.district
+              }
+              onChange={(
+                value,
+              ) =>
+                setField(
+                  "district",
+                  value,
+                )
+              }
+            />
+            <TextArea
+              label={
+                t.address
+              }
+              value={
+                form.address
+              }
+              onChange={(
+                value,
+              ) =>
+                setField(
+                  "address",
+                  value,
+                )
+              }
+            />
+            <ToggleInput
+              label={
+                t.activeBranch
+              }
+              description={
+                t.activeBranchDescription
+              }
+              checked={
+                form.is_active
+              }
+              onChange={(
+                value,
+              ) =>
+                setField(
+                  "is_active",
+                  value,
+                )
+              }
+            />
+            <ToggleInput
+              label={
+                t.mainBranch
+              }
+              description={
+                t.mainBranchDescription
+              }
+              checked={
+                form.is_main
+              }
+              onChange={(
+                value,
+              ) =>
+                setField(
+                  "is_main",
+                  value,
+                )
+              }
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={
+                closeForm
+              }
+              disabled={
+                saving
+              }
+            >
+              {t.cancel}
+            </Button>
+            <Button
+              type="button"
+              onClick={() =>
+                void save()
+              }
+              disabled={
+                saving
+              }
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
               )}
-            </ProfileSectionCard>
-          </section>
-        </div>
-      )}
-    </PageShell>
+              {saving
+                ? t.saving
+                : t.save}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <AlertDialog
+        open={Boolean(
+          pendingStatus,
+        )}
+        onOpenChange={(
+          open,
+        ) => {
+          if (
+            !open &&
+            !updatingStatus
+          ) {
+            setPendingStatus(
+              null,
+            );
+          }
+        }}
+      >
+        <AlertDialogContent
+          dir={
+            rtl
+              ? "rtl"
+              : "ltr"
+          }
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingStatus?.nextActive
+                ? t.confirmActivateTitle
+                : t.confirmDeactivateTitle}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingStatus?.nextActive
+                ? t.confirmActivateDescription
+                : t.confirmDeactivateDescription}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={
+                updatingStatus
+              }
+            >
+              {t.cancel}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={
+                updatingStatus ||
+                !pendingStatus
+              }
+              className={
+                pendingStatus?.nextActive
+                  ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                  : "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              }
+              onClick={(
+                event,
+              ) => {
+                event.preventDefault();
+                if (
+                  pendingStatus
+                ) {
+                  void toggleActive(
+                    pendingStatus.row,
+                    pendingStatus.nextActive,
+                  );
+                }
+              }}
+            >
+              {updatingStatus ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : pendingStatus?.nextActive ? (
+                <Power className="h-4 w-4" />
+              ) : (
+                <PowerOff className="h-4 w-4" />
+              )}
+              {pendingStatus?.nextActive
+                ? t.activate
+                : t.deactivate}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </main>
   );
 }
-
 type CompanyUserStatusFilter = "all" | "active" | "inactive";
+type CompanyUserRoleFilter =
+  | "all"
+  | "OWNER"
+  | "ADMIN"
+  | "MANAGER"
+  | "ACCOUNTANT"
+  | "CASHIER"
+  | "SALES"
+  | "INVENTORY"
+  | "HR"
+  | "EMPLOYEE"
+  | "VIEWER";
 type CompanyUserSortKey = "newest" | "oldest" | "name" | "role";
 type UserForm = {
   full_name: string;
@@ -1790,6 +3908,7 @@ type UserForm = {
   branch_id: string;
   is_active: boolean;
 };
+
 const emptyUserForm: UserForm = {
   full_name: "",
   email: "",
@@ -1798,156 +3917,20 @@ const emptyUserForm: UserForm = {
   branch_id: "",
   is_active: true,
 };
-const companyUsersAr = {
-  title: "\u0645\u0633\u062a\u062e\u062f\u0645\u0648 \u0627\u0644\u0634\u0631\u0643\u0629",
-  description: "\u0625\u062f\u0627\u0631\u0629 \u0645\u0633\u062a\u062e\u062f\u0645\u064a \u0627\u0644\u0634\u0631\u0643\u0629\u060c \u0627\u0644\u0623\u062f\u0648\u0627\u0631\u060c \u0627\u0644\u0641\u0631\u0648\u0639\u060c \u0648\u062d\u0627\u0644\u0629 \u0627\u0644\u062a\u0641\u0639\u064a\u0644 \u0628\u0646\u0641\u0633 \u0646\u0645\u0637 \u0645\u0633\u062a\u062e\u062f\u0645\u064a \u0627\u0644\u0646\u0638\u0627\u0645.",
-  refresh: "\u062a\u062d\u062f\u064a\u062b",
-  exportExcel: "\u062a\u0635\u062f\u064a\u0631 Excel",
-  print: "\u0637\u0628\u0627\u0639\u0629",
-  addUser: "\u0625\u0636\u0627\u0641\u0629 \u0645\u0633\u062a\u062e\u062f\u0645",
-  editUser: "\u062a\u0639\u062f\u064a\u0644 \u0645\u0633\u062a\u062e\u062f\u0645",
-  formDescription: "\u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0648\u062f\u0648\u0631\u0647 \u0648\u0627\u0631\u062a\u0628\u0627\u0637\u0647 \u0628\u0627\u0644\u0641\u0631\u0639.",
-  usersList: "\u0642\u0627\u0626\u0645\u0629 \u0645\u0633\u062a\u062e\u062f\u0645\u064a \u0627\u0644\u0634\u0631\u0643\u0629",
-  usersListDescription: "\u0639\u0631\u0636 \u0648\u0645\u062a\u0627\u0628\u0639\u0629 \u0645\u0633\u062a\u062e\u062f\u0645\u064a \u0627\u0644\u0634\u0631\u0643\u0629 \u0645\u0639 \u0627\u0644\u0628\u062d\u062b \u0648\u0627\u0644\u062a\u0635\u0641\u064a\u0629 \u0648\u0627\u0644\u062a\u0635\u062f\u064a\u0631.",
-  filters: "\u0627\u0644\u0628\u062d\u062b \u0648\u0627\u0644\u062a\u0635\u0641\u064a\u0629",
-  filtersDescription: "\u0627\u0628\u062d\u062b \u0628\u0627\u0644\u0627\u0633\u0645\u060c \u0627\u0644\u0628\u0631\u064a\u062f\u060c \u0627\u0644\u062f\u0648\u0631\u060c \u0623\u0648 \u0627\u0644\u0641\u0631\u0639.",
-  totalUsers: "\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645\u064a\u0646",
-  activeUsers: "\u0645\u0633\u062a\u062e\u062f\u0645\u0648\u0646 \u0646\u0634\u0637\u0648\u0646",
-  inactiveUsers: "\u0645\u0633\u062a\u062e\u062f\u0645\u0648\u0646 \u0645\u0639\u0637\u0644\u0648\u0646",
-  adminUsers: "\u0625\u062f\u0627\u0631\u064a\u0648\u0646 \u0648\u0645\u0634\u0631\u0641\u0648\u0646",
-  totalHint: "\u0645\u0633\u062a\u062e\u062f\u0645\u0648\u0646 \u062f\u0627\u062e\u0644 \u0627\u0644\u0634\u0631\u0643\u0629",
-  activeHint: "\u0645\u062a\u0627\u062d\u0648\u0646 \u0644\u0644\u062f\u062e\u0648\u0644 \u0648\u0627\u0644\u0639\u0645\u0644",
-  inactiveHint: "\u062a\u0645 \u062a\u0639\u0637\u064a\u0644 \u0648\u0635\u0648\u0644\u0647\u0645",
-  adminHint: "\u0623\u062f\u0648\u0627\u0631 \u0625\u062f\u0627\u0631\u064a\u0629 \u0623\u0648 \u0625\u0634\u0631\u0627\u0641\u064a\u0629",
-  searchPlaceholder: "\u0627\u0628\u062d\u062b \u0628\u0627\u0644\u0627\u0633\u0645 \u0623\u0648 \u0627\u0644\u0628\u0631\u064a\u062f \u0623\u0648 \u0627\u0644\u062f\u0648\u0631 \u0623\u0648 \u0627\u0644\u0641\u0631\u0639...",
-  statusFilter: "\u0627\u0644\u062d\u0627\u0644\u0629",
-  sortBy: "\u0627\u0644\u062a\u0631\u062a\u064a\u0628",
-  all: "\u0627\u0644\u0643\u0644",
-  active: "\u0646\u0634\u0637",
-  inactive: "\u063a\u064a\u0631 \u0646\u0634\u0637",
-  newest: "\u0627\u0644\u0623\u062d\u062f\u062b",
-  oldest: "\u0627\u0644\u0623\u0642\u062f\u0645",
-  nameSort: "\u0627\u0644\u0627\u0633\u0645",
-  roleSort: "\u0627\u0644\u062f\u0648\u0631",
-  reset: "\u0625\u0639\u0627\u062f\u0629 \u0636\u0628\u0637",
-  fullName: "\u0627\u0644\u0627\u0633\u0645",
-  email: "\u0627\u0644\u0628\u0631\u064a\u062f \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a",
-  phone: "\u0631\u0642\u0645 \u0627\u0644\u062a\u0648\u0627\u0635\u0644",
-  role: "\u0627\u0644\u062f\u0648\u0631",
-  branch: "\u0627\u0644\u0641\u0631\u0639",
-  noBranch: "\u0628\u062f\u0648\u0646 \u0641\u0631\u0639 \u0645\u062d\u062f\u062f",
-  activeUser: "\u0645\u0633\u062a\u062e\u062f\u0645 \u0646\u0634\u0637",
-  activeUserDescription: "\u064a\u0633\u062a\u0637\u064a\u0639 \u0627\u0644\u062f\u062e\u0648\u0644 \u0648\u0627\u0644\u0627\u0633\u062a\u062e\u062f\u0627\u0645 \u062d\u0633\u0628 \u0635\u0644\u0627\u062d\u064a\u0627\u062a\u0647.",
-  save: "\u062d\u0641\u0638",
-  cancel: "\u0625\u0644\u063a\u0627\u0621",
-  edit: "\u062a\u0639\u062f\u064a\u0644",
-  activate: "\u062a\u0641\u0639\u064a\u0644",
-  deactivate: "\u062a\u0639\u0637\u064a\u0644",
-  user: "\u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645",
-  contact: "\u0627\u0644\u062a\u0648\u0627\u0635\u0644",
-  status: "\u0627\u0644\u062d\u0627\u0644\u0629",
-  createdAt: "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0625\u0636\u0627\u0641\u0629",
-  actions: "\u0625\u062c\u0631\u0627\u0621\u0627\u062a",
-  noUsers: "\u0644\u0627 \u064a\u0648\u062c\u062f \u0645\u0633\u062a\u062e\u062f\u0645\u0648\u0646",
-  noUsersDescription: "\u0633\u062a\u0638\u0647\u0631 \u0645\u0633\u062a\u062e\u062f\u0645\u0648 \u0627\u0644\u0634\u0631\u0643\u0629 \u0647\u0646\u0627 \u0639\u0646\u062f \u062a\u0648\u0641\u0631\u0647\u0645 \u0645\u0646 \u0627\u0644\u0640 API \u0623\u0648 \u0639\u0646\u062f \u0625\u0636\u0627\u0641\u062a\u0647\u0645.",
-  noResults: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0646\u062a\u0627\u0626\u062c",
-  noResultsDescription: "\u063a\u064a\u0631 \u0645\u0637\u0627\u0628\u0642 \u0644\u0644\u0628\u062d\u062b \u0623\u0648 \u0627\u0644\u062a\u0635\u0641\u064a\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629.",
-  owner: "\u0645\u0627\u0644\u0643",
-  admin: "\u0645\u062f\u064a\u0631",
-  manager: "\u0645\u0634\u0631\u0641",
-  accountant: "\u0645\u062d\u0627\u0633\u0628",
-  cashier: "\u0643\u0627\u0634\u064a\u0631",
-  sales: "\u0645\u0628\u064a\u0639\u0627\u062a",
-  inventory: "\u0645\u062e\u0632\u0648\u0646",
-  hr: "\u0645\u0648\u0627\u0631\u062f \u0628\u0634\u0631\u064a\u0629",
-  employee: "\u0645\u0648\u0638\u0641",
-  viewer: "\u0645\u0634\u0627\u0647\u062f",
-  emailRequired: "\u0627\u0644\u0628\u0631\u064a\u062f \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a \u0645\u0637\u0644\u0648\u0628",
-  emailInvalid: "\u0627\u0644\u0628\u0631\u064a\u062f \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a \u063a\u064a\u0631 \u0635\u062d\u064a\u062d",
-  loadError: "\u062a\u0639\u0630\u0631 \u062a\u062d\u0645\u064a\u0644 \u0645\u0633\u062a\u062e\u062f\u0645\u064a \u0627\u0644\u0634\u0631\u0643\u0629",
-  saveError: "\u062a\u0639\u0630\u0631 \u062d\u0641\u0638 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645",
-  statusError: "\u062a\u0639\u0630\u0631 \u062a\u062d\u062f\u064a\u062b \u062d\u0627\u0644\u0629 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645",
-  created: "\u062a\u0645 \u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645",
-  updated: "\u062a\u0645 \u062a\u062d\u062f\u064a\u062b \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645",
-  activated: "\u062a\u0645 \u062a\u0641\u0639\u064a\u0644 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645",
-  deactivated: "\u062a\u0645 \u062a\u0639\u0637\u064a\u0644 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645",
-  exported: "\u062a\u0645 \u062a\u0635\u062f\u064a\u0631 \u0645\u0633\u062a\u062e\u062f\u0645\u064a \u0627\u0644\u0634\u0631\u0643\u0629",
-};
-const companyUsersEn = {
-  title: "Company users",
-  description: "Manage company users, roles, branches, and activation status using the same system users pattern.",
-  refresh: "Refresh",
-  exportExcel: "Export Excel",
-  print: "Print",
-  addUser: "Add user",
-  editUser: "Edit user",
-  formDescription: "User identity, role, branch, and access status.",
-  usersList: "Company users list",
-  usersListDescription: "View and manage company users with search, filters, and export.",
-  filters: "Search and filters",
-  filtersDescription: "Search by name, email, role, or branch.",
-  totalUsers: "Total users",
-  activeUsers: "Active users",
-  inactiveUsers: "Inactive users",
-  adminUsers: "Admins and managers",
-  totalHint: "Users inside the company",
-  activeHint: "Can sign in and work",
-  inactiveHint: "Access is disabled",
-  adminHint: "Administrative or management roles",
-  searchPlaceholder: "Search name, email, role, or branch...",
-  statusFilter: "Status",
-  sortBy: "Sort by",
-  all: "All",
-  active: "Active",
-  inactive: "Inactive",
-  newest: "Newest",
-  oldest: "Oldest",
-  nameSort: "Name",
-  roleSort: "Role",
-  reset: "Reset",
-  fullName: "Name",
-  email: "Email",
-  phone: "Phone",
-  role: "Role",
-  branch: "Branch",
-  noBranch: "No specific branch",
-  activeUser: "Active user",
-  activeUserDescription: "Can sign in and use features according to permissions.",
-  save: "Save",
-  cancel: "Cancel",
-  edit: "Edit",
-  activate: "Activate",
-  deactivate: "Deactivate",
-  user: "User",
-  contact: "Contact",
-  status: "Status",
-  createdAt: "Created at",
-  actions: "Actions",
-  noUsers: "No users",
-  noUsersDescription: "Company users will appear here when returned by the API or after adding them.",
-  noResults: "No results",
-  noResultsDescription: "No users match the current search or filters.",
-  owner: "Owner",
-  admin: "Admin",
-  manager: "Manager",
-  accountant: "Accountant",
-  cashier: "Cashier",
-  sales: "Sales",
-  inventory: "Inventory",
-  hr: "HR",
-  employee: "Employee",
-  viewer: "Viewer",
-  emailRequired: "Email is required",
-  emailInvalid: "Invalid email address",
-  loadError: "Could not load company users",
-  saveError: "Could not save user",
-  statusError: "Could not update user status",
-  created: "User added",
-  updated: "User updated",
-  activated: "User activated",
-  deactivated: "User deactivated",
-  exported: "Company users exported",
-};
+
+const COMPANY_USER_ROLES = [
+  "OWNER",
+  "ADMIN",
+  "MANAGER",
+  "ACCOUNTANT",
+  "CASHIER",
+  "SALES",
+  "INVENTORY",
+  "HR",
+  "EMPLOYEE",
+  "VIEWER",
+] as const;
+
 function getCompanyUserName(row: ApiRecord): string {
   const user = asRecord(row.user);
   return (
@@ -1956,18 +3939,32 @@ function getCompanyUserName(row: ApiRecord): string {
     getText(row, ["username"], "-")
   );
 }
+
 function getCompanyUserEmail(row: ApiRecord): string {
   const user = asRecord(row.user);
   return getText(row, ["email"]) || getText(user, ["email"], "-");
 }
+
 function getCompanyUserPhone(row: ApiRecord): string {
   const user = asRecord(row.user);
-  return getText(row, ["phone", "mobile", "contact_phone"]) || getText(user, ["phone", "mobile"], "-");
+  return (
+    getText(row, ["phone", "mobile", "contact_phone"]) ||
+    getText(user, ["phone", "mobile", "contact_phone"], "-")
+  );
 }
+
 function getCompanyUserRole(row: ApiRecord): string {
-  return getText(row, ["role", "company_role", "membership_role", "access_role"], "VIEWER").toUpperCase();
+  const membership = asRecord(row.membership);
+  return (
+    getText(row, ["role", "role_key", "role_code"]) ||
+    getText(membership, ["role", "role_key", "role_code"], "VIEWER")
+  ).toUpperCase();
 }
-function getCompanyUserBranchName(row: ApiRecord, branches: ApiRecord[]): string {
+
+function getCompanyUserBranchName(
+  row: ApiRecord,
+  branches: ApiRecord[],
+): string {
   const branchRecord = asRecord(row.branch);
   const direct = getText(row, ["branch_name", "branch"]);
   const nested = getText(branchRecord, ["name", "branch_name", "title"]);
@@ -1975,15 +3972,23 @@ function getCompanyUserBranchName(row: ApiRecord, branches: ApiRecord[]): string
   if (nested) return nested;
   const branchId = getText(row, ["branch_id"]);
   const matched = branches.find((branch) => getRowId(branch) === branchId);
-  return matched ? getText(matched, ["name", "branch_name", "title"], branchId) : "";
+  return matched
+    ? getText(matched, ["name", "branch_name", "title"], branchId)
+    : "";
 }
+
 function getCompanyUserActive(row: ApiRecord): boolean {
   const user = asRecord(row.user);
   if (Object.keys(user).length > 0) {
-    return getBool(user, ["is_active", "active", "enabled"], getBool(row, ["is_active", "active", "enabled"], true));
+    return getBool(
+      user,
+      ["is_active", "active", "enabled"],
+      getBool(row, ["is_active", "active", "enabled"], true),
+    );
   }
   return getBool(row, ["is_active", "active", "enabled"], true);
 }
+
 function getCompanyUserCreatedAt(row: ApiRecord): string {
   const user = asRecord(row.user);
   return (
@@ -1991,99 +3996,294 @@ function getCompanyUserCreatedAt(row: ApiRecord): string {
     getText(user, ["created_at", "created", "date_joined", "joined_at"])
   );
 }
+
 function formatCompanyUsersDate(value: string): string {
   if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   return formatEnglishDateTime(parsed);
 }
-function getCompanyUserRoleLabel(role: string, t: typeof companyUsersEn): string {
-  const normalized = role.toUpperCase();
-  const labels: Record<string, string> = {
-    OWNER: t.owner,
-    ADMIN: t.admin,
-    MANAGER: t.manager,
-    ACCOUNTANT: t.accountant,
-    CASHIER: t.cashier,
-    SALES: t.sales,
-    INVENTORY: t.inventory,
-    HR: t.hr,
-    EMPLOYEE: t.employee,
-    VIEWER: t.viewer,
+
+function getCompanyUserRoleLabel(role: string, rtl: boolean): string {
+  const labels: Record<string, { ar: string; en: string }> = {
+    OWNER: { ar: "مالك", en: "Owner" },
+    ADMIN: { ar: "مدير نظام", en: "Admin" },
+    MANAGER: { ar: "مدير", en: "Manager" },
+    ACCOUNTANT: { ar: "محاسب", en: "Accountant" },
+    CASHIER: { ar: "أمين صندوق", en: "Cashier" },
+    SALES: { ar: "مبيعات", en: "Sales" },
+    INVENTORY: { ar: "مخزون", en: "Inventory" },
+    HR: { ar: "موارد بشرية", en: "HR" },
+    EMPLOYEE: { ar: "موظف", en: "Employee" },
+    VIEWER: { ar: "مشاهد", en: "Viewer" },
   };
-  return labels[normalized] || role || "-";
+  const normalized = role.toUpperCase();
+  return labels[normalized]?.[rtl ? "ar" : "en"] || role || "-";
 }
-function buildCompanyUsersExcel(rows: ApiRecord[], branches: ApiRecord[], t: typeof companyUsersEn): string {
-  const headers = [t.user, t.email, t.phone, t.role, t.branch, t.status, t.createdAt];
-  const body = rows.map((row) => {
-    const active = getCompanyUserActive(row);
-    return [
-      getCompanyUserName(row),
-      getCompanyUserEmail(row),
-      getCompanyUserPhone(row),
-      getCompanyUserRoleLabel(getCompanyUserRole(row), t),
-      getCompanyUserBranchName(row, branches) || t.noBranch,
-      active ? t.active : t.inactive,
-      formatCompanyUsersDate(getCompanyUserCreatedAt(row)),
-    ];
-  });
-  return [headers, ...body]
-    .map((line) => line.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join("\t"))
-    .join("\n");
+
+function getCompanyUserRoleBadgeClass(role: string): string {
+  const normalized = role.toUpperCase();
+  if (["OWNER", "ADMIN"].includes(normalized)) {
+    return "border-violet-200 bg-violet-50 text-violet-700";
+  }
+  if (normalized === "MANAGER") {
+    return "border-blue-200 bg-blue-50 text-blue-700";
+  }
+  if (["ACCOUNTANT", "CASHIER"].includes(normalized)) {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  return "border-slate-200 bg-slate-50 text-slate-700";
 }
+
+function escapeCompanyUsersHtml(value: unknown): string {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 export function CompanyUsersPage() {
   const locale = useLocale();
   const rtl = locale === "ar";
-  const t = rtl ? companyUsersAr : companyUsersEn;
   const [rows, setRows] = useState<ApiRecord[]>([]);
   const [branches, setBranches] = useState<ApiRecord[]>([]);
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<CompanyUserStatusFilter>("all");
-  const [sortKey, setSortKey] = useState<CompanyUserSortKey>("newest");
+  const [statusFilter, setStatusFilter] =
+    useState<CompanyUserStatusFilter>("all");
+  const [roleFilter, setRoleFilter] =
+    useState<CompanyUserRoleFilter>("all");
+  const [branchFilter, setBranchFilter] = useState("all");
+  const [sortKey, setSortKey] =
+    useState<CompanyUserSortKey>("newest");
   const [form, setForm] = useState<UserForm>(emptyUserForm);
   const [editingId, setEditingId] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState<ApiRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const t = rtl
+    ? {
+        title: "مستخدمو الشركة",
+        description:
+          "إدارة مستخدمي الشركة والأدوار والفروع وحالة التفعيل داخل مساحة الشركة الحالية.",
+        badge: "إعدادات الشركة",
+        settingsCenter: "مركز الإعدادات",
+        refresh: "تحديث",
+        addUser: "إضافة مستخدم",
+        editUser: "تعديل مستخدم",
+        formDescription: "بيانات المستخدم ودوره وارتباطه بالفرع.",
+        totalUsers: "إجمالي المستخدمين",
+        activeUsers: "مستخدمون نشطون",
+        inactiveUsers: "مستخدمون معطلون",
+        adminUsers: "إداريون ومشرفون",
+        totalHint: "مستخدمون داخل الشركة",
+        activeHint: "متاحون للدخول والعمل",
+        inactiveHint: "تم تعطيل وصولهم",
+        adminHint: "أدوار إدارية أو إشرافية",
+        tableTitle: "قائمة مستخدمي الشركة",
+        tableDescription:
+          "عرض ومتابعة مستخدمي الشركة مع البحث والتصفية والتصدير.",
+        exportExcel: "تصدير Excel",
+        print: "طباعة",
+        searchPlaceholder: "ابحث بالاسم أو البريد أو الدور أو الفرع...",
+        all: "الكل",
+        active: "نشط",
+        inactive: "غير نشط",
+        newest: "الأحدث",
+        oldest: "الأقدم",
+        nameSort: "الاسم",
+        roleSort: "الدور",
+        reset: "إعادة ضبط",
+        user: "المستخدم",
+        contact: "التواصل",
+        role: "الدور",
+        branch: "الفرع",
+        status: "الحالة",
+        createdAt: "تاريخ الإضافة",
+        actions: "الإجراءات",
+        noBranch: "بدون فرع محدد",
+        noUsers: "لا يوجد مستخدمون",
+        noUsersDescription:
+          "سيظهر مستخدمو الشركة هنا عند توفرهم من API أو بعد إضافتهم.",
+        noResults: "لا توجد نتائج مطابقة",
+        noResultsDescription:
+          "غيّر البحث أو الفلاتر لعرض مستخدمين آخرين.",
+        fullName: "الاسم",
+        email: "البريد الإلكتروني",
+        phone: "رقم التواصل",
+        activeUser: "مستخدم نشط",
+        activeUserDescription:
+          "يستطيع تسجيل الدخول واستخدام النظام حسب صلاحياته.",
+        save: "حفظ",
+        saving: "جاري الحفظ...",
+        cancel: "إلغاء",
+        edit: "تعديل",
+        activate: "تفعيل",
+        deactivate: "تعطيل",
+        confirmActivateTitle: "تأكيد تفعيل المستخدم",
+        confirmDeactivateTitle: "تأكيد تعطيل المستخدم",
+        confirmActivateDescription:
+          "سيتم تفعيل المستخدم وإتاحة الدخول له حسب دوره وصلاحياته.",
+        confirmDeactivateDescription:
+          "سيتم تعطيل دخول المستخدم مع الاحتفاظ بسجلاته السابقة.",
+        confirmActivate: "تأكيد التفعيل",
+        confirmDeactivate: "تأكيد التعطيل",
+        emailRequired: "البريد الإلكتروني مطلوب.",
+        emailInvalid: "صيغة البريد الإلكتروني غير صحيحة.",
+        loadError: "تعذر تحميل مستخدمي الشركة.",
+        saveError: "تعذر حفظ المستخدم.",
+        statusError: "تعذر تحديث حالة المستخدم.",
+        created: "تمت إضافة المستخدم.",
+        updated: "تم تحديث المستخدم.",
+        activated: "تم تفعيل المستخدم.",
+        deactivated: "تم تعطيل المستخدم.",
+        refreshed: "تم تحديث مستخدمي الشركة.",
+        exported: "تم تجهيز ملف Excel.",
+        printReady: "تم تجهيز صفحة الطباعة.",
+        reportDate: "تاريخ التقرير",
+        records: "عدد السجلات",
+        showing: "عرض",
+        of: "من",
+      }
+    : {
+        title: "Company users",
+        description:
+          "Manage company users, roles, branches, and activation status inside the current company workspace.",
+        badge: "Company settings",
+        settingsCenter: "Settings center",
+        refresh: "Refresh",
+        addUser: "Add user",
+        editUser: "Edit user",
+        formDescription: "User identity, role, branch, and access status.",
+        totalUsers: "Total users",
+        activeUsers: "Active users",
+        inactiveUsers: "Inactive users",
+        adminUsers: "Admins and managers",
+        totalHint: "Users inside the company",
+        activeHint: "Can sign in and work",
+        inactiveHint: "Access is disabled",
+        adminHint: "Administrative or management roles",
+        tableTitle: "Company users list",
+        tableDescription:
+          "View and manage company users with search, filters, and export.",
+        exportExcel: "Export Excel",
+        print: "Print",
+        searchPlaceholder: "Search by name, email, role, or branch...",
+        all: "All",
+        active: "Active",
+        inactive: "Inactive",
+        newest: "Newest",
+        oldest: "Oldest",
+        nameSort: "Name",
+        roleSort: "Role",
+        reset: "Reset",
+        user: "User",
+        contact: "Contact",
+        role: "Role",
+        branch: "Branch",
+        status: "Status",
+        createdAt: "Created at",
+        actions: "Actions",
+        noBranch: "No specific branch",
+        noUsers: "No users",
+        noUsersDescription:
+          "Company users will appear here when returned by the API or after adding them.",
+        noResults: "No matching results",
+        noResultsDescription:
+          "Change the search or filters to show other users.",
+        fullName: "Name",
+        email: "Email",
+        phone: "Phone",
+        activeUser: "Active user",
+        activeUserDescription:
+          "Can sign in and use the system according to assigned permissions.",
+        save: "Save",
+        saving: "Saving...",
+        cancel: "Cancel",
+        edit: "Edit",
+        activate: "Activate",
+        deactivate: "Deactivate",
+        confirmActivateTitle: "Confirm user activation",
+        confirmDeactivateTitle: "Confirm user deactivation",
+        confirmActivateDescription:
+          "The user will be activated and allowed to sign in according to the assigned role and permissions.",
+        confirmDeactivateDescription:
+          "The user will be disabled while previous records remain available.",
+        confirmActivate: "Confirm activation",
+        confirmDeactivate: "Confirm deactivation",
+        emailRequired: "Email is required.",
+        emailInvalid: "Invalid email address.",
+        loadError: "Could not load company users.",
+        saveError: "Could not save user.",
+        statusError: "Could not update user status.",
+        created: "User added.",
+        updated: "User updated.",
+        activated: "User activated.",
+        deactivated: "User deactivated.",
+        refreshed: "Company users refreshed.",
+        exported: "Excel file prepared.",
+        printReady: "Print page prepared.",
+        reportDate: "Report date",
+        records: "Records",
+        showing: "Showing",
+        of: "of",
+      };
+
   const roleOptions = useMemo(
-    () => [
-      { value: "OWNER", label: t.owner },
-      { value: "ADMIN", label: t.admin },
-      { value: "MANAGER", label: t.manager },
-      { value: "ACCOUNTANT", label: t.accountant },
-      { value: "CASHIER", label: t.cashier },
-      { value: "SALES", label: t.sales },
-      { value: "INVENTORY", label: t.inventory },
-      { value: "HR", label: t.hr },
-      { value: "EMPLOYEE", label: t.employee },
-      { value: "VIEWER", label: t.viewer },
-    ],
-    [t],
+    () =>
+      COMPANY_USER_ROLES.map((role) => ({
+        value: role,
+        label: getCompanyUserRoleLabel(role, rtl),
+      })),
+    [rtl],
   );
-  const setField = <K extends keyof UserForm>(key: K, value: UserForm[K]) => {
+
+  const setField = <K extends keyof UserForm>(
+    key: K,
+    value: UserForm[K],
+  ) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [usersPayload, branchesPayload] = await Promise.all([
-        apiRequest<unknown>("/api/company/users/"),
-        apiRequest<unknown>("/api/company/branches/").catch(() => []),
-      ]);
-      setRows(normalizeList(usersPayload));
-      setBranches(normalizeList(branchesPayload));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t.loadError);
-    } finally {
-      setLoading(false);
-    }
-  }, [t.loadError]);
+
+  const load = useCallback(
+    async ({ notify = false }: { notify?: boolean } = {}) => {
+      try {
+        setRefreshing(true);
+        setError("");
+        const [usersPayload, branchesPayload] = await Promise.all([
+          apiRequest<unknown>("/api/company/users/"),
+          apiRequest<unknown>("/api/company/branches/").catch(() => []),
+        ]);
+        setRows(normalizeList(usersPayload));
+        setBranches(normalizeList(branchesPayload));
+        if (notify) toast.success(t.refreshed);
+      } catch (caughtError) {
+        const message =
+          caughtError instanceof Error ? caughtError.message : t.loadError;
+        setError(message);
+        toast.error(message);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [t.loadError, t.refreshed],
+  );
+
   useEffect(() => {
     void load();
   }, [load]);
+
   const userStats = useMemo(() => {
-    const active = rows.filter((row) => getCompanyUserActive(row)).length;
-    const adminRoles = ["OWNER", "ADMIN", "MANAGER"];
-    const admins = rows.filter((row) => adminRoles.includes(getCompanyUserRole(row))).length;
+    const active = rows.filter(getCompanyUserActive).length;
+    const admins = rows.filter((row) =>
+      ["OWNER", "ADMIN", "MANAGER"].includes(getCompanyUserRole(row)),
+    ).length;
     return {
       total: rows.length,
       active,
@@ -2091,28 +4291,118 @@ export function CompanyUsersPage() {
       admins,
     };
   }, [rows]);
+
+  const filteredRows = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return rows
+      .filter((row) => {
+        const active = getCompanyUserActive(row);
+        const role = getCompanyUserRole(row);
+        const branchName = getCompanyUserBranchName(row, branches);
+        const branchId =
+          getText(row, ["branch_id"]) || getRowId(asRecord(row.branch));
+
+        if (statusFilter === "active" && !active) return false;
+        if (statusFilter === "inactive" && active) return false;
+        if (roleFilter !== "all" && role !== roleFilter) return false;
+        if (
+          branchFilter !== "all" &&
+          branchId !== branchFilter &&
+          branchName !== branchFilter
+        ) {
+          return false;
+        }
+
+        const haystack = [
+          getCompanyUserName(row),
+          getCompanyUserEmail(row),
+          getCompanyUserPhone(row),
+          role,
+          getCompanyUserRoleLabel(role, rtl),
+          branchName,
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        return !normalizedQuery || haystack.includes(normalizedQuery);
+      })
+      .sort((a, b) => {
+        if (sortKey === "name") {
+          return getCompanyUserName(a).localeCompare(
+            getCompanyUserName(b),
+            "en",
+          );
+        }
+        if (sortKey === "role") {
+          return getCompanyUserRole(a).localeCompare(
+            getCompanyUserRole(b),
+            "en",
+          );
+        }
+        const dateA = new Date(getCompanyUserCreatedAt(a)).getTime() || 0;
+        const dateB = new Date(getCompanyUserCreatedAt(b)).getTime() || 0;
+        return sortKey === "oldest" ? dateA - dateB : dateB - dateA;
+      });
+  }, [
+    branchFilter,
+    branches,
+    query,
+    roleFilter,
+    rows,
+    rtl,
+    sortKey,
+    statusFilter,
+  ]);
+
+  const hasFilters = Boolean(
+    query ||
+      statusFilter !== "all" ||
+      roleFilter !== "all" ||
+      branchFilter !== "all" ||
+      sortKey !== "newest",
+  );
+
+  const resetFilters = () => {
+    setQuery("");
+    setStatusFilter("all");
+    setRoleFilter("all");
+    setBranchFilter("all");
+    setSortKey("newest");
+  };
+
   const resetForm = () => {
     setEditingId("");
     setForm(emptyUserForm);
   };
-  const resetFilters = () => {
-    setQuery("");
-    setStatusFilter("all");
-    setSortKey("newest");
+
+  const openCreate = () => {
+    resetForm();
+    setDialogOpen(true);
   };
+
   const edit = (row: ApiRecord) => {
     const user = asRecord(row.user);
     const branchRecord = asRecord(row.branch);
     setEditingId(getRowId(row));
     setForm({
-      full_name: getCompanyUserName(row) === "-" ? "" : getCompanyUserName(row),
-      email: getCompanyUserEmail(row) === "-" ? "" : getCompanyUserEmail(row),
-      phone: getCompanyUserPhone(row) === "-" ? "" : getCompanyUserPhone(row),
+      full_name:
+        getCompanyUserName(row) === "-" ? "" : getCompanyUserName(row),
+      email:
+        getCompanyUserEmail(row) === "-" ? "" : getCompanyUserEmail(row),
+      phone:
+        getCompanyUserPhone(row) === "-" ? "" : getCompanyUserPhone(row),
       role: getCompanyUserRole(row) || "VIEWER",
-      branch_id: getText(row, ["branch_id"]) || getRowId(branchRecord),
-      is_active: getBool(user, ["is_active", "active", "enabled"], getCompanyUserActive(row)),
+      branch_id:
+        getText(row, ["branch_id"]) || getRowId(branchRecord),
+      is_active: getBool(
+        user,
+        ["is_active", "active", "enabled"],
+        getCompanyUserActive(row),
+      ),
     });
+    setDialogOpen(true);
   };
+
   const save = async () => {
     if (!form.email.trim()) {
       toast.error(t.emailRequired);
@@ -2122,6 +4412,7 @@ export function CompanyUsersPage() {
       toast.error(t.emailInvalid);
       return;
     }
+
     const payload: ApiRecord = {
       full_name: form.full_name.trim(),
       email: form.email.trim(),
@@ -2130,261 +4421,891 @@ export function CompanyUsersPage() {
     };
     if (form.phone.trim()) payload.phone = form.phone.trim();
     if (form.branch_id) payload.branch_id = form.branch_id;
+
     try {
       setSaving(true);
-      await apiRequest(editingId ? `/api/company/users/${editingId}/` : "/api/company/users/", {
-        method: editingId ? "PATCH" : "POST",
-        body: JSON.stringify(payload),
-      });
+      await apiRequest(
+        editingId
+          ? `/api/company/users/${encodeURIComponent(editingId)}/`
+          : "/api/company/users/",
+        {
+          method: editingId ? "PATCH" : "POST",
+          body: JSON.stringify(payload),
+        },
+      );
       toast.success(editingId ? t.updated : t.created);
+      setDialogOpen(false);
       resetForm();
       await load();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t.saveError);
+    } catch (caughtError) {
+      toast.error(
+        caughtError instanceof Error ? caughtError.message : t.saveError,
+      );
     } finally {
       setSaving(false);
     }
   };
-  const toggleActive = async (row: ApiRecord, nextActive: boolean) => {
-    const id = getRowId(row);
+
+  const applyStatusChange = async () => {
+    if (!confirmTarget) return;
+    const id = getRowId(confirmTarget);
     if (!id) return;
+    const nextActive = !getCompanyUserActive(confirmTarget);
+
     try {
+      setSaving(true);
       try {
-        await apiRequest(`/api/company/users/${id}/${nextActive ? "activate" : "deactivate"}/`, {
-          method: "POST",
-          body: JSON.stringify({}),
-        });
+        await apiRequest(
+          `/api/company/users/${encodeURIComponent(id)}/${
+            nextActive ? "activate" : "deactivate"
+          }/`,
+          {
+            method: "POST",
+            body: JSON.stringify({}),
+          },
+        );
       } catch {
-        await apiRequest(`/api/company/users/${id}/`, {
-          method: "PATCH",
-          body: JSON.stringify({ is_active: nextActive }),
-        });
+        await apiRequest(
+          `/api/company/users/${encodeURIComponent(id)}/`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({ is_active: nextActive }),
+          },
+        );
       }
       toast.success(nextActive ? t.activated : t.deactivated);
+      setConfirmTarget(null);
       await load();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t.statusError);
+    } catch (caughtError) {
+      toast.error(
+        caughtError instanceof Error ? caughtError.message : t.statusError,
+      );
+    } finally {
+      setSaving(false);
     }
   };
-  const filteredRows = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return rows
-      .filter((row) => {
-        const active = getCompanyUserActive(row);
-        if (statusFilter === "active" && !active) return false;
-        if (statusFilter === "inactive" && active) return false;
-        const haystack = [
-          getCompanyUserName(row),
-          getCompanyUserEmail(row),
-          getCompanyUserPhone(row),
-          getCompanyUserRole(row),
-          getCompanyUserRoleLabel(getCompanyUserRole(row), t),
-          getCompanyUserBranchName(row, branches),
-        ]
-          .join(" ")
-          .toLowerCase();
-        return !normalizedQuery || haystack.includes(normalizedQuery);
-      })
-      .sort((a, b) => {
-        if (sortKey === "name") {
-          return getCompanyUserName(a).localeCompare(getCompanyUserName(b), "en");
-        }
-        if (sortKey === "role") {
-          return getCompanyUserRole(a).localeCompare(getCompanyUserRole(b), "en");
-        }
-        const dateA = new Date(getCompanyUserCreatedAt(a)).getTime() || 0;
-        const dateB = new Date(getCompanyUserCreatedAt(b)).getTime() || 0;
-        return sortKey === "oldest" ? dateA - dateB : dateB - dateA;
-      });
-  }, [branches, query, rows, sortKey, statusFilter, t]);
+
+  const reportRows = filteredRows.map((row) => {
+    const role = getCompanyUserRole(row);
+    return [
+      getCompanyUserName(row),
+      getCompanyUserEmail(row),
+      getCompanyUserPhone(row),
+      getCompanyUserRoleLabel(role, rtl),
+      getCompanyUserBranchName(row, branches) || t.noBranch,
+      getCompanyUserActive(row) ? t.active : t.inactive,
+      formatCompanyUsersDate(getCompanyUserCreatedAt(row)),
+    ];
+  });
+
+  const reportHtml = (mode: "excel" | "print") => {
+    const headers = [
+      t.user,
+      t.email,
+      t.phone,
+      t.role,
+      t.branch,
+      t.status,
+      t.createdAt,
+    ];
+    const generatedAt = formatEnglishDateTime(new Date());
+    return `<!doctype html>
+<html lang="${locale}" dir="${rtl ? "rtl" : "ltr"}">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeCompanyUsersHtml(t.tableTitle)}</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 100%; }
+    body {
+      margin: 0;
+      padding: ${mode === "print" ? "6mm" : "18px"};
+      font-family: Tahoma, Arial, sans-serif;
+      font-size: 12px;
+      color: #111;
+      background: #fff;
+    }
+    h1 {
+      margin: 0;
+      font-size: 26px;
+      line-height: 1.35;
+    }
+    .meta {
+      margin: 8px 0 16px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #4b5563;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: auto;
+    }
+    th,
+    td {
+      border: 1px solid #000;
+      padding: 9px 8px;
+      text-align: start;
+      vertical-align: middle;
+      overflow-wrap: anywhere;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    th {
+      background: #e5e7eb;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    td:nth-child(1) { font-weight: 700; }
+    .text { mso-number-format: '\\@'; }
+    @page {
+      size: A4 landscape;
+      margin: 6mm;
+    }
+    @media print {
+      html,
+      body {
+        width: 100% !important;
+      }
+      body {
+        padding: 0 !important;
+      }
+      table {
+        width: 100% !important;
+      }
+      thead {
+        display: table-header-group;
+      }
+      tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>${escapeCompanyUsersHtml(t.tableTitle)}</h1>
+  <div class="meta">${escapeCompanyUsersHtml(t.reportDate)}: ${escapeCompanyUsersHtml(generatedAt)} &nbsp; | &nbsp; ${escapeCompanyUsersHtml(t.records)}: ${formatInteger(reportRows.length)}</div>
+  <table>
+    <thead><tr>${headers.map((header) => `<th>${escapeCompanyUsersHtml(header)}</th>`).join("")}</tr></thead>
+    <tbody>${reportRows
+      .map(
+        (row) =>
+          `<tr>${row
+            .map((cell) => `<td class="text">${escapeCompanyUsersHtml(cell)}</td>`)
+            .join("")}</tr>`,
+      )
+      .join("")}</tbody>
+  </table>
+</body>
+</html>`;
+  };
+
   const exportExcel = () => {
-    const content = buildCompanyUsersExcel(filteredRows, branches, t);
-    const blob = new Blob(["\ufeff", content], {
+    if (!reportRows.length) {
+      toast.warning(t.noResults);
+      return;
+    }
+    const blob = new Blob(["\ufeff", reportHtml("excel")], {
       type: "application/vnd.ms-excel;charset=utf-8;",
     });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `company-users-${formatEnglishDateTime(new Date()).replace(/[: ]/g, "-")}.xls`;
+    anchor.download = `company-users-${new Date()
+      .toISOString()
+      .slice(0, 10)}.xls`;
     anchor.click();
     URL.revokeObjectURL(url);
     toast.success(t.exported);
   };
+
+  const printTable = () => {
+    if (!reportRows.length) {
+      toast.warning(t.noResults);
+      return;
+    }
+    const popup = window.open("", "_blank", "width=1200,height=850");
+    if (!popup) {
+      toast.error(rtl ? "تعذر فتح نافذة الطباعة." : "Could not open print window.");
+      return;
+    }
+    popup.document.open();
+    popup.document.write(reportHtml("print"));
+    popup.document.close();
+    popup.opener = null;
+    popup.onload = () => {
+      popup.focus();
+      popup.print();
+    };
+    popup.onafterprint = () => popup.close();
+    toast.success(t.printReady);
+  };
+
+  const summaryCards = [
+    {
+      label: t.totalUsers,
+      value: userStats.total,
+      hint: t.totalHint,
+      icon: UsersRound,
+    },
+    {
+      label: t.activeUsers,
+      value: userStats.active,
+      hint: t.activeHint,
+      icon: CheckCircle2,
+    },
+    {
+      label: t.inactiveUsers,
+      value: userStats.inactive,
+      hint: t.inactiveHint,
+      icon: XCircle,
+    },
+    {
+      label: t.adminUsers,
+      value: userStats.admins,
+      hint: t.adminHint,
+      icon: ShieldCheck,
+    },
+  ];
+
+  const confirmTargetActive = confirmTarget
+    ? getCompanyUserActive(confirmTarget)
+    : false;
+
   return (
-    <PageShell
-      title={t.title}
-      description={t.description}
-      icon={UsersRound}
-      actions={
-        <>
-          <SecondaryButton onClick={() => void load()} disabled={loading}>
-            <RefreshCcw className="h-4 w-4" />
-            {t.refresh}
-          </SecondaryButton>
-          <SecondaryButton onClick={exportExcel} disabled={filteredRows.length === 0}>
-            <FileText className="h-4 w-4" />
-            {t.exportExcel}
-          </SecondaryButton>
-          <SecondaryButton onClick={() => window.print()}>
-            <FileText className="h-4 w-4" />
-            {t.print}
-          </SecondaryButton>
-        </>
-      }
+    <main
+      dir={rtl ? "rtl" : "ltr"}
+      className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8"
     >
-      {loading ? (
-        <LoadingBlock />
-      ) : (
-        <div className="space-y-6">
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <StatCard label={t.totalUsers} value={userStats.total} hint={t.totalHint} icon={UsersRound} />
-            <StatCard label={t.activeUsers} value={userStats.active} hint={t.activeHint} icon={CheckCircle2} />
-            <StatCard label={t.inactiveUsers} value={userStats.inactive} hint={t.inactiveHint} icon={XCircle} />
-            <StatCard label={t.adminUsers} value={userStats.admins} hint={t.adminHint} icon={ShieldCheck} />
-          </section>
-          <ProfileSectionCard title={t.filters} description={t.filtersDescription} icon={Search}>
-            <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px_auto]">
-              <SearchBox value={query} onChange={setQuery} placeholder={t.searchPlaceholder} />
-              <SelectInput
-                label={t.statusFilter}
-                value={statusFilter}
-                onChange={(value) => setStatusFilter(value as CompanyUserStatusFilter)}
-                options={[
-                  { value: "all", label: t.all },
-                  { value: "active", label: t.active },
-                  { value: "inactive", label: t.inactive },
-                ]}
-              />
-              <SelectInput
-                label={t.sortBy}
-                value={sortKey}
-                onChange={(value) => setSortKey(value as CompanyUserSortKey)}
-                options={[
-                  { value: "newest", label: t.newest },
-                  { value: "oldest", label: t.oldest },
-                  { value: "name", label: t.nameSort },
-                  { value: "role", label: t.roleSort },
-                ]}
-              />
-              <div className="flex items-end">
-                <SecondaryButton onClick={resetFilters}>
-                  <RefreshCcw className="h-4 w-4" />
-                  {t.reset}
-                </SecondaryButton>
-              </div>
+      <div className="mx-auto max-w-[1500px] space-y-6">
+        <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-4xl">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
+              <UsersRound className="h-3.5 w-3.5" />
+              {t.badge}
             </div>
-          </ProfileSectionCard>
-          <section className="grid gap-6 xl:grid-cols-[420px_1fr]">
-            <ProfileSectionCard
-              title={editingId ? t.editUser : t.addUser}
-              description={t.formDescription}
-              icon={editingId ? UserRoundCog : Plus}
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+              {t.title}
+            </h1>
+            <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">
+              {t.description}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" onClick={openCreate}>
+              <Plus className="h-4 w-4" />
+              {t.addUser}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void load({ notify: true })}
+              disabled={refreshing}
             >
-              <div className="grid gap-4">
-                <TextInput label={t.fullName} value={form.full_name} onChange={(value) => setField("full_name", value)} />
-                <TextInput label={t.email} value={form.email} onChange={(value) => setField("email", value)} type="email" required />
-                <TextInput label={t.phone} value={form.phone} onChange={(value) => setField("phone", value)} />
-                <SelectInput label={t.role} value={form.role} onChange={(value) => setField("role", value)} options={roleOptions} />
-                <SelectInput
-                  label={t.branch}
-                  value={form.branch_id}
-                  onChange={(value) => setField("branch_id", value)}
-                  options={[
-                    { value: "", label: t.noBranch },
-                    ...branches.map((branch) => ({
-                      value: getRowId(branch),
-                      label: getText(branch, ["name", "branch_name", "title"], getRowId(branch)),
-                    })),
-                  ]}
+              {refreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCcw className="h-4 w-4" />
+              )}
+              {t.refresh}
+            </Button>
+            <Button asChild type="button" variant="outline">
+              <Link href="/company/settings">
+                <Settings2 className="h-4 w-4" />
+                {t.settingsCenter}
+              </Link>
+            </Button>
+          </div>
+        </header>
+
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {loading
+            ? Array.from({ length: 4 }).map((_, index) => (
+                <UiCard
+                  key={`company-user-stat-loading-${index}`}
+                  className="min-h-[150px] rounded-2xl border bg-card shadow-none"
+                >
+                  <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-3">
+                    <div className="min-w-0 flex-1 space-y-3">
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-8 w-16" />
+                    </div>
+                    <Skeleton className="h-10 w-10 rounded-xl" />
+                  </CardHeader>
+                  <CardContent>
+                    <Skeleton className="h-3 w-40" />
+                  </CardContent>
+                </UiCard>
+              ))
+            : summaryCards.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <UiCard
+                    key={item.label}
+                    className="min-h-[150px] rounded-2xl border bg-card shadow-none"
+                  >
+                    <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-3">
+                      <div className="min-w-0">
+                        <CardDescription className="text-sm">
+                          {item.label}
+                        </CardDescription>
+                        <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
+                          {formatInteger(item.value)}
+                        </CardTitle>
+                      </div>
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-background text-muted-foreground">
+                        <Icon className="h-5 w-5" />
+                      </span>
+                    </CardHeader>
+                    <CardContent className="pt-1">
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        {item.hint}
+                      </p>
+                    </CardContent>
+                  </UiCard>
+                );
+              })}
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border bg-card shadow-none">
+          <div className="flex flex-col gap-4 border-b px-5 py-5 sm:px-6 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-bold tracking-tight">
+                  {t.tableTitle}
+                </h2>
+                <Badge
+                  variant="outline"
+                  className="rounded-full bg-background px-2.5 py-1 text-xs tabular-nums"
+                >
+                  {formatInteger(filteredRows.length)}
+                </Badge>
+              </div>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {t.tableDescription}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={exportExcel}
+                disabled={!filteredRows.length}
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                {t.exportExcel}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={printTable}
+                disabled={!filteredRows.length}
+              >
+                <Printer className="h-4 w-4" />
+                {t.print}
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-4 p-5 sm:p-6">
+            <div className="grid gap-3 rounded-xl border bg-muted/10 p-3 md:grid-cols-2 xl:grid-cols-[minmax(280px,1fr)_150px_170px_180px_150px_auto]">
+              <div className="relative md:col-span-2 xl:col-span-1">
+                <Search
+                  className={`pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground ${
+                    rtl ? "right-3" : "left-3"
+                  }`}
                 />
-                <ToggleInput
-                  label={t.activeUser}
-                  description={t.activeUserDescription}
-                  checked={form.is_active}
-                  onChange={(value) => setField("is_active", value)}
+                <Input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={t.searchPlaceholder}
+                  className={`h-10 bg-background shadow-none ${
+                    rtl ? "pr-10" : "pl-10"
+                  }`}
                 />
-                <div className="flex flex-wrap gap-2">
-                  <PrimaryButton onClick={() => void save()} disabled={saving}>
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                    {t.save}
-                  </PrimaryButton>
-                  {editingId ? <SecondaryButton onClick={resetForm}>{t.cancel}</SecondaryButton> : null}
+              </div>
+
+              <Select
+                value={statusFilter}
+                onValueChange={(value) =>
+                  setStatusFilter(value as CompanyUserStatusFilter)
+                }
+              >
+                <SelectTrigger className="h-10 bg-background shadow-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
+                  <SelectItem value="all">
+                    {`${t.status}: ${t.all}`}
+                  </SelectItem>
+                  <SelectItem value="active">
+                    {`${t.status}: ${t.active}`}
+                  </SelectItem>
+                  <SelectItem value="inactive">
+                    {`${t.status}: ${t.inactive}`}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={roleFilter}
+                onValueChange={(value) =>
+                  setRoleFilter(value as CompanyUserRoleFilter)
+                }
+              >
+                <SelectTrigger className="h-10 bg-background shadow-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
+                  <SelectItem value="all">
+                    {`${t.role}: ${t.all}`}
+                  </SelectItem>
+                  {roleOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {`${t.role}: ${option.label}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={branchFilter} onValueChange={setBranchFilter}>
+                <SelectTrigger className="h-10 bg-background shadow-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
+                  <SelectItem value="all">
+                    {`${t.branch}: ${t.all}`}
+                  </SelectItem>
+                  {branches.map((branch) => {
+                    const id = getRowId(branch);
+                    const name = getText(
+                      branch,
+                      ["name", "branch_name", "title"],
+                      id,
+                    );
+                    return id ? (
+                      <SelectItem key={id} value={id}>
+                        {`${t.branch}: ${name}`}
+                      </SelectItem>
+                    ) : null;
+                  })}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={sortKey}
+                onValueChange={(value) =>
+                  setSortKey(value as CompanyUserSortKey)
+                }
+              >
+                <SelectTrigger className="h-10 bg-background shadow-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">{t.newest}</SelectItem>
+                  <SelectItem value="oldest">{t.oldest}</SelectItem>
+                  <SelectItem value="name">{t.nameSort}</SelectItem>
+                  <SelectItem value="role">{t.roleSort}</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={resetFilters}
+                disabled={!hasFilters}
+              >
+                <RotateCcw className="h-4 w-4" />
+                {t.reset}
+              </Button>
+            </div>
+
+            {error && !rows.length ? (
+              <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-muted/10 px-6 py-10 text-center">
+                <XCircle className="h-7 w-7 text-rose-600" />
+                <div>
+                  <h3 className="text-sm font-semibold">{t.loadError}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {error}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void load({ notify: true })}
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                  {t.refresh}
+                </Button>
+              </div>
+            ) : loading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <Skeleton
+                    key={`company-user-row-loading-${index}`}
+                    className="h-16 w-full rounded-xl"
+                  />
+                ))}
+              </div>
+            ) : filteredRows.length ? (
+              <div className="overflow-hidden rounded-xl border bg-background">
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[1050px] table-fixed">
+                    <TableHeader>
+                      <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
+                        <TableHead className="sticky start-0 z-20 w-[220px] bg-muted/40 px-4 text-start text-xs font-semibold">
+                          {t.user}
+                        </TableHead>
+                        <TableHead className="w-[230px] px-4 text-start text-xs font-semibold">
+                          {t.contact}
+                        </TableHead>
+                        <TableHead className="w-[140px] px-4 text-start text-xs font-semibold">
+                          {t.role}
+                        </TableHead>
+                        <TableHead className="w-[150px] px-4 text-start text-xs font-semibold">
+                          {t.branch}
+                        </TableHead>
+                        <TableHead className="w-[120px] px-4 text-start text-xs font-semibold">
+                          {t.status}
+                        </TableHead>
+                        <TableHead className="w-[170px] px-4 text-start text-xs font-semibold">
+                          {t.createdAt}
+                        </TableHead>
+                        <TableHead className="w-[80px] px-4 text-center text-xs font-semibold">
+                          {t.actions}
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredRows.map((row, index) => {
+                        const active = getCompanyUserActive(row);
+                        const role = getCompanyUserRole(row);
+                        const branchName =
+                          getCompanyUserBranchName(row, branches) || t.noBranch;
+                        return (
+                          <TableRow
+                            key={getRowId(row) || `company-user-${index}`}
+                            className="group h-[66px] cursor-pointer transition-colors hover:bg-muted/35"
+                            onClick={() => edit(row)}
+                          >
+                            <TableCell className="sticky start-0 z-10 h-[66px] bg-background px-4 group-hover:bg-muted/35">
+                              <p className="truncate font-semibold text-foreground">
+                                {getCompanyUserName(row)}
+                              </p>
+                            </TableCell>
+                            <TableCell className="h-[66px] px-4 text-muted-foreground">
+                              <p className="truncate text-sm">
+                                {getCompanyUserEmail(row)}
+                              </p>
+                              <p className="mt-1 truncate text-xs" dir="ltr">
+                                {getCompanyUserPhone(row)}
+                              </p>
+                            </TableCell>
+                            <TableCell className="h-[66px] px-4">
+                              <Badge
+                                variant="outline"
+                                className={`rounded-full px-2.5 py-1 text-xs ${getCompanyUserRoleBadgeClass(
+                                  role,
+                                )}`}
+                              >
+                                {getCompanyUserRoleLabel(role, rtl)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="h-[66px] px-4 text-sm text-muted-foreground">
+                              <span className="block truncate">{branchName}</span>
+                            </TableCell>
+                            <TableCell className="h-[66px] px-4">
+                              <StatusPill active={active} />
+                            </TableCell>
+                            <TableCell
+                              className="h-[66px] px-4 text-sm text-muted-foreground tabular-nums"
+                              dir="ltr"
+                            >
+                              {formatCompanyUsersDate(
+                                getCompanyUserCreatedAt(row),
+                              )}
+                            </TableCell>
+                            <TableCell
+                              className="h-[66px] px-4 text-center"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-9 w-9"
+                                    aria-label={t.actions}
+                                  >
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="min-w-44">
+                                  <DropdownMenuItem onClick={() => edit(row)}>
+                                    <Pencil className="h-4 w-4" />
+                                    {t.edit}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className={
+                                      active
+                                        ? "text-rose-600 focus:text-rose-700"
+                                        : "text-emerald-600 focus:text-emerald-700"
+                                    }
+                                    onClick={() => setConfirmTarget(row)}
+                                  >
+                                    {active ? (
+                                      <PowerOff className="h-4 w-4" />
+                                    ) : (
+                                      <Power className="h-4 w-4" />
+                                    )}
+                                    {active ? t.deactivate : t.activate}
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
-            </ProfileSectionCard>
-            <ProfileSectionCard
-              title={t.usersList}
-              description={`${t.usersListDescription} ? ${formatInteger(filteredRows.length)} / ${formatInteger(rows.length)}`}
-              icon={UsersRound}
-            >
-              {filteredRows.length === 0 ? (
-                <EmptyState
-                  title={rows.length === 0 ? t.noUsers : t.noResults}
-                  description={rows.length === 0 ? t.noUsersDescription : t.noResultsDescription}
-                />
-              ) : (
-                <div className="overflow-hidden rounded-2xl border bg-card">
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[980px] text-sm">
-                      <thead className="border-b bg-muted/40 text-muted-foreground">
-                        <tr>
-                          <th className="px-4 py-3 text-start font-semibold">{t.user}</th>
-                          <th className="px-4 py-3 text-start font-semibold">{t.contact}</th>
-                          <th className="px-4 py-3 text-start font-semibold">{t.role}</th>
-                          <th className="px-4 py-3 text-start font-semibold">{t.branch}</th>
-                          <th className="px-4 py-3 text-start font-semibold">{t.status}</th>
-                          <th className="px-4 py-3 text-start font-semibold">{t.createdAt}</th>
-                          <th className="px-4 py-3 text-start font-semibold">{t.actions}</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {filteredRows.map((row, index) => {
-                          const active = getCompanyUserActive(row);
-                          const role = getCompanyUserRole(row);
-                          const branchName = getCompanyUserBranchName(row, branches);
-                          return (
-                            <tr key={getRowId(row) || index} className="bg-card transition hover:bg-muted/30">
-                              <td className="px-4 py-4">
-                                <p className="font-semibold text-foreground">{getCompanyUserName(row)}</p>
-                                <p className="mt-1 text-xs text-muted-foreground">{getRowId(row) || "-"}</p>
-                              </td>
-                              <td className="px-4 py-4 text-muted-foreground">
-                                <p>{getCompanyUserEmail(row)}</p>
-                                <p className="mt-1 text-xs">{getCompanyUserPhone(row)}</p>
-                              </td>
-                              <td className="px-4 py-4">
-                                <Badge variant="outline" className="rounded-full bg-background px-2.5 py-1 text-xs">
-                                  {getCompanyUserRoleLabel(role, t)}
-                                </Badge>
-                              </td>
-                              <td className="px-4 py-4 text-muted-foreground">{branchName || t.noBranch}</td>
-                              <td className="px-4 py-4">
-                                <StatusPill active={active} />
-                              </td>
-                              <td className="px-4 py-4 text-muted-foreground">
-                                {formatCompanyUsersDate(getCompanyUserCreatedAt(row))}
-                              </td>
-                              <td className="px-4 py-4">
-                                <div className="flex flex-wrap gap-2">
-                                  <SecondaryButton onClick={() => edit(row)}>{t.edit}</SecondaryButton>
-                                  <SecondaryButton onClick={() => void toggleActive(row, !active)}>
-                                    {active ? t.deactivate : t.activate}
-                                  </SecondaryButton>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+            ) : (
+              <div className="flex min-h-72 flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-muted/10 px-6 py-10 text-center">
+                <Search className="h-7 w-7 text-muted-foreground" />
+                <div>
+                  <h3 className="text-sm font-semibold">
+                    {hasFilters ? t.noResults : t.noUsers}
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {hasFilters
+                      ? t.noResultsDescription
+                      : t.noUsersDescription}
+                  </p>
                 </div>
+                {hasFilters ? (
+                  <Button type="button" variant="outline" onClick={resetFilters}>
+                    <RotateCcw className="h-4 w-4" />
+                    {t.reset}
+                  </Button>
+                ) : null}
+              </div>
+            )}
+
+            <p className="text-sm text-muted-foreground">
+              {t.showing}{" "}
+              <span className="font-medium text-foreground tabular-nums">
+                {formatInteger(filteredRows.length)}
+              </span>{" "}
+              {t.of}{" "}
+              <span className="font-medium text-foreground tabular-nums">
+                {formatInteger(rows.length)}
+              </span>
+            </p>
+          </div>
+        </section>
+      </div>
+
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          if (saving) return;
+          setDialogOpen(open);
+          if (!open) resetForm();
+        }}
+      >
+        <DialogContent
+          dir={rtl ? "rtl" : "ltr"}
+          className="overflow-hidden rounded-2xl p-0 sm:max-w-[620px]"
+        >
+          <div className="h-1 bg-foreground" />
+          <DialogHeader className="border-b px-5 py-4 text-start sm:px-6">
+            <DialogTitle>
+              {editingId ? t.editUser : t.addUser}
+            </DialogTitle>
+            <DialogDescription>{t.formDescription}</DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 px-5 py-5 sm:grid-cols-2 sm:px-6">
+            <label className="space-y-2">
+              <span className="text-sm font-semibold">{t.fullName}</span>
+              <Input
+                value={form.full_name}
+                onChange={(event) =>
+                  setField("full_name", event.target.value)
+                }
+                className="h-10"
+              />
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-semibold">
+                {t.email} <span className="text-rose-600">*</span>
+              </span>
+              <Input
+                type="email"
+                value={form.email}
+                onChange={(event) => setField("email", event.target.value)}
+                className="h-10"
+              />
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-semibold">{t.phone}</span>
+              <Input
+                value={form.phone}
+                onChange={(event) => setField("phone", event.target.value)}
+                className="h-10 tabular-nums"
+                dir="ltr"
+              />
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-semibold">{t.role}</span>
+              <Select
+                value={form.role}
+                onValueChange={(value) => setField("role", value)}
+              >
+                <SelectTrigger className="h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
+                  {roleOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+            <label className="space-y-2 sm:col-span-2">
+              <span className="text-sm font-semibold">{t.branch}</span>
+              <Select
+                value={form.branch_id || "__none__"}
+                onValueChange={(value) =>
+                  setField("branch_id", value === "__none__" ? "" : value)
+                }
+              >
+                <SelectTrigger className="h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain">
+                  <SelectItem value="__none__">{t.noBranch}</SelectItem>
+                  {branches.map((branch) => {
+                    const id = getRowId(branch);
+                    const name = getText(
+                      branch,
+                      ["name", "branch_name", "title"],
+                      id,
+                    );
+                    return id ? (
+                      <SelectItem key={id} value={id}>
+                        {name}
+                      </SelectItem>
+                    ) : null;
+                  })}
+                </SelectContent>
+              </Select>
+            </label>
+
+            <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border bg-muted/10 p-4 sm:col-span-2">
+              <span>
+                <span className="block text-sm font-semibold">
+                  {t.activeUser}
+                </span>
+                <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                  {t.activeUserDescription}
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={form.is_active}
+                onChange={(event) =>
+                  setField("is_active", event.target.checked)
+                }
+                className="h-5 w-5 rounded border-input"
+              />
+            </label>
+          </div>
+
+          <DialogFooter className="border-t px-5 py-4 sm:px-6">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDialogOpen(false)}
+              disabled={saving}
+            >
+              {t.cancel}
+            </Button>
+            <Button type="button" onClick={() => void save()} disabled={saving}>
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
               )}
-            </ProfileSectionCard>
-          </section>
-        </div>
-      )}
-    </PageShell>
+              {saving ? t.saving : t.save}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={Boolean(confirmTarget)}
+        onOpenChange={(open) => {
+          if (!open && !saving) setConfirmTarget(null);
+        }}
+      >
+        <AlertDialogContent dir={rtl ? "rtl" : "ltr"}>
+          <AlertDialogHeader className="text-start">
+            <AlertDialogTitle>
+              {confirmTargetActive
+                ? t.confirmDeactivateTitle
+                : t.confirmActivateTitle}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmTargetActive
+                ? t.confirmDeactivateDescription
+                : t.confirmActivateDescription}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {confirmTarget ? (
+            <div className="rounded-xl border bg-muted/20 px-4 py-3">
+              <p className="font-semibold">
+                {getCompanyUserName(confirmTarget)}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {getCompanyUserEmail(confirmTarget)}
+              </p>
+            </div>
+          ) : null}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>{t.cancel}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={saving}
+              onClick={(event) => {
+                event.preventDefault();
+                void applyStatusChange();
+              }}
+              className={
+                confirmTargetActive
+                  ? "bg-rose-600 text-white hover:bg-rose-700"
+                  : "bg-emerald-600 text-white hover:bg-emerald-700"
+              }
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {confirmTargetActive
+                ? t.confirmDeactivate
+                : t.confirmActivate}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </main>
   );
 }
 
@@ -2767,300 +5688,1498 @@ export function CompanyPermissionsPage() {
   const [selectedRole, setSelectedRole] = useState("");
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [query, setQuery] = useState("");
-  const [permissionFilter, setPermissionFilter] = useState<CompanyPermissionFilter>("all");
-  const [sortKey, setSortKey] = useState<CompanyPermissionSortKey>("code");
+  const [permissionFilter, setPermissionFilter] =
+    useState<CompanyPermissionFilter>("all");
+  const [sortKey, setSortKey] =
+    useState<CompanyPermissionSortKey>("code");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const groups = useMemo(() => {
-    return Array.from(new Set(permissions.map((permission) => permission.group))).filter(Boolean).sort();
-  }, [permissions]);
-  const selectedRoleRecord = useMemo(() => {
-    return roles.find((role) => role.key === selectedRole);
-  }, [roles, selectedRole]);
+  const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
+  const selectedPermissionSet = useMemo(
+    () => new Set(selectedPermissions),
+    [selectedPermissions],
+  );
+  const selectedRoleRecord = useMemo(
+    () => roles.find((role) => role.key === selectedRole),
+    [roles, selectedRole],
+  );
   const permissionStats = useMemo(() => {
-    const granted = permissions.filter((permission) => selectedPermissions.includes(permission.key)).length;
+    const granted = permissions.filter((permission) =>
+      selectedPermissionSet.has(permission.key),
+    ).length;
     return {
       total: permissions.length,
       granted,
       missing: Math.max(permissions.length - granted, 0),
       roles: roles.length,
     };
-  }, [permissions, roles.length, selectedPermissions]);
+  }, [permissions, roles.length, selectedPermissionSet]);
   const filteredPermissions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return permissions
       .filter((permission) => {
-        const granted = selectedPermissions.includes(permission.key);
-        if (permissionFilter === "granted" && !granted) return false;
-        if (permissionFilter === "missing" && granted) return false;
+        const granted = selectedPermissionSet.has(permission.key);
+        if (permissionFilter === "granted" && !granted) {
+          return false;
+        }
+        if (permissionFilter === "missing" && granted) {
+          return false;
+        }
         const haystack = [
           permission.key,
           permission.label,
           getCompanyPermissionDisplayLabel(permission, rtl),
           permission.group,
-          getCompanyPermissionGroupDisplayLabel(permission.group, rtl),
+          getCompanyPermissionGroupDisplayLabel(
+            permission.group,
+            rtl,
+          ),
           permission.description,
           permission.scope,
         ]
           .join(" ")
           .toLowerCase();
-        return !normalizedQuery || haystack.includes(normalizedQuery);
+        return (
+          !normalizedQuery ||
+          haystack.includes(normalizedQuery)
+        );
       })
-      .sort((a, b) => {
-        if (sortKey === "group") return a.group.localeCompare(b.group, "en");
-        if (sortKey === "name") return a.label.localeCompare(b.label, "en");
-        return a.key.localeCompare(b.key, "en");
+      .sort((first, second) => {
+        if (sortKey === "group") {
+          return (
+            first.group.localeCompare(
+              second.group,
+              "en",
+            ) ||
+            first.key.localeCompare(second.key, "en")
+          );
+        }
+        if (sortKey === "name") {
+          return getCompanyPermissionDisplayLabel(
+            first,
+            rtl,
+          ).localeCompare(
+            getCompanyPermissionDisplayLabel(
+              second,
+              rtl,
+            ),
+            rtl ? "ar" : "en",
+          );
+        }
+        return first.key.localeCompare(
+          second.key,
+          "en",
+          {
+            numeric: true,
+            sensitivity: "base",
+          },
+        );
       });
-  }, [permissionFilter, permissions, query, rtl, selectedPermissions, sortKey]);
+  }, [
+    permissionFilter,
+    permissions,
+    query,
+    rtl,
+    selectedPermissionSet,
+    sortKey,
+  ]);
   const groupedPermissions = useMemo(() => {
-    return filteredPermissions.reduce<Record<string, CompanyPermissionItem[]>>((acc, permission) => {
-      acc[permission.group] = [...(acc[permission.group] ?? []), permission];
-      return acc;
+    return filteredPermissions.reduce<
+      Record<string, CompanyPermissionItem[]>
+    >((groups, permission) => {
+      groups[permission.group] = [
+        ...(groups[permission.group] ?? []),
+        permission,
+      ];
+      return groups;
     }, {});
   }, [filteredPermissions]);
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
-      const payload = await apiRequest<unknown>("/api/company/permissions/");
-      const normalized = normalizeCompanyPermissionsPayload(payload);
-      setPermissions(normalized.permissions);
-      setRoles(normalized.roles);
-      const currentSelectedRole = normalized.roles.find((role) => role.key === selectedRole) ?? normalized.roles[0];
-      if (currentSelectedRole) {
-        setSelectedRole(currentSelectedRole.key);
-        setSelectedPermissions(expandCompanyRolePermissionKeys(currentSelectedRole.permissions, normalized.permissions));
-      } else {
-        setSelectedRole("");
-        setSelectedPermissions([]);
+  const filtersActive = Boolean(
+    query.trim() ||
+      permissionFilter !== "all" ||
+      sortKey !== "code",
+  );
+  const load = useCallback(
+    async (preferredRole = "") => {
+      try {
+        setLoading(true);
+        const payload = await apiRequest<unknown>(
+          "/api/company/permissions/",
+        );
+        const normalized =
+          normalizeCompanyPermissionsPayload(payload);
+        setPermissions(normalized.permissions);
+        setRoles(normalized.roles);
+        const nextRole =
+          normalized.roles.find(
+            (role) => role.key === preferredRole,
+          ) ?? normalized.roles[0];
+        if (nextRole) {
+          setSelectedRole(nextRole.key);
+          setSelectedPermissions(
+            expandCompanyRolePermissionKeys(
+              nextRole.permissions,
+              normalized.permissions,
+            ),
+          );
+        } else {
+          setSelectedRole("");
+          setSelectedPermissions([]);
+        }
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : t.loadError,
+        );
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t.loadError);
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedRole, t.loadError]);
+    },
+    [t.loadError],
+  );
   useEffect(() => {
     void load();
   }, [load]);
   const changeRole = (roleKey: string) => {
-    const role = roles.find((item) => item.key === roleKey);
+    const role = roles.find(
+      (item) => item.key === roleKey,
+    );
     setSelectedRole(roleKey);
-    setSelectedPermissions(expandCompanyRolePermissionKeys(role?.permissions ?? [], permissions));
+    setSelectedPermissions(
+      expandCompanyRolePermissionKeys(
+        role?.permissions ?? [],
+        permissions,
+      ),
+    );
   };
   const resetFilters = () => {
     setQuery("");
     setPermissionFilter("all");
     setSortKey("code");
   };
-  const togglePermission = (permissionKey: string) => {
+  const togglePermission = (
+    permissionKey: string,
+  ) => {
     setSelectedPermissions((current) =>
       current.includes(permissionKey)
-        ? current.filter((key) => key !== permissionKey)
+        ? current.filter(
+            (key) => key !== permissionKey,
+          )
         : [...current, permissionKey],
     );
   };
-  const save = async () => {
+  const resetRolePermissions = () => {
+    const role = roles.find(
+      (item) => item.key === selectedRole,
+    );
+    setSelectedPermissions(
+      expandCompanyRolePermissionKeys(
+        role?.permissions ?? [],
+        permissions,
+      ),
+    );
+    toast.success(
+      rtl
+        ? "تمت استعادة صلاحيات الدور المحفوظة."
+        : "Saved role permissions were restored.",
+    );
+  };
+  const selectAllVisible = () => {
+    const visibleKeys = filteredPermissions.map(
+      (permission) => permission.key,
+    );
+    setSelectedPermissions((current) =>
+      Array.from(
+        new Set([
+          ...current,
+          ...visibleKeys,
+        ]),
+      ),
+    );
+  };
+  const clearVisible = () => {
+    const visibleKeys = new Set(
+      filteredPermissions.map(
+        (permission) => permission.key,
+      ),
+    );
+    setSelectedPermissions((current) =>
+      current.filter(
+        (permissionKey) =>
+          !visibleKeys.has(permissionKey),
+      ),
+    );
+  };
+  const requestSave = () => {
+    if (!selectedRole) {
+      toast.error(t.selectRole);
+      return;
+    }
+    setConfirmSaveOpen(true);
+  };
+  const savePermissions = async () => {
     if (!selectedRole) {
       toast.error(t.selectRole);
       return;
     }
     try {
       setSaving(true);
-      await apiRequest("/api/company/permissions/", {
-        method: "PATCH",
-        body: JSON.stringify({
-          role: selectedRole,
-          permissions: selectedPermissions,
-        }),
-      });
+      await apiRequest(
+        "/api/company/permissions/",
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            role: selectedRole,
+            permissions: selectedPermissions,
+          }),
+        },
+      );
       toast.success(t.saved);
-      await load();
+      setConfirmSaveOpen(false);
+      await load(selectedRole);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t.saveError);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t.saveError,
+      );
     } finally {
       setSaving(false);
     }
   };
-  const exportExcel = () => {
-    const content = buildCompanyPermissionsExcel(filteredPermissions, selectedPermissions, t, rtl);
-    const blob = new Blob(["\ufeff", content], {
-      type: "application/vnd.ms-excel;charset=utf-8;",
-    });
+  const rolePermissionCount = (
+    role: CompanyPermissionRole,
+  ) => {
+    return expandCompanyRolePermissionKeys(
+      role.permissions,
+      permissions,
+    ).length;
+  };
+  const escapeReportHtml = (
+    value: unknown,
+  ) => {
+    const replacements: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;",
+    };
+    return String(value ?? "").replace(
+      /[&<>"']/g,
+      (character) =>
+        replacements[character] ?? character,
+    );
+  };
+  const buildReportRows = () => {
+    return filteredPermissions
+      .map((permission) => {
+        const enabled =
+          selectedPermissionSet.has(
+            permission.key,
+          );
+        return `
+          <tr>
+            <td class="text">${escapeReportHtml(
+              permission.key,
+            )}</td>
+            <td>${escapeReportHtml(
+              getCompanyPermissionGroupDisplayLabel(
+                permission.group,
+                rtl,
+              ),
+            )}</td>
+            <td>${escapeReportHtml(
+              getCompanyPermissionDisplayLabel(
+                permission,
+                rtl,
+              ),
+            )}</td>
+            <td>${escapeReportHtml(
+              getCompanyPermissionDescriptionDisplay(
+                permission,
+                rtl,
+              ),
+            )}</td>
+            <td>${escapeReportHtml(
+              enabled
+                ? rtl
+                  ? "مفعلة"
+                  : "Enabled"
+                : rtl
+                  ? "غير مفعلة"
+                  : "Disabled",
+            )}</td>
+          </tr>
+        `;
+      })
+      .join("");
+  };
+  const buildReportDocument = (
+    mode: "print" | "excel",
+  ) => {
+    const reportTitle = rtl
+      ? "تقرير صلاحيات الشركة"
+      : "Company permissions report";
+    const tableTitle = rtl
+      ? "كتالوج صلاحيات الشركة"
+      : "Company permissions catalog";
+    const roleLabel =
+      selectedRoleRecord?.label ||
+      selectedRole ||
+      (rtl ? "غير محدد" : "Not selected");
+    const generatedAt =
+      formatEnglishDateTime(new Date());
+    const sheetName = rtl
+      ? "صلاحيات الشركة"
+      : "Company permissions";
+    const excelWorkbook =
+      mode === "excel"
+        ? `
+          <!--[if gte mso 9]>
+          <xml>
+            <x:ExcelWorkbook>
+              <x:ExcelWorksheets>
+                <x:ExcelWorksheet>
+                  <x:Name>${escapeReportHtml(
+                    sheetName,
+                  )}</x:Name>
+                  <x:WorksheetOptions>
+                    <x:DisplayGridlines/>
+                    <x:FitToPage/>
+                  </x:WorksheetOptions>
+                </x:ExcelWorksheet>
+              </x:ExcelWorksheets>
+            </x:ExcelWorkbook>
+          </xml>
+          <![endif]-->
+        `
+        : "";
+    return `
+      <!doctype html>
+      <html
+        dir="${rtl ? "rtl" : "ltr"}"
+        lang="${locale}"
+        xmlns:o="urn:schemas-microsoft-com:office:office"
+        xmlns:x="urn:schemas-microsoft-com:office:excel"
+        xmlns="http://www.w3.org/TR/REC-html40"
+      >
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeReportHtml(
+            reportTitle,
+          )}</title>
+          ${excelWorkbook}
+          <style>
+            * {
+              box-sizing: border-box;
+            }
+            html,
+            body {
+              width: 100%;
+            }
+            body {
+              margin: 0;
+              padding: ${
+                mode === "print"
+                  ? "6mm"
+                  : "18px"
+              };
+              font-family: Tahoma, Arial, sans-serif;
+              font-size: 11px;
+              color: #111;
+              background: #fff;
+              direction: ${
+                rtl ? "rtl" : "ltr"
+              };
+            }
+            .report-header {
+              margin-bottom: 14px;
+            }
+            .brand {
+              margin-bottom: 4px;
+              font-size: 10px;
+              font-weight: 700;
+            }
+            h1 {
+              margin: 0;
+              font-size: 24px;
+              line-height: 1.35;
+            }
+            .meta {
+              margin-top: 6px;
+              font-size: 11px;
+              line-height: 1.6;
+            }
+            .section-title {
+              margin: 16px 0 7px;
+              font-size: 13px;
+              font-weight: 700;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              table-layout: auto;
+            }
+            th,
+            td {
+              border: 1px solid #000;
+              padding: 7px;
+              text-align: start;
+              vertical-align: middle;
+              overflow-wrap: anywhere;
+              font-size: 10px;
+              line-height: 1.45;
+            }
+            th {
+              background: #e5e7eb;
+              font-weight: 700;
+              white-space: nowrap;
+            }
+            .summary td {
+              width: 25%;
+              text-align: center;
+            }
+            .summary strong {
+              display: block;
+              margin-top: 3px;
+              font-size: 13px;
+            }
+            .text {
+              mso-number-format: "\\@";
+              direction: ltr;
+              text-align: left;
+            }
+            @page {
+              size: A4 landscape;
+              margin: 6mm;
+            }
+            @media print {
+              body {
+                padding: 0;
+              }
+              thead {
+                display: table-header-group;
+              }
+              tr {
+                break-inside: avoid;
+                page-break-inside: avoid;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="report-header">
+            <div class="brand">PrimeyAcc</div>
+            <h1>${escapeReportHtml(
+              reportTitle,
+            )}</h1>
+            <div class="meta">
+              ${
+                rtl
+                  ? "الدور المحدد"
+                  : "Selected role"
+              }:
+              <strong>${escapeReportHtml(
+                roleLabel,
+              )}</strong>
+              <br />
+              ${
+                rtl
+                  ? "تاريخ الطباعة"
+                  : "Generated at"
+              }:
+              ${escapeReportHtml(
+                generatedAt,
+              )}
+              <br />
+              ${
+                rtl
+                  ? "عدد النتائج المعروضة"
+                  : "Displayed rows"
+              }:
+              ${escapeReportHtml(
+                filteredPermissions.length,
+              )}
+            </div>
+          </div>
+          <table class="summary">
+            <tbody>
+              <tr>
+                <td>
+                  ${
+                    rtl
+                      ? "إجمالي الصلاحيات"
+                      : "Total permissions"
+                  }
+                  <strong>${escapeReportHtml(
+                    permissionStats.total,
+                  )}</strong>
+                </td>
+                <td>
+                  ${
+                    rtl
+                      ? "الصلاحيات المفعلة"
+                      : "Enabled permissions"
+                  }
+                  <strong>${escapeReportHtml(
+                    permissionStats.granted,
+                  )}</strong>
+                </td>
+                <td>
+                  ${
+                    rtl
+                      ? "الصلاحيات غير المفعلة"
+                      : "Disabled permissions"
+                  }
+                  <strong>${escapeReportHtml(
+                    permissionStats.missing,
+                  )}</strong>
+                </td>
+                <td>
+                  ${
+                    rtl
+                      ? "عدد الأدوار"
+                      : "Roles"
+                  }
+                  <strong>${escapeReportHtml(
+                    permissionStats.roles,
+                  )}</strong>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="section-title">
+            ${escapeReportHtml(tableTitle)}
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>${
+                  rtl
+                    ? "كود الصلاحية"
+                    : "Permission code"
+                }</th>
+                <th>${
+                  rtl
+                    ? "المجموعة"
+                    : "Group"
+                }</th>
+                <th>${
+                  rtl
+                    ? "الصلاحية"
+                    : "Permission"
+                }</th>
+                <th>${
+                  rtl
+                    ? "الوصف"
+                    : "Description"
+                }</th>
+                <th>${
+                  rtl
+                    ? "الحالة"
+                    : "Status"
+                }</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${buildReportRows()}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+  };
+  const exportPermissionsExcel = () => {
+    if (filteredPermissions.length === 0) {
+      toast.warning(
+        rtl
+          ? "لا توجد صلاحيات مطابقة للتصدير."
+          : "There are no matching permissions to export.",
+      );
+      return;
+    }
+    const content =
+      buildReportDocument("excel");
+    const blob = new Blob(
+      ["\ufeff", content],
+      {
+        type:
+          "application/vnd.ms-excel;charset=utf-8;",
+      },
+    );
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `company-permissions-${formatEnglishDateTime(new Date()).replace(/[: ]/g, "-")}.xls`;
+    anchor.download =
+      `company-permissions-${formatEnglishDateTime(
+        new Date(),
+      )
+        .slice(0, 10)
+        .replace(/:/g, "-")}.xls`;
+    document.body.appendChild(anchor);
     anchor.click();
-    URL.revokeObjectURL(url);
+    anchor.remove();
+    window.setTimeout(
+      () => URL.revokeObjectURL(url),
+      0,
+    );
     toast.success(t.exported);
   };
-  const rolePermissionCount = (role: CompanyPermissionRole) => {
-    return expandCompanyRolePermissionKeys(role.permissions, permissions).length;
+  const printPermissions = () => {
+    if (filteredPermissions.length === 0) {
+      toast.warning(
+        rtl
+          ? "لا توجد صلاحيات مطابقة للطباعة."
+          : "There are no matching permissions to print.",
+      );
+      return;
+    }
+    const popup = window.open(
+      "",
+      "_blank",
+      "width=1400,height=900",
+    );
+    if (!popup) {
+      toast.error(
+        rtl
+          ? "تعذر فتح نافذة الطباعة."
+          : "Could not open the print window.",
+      );
+      return;
+    }
+    popup.opener = null;
+    popup.document.open();
+    popup.document.write(
+      buildReportDocument("print"),
+    );
+    popup.document.close();
+    popup.onafterprint = () => {
+      popup.close();
+    };
+    window.setTimeout(() => {
+      popup.focus();
+      popup.print();
+    }, 250);
   };
+  const summaryCards = [
+    {
+      label: rtl
+        ? "إجمالي الصلاحيات"
+        : "Total permissions",
+      value: permissionStats.total,
+      hint: rtl
+        ? "جميع صلاحيات الشركة المتاحة."
+        : "All available company permissions.",
+      icon: ShieldCheck,
+    },
+    {
+      label: rtl
+        ? "صلاحيات مفعلة"
+        : "Enabled permissions",
+      value: permissionStats.granted,
+      hint: rtl
+        ? "الصلاحيات المفعلة للدور المحدد."
+        : "Permissions enabled for the selected role.",
+      icon: CheckCircle2,
+    },
+    {
+      label: rtl
+        ? "صلاحيات غير مفعلة"
+        : "Disabled permissions",
+      value: permissionStats.missing,
+      hint: rtl
+        ? "الصلاحيات غير الممنوحة للدور المحدد."
+        : "Permissions not granted to the selected role.",
+      icon: XCircle,
+    },
+    {
+      label: rtl
+        ? "الأدوار"
+        : "Roles",
+      value: permissionStats.roles,
+      hint: rtl
+        ? "أدوار الشركة المتاحة من API."
+        : "Company roles returned by the API.",
+      icon: UsersRound,
+    },
+  ];
   return (
-    <PageShell
-      title={t.title}
-      description={t.description}
-      icon={LockKeyhole}
-      actions={
-        <>
-          <SecondaryButton onClick={() => void load()} disabled={loading}>
-            <RefreshCcw className="h-4 w-4" />
-            {t.refresh}
-          </SecondaryButton>
-          <SecondaryButton onClick={exportExcel} disabled={filteredPermissions.length === 0}>
-            <FileText className="h-4 w-4" />
-            {t.exportExcel}
-          </SecondaryButton>
-          <SecondaryButton onClick={() => window.print()}>
-            <FileText className="h-4 w-4" />
-            {t.print}
-          </SecondaryButton>
-          <PrimaryButton onClick={() => void save()} disabled={saving || loading || !selectedRole}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-            {t.savePermissions}
-          </PrimaryButton>
-        </>
-      }
-    >
-      {loading ? (
-        <LoadingBlock />
-      ) : (
-        <div className="space-y-6">
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <StatCard label={t.totalPermissions} value={permissionStats.total} hint={t.totalHint} icon={ShieldCheck} />
-            <StatCard label={t.grantedPermissions} value={permissionStats.granted} hint={t.grantedHint} icon={CheckCircle2} />
-            <StatCard label={t.missingPermissions} value={permissionStats.missing} hint={t.missingHint} icon={XCircle} />
-            <StatCard label={t.rolesCount} value={permissionStats.roles} hint={t.rolesHint} icon={UsersRound} />
-          </section>
-          <ProfileSectionCard title={t.rolesTitle} description={t.rolesDescription} icon={ShieldCheck}>
-            {roles.length === 0 ? (
-              <EmptyState title={t.noRoles} description={t.noRolesDescription} />
-            ) : (
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                {roles.map((role) => {
-                  const active = role.key === selectedRole;
-                  const count = rolePermissionCount(role);
-                  return (
-                    <button
-                      key={role.key}
-                      type="button"
-                      onClick={() => changeRole(role.key)}
-                      className={`rounded-2xl border p-4 text-start transition ${
-                        active
-                          ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                          : "border-border bg-card text-foreground hover:bg-muted/40"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-bold">{getCompanyPermissionRoleDisplayLabel(role, rtl)}</p>
-                          <p className={`mt-1 text-xs ${active ? "text-primary-foreground/75" : "text-muted-foreground"}`}>
-                            {`${formatInteger(count)} / ${formatInteger(permissions.length)}`}
-                          </p>
-                        </div>
-                        <Badge variant="outline" className={active ? "border-white/30 text-primary-foreground" : "bg-background"}>
-                          {rtl ? getCompanyPermissionRoleDisplayLabel(role, rtl) : role.key}
-                        </Badge>
+    <>
+      <main
+        data-primey-section="company-permissions-approved"
+        dir={rtl ? "rtl" : "ltr"}
+        className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8"
+      >
+        <div className="mx-auto max-w-[1500px] space-y-6">
+          <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-4xl">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
+                <LockKeyhole className="h-3.5 w-3.5" />
+                {rtl
+                  ? "إعدادات الشركة"
+                  : "Company settings"}
+              </div>
+              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                {rtl
+                  ? "صلاحيات الشركة"
+                  : "Company permissions"}
+              </h1>
+              <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">
+                {rtl
+                  ? "مراجعة صلاحيات أدوار الشركة وتحديثها من كتالوج الصلاحيات التشغيلي."
+                  : "Review and update company role permissions from the operational permissions catalog."}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                asChild
+                type="button"
+                variant="outline"
+              >
+                <Link href="/company/settings">
+                  <Settings2 className="h-4 w-4" />
+                  {rtl
+                    ? "مركز الإعدادات"
+                    : "Settings center"}
+                </Link>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={loading}
+                onClick={() =>
+                  void load(selectedRole)
+                }
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCcw className="h-4 w-4" />
+                )}
+                {rtl ? "تحديث" : "Refresh"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={
+                  loading ||
+                  filteredPermissions.length === 0
+                }
+                onClick={exportPermissionsExcel}
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                {rtl ? "تصدير Excel" : "Export Excel"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={
+                  loading ||
+                  filteredPermissions.length === 0
+                }
+                onClick={printPermissions}
+              >
+                <Printer className="h-4 w-4" />
+                {rtl ? "طباعة" : "Print"}
+              </Button>
+              <Button
+                type="button"
+                disabled={
+                  loading ||
+                  saving ||
+                  !selectedRole
+                }
+                onClick={requestSave}
+                className="bg-slate-950 text-white hover:bg-slate-800"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ShieldCheck className="h-4 w-4" />
+                )}
+                {rtl
+                  ? "حفظ الصلاحيات"
+                  : "Save permissions"}
+              </Button>
+            </div>
+          </header>
+          <section
+            aria-busy={loading}
+            className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+          >
+            {loading
+              ? Array.from({
+                  length: 4,
+                }).map((_, index) => (
+                  <UiCard
+                    key={`permissions-stat-loading-${index}`}
+                    className="min-h-[150px] rounded-2xl border bg-card shadow-none"
+                  >
+                    <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-3">
+                      <div className="min-w-0 flex-1 space-y-3">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-8 w-20" />
                       </div>
-                    </button>
+                      <Skeleton className="h-10 w-10 rounded-xl" />
+                    </CardHeader>
+                    <CardContent>
+                      <Skeleton className="h-3 w-44" />
+                    </CardContent>
+                  </UiCard>
+                ))
+              : summaryCards.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <UiCard
+                      key={item.label}
+                      className="min-h-[150px] rounded-2xl border bg-card shadow-none"
+                    >
+                      <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-3">
+                        <div className="min-w-0">
+                          <CardDescription className="text-sm">
+                            {item.label}
+                          </CardDescription>
+                          <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
+                            {formatInteger(
+                              item.value,
+                            )}
+                          </CardTitle>
+                        </div>
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-background text-muted-foreground">
+                          <Icon className="h-5 w-5" />
+                        </span>
+                      </CardHeader>
+                      <CardContent className="pt-1">
+                        <p className="text-xs leading-5 text-muted-foreground">
+                          {item.hint}
+                        </p>
+                      </CardContent>
+                    </UiCard>
                   );
                 })}
+          </section>
+          <section className="overflow-hidden rounded-2xl border bg-card shadow-none">
+            <div className="flex flex-col gap-4 border-b px-5 py-5 sm:px-6 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-base font-bold tracking-tight">
+                    {rtl
+                      ? "أدوار الشركة"
+                      : "Company roles"}
+                  </h2>
+                  <Badge
+                    variant="outline"
+                    className="rounded-full bg-background px-2.5 py-1 text-xs tabular-nums"
+                  >
+                    {formatInteger(
+                      roles.length,
+                    )}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  {rtl
+                    ? "اختر دورًا لمراجعة الصلاحيات الممنوحة له وتحديثها."
+                    : "Select a role to review and update its granted permissions."}
+                </p>
               </div>
-            )}
-          </ProfileSectionCard>
-          <ProfileSectionCard title={t.filtersTitle} description={selectedRoleRecord ? getCompanyPermissionRoleDisplayLabel(selectedRoleRecord, rtl) : t.catalogDescription} icon={Search}>
-            <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px_auto]">
-              <SearchBox value={query} onChange={setQuery} placeholder={t.searchPlaceholder} />
-              <SelectInput
-                label={t.statusFilter}
-                value={permissionFilter}
-                onChange={(value) => setPermissionFilter(value as CompanyPermissionFilter)}
-                options={[
-                  { value: "all", label: t.all },
-                  { value: "granted", label: t.granted },
-                  { value: "missing", label: t.missing },
-                ]}
-              />
-              <SelectInput
-                label={t.sortBy}
-                value={sortKey}
-                onChange={(value) => setSortKey(value as CompanyPermissionSortKey)}
-                options={[
-                  { value: "code", label: t.code },
-                  { value: "group", label: t.group },
-                  { value: "name", label: t.name },
-                ]}
-              />
-              <div className="flex items-end">
-                <SecondaryButton onClick={resetFilters}>
-                  <RefreshCcw className="h-4 w-4" />
-                  {t.reset}
-                </SecondaryButton>
+              {selectedRoleRecord ? (
+                <Badge
+                  variant="outline"
+                  className="rounded-full bg-background px-3 py-1.5 text-xs"
+                >
+                  {rtl
+                    ? "الدور المحدد"
+                    : "Selected role"}
+                  :
+                  <span className="ms-1 font-semibold">
+                    {selectedRoleRecord.label}
+                  </span>
+                </Badge>
+              ) : null}
+            </div>
+            <div className="p-5 sm:p-6">
+              {loading ? (
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  {Array.from({
+                    length: 10,
+                  }).map((_, index) => (
+                    <Skeleton
+                      key={`permissions-role-loading-${index}`}
+                      className="h-[82px] rounded-xl"
+                    />
+                  ))}
+                </div>
+              ) : roles.length ? (
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  {roles.map((role) => {
+                    const selected =
+                      selectedRole === role.key;
+                    return (
+                      <Button
+                        key={role.key}
+                        type="button"
+                        variant={
+                          selected
+                            ? "default"
+                            : "outline"
+                        }
+                        onClick={() =>
+                          changeRole(role.key)
+                        }
+                        className="h-auto min-h-[82px] justify-between whitespace-normal rounded-xl px-4 py-3 text-start"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-bold">
+                            {role.label ||
+                              role.key}
+                          </span>
+                          <span
+                            dir="ltr"
+                            className={`mt-1 block truncate text-xs ${
+                              selected
+                                ? "text-primary-foreground/70"
+                                : "text-muted-foreground"
+                            }`}
+                          >
+                            {role.key}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-xs tabular-nums">
+                          {formatInteger(
+                            rolePermissionCount(
+                              role,
+                            ),
+                          )}
+                          {" / "}
+                          {formatInteger(
+                            permissions.length,
+                          )}
+                        </span>
+                      </Button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <EmptyState
+                  title={
+                    rtl
+                      ? "لا توجد أدوار"
+                      : "No roles"
+                  }
+                  description={
+                    rtl
+                      ? "ستظهر أدوار الشركة هنا عند إعادتها من API."
+                      : "Company roles will appear here when returned by the API."
+                  }
+                />
+              )}
+            </div>
+          </section>
+          <section className="overflow-hidden rounded-2xl border bg-card shadow-none">
+            <div className="flex flex-col gap-4 border-b px-5 py-5 sm:px-6 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-base font-bold tracking-tight">
+                    {rtl
+                      ? "كتالوج الصلاحيات"
+                      : "Permissions catalog"}
+                  </h2>
+                  <Badge
+                    variant="outline"
+                    className="rounded-full bg-background px-2.5 py-1 text-xs tabular-nums"
+                  >
+                    {formatInteger(
+                      filteredPermissions.length,
+                    )}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  {rtl
+                    ? "البحث والتصفية وتحديد صلاحيات الدور الحالي، ثم حفظ التغييرات."
+                    : "Search, filter, select permissions for the current role, then save the changes."}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={
+                    loading ||
+                    filteredPermissions.length === 0
+                  }
+                  onClick={exportPermissionsExcel}
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  {rtl
+                    ? "تصدير Excel"
+                    : "Export Excel"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={
+                    loading ||
+                    filteredPermissions.length === 0
+                  }
+                  onClick={printPermissions}
+                >
+                  <Printer className="h-4 w-4" />
+                  {rtl ? "طباعة" : "Print"}
+                </Button>
               </div>
             </div>
-          </ProfileSectionCard>
-          <ProfileSectionCard
-            title={t.catalogTitle}
-            description={`${t.catalogDescription} ? ${formatInteger(filteredPermissions.length)} / ${formatInteger(permissions.length)} ? ${formatInteger(groups.length)} ${t.group}`}
-            icon={LockKeyhole}
-          >
-            {permissions.length === 0 ? (
-              <EmptyState title={t.noPermissions} description={t.noPermissionsDescription} />
-            ) : filteredPermissions.length === 0 ? (
-              <EmptyState title={t.noResults} description={t.noResultsDescription} />
-            ) : (
-              <div className="space-y-4">
-                {Object.entries(groupedPermissions).map(([group, items]) => (
-                  <div key={group} className="overflow-hidden rounded-2xl border bg-card">
-                    <div className="flex items-center justify-between gap-3 border-b bg-muted/30 px-4 py-3">
-                      <div>
-                        <p className="text-sm font-bold text-foreground">{getCompanyPermissionGroupDisplayLabel(group, rtl)}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">{formatInteger(items.length)} {t.permission}</p>
-                      </div>
-                      <Badge variant="outline" className="rounded-full bg-background">
-                        {formatInteger(items.filter((item) => selectedPermissions.includes(item.key)).length)} / {formatInteger(items.length)}
-                      </Badge>
-                    </div>
-                    <div className="divide-y">
-                      {items.map((permission) => {
-                        const granted = selectedPermissions.includes(permission.key);
-                        return (
-                          <label key={permission.key} className="flex cursor-pointer items-start gap-3 px-4 py-3 transition hover:bg-muted/30">
-                            <input
-                              type="checkbox"
-                              checked={granted}
-                              onChange={() => togglePermission(permission.key)}
-                              className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                            />
-                            <span className="min-w-0 flex-1">
-                              <span className="flex flex-wrap items-center gap-2">
-                                <span className="font-semibold text-foreground">{getCompanyPermissionDisplayLabel(permission, rtl)}</span>
-                                <Badge
-                                  variant="outline"
-                                  className="rounded-full bg-background px-2 py-0.5 text-[11px]"
-                                  title={permission.key}
-                                >
-                                  {rtl ? getCompanyPermissionGroupDisplayLabel(permission.group, rtl) : permission.key}
-                                </Badge>
-                              </span>
-                              {permission.description ? (
-                                <span className="mt-1 block text-xs leading-5 text-muted-foreground">{permission.description}</span>
-                              ) : null}
-                            </span>
-                            <StatusPill active={granted} />
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
+            <div className="border-b p-4 sm:p-5">
+              <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_190px_190px_auto]">
+                <SearchBox
+                  value={query}
+                  onChange={setQuery}
+                  placeholder={
+                    rtl
+                      ? "ابحث بكود الصلاحية أو الاسم أو المجموعة أو الوصف..."
+                      : "Search by permission code, name, group, or description..."
+                  }
+                />
+                <Select
+                  value={permissionFilter}
+                  onValueChange={(value) =>
+                    setPermissionFilter(
+                      value as CompanyPermissionFilter,
+                    )
+                  }
+                >
+                  <SelectTrigger className="h-11 bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent
+                    position="popper"
+                    className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain"
+                  >
+                    <SelectItem value="all">
+                      {rtl
+                        ? "الحالة: الكل"
+                        : "Status: All"}
+                    </SelectItem>
+                    <SelectItem value="granted">
+                      {rtl
+                        ? "الحالة: مفعلة"
+                        : "Status: Enabled"}
+                    </SelectItem>
+                    <SelectItem value="missing">
+                      {rtl
+                        ? "الحالة: غير مفعلة"
+                        : "Status: Disabled"}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={sortKey}
+                  onValueChange={(value) =>
+                    setSortKey(
+                      value as CompanyPermissionSortKey,
+                    )
+                  }
+                >
+                  <SelectTrigger className="h-11 bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent
+                    position="popper"
+                    className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain"
+                  >
+                    <SelectItem value="code">
+                      {rtl
+                        ? "الترتيب: الكود"
+                        : "Sort: Code"}
+                    </SelectItem>
+                    <SelectItem value="group">
+                      {rtl
+                        ? "الترتيب: المجموعة"
+                        : "Sort: Group"}
+                    </SelectItem>
+                    <SelectItem value="name">
+                      {rtl
+                        ? "الترتيب: الاسم"
+                        : "Sort: Name"}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!filtersActive}
+                  onClick={resetFilters}
+                  className="h-11"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  {rtl
+                    ? "إعادة ضبط"
+                    : "Reset"}
+                </Button>
               </div>
-            )}
-          </ProfileSectionCard>
+            </div>
+            <div className="flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted-foreground">
+                {rtl
+                  ? "المعروض"
+                  : "Showing"}
+                :
+                <span className="mx-1 font-semibold text-foreground tabular-nums">
+                  {formatInteger(
+                    filteredPermissions.length,
+                  )}
+                </span>
+                {rtl
+                  ? "من"
+                  : "of"}
+                <span className="mx-1 font-semibold text-foreground tabular-nums">
+                  {formatInteger(
+                    permissions.length,
+                  )}
+                </span>
+                {rtl
+                  ? "صلاحية"
+                  : "permissions"}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={
+                    loading ||
+                    filteredPermissions.length === 0
+                  }
+                  onClick={selectAllVisible}
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  {rtl
+                    ? "تحديد المعروض"
+                    : "Select visible"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={
+                    loading ||
+                    filteredPermissions.length === 0
+                  }
+                  onClick={clearVisible}
+                >
+                  <XCircle className="h-4 w-4" />
+                  {rtl
+                    ? "إلغاء تحديد المعروض"
+                    : "Clear visible"}
+                </Button>
+              </div>
+            </div>
+            <div className="p-5 sm:p-6">
+              {loading ? (
+                <div className="space-y-4">
+                  {Array.from({
+                    length: 3,
+                  }).map((_, groupIndex) => (
+                    <div
+                      key={`permissions-group-loading-${groupIndex}`}
+                      className="overflow-hidden rounded-xl border"
+                    >
+                      <div className="border-b bg-muted/20 px-4 py-4">
+                        <Skeleton className="h-5 w-40" />
+                      </div>
+                      <div className="divide-y">
+                        {Array.from({
+                          length: 4,
+                        }).map((_, rowIndex) => (
+                          <div
+                            key={`permissions-row-loading-${groupIndex}-${rowIndex}`}
+                            className="flex min-h-[76px] items-center gap-4 px-4 py-3"
+                          >
+                            <Skeleton className="h-5 w-5 rounded" />
+                            <div className="flex-1 space-y-2">
+                              <Skeleton className="h-4 w-48" />
+                              <Skeleton className="h-3 w-72" />
+                            </div>
+                            <Skeleton className="h-6 w-16 rounded-full" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : permissions.length === 0 ? (
+                <EmptyState
+                  title={
+                    rtl
+                      ? "لا توجد صلاحيات"
+                      : "No permissions"
+                  }
+                  description={
+                    rtl
+                      ? "ستظهر صلاحيات الشركة هنا عند إعادتها من API."
+                      : "Company permissions will appear here when returned by the API."
+                  }
+                />
+              ) : filteredPermissions.length === 0 ? (
+                <EmptyState
+                  title={
+                    rtl
+                      ? "لا توجد نتائج مطابقة"
+                      : "No matching results"
+                  }
+                  description={
+                    rtl
+                      ? "غيّر البحث أو الفلاتر الحالية لعرض صلاحيات أخرى."
+                      : "Change the current search or filters to display other permissions."
+                  }
+                />
+              ) : (
+                <div className="space-y-4">
+                  {Object.entries(
+                    groupedPermissions,
+                  ).map(([group, rows]) => (
+                    <section
+                      key={group}
+                      className="overflow-hidden rounded-xl border bg-background"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/20 px-4 py-4">
+                        <div>
+                          <h3 className="text-sm font-bold text-foreground">
+                            {getCompanyPermissionGroupDisplayLabel(
+                              group,
+                              rtl,
+                            )}
+                          </h3>
+                          <p
+                            dir="ltr"
+                            className="mt-1 text-xs text-muted-foreground"
+                          >
+                            {group}
+                          </p>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className="rounded-full bg-background px-2.5 py-1 text-xs tabular-nums"
+                        >
+                          {formatInteger(
+                            rows.length,
+                          )}
+                        </Badge>
+                      </div>
+                      <div className="divide-y">
+                        {rows.map((permission) => {
+                          const enabled =
+                            selectedPermissionSet.has(
+                              permission.key,
+                            );
+                          return (
+                            <label
+                              key={permission.key}
+                              htmlFor={`company-permission-${permission.key}`}
+                              className="flex cursor-pointer items-start gap-4 px-4 py-4 transition-colors hover:bg-muted/20"
+                            >
+                              <Checkbox
+                                id={`company-permission-${permission.key}`}
+                                checked={enabled}
+                                disabled={
+                                  saving ||
+                                  !selectedRole
+                                }
+                                onCheckedChange={() =>
+                                  togglePermission(
+                                    permission.key,
+                                  )
+                                }
+                                className="mt-1 shrink-0"
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span className="flex flex-wrap items-center gap-2">
+                                  <span className="text-sm font-bold text-foreground">
+                                    {getCompanyPermissionDisplayLabel(
+                                      permission,
+                                      rtl,
+                                    )}
+                                  </span>
+                                  {permission.scope ? (
+                                    <Badge
+                                      variant="outline"
+                                      className="rounded-full bg-background px-2 py-0.5 text-[10px]"
+                                    >
+                                      {permission.scope}
+                                    </Badge>
+                                  ) : null}
+                                </span>
+                                <span
+                                  dir="ltr"
+                                  className="mt-1 block break-all text-xs tabular-nums text-muted-foreground"
+                                >
+                                  {permission.key}
+                                </span>
+                                <span className="mt-2 block text-xs leading-5 text-muted-foreground">
+                                  {getCompanyPermissionDescriptionDisplay(
+                                    permission,
+                                    rtl,
+                                  )}
+                                </span>
+                              </span>
+                              <Badge
+                                variant="outline"
+                                className={`mt-1 shrink-0 rounded-full px-2.5 py-1 text-xs ${
+                                  enabled
+                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                    : "border-slate-200 bg-slate-50 text-slate-600"
+                                }`}
+                              >
+                                {enabled
+                                  ? rtl
+                                    ? "مفعلة"
+                                    : "Enabled"
+                                  : rtl
+                                    ? "غير مفعلة"
+                                    : "Disabled"}
+                              </Badge>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col gap-4 border-t bg-muted/10 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  {rtl
+                    ? "صلاحيات الدور المحدد"
+                    : "Selected role permissions"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {selectedRoleRecord
+                    ? `${selectedRoleRecord.label}: ${formatInteger(
+                        permissionStats.granted,
+                      )} / ${formatInteger(
+                        permissionStats.total,
+                      )}`
+                    : rtl
+                      ? "اختر دورًا أولًا."
+                      : "Select a role first."}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={
+                    loading ||
+                    saving ||
+                    !selectedRole
+                  }
+                  onClick={resetRolePermissions}
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  {rtl
+                    ? "استعادة المحفوظ"
+                    : "Restore saved"}
+                </Button>
+                <Button
+                  type="button"
+                  disabled={
+                    loading ||
+                    saving ||
+                    !selectedRole
+                  }
+                  onClick={requestSave}
+                  className="bg-slate-950 text-white hover:bg-slate-800"
+                >
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ShieldCheck className="h-4 w-4" />
+                  )}
+                  {rtl
+                    ? "حفظ الصلاحيات"
+                    : "Save permissions"}
+                </Button>
+              </div>
+            </div>
+          </section>
         </div>
-      )}
-    </PageShell>
+      </main>
+      <AlertDialog
+        open={confirmSaveOpen}
+        onOpenChange={(open) => {
+          if (!saving) {
+            setConfirmSaveOpen(open);
+          }
+        }}
+      >
+        <AlertDialogContent
+          dir={rtl ? "rtl" : "ltr"}
+          className="sm:max-w-[500px]"
+        >
+          <AlertDialogHeader className="text-start">
+            <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-900">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <AlertDialogTitle>
+              {rtl
+                ? "تأكيد حفظ الصلاحيات"
+                : "Confirm permission changes"}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="leading-6">
+              {rtl
+                ? "سيتم تحديث صلاحيات الدور المحدد وفق الاختيارات الحالية."
+                : "The selected role permissions will be updated using the current selections."}
+              {selectedRoleRecord ? (
+                <span className="mt-3 block rounded-lg border bg-muted/30 px-3 py-3 text-foreground">
+                  <span className="block font-semibold">
+                    {selectedRoleRecord.label}
+                  </span>
+                  <span className="mt-1 block text-xs text-muted-foreground tabular-nums">
+                    {rtl
+                      ? "الصلاحيات المفعلة"
+                      : "Enabled permissions"}
+                    :
+                    {" "}
+                    {formatInteger(
+                      permissionStats.granted,
+                    )}
+                    {" / "}
+                    {formatInteger(
+                      permissionStats.total,
+                    )}
+                  </span>
+                </span>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel
+              disabled={saving}
+            >
+              {rtl ? "إلغاء" : "Cancel"}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={saving}
+              onClick={(event) => {
+                event.preventDefault();
+                void savePermissions();
+              }}
+              className="bg-slate-950 text-white hover:bg-slate-800"
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ShieldCheck className="h-4 w-4" />
+              )}
+              {rtl
+                ? "تأكيد الحفظ"
+                : "Confirm save"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 

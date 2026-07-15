@@ -38,8 +38,19 @@ import {
   Wifi,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
   CardContent,
@@ -48,7 +59,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 type Locale = "ar" | "en";
 type ApiRecord = Record<string, unknown>;
@@ -160,6 +179,11 @@ const translations = {
     createPairingDesc: "توليد كود ربط باستخدام رقم الهاتف.",
     disconnect: "فصل الاتصال",
     disconnectDesc: "فصل الجلسة الحالية وتنظيف حالة الربط.",
+    disconnectConfirmTitle: "تأكيد فصل اتصال واتساب",
+    disconnectConfirmDesc:
+      "سيتم فصل الجلسة الحالية وإيقاف الربط على هذا الجهاز. لن يتم حذف إعدادات واتساب المحفوظة.",
+    confirmDisconnect: "فصل الاتصال",
+    cancel: "إلغاء",
     settingsTitle: "بيانات اتصال واتساب الشركة",
     settingsDesc: "هذه البيانات تخص واتساب الشركة ولا تكشف التوكنات المحفوظة.",
     provider: "المزود",
@@ -209,7 +233,7 @@ const translations = {
     messageBody: "نص الرسالة",
     sendTest: "إرسال اختبار",
     gatewayHint:
-      "Gateway غير مضبوط. للتفعيل الحقيقي شغل WhatsApp Session Gateway واضبط WHATSAPP_SESSION_GATEWAY_URL في .env.",
+      "بوابة اتصال واتساب غير مهيأة بعد. أكمل إعداد الاتصال من إعدادات النظام أو تواصل مع مسؤول المنصة.",
     loadError: "تعذر تحميل إعدادات واتساب الشركة.",
     saveSuccess: "تم حفظ إعدادات واتساب الشركة.",
     saveError: "تعذر حفظ إعدادات واتساب الشركة.",
@@ -266,6 +290,11 @@ const translations = {
     createPairingDesc: "Generate a pairing code using the phone number.",
     disconnect: "Disconnect",
     disconnectDesc: "Disconnect the current session and clear link state.",
+    disconnectConfirmTitle: "Confirm WhatsApp disconnection",
+    disconnectConfirmDesc:
+      "The current session will be disconnected from this device. Saved WhatsApp settings will not be deleted.",
+    confirmDisconnect: "Disconnect",
+    cancel: "Cancel",
     settingsTitle: "Company WhatsApp connection details",
     settingsDesc: "These details belong to the official company WhatsApp and do not expose saved tokens.",
     provider: "Provider",
@@ -315,7 +344,7 @@ const translations = {
     messageBody: "Message body",
     sendTest: "Send test",
     gatewayHint:
-      "Gateway is not configured. For real activation, run WhatsApp Session Gateway and set WHATSAPP_SESSION_GATEWAY_URL in .env.",
+      "The WhatsApp connection gateway is not configured yet. Complete the platform connection setup or contact the system administrator.",
     loadError: "Failed to load company WhatsApp settings.",
     saveSuccess: "Company WhatsApp settings saved.",
     saveError: "Failed to save company WhatsApp settings.",
@@ -481,15 +510,30 @@ function statusBadgeClass(status: string): string {
   }
   return "border-muted-foreground/30 text-muted-foreground";
 }
-function formatDate(value: string, locale: Locale, fallback: string): string {
+function formatDate(value: string, _locale: Locale, fallback: string): string {
   if (!value) return fallback;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(locale === "ar" ? "ar-SA" : "en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
+
+  return new Intl.DateTimeFormat("en-GB", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
   }).format(date);
 }
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function KpiCard({
   title,
   value,
@@ -502,42 +546,52 @@ function KpiCard({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <Card className="overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
+    <Card className="rounded-xl border bg-background shadow-none">
+      <CardContent className="flex min-h-[132px] items-start justify-between gap-4 p-5">
         <div className="min-w-0">
-          <CardDescription className="truncate text-sm">{title}</CardDescription>
-          <CardTitle className="mt-2 truncate text-2xl font-bold tracking-tight">
+          <p className="text-sm text-muted-foreground">{title}</p>
+          <p className="mt-3 truncate text-2xl font-bold tracking-tight text-foreground">
             {value}
-          </CardTitle>
+          </p>
+          <p className="mt-5 line-clamp-2 text-xs leading-5 text-muted-foreground">
+            {description}
+          </p>
         </div>
-        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
-          <Icon className="h-5 w-5" />
+
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-muted/20 text-muted-foreground">
+          <Icon className="h-4 w-4" />
         </span>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
       </CardContent>
     </Card>
   );
 }
+
 function QuickLinkCard({ action }: { action: QuickLink }) {
   const Icon = action.icon;
+
   return (
-    <Card className="group rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <Link href={action.href} className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+    <Card className="group rounded-xl border bg-background shadow-none transition-colors hover:bg-muted/20">
+      <Link
+        href={action.href}
+        className="block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <CardContent className="flex min-h-[102px] items-start justify-between gap-4 p-5">
           <div className="min-w-0">
-            <CardTitle className="text-base">{action.title}</CardTitle>
-            <CardDescription className="mt-2 line-clamp-2">{action.description}</CardDescription>
+            <p className="text-sm font-semibold text-foreground">{action.title}</p>
+            <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">
+              {action.description}
+            </p>
           </div>
-          <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
-            <Icon className="h-5 w-5" />
+
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-muted/20 text-muted-foreground">
+            <Icon className="h-4 w-4" />
           </span>
-        </CardHeader>
+        </CardContent>
       </Link>
     </Card>
   );
 }
+
 function ActionCard({
   title,
   description,
@@ -556,27 +610,40 @@ function ActionCard({
   onClick: () => void;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "group rounded-2xl border border-border/70 bg-card p-5 text-start shadow-sm transition hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60",
-        danger && "hover:border-destructive/30",
+        "h-auto min-h-[102px] w-full justify-between whitespace-normal rounded-xl bg-background p-5 text-start shadow-none",
+        danger &&
+          "border-red-200 text-red-700 hover:border-red-300 hover:bg-red-50 hover:text-red-800",
       )}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h3 className="font-semibold">{title}</h3>
-          <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{description}</p>
-        </div>
-        <span className={cn("rounded-2xl p-2.5", danger ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary")}>
-          {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Icon className="h-5 w-5" />}
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold">{title}</span>
+        <span className="mt-2 block line-clamp-2 text-xs font-normal leading-5 text-muted-foreground">
+          {description}
         </span>
-      </div>
-    </button>
+      </span>
+
+      <span
+        className={cn(
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-muted/20 text-muted-foreground",
+          danger && "border-red-200 bg-red-50 text-red-600",
+        )}
+      >
+        {loading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Icon className="h-4 w-4" />
+        )}
+      </span>
+    </Button>
   );
 }
+
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return <label className="text-xs font-semibold text-muted-foreground">{children}</label>;
 }
@@ -597,30 +664,35 @@ function ToggleRow({
   checked: boolean;
   onChange: (checked: boolean) => void;
 }) {
+  const id = React.useId();
+
   return (
-    <label className="flex items-center justify-between gap-3 rounded-2xl border bg-background px-4 py-3 text-sm">
+    <label
+      htmlFor={id}
+      className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl border bg-background px-4 py-3 text-sm"
+    >
       <span className="font-medium">{label}</span>
-      <input
-        type="checkbox"
+      <Checkbox
+        id={id}
         checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="h-4 w-4 accent-foreground"
+        onCheckedChange={(value) => onChange(value === true)}
       />
     </label>
   );
 }
+
 function SettingsSkeleton({ dir }: { dir: "rtl" | "ltr" }) {
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
-        <div className="rounded-3xl border bg-card p-6 shadow-sm">
+        <div className="rounded-xl border bg-background p-6 shadow-none">
           <Skeleton className="h-5 w-40" />
           <Skeleton className="mt-3 h-8 w-72" />
           <Skeleton className="mt-3 h-4 w-full max-w-3xl" />
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => (
-            <Card key={index} className="rounded-2xl">
+            <Card key={index} className="rounded-xl border bg-background shadow-none">
               <CardHeader>
                 <Skeleton className="h-4 w-28" />
                 <Skeleton className="h-8 w-20" />
@@ -631,7 +703,7 @@ function SettingsSkeleton({ dir }: { dir: "rtl" | "ltr" }) {
             </Card>
           ))}
         </div>
-        <Card className="rounded-2xl">
+        <Card className="rounded-xl border bg-background shadow-none">
           <CardHeader>
             <Skeleton className="h-6 w-52" />
             <Skeleton className="h-4 w-96 max-w-full" />
@@ -653,6 +725,7 @@ export default function CompanyWhatsAppSettingsPage() {
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState("");
   const [actionLoading, setActionLoading] = React.useState<ConnectionAction | "">("");
+  const [disconnectDialogOpen, setDisconnectDialogOpen] = React.useState(false);
   const [testRecipient, setTestRecipient] = React.useState("");
   const [testBody, setTestBody] = React.useState(DEFAULT_TEST_BODY);
   const t = translations[locale];
@@ -799,7 +872,160 @@ export default function CompanyWhatsAppSettingsPage() {
     if (kind === "pdf") {
       toast.info(t.pdfHint);
     }
-    window.print();
+
+    const printWindow = window.open("", "_blank", "noopener,noreferrer");
+
+    if (!printWindow) {
+      toast.error(t.actionError);
+      return;
+    }
+
+    const isArabic = locale === "ar";
+    const printedAt = new Intl.DateTimeFormat("en-GB", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date());
+
+    const summaryRows = [
+      [t.connectionStatus, statusText],
+      [t.gatewayStatus, gatewayText],
+      [t.tokenStatus, tokenText],
+      [t.sessionMode, modeText],
+    ];
+
+    const settingRows = [
+      [t.provider, form.provider || "—"],
+      [t.businessName, form.business_name || "—"],
+      [t.phoneNumber, form.phone_number || "—"],
+      [t.sessionName, form.session_name || "—"],
+      [t.apiVersion, form.api_version || "—"],
+      [t.defaultLanguage, form.default_language_code || "—"],
+      [t.defaultCountry, form.default_country_code || "—"],
+      [t.connectedPhone, connection?.sessionConnectedPhone || "—"],
+      [t.deviceLabel, connection?.sessionDeviceLabel || "—"],
+      [
+        t.lastConnected,
+        formatDate(connection?.sessionLastConnectedAt || "", locale, "—"),
+      ],
+      [
+        t.lastHealth,
+        formatDate(connection?.lastHealthCheckAt || "", locale, "—"),
+      ],
+    ];
+
+    const summaryHtml = summaryRows
+      .map(
+        ([label, value]) =>
+          `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`,
+      )
+      .join("");
+
+    const settingsHtml = settingRows
+      .map(
+        ([label, value]) =>
+          `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`,
+      )
+      .join("");
+
+    const documentTitle = isArabic
+      ? "تقرير إعدادات واتساب الشركة"
+      : "Company WhatsApp Settings Report";
+    const printedAtLabel = isArabic ? "تاريخ الطباعة" : "Printed at";
+    const note = isArabic
+      ? "لا يتضمن هذا التقرير أي مفاتيح أو توكنات سرية."
+      : "This report does not include secret keys or tokens.";
+
+    printWindow.document.open();
+    printWindow.document.write(`<!doctype html>
+<html lang="${isArabic ? "ar" : "en"}" dir="${dir}">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(documentTitle)}</title>
+  <style>
+    @page { size: A4; margin: 12mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: #111827;
+      background: #ffffff;
+      font-family: Tahoma, Arial, sans-serif;
+      font-size: 12px;
+    }
+    .header {
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #111827;
+    }
+    h1 { margin: 0; font-size: 22px; }
+    .meta { margin-top: 6px; color: #4b5563; }
+    .section-title {
+      margin: 16px 0 7px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 1px solid #111827;
+      padding: 7px 8px;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+    th {
+      width: 34%;
+      background: #f3f4f6;
+      text-align: ${isArabic ? "right" : "left"};
+    }
+    td { text-align: ${isArabic ? "right" : "left"}; }
+    .note {
+      margin-top: 12px;
+      padding: 8px;
+      border: 1px solid #9ca3af;
+      background: #f9fafb;
+    }
+    .footer {
+      margin-top: 12px;
+      color: #6b7280;
+      font-size: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>${escapeHtml(form.business_name || t.title)}</div>
+    <h1>${escapeHtml(documentTitle)}</h1>
+    <div class="meta">${escapeHtml(printedAtLabel)}: ${escapeHtml(printedAt)}</div>
+  </div>
+
+  <div class="section-title">${escapeHtml(
+    isArabic ? "ملخص الاتصال" : "Connection summary",
+  )}</div>
+  <table><tbody>${summaryHtml}</tbody></table>
+
+  <div class="section-title">${escapeHtml(
+    isArabic ? "بيانات الإعداد" : "Settings details",
+  )}</div>
+  <table><tbody>${settingsHtml}</tbody></table>
+
+  <div class="note">${escapeHtml(note)}</div>
+  <div class="footer">PrimeyAcc</div>
+
+  <script>
+    window.addEventListener("load", function () {
+      window.focus();
+      window.print();
+    });
+  </script>
+</body>
+</html>`);
+    printWindow.document.close();
   }
 
   async function copyPairingCode() {
@@ -840,7 +1066,7 @@ export default function CompanyWhatsAppSettingsPage() {
   if (loading) return <SettingsSkeleton dir={dir} />;
   if (error) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+      <main dir={dir} className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
         <Card className="mx-auto max-w-3xl rounded-3xl border-destructive/30 bg-card shadow-sm">
           <CardHeader className="text-center">
             <div className="mx-auto mb-2 rounded-full bg-destructive/10 p-4 text-destructive">
@@ -861,63 +1087,100 @@ export default function CompanyWhatsAppSettingsPage() {
     );
   }
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
-          <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-              <div className="max-w-4xl">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  {t.badge}
-                </div>
-                <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{t.title}</h1>
-                <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">{t.subtitle}</p>
-                {!connection?.gatewayConfigured ? (
-                  <div className="mt-4 flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                    <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span>{t.gatewayHint}</span>
-                  </div>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="outline"
-                  className="rounded-xl bg-background"
-                  onClick={() => void loadConnection({ silent: true })}
-                  disabled={refreshing}
-                >
-                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  {t.refresh}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("print")}>
-                  <Printer className="h-4 w-4" />
-                  {t.print}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("pdf")}>
-                  <FileText className="h-4 w-4" />
-                  {t.pdf}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={resetLocalForm}>
-                  <RotateCcw className="h-4 w-4" />
-                  {t.reset}
-                </Button>
-                <Button className="rounded-xl" onClick={() => void saveSettings()} disabled={saving}>
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  {t.save}
-                </Button>
-              </div>
-            </div>
+        <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between rtl:lg:flex-row-reverse">
+          <div className="order-2 flex flex-wrap items-center gap-2 lg:order-1">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 bg-background shadow-none"
+              onClick={() => void loadConnection({ silent: true })}
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {t.refresh}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 bg-background shadow-none"
+              onClick={() => openPrintWindow("print")}
+            >
+              <Printer className="h-4 w-4" />
+              {t.print}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 bg-background shadow-none"
+              onClick={() => openPrintWindow("pdf")}
+            >
+              <FileText className="h-4 w-4" />
+              {t.pdf}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 bg-background shadow-none"
+              onClick={resetLocalForm}
+            >
+              <RotateCcw className="h-4 w-4" />
+              {t.reset}
+            </Button>
+
+            <Button
+              type="button"
+              className="h-9 shadow-none"
+              onClick={() => void saveSettings()}
+              disabled={saving}
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              {t.save}
+            </Button>
           </div>
-        </section>
+
+          <div className="order-1 max-w-4xl text-start lg:order-2">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
+              <Sparkles className="h-3.5 w-3.5" />
+              {t.badge}
+            </div>
+
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">
+              {t.title}
+            </h1>
+
+            <p className="mt-3 text-sm leading-7 text-muted-foreground">
+              {t.subtitle}
+            </p>
+
+            {!connection?.gatewayConfigured ? (
+              <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{t.gatewayHint}</span>
+              </div>
+            ) : null}
+          </div>
+        </header>
+
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <KpiCard title={t.connectionStatus} value={statusText} description={t.fromLiveApi} icon={Power} />
           <KpiCard title={t.gatewayStatus} value={gatewayText} description={t.fromLiveApi} icon={Webhook} />
           <KpiCard title={t.tokenStatus} value={tokenText} description={t.fromLiveApi} icon={KeyRound} />
           <KpiCard title={t.sessionMode} value={modeText} description={t.fromLiveApi} icon={Wifi} />
         </div>
-        <Card className="rounded-2xl shadow-sm">
+        <Card className="rounded-xl border bg-background shadow-none">
           <CardHeader>
             <CardTitle>{t.pageLinksTitle}</CardTitle>
             <CardDescription>{t.pageLinksDesc}</CardDescription>
@@ -930,7 +1193,7 @@ export default function CompanyWhatsAppSettingsPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="rounded-2xl shadow-sm">
+        <Card className="rounded-xl border bg-background shadow-none">
           <CardHeader>
             <CardTitle>{t.actionsTitle}</CardTitle>
             <CardDescription>{t.actionsDesc}</CardDescription>
@@ -968,13 +1231,13 @@ export default function CompanyWhatsAppSettingsPage() {
                 loading={actionLoading === "disconnect"}
                 disabled={Boolean(actionLoading)}
                 danger
-                onClick={() => void runConnectionAction("disconnect")}
+                onClick={() => setDisconnectDialogOpen(true)}
               />
             </div>
           </CardContent>
         </Card>
         <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-xl border bg-background shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Settings2 className="h-5 w-5" />
@@ -986,16 +1249,20 @@ export default function CompanyWhatsAppSettingsPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
                   <FieldLabel>{t.provider}</FieldLabel>
-                  <select
+                  <Select
                     value={form.provider}
-                    onChange={(event) => updateField("provider", event.target.value)}
-                    className="h-10 rounded-xl border bg-background px-3 text-sm"
+                    onValueChange={(value) => updateField("provider", value)}
                   >
-                    <option value="WEB_SESSION">WEB_SESSION</option>
-                    <option value="WHATSAPP_CLOUD">WHATSAPP_CLOUD</option>
-                    <option value="CUSTOM">CUSTOM</option>
-                    <option value="MOCK">MOCK</option>
-                  </select>
+                    <SelectTrigger className="h-10 w-full rounded-xl bg-background shadow-none">
+                      <SelectValue placeholder={t.provider} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="WEB_SESSION">WEB_SESSION</SelectItem>
+                      <SelectItem value="WHATSAPP_CLOUD">WHATSAPP_CLOUD</SelectItem>
+                      <SelectItem value="CUSTOM">CUSTOM</SelectItem>
+                      <SelectItem value="MOCK">MOCK</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid gap-2">
                   <FieldLabel>{t.businessName}</FieldLabel>
@@ -1011,14 +1278,18 @@ export default function CompanyWhatsAppSettingsPage() {
                 </div>
                 <div className="grid gap-2">
                   <FieldLabel>{t.sessionMode}</FieldLabel>
-                  <select
+                  <Select
                     value={form.session_mode}
-                    onChange={(event) => updateField("session_mode", event.target.value)}
-                    className="h-10 rounded-xl border bg-background px-3 text-sm"
+                    onValueChange={(value) => updateField("session_mode", value)}
                   >
-                    <option value="qr">QR</option>
-                    <option value="pairing_code">Pairing Code</option>
-                  </select>
+                    <SelectTrigger className="h-10 w-full rounded-xl bg-background shadow-none">
+                      <SelectValue placeholder={t.sessionMode} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="qr">QR</SelectItem>
+                      <SelectItem value="pairing_code">Pairing Code</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid gap-2">
                   <FieldLabel>{t.apiVersion}</FieldLabel>
@@ -1053,7 +1324,7 @@ export default function CompanyWhatsAppSettingsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-xl border bg-background shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Power className="h-5 w-5" />
@@ -1079,7 +1350,7 @@ export default function CompanyWhatsAppSettingsPage() {
           </Card>
         </section>
         <section className="grid gap-6 xl:grid-cols-2">
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-xl border bg-background shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Webhook className="h-5 w-5" />
@@ -1109,7 +1380,7 @@ export default function CompanyWhatsAppSettingsPage() {
               <ToggleRow label={t.webhookVerified} checked={form.webhook_verified} onChange={(checked) => updateField("webhook_verified", checked)} />
             </CardContent>
           </Card>
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-xl border bg-background shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <SendHorizontal className="h-5 w-5" />
@@ -1128,11 +1399,11 @@ export default function CompanyWhatsAppSettingsPage() {
               </div>
               <div className="grid gap-2">
                 <FieldLabel>{t.messageBody}</FieldLabel>
-                <textarea
+                <Textarea
                   value={testBody}
                   onChange={(event) => setTestBody(event.target.value)}
                   rows={5}
-                  className="min-h-28 rounded-xl border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="min-h-28 resize-y rounded-xl bg-background shadow-none"
                 />
               </div>
               <Button className="w-full rounded-xl" disabled={Boolean(actionLoading) || !testRecipient} onClick={() => void runConnectionAction("test")}>
@@ -1143,7 +1414,7 @@ export default function CompanyWhatsAppSettingsPage() {
           </Card>
         </section>
         <section className="grid gap-6 xl:grid-cols-2">
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-xl border bg-background shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <QrCode className="h-5 w-5" />
@@ -1164,7 +1435,7 @@ export default function CompanyWhatsAppSettingsPage() {
               )}
             </CardContent>
           </Card>
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-xl border bg-background shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Smartphone className="h-5 w-5" />
@@ -1196,6 +1467,61 @@ export default function CompanyWhatsAppSettingsPage() {
           </Card>
         </section>
       </div>
+
+      <AlertDialog
+        open={disconnectDialogOpen}
+        onOpenChange={(open) => {
+          if (actionLoading !== "disconnect") {
+            setDisconnectDialogOpen(open);
+          }
+        }}
+      >
+        <AlertDialogContent dir={dir}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t.disconnectConfirmTitle}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t.disconnectConfirmDesc}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="rounded-xl border bg-muted/20 px-4 py-3">
+            <p className="text-sm font-semibold text-foreground">
+              {connection?.businessName || form.business_name || t.title}
+            </p>
+            <p
+              dir="ltr"
+              className="mt-1 text-xs tabular-nums text-muted-foreground"
+            >
+              {connection?.sessionConnectedPhone ||
+                connection?.phoneNumber ||
+                form.phone_number ||
+                "—"}
+            </p>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionLoading === "disconnect"}>
+              {t.cancel}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 text-white hover:bg-red-700"
+              disabled={actionLoading === "disconnect"}
+              onClick={(event) => {
+                event.preventDefault();
+                setDisconnectDialogOpen(false);
+                void runConnectionAction("disconnect");
+              }}
+            >
+              {actionLoading === "disconnect" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Unplug className="h-4 w-4" />
+              )}
+              {t.confirmDisconnect}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }

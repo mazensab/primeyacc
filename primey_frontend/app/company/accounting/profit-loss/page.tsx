@@ -94,6 +94,15 @@ const translations = {
     refresh: "تحديث",
     export: "تصدير Excel",
     print: "طباعة",
+    companyFallback: "الشركة الحالية",
+    printBlocked: "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم حاول مجددًا.",
+    printEmpty: "لا توجد بيانات مطابقة للطباعة أو التصدير.",
+    printReady: "تم تجهيز قائمة الدخل للطباعة.",
+    generatedAt: "تاريخ التجهيز",
+    filtersApplied: "الفلاتر المطبقة",
+    noFilters: "بدون فلاتر إضافية",
+    fullReport: "تقرير قائمة الدخل",
+    tableReport: "كشف قائمة الدخل",
     reset: "إعادة ضبط",
     totalRevenue: "إجمالي الدخل",
     totalExpenses: "إجمالي المصروفات",
@@ -151,6 +160,15 @@ const translations = {
     refresh: "Refresh",
     export: "Export Excel",
     print: "Print",
+    companyFallback: "Current Company",
+    printBlocked: "The print window could not be opened. Allow pop-ups and try again.",
+    printEmpty: "There is no matching data to print or export.",
+    printReady: "The income statement is ready to print.",
+    generatedAt: "Generated at",
+    filtersApplied: "Applied filters",
+    noFilters: "No additional filters",
+    fullReport: "Income Statement Report",
+    tableReport: "Income Statement",
     reset: "Reset",
     totalRevenue: "Total income",
     totalExpenses: "Total expenses",
@@ -202,11 +220,7 @@ function getInitialLocale(): Locale {
   return window.localStorage.getItem("primey-locale") === "en" ? "en" : "ar";
 }
 function apiBase() {
-  const value = (
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    ""
-  ).replace(/\/+$/, "");
+  const value = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/+$/, "");
   return value.endsWith("/api") ? value.slice(0, -4) : value;
 }
 function apiUrl(path: string) {
@@ -261,6 +275,74 @@ function formatMoney(value: unknown) {
 }
 function formatInteger(value: number) {
   return Math.trunc(value || 0).toLocaleString("en-US");
+}
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+function extractCompanyName(
+  payload: unknown,
+  locale: Locale,
+  fallback: string,
+) {
+  const source = record(payload);
+  const data = record(source.data);
+  const membership = record(source.membership || data.membership);
+  const candidates = [
+    source.company,
+    source.current_company,
+    source.active_company,
+    source.workspace_company,
+    data.company,
+    data.current_company,
+    data.active_company,
+    data.workspace_company,
+    membership.company,
+  ];
+  for (const candidate of candidates) {
+    const company = record(candidate);
+    const localizedName =
+      locale === "ar"
+        ? company.name_ar ||
+          company.legal_name_ar ||
+          company.commercial_name_ar
+        : company.name_en ||
+          company.legal_name_en ||
+          company.commercial_name_en;
+    const result = text(
+      localizedName ||
+        company.legal_name ||
+        company.commercial_name ||
+        company.company_name ||
+        company.display_name ||
+        company.name,
+    );
+    if (result) return result;
+  }
+  return (
+    text(
+      source.company_name ||
+        source.current_company_name ||
+        source.active_company_name ||
+        data.company_name ||
+        data.current_company_name ||
+        data.active_company_name,
+    ) || fallback
+  );
+}
+function formatDateTime(value: Date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(value);
 }
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -375,19 +457,23 @@ function KpiCard({
   label: string;
 }) {
   return (
-    <Card className="group h-[128px] overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 p-5 pb-2">
+    <Card className="group rounded-lg border bg-card shadow-none transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-sm">
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
         <div className="min-w-0">
           <CardDescription className="truncate text-sm">{title}</CardDescription>
-          <CardTitle className="mt-2 text-2xl font-black tracking-tight tabular-nums">
-            {money ? <MoneyValue value={value} label={label} strong /> : formatInteger(value)}
+          <CardTitle className="mt-2 text-xl font-bold tracking-tight tabular-nums">
+            {money ? (
+              <MoneyValue value={value} label={label} strong />
+            ) : (
+              formatInteger(value)
+            )}
           </CardTitle>
         </div>
-        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+        <span className="rounded-lg border bg-background p-2.5 text-muted-foreground transition group-hover:border-foreground/20 group-hover:text-foreground">
           <Icon className="h-5 w-5" />
         </span>
       </CardHeader>
-      <CardContent className="px-5 pt-0">
+      <CardContent className="pt-0">
         <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
       </CardContent>
     </Card>
@@ -408,6 +494,7 @@ export default function CompanyIncomeStatementPage() {
   const [search, setSearch] = React.useState("");
   const [sort, setSort] = React.useState<SortKey>("statement");
   const [loading, setLoading] = React.useState(true);
+  const [companyName, setCompanyName] = React.useState("");
   React.useEffect(() => {
     const applyLocale = () => {
       const next = getInitialLocale();
@@ -424,6 +511,28 @@ export default function CompanyIncomeStatementPage() {
       window.removeEventListener("primey-locale-changed", applyLocale);
     };
   }, []);
+  React.useEffect(() => {
+    let active = true;
+    void fetchJson<unknown>("/api/auth/whoami/")
+      .then((payload) => {
+        if (!active) return;
+        setCompanyName(
+          extractCompanyName(
+            payload,
+            locale,
+            translations[locale].companyFallback,
+          ),
+        );
+      })
+      .catch(() => {
+        if (active) {
+          setCompanyName(translations[locale].companyFallback);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [locale]);
   const filteredRows = React.useMemo(() => {
     const q = search.trim().toLowerCase();
     const result = rows.filter((row) => {
@@ -492,107 +601,407 @@ export default function CompanyIncomeStatementPage() {
     setSearch("");
     setSort("statement");
   }
-  function exportExcel() {
-    const headers = [t.item, t.amount];
-    const exportRows = filteredRows.map((row) => [
-      showAccountCode && row.code ? `${row.code} — ${row.name}` : row.name,
-      formatMoney(row.rowType === "net" ? row.signedAmount : row.amount),
-    ]);
-    const html = `<html><head><meta charset="utf-8" /></head><body><table border="1"><thead><tr>${headers
-      .map((header) => `<th>${header}</th>`)
-      .join("")}</tr></thead><tbody>${exportRows
-      .map((row) => `<tr>${row.map((cell) => `<td>${String(cell).replaceAll("<", "&lt;")}</td>`).join("")}</tr>`)
-      .join("")}</tbody></table></body></html>`;
-    const blob = new Blob(["\ufeff", html], {
-      type: "application/vnd.ms-excel;charset=utf-8;",
-    });
+  function filterSummary() {
+    const values: string[] = [
+      `${t.dateFrom}: ${dateFrom || "—"}`,
+      `${t.dateTo}: ${dateTo || "—"}`,
+      level === "summary"
+        ? t.summaryLevel
+        : level === "leaf"
+          ? t.leafLevel
+          : level === "all"
+            ? t.allLevels
+            : translations[locale][`level${level}` as keyof typeof translations.ar],
+      section === "REVENUE"
+        ? t.incomeOnly
+        : section === "EXPENSE"
+          ? t.expensesOnly
+          : t.allSections,
+      sort === "name"
+        ? t.sortName
+        : sort === "amount"
+          ? t.sortAmount
+          : t.sortStatement,
+    ];
+    if (includeZero) values.push(t.includeZero);
+    if (showAccountCode) values.push(t.showAccountCode);
+    if (search.trim()) values.push(`${t.searchPlaceholder}: ${search.trim()}`);
+    return values.filter(Boolean).join(" · ") || t.noFilters;
+  }
+  function buildIncomeStatementDocument(
+    mode: "excel" | "print",
+    includeSummary: boolean,
+    title: string,
+  ) {
+    const rowsHtml = filteredRows
+      .map((row) => {
+        const value = row.rowType === "net" ? row.signedAmount : row.amount;
+        const itemName =
+          showAccountCode && row.code
+            ? `${row.code} — ${row.name}`
+            : row.name;
+        const className =
+          row.rowType === "net"
+            ? "net-row"
+            : row.rowType === "section"
+              ? "section-row"
+              : row.rowType === "total"
+                ? "total-row"
+                : "";
+        return `
+          <tr class="${className}">
+            <td>
+              <strong>${escapeHtml(itemName || "—")}</strong>
+              ${
+                row.nameEn
+                  ? `<div class="sub">${escapeHtml(row.nameEn)}</div>`
+                  : ""
+              }
+            </td>
+            <td class="money">${escapeHtml(formatMoney(value))}</td>
+          </tr>`;
+      })
+      .join("");
+    const summaryHtml = includeSummary
+      ? `
+        <table class="summary-table">
+          <tbody>
+            <tr>
+              <th>${escapeHtml(t.totalRevenue)}</th>
+              <td class="money">${escapeHtml(formatMoney(stats.totalRevenue))}</td>
+              <th>${escapeHtml(t.totalExpenses)}</th>
+              <td class="money">${escapeHtml(formatMoney(stats.totalExpenses))}</td>
+            </tr>
+            <tr>
+              <th>${escapeHtml(t.netIncome)}</th>
+              <td class="money">${escapeHtml(formatMoney(stats.netIncome))}</td>
+              <th>${escapeHtml(t.rowsCount)}</th>
+              <td>${escapeHtml(formatInteger(stats.rowsCount))}</td>
+            </tr>
+          </tbody>
+        </table>`
+      : "";
+    const isPrint = mode === "print";
+    return `<!doctype html>
+      <html lang="${locale}" dir="${dir}">
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(title)}</title>
+          <style>
+            @page { size: A4 portrait; margin: 12mm; }
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              color: #000;
+              background: #fff;
+              font-family: Tahoma, Arial, sans-serif;
+              font-size: 10px;
+            }
+            .report { width: 100%; }
+            .head {
+              display: flex;
+              align-items: flex-start;
+              justify-content: space-between;
+              gap: 16px;
+              margin-bottom: 10px;
+            }
+            .company {
+              max-width: 118mm;
+              font-size: 13px;
+              font-weight: 700;
+              line-height: 1.6;
+              overflow-wrap: anywhere;
+            }
+            h1 { margin: 3px 0 0; font-size: 20px; }
+            .meta {
+              min-width: 220px;
+              border: 1px solid #000;
+              padding: 7px 9px;
+              line-height: 1.8;
+            }
+            .filters {
+              margin: 0 0 9px;
+              border: 1px solid #000;
+              padding: 7px 9px;
+              line-height: 1.7;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              table-layout: fixed;
+            }
+            .summary-table { margin-bottom: 10px; }
+            thead { display: table-header-group; }
+            tr { break-inside: avoid; }
+            th, td {
+              border: 1px solid #000;
+              padding: 7px 6px;
+              vertical-align: top;
+              overflow-wrap: anywhere;
+            }
+            th {
+              background: #f1f1f1;
+              font-weight: 700;
+              text-align: ${locale === "ar" ? "right" : "left"};
+            }
+            .money {
+              direction: ltr;
+              text-align: right;
+              font-variant-numeric: tabular-nums;
+              font-weight: 700;
+            }
+            .sub { margin-top: 2px; font-size: 9px; color: #333; }
+            .section-row td { background: #f1f1f1; font-weight: 700; }
+            .total-row td { background: #fafafa; font-weight: 700; }
+            .net-row td {
+              background: #e5e7eb;
+              color: #111827;
+              font-weight: 700;
+              border-top: 2px solid #64748b;
+            }
+            .net-row .sub { color: #475569; }
+            .footer {
+              display: flex;
+              justify-content: space-between;
+              gap: 12px;
+              margin-top: 8px;
+              font-size: 9px;
+            }
+            ${isPrint ? "" : ".footer { display: none; }"}
+          </style>
+        </head>
+        <body>
+          <section class="report">
+            <div class="head">
+              <div>
+                <div class="company">${escapeHtml(
+                  companyName || t.companyFallback,
+                )}</div>
+                <h1>${escapeHtml(title)}</h1>
+              </div>
+              <div class="meta">
+                <div><strong>${escapeHtml(t.rowsCount)}:</strong> ${escapeHtml(
+                  formatInteger(filteredRows.length),
+                )}</div>
+                <div><strong>${escapeHtml(t.generatedAt)}:</strong> ${escapeHtml(
+                  formatDateTime(new Date()),
+                )}</div>
+              </div>
+            </div>
+            <div class="filters">
+              <strong>${escapeHtml(t.filtersApplied)}:</strong>
+              ${escapeHtml(filterSummary())}
+            </div>
+            ${summaryHtml}
+            <table>
+              <thead>
+                <tr>
+                  <th>${escapeHtml(t.item)}</th>
+                  <th style="width: 30%">${escapeHtml(t.amount)}</th>
+                </tr>
+              </thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+            <div class="footer">
+              <span>${escapeHtml(companyName || t.companyFallback)}</span>
+              <span>${escapeHtml(formatDateTime(new Date()))}</span>
+            </div>
+          </section>
+        </body>
+      </html>`;
+  }
+  function downloadIncomeStatement(
+    includeSummary: boolean,
+    title: string,
+    filename: string,
+  ) {
+    if (!filteredRows.length) {
+      toast.error(t.printEmpty);
+      return;
+    }
+    const blob = new Blob(
+      [
+        "\ufeff",
+        buildIncomeStatementDocument("excel", includeSummary, title),
+      ],
+      { type: "application/vnd.ms-excel;charset=utf-8;" },
+    );
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "income-statement.xls";
+    anchor.download = filename;
     anchor.click();
     URL.revokeObjectURL(url);
   }
+  function printIncomeStatement(
+    includeSummary: boolean,
+    title: string,
+  ) {
+    if (!filteredRows.length) {
+      toast.error(t.printEmpty);
+      return;
+    }
+    const popup = window.open("", "_blank", "width=1200,height=900");
+    if (!popup) {
+      toast.error(t.printBlocked);
+      return;
+    }
+    popup.opener = null;
+    popup.document.open();
+    popup.document.write(
+      buildIncomeStatementDocument("print", includeSummary, title),
+    );
+    popup.document.close();
+    popup.onafterprint = () => popup.close();
+    window.setTimeout(() => {
+      popup.focus();
+      popup.print();
+    }, 300);
+    toast.success(t.printReady);
+  }
+  function exportFullReport() {
+    downloadIncomeStatement(
+      true,
+      t.fullReport,
+      `income-statement-${dateFrom}-${dateTo}.xls`,
+    );
+  }
+  function exportTableReport() {
+    downloadIncomeStatement(
+      false,
+      t.tableReport,
+      `income-statement-table-${dateFrom}-${dateTo}.xls`,
+    );
+  }
+  function printFullReport() {
+    printIncomeStatement(true, t.fullReport);
+  }
+  function printTableReport() {
+    printIncomeStatement(false, t.tableReport);
+  }
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1500px] space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
-          <div className="relative min-h-[154px] p-5 sm:p-7">
-            <div className="absolute inset-x-0 top-0 h-[5px] bg-slate-950" />
-            <div className="flex h-full flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="max-w-4xl">
-                <div className="mb-2 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  {t.badge}
-                </div>
-                <h1 className="text-3xl font-black tracking-tight sm:text-4xl">{t.title}</h1>
-                <p className="mt-2 max-w-4xl text-sm leading-7 text-muted-foreground">{t.subtitle}</p>
-                <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                  <Link href="/company/accounting" className="rounded-full border bg-background px-3 py-1 transition hover:bg-muted">
-                    <ArrowLeft className="inline h-3.5 w-3.5" /> {t.accountingDashboard}
-                  </Link>
-                  <Link href="/company/accounting/journal-entries" className="rounded-full border bg-background px-3 py-1 transition hover:bg-muted">
-                    {t.journalEntries}
-                  </Link>
-                  <Link href="/company/accounting/ledger" className="rounded-full border bg-background px-3 py-1 transition hover:bg-muted">
-                    {t.ledger}
-                  </Link>
-                  <Link href="/company/accounting/trial-balance" className="rounded-full border bg-background px-3 py-1 transition hover:bg-muted">
-                    {t.trialBalance}
-                  </Link>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button className="rounded-xl bg-slate-950 text-white shadow-sm hover:bg-slate-800" onClick={() => window.print()}>
-                  <Printer className="h-4 w-4" />
-                  {t.print}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background shadow-sm hover:bg-muted/70" onClick={exportExcel}>
-                  <FileSpreadsheet className="h-4 w-4" />
-                  {t.export}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background shadow-sm hover:bg-muted/70" onClick={() => void loadIncomeStatement()}>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  {t.refresh}
-                </Button>
-              </div>
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-4xl">
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              {t.badge}
+            </div>
+            <h1 className="text-3xl font-black tracking-tight">{t.title}</h1>
+            <p className="mt-2 max-w-4xl text-sm leading-7 text-muted-foreground">
+              {t.subtitle}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <Button asChild type="button" variant="outline" size="sm">
+                <Link href="/company/accounting">
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  {t.accountingDashboard}
+                </Link>
+              </Button>
+              <Button asChild type="button" variant="outline" size="sm">
+                <Link href="/company/accounting/journal-entries">
+                  {t.journalEntries}
+                </Link>
+              </Button>
+              <Button asChild type="button" variant="outline" size="sm">
+                <Link href="/company/accounting/ledger">{t.ledger}</Link>
+              </Button>
+              <Button asChild type="button" variant="outline" size="sm">
+                <Link href="/company/accounting/trial-balance">
+                  {t.trialBalance}
+                </Link>
+              </Button>
             </div>
           </div>
-        </section>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" onClick={printFullReport}>
+              <Printer className="h-4 w-4" />
+              {t.print}
+            </Button>
+            <Button type="button" variant="outline" onClick={exportFullReport}>
+              <FileSpreadsheet className="h-4 w-4" />
+              {t.export}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void loadIncomeStatement()}
+              disabled={loading}
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {t.refresh}
+            </Button>
+          </div>
+        </header>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <KpiCard title={t.totalRevenue} value={stats.totalRevenue} description={t.totalRevenueDesc} icon={TrendingUp} money label={t.sar} />
           <KpiCard title={t.totalExpenses} value={stats.totalExpenses} description={t.totalExpensesDesc} icon={TrendingDown} money label={t.sar} />
           <KpiCard title={t.netIncome} value={Math.abs(stats.netIncome)} description={`${stats.isProfit ? t.profit : t.loss} · ${t.netIncomeDesc}`} icon={ArrowUpDown} money label={t.sar} />
           <KpiCard title={t.rowsCount} value={stats.rowsCount} description={t.rowsCountDesc} icon={Layers3} label={t.sar} />
         </div>
-        <Card className="rounded-2xl border-border/70 bg-card shadow-sm transition hover:shadow-md">
-          <CardHeader className="px-5 py-4 sm:px-6">
-            <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <CardTitle>{t.filtersTitle}</CardTitle>
-                <CardDescription className="mt-1">{t.filtersDesc}</CardDescription>
+
+        <Card data-approved-income-statement-table="true" className="overflow-hidden rounded-lg border bg-card shadow-none">
+                  <CardHeader className="px-5 pt-5 sm:px-6">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle className="flex flex-wrap items-center gap-2">
+                  {t.registerTitle}
+                  <Badge
+                    variant="outline"
+                    className="rounded-full tabular-nums"
+                  >
+                    {formatInteger(filteredRows.length)}
+                  </Badge>
+                </CardTitle>
+                <Badge
+                  variant="outline"
+                  className={
+                    stats.isProfit
+                      ? "w-fit rounded-full border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700"
+                      : "w-fit rounded-full border-rose-200 bg-rose-50 px-3 py-1 text-rose-700"
+                  }
+                >
+                  <BadgeCheck className="h-3.5 w-3.5" />
+                  {stats.isProfit ? t.profit : t.loss}
+                </Badge>
               </div>
-              <Badge
-                variant="outline"
-                className={
-                  stats.isProfit
-                    ? "w-fit rounded-full border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700"
-                    : "w-fit rounded-full border-rose-200 bg-rose-50 px-3 py-1 text-rose-700"
-                }
-              >
-                <BadgeCheck className="h-3.5 w-3.5" />
-                {stats.isProfit ? t.profit : t.loss}
-              </Badge>
+              <CardDescription className="mt-1">
+                {t.registerDesc}
+              </CardDescription>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4 px-5 pb-5 sm:px-6 sm:pb-5">
-            <div className="grid gap-3 rounded-2xl border bg-muted/20 p-3 lg:grid-cols-4 xl:grid-cols-[160px_160px_170px_185px_165px_150px_145px_130px]">
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={exportTableReport}
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                {t.export}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={printTableReport}
+              >
+                <Printer className="h-4 w-4" />
+                {t.print}
+              </Button>
+            </div>
+          </div>
+          <div className="mt-4 space-y-2">
+            <div className="grid gap-3 rounded-lg border bg-background p-3 lg:grid-cols-4 xl:grid-cols-[160px_160px_170px_185px_165px_150px_145px_130px]">
               <DatePickerField label={t.dateFrom} value={dateFrom} onChange={setDateFrom} dir={dir} />
               <DatePickerField label={t.dateTo} value={dateTo} onChange={setDateTo} dir={dir} />
               <label className="space-y-2">
                 <span className="text-xs font-medium text-muted-foreground">{t.level}</span>
                 <Select value={level} onValueChange={(value) => setLevel(value as LevelFilter)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background">
+                  <SelectTrigger className="h-9 bg-background shadow-none">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -610,7 +1019,7 @@ export default function CompanyIncomeStatementPage() {
               <label className="space-y-2">
                 <span className="text-xs font-medium text-muted-foreground">{t.section}</span>
                 <Select value={section} onValueChange={(value) => setSection(value as SectionFilter)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background">
+                  <SelectTrigger className="h-9 bg-background shadow-none">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -623,7 +1032,7 @@ export default function CompanyIncomeStatementPage() {
               <label className="space-y-2">
                 <span className="text-xs font-medium text-muted-foreground">ترتيب</span>
                 <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background">
+                  <SelectTrigger className="h-9 bg-background shadow-none">
                     <Filter className="h-4 w-4" />
                     <SelectValue />
                   </SelectTrigger>
@@ -637,7 +1046,7 @@ export default function CompanyIncomeStatementPage() {
               <Button
                 type="button"
                 variant={includeZero ? "default" : "outline"}
-                className="mt-auto h-10 rounded-xl"
+                className="mt-auto h-9"
                 onClick={() => setIncludeZero((current) => !current)}
               >
                 {t.includeZero}
@@ -645,42 +1054,37 @@ export default function CompanyIncomeStatementPage() {
               <Button
                 type="button"
                 variant={showAccountCode ? "default" : "outline"}
-                className="mt-auto h-10 rounded-xl"
+                className="mt-auto h-9"
                 onClick={() => setShowAccountCode((current) => !current)}
               >
                 {t.showAccountCode}
               </Button>
-              <Button variant="outline" className="mt-auto h-10 rounded-xl bg-background" onClick={resetFilters}>
+              <Button variant="outline" className="mt-auto h-9 bg-background shadow-none" onClick={resetFilters}>
                 <RotateCcw className="h-4 w-4" />
                 {t.reset}
               </Button>
             </div>
-            <div className="relative">
+            <div className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder={t.searchPlaceholder}
-                className="h-10 rounded-xl bg-background ps-9"
+                className="h-9 bg-background shadow-none ps-9"
               />
             </div>
-          </CardContent>
-        </Card>
-        <Card className="rounded-2xl border-border/70 bg-card shadow-sm transition hover:shadow-md">
-          <CardHeader className="px-5 py-4 sm:px-6">
-            <CardTitle>{t.registerTitle}</CardTitle>
-            <CardDescription className="mt-1">{t.registerDesc}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 px-5 pb-5 sm:px-6 sm:pb-6">
+          </div>
+        </CardHeader>
+          <CardContent className="space-y-3 px-5 pb-5 sm:px-6">
             {loading ? (
-              <div className="space-y-3 rounded-2xl border p-4">
+              <div className="space-y-3 rounded-lg border p-4">
                 <p className="text-sm text-muted-foreground">{t.loading}</p>
                 {Array.from({ length: 6 }).map((_, index) => (
                   <Skeleton key={index} className="h-12 w-full rounded-xl" />
                 ))}
               </div>
             ) : filteredRows.length ? (
-              <div className="overflow-hidden rounded-2xl border">
+              <div className="overflow-hidden rounded-lg border">
                 <div className="overflow-x-auto">
                   <Table className="min-w-[900px] table-fixed">
                     <TableHeader>
@@ -701,7 +1105,7 @@ export default function CompanyIncomeStatementPage() {
                             className={[
                               "h-[58px] hover:bg-muted/30",
                               isSection ? "bg-muted/40" : "bg-card",
-                              isNet ? "bg-slate-950 text-white hover:bg-slate-900" : "",
+                              isNet ? "border-t-2 border-slate-300 bg-slate-100 text-slate-950 hover:bg-slate-100" : "",
                               isTotal ? "bg-muted/20" : "",
                             ].join(" ")}
                           >
@@ -731,7 +1135,7 @@ export default function CompanyIncomeStatementPage() {
                                   </span>
                                 </div>
                                 {row.nameEn ? (
-                                  <div className={isNet ? "truncate text-xs text-slate-200" : "truncate text-xs text-muted-foreground"}>
+                                  <div className={isNet ? "truncate text-xs text-slate-600" : "truncate text-xs text-muted-foreground"}>
                                     {row.nameEn}
                                   </div>
                                 ) : null}
@@ -757,7 +1161,7 @@ export default function CompanyIncomeStatementPage() {
                 </div>
               </div>
             ) : (
-              <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed bg-muted/20 px-6 py-10 text-center">
+              <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-muted/20 px-6 py-10 text-center">
                 <WalletCards className="h-7 w-7 text-muted-foreground" />
                 <div>
                   <h3 className="text-sm font-semibold">{t.emptyTitle}</h3>
