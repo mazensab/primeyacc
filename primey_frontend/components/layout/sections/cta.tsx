@@ -29,21 +29,21 @@ type PricingCtaContent = {
 const content: Record<AppLang, PricingCtaContent> = {
   ar: {
     eyebrow: "ابدأ الآن",
-    title: "رعاية صحية أوفر وأسهل لك ولعائلتك",
+    title: "ابدأ تشغيل أعمالك بصورة أوضح مع Mhamcloud",
     description:
-      "اختر بطاقة أو برنامج Mhamcloud المناسب لك، واستفد من مزايا وخصومات طبية مختارة لدى مزودي خدمة مشاركين بطريقة سهلة وواضحة.",
-    askButton: "استفسر عن المزايا",
-    joinButton: "اشترك الآن",
-    imageAlt: "بطاقة Mhamcloud ومزايا الرعاية الصحية",
+      "حدد الوحدات التي تحتاجها شركتك، من المحاسبة والمبيعات والمشتريات إلى المخزون والخزينة والتقارير، وابدأ بتهيئة تناسب نطاق عملك.",
+    askButton: "تواصل مع المبيعات",
+    joinButton: "اطلب تجربة",
+    imageAlt: "واجهة نظام Mhamcloud للمحاسبة وإدارة الأعمال",
   },
   en: {
     eyebrow: "Get Started",
-    title: "Smarter and more affordable care for you and your family",
+    title: "Run your business with clearer control through Mhamcloud",
     description:
-      "Choose the Mhamcloud card or program that fits your needs and enjoy selected healthcare benefits and discounts through participating providers with a clear and easy experience.",
-    askButton: "Ask About Benefits",
-    joinButton: "Join Now",
-    imageAlt: "Mhamcloud card and healthcare benefits",
+      "Choose the modules your company needs, from accounting and sales to purchases, inventory, treasury, and reporting, then start with a setup that fits your operating scope.",
+    askButton: "Talk to Sales",
+    joinButton: "Request a Trial",
+    imageAlt: "Mhamcloud accounting and business management interface",
   },
 };
 

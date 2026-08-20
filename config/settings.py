@@ -173,11 +173,24 @@ TEMPLATES = [
 # Database
 # ---------------------------------------------------------------------
 # Development default: SQLite for quick bootstrapping.
-# Production-ready switch: set DATABASE_ENGINE=mysql in .env.
+# Supported engines: sqlite, mysql, postgresql.
 
-DATABASE_ENGINE = os.getenv("DATABASE_ENGINE", "sqlite").lower()
+DATABASE_ENGINE = os.getenv("DATABASE_ENGINE", "sqlite").strip().lower()
 
-if DATABASE_ENGINE == "mysql":
+if DATABASE_ENGINE == "postgresql":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("POSTGRES_DB", "primeyacc"),
+            "USER": os.getenv("POSTGRES_USER", "primeyacc_app"),
+            "PASSWORD": os.getenv("POSTGRES_PASSWORD", ""),
+            "HOST": os.getenv("POSTGRES_HOST", "127.0.0.1"),
+            "PORT": os.getenv("POSTGRES_PORT", "5432"),
+            "CONN_MAX_AGE": int(os.getenv("POSTGRES_CONN_MAX_AGE", "60")),
+            "CONN_HEALTH_CHECKS": True,
+        }
+    }
+elif DATABASE_ENGINE == "mysql":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.mysql",
@@ -192,13 +205,18 @@ if DATABASE_ENGINE == "mysql":
             },
         }
     }
-else:
+elif DATABASE_ENGINE == "sqlite":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": BASE_DIR / "db.sqlite3",
         }
     }
+else:
+    raise RuntimeError(
+        "Unsupported DATABASE_ENGINE. "
+        "Expected one of: sqlite, mysql, postgresql."
+    )
 
 
 # ---------------------------------------------------------------------

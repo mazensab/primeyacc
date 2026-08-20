@@ -205,13 +205,13 @@ export default async function Home() {
       {/* حالات الاستخدام */}
       <TestimonialSection />
 
-      {/* التواصل */}
-      <ContactSection />
-
       {/* الأسئلة الشائعة */}
       <FAQSection />
 
-      {/* التحديثات والنشرة */}
+      {/* التواصل */}
+      <ContactSection />
+
+      {/* الدعوة النهائية لاتخاذ الإجراء */}
       <NewsletterSection />
 
       {/* الفوتر */}

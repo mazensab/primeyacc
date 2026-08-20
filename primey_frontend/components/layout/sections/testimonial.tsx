@@ -1,48 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { reviewList } from "@/@data/reviews";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import Link from "next/link";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from "@/components/ui/carousel";
-import { Star } from "lucide-react";
+  ArrowLeft,
+  ArrowRight,
+  Building2,
+  Calculator,
+  GitBranch,
+  PackageSearch,
+  ReceiptText,
+  Store,
+} from "lucide-react";
+
 import SectionContainer from "@/components/layout/section-container";
 import SectionHeader from "@/components/layout/section-header";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
 
-/* =========================================================
-   🌐 Language Types
-========================================================= */
 type AppLang = "ar" | "en";
 
-type TestimonialItem = {
-  name: string;
-  role: string;
-  comment: string;
-};
-
-type TestimonialContent = {
-  subTitle: string;
-  title: string;
-  description: string;
-  imageAlt: string;
-  reviews: TestimonialItem[];
-};
-
-/* =========================================================
-   🍪 Cookie Helper
-========================================================= */
 function getCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
 
@@ -55,110 +32,83 @@ function getCookie(name: string): string | null {
 
 function getCurrentLang(): AppLang {
   const cookieLang =
-    getCookie("lang") || getCookie("locale") || getCookie("NEXT_LOCALE");
+    getCookie("lang") ||
+    getCookie("locale") ||
+    getCookie("NEXT_LOCALE") ||
+    "";
 
-  return cookieLang === "ar" ? "ar" : "en";
+  return cookieLang.toLowerCase().startsWith("ar") ? "ar" : "en";
 }
 
-/* =========================================================
-   📝 Localized Content
-========================================================= */
-const content: Record<AppLang, TestimonialContent> = {
-  ar: {
-    subTitle: "تجارب العملاء",
-    title: "عملاء استفادوا من رعاية أوضح وتوفير أفضل",
-    description:
-      "آراء مختصرة تعكس كيف تساعد Mhamcloud العملاء على الوصول إلى مزايا صحية وخصومات طبية بطريقة أسهل لهم ولعائلاتهم.",
-    imageAlt: "صورة عميل Mhamcloud",
-    reviews: [
-      {
-        name: "عميل Mhamcloud",
-        role: "بطاقة فردية",
-        comment:
-          "أكثر ما أعجبني أن المزايا واضحة وسهلة الاستخدام. عرفت الخصم قبل الزيارة واستفدت منه بدون تعقيد.",
-      },
-      {
-        name: "مشتركة Mhamcloud",
-        role: "بطاقة عائلية",
-        comment:
-          "البطاقة مناسبة للعائلة، خصوصًا مع تكرار زيارات الأسنان والتحاليل. وجود خيارات متعددة ساعدنا على التوفير.",
-      },
-      {
-        name: "عميل Mhamcloud",
-        role: "برنامج الفحوصات",
-        comment:
-          "كنت أبحث عن طريقة أوضح لمتابعة الفحوصات الدورية. البرنامج سهّل علي معرفة الخدمات والمزايا المتاحة.",
-      },
-      {
-        name: "مشتركة Mhamcloud",
-        role: "برنامج الجلدية والتجميل",
-        comment:
-          "أعجبني تنوع الخدمات وإمكانية الاستفسار قبل الحجز. التجربة كانت مرتبة وواضحة من البداية.",
-      },
-      {
-        name: "عميل Mhamcloud",
-        role: "برنامج الأسنان",
-        comment:
-          "استفدت من خصومات الأسنان، وكانت التفاصيل واضحة قبل زيارة المركز. هذا أعطاني ثقة أكبر في الاختيار.",
-      },
-      {
-        name: "مشتركة Mhamcloud",
-        role: "استفسار ودعم",
-        comment:
-          "الدعم ساعدني في معرفة البطاقة الأنسب وشرح لي المزايا المتاحة حسب احتياجي والمدينة.",
-      },
-    ],
+const useCases = [
+  {
+    icon: Store,
+    title: {
+      ar: "الشركات التجارية",
+      en: "Trading Companies",
+    },
+    description: {
+      ar: "اربط المبيعات والمشتريات والعملاء والموردين والمخزون والحسابات ضمن دورة واحدة.",
+      en: "Connect sales, purchases, customers, suppliers, inventory, and accounting in one workflow.",
+    },
   },
-  en: {
-    subTitle: "Testimonials",
-    title: "Customers enjoying clearer care and better savings",
-    description:
-      "Short experiences showing how Mhamcloud helps customers access healthcare benefits and selected medical discounts in an easier way for themselves and their families.",
-    imageAlt: "Mhamcloud customer avatar",
-    reviews: [
-      {
-        name: "Mhamcloud Customer",
-        role: "Individual Card",
-        comment:
-          "What I liked most is that the benefits are clear and easy to use. I knew the discount before my visit and used it without complications.",
-      },
-      {
-        name: "Mhamcloud Member",
-        role: "Family Card",
-        comment:
-          "The card is helpful for the family, especially with repeated dental visits and lab tests. The flexible options helped us save more.",
-      },
-      {
-        name: "Mhamcloud Customer",
-        role: "Checkups Program",
-        comment:
-          "I was looking for a clearer way to manage routine checkups. The program made it easier to understand available services and benefits.",
-      },
-      {
-        name: "Mhamcloud Member",
-        role: "Dermatology & Beauty Program",
-        comment:
-          "I liked the variety of services and the ability to ask before booking. The whole experience felt organized from the beginning.",
-      },
-      {
-        name: "Mhamcloud Customer",
-        role: "Dental Program",
-        comment:
-          "I used the dental benefits, and the details were clear before visiting the center. That gave me more confidence in my choice.",
-      },
-      {
-        name: "Mhamcloud Member",
-        role: "Support Inquiry",
-        comment:
-          "The support team helped me understand the right card and explained available benefits based on my needs and city.",
-      },
-    ],
+  {
+    icon: ReceiptText,
+    title: {
+      ar: "شركات الخدمات",
+      en: "Service Businesses",
+    },
+    description: {
+      ar: "نظم الفوترة والتحصيل والمصروفات والعملاء والتقارير المالية دون الاعتماد على ملفات متفرقة.",
+      en: "Organize invoicing, collections, expenses, customers, and financial reporting without scattered files.",
+    },
   },
-};
+  {
+    icon: PackageSearch,
+    title: {
+      ar: "التجزئة والمخزون",
+      en: "Retail & Inventory",
+    },
+    description: {
+      ar: "تابع المنتجات والمستودعات والحركات وربطها بالمبيعات والمشتريات والمحاسبة.",
+      en: "Track products, warehouses, and stock movements alongside sales, purchases, and accounting.",
+    },
+  },
+  {
+    icon: GitBranch,
+    title: {
+      ar: "الشركات متعددة الفروع",
+      en: "Multi-Branch Businesses",
+    },
+    description: {
+      ar: "هيئ نطاق التشغيل والمستخدمين والصلاحيات بما يناسب توسع الشركة وفروعها.",
+      en: "Configure operating scope, users, and permissions to support company and branch growth.",
+    },
+  },
+  {
+    icon: Calculator,
+    title: {
+      ar: "فرق المالية والمحاسبة",
+      en: "Finance & Accounting Teams",
+    },
+    description: {
+      ar: "اجمع القيود والأستاذ والخزينة والأرصدة والتقارير في مساحة عمل أقرب إلى العمليات اليومية.",
+      en: "Bring journals, ledger, treasury, balances, and reports closer to daily business operations.",
+    },
+  },
+  {
+    icon: Building2,
+    title: {
+      ar: "المنشآت النامية",
+      en: "Growing Businesses",
+    },
+    description: {
+      ar: "ابدأ بالنطاق الذي تحتاجه ثم وسع الوحدات والمستخدمين مع تطور حجم العمل.",
+      en: "Start with the scope you need and expand modules and users as your business grows.",
+    },
+  },
+] as const;
 
-/* =========================================================
-   🧩 Section
-========================================================= */
 export const TestimonialSection = () => {
   const [lang, setLang] = useState<AppLang>("en");
 
@@ -167,113 +117,83 @@ export const TestimonialSection = () => {
 
     updateLang();
 
-    const observer = new MutationObserver(() => {
-      updateLang();
+    const observer = new MutationObserver(updateLang);
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["lang", "dir"],
     });
 
-    if (typeof document !== "undefined") {
-      observer.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ["lang", "dir"],
-      });
-    }
+    window.addEventListener("primey-locale-changed", updateLang);
 
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("primey-locale-changed", updateLang);
+    };
   }, []);
 
   const isArabic = lang === "ar";
-  const dir = isArabic ? "rtl" : "ltr";
-  const t = content[lang];
+  const ArrowIcon = isArabic ? ArrowLeft : ArrowRight;
 
   return (
-    <SectionContainer id="testimonials">
-      <div dir={dir}>
+    <SectionContainer id="use-cases" className="py-8 md:py-10 lg:py-12">
+      <div dir={isArabic ? "rtl" : "ltr"}>
         <SectionHeader
-          subTitle={t.subTitle}
-          title={t.title}
-          description={t.description}
+          subTitle={
+            isArabic ? "حالات الاستخدام" : "Use Cases"
+          }
+          title={
+            isArabic
+              ? "Mhamcloud يناسب طريقة عمل شركتك"
+              : "Mhamcloud adapts to how your business operates"
+          }
+          description={
+            isArabic
+              ? "بدل شهادات غير موثقة نوضح أين يمكن أن يخدم Mhamcloud فعليا بحسب طبيعة التشغيل والوحدات المطلوبة."
+              : "Rather than unverified testimonials, here is where Mhamcloud can fit based on your operating model and required modules."
+          }
         />
 
-        <Carousel
-          opts={{
-            align: "start",
-            direction: isArabic ? "rtl" : "ltr",
-          }}
-          className="relative mx-auto w-[80%] sm:w-[90%] lg:max-w-(--breakpoint-xl)"
-        >
-          <CarouselContent>
-            {reviewList.map((review, index) => {
-              const testimonial = t.reviews[index % t.reviews.length];
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {useCases.map((item) => {
+            const Icon = item.icon;
 
-              return (
-                <CarouselItem
-                  key={`${testimonial.name}-${index}`}
-                  className="md:basis-1/2 lg:basis-1/3"
-                >
-                  <Card className="bg-muted h-full">
-                    <CardContent className="flex h-full flex-col gap-4">
-                      <div
-                        className={cn(
-                          "flex gap-1",
-                          isArabic && "justify-end"
-                        )}
-                      >
-                        <Star className="size-4 fill-orange-400 text-orange-400" />
-                        <Star className="size-4 fill-orange-400 text-orange-400" />
-                        <Star className="size-4 fill-orange-400 text-orange-400" />
-                        <Star className="size-4 fill-orange-400 text-orange-400" />
-                        <Star className="size-4 fill-orange-400 text-orange-400" />
-                      </div>
+            return (
+              <Card
+                key={item.title.en}
+                className="group border-border/70 bg-background/80 shadow-[0_16px_42px_rgba(15,23,42,0.05)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_22px_52px_rgba(15,23,42,0.09)]"
+              >
+                <CardContent className="flex h-full flex-col p-6">
+                  <div className="flex size-12 items-center justify-center rounded-2xl border border-border/70 bg-muted/60 text-foreground">
+                    <Icon className="size-5" />
+                  </div>
 
-                      <p
-                        className={cn(
-                          "text-muted-foreground flex-1 leading-7",
-                          isArabic && "text-right"
-                        )}
-                      >
-                        {testimonial.comment}
-                      </p>
+                  <CardTitle className="mt-5 text-xl">
+                    {isArabic ? item.title.ar : item.title.en}
+                  </CardTitle>
 
-                      <div
-                        className={cn(
-                          "flex flex-row items-center gap-4",
-                          isArabic && "flex-row-reverse"
-                        )}
-                      >
-                        <Avatar className="size-12">
-                          <AvatarImage src={review.image} alt={t.imageAlt} />
-                          <AvatarFallback>
-                            {testimonial.name
-                              ?.split(" ")
-                              .slice(0, 2)
-                              .map((part) => part.charAt(0))
-                              .join("")
-                              .toUpperCase() || "PC"}
-                          </AvatarFallback>
-                        </Avatar>
+                  <p className="mt-3 flex-1 text-sm leading-7 text-muted-foreground">
+                    {isArabic
+                      ? item.description.ar
+                      : item.description.en}
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
 
-                        <div
-                          className={cn(
-                            "flex flex-col space-y-1",
-                            isArabic && "items-end text-right"
-                          )}
-                        >
-                          <CardTitle>{testimonial.name}</CardTitle>
-                          <CardDescription>
-                            {testimonial.role}
-                          </CardDescription>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </CarouselItem>
-              );
-            })}
-          </CarouselContent>
+        <div className="mt-7 flex justify-center">
+          <Button asChild variant="outline" className="rounded-xl">
+            <Link href="/register">
+              {isArabic
+                ? "حدد احتياج شركتك"
+                : "Tell us what your business needs"}
 
-          <CarouselPrevious />
-          <CarouselNext />
-        </Carousel>
+              <ArrowIcon className="size-4" />
+            </Link>
+          </Button>
+        </div>
       </div>
     </SectionContainer>
   );

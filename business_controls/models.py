@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from django.conf import settings
 from django.db import models, transaction
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 
 
@@ -198,3 +200,284 @@ class BusinessReferenceSequence(models.Model):
             locked.current_number += 1
             locked.save(update_fields=["current_number", "updated_at"])
             return f"{locked.prefix}{str(locked.current_number).zfill(locked.padding)}"
+# ===== PRIMEYACC LEGACY MIGRATION FOUNDATION V1 =====
+# ---------------------------------------------------------------------
+# Historical migration control layer.
+#
+# Rules:
+# - This layer does not alter operational source records.
+# - Every migration execution has a durable run record.
+# - Every legacy object can be mapped deterministically to its target.
+# - Re-running imports must not silently duplicate migrated objects.
+# - source_system + source_table + legacy_id is the legacy identity.
+# - target_content_type + target_object_id identifies the new object.
+# - checksum can be used to detect legacy-source changes between runs.
+# ---------------------------------------------------------------------
+
+
+class MigrationRun(models.Model):
+    class Status(models.TextChoices):
+        DRY_RUN = "dry_run", "Dry Run"
+        VALIDATED = "validated", "Validated"
+        APPLIED = "applied", "Applied"
+        FAILED = "failed", "Failed"
+
+    source_system = models.CharField(
+        max_length=80,
+        db_index=True,
+    )
+    migration_name = models.CharField(
+        max_length=160,
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.DRY_RUN,
+    )
+
+    # Optional scope. A global migration/discovery run may not belong
+    # to a single company yet.
+    company = models.ForeignKey(
+        "companies.Company",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="legacy_migration_runs",
+    )
+
+    started_at = models.DateTimeField(
+        default=timezone.now,
+    )
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    source_count = models.PositiveBigIntegerField(default=0)
+    processed_count = models.PositiveBigIntegerField(default=0)
+    created_count = models.PositiveBigIntegerField(default=0)
+    updated_count = models.PositiveBigIntegerField(default=0)
+    skipped_count = models.PositiveBigIntegerField(default=0)
+    failed_count = models.PositiveBigIntegerField(default=0)
+
+    source_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+    reconciliation = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    error_message = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-started_at", "-id"]
+        indexes = [
+            models.Index(
+                fields=["source_system", "status"],
+                name="bc_mrun_source_status_idx",
+            ),
+            models.Index(
+                fields=["company", "status"],
+                name="bc_mrun_company_status_idx",
+            ),
+            models.Index(
+                fields=["migration_name", "started_at"],
+                name="bc_mrun_name_start_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.source_system} | "
+            f"{self.migration_name} | "
+            f"{self.status}"
+        )
+
+    def mark_validated(self, reconciliation: dict | None = None) -> None:
+        self.status = self.Status.VALIDATED
+        self.reconciliation = reconciliation or {}
+        self.error_message = ""
+        self.completed_at = timezone.now()
+        self.save(
+            update_fields=[
+                "status",
+                "reconciliation",
+                "error_message",
+                "completed_at",
+                "updated_at",
+            ]
+        )
+
+    def mark_applied(self, reconciliation: dict | None = None) -> None:
+        self.status = self.Status.APPLIED
+        self.reconciliation = reconciliation or {}
+        self.error_message = ""
+        self.completed_at = timezone.now()
+        self.save(
+            update_fields=[
+                "status",
+                "reconciliation",
+                "error_message",
+                "completed_at",
+                "updated_at",
+            ]
+        )
+
+    def mark_failed(self, error_message: str) -> None:
+        self.status = self.Status.FAILED
+        self.error_message = (error_message or "")[:10000]
+        self.completed_at = timezone.now()
+        self.save(
+            update_fields=[
+                "status",
+                "error_message",
+                "completed_at",
+                "updated_at",
+            ]
+        )
+
+
+class LegacyObjectMap(models.Model):
+    run = models.ForeignKey(
+        MigrationRun,
+        on_delete=models.PROTECT,
+        related_name="object_maps",
+    )
+
+    source_system = models.CharField(
+        max_length=80,
+    )
+    source_table = models.CharField(
+        max_length=120,
+    )
+    legacy_id = models.CharField(
+        max_length=160,
+    )
+
+    # Legacy company identity is deliberately stored independently
+    # from the new Company FK. This allows company migration itself
+    # to be mapped before a target company exists.
+    legacy_company_id = models.CharField(
+        max_length=160,
+        blank=True,
+    )
+
+    company = models.ForeignKey(
+        "companies.Company",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="legacy_object_maps",
+    )
+
+    target_content_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    target_object_id = models.CharField(
+        max_length=160,
+        blank=True,
+    )
+    target_object = GenericForeignKey(
+        "target_content_type",
+        "target_object_id",
+    )
+
+    checksum = models.CharField(
+        max_length=128,
+        blank=True,
+    )
+
+    source_reference = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    migrated_at = models.DateTimeField(
+        default=timezone.now,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = [
+            "source_system",
+            "source_table",
+            "legacy_id",
+        ]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "source_system",
+                    "source_table",
+                    "legacy_id",
+                ],
+                name="bc_legacy_source_object_uniq",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "source_system",
+                    "source_table",
+                    "legacy_id",
+                ],
+                name="bc_legacy_lookup_idx",
+            ),
+            models.Index(
+                fields=[
+                    "source_system",
+                    "legacy_company_id",
+                ],
+                name="bc_legacy_company_idx",
+            ),
+            models.Index(
+                fields=[
+                    "target_content_type",
+                    "target_object_id",
+                ],
+                name="bc_legacy_target_idx",
+            ),
+            models.Index(
+                fields=["company", "source_table"],
+                name="bc_legacy_scope_idx",
+            ),
+            models.Index(
+                fields=["run", "source_table"],
+                name="bc_legacy_run_table_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.source_system}:"
+            f"{self.source_table}:"
+            f"{self.legacy_id}"
+        )
+
+    @property
+    def has_target(self) -> bool:
+        return bool(
+            self.target_content_type_id
+            and self.target_object_id
+        )

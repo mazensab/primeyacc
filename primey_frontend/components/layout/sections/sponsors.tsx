@@ -1,23 +1,22 @@
 import { cookies } from "next/headers";
+import {
+  BarChart3,
+  Boxes,
+  Building2,
+  Calculator,
+  CreditCard,
+  Landmark,
+  PlugZap,
+  ReceiptText,
+  ShieldCheck,
+  ShoppingCart,
+  UsersRound,
+} from "lucide-react";
 
-import { sponsors } from "@/@data/sponsors";
-import Icon from "@/components/icon";
 import { InfiniteSlider } from "@/components/ui/extras/infinite-slider";
-import { cn } from "@/lib/utils";
 
-/* =========================================================
-   🌐 Language Types
-========================================================= */
 type AppLang = "ar" | "en";
 
-type SponsorContent = {
-  intro: string;
-  items: string[];
-};
-
-/* =========================================================
-   🌐 Language Helper
-========================================================= */
 async function getPageLang(): Promise<AppLang> {
   const cookieStore = await cookies();
 
@@ -27,90 +26,109 @@ async function getPageLang(): Promise<AppLang> {
     cookieStore.get("NEXT_LOCALE")?.value ||
     "";
 
-  const normalizedLang = cookieLang.toLowerCase();
-
-  return normalizedLang.startsWith("ar") ? "ar" : "en";
+  return cookieLang.toLowerCase().startsWith("ar") ? "ar" : "en";
 }
 
-/* =========================================================
-   📝 Localized Content
-========================================================= */
-const content: Record<AppLang, SponsorContent> = {
-  ar: {
-    intro: "مزايا صحية عبر تخصصات متنوعة",
-    items: [
-      "العيادات الطبية",
-      "المستشفيات",
-      "المختبرات والتحاليل",
-      "الأشعة والفحوصات",
-      "الأسنان",
-      "الجلدية والتجميل",
-      "النساء والولادة",
-      "الصيدليات",
-      "الفحوصات الدورية",
-      "البرامج الصحية",
-    ],
+const capabilities = [
+  {
+    icon: Calculator,
+    ar: "المحاسبة والمالية",
+    en: "Accounting & Finance",
   },
-  en: {
-    intro: "Healthcare benefits across multiple specialties",
-    items: [
-      "Medical Clinics",
-      "Hospitals",
-      "Labs & Tests",
-      "Scans & Diagnostics",
-      "Dental Care",
-      "Dermatology & Beauty",
-      "Maternity Care",
-      "Pharmacies",
-      "Routine Checkups",
-      "Care Programs",
-    ],
+  {
+    icon: ReceiptText,
+    ar: "المبيعات والفوترة",
+    en: "Sales & Invoicing",
   },
-};
+  {
+    icon: ShoppingCart,
+    ar: "المشتريات",
+    en: "Purchases",
+  },
+  {
+    icon: Boxes,
+    ar: "المخزون والمستودعات",
+    en: "Inventory & Warehouses",
+  },
+  {
+    icon: UsersRound,
+    ar: "العملاء والموردون",
+    en: "Customers & Suppliers",
+  },
+  {
+    icon: Landmark,
+    ar: "الخزينة",
+    en: "Treasury",
+  },
+  {
+    icon: CreditCard,
+    ar: "المدفوعات",
+    en: "Payments",
+  },
+  {
+    icon: BarChart3,
+    ar: "التقارير",
+    en: "Reports",
+  },
+  {
+    icon: ShieldCheck,
+    ar: "الصلاحيات والرقابة",
+    en: "Permissions & Control",
+  },
+  {
+    icon: Building2,
+    ar: "إدارة الفروع",
+    en: "Branch Management",
+  },
+  {
+    icon: PlugZap,
+    ar: "التكاملات",
+    en: "Integrations",
+  },
+] as const;
 
-/* =========================================================
-   🧩 Section
-========================================================= */
 export const SponsorsSection = async () => {
   const lang = await getPageLang();
   const isArabic = lang === "ar";
-  const t = content[lang];
 
   return (
-    <section className="pb-12 lg:pb-24" dir={isArabic ? "rtl" : "ltr"}>
+    <section
+      dir={isArabic ? "rtl" : "ltr"}
+      className="pb-12 pt-4 lg:pb-20 lg:pt-6"
+    >
       <div className="container">
-        <p
-          className={cn(
-            "text-muted-foreground mb-6 text-center text-sm font-medium md:text-base",
-            isArabic && "tracking-normal"
-          )}
-        >
-          {t.intro}
-        </p>
+        <div className="mx-auto mb-6 max-w-3xl text-center">
+          <p className="text-sm font-semibold text-foreground sm:text-base">
+            {isArabic
+              ? "منصة واحدة تربط أهم عمليات شركتك"
+              : "One platform connecting your core business operations"}
+          </p>
+
+          <p className="mt-2 text-sm leading-7 text-muted-foreground">
+            {isArabic
+              ? "بدل توزيع البيانات بين أنظمة منفصلة اجمع الدورة المالية والتشغيلية داخل Mhamcloud."
+              : "Instead of splitting data across disconnected systems, bring financial and operational workflows together in Mhamcloud."}
+          </p>
+        </div>
       </div>
 
       <div className="container mask-r-from-50% mask-r-to-90% mask-l-from-50% mask-l-to-90%">
-        <InfiniteSlider gap={50} speedOnHover={40} reverse={isArabic}>
-          {sponsors.map(({ icon, name }, index) => {
-            const label = t.items[index % t.items.length];
+        <InfiniteSlider gap={18} speedOnHover={30} reverse={isArabic}>
+          {capabilities.map((item) => {
+            const Icon = item.icon;
 
             return (
               <div
-                key={`${name}-${index}`}
-                className={cn(
-                  "bg-background/70 border-border/70 flex items-center rounded-full border px-5 py-3 text-xl font-medium shadow-sm backdrop-blur md:text-2xl",
-                  isArabic && "flex-row-reverse"
-                )}
+                key={item.en}
+                className="flex items-center gap-3 rounded-full border border-border/70 bg-background/75 px-5 py-3 text-sm font-semibold text-foreground shadow-sm backdrop-blur-xl sm:text-base"
               >
-                <Icon
-                  name={icon}
-                  className={cn(
-                    "text-primary size-6 shrink-0",
-                    isArabic ? "ml-3" : "mr-3"
-                  )}
-                />
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
+                  <Icon className="size-4" />
+                </span>
 
-                <span className="whitespace-nowrap">{label}</span>
+                <span className="whitespace-nowrap">
+                  {isArabic ? item.ar : item.en}
+                </span>
               </div>
             );
           })}

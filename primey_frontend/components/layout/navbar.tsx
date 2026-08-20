@@ -5,16 +5,15 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  Boxes,
+  Calculator,
   ChevronLeftIcon,
   ChevronRightIcon,
-  HeartPulse,
   Languages,
+  Landmark,
   Menu,
-  Stethoscope,
-  Syringe,
-  Smile,
-  Sparkles,
-  TestTube2,
+  ReceiptText,
+  ShoppingCart,
   UsersRound,
 } from "lucide-react";
 
@@ -41,9 +40,6 @@ import {
   navigationMenuTriggerStyle,
 } from "@/components/ui/navigation-menu";
 
-/* =========================================================
-   🌐 Types
-========================================================= */
 type AppLocale = "ar" | "en";
 
 type NavbarProps = {
@@ -60,16 +56,13 @@ type LandingRoute = {
   label: LocalizedText;
 };
 
-type LandingProgram = {
+type LandingSolution = {
   href: string;
   title: LocalizedText;
   description: LocalizedText;
   icon: React.ElementType;
 };
 
-/* =========================================================
-   🧭 Landing Navigation Content
-========================================================= */
 const landingRoutes: LandingRoute[] = [
   {
     href: "/#benefits",
@@ -78,18 +71,12 @@ const landingRoutes: LandingRoute[] = [
       en: "Benefits",
     },
   },
-  {
-    href: "/#features",
-    label: {
-      ar: "الخدمات الصحية",
-      en: "Services",
-    },
-  },
+
   {
     href: "/pricing",
     label: {
-      ar: "الاشتراكات",
-      en: "Subscriptions",
+      ar: "الباقات",
+      en: "Pricing",
     },
   },
   {
@@ -108,84 +95,81 @@ const landingRoutes: LandingRoute[] = [
   },
 ];
 
-const landingPrograms: LandingProgram[] = [
+const landingSolutions: LandingSolution[] = [
   {
     href: "/#solutions",
     title: {
-      ar: "بطاقة الرعاية السنوية",
-      en: "Annual Care Card",
+      ar: "المحاسبة والمالية",
+      en: "Accounting & Finance",
     },
     description: {
-      ar: "مزايا وخصومات طبية طوال العام للأفراد والعائلات.",
-      en: "Year-round healthcare benefits for individuals and families.",
+      ar: "قيود وحسابات وتقارير مالية مترابطة تساعدك على متابعة أعمالك بدقة.",
+      en: "Connected accounting, journals, and financial reports for clearer control.",
     },
-    icon: HeartPulse,
-  },
-  {
-    href: "/#solutions",
-    title: {
-      ar: "برنامج الأسنان",
-      en: "Dental Program",
-    },
-    description: {
-      ar: "خصومات على الكشف، التنظيف، الحشوات وخدمات العناية بالفم.",
-      en: "Savings on consultations, cleaning, fillings, and oral care.",
-    },
-    icon: Smile,
+    icon: Calculator,
   },
   {
     href: "/#solutions",
     title: {
-      ar: "الفحوصات والتحاليل",
-      en: "Checkups & Lab Tests",
+      ar: "المبيعات والفوترة",
+      en: "Sales & Invoicing",
     },
     description: {
-      ar: "مزايا على التحاليل، الفحوصات الدورية والخدمات التشخيصية.",
-      en: "Benefits on lab tests, routine checkups, and diagnostics.",
+      ar: "إدارة العملاء والفواتير ومتابعة دورة المبيعات من مكان واحد.",
+      en: "Manage customers, invoices, and your complete sales workflow.",
     },
-    icon: TestTube2,
+    icon: ReceiptText,
   },
   {
     href: "/#solutions",
     title: {
-      ar: "الجلدية والتجميل",
-      en: "Dermatology & Beauty",
+      ar: "المشتريات والموردون",
+      en: "Purchases & Suppliers",
     },
     description: {
-      ar: "عروض ومزايا على العناية بالبشرة والخدمات التجميلية المختارة.",
-      en: "Selected benefits for skincare and beauty services.",
+      ar: "نظم الموردين والمشتريات والالتزامات ومتابعة العمليات بسهولة.",
+      en: "Organize suppliers, purchases, obligations, and operational follow-up.",
     },
-    icon: Sparkles,
+    icon: ShoppingCart,
   },
   {
-    href: "/#features",
+    href: "/#solutions",
     title: {
-      ar: "العيادات والاستشارات",
-      en: "Clinics & Consultations",
+      ar: "المخزون",
+      en: "Inventory",
     },
     description: {
-      ar: "استفد من مزايا طبية لدى عيادات ومراكز مشاركة.",
-      en: "Use healthcare benefits through participating clinics.",
+      ar: "متابعة المنتجات والمستودعات والحركات والمخزون بشكل متكامل.",
+      en: "Track products, warehouses, stock levels, and movements.",
     },
-    icon: Stethoscope,
+    icon: Boxes,
   },
   {
-    href: "/#features",
+    href: "/#solutions",
     title: {
-      ar: "النساء والولادة",
-      en: "Maternity Care",
+      ar: "الخزينة والمدفوعات",
+      en: "Treasury & Payments",
     },
     description: {
-      ar: "خيارات وبرامج مساندة للمتابعة والولادة حسب الباقات المتاحة.",
-      en: "Supportive options for maternity care based on available programs.",
+      ar: "إدارة النقد والبنوك والتحصيل والمدفوعات ضمن دورة مالية موحدة.",
+      en: "Manage cash, banks, collections, and payments in one financial flow.",
     },
-    icon: Syringe,
+    icon: Landmark,
+  },
+  {
+    href: "/#solutions",
+    title: {
+      ar: "العملاء والموردون",
+      en: "Customers & Suppliers",
+    },
+    description: {
+      ar: "ملف متكامل لكل طرف مع الأرصدة والحركات والتفاصيل المرتبطة.",
+      en: "Complete party profiles with balances, movements, and related details.",
+    },
+    icon: UsersRound,
   },
 ];
 
-/* =========================================================
-   🌐 Locale Helpers
-========================================================= */
 function normalizeLocale(value?: string | null): AppLocale {
   const normalized = (value || "").trim().toLowerCase();
 
@@ -208,11 +192,9 @@ function setLocaleCookie(locale: AppLocale) {
   document.cookie = `NEXT_LOCALE=${locale}; path=/; max-age=${oneYearInSeconds}; samesite=lax`;
 }
 
-/* =========================================================
-   🧩 Navbar
-========================================================= */
 export const Navbar = ({ initialLocale = "ar" }: NavbarProps) => {
   const router = useRouter();
+
   const [isOpen, setIsOpen] = React.useState(false);
   const [locale, setLocale] = useState<AppLocale>(initialLocale);
 
@@ -255,10 +237,10 @@ export const Navbar = ({ initialLocale = "ar" }: NavbarProps) => {
   const ArrowIcon = isArabic ? ChevronLeftIcon : ChevronRightIcon;
 
   const text = {
-    logoAlt: isArabic ? "Mhamcloud" : "Mhamcloud",
-    programs: isArabic ? "البرامج والبطاقات" : "Cards & Programs",
+    logoAlt: "Mhamcloud",
+    solutions: isArabic ? "المنتج والحلول" : "Product & Solutions",
     login: isArabic ? "تسجيل الدخول" : "Log in",
-    register: isArabic ? "اشترك الآن" : "Join Now",
+    register: isArabic ? "ابدأ الآن" : "Get Started",
     switchLanguage: isArabic ? "التبديل إلى الإنجليزية" : "Switch to Arabic",
     mobileMenu: isArabic ? "قائمة Mhamcloud" : "Mhamcloud Menu",
   };
@@ -266,6 +248,7 @@ export const Navbar = ({ initialLocale = "ar" }: NavbarProps) => {
   const toggleLanguage = () => {
     try {
       const nextLocale: AppLocale = locale === "ar" ? "en" : "ar";
+
       setLocale(nextLocale);
 
       if (typeof window !== "undefined") {
@@ -287,343 +270,269 @@ export const Navbar = ({ initialLocale = "ar" }: NavbarProps) => {
   };
 
   return (
-    <header className="sticky top-3 z-40 lg:top-5">
-      <div className="container">
-        <div
-          className={cn(
-            "flex items-center justify-between",
-            "min-h-[64px] rounded-[26px]",
-            "border border-white/35 bg-white/45",
-            "px-4 py-2",
-            "shadow-[0_8px_30px_rgba(15,23,42,0.08)]",
-            "backdrop-blur-xl supports-[backdrop-filter]:bg-white/35",
-            "sm:min-h-[68px] sm:px-5",
-            "lg:min-h-[74px] lg:px-6"
-          )}
-          dir={isArabic ? "rtl" : "ltr"}
+    <header className="sticky top-3 z-50 px-3 sm:px-5 lg:top-4 lg:px-7">
+      <div
+        dir={isArabic ? "rtl" : "ltr"}
+        className={cn(
+          "mx-auto flex min-h-[70px] w-full max-w-[1480px] items-center justify-between gap-4",
+          "rounded-[26px] border border-white/75",
+          "bg-[linear-gradient(115deg,rgba(255,255,255,0.76)_0%,rgba(248,250,252,0.62)_100%)]",
+          "px-4 shadow-[0_18px_54px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.85)]",
+          "backdrop-blur-2xl",
+          "sm:min-h-[76px] sm:px-6",
+          "lg:min-h-[82px] lg:px-7",
+          "dark:border-white/10 dark:bg-[linear-gradient(115deg,rgba(17,24,39,0.86)_0%,rgba(3,7,18,0.78)_100%)]"
+        )}
+      >
+        <Link
+          href="/"
+          className="flex shrink-0 items-center transition hover:opacity-85"
+          aria-label={text.logoAlt}
         >
-          <Link
-            href="/"
-            className="flex shrink-0 cursor-pointer items-center transition hover:opacity-85"
-            aria-label={text.logoAlt}
+          <Image
+            src="/hero logo.png"
+            alt={text.logoAlt}
+            width={1200}
+            height={420}
+            priority
+            unoptimized
+            className="h-auto w-auto max-w-[108px] object-contain sm:max-w-[124px] lg:max-w-[144px]"
+          />
+        </Link>
+
+        <div className="flex items-center gap-2 lg:hidden">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={toggleLanguage}
+            className="h-9 rounded-full border-border/70 bg-background/70 px-3 shadow-sm backdrop-blur-xl"
           >
-            <Image
-              src="/hero logo.png"
-              alt={text.logoAlt}
-              width={1200}
-              height={420}
-              priority
-              unoptimized
-              className={cn(
-                "h-auto w-auto object-contain",
-                "max-w-[96px]",
-                "sm:max-w-[108px]",
-                "md:max-w-[118px]",
-                "lg:max-w-[132px]",
-                "xl:max-w-[142px]"
-              )}
-            />
-          </Link>
+            <Languages className="size-4" />
+            <span>{isArabic ? "EN" : "عربي"}</span>
+          </Button>
 
-          {/* =========================================================
-              📱 Mobile
-          ========================================================= */}
-          <div className="flex items-center gap-2 lg:hidden">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={toggleLanguage}
-              className={cn(
-                "h-8 rounded-xl border-white/40",
-                "bg-white/55 px-3 text-sm",
-                "shadow-sm backdrop-blur-md",
-                "hover:bg-white/70"
-              )}
-            >
-              <Languages className="h-4 w-4" />
-              <span>{isArabic ? "EN" : "عربي"}</span>
-            </Button>
-
-            <Sheet open={isOpen} onOpenChange={setIsOpen}>
-              <SheetTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "h-8 w-8 rounded-xl",
-                    "bg-white/40 backdrop-blur-md",
-                    "hover:bg-white/60",
-                    "lg:hidden"
-                  )}
-                  onClick={() => setIsOpen(!isOpen)}
-                  aria-label={text.mobileMenu}
-                >
-                  <Menu className="h-4 w-4" />
-                </Button>
-              </SheetTrigger>
-
-              <SheetContent
-                side={isArabic ? "right" : "left"}
-                className={cn(
-                  "flex flex-col justify-between",
-                  isArabic
-                    ? "rounded-tl-2xl rounded-bl-2xl"
-                    : "rounded-tr-2xl rounded-br-2xl",
-                  "border-white/30 bg-white/80",
-                  "backdrop-blur-xl",
-                  "data-[state=open]:duration-300"
-                )}
-                dir={isArabic ? "rtl" : "ltr"}
+          <Sheet open={isOpen} onOpenChange={setIsOpen}>
+            <SheetTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-9 rounded-xl border-border/70 bg-background/70 shadow-sm backdrop-blur-xl"
+                aria-label={text.mobileMenu}
               >
-                <div>
-                  <SheetHeader
-                    className={cn("mb-4", isArabic ? "mr-4" : "ml-4")}
-                  >
-                    <SheetTitle className="flex items-center">
-                      <Link
-                        href="/"
-                        onClick={() => setIsOpen(false)}
-                        className="flex cursor-pointer items-center transition hover:opacity-85"
-                        aria-label={text.logoAlt}
-                      >
-                        <Image
-                          src="/hero logo.png"
-                          alt={text.logoAlt}
-                          width={1200}
-                          height={420}
-                          priority
-                          unoptimized
-                          className="h-auto w-auto max-w-[118px] object-contain sm:max-w-[130px]"
-                        />
-                      </Link>
-                    </SheetTitle>
-                  </SheetHeader>
+                <Menu className="size-4" />
+              </Button>
+            </SheetTrigger>
 
-                  <div className="flex flex-col gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        "border-white/40 bg-white/60 text-base backdrop-blur-md hover:bg-white/75",
-                        isArabic
-                          ? "justify-end text-right"
-                          : "justify-start text-left"
-                      )}
-                      onClick={toggleLanguage}
-                    >
-                      <Languages className="h-4 w-4" />
-                      {text.switchLanguage}
-                    </Button>
+            <SheetContent
+              side={isArabic ? "right" : "left"}
+              dir={isArabic ? "rtl" : "ltr"}
+              className="flex w-[90vw] max-w-sm flex-col bg-background/95 backdrop-blur-2xl"
+            >
+              <SheetHeader>
+                <SheetTitle className="flex justify-start">
+                  <Image
+                    src="/hero logo.png"
+                    alt={text.logoAlt}
+                    width={1200}
+                    height={420}
+                    priority
+                    unoptimized
+                    className="h-auto w-auto max-w-[132px] object-contain"
+                  />
+                </SheetTitle>
+              </SheetHeader>
 
-                    <Separator className="my-2 bg-white/40" />
-
-                    <div
-                      className={cn(
-                        "px-3 text-xs font-semibold text-muted-foreground",
-                        isArabic ? "text-right" : "text-left"
-                      )}
-                    >
-                      {text.programs}
-                    </div>
-
-                    {landingPrograms.slice(0, 4).map(({ href, title, icon: Icon }) => (
-                      <Button
-                        key={title.en}
-                        onClick={() => setIsOpen(false)}
-                        asChild
-                        variant="ghost"
-                        className={cn(
-                          "gap-3 text-base hover:bg-white/55",
-                          isArabic
-                            ? "justify-end text-right"
-                            : "justify-start text-left"
-                        )}
-                      >
-                        <Link href={href}>
-                          <Icon className="h-4 w-4 text-primary" />
-                          {isArabic ? title.ar : title.en}
-                        </Link>
-                      </Button>
-                    ))}
-
-                    <Separator className="my-2 bg-white/40" />
-
-                    {landingRoutes.map(({ href, label }) => (
-                      <Button
-                        key={href}
-                        onClick={() => setIsOpen(false)}
-                        asChild
-                        variant="ghost"
-                        className={cn(
-                          "text-base hover:bg-white/55",
-                          isArabic
-                            ? "justify-end text-right"
-                            : "justify-start text-left"
-                        )}
-                      >
-                        <Link href={href}>
-                          {isArabic ? label.ar : label.en}
-                        </Link>
-                      </Button>
-                    ))}
-
-                    <Separator className="my-2 bg-white/40" />
-
-                    <Button
-                      onClick={() => setIsOpen(false)}
-                      asChild
-                      className="rounded-xl"
-                    >
-                      <Link href="/register">
-                        {text.register}
-                        <ArrowIcon className="h-4 w-4" />
-                      </Link>
-                    </Button>
-
-                    <Button
-                      onClick={() => setIsOpen(false)}
-                      asChild
-                      variant="outline"
-                      className="rounded-xl border-white/40 bg-white/60"
-                    >
-                      <Link href="/login">{text.login}</Link>
-                    </Button>
-                  </div>
+              <div className="mt-6 flex flex-1 flex-col gap-2">
+                <div className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {text.solutions}
                 </div>
 
-                <SheetFooter
-                  className={cn(
-                    "flex-col justify-start sm:flex-col",
-                    isArabic ? "items-end" : "items-start"
-                  )}
-                >
-                  <Separator className="mb-2 bg-white/40" />
-                  <ToggleTheme />
-                </SheetFooter>
-              </SheetContent>
-            </Sheet>
-          </div>
+                {landingSolutions.map(({ href, title, icon: Icon }) => (
+                  <Button
+                    key={title.en}
+                    asChild
+                    variant="ghost"
+                    onClick={() => setIsOpen(false)}
+                    className={cn(
+                      "h-11 gap-3 rounded-xl",
+                      isArabic
+                        ? "justify-start text-right"
+                        : "justify-start text-left"
+                    )}
+                  >
+                    <Link href={href}>
+                      <span className="flex size-8 items-center justify-center rounded-lg bg-primary/8 text-primary">
+                        <Icon className="size-4" />
+                      </span>
 
-          {/* =========================================================
-              🖥️ Desktop
-          ========================================================= */}
-          <NavigationMenu className="mx-auto hidden lg:block">
-            <NavigationMenuList className="gap-1 xl:gap-2">
-              <NavigationMenuItem>
-                <NavigationMenuTrigger
-                  className={cn(
-                    "h-9 rounded-xl bg-transparent px-3",
-                    "text-sm font-medium text-foreground",
-                    "hover:bg-white/45",
-                    "data-[state=open]:bg-white/55"
-                  )}
-                >
-                  {text.programs}
-                </NavigationMenuTrigger>
+                      {isArabic ? title.ar : title.en}
+                    </Link>
+                  </Button>
+                ))}
 
-                <NavigationMenuContent className="border-white/30 bg-white/90 backdrop-blur-xl">
-                  <div className="w-80 gap-4">
-                    <ul className="flex flex-col">
-                      {landingPrograms.map(
-                        ({ href, title, description, icon: Icon }) => (
-                          <li key={title.en}>
-                            <Link
-                              href={href}
-                              className={cn(
-                                "flex items-center gap-4 rounded-md p-4 text-sm hover:bg-white/60",
-                                isArabic && "flex-row-reverse"
-                              )}
-                            >
-                              <div className="bg-primary/15 ring-primary/10 flex size-8 items-center justify-center rounded-full p-2 ring-8">
-                                <Icon className="text-primary size-5 shrink-0" />
-                              </div>
+                <Separator className="my-3" />
 
-                              <div
-                                className={isArabic ? "text-right" : "text-left"}
-                              >
-                                <p className="text-foreground mb-1 leading-none font-semibold">
-                                  {isArabic ? title.ar : title.en}
-                                </p>
-                                <p className="text-muted-foreground line-clamp-2">
-                                  {isArabic
-                                    ? description.ar
-                                    : description.en}
-                                </p>
-                              </div>
-                            </Link>
-                          </li>
-                        )
-                      )}
-                    </ul>
-                  </div>
-                </NavigationMenuContent>
-              </NavigationMenuItem>
-
-              <NavigationMenuItem className="flex items-center gap-1 xl:gap-2">
                 {landingRoutes.map(({ href, label }) => (
-                  <NavigationMenuLink
+                  <Button
                     key={href}
                     asChild
+                    variant="ghost"
+                    onClick={() => setIsOpen(false)}
                     className={cn(
-                      navigationMenuTriggerStyle(),
-                      "h-9 rounded-xl bg-transparent px-3 text-sm font-medium xl:px-4",
-                      "hover:bg-white/45!"
+                      "h-11 rounded-xl",
+                      isArabic
+                        ? "justify-start text-right"
+                        : "justify-start text-left"
                     )}
                   >
                     <Link href={href}>
                       {isArabic ? label.ar : label.en}
                     </Link>
-                  </NavigationMenuLink>
+                  </Button>
                 ))}
+
+                <Separator className="my-3" />
+
+                <Button
+                  asChild
+                  onClick={() => setIsOpen(false)}
+                  className="h-11 rounded-xl"
+                >
+                  <Link href="/register">
+                    {text.register}
+                    <ArrowIcon className="size-4" />
+                  </Link>
+                </Button>
+
+                <Button
+                  asChild
+                  variant="outline"
+                  onClick={() => setIsOpen(false)}
+                  className="h-11 rounded-xl"
+                >
+                  <Link href="/login">{text.login}</Link>
+                </Button>
+              </div>
+
+              <SheetFooter className="mt-5">
+                <div className="flex items-center justify-between gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={toggleLanguage}
+                    className="rounded-xl"
+                  >
+                    <Languages className="size-4" />
+                    {text.switchLanguage}
+                  </Button>
+
+                  <ToggleTheme />
+                </div>
+              </SheetFooter>
+            </SheetContent>
+          </Sheet>
+        </div>
+
+        <NavigationMenu className="mx-auto hidden lg:block">
+          <NavigationMenuList className="gap-1">
+            <NavigationMenuItem>
+              <NavigationMenuTrigger className="h-10 rounded-xl bg-transparent px-4 text-sm font-semibold hover:bg-muted/60 data-[state=open]:bg-muted/70">
+                {text.solutions}
+              </NavigationMenuTrigger>
+
+              <NavigationMenuContent className="border-border/70 bg-background/95 shadow-xl backdrop-blur-2xl">
+                <div className="grid w-[660px] grid-cols-2 gap-2 p-2">
+                  {landingSolutions.map(
+                    ({ href, title, description, icon: Icon }) => (
+                      <Link
+                        key={title.en}
+                        href={href}
+                        className={cn(
+                          "group flex gap-4 rounded-2xl border border-transparent p-4",
+                          "transition hover:border-border hover:bg-muted/55",
+                          isArabic && "flex-row-reverse"
+                        )}
+                      >
+                        <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl border bg-background text-primary shadow-sm">
+                          <Icon className="size-5" />
+                        </span>
+
+                        <span
+                          className={cn(
+                            "min-w-0",
+                            isArabic ? "text-right" : "text-left"
+                          )}
+                        >
+                          <span className="block font-semibold text-foreground">
+                            {isArabic ? title.ar : title.en}
+                          </span>
+
+                          <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                            {isArabic ? description.ar : description.en}
+                          </span>
+                        </span>
+                      </Link>
+                    )
+                  )}
+                </div>
+              </NavigationMenuContent>
+            </NavigationMenuItem>
+
+            {landingRoutes.map(({ href, label }) => (
+              <NavigationMenuItem key={href}>
+                <NavigationMenuLink
+                  asChild
+                  className={cn(
+                    navigationMenuTriggerStyle(),
+                    "h-10 rounded-xl bg-transparent px-3 text-sm font-medium hover:bg-muted/55!"
+                  )}
+                >
+                  <Link href={href}>
+                    {isArabic ? label.ar : label.en}
+                  </Link>
+                </NavigationMenuLink>
               </NavigationMenuItem>
-            </NavigationMenuList>
-          </NavigationMenu>
+            ))}
+          </NavigationMenuList>
+        </NavigationMenu>
 
-          <div className="hidden items-center gap-2 lg:flex">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={toggleLanguage}
-              className={cn(
-                "h-8 rounded-xl border-white/40",
-                "bg-white/55 px-3 text-sm",
-                "shadow-sm backdrop-blur-md",
-                "hover:bg-white/70"
-              )}
-            >
-              <Languages className="h-4 w-4" />
-              <span>{isArabic ? "EN" : "عربي"}</span>
-            </Button>
+        <div className="hidden shrink-0 items-center gap-2 lg:flex">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={toggleLanguage}
+            className="h-9 rounded-full border border-border/70 bg-background/60 px-3 shadow-sm"
+          >
+            <Languages className="size-4" />
+            {isArabic ? "EN" : "عربي"}
+          </Button>
 
-            <div className="rounded-xl bg-white/40 p-1 backdrop-blur-md">
-              <ToggleTheme />
-            </div>
-
-            <div className="flex items-center gap-1 xl:gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                asChild
-                className="h-9 rounded-xl px-4 text-sm hover:bg-white/45"
-              >
-                <Link href="/login">{text.login}</Link>
-              </Button>
-
-              <Button
-                size="sm"
-                asChild
-                className="h-9 rounded-xl px-4 text-sm shadow-sm xl:px-5"
-              >
-                <Link href="/register">
-                  {text.register}
-                  <ArrowIcon className="h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
+          <div className="rounded-xl border border-border/60 bg-background/55 p-1">
+            <ToggleTheme />
           </div>
+
+          <Button
+            size="sm"
+            variant="ghost"
+            asChild
+            className="h-10 rounded-xl px-4"
+          >
+            <Link href="/login">{text.login}</Link>
+          </Button>
+
+          <Button
+            size="sm"
+            asChild
+            className="h-10 rounded-xl px-5 shadow-sm"
+          >
+            <Link href="/register">
+              {text.register}
+              <ArrowIcon className="size-4" />
+            </Link>
+          </Button>
         </div>
       </div>
     </header>

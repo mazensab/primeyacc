@@ -1,32 +1,18 @@
 import { cookies } from "next/headers";
+import {
+  ChartNoAxesCombined,
+  DatabaseZap,
+  Gauge,
+  Layers3,
+} from "lucide-react";
 
-import { benefitList } from "@/@data/benefits";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import Icon from "@/components/icon";
 import { cn } from "@/lib/utils";
 import SectionContainer from "../section-container";
 import SectionHeader from "../section-header";
 
-/* =========================================================
-   🌐 Language Types
-========================================================= */
 type AppLang = "ar" | "en";
 
-type BenefitTranslation = {
-  title: string;
-  description: string;
-};
-
-type BenefitsContent = {
-  subTitle: string;
-  title: string;
-  description: string;
-  items: BenefitTranslation[];
-};
-
-/* =========================================================
-   🌐 Language Helper
-========================================================= */
 async function getPageLang(): Promise<AppLang> {
   const cookieStore = await cookies();
 
@@ -36,132 +22,128 @@ async function getPageLang(): Promise<AppLang> {
     cookieStore.get("NEXT_LOCALE")?.value ||
     "";
 
-  const normalizedLang = cookieLang.toLowerCase();
-
-  return normalizedLang.startsWith("ar") ? "ar" : "en";
+  return cookieLang.toLowerCase().startsWith("ar") ? "ar" : "en";
 }
 
-/* =========================================================
-   📝 Localized Content
-========================================================= */
-const benefitsContent: Record<AppLang, BenefitsContent> = {
-  ar: {
-    subTitle: "لماذا Mhamcloud؟",
-    title: "مزايا صحية تساعدك أنت وعائلتك على التوفير",
-    description:
-      "Mhamcloud تمنحك طريقة أسهل للاستفادة من خدمات طبية متنوعة بخصومات مختارة، عبر بطاقة وبرامج رعاية مصممة لتجعل الوصول إلى الرعاية الصحية أوضح وأقرب وأقل تكلفة.",
-    items: [
-      {
-        title: "وفّر في كل زيارة",
-        description:
-          "استفد من خصومات مختارة على الكشف، التحاليل، الأشعة، الأسنان، الجلدية، التجميل، الولادة وخدمات طبية أخرى حسب مقدم الخدمة والعرض المتاح.",
-      },
-      {
-        title: "بطاقة سهلة الاستخدام",
-        description:
-          "اشترك في البطاقة أو البرنامج المناسب، ثم استخدم بيانات عضويتك لدى مزودي الخدمة المشاركين للاستفادة من المزايا المتاحة بكل سهولة.",
-      },
-      {
-        title: "شبكة طبية مختارة",
-        description:
-          "نوفر لك وصولًا إلى مجموعة من العيادات والمراكز والمستشفيات ومقدمي الخدمات الصحية المشاركين لتلبية احتياجاتك واحتياجات عائلتك.",
-      },
-      {
-        title: "خيارات تناسب احتياجك",
-        description:
-          "سواء كنت تبحث عن بطاقة رعاية سنوية أو برنامج طبي محدد للأسنان أو الفحوصات أو التجميل أو الولادة، ستجد خيارات مرنة تساعدك على اختيار الأنسب.",
-      },
-    ],
+const benefits = [
+  {
+    icon: DatabaseZap,
+    title: {
+      ar: "بيانات مترابطة بدل الإدخال المتكرر",
+      en: "Connected data instead of repeated entry",
+    },
+    description: {
+      ar: "تنتقل آثار العمليات بين المبيعات والمشتريات والعملاء والموردين والمخزون والحسابات ضمن دورة مترابطة فتقل الحاجة إلى إعادة إدخال نفس البيانات في أكثر من مكان.",
+      en: "Sales, purchases, customers, suppliers, inventory, and accounting work through connected workflows, reducing repeated data entry across separate tools.",
+    },
   },
-  en: {
-    subTitle: "Why Mhamcloud?",
-    title: "Healthcare benefits that help you and your family save",
-    description:
-      "Mhamcloud gives you an easier way to access a wide range of healthcare services with selected discounts through care cards and programs designed to make healthcare clearer, closer, and more affordable.",
-    items: [
-      {
-        title: "Save on Every Visit",
-        description:
-          "Enjoy selected discounts on consultations, lab tests, scans, dental care, dermatology, beauty, maternity, and other healthcare services depending on the provider and available offer.",
-      },
-      {
-        title: "Easy-to-Use Card",
-        description:
-          "Subscribe to the card or program that fits your needs, then use your membership details at participating providers to access available benefits with ease.",
-      },
-      {
-        title: "Selected Healthcare Network",
-        description:
-          "Get access to a network of participating clinics, medical centers, hospitals, and healthcare providers that support your needs and your family’s needs.",
-      },
-      {
-        title: "Options That Fit Your Needs",
-        description:
-          "Whether you need an annual care card or a specific healthcare program for dental care, checkups, beauty, or maternity, Mhamcloud offers flexible options to choose from.",
-      },
-    ],
+  {
+    icon: ChartNoAxesCombined,
+    title: {
+      ar: "رؤية مالية أوضح",
+      en: "Clearer financial visibility",
+    },
+    description: {
+      ar: "تابع القيود والأرصدة والحركات والخزينة والتقارير من نفس بيئة العمل بحيث تكون الصورة المالية أقرب إلى العمليات التي أنشأتها.",
+      en: "Track journals, balances, movements, treasury, and reports in the same workspace so financial visibility stays close to the operations behind it.",
+    },
   },
-};
+  {
+    icon: Gauge,
+    title: {
+      ar: "تشغيل أسرع للفريق",
+      en: "Faster team operations",
+    },
+    description: {
+      ar: "تجميع الوحدات في منصة واحدة يقلل التنقل بين الأدوات ويساعد الفرق المالية والتشغيلية على الوصول للمعلومة والإجراء المطلوب بصورة أسرع.",
+      en: "Bringing modules into one platform reduces tool switching and helps financial and operational teams reach the right information and action faster.",
+    },
+  },
+  {
+    icon: Layers3,
+    title: {
+      ar: "منصة تنمو مع شركتك",
+      en: "A platform that grows with your business",
+    },
+    description: {
+      ar: "ابدأ بالنطاق الذي تحتاجه ثم وسع المستخدمين والوحدات والصلاحيات مع نمو عملياتك بدل تغيير النظام كلما تطورت الشركة.",
+      en: "Start with the scope you need, then expand users, modules, and permissions as operations grow instead of replacing the system as your business evolves.",
+    },
+  },
+] as const;
 
-/* =========================================================
-   🧩 Section
-========================================================= */
 export const BenefitsSection = async () => {
   const lang = await getPageLang();
   const isArabic = lang === "ar";
-  const t = benefitsContent[lang];
 
   return (
-    <SectionContainer id="benefits">
-      <div className="grid lg:grid-cols-2 lg:gap-24">
+    <SectionContainer id="benefits" className="py-10 md:py-12 lg:py-14">
+      <div
+        dir={isArabic ? "rtl" : "ltr"}
+        className="space-y-8 md:space-y-10"
+      >
         <div>
           <SectionHeader
             className={cn(
-              "sticky max-w-full text-center lg:top-[22rem]",
-              isArabic ? "lg:text-right" : "lg:text-start"
+              "mx-auto max-w-3xl text-center",
+              ""
             )}
-            subTitle={t.subTitle}
-            title={t.title}
-            description={t.description}
+            subTitle={
+              isArabic ? "لماذا Mhamcloud" : "Why Mhamcloud?"
+            }
+            title={
+              isArabic
+                ? "من العمليات اليومية إلى القرار المالي"
+                : "From daily operations to financial decisions"
+            }
+            description={
+              isArabic
+                ? "Mhamcloud لا يجمع الشاشات فقط بل يربط الدورة التشغيلية والمالية حتى تعمل الفرق على بيانات أوضح ويصل أثر العملية إلى المكان الصحيح."
+                : "Mhamcloud does more than group screens. It connects operational and financial workflows so teams work with clearer data and each transaction reaches the right place."
+            }
           />
         </div>
 
-        <div className="flex w-full flex-col gap-6 lg:gap-[14rem]">
-          {benefitList.map(({ icon, title }, index) => {
-            const translatedItem = t.items[index];
+        <div className="grid w-full gap-4 md:grid-cols-2 lg:gap-5">
+          {benefits.map((benefit, index) => {
+            const Icon = benefit.icon;
 
             return (
               <Card
-                key={title}
-                className={cn("group/number bg-background lg:sticky")}
-                style={{ top: `${20 + index + 2}rem` }}
+                key={benefit.title.en}
+                className="group/number h-full overflow-hidden border-border/70 bg-background/90 shadow-[0_14px_36px_rgba(15,23,42,0.045)] backdrop-blur-xl transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_46px_rgba(15,23,42,0.075)]"
+
               >
                 <CardHeader>
-                  <div className="flex justify-between">
-                    <Icon
-                      name={icon}
-                      className="text-primary bg-primary/20 ring-primary/10 mb-6 size-10 rounded-full p-2 ring-8"
-                    />
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex size-10 items-center justify-center rounded-[14px] border border-border/70 bg-muted/55 text-foreground">
+                      <Icon className="size-[18px]" />
+                    </div>
 
-                    <span className="text-muted-foreground/15 group-hover/number:text-muted-foreground/30 text-5xl font-bold transition-all delay-75">
+                    <span className="text-[42px] font-bold leading-none text-muted-foreground/15 transition group-hover/number:text-muted-foreground/30">
                       0{index + 1}
                     </span>
                   </div>
 
                   <CardTitle
-                    className={cn("text-lg", isArabic && "text-right")}
+                    className={cn(
+                      "mt-2 text-xl leading-7",
+                      isArabic && "text-right"
+                    )}
                   >
-                    {translatedItem?.title || title}
+                    {isArabic ? benefit.title.ar : benefit.title.en}
                   </CardTitle>
                 </CardHeader>
 
                 <CardContent
                   className={cn(
-                    "text-muted-foreground leading-7",
+                    "pb-5 text-sm leading-7 text-muted-foreground sm:text-[15px]",
                     isArabic && "text-right"
                   )}
                 >
-                  {translatedItem?.description || ""}
+                  {isArabic
+                    ? benefit.description.ar
+                    : benefit.description.en}
                 </CardContent>
               </Card>
             );

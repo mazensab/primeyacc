@@ -51,11 +51,11 @@ function buildApiUrl(path: string): string {
    🧩 Types
 ========================================================= */
 const SUBJECT_OPTIONS = [
-  "Join Mhamcloud",
-  "Ask About Benefits",
-  "Healthcare Network",
-  "Family Card",
-  "Medical Programs",
+  "Request a Trial",
+  "Pricing & Plans",
+  "Accounting & Finance",
+  "Sales & Invoicing",
+  "Inventory & Purchases",
   "Customer Support",
 ] as const;
 
@@ -127,9 +127,9 @@ const content: Record<AppLang, ContactContent> = {
   ar: {
     section: {
       subTitle: "تواصل معنا",
-      title: "هل تريد معرفة البطاقة أو البرنامج الأنسب لك؟",
+      title: "لنساعدك في اختيار الحل المناسب لأعمالك",
       description:
-        "أرسل لنا استفسارك وسنساعدك في اختيار بطاقة أو برنامج Mhamcloud المناسب لك ولعائلتك، مع توضيح المزايا والشبكة الطبية المتاحة حسب احتياجك.",
+        "أرسل لنا احتياج شركتك وسنساعدك في تحديد الوحدات والباقات المناسبة، سواء للمحاسبة أو المبيعات أو المشتريات أو المخزون أو الخزينة والمدفوعات.",
     },
     contactInfo: {
       locationLabel: "الموقع:",
@@ -137,7 +137,7 @@ const content: Record<AppLang, ContactContent> = {
       phoneLabel: "اتصل بنا:",
       phoneValue: "00966 (50) 526-3775",
       whatsappLabel: "واتساب:",
-      whatsappValue: "تواصل سريع للاستفسار عن المزايا والاشتراك",
+      whatsappValue: "تواصل سريع للاستفسار عن النظام والباقات وطلب تجربة Mhamcloud",
       emailLabel: "البريد الإلكتروني:",
       emailValue: "info@mhamcloud.sa",
       businessHoursLabel: "ساعات التواصل:",
@@ -155,7 +155,7 @@ const content: Record<AppLang, ContactContent> = {
       emailPlaceholder: "name@example.com",
       subjectPlaceholder: "اختر نوع الاستفسار",
       messagePlaceholder:
-        "اكتب استفسارك هنا، مثل المدينة، نوع البطاقة، أو الخدمة الطبية التي تريد معرفة مزاياها...",
+        "اكتب احتياج شركتك، مثل عدد المستخدمين والوحدات المطلوبة أو أي تفاصيل تساعدنا على فهم متطلباتك...",
       submit: "إرسال الاستفسار",
       submitting: "جارٍ الإرسال...",
     },
@@ -174,20 +174,20 @@ const content: Record<AppLang, ContactContent> = {
       sendFailed: "تعذر إرسال الاستفسار",
     },
     subjects: {
-      "Join Mhamcloud": "الاشتراك في Mhamcloud",
-      "Ask About Benefits": "الاستفسار عن المزايا",
-      "Healthcare Network": "الشبكة الطبية والمراكز المشاركة",
-      "Family Card": "البطاقة العائلية",
-      "Medical Programs": "البرامج الطبية",
-      "Customer Support": "الدعم والمساعدة",
+      "Request a Trial": "طلب تجربة Mhamcloud",
+      "Pricing & Plans": "الباقات والأسعار",
+      "Accounting & Finance": "المحاسبة والمالية",
+      "Sales & Invoicing": "المبيعات والفوترة",
+      "Inventory & Purchases": "المخزون والمشتريات",
+      "Customer Support": "الدعم الفني",
     },
   },
   en: {
     section: {
       subTitle: "Contact",
-      title: "Need help choosing the right card or program?",
+      title: "Let us help you choose the right solution for your business",
       description:
-        "Send us your inquiry and we will help you choose the Mhamcloud card or program that fits you and your family, with clear details about benefits and available healthcare providers.",
+        "Tell us what your company needs and we will help you identify the right modules and plan for accounting, sales, purchases, inventory, treasury, payments, and daily operations.",
     },
     contactInfo: {
       locationLabel: "Location:",
@@ -195,7 +195,7 @@ const content: Record<AppLang, ContactContent> = {
       phoneLabel: "Call us:",
       phoneValue: "+966 (50) 526-3775",
       whatsappLabel: "WhatsApp:",
-      whatsappValue: "Quick support for benefits and subscription inquiries",
+      whatsappValue: "Quick support for Mhamcloud product, plan, and trial inquiries",
       emailLabel: "Email:",
       emailValue: "info@mhamcloud.sa",
       businessHoursLabel: "Contact Hours:",
@@ -213,7 +213,7 @@ const content: Record<AppLang, ContactContent> = {
       emailPlaceholder: "name@example.com",
       subjectPlaceholder: "Select inquiry type",
       messagePlaceholder:
-        "Write your inquiry here, such as your city, preferred card type, or the healthcare service you want to know about...",
+        "Tell us about your company, number of users, required modules, or any details that can help us understand your needs...",
       submit: "Send Inquiry",
       submitting: "Sending...",
     },
@@ -232,11 +232,11 @@ const content: Record<AppLang, ContactContent> = {
       sendFailed: "Failed to send inquiry",
     },
     subjects: {
-      "Join Mhamcloud": "Join Mhamcloud",
-      "Ask About Benefits": "Ask About Benefits",
-      "Healthcare Network": "Healthcare Network",
-      "Family Card": "Family Card",
-      "Medical Programs": "Medical Programs",
+      "Request a Trial": "Request a Trial",
+      "Pricing & Plans": "Pricing & Plans",
+      "Accounting & Finance": "Accounting & Finance",
+      "Sales & Invoicing": "Sales & Invoicing",
+      "Inventory & Purchases": "Inventory & Purchases",
       "Customer Support": "Customer Support",
     },
   },
@@ -357,7 +357,7 @@ export const ContactSection = () => {
           email: values.email,
           subject: values.subject,
           message: values.message,
-          source: "primey_care_landing",
+          source: "mhamcloud_landing",
         }),
       });
 
@@ -387,7 +387,7 @@ export const ContactSection = () => {
   }
 
   return (
-    <SectionContainer id="contact">
+    <SectionContainer id="contact" className="py-8 md:py-10 lg:py-12">
       <div dir={dir} className={cn("w-full", isArabic && "font-[inherit]")}>
         <SectionHeader
           subTitle={t.section.subTitle}
