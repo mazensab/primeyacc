@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # ًں“‚ treasury/services.py
 # ًں§  Mhamcloud | Treasury & Payments Services V1.4
 # ------------------------------------------------------------
@@ -897,10 +897,7 @@ def post_treasury_transaction(
     ensure_same_company(company, treasury_transaction, field_name="transaction")
 
     with transaction.atomic():
-        treasury_transaction = TreasuryTransaction.objects.select_for_update().select_related(
-            "account",
-            "counterparty_account",
-        ).get(
+        treasury_transaction = TreasuryTransaction.objects.select_for_update().get(
             id=treasury_transaction.id,
             company=company,
         )
@@ -977,10 +974,7 @@ def cancel_treasury_transaction(
     ensure_same_company(company, treasury_transaction, field_name="transaction")
 
     with transaction.atomic():
-        treasury_transaction = TreasuryTransaction.objects.select_for_update().select_related(
-            "account",
-            "counterparty_account",
-        ).get(
+        treasury_transaction = TreasuryTransaction.objects.select_for_update().get(
             id=treasury_transaction.id,
             company=company,
         )
@@ -1561,12 +1555,7 @@ def confirm_customer_payment(
     ensure_same_company(company, payment, field_name="payment")
 
     with transaction.atomic():
-        payment = CustomerPayment.objects.select_for_update().select_related(
-            "sales_invoice",
-            "treasury_account",
-            "treasury_transaction",
-            "accounting_entry",
-        ).get(
+        payment = CustomerPayment.objects.select_for_update().get(
             id=payment.id,
             company=company,
         )
@@ -1649,11 +1638,7 @@ def cancel_customer_payment(
     ensure_same_company(company, payment, field_name="payment")
 
     with transaction.atomic():
-        payment = CustomerPayment.objects.select_for_update().select_related(
-            "sales_invoice",
-            "treasury_transaction",
-            "accounting_entry",
-        ).get(
+        payment = CustomerPayment.objects.select_for_update().get(
             id=payment.id,
             company=company,
         )
@@ -1914,12 +1899,7 @@ def confirm_supplier_payment(
     ensure_same_company(company, payment, field_name="payment")
 
     with transaction.atomic():
-        payment = SupplierPayment.objects.select_for_update().select_related(
-            "purchase_bill",
-            "treasury_account",
-            "treasury_transaction",
-            "accounting_entry",
-        ).get(
+        payment = SupplierPayment.objects.select_for_update().get(
             id=payment.id,
             company=company,
         )
@@ -2002,11 +1982,7 @@ def cancel_supplier_payment(
     ensure_same_company(company, payment, field_name="payment")
 
     with transaction.atomic():
-        payment = SupplierPayment.objects.select_for_update().select_related(
-            "purchase_bill",
-            "treasury_transaction",
-            "accounting_entry",
-        ).get(
+        payment = SupplierPayment.objects.select_for_update().get(
             id=payment.id,
             company=company,
         )
