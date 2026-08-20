@@ -21,6 +21,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.core.exceptions import ValidationError
@@ -30,6 +31,7 @@ from django.utils import timezone
 
 
 ZERO_MONEY = Decimal("0.00")
+SUBSCRIPTION_ACTIVE_GRACE_DAYS = 7
 
 
 def money(value: Decimal | int | str | None) -> Decimal:
@@ -397,6 +399,66 @@ class CompanySubscription(models.Model):
         return max(remaining, 0)
 
     @property
+    def active_grace_expires_at(self):
+        """
+        Return the final grace date for ACTIVE subscriptions.
+
+        TRIAL and non-ACTIVE statuses never receive this grace.
+        """
+
+        if self.status != self.Status.ACTIVE:
+            return None
+
+        return self.end_date + timedelta(
+            days=SUBSCRIPTION_ACTIVE_GRACE_DAYS
+        )
+
+    @property
+    def is_in_active_grace(self) -> bool:
+        """
+        True only while an ACTIVE subscription is inside its
+        post-expiry grace window.
+        """
+
+        if self.status != self.Status.ACTIVE:
+            return False
+
+        grace_expires_at = self.active_grace_expires_at
+
+        if grace_expires_at is None:
+            return False
+
+        today = timezone.localdate()
+
+        return (
+            self.end_date < today <= grace_expires_at
+        )
+
+    @property
+    def grace_days_remaining(self) -> int:
+        """
+        Remaining calendar days in ACTIVE grace.
+
+        Returns zero outside the grace window.
+        """
+
+        if not self.is_in_active_grace:
+            return 0
+
+        grace_expires_at = self.active_grace_expires_at
+
+        if grace_expires_at is None:
+            return 0
+
+        return max(
+            (
+                grace_expires_at
+                - timezone.localdate()
+            ).days,
+            0,
+        )
+
+    @property
     def amount_before_tax(self) -> Decimal:
         return max(money(self.price) - money(self.discount_amount), ZERO_MONEY)
 
@@ -483,15 +545,27 @@ class CompanySubscription(models.Model):
         يرجع True إذا تم تغيير الحالة.
         """
 
-        if self.status in {self.Status.TRIAL, self.Status.ACTIVE} and self.is_expired_by_date:
-            self.status = self.Status.EXPIRED
+        today = timezone.localdate()
 
-            if save:
-                self.save(update_fields=["status", "updated_at"])
+        if self.status == self.Status.TRIAL:
+            should_expire = today > self.end_date
+        elif self.status == self.Status.ACTIVE:
+            grace_end_date = self.end_date + timedelta(
+                days=SUBSCRIPTION_ACTIVE_GRACE_DAYS
+            )
+            should_expire = today > grace_end_date
+        else:
+            should_expire = False
 
-            return True
+        if not should_expire:
+            return False
 
-        return False
+        self.status = self.Status.EXPIRED
+
+        if save:
+            self.save(update_fields=["status", "updated_at"])
+
+        return True
 
     def cancel(self, save: bool = True) -> None:
         self.status = self.Status.CANCELLED

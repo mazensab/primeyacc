@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import calendar
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
@@ -28,7 +28,11 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from subscriptions.models import CompanySubscription, SubscriptionPlan
+from subscriptions.models import (
+    SUBSCRIPTION_ACTIVE_GRACE_DAYS,
+    CompanySubscription,
+    SubscriptionPlan,
+)
 
 
 ZERO_MONEY = Decimal("0.00")
@@ -178,6 +182,8 @@ def get_current_subscription(company) -> CompanySubscription | None:
     if not company:
         raise ValidationError({"company": "الشركة مطلوبة."})
 
+    today = timezone.localdate()
+
     return (
         CompanySubscription.objects.filter(
             company=company,
@@ -185,8 +191,37 @@ def get_current_subscription(company) -> CompanySubscription | None:
                 CompanySubscription.Status.TRIAL,
                 CompanySubscription.Status.ACTIVE,
             ],
+            start_date__lte=today,
+            end_date__gte=today,
         )
         .order_by("-start_date", "-created_at", "-id")
+        .first()
+    )
+
+def get_active_grace_subscription(
+    company,
+) -> CompanySubscription | None:
+    """
+    Return the ACTIVE subscription currently inside its grace window.
+    Grace starts the day after end_date and remains valid through
+    end_date + SUBSCRIPTION_ACTIVE_GRACE_DAYS.
+    TRIAL subscriptions never receive this grace period.
+    """
+    if not company:
+        raise ValidationError({"company": "الشركة مطلوبة."})
+    today = timezone.localdate()
+    grace_floor = today - timedelta(
+        days=SUBSCRIPTION_ACTIVE_GRACE_DAYS
+    )
+    return (
+        CompanySubscription.objects.filter(
+            company=company,
+            status=CompanySubscription.Status.ACTIVE,
+            start_date__lte=today,
+            end_date__lt=today,
+            end_date__gte=grace_floor,
+        )
+        .order_by("-end_date", "-created_at", "-id")
         .first()
     )
 
@@ -365,7 +400,10 @@ def create_renewal_pending_subscription(
     selected_cycle = billing_cycle or current_subscription.billing_cycle
 
     today = timezone.localdate()
-    next_start_date = max(current_subscription.end_date, today)
+    if current_subscription.end_date >= today:
+        next_start_date = current_subscription.end_date + timedelta(days=1)
+    else:
+        next_start_date = today
 
     return create_pending_subscription(
         company=company,
@@ -563,24 +601,43 @@ def suspend_subscription(
 @transaction.atomic
 def expire_due_subscriptions() -> int:
     """
-    Mark due active/trial subscriptions as expired.
+    Mark due subscriptions as expired.
+
+    TRIAL expires immediately after end_date.
+    ACTIVE receives a 7-day grace period and expires after the grace window.
 
     Returns number of changed subscriptions.
     """
 
     today = timezone.localdate()
 
-    subscriptions = CompanySubscription.objects.select_for_update().filter(
-        status__in=[
-            CompanySubscription.Status.TRIAL,
-            CompanySubscription.Status.ACTIVE,
-        ],
-        end_date__lt=today,
+    trial_subscriptions = (
+        CompanySubscription.objects.select_for_update()
+        .filter(
+            status=CompanySubscription.Status.TRIAL,
+            end_date__lt=today,
+        )
+        .order_by("id")
+    )
+
+    active_subscriptions = (
+        CompanySubscription.objects.select_for_update()
+        .filter(
+            status=CompanySubscription.Status.ACTIVE,
+            end_date__lt=today - timedelta(
+                days=SUBSCRIPTION_ACTIVE_GRACE_DAYS
+            ),
+        )
+        .order_by("id")
     )
 
     changed = 0
 
-    for subscription in subscriptions:
+    for subscription in trial_subscriptions:
+        if subscription.mark_expired_if_needed(save=True):
+            changed += 1
+
+    for subscription in active_subscriptions:
         if subscription.mark_expired_if_needed(save=True):
             changed += 1
 
@@ -610,46 +667,105 @@ def set_auto_renew(
 def build_subscription_summary(company) -> dict[str, Any]:
     """
     Build a compact subscription snapshot for APIs.
+
+    current keeps its strict contractual meaning.
+    grace represents an expired-by-date ACTIVE subscription that
+    remains operational during the grace window.
+    effective is current or grace, whichever currently owns workspace
+    access.
     """
 
     current = get_current_subscription(company)
+    grace = get_active_grace_subscription(company)
     latest = get_latest_subscription(company)
 
-    source = current or latest
+    source = current or grace or latest
 
     if not source:
         return {
             "has_subscription": False,
             "current": None,
+            "grace": None,
+            "effective": None,
             "latest": None,
         }
 
-    def serialize(subscription: CompanySubscription | None) -> dict[str, Any] | None:
+    def serialize(
+        subscription: CompanySubscription | None,
+    ) -> dict[str, Any] | None:
         if not subscription:
             return None
+
+        is_in_grace = subscription.is_in_active_grace
+        grace_expires_at = (
+            subscription.active_grace_expires_at
+            if is_in_grace
+            else None
+        )
 
         return {
             "id": subscription.id,
             "plan_id": subscription.plan_id,
-            "plan_name": subscription.plan.name if subscription.plan_id else "",
+            "plan_name": (
+                subscription.plan.name
+                if subscription.plan_id
+                else ""
+            ),
             "status": subscription.status,
             "action": subscription.action,
             "billing_cycle": subscription.billing_cycle,
-            "start_date": subscription.start_date.isoformat() if subscription.start_date else None,
-            "end_date": subscription.end_date.isoformat() if subscription.end_date else None,
+            "start_date": (
+                subscription.start_date.isoformat()
+                if subscription.start_date
+                else None
+            ),
+            "end_date": (
+                subscription.end_date.isoformat()
+                if subscription.end_date
+                else None
+            ),
             "days_remaining": subscription.days_remaining,
+            "is_in_grace": is_in_grace,
+            "grace_days_remaining": (
+                subscription.grace_days_remaining
+            ),
+            "grace_expires_at": (
+                grace_expires_at.isoformat()
+                if grace_expires_at
+                else None
+            ),
             "auto_renew": subscription.auto_renew,
             "price": str(money(subscription.price)),
-            "discount_amount": str(money(subscription.discount_amount)),
-            "tax_amount": str(money(subscription.tax_amount)),
-            "total_amount": str(money(subscription.total_amount)),
-            "billing_reference": subscription.billing_reference,
-            "paid_at": subscription.paid_at.isoformat() if subscription.paid_at else None,
-            "activated_at": subscription.activated_at.isoformat() if subscription.activated_at else None,
+            "discount_amount": str(
+                money(subscription.discount_amount)
+            ),
+            "tax_amount": str(
+                money(subscription.tax_amount)
+            ),
+            "total_amount": str(
+                money(subscription.total_amount)
+            ),
+            "billing_reference": (
+                subscription.billing_reference
+            ),
+            "paid_at": (
+                subscription.paid_at.isoformat()
+                if subscription.paid_at
+                else None
+            ),
+            "activated_at": (
+                subscription.activated_at.isoformat()
+                if subscription.activated_at
+                else None
+            ),
         }
+
+    effective = current or grace
 
     return {
         "has_subscription": True,
         "current": serialize(current),
+        "grace": serialize(grace),
+        "effective": serialize(effective),
         "latest": serialize(latest),
     }

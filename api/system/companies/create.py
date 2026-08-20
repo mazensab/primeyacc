@@ -25,7 +25,6 @@
 from __future__ import annotations
 
 import json
-import re
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -34,21 +33,9 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest, JsonResponse
-from django.utils import timezone
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
-from accounting.services import (
-    AccountingConfigurationError,
-    seed_company_chart_of_accounts,
-)
-from accounts.models import (
-    CompanyMembership,
-    CompanyRole,
-    MembershipStatus,
-    UserProfile,
-    WorkspaceType,
-)
 from api.permissions import user_has_system_permission
 from companies.models import (
     ActivityProfile,
@@ -56,6 +43,8 @@ from companies.models import (
     CompanyActivityProfile,
     CompanyStatus,
 )
+from companies.provisioning import provision_company_tenant
+
 
 
 User = get_user_model()
@@ -271,50 +260,6 @@ def _company_payload(company: Company) -> dict[str, Any]:
     }
 
 
-def _filter_company_fields(data: dict[str, Any]) -> dict[str, Any]:
-    """
-    يمنع تمرير حقول غير موجودة إلى Company.
-    """
-
-    valid_fields = {field.name for field in Company._meta.fields}
-    return {key: value for key, value in data.items() if key in valid_fields}
-
-
-def _generate_company_code() -> str:
-    """
-    يولد كود شركة داخلي آمن من الباكند.
-
-    النمط:
-    CMP-2026-000001
-    """
-
-    current_year = timezone.now().year
-    prefix = f"CMP-{current_year}-"
-    pattern = re.compile(rf"^{re.escape(prefix)}(\d+)$")
-
-    existing_codes = (
-        Company.objects.select_for_update()
-        .filter(company_code__startswith=prefix)
-        .values_list("company_code", flat=True)
-    )
-
-    max_sequence = 0
-
-    for code in existing_codes:
-        match = pattern.match(str(code or ""))
-        if match:
-            max_sequence = max(max_sequence, int(match.group(1)))
-
-    next_sequence = max_sequence + 1
-
-    while True:
-        candidate = f"{prefix}{next_sequence:06d}"
-        if not Company.objects.filter(company_code__iexact=candidate).exists():
-            return candidate
-
-        next_sequence += 1
-
-
 def _resolve_activity_profile_ref(
     request: HttpRequest,
     payload: dict[str, Any],
@@ -442,71 +387,6 @@ def _validate_required_company_data(
     return errors
 
 
-def _ensure_owner_membership(
-    *,
-    owner: User | None,
-    company: Company,
-    acting_user: User,
-) -> None:
-    """
-    ينشئ عضوية OWNER للمالك إذا تم تحديد owner_id.
-    """
-
-    if not owner:
-        return
-
-    profile, _ = UserProfile.objects.get_or_create(
-        user=owner,
-        defaults={
-            "display_name": owner.get_full_name() or owner.get_username(),
-            "default_workspace": WorkspaceType.COMPANY,
-        },
-    )
-
-    if not profile.default_company_id:
-        profile.default_company = company
-        profile.default_workspace = WorkspaceType.COMPANY
-        profile.save(
-            update_fields=[
-                "default_company",
-                "default_workspace",
-                "updated_at",
-            ]
-        )
-
-    membership, created = CompanyMembership.objects.get_or_create(
-        user=owner,
-        company=company,
-        defaults={
-            "role": CompanyRole.OWNER,
-            "status": MembershipStatus.ACTIVE,
-            "is_primary": True,
-            "created_by": acting_user,
-            "updated_by": acting_user,
-        },
-    )
-
-    if not created:
-        membership.role = CompanyRole.OWNER
-        membership.status = MembershipStatus.ACTIVE
-        membership.is_primary = True
-        membership.updated_by = acting_user
-        membership.save(
-            update_fields=[
-                "role",
-                "status",
-                "is_primary",
-                "updated_by",
-                "updated_at",
-            ]
-        )
-
-    CompanyMembership.objects.filter(
-        user=owner,
-        is_primary=True,
-    ).exclude(id=membership.id).update(is_primary=False)
-
-
 @login_required
 @csrf_protect
 @require_POST
@@ -549,15 +429,6 @@ def system_company_create(request: HttpRequest) -> JsonResponse:
             request=request,
             payload=payload,
             activity_profile_ref=activity_profile_ref,
-        )
-    except AccountingConfigurationError as exc:
-        return JsonResponse(
-            {
-                "ok": False,
-                "message": "تعذر تهيئة دليل الحسابات للشركة.",
-                "errors": {"accounting": str(exc)},
-            },
-            status=400,
         )
     except ValidationError as exc:
         return JsonResponse(
@@ -650,13 +521,11 @@ def system_company_create(request: HttpRequest) -> JsonResponse:
 
     try:
         with transaction.atomic():
-            company_code = _generate_company_code()
 
             company_data = {
                 "name": name,
                 "name_ar": name_ar,
                 "name_en": name_en,
-                "company_code": company_code,
                 "activity_profile": activity_profile,
                 "activity_profile_ref": activity_profile_ref,
                 "status": status,
@@ -698,21 +567,15 @@ def system_company_create(request: HttpRequest) -> JsonResponse:
                 "updated_by": request.user,
             }
 
-            company = Company(**_filter_company_fields(company_data))
-            company.full_clean()
-            company.save()
+            company_data.pop("created_by", None)
+            company_data.pop("updated_by", None)
 
-            _ensure_owner_membership(
-                owner=owner,
-                company=company,
+            provisioning = provision_company_tenant(
+                **company_data,
                 acting_user=request.user,
             )
 
-            seed_company_chart_of_accounts(
-                company,
-                user=request.user,
-                overwrite=False,
-            )
+            company = provisioning.company
 
     except ValidationError as exc:
         return JsonResponse(

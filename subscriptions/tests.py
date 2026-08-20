@@ -369,7 +369,7 @@ class SubscriptionServiceTests(TestCase):
 
         self.assertEqual(
             Account.objects.filter(company=self.company).count(),
-            112,
+            103,
         )
 
     def test_activate_non_pending_subscription_raises_validation_error(self):

@@ -188,6 +188,9 @@ if DATABASE_ENGINE == "postgresql":
             "PORT": os.getenv("POSTGRES_PORT", "5432"),
             "CONN_MAX_AGE": int(os.getenv("POSTGRES_CONN_MAX_AGE", "60")),
             "CONN_HEALTH_CHECKS": True,
+            "TEST": {
+                "NAME": os.getenv("POSTGRES_TEST_DB") or None,
+            },
         }
     }
 elif DATABASE_ENGINE == "mysql":
