@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import timedelta
 from decimal import Decimal
@@ -434,3 +434,84 @@ class PlatformGatewayDatabaseLifecycleTests(TestCase):
             adapter.retrieve_payment.call_count,
             2,
         )
+
+    def test_authorized_provider_state_moves_to_processing(self):
+        payment = self.create_payment(
+            "pay_phase22_authorized"
+        )
+
+        processed = apply_gateway_result(
+            payment=payment,
+            result=self.result(
+                payment,
+                PaymentStatus.AUTHORIZED,
+                "pay_phase22_authorized",
+            ),
+            actor=self.user,
+        )
+
+        processed.refresh_from_db()
+        self.pending.refresh_from_db()
+
+        self.assertEqual(
+            processed.status,
+            PlatformSubscriptionPayment.Status.PROCESSING,
+        )
+        self.assertEqual(
+            self.pending.status,
+            CompanySubscription.Status.PENDING_PAYMENT,
+        )
+
+    def test_verify_rejects_unsupported_provider_states(self):
+        from integrations.payments.exceptions import (
+            PaymentGatewayVerificationError,
+        )
+
+        unsupported_statuses = (
+            PaymentStatus.UNKNOWN,
+            PaymentStatus.REFUNDED,
+            PaymentStatus.PARTIALLY_REFUNDED,
+        )
+
+        for index, status in enumerate(
+            unsupported_statuses,
+            start=1,
+        ):
+            with self.subTest(status=status):
+                provider_id = (
+                    f"pay_phase22_unsupported_{index}"
+                )
+
+                payment = self.create_payment(
+                    provider_id
+                )
+
+                adapter = MagicMock()
+                adapter.retrieve_payment.return_value = (
+                    self.result(
+                        payment,
+                        status,
+                        provider_id,
+                    )
+                )
+
+                with self.assertRaises(
+                    PaymentGatewayVerificationError
+                ):
+                    verify_and_apply_gateway_payment(
+                        payment=payment,
+                        actor=self.user,
+                        adapter=adapter,
+                    )
+
+                payment.refresh_from_db()
+                self.pending.refresh_from_db()
+
+                self.assertEqual(
+                    payment.status,
+                    PlatformSubscriptionPayment.Status.PENDING,
+                )
+                self.assertEqual(
+                    self.pending.status,
+                    CompanySubscription.Status.PENDING_PAYMENT,
+                )

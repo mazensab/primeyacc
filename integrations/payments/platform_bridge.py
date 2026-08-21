@@ -199,6 +199,18 @@ def apply_gateway_result(
 
         return cancelled
 
+    processing_provider_statuses = {
+        PaymentStatus.INITIATED,
+        PaymentStatus.PENDING,
+        PaymentStatus.AUTHORIZED,
+    }
+
+    if result.status not in processing_provider_statuses:
+        raise PaymentGatewayVerificationError(
+            "Unsupported provider payment status for platform "
+            f"payment lifecycle: {result.status.value}."
+        )
+
     if locked.status in {
         PlatformSubscriptionPayment.Status.FAILED,
         PlatformSubscriptionPayment.Status.CANCELLED,
