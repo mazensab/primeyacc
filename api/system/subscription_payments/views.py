@@ -22,6 +22,9 @@ from billing.payment_services import (
     fail_subscription_payment,
 )
 from subscriptions.models import CompanySubscription
+from integrations.payments.platform_bridge import (
+    verify_and_apply_gateway_payment,
+)
 from integrations.payments.platform_checkout import (
     attach_moyasar_client_payment,
     initiate_platform_checkout,
@@ -498,6 +501,108 @@ def system_subscription_payment_checkout(
             },
         }
     )
+
+
+
+@login_required
+@csrf_protect
+@require_POST
+def system_subscription_payment_verify(
+    request: HttpRequest,
+    payment_id: int,
+) -> JsonResponse:
+    """
+    Verify a platform subscription payment against its configured provider.
+
+    The request body cannot override payment status, amount, currency,
+    gateway, provider payment ID, or merchant reference. Those values are
+    taken from the persisted platform payment and the provider response.
+    """
+    if not user_has_system_permission(request.user, WRITE_PERMISSION):
+        return _forbidden(
+            "You are not authorized to verify subscription payment."
+        )
+
+    payment = get_object_or_404(
+        _payment_queryset(),
+        pk=payment_id,
+    )
+
+    try:
+        result = verify_and_apply_gateway_payment(
+            payment=payment,
+            actor=request.user,
+        )
+    except ValidationError as exc:
+        return JsonResponse(
+            {
+                "ok": False,
+                "message": "Unable to verify subscription payment.",
+                "errors": _errors(exc),
+            },
+            status=400,
+        )
+    except Exception as exc:
+        from integrations.payments.exceptions import PaymentGatewayError
+
+        if isinstance(exc, PaymentGatewayError):
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "message": "Payment provider verification failed.",
+                    "errors": {
+                        "provider": [str(exc)],
+                    },
+                },
+                status=400,
+            )
+        raise
+
+    # Phase 19 confirmation returns:
+    # (payment, subscription, receipt)
+    if isinstance(result, tuple):
+        verified_payment, subscription, receipt = result
+
+        verified_payment = _payment_queryset().get(
+            pk=verified_payment.pk
+        )
+
+        return JsonResponse(
+            {
+                "ok": True,
+                "data": {
+                    "payment": _payment_payload(
+                        verified_payment,
+                        events=True,
+                    ),
+                    "subscription": {
+                        "id": subscription.id,
+                        "status": subscription.status,
+                        "billing_reference": (
+                            subscription.billing_reference
+                        ),
+                    },
+                    "receipt": _document_payload(receipt),
+                },
+            }
+        )
+
+    verified_payment = _payment_queryset().get(
+        pk=result.pk
+    )
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "data": {
+                "payment": _payment_payload(
+                    verified_payment,
+                    events=True,
+                ),
+            },
+        }
+    )
+
 
 
 @login_required

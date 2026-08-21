@@ -293,9 +293,24 @@ def verify_and_apply_gateway_payment(
         )
     )
 
-    result = gateway_adapter.verify_payment(
+    # Retrieve the authoritative provider state directly.
+    #
+    # Do not accept a payment status from the browser. We intentionally
+    # retrieve the provider payment here instead of using adapter-specific
+    # success-only verify_payment() implementations because the platform
+    # lifecycle must also be able to apply authoritative pending, failed,
+    # cancelled, and other non-success provider states.
+    result = gateway_adapter.retrieve_payment(
         payment.gateway_payment_id
     )
+
+    if (
+        _clean(result.provider_payment_id)
+        != _clean(payment.gateway_payment_id)
+    ):
+        raise PaymentGatewayVerificationError(
+            "Provider payment ID does not match platform payment."
+        )
 
     return apply_gateway_result(
         payment=payment,

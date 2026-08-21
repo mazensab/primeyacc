@@ -97,6 +97,10 @@ class SystemSubscriptionPaymentsAPITests(TestCase):
                 "system:system_subscription_payments:checkout",
             ),
             (
+                "/api/system/subscription-payments/1/verify/",
+                "system:system_subscription_payments:verify",
+            ),
+            (
                 "/api/system/subscription-payments/1/moyasar/attach/",
                 "system:system_subscription_payments:moyasar_attach",
             ),
@@ -132,6 +136,15 @@ class SystemSubscriptionPaymentsAPITests(TestCase):
         response = self.client.post(
             "/api/system/subscription-payments/1/moyasar/attach/",
             data='{"provider_payment_id":"pay_test"}',
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_verify_requires_system_subscription_update_permission(self) -> None:
+        self.client.force_login(self.regular_user)
+        response = self.client.post(
+            "/api/system/subscription-payments/1/verify/",
+            data='{"status":"PAID","amount":"1.00","currency":"USD"}',
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 403)

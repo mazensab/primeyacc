@@ -158,7 +158,7 @@ class PlatformGatewayDatabaseLifecycleTests(TestCase):
     def test_verify_fetches_provider_before_activation(self):
         payment = self.create_payment("pay_phase21_verify")
         adapter = MagicMock()
-        adapter.verify_payment.return_value = self.result(
+        adapter.retrieve_payment.return_value = self.result(
             payment,
             PaymentStatus.PAID,
             "pay_phase21_verify",
@@ -171,9 +171,266 @@ class PlatformGatewayDatabaseLifecycleTests(TestCase):
             adapter=adapter,
         )
 
-        adapter.verify_payment.assert_called_once_with("pay_phase21_verify")
+        adapter.retrieve_payment.assert_called_once_with("pay_phase21_verify")
         paid.refresh_from_db()
         subscription.refresh_from_db()
         self.assertEqual(paid.status, PlatformSubscriptionPayment.Status.PAID)
         self.assertEqual(subscription.status, CompanySubscription.Status.ACTIVE)
         self.assertIsNotNone(receipt)
+
+    def test_verify_requires_provider_payment_id(self):
+        payment = self.create_payment()
+        adapter = MagicMock()
+
+        with self.assertRaises(ValidationError):
+            verify_and_apply_gateway_payment(
+                payment=payment,
+                actor=self.user,
+                adapter=adapter,
+            )
+
+        adapter.retrieve_payment.assert_not_called()
+
+    def test_verify_rejects_provider_payment_id_mismatch(self):
+        payment = self.create_payment(
+            "pay_phase22_expected"
+        )
+
+        adapter = MagicMock()
+        adapter.retrieve_payment.return_value = self.result(
+            payment,
+            PaymentStatus.PAID,
+            "pay_phase22_other",
+        )
+
+        from integrations.payments.exceptions import (
+            PaymentGatewayVerificationError,
+        )
+
+        with self.assertRaises(
+            PaymentGatewayVerificationError
+        ):
+            verify_and_apply_gateway_payment(
+                payment=payment,
+                actor=self.user,
+                adapter=adapter,
+            )
+
+        payment.refresh_from_db()
+        self.pending.refresh_from_db()
+
+        self.assertEqual(
+            payment.status,
+            PlatformSubscriptionPayment.Status.PENDING,
+        )
+        self.assertEqual(
+            self.pending.status,
+            CompanySubscription.Status.PENDING_PAYMENT,
+        )
+
+    def test_verify_applies_provider_failed_state(self):
+        payment = self.create_payment(
+            "pay_phase22_failed"
+        )
+
+        adapter = MagicMock()
+        adapter.retrieve_payment.return_value = self.result(
+            payment,
+            PaymentStatus.FAILED,
+            "pay_phase22_failed",
+        )
+
+        failed = verify_and_apply_gateway_payment(
+            payment=payment,
+            actor=self.user,
+            adapter=adapter,
+        )
+
+        failed.refresh_from_db()
+        self.pending.refresh_from_db()
+
+        self.assertEqual(
+            failed.status,
+            PlatformSubscriptionPayment.Status.FAILED,
+        )
+        self.assertEqual(
+            self.pending.status,
+            CompanySubscription.Status.PENDING_PAYMENT,
+        )
+
+    def test_verify_rejects_amount_mismatch_before_activation(self):
+        payment = self.create_payment(
+            "pay_phase22_amount"
+        )
+
+        adapter = MagicMock()
+        adapter.retrieve_payment.return_value = PaymentResult(
+            gateway=PaymentGatewayName.MOYASAR,
+            provider_payment_id="pay_phase22_amount",
+            status=PaymentStatus.PAID,
+            amount=1,
+            currency="SAR",
+            reference=payment.payment_reference,
+            raw={
+                "id": "pay_phase22_amount",
+                "status": "paid",
+            },
+        )
+
+        from integrations.payments.exceptions import (
+            PaymentGatewayVerificationError,
+        )
+
+        with self.assertRaises(
+            PaymentGatewayVerificationError
+        ):
+            verify_and_apply_gateway_payment(
+                payment=payment,
+                actor=self.user,
+                adapter=adapter,
+            )
+
+        payment.refresh_from_db()
+        self.pending.refresh_from_db()
+
+        self.assertEqual(
+            payment.status,
+            PlatformSubscriptionPayment.Status.PENDING,
+        )
+        self.assertEqual(
+            self.pending.status,
+            CompanySubscription.Status.PENDING_PAYMENT,
+        )
+
+    def test_verify_rejects_currency_mismatch_before_activation(self):
+        payment = self.create_payment(
+            "pay_phase22_currency"
+        )
+
+        adapter = MagicMock()
+        adapter.retrieve_payment.return_value = PaymentResult(
+            gateway=PaymentGatewayName.MOYASAR,
+            provider_payment_id="pay_phase22_currency",
+            status=PaymentStatus.PAID,
+            amount=11500,
+            currency="USD",
+            reference=payment.payment_reference,
+            raw={
+                "id": "pay_phase22_currency",
+                "status": "paid",
+            },
+        )
+
+        from integrations.payments.exceptions import (
+            PaymentGatewayVerificationError,
+        )
+
+        with self.assertRaises(
+            PaymentGatewayVerificationError
+        ):
+            verify_and_apply_gateway_payment(
+                payment=payment,
+                actor=self.user,
+                adapter=adapter,
+            )
+
+        payment.refresh_from_db()
+        self.pending.refresh_from_db()
+
+        self.assertEqual(
+            payment.status,
+            PlatformSubscriptionPayment.Status.PENDING,
+        )
+        self.assertEqual(
+            self.pending.status,
+            CompanySubscription.Status.PENDING_PAYMENT,
+        )
+
+    def test_verify_rejects_reference_mismatch_before_activation(self):
+        payment = self.create_payment(
+            "pay_phase22_reference"
+        )
+
+        adapter = MagicMock()
+        adapter.retrieve_payment.return_value = PaymentResult(
+            gateway=PaymentGatewayName.MOYASAR,
+            provider_payment_id="pay_phase22_reference",
+            status=PaymentStatus.PAID,
+            amount=11500,
+            currency="SAR",
+            reference="wrong-reference",
+            raw={
+                "id": "pay_phase22_reference",
+                "status": "paid",
+            },
+        )
+
+        from integrations.payments.exceptions import (
+            PaymentGatewayVerificationError,
+        )
+
+        with self.assertRaises(
+            PaymentGatewayVerificationError
+        ):
+            verify_and_apply_gateway_payment(
+                payment=payment,
+                actor=self.user,
+                adapter=adapter,
+            )
+
+        payment.refresh_from_db()
+        self.pending.refresh_from_db()
+
+        self.assertEqual(
+            payment.status,
+            PlatformSubscriptionPayment.Status.PENDING,
+        )
+        self.assertEqual(
+            self.pending.status,
+            CompanySubscription.Status.PENDING_PAYMENT,
+        )
+
+    def test_paid_verification_is_idempotent(self):
+        payment = self.create_payment(
+            "pay_phase22_idempotent"
+        )
+
+        adapter = MagicMock()
+        adapter.retrieve_payment.return_value = self.result(
+            payment,
+            PaymentStatus.PAID,
+            "pay_phase22_idempotent",
+        )
+
+        paid, subscription, receipt = verify_and_apply_gateway_payment(
+            payment=payment,
+            actor=self.user,
+            adapter=adapter,
+        )
+
+        paid.refresh_from_db()
+
+        paid_again, subscription_again, receipt_again = (
+            verify_and_apply_gateway_payment(
+                payment=paid,
+                actor=self.user,
+                adapter=adapter,
+            )
+        )
+
+        self.assertEqual(
+            paid_again.pk,
+            paid.pk,
+        )
+        self.assertEqual(
+            subscription_again.pk,
+            subscription.pk,
+        )
+        self.assertEqual(
+            receipt_again.pk,
+            receipt.pk,
+        )
+        self.assertEqual(
+            adapter.retrieve_payment.call_count,
+            2,
+        )
