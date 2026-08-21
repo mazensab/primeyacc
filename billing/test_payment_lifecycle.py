@@ -428,3 +428,93 @@ class PlatformSubscriptionPaymentLifecycleTests(
         )
         self.assertIn("CREATED", events)
         self.assertIn("PAID", events)
+
+
+    def test_provider_managed_payment_requires_verified_confirmation(self):
+        payment, _ = create_or_get_subscription_payment(
+            subscription=self.pending,
+            idempotency_key="phase22d-provider-guard",
+            gateway="MOYASAR",
+            payment_method="CARD",
+            gateway_payment_id="pay_phase22d_guard",
+            created_by=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            confirm_subscription_payment(
+                payment=payment,
+                actor=self.user,
+            )
+
+        payment.refresh_from_db()
+        self.pending.refresh_from_db()
+
+        self.assertEqual(
+            payment.status,
+            PlatformSubscriptionPayment.Status.PENDING,
+        )
+        self.assertEqual(
+            self.pending.status,
+            CompanySubscription.Status.PENDING_PAYMENT,
+        )
+
+    def test_provider_verified_confirmation_succeeds(self):
+        payment, _ = create_or_get_subscription_payment(
+            subscription=self.pending,
+            idempotency_key="phase22d-provider-ok",
+            gateway="MOYASAR",
+            payment_method="CARD",
+            gateway_payment_id="pay_phase22d_ok",
+            created_by=self.user,
+        )
+
+        paid, subscription, receipt = confirm_subscription_payment(
+            payment=payment,
+            actor=self.user,
+            gateway_payment_id="pay_phase22d_ok",
+            provider_verified=True,
+        )
+
+        self.assertEqual(
+            paid.status,
+            PlatformSubscriptionPayment.Status.PAID,
+        )
+        self.assertEqual(
+            subscription.status,
+            CompanySubscription.Status.ACTIVE,
+        )
+        self.assertIsNotNone(receipt)
+
+    def test_provider_payment_id_cannot_be_replaced(self):
+        payment, _ = create_or_get_subscription_payment(
+            subscription=self.pending,
+            idempotency_key="phase22d-provider-id",
+            gateway="MOYASAR",
+            payment_method="CARD",
+            gateway_payment_id="pay_original",
+            created_by=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            confirm_subscription_payment(
+                payment=payment,
+                actor=self.user,
+                gateway_payment_id="pay_different",
+                provider_verified=True,
+            )
+
+        payment.refresh_from_db()
+        self.pending.refresh_from_db()
+
+        self.assertEqual(
+            payment.gateway_payment_id,
+            "pay_original",
+        )
+        self.assertEqual(
+            payment.status,
+            PlatformSubscriptionPayment.Status.PENDING,
+        )
+        self.assertEqual(
+            self.pending.status,
+            CompanySubscription.Status.PENDING_PAYMENT,
+        )

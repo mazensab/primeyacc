@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
@@ -33,6 +33,47 @@ _MINOR_QUANTIZER = Decimal("1")
 
 def _clean(value: Any) -> str:
     return str(value or "").strip()
+
+
+_SENSITIVE_SNAPSHOT_KEYS = {
+    "authorization",
+    "api_key",
+    "apikey",
+    "secret",
+    "secret_key",
+    "secret_token",
+    "token",
+    "access_token",
+    "refresh_token",
+    "password",
+    "signature",
+}
+
+
+def _safe_provider_snapshot(value: Any) -> Any:
+    if isinstance(value, dict):
+        safe = {}
+
+        for key, item in value.items():
+            key_text = str(key)
+            normalized = key_text.strip().lower()
+
+            if normalized in _SENSITIVE_SNAPSHOT_KEYS:
+                safe[key_text] = "[REDACTED]"
+            else:
+                safe[key_text] = _safe_provider_snapshot(
+                    item
+                )
+
+        return safe
+
+    if isinstance(value, list):
+        return [
+            _safe_provider_snapshot(item)
+            for item in value
+        ]
+
+    return value
 
 
 def _major_to_minor(value: Any) -> int:
@@ -132,8 +173,18 @@ def apply_gateway_result(
         result=result,
     )
 
+    if (
+        locked.gateway_payment_id
+        and result.provider_payment_id
+        and _clean(locked.gateway_payment_id)
+        != _clean(result.provider_payment_id)
+    ):
+        raise PaymentGatewayVerificationError(
+            "Provider payment ID does not match platform payment."
+        )
+
     provider_snapshot = (
-        dict(result.raw)
+        _safe_provider_snapshot(result.raw)
         if isinstance(result.raw, dict)
         else {}
     )
@@ -148,6 +199,7 @@ def apply_gateway_result(
             provider_response_snapshot=(
                 provider_snapshot
             ),
+            provider_verified=True,
         )
 
     if result.status is PaymentStatus.FAILED:

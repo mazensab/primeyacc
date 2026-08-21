@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import secrets
 from typing import Any
@@ -25,6 +25,20 @@ from subscriptions.services import activate_pending_subscription
 
 def _clean(value: Any) -> str:
     return str(value or "").strip()
+
+
+PROVIDER_MANAGED_GATEWAYS = frozenset(
+    {"MOYASAR", "TAMARA", "TABBY"}
+)
+
+
+def is_provider_managed_subscription_payment(
+    payment: PlatformSubscriptionPayment,
+) -> bool:
+    return (
+        _clean(payment.gateway).upper()
+        in PROVIDER_MANAGED_GATEWAYS
+    )
 
 
 def _json_object(
@@ -412,6 +426,7 @@ def confirm_subscription_payment(
     provider_response_snapshot: dict[str, Any] | None = None,
     payment_extra: dict[str, Any] | None = None,
     cancel_previous: bool = True,
+    provider_verified: bool = False,
 ):
 
     locked_payment = (
@@ -425,6 +440,21 @@ def confirm_subscription_payment(
         .select_for_update()
         .get(pk=locked_payment.subscription_id)
     )
+
+    if (
+        is_provider_managed_subscription_payment(
+            locked_payment
+        )
+        and not provider_verified
+    ):
+        raise ValidationError(
+            {
+                "gateway": [
+                    "Provider-managed payments can only be confirmed "
+                    "after authoritative provider verification."
+                ]
+            }
+        )
 
     if locked_payment.status == (
         PlatformSubscriptionPayment.Status.PAID
@@ -554,8 +584,25 @@ def confirm_subscription_payment(
     )
 
     if gateway_payment_id:
+        incoming_gateway_payment_id = _clean(
+            gateway_payment_id
+        )
+
+        if (
+            locked_payment.gateway_payment_id
+            and locked_payment.gateway_payment_id
+            != incoming_gateway_payment_id
+        ):
+            raise ValidationError(
+                {
+                    "gateway_payment_id": [
+                        "Provider payment ID cannot be replaced."
+                    ]
+                }
+            )
+
         locked_payment.gateway_payment_id = (
-            _clean(gateway_payment_id)
+            incoming_gateway_payment_id
         )
 
     if provider_response_snapshot is not None:
