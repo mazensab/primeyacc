@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from django.urls import path
 
+from .webhooks import (
+    system_subscription_payment_moyasar_webhook,
+    system_subscription_payment_tabby_webhook,
+    system_subscription_payment_tamara_webhook,
+)
+
 from .views import (
     system_subscription_payment_cancel,
     system_subscription_payment_checkout,
@@ -22,6 +28,9 @@ app_name = "system_subscription_payments"
 urlpatterns = [
     path("", system_subscription_payments_list, name="list"),
     path("create/", system_subscription_payment_create, name="create"),
+    path("webhooks/moyasar/", system_subscription_payment_moyasar_webhook, name="webhook_moyasar"),
+    path("webhooks/tamara/", system_subscription_payment_tamara_webhook, name="webhook_tamara"),
+    path("webhooks/tabby/", system_subscription_payment_tabby_webhook, name="webhook_tabby"),
     path("<int:payment_id>/", system_subscription_payment_detail, name="detail"),
     path("<int:payment_id>/events/", system_subscription_payment_events, name="events"),
     path("<int:payment_id>/checkout/", system_subscription_payment_checkout, name="checkout"),

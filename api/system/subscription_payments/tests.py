@@ -85,6 +85,18 @@ class SystemSubscriptionPaymentsAPITests(TestCase):
                 "system:system_subscription_payments:create",
             ),
             (
+                "/api/system/subscription-payments/webhooks/moyasar/",
+                "system:system_subscription_payments:webhook_moyasar",
+            ),
+            (
+                "/api/system/subscription-payments/webhooks/tamara/",
+                "system:system_subscription_payments:webhook_tamara",
+            ),
+            (
+                "/api/system/subscription-payments/webhooks/tabby/",
+                "system:system_subscription_payments:webhook_tabby",
+            ),
+            (
                 "/api/system/subscription-payments/1/",
                 "system:system_subscription_payments:detail",
             ),
