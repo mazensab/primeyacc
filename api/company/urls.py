@@ -52,6 +52,7 @@ from .profile import company_profile
 app_name = "company"
 
 urlpatterns = [
+    path("subscription/", include("api.company.subscription.urls")),
     path("tax-rates/", include("api.company.tax_rates.urls")),
 path("business-controls/", include("api.company.business_controls.urls")),
     path('jewelry/', include('api.company.jewelry.urls')),
