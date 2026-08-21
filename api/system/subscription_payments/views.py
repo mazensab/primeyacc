@@ -22,6 +22,10 @@ from billing.payment_services import (
     fail_subscription_payment,
 )
 from subscriptions.models import CompanySubscription
+from integrations.payments.platform_checkout import (
+    attach_moyasar_client_payment,
+    initiate_platform_checkout,
+)
 
 
 READ_PERMISSION = "system.subscriptions.view"
@@ -425,3 +429,143 @@ def system_subscription_payment_cancel(
         return JsonResponse({"ok": False, "message": "تعذر إلغاء محاولة الدفع.", "errors": _errors(exc)}, status=400)
     cancelled = _payment_queryset().get(pk=cancelled.pk)
     return JsonResponse({"ok": True, "data": {"payment": _payment_payload(cancelled, events=True)}})
+
+@login_required
+@csrf_protect
+@require_POST
+def system_subscription_payment_checkout(
+    request: HttpRequest,
+    payment_id: int,
+) -> JsonResponse:
+    """
+    Start provider checkout for an existing platform subscription payment.
+
+    Financial values are always read from the persisted payment contract.
+    The browser cannot override amount, currency, gateway, or payment status.
+    """
+    if not user_has_system_permission(request.user, WRITE_PERMISSION):
+        return _forbidden("You are not authorized to start subscription checkout.")
+
+    payment = get_object_or_404(
+        _payment_queryset(),
+        pk=payment_id,
+    )
+
+    payload = _json_body(request)
+
+    metadata = payload.get("metadata")
+    if metadata is not None and not isinstance(metadata, dict):
+        return JsonResponse(
+            {
+                "ok": False,
+                "message": "Invalid checkout metadata.",
+                "errors": {
+                    "metadata": ["Expected JSON object."],
+                },
+            },
+            status=400,
+        )
+
+    description = _clean(payload.get("description"))
+
+    try:
+        result = initiate_platform_checkout(
+            payment=payment,
+            metadata=metadata,
+            description=description,
+        )
+    except ValidationError as exc:
+        return JsonResponse(
+            {
+                "ok": False,
+                "message": "Unable to start subscription checkout.",
+                "errors": _errors(exc),
+            },
+            status=400,
+        )
+
+    payment = _payment_queryset().get(pk=payment.pk)
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "data": {
+                "checkout": result.as_dict(),
+                "payment": _payment_payload(
+                    payment,
+                    events=True,
+                ),
+            },
+        }
+    )
+
+
+@login_required
+@csrf_protect
+@require_POST
+def system_subscription_payment_moyasar_attach(
+    request: HttpRequest,
+    payment_id: int,
+) -> JsonResponse:
+    """
+    Attach the Moyasar payment ID created by the browser.
+
+    This endpoint never marks a payment PAID. Final payment confirmation
+    must come from provider verification/webhook processing.
+    """
+    if not user_has_system_permission(request.user, WRITE_PERMISSION):
+        return _forbidden("You are not authorized to attach a Moyasar payment.")
+
+    payment = get_object_or_404(
+        _payment_queryset(),
+        pk=payment_id,
+    )
+
+    payload = _json_body(request)
+    provider_payment_id = _clean(
+        payload.get("provider_payment_id")
+    )
+
+    if not provider_payment_id:
+        return JsonResponse(
+            {
+                "ok": False,
+                "message": "provider_payment_id is required.",
+                "errors": {
+                    "provider_payment_id": [
+                        "Required value."
+                    ],
+                },
+            },
+            status=400,
+        )
+
+    try:
+        result = attach_moyasar_client_payment(
+            payment=payment,
+            provider_payment_id=provider_payment_id,
+        )
+    except ValidationError as exc:
+        return JsonResponse(
+            {
+                "ok": False,
+                "message": "Unable to attach Moyasar payment.",
+                "errors": _errors(exc),
+            },
+            status=400,
+        )
+
+    payment = _payment_queryset().get(pk=payment.pk)
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "data": {
+                "checkout": result.as_dict(),
+                "payment": _payment_payload(
+                    payment,
+                    events=True,
+                ),
+            },
+        }
+    )
