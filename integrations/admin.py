@@ -11,7 +11,12 @@ from __future__ import annotations
 
 from django.contrib import admin
 
-from .models import IntegrationApiKey, IntegrationApiKeyUsageLog
+from .models import (
+    IntegrationApiKey,
+    IntegrationApiKeyUsageLog,
+    TikTokConnection,
+    TikTokVideo,
+)
 
 
 @admin.register(IntegrationApiKey)
@@ -92,5 +97,90 @@ class IntegrationApiKeyUsageLogAdmin(admin.ModelAdmin):
         "scope",
         "success",
         "error_message",
+        "created_at",
+    ]
+
+
+@admin.register(TikTokConnection)
+class TikTokConnectionAdmin(admin.ModelAdmin):
+    list_display = [
+        "display_name",
+        "open_id",
+        "is_active",
+        "last_synced_at",
+        "access_token_expires_at",
+        "updated_at",
+    ]
+
+    list_filter = [
+        "is_active",
+        "last_synced_at",
+        "updated_at",
+    ]
+
+    search_fields = [
+        "display_name",
+        "open_id",
+    ]
+
+    readonly_fields = [
+        "open_id",
+        "display_name",
+        "avatar_url",
+        "scopes",
+        "access_token_expires_at",
+        "refresh_token_expires_at",
+        "last_synced_at",
+        "last_error",
+        "created_at",
+        "updated_at",
+    ]
+
+    exclude = [
+        "access_token",
+        "refresh_token",
+    ]
+
+
+@admin.register(TikTokVideo)
+class TikTokVideoAdmin(admin.ModelAdmin):
+    list_display = [
+        "tiktok_video_id",
+        "title",
+        "published_at",
+        "is_visible",
+        "view_count",
+        "last_synced_at",
+    ]
+
+    list_filter = [
+        "is_visible",
+        "published_at",
+        "last_synced_at",
+    ]
+
+    search_fields = [
+        "tiktok_video_id",
+        "title",
+        "description",
+    ]
+
+    readonly_fields = [
+        "connection",
+        "tiktok_video_id",
+        "title",
+        "description",
+        "cover_image_url",
+        "share_url",
+        "embed_link",
+        "duration",
+        "width",
+        "height",
+        "like_count",
+        "comment_count",
+        "share_count",
+        "view_count",
+        "published_at",
+        "last_synced_at",
         "created_at",
     ]

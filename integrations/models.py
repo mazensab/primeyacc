@@ -381,3 +381,196 @@ class IntegrationApiKeyUsageLog(models.Model):
 
     def __str__(self) -> str:
         return f"{self.api_key.key_prefix} {self.method} {self.path} {self.status_code}"
+
+
+# ============================================================
+# Marilyn Clinics | TikTok Display Integration
+# ============================================================
+
+class TikTokConnection(models.Model):
+    """
+    Server-side TikTok account connection.
+
+    Tokens are never exposed by API serializers or Django admin.
+    The connected account is used only for Marilyn public media sync.
+    """
+
+    open_id = models.CharField(
+        max_length=255,
+        unique=True,
+        db_index=True,
+    )
+
+    display_name = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+
+    avatar_url = models.URLField(
+        max_length=1000,
+        blank=True,
+    )
+
+    scopes = models.JSONField(
+        default=list,
+        blank=True,
+    )
+
+    access_token = models.TextField(
+        blank=True,
+        editable=False,
+    )
+
+    refresh_token = models.TextField(
+        blank=True,
+        editable=False,
+    )
+
+    access_token_expires_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+    )
+
+    refresh_token_expires_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+    )
+
+    last_synced_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+    )
+
+    last_error = models.TextField(
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        verbose_name = "TikTok connection"
+        verbose_name_plural = "TikTok connections"
+        ordering = ["-updated_at"]
+
+    def __str__(self) -> str:
+        return self.display_name or self.open_id
+
+
+class TikTokVideo(models.Model):
+    """
+    Cached TikTok video metadata.
+
+    TikTok remains the media host. Marilyn stores metadata only and
+    renders videos using TikTok's official embed link.
+    """
+
+    connection = models.ForeignKey(
+        TikTokConnection,
+        on_delete=models.CASCADE,
+        related_name="videos",
+    )
+
+    tiktok_video_id = models.CharField(
+        max_length=100,
+        unique=True,
+        db_index=True,
+    )
+
+    title = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+
+    description = models.TextField(
+        blank=True,
+    )
+
+    cover_image_url = models.URLField(
+        max_length=2000,
+        blank=True,
+    )
+
+    share_url = models.URLField(
+        max_length=2000,
+        blank=True,
+    )
+
+    embed_link = models.URLField(
+        max_length=2000,
+        blank=True,
+    )
+
+    duration = models.PositiveIntegerField(
+        default=0,
+    )
+
+    width = models.PositiveIntegerField(
+        default=0,
+    )
+
+    height = models.PositiveIntegerField(
+        default=0,
+    )
+
+    like_count = models.PositiveBigIntegerField(
+        default=0,
+    )
+
+    comment_count = models.PositiveBigIntegerField(
+        default=0,
+    )
+
+    share_count = models.PositiveBigIntegerField(
+        default=0,
+    )
+
+    view_count = models.PositiveBigIntegerField(
+        default=0,
+    )
+
+    published_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+    )
+
+    is_visible = models.BooleanField(
+        default=True,
+        db_index=True,
+    )
+
+    last_synced_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        verbose_name = "TikTok video"
+        verbose_name_plural = "TikTok videos"
+        ordering = ["-published_at", "-id"]
+        indexes = [
+            models.Index(fields=["is_visible", "published_at"]),
+            models.Index(fields=["connection", "published_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.title or self.tiktok_video_id
+
