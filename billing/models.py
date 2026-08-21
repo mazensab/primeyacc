@@ -1118,3 +1118,5 @@ class PlatformBillingDocument(models.Model):
                     "updated_at",
                 ]
             )
+# Phase 19 platform subscription payment models.
+from billing.payment_models import PlatformSubscriptionPayment, PlatformSubscriptionPaymentEvent

@@ -1059,12 +1059,6 @@ def create_or_get_subscription_invoice(
     locked_subscription = (
         CompanySubscription.objects
         .select_for_update()
-        .select_related(
-            "company",
-            "plan",
-            "previous_subscription",
-            "previous_subscription__plan",
-        )
         .get(pk=subscription.pk)
     )
 
@@ -1385,12 +1379,6 @@ def create_or_get_subscription_payment_receipt(
     locked_subscription = (
         CompanySubscription.objects
         .select_for_update()
-        .select_related(
-            "company",
-            "plan",
-            "previous_subscription",
-            "previous_subscription__plan",
-        )
         .get(pk=subscription.pk)
     )
 
@@ -1427,11 +1415,6 @@ def create_or_get_subscription_payment_receipt(
     invoice = (
         PlatformBillingDocument.objects
         .select_for_update()
-        .select_related(
-            "company",
-            "subscription",
-            "subscription__plan",
-        )
         .get(pk=invoice.pk)
     )
 

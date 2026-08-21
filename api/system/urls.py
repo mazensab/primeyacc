@@ -47,6 +47,10 @@ urlpatterns = [
         include("api.system.billing_documents.urls"),
     ),
     path(
+        "subscription-payments/",
+        include("api.system.subscription_payments.urls"),
+    ),
+    path(
         "documents/",
         include("api.system.documents.urls"),
     ),
