@@ -33,6 +33,10 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from accounts.models import CompanyMembership, UserProfile, WorkspaceType
+from subscriptions.access_policy import (
+    SubscriptionWorkspaceAccess,
+    evaluate_subscription_access,
+)
 
 
 def _safe_str(value: Any) -> str:
@@ -92,7 +96,19 @@ def _resolve_workspace_and_dashboard(
     4. Return None when no workspace is available.
     """
     can_access_system = profile.can_access_system
-    can_access_company = bool(current_membership)
+
+    subscription_policy = evaluate_subscription_access(
+        current_membership.company if current_membership else None
+    )
+
+    can_access_company = bool(
+        current_membership
+        and subscription_policy.access
+        in {
+            SubscriptionWorkspaceAccess.FULL,
+            SubscriptionWorkspaceAccess.BILLING_ONLY,
+        }
+    )
 
     if profile.default_workspace == WorkspaceType.SYSTEM and can_access_system:
         return WorkspaceType.SYSTEM, "/system"
@@ -138,6 +154,10 @@ def _profile_payload(profile: UserProfile) -> dict[str, Any]:
         else None
     )
 
+    subscription_policy = evaluate_subscription_access(
+        current_membership.company if current_membership else None
+    )
+
     return {
         "id": profile.id,
         "display_name": profile.display_name,
@@ -149,7 +169,19 @@ def _profile_payload(profile: UserProfile) -> dict[str, Any]:
         "system_role": profile.system_role,
         "system_permissions": profile.system_permissions,
         "can_access_system": profile.can_access_system,
-        "can_access_company": bool(current_membership),
+        "can_access_company": (
+            bool(current_membership)
+            and subscription_policy.access
+            in {
+                SubscriptionWorkspaceAccess.FULL,
+                SubscriptionWorkspaceAccess.BILLING_ONLY,
+            }
+        ),
+        "can_use_company_workspace": (
+            bool(current_membership)
+            and subscription_policy.access == SubscriptionWorkspaceAccess.FULL
+        ),
+        "subscription_access": subscription_policy.as_dict(),
         "default_company": current_company,
         "current_company": current_company,
         "current_membership": current_membership_payload,
@@ -177,6 +209,8 @@ def whoami(request: Request) -> Response:
                 "dashboard_path": None,
                 "can_access_system": False,
                 "can_access_company": False,
+                "can_use_company_workspace": False,
+                "subscription_access": None,
                 "system_permissions": [],
                 "company_permissions": [],
                 "current_company": None,
@@ -218,6 +252,8 @@ def whoami(request: Request) -> Response:
             "dashboard_path": profile_data["dashboard_path"],
             "can_access_system": profile_data["can_access_system"],
             "can_access_company": profile_data["can_access_company"],
+            "can_use_company_workspace": profile_data["can_use_company_workspace"],
+            "subscription_access": profile_data["subscription_access"],
             "system_permissions": profile_data["system_permissions"],
             "company_permissions": company_permissions,
             "default_company": profile_data["default_company"],

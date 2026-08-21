@@ -196,6 +196,7 @@ def evaluate_subscription_access(
             SubscriptionAccessReason.SUBSCRIPTION_CANCELLED
         ),
     }
+
     return _build_policy(
         SubscriptionWorkspaceAccess.BILLING_ONLY,
         reasons.get(
@@ -206,6 +207,5 @@ def evaluate_subscription_access(
         renew=latest.status in {
             CompanySubscription.Status.EXPIRED,
             CompanySubscription.Status.SUSPENDED,
-            CompanySubscription.Status.CANCELLED,
         },
     )

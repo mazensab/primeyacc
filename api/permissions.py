@@ -41,6 +41,10 @@ from accounts.models import (
     UserProfile,
 )
 from companies.models import CompanyStatus
+from subscriptions.access_policy import (
+    SubscriptionWorkspaceAccess,
+    evaluate_subscription_access,
+)
 
 
 # ============================================================
@@ -271,6 +275,71 @@ def attach_company_context(request: Request) -> CompanyMembership | None:
     return membership
 
 
+
+# ============================================================
+# Subscription Workspace Access
+# ============================================================
+
+def get_company_subscription_access(request: Request):
+    """
+    Resolve the subscription workspace policy for the current company.
+
+    CompanyMembership remains the tenant boundary.
+    Subscription policy is evaluated only after the company has been
+    resolved safely from that membership.
+    """
+    company = getattr(request, "company", None)
+
+    if company is None:
+        membership = get_current_company_membership(request)
+        company = membership.company if membership else None
+
+    return evaluate_subscription_access(company)
+
+
+def attach_subscription_access(request: Request):
+    """
+    Attach the effective SaaS subscription policy to the request.
+
+    Adds:
+    - request.subscription_access_policy
+    - request.subscription_access
+    """
+    policy = get_company_subscription_access(request)
+
+    setattr(request, "subscription_access_policy", policy)
+    setattr(request, "subscription_access", policy.access)
+
+    return policy
+
+
+def request_has_full_subscription_access(request: Request) -> bool:
+    """
+    True only when the current company may use the normal workspace.
+    """
+    policy = attach_subscription_access(request)
+    return policy.access == SubscriptionWorkspaceAccess.FULL
+
+
+def request_has_subscription_management_access(request: Request) -> bool:
+    """
+    Subscription-management endpoints remain reachable for FULL and
+    BILLING_ONLY companies so expired/past-due/suspended customers can
+    recover access by paying, renewing, or changing plan.
+    """
+    policy = attach_subscription_access(request)
+    return policy.access in {
+        SubscriptionWorkspaceAccess.FULL,
+        SubscriptionWorkspaceAccess.BILLING_ONLY,
+    }
+
+
+class SubscriptionAccessDenied(Exception):
+    """
+    Internal marker for subscription workspace denial.
+    """
+
+
 # ============================================================
 # Permission Attribute Resolver
 # ============================================================
@@ -452,17 +521,28 @@ class HasAnySystemPermission(BasePermission):
 
 class IsCompanyMember(BasePermission):
     """
-    Guard for /api/company endpoints.
+    Guard for normal /api/company workspace endpoints.
 
-    Allows only requests with an active company membership.
-    Also attaches safe company context to the request.
+    CompanyMembership is the tenant boundary.
+    Subscription policy is the SaaS workspace boundary.
     """
 
-    message = "Active company membership is required."
+    message = "Subscription access is required."
 
     def has_permission(self, request: Request, view: Any) -> bool:
         membership = attach_company_context(request)
-        return bool(membership and membership.is_active_membership)
+
+        if not membership or not membership.is_active_membership:
+            self.message = "Active company membership is required."
+            return False
+
+        policy = attach_subscription_access(request)
+
+        if policy.access != SubscriptionWorkspaceAccess.FULL:
+            self.message = "SUBSCRIPTION_ACCESS_REQUIRED"
+            return False
+
+        return True
 
 
 class HasCompanyPermission(BasePermission):
@@ -477,7 +557,12 @@ class HasCompanyPermission(BasePermission):
 
     def has_permission(self, request: Request, view: Any) -> bool:
         membership = attach_company_context(request)
-        if not membership:
+        if not membership or not membership.is_active_membership:
+            return False
+
+        policy = attach_subscription_access(request)
+        if policy.access != SubscriptionWorkspaceAccess.FULL:
+            self.message = "SUBSCRIPTION_ACCESS_REQUIRED"
             return False
 
         required_permission = get_view_required_attribute(
@@ -488,7 +573,7 @@ class HasCompanyPermission(BasePermission):
         )
 
         if not required_permission:
-            return membership.is_active_membership
+            return True
 
         return membership.has_company_permission(required_permission)
 
@@ -508,7 +593,12 @@ class HasAnyCompanyPermission(BasePermission):
 
     def has_permission(self, request: Request, view: Any) -> bool:
         membership = attach_company_context(request)
-        if not membership:
+        if not membership or not membership.is_active_membership:
+            return False
+
+        policy = attach_subscription_access(request)
+        if policy.access != SubscriptionWorkspaceAccess.FULL:
+            self.message = "SUBSCRIPTION_ACCESS_REQUIRED"
             return False
 
         required_permissions = get_view_required_attribute(
@@ -519,7 +609,7 @@ class HasAnyCompanyPermission(BasePermission):
         )
 
         if not required_permissions:
-            return membership.is_active_membership
+            return True
 
         permissions = membership.company_permissions
 

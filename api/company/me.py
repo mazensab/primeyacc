@@ -30,7 +30,10 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.http import require_GET
 
 from accounts.models import CompanyMembership
-from api.permissions import attach_company_context
+from api.permissions import (
+    attach_company_context,
+    attach_subscription_access,
+)
 from companies.models import Branch, Company, CompanySettings
 
 
@@ -327,6 +330,7 @@ def company_me(request: HttpRequest) -> JsonResponse:
         )
 
     company = membership.company
+    subscription_policy = attach_subscription_access(request)
 
     if not company or not getattr(company, "is_active", True):
         return JsonResponse(
@@ -356,6 +360,7 @@ def company_me(request: HttpRequest) -> JsonResponse:
                 "membership_id": membership.id,
                 "role": membership.role,
                 "permissions": membership.company_permissions,
+                "subscription_access": subscription_policy.as_dict(),
             },
         },
         status=200,
