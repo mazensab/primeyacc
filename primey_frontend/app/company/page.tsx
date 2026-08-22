@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { CompanySubscriptionAlert } from "@/components/company/subscription/company-subscription-alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -2402,6 +2403,9 @@ export default function CompanyDashboardPage() {
             </CardContent>
           </Card>
         ) : null}
+
+        {/* PHASE23EF_SUBSCRIPTION_ALERT */}
+        <CompanySubscriptionAlert />
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <KpiCard title={t.salesTotal} value={stats.salesTotal} description={t.salesDesc} href="/company/sales/invoices" icon={ShoppingCart} money currencyLabel={t.sar} />

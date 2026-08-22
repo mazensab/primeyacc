@@ -21,6 +21,7 @@ from billing.models import (
 from billing.payment_services import create_or_get_subscription_payment
 from subscriptions.models import CompanySubscription, SubscriptionPlan
 from subscriptions.services import (
+    create_pending_subscription,
     create_plan_change_pending_subscription,
     create_renewal_pending_subscription,
     money,
@@ -472,18 +473,6 @@ def company_subscription_change_plan(request: HttpRequest) -> JsonResponse:
         return conflict
 
     current = _effective_subscription(company, policy)
-    if current is None or current.status not in {
-        CompanySubscription.Status.TRIAL,
-        CompanySubscription.Status.ACTIVE,
-    }:
-        return JsonResponse(
-            {
-                "ok": False,
-                "code": "SUBSCRIPTION_PLAN_CHANGE_NOT_ALLOWED",
-                "message": "The current subscription cannot change plan.",
-            },
-            status=400,
-        )
 
     payload = _json_body(request)
     try:
@@ -514,7 +503,20 @@ def company_subscription_change_plan(request: HttpRequest) -> JsonResponse:
             status=400,
         )
 
-    if new_plan.id == current.plan_id:
+    if current is not None and current.status not in {
+        CompanySubscription.Status.TRIAL,
+        CompanySubscription.Status.ACTIVE,
+    }:
+        return JsonResponse(
+            {
+                "ok": False,
+                "code": "SUBSCRIPTION_PLAN_CHANGE_NOT_ALLOWED",
+                "message": "The current subscription cannot change plan.",
+            },
+            status=400,
+        )
+
+    if current is not None and new_plan.id == current.plan_id:
         return JsonResponse(
             {
                 "ok": False,
@@ -525,32 +527,63 @@ def company_subscription_change_plan(request: HttpRequest) -> JsonResponse:
         )
 
     try:
-        cycle = _billing_cycle(payload.get("billing_cycle"), current.billing_cycle)
-        gateway = _gateway(payload.get("gateway"))
-        auto_renew = _bool(payload.get("auto_renew"), current.auto_renew)
-
-        current_price = current.plan.get_price_for_cycle(cycle)
-        new_price = new_plan.get_price_for_cycle(cycle)
-
-        if new_price > current_price:
-            action = CompanySubscription.SubscriptionAction.UPGRADE
-        elif new_price < current_price:
-            action = CompanySubscription.SubscriptionAction.DOWNGRADE
-        elif new_plan.sort_order > current.plan.sort_order:
-            action = CompanySubscription.SubscriptionAction.UPGRADE
-        else:
-            action = CompanySubscription.SubscriptionAction.DOWNGRADE
-
-        pending = create_plan_change_pending_subscription(
-            current_subscription=current,
-            new_plan=new_plan,
-            billing_cycle=cycle,
-            action=action,
-            discount_amount=0,
-            auto_renew=auto_renew,
-            created_by=request.user,
-            notes=f"Company self-service {action.lower()}.",
+        fallback_cycle = (
+            current.billing_cycle
+            if current is not None
+            else CompanySubscription.BillingCycle.MONTHLY
         )
+        fallback_auto_renew = (
+            current.auto_renew
+            if current is not None
+            else False
+        )
+
+        cycle = _billing_cycle(
+            payload.get("billing_cycle"),
+            fallback_cycle,
+        )
+        gateway = _gateway(payload.get("gateway"))
+        auto_renew = _bool(
+            payload.get("auto_renew"),
+            fallback_auto_renew,
+        )
+
+        if current is None:
+            action = CompanySubscription.SubscriptionAction.NEW
+
+            pending = create_pending_subscription(
+                company=company,
+                plan=new_plan,
+                billing_cycle=cycle,
+                action=action,
+                discount_amount=0,
+                auto_renew=auto_renew,
+                created_by=request.user,
+                notes="Company self-service initial subscription.",
+            )
+        else:
+            current_price = current.plan.get_price_for_cycle(cycle)
+            new_price = new_plan.get_price_for_cycle(cycle)
+
+            if new_price > current_price:
+                action = CompanySubscription.SubscriptionAction.UPGRADE
+            elif new_price < current_price:
+                action = CompanySubscription.SubscriptionAction.DOWNGRADE
+            elif new_plan.sort_order > current.plan.sort_order:
+                action = CompanySubscription.SubscriptionAction.UPGRADE
+            else:
+                action = CompanySubscription.SubscriptionAction.DOWNGRADE
+
+            pending = create_plan_change_pending_subscription(
+                current_subscription=current,
+                new_plan=new_plan,
+                billing_cycle=cycle,
+                action=action,
+                discount_amount=0,
+                auto_renew=auto_renew,
+                created_by=request.user,
+                notes=f"Company self-service {action.lower()}.",
+            )
 
         payment, _ = create_or_get_subscription_payment(
             subscription=pending,

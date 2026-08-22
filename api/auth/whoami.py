@@ -110,17 +110,27 @@ def _resolve_workspace_and_dashboard(
         }
     )
 
+    company_dashboard_path = (
+        "/company/subscription"
+        if (
+            current_membership
+            and subscription_policy.access
+            == SubscriptionWorkspaceAccess.BILLING_ONLY
+        )
+        else "/company"
+    )
+
     if profile.default_workspace == WorkspaceType.SYSTEM and can_access_system:
         return WorkspaceType.SYSTEM, "/system"
 
     if profile.default_workspace == WorkspaceType.COMPANY and can_access_company:
-        return WorkspaceType.COMPANY, "/company"
+        return WorkspaceType.COMPANY, company_dashboard_path
 
     if can_access_system:
         return WorkspaceType.SYSTEM, "/system"
 
     if can_access_company:
-        return WorkspaceType.COMPANY, "/company"
+        return WorkspaceType.COMPANY, company_dashboard_path
 
     return None, None
 

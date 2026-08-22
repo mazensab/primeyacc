@@ -944,6 +944,13 @@ const companyNavItems: NavGroup[] = [
         ],
       },
       {
+        title: { ar: "الاشتراك والفوترة", en: "Subscription & Billing" },
+        href: "/company/subscription",
+        icon: Gift,
+        permission: PERMISSIONS.PROVIDER_WORKSPACE_VIEW,
+        workspaces: ["company"],
+      },
+      {
         title: { ar: "إعدادات الشركة", en: "Company Settings" },
         href: "/company/settings",
         icon: Settings,
@@ -1568,8 +1575,37 @@ export function NavMain({ type }: NavMainProps) {
   const ChevronIcon = isArabic ? ChevronLeft : ChevronRight;
 
   const navItems = useMemo(() => {
-    const sourceGroups =
-      type === "system"
+    const subscriptionAccess = String(
+      (
+        authSession as Record<string, unknown>
+      ).subscription_access &&
+      typeof (
+        authSession as Record<string, unknown>
+      ).subscription_access === "object"
+        ? (
+            (
+              authSession as Record<string, unknown>
+            ).subscription_access as Record<string, unknown>
+          ).access || ""
+        : ""
+    )
+      .trim()
+      .toUpperCase();
+
+    const isBillingOnlyCompany =
+      (type === "company" || type === "center" || type === "provider") &&
+      subscriptionAccess === "BILLING_ONLY";
+
+    const sourceGroups = isBillingOnlyCompany
+      ? companyNavItems
+          .map((group) => ({
+            ...group,
+            items: group.items.filter(
+              (item) => item.href === "/company/subscription",
+            ),
+          }))
+          .filter((group) => group.items.length > 0)
+      : type === "system"
         ? systemNavItems
         : type === "customer"
           ? customerNavItems
