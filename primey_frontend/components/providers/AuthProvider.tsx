@@ -124,6 +124,18 @@ export type AuthSession = {
     [key: string]: unknown;
   } | null;
 
+  subscription_access?: {
+    access?: "FULL" | "BILLING_ONLY" | "DENIED" | string;
+    reason?: string;
+    status?: string | null;
+    can_use_workspace?: boolean;
+    can_manage_subscription?: boolean;
+    can_pay?: boolean;
+    can_renew?: boolean;
+    can_change_plan?: boolean;
+    [key: string]: unknown;
+  } | null;
+
   permission_codes?: PermissionCode[];
   permissions?: AuthPermissions | null;
   profile_permissions?: AuthProfilePermissions | null;
@@ -533,6 +545,12 @@ function normalizeSession(
         }
       : null,
 
+    subscription_access:
+      input?.subscription_access &&
+      typeof input.subscription_access === "object"
+        ? { ...input.subscription_access }
+        : null,
+
     permission_codes: rawPermissionCodes,
     permissions: normalizedPermissions,
     profile_permissions: normalizedProfilePermissions,
@@ -671,6 +689,30 @@ export function AuthProvider({
 
         if (pathname === "/login") {
           router.replace(normalized.dashboard_path || "/system");
+          return;
+        }
+
+        const subscriptionAccess = String(
+          normalized.subscription_access?.access || "",
+        )
+          .trim()
+          .toUpperCase();
+
+        const isCompanyPath =
+          pathname === "/company" || pathname.startsWith("/company/");
+
+        const isSubscriptionManagementPath =
+          pathname === "/company/subscription" ||
+          pathname.startsWith("/company/subscription/");
+
+        if (
+          normalized.workspace === "company" &&
+          subscriptionAccess === "BILLING_ONLY" &&
+          isCompanyPath &&
+          !isSubscriptionManagementPath
+        ) {
+          router.replace("/company/subscription");
+          return;
         }
       } catch (error) {
         if (!active) return;

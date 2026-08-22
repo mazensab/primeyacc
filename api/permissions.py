@@ -397,11 +397,45 @@ def get_view_required_attribute(
 # ============================================================
 
 def user_can_access_system(user) -> bool:
+    """
+    Return whether an authenticated user may enter the platform workspace.
+
+    Django superusers are platform owners and therefore have full /system
+    access. This bypass is intentionally limited to system permissions only;
+    it does not grant CompanyMembership or bypass company tenant isolation.
+    """
+    if (
+        user
+        and not isinstance(user, AnonymousUser)
+        and user.is_authenticated
+        and user.is_active
+        and getattr(user, "is_superuser", False)
+    ):
+        return True
+
     profile = get_user_profile(user)
     return bool(profile and profile.can_access_system)
 
 
 def user_has_system_permission(user, permission: str) -> bool:
+    """
+    Check a platform permission.
+
+    Active Django superusers are platform owners and implicitly hold every
+    system permission. Normal staff/system users continue to be governed by
+    UserProfile.system_permissions.
+
+    This function does not grant any company permission.
+    """
+    if (
+        user
+        and not isinstance(user, AnonymousUser)
+        and user.is_authenticated
+        and user.is_active
+        and getattr(user, "is_superuser", False)
+    ):
+        return True
+
     profile = get_user_profile(user)
     if not profile or not profile.can_access_system:
         return False

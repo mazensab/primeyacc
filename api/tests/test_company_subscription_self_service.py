@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from accounts.models import CompanyMembership
 from billing.models import PlatformSubscriptionPayment
+from subscriptions.access_policy import SubscriptionWorkspaceAccess, evaluate_subscription_access
 from subscriptions.models import CompanySubscription, SubscriptionPlan
 from subscriptions.tests import SubscriptionServiceTests
 
@@ -248,3 +249,64 @@ class CompanySubscriptionSelfServiceTests(TestCase):
             item["id"] for item in billing.json()["data"]["payments"]
         }
         self.assertNotIn(other_payment.id, payment_ids)
+
+
+
+class CompanyInitialSubscriptionSelfServiceTests(CompanySubscriptionSelfServiceTests):
+    def test_company_without_subscription_can_create_initial_subscription(self):
+        CompanySubscription.objects.filter(company=self.company).delete()
+
+        response = self.client.post(
+            "/api/company/subscription/change-plan/",
+            data={
+                "plan_id": self.pro.id,
+                "billing_cycle": CompanySubscription.BillingCycle.MONTHLY,
+                "gateway": "MOYASAR",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+
+        payload = response.json()
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["data"]["action"], CompanySubscription.SubscriptionAction.NEW)
+
+        subscription = CompanySubscription.objects.get(
+            pk=payload["data"]["subscription"]["id"]
+        )
+
+        self.assertEqual(
+            subscription.status,
+            CompanySubscription.Status.PENDING_PAYMENT,
+        )
+        self.assertEqual(
+            subscription.action,
+            CompanySubscription.SubscriptionAction.NEW,
+        )
+        self.assertEqual(subscription.company, self.company)
+        self.assertEqual(subscription.plan, self.pro)
+        self.assertIsNone(subscription.previous_subscription)
+
+        payment = PlatformSubscriptionPayment.objects.get(
+            pk=payload["data"]["payment"]["id"]
+        )
+
+        self.assertEqual(payment.subscription, subscription)
+        self.assertEqual(payment.company, self.company)
+        self.assertEqual(payment.gateway, "MOYASAR")
+
+    def test_company_without_subscription_still_cannot_use_operational_workspace(self):
+        CompanySubscription.objects.filter(company=self.company).delete()
+
+        policy = evaluate_subscription_access(self.company)
+
+        self.assertEqual(
+            policy.access,
+            SubscriptionWorkspaceAccess.BILLING_ONLY,
+        )
+        self.assertFalse(policy.can_use_workspace)
+        self.assertTrue(policy.can_manage_subscription)
+        self.assertTrue(policy.can_pay)
+        self.assertTrue(policy.can_change_plan)
