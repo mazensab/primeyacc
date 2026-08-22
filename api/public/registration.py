@@ -8,12 +8,22 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest, JsonResponse
-from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 
 from accounts.models import UserProfile
 from billing.payment_services import (
     create_or_get_subscription_payment,
+)
+from integrations.payments.exceptions import (
+    PaymentGatewayError,
+)
+from integrations.payments.platform_checkout import (
+    attach_moyasar_client_payment,
+    initiate_platform_checkout,
+)
+from integrations.payments.platform_bridge import (
+    verify_and_apply_gateway_payment,
 )
 from companies.models import Company, CompanyStatus
 from companies.provisioning import provision_company_tenant
@@ -21,6 +31,7 @@ from subscriptions.models import (
     CompanySubscription,
     SubscriptionPlan,
 )
+from billing.models import PlatformSubscriptionPayment
 
 
 User = get_user_model()
@@ -326,6 +337,7 @@ def _plan_payload(
     }
 
 
+@ensure_csrf_cookie
 @require_GET
 def public_registration_options(
     request: HttpRequest,
@@ -622,3 +634,471 @@ def public_register_company(
             },
             status=409,
         )
+def _public_payment_queryset():
+    return (
+        PlatformSubscriptionPayment.objects
+        .select_related(
+            "subscription",
+            "subscription__plan",
+            "company",
+            "created_by",
+        )
+    )
+
+
+def _public_checkout_payment(
+    payment_reference: str,
+) -> PlatformSubscriptionPayment | None:
+    reference = _clean(
+        payment_reference
+    ).upper()
+
+    if not reference:
+        return None
+
+    payment = (
+        _public_payment_queryset()
+        .filter(
+            payment_reference=reference,
+        )
+        .first()
+    )
+
+    if payment is None:
+        return None
+
+    metadata = (
+        payment.metadata
+        if isinstance(payment.metadata, dict)
+        else {}
+    )
+
+    if (
+        metadata.get("source")
+        != "public-registration"
+    ):
+        return None
+
+    return payment
+
+
+def _checkout_metadata(
+    request: HttpRequest,
+    payment: PlatformSubscriptionPayment,
+) -> dict[str, Any]:
+    owner = payment.created_by
+    company = payment.company
+
+    origin = (
+        request.headers.get("Origin")
+        or ""
+    ).rstrip("/")
+
+    if not origin:
+        origin = (
+            request.build_absolute_uri("/")
+            .rstrip("/")
+        )
+
+    callback_url = (
+        f"{origin}/register/payment-return"
+        f"?reference={payment.payment_reference}"
+    )
+
+    customer_name = ""
+
+    if owner is not None:
+        customer_name = (
+            owner.get_full_name()
+            or owner.get_username()
+        )
+
+    customer_email = (
+        getattr(owner, "email", "")
+        if owner is not None
+        else ""
+    )
+
+    customer_phone = (
+        getattr(company, "phone", "")
+        or getattr(company, "mobile", "")
+        or ""
+    )
+
+    return {
+        "source": "public-registration",
+        "company_id": payment.company_id,
+        "subscription_id": (
+            payment.subscription_id
+        ),
+        "callback_url": callback_url,
+        "customer_name": customer_name,
+        "customer_email": customer_email,
+        "customer_phone": customer_phone,
+        "merchant_urls": {
+            "success": callback_url + "&result=success",
+            "failure": callback_url + "&result=failure",
+            "cancel": callback_url + "&result=cancel",
+        },
+    }
+
+
+@csrf_protect
+@require_POST
+def public_registration_checkout(
+    request: HttpRequest,
+) -> JsonResponse:
+    payload = _json_body(request)
+
+    payment_reference = _clean(
+        payload.get("payment_reference")
+    )
+
+    payment = _public_checkout_payment(
+        payment_reference
+    )
+
+    if payment is None:
+        return JsonResponse(
+            {
+                "ok": False,
+                "code": "PUBLIC_PAYMENT_NOT_FOUND",
+                "message": (
+                    "Public registration payment was not found."
+                ),
+            },
+            status=404,
+        )
+
+    if payment.status != (
+        PlatformSubscriptionPayment.Status.PENDING
+    ):
+        return JsonResponse(
+            {
+                "ok": False,
+                "code": "PUBLIC_PAYMENT_NOT_PENDING",
+                "message": (
+                    "Payment checkout cannot be started "
+                    "from its current state."
+                ),
+            },
+            status=409,
+        )
+
+    if payment.subscription.status != (
+        CompanySubscription.Status.PENDING_PAYMENT
+    ):
+        return JsonResponse(
+            {
+                "ok": False,
+                "code": "PUBLIC_SUBSCRIPTION_NOT_PENDING",
+                "message": (
+                    "Subscription is not awaiting payment."
+                ),
+            },
+            status=409,
+        )
+
+    try:
+        checkout = initiate_platform_checkout(
+            payment=payment,
+            metadata=_checkout_metadata(
+                request,
+                payment,
+            ),
+            description=(
+                "Mhamcloud platform subscription "
+                f"{payment.payment_reference}"
+            ),
+        )
+    except ValidationError as exc:
+        return JsonResponse(
+            {
+                "ok": False,
+                "code": "PUBLIC_CHECKOUT_INVALID",
+                "message": (
+                    "Unable to start payment checkout."
+                ),
+                "errors": _errors(exc),
+            },
+            status=400,
+        )
+    except PaymentGatewayError:
+        return JsonResponse(
+            {
+                "ok": False,
+                "code": (
+                    "PUBLIC_CHECKOUT_PROVIDER_UNAVAILABLE"
+                ),
+                "message": (
+                    "Payment gateway is temporarily unavailable."
+                ),
+            },
+            status=503,
+        )
+
+    payment.refresh_from_db()
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "code": "PUBLIC_CHECKOUT_READY",
+            "data": {
+                "checkout": checkout.as_dict(),
+                "payment": {
+                    "id": payment.id,
+                    "payment_reference": (
+                        payment.payment_reference
+                    ),
+                    "status": payment.status,
+                    "gateway": payment.gateway,
+                    "amount": str(payment.amount),
+                    "currency_code": (
+                        payment.currency_code
+                    ),
+                },
+            },
+        }
+    )
+
+def _public_pending_moyasar_payment(
+    payment_reference: str,
+) -> PlatformSubscriptionPayment | None:
+    payment = _public_checkout_payment(
+        payment_reference
+    )
+
+    if payment is None:
+        return None
+
+    if str(payment.gateway or "").upper() != "MOYASAR":
+        return None
+
+    return payment
+
+
+@csrf_protect
+@require_POST
+def public_registration_moyasar_attach(
+    request: HttpRequest,
+) -> JsonResponse:
+    """
+    Attach a Moyasar provider payment ID created client-side.
+
+    The browser is never allowed to provide amount, currency,
+    gateway, subscription status, or payment success state.
+    """
+
+    payload = _json_body(request)
+
+    payment_reference = _clean(
+        payload.get("payment_reference")
+    )
+
+    provider_payment_id = _clean(
+        payload.get("provider_payment_id")
+    )
+
+    if not provider_payment_id:
+        return JsonResponse(
+            {
+                "ok": False,
+                "code": "MOYASAR_PAYMENT_ID_REQUIRED",
+                "message": (
+                    "Moyasar provider payment ID is required."
+                ),
+            },
+            status=400,
+        )
+
+    if len(provider_payment_id) > 200:
+        return JsonResponse(
+            {
+                "ok": False,
+                "code": "MOYASAR_PAYMENT_ID_INVALID",
+                "message": (
+                    "Moyasar provider payment ID is invalid."
+                ),
+            },
+            status=400,
+        )
+
+    payment = _public_pending_moyasar_payment(
+        payment_reference
+    )
+
+    if payment is None:
+        return JsonResponse(
+            {
+                "ok": False,
+                "code": "PUBLIC_MOYASAR_PAYMENT_NOT_FOUND",
+                "message": (
+                    "Public Moyasar payment was not found."
+                ),
+            },
+            status=404,
+        )
+
+    try:
+        checkout = attach_moyasar_client_payment(
+            payment=payment,
+            provider_payment_id=provider_payment_id,
+        )
+    except ValidationError as exc:
+        return JsonResponse(
+            {
+                "ok": False,
+                "code": "MOYASAR_ATTACH_INVALID",
+                "message": (
+                    "Moyasar payment could not be attached."
+                ),
+                "errors": _errors(exc),
+            },
+            status=409,
+        )
+
+    payment.refresh_from_db()
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "code": "MOYASAR_PAYMENT_ATTACHED",
+            "data": {
+                "checkout": checkout.as_dict(),
+                "payment": {
+                    "id": payment.id,
+                    "payment_reference": (
+                        payment.payment_reference
+                    ),
+                    "status": payment.status,
+                    "gateway": payment.gateway,
+                    "gateway_payment_id": (
+                        payment.gateway_payment_id
+                    ),
+                    "amount": str(payment.amount),
+                    "currency_code": (
+                        payment.currency_code
+                    ),
+                },
+            },
+        }
+    )
+
+
+@csrf_protect
+@require_POST
+def public_registration_payment_verify(
+    request: HttpRequest,
+) -> JsonResponse:
+    """
+    Retrieve authoritative payment state from the provider.
+
+    Browser result/status is ignored. Only payment_reference is used
+    to resolve the existing platform payment.
+    """
+
+    payload = _json_body(request)
+
+    payment_reference = _clean(
+        payload.get("payment_reference")
+    )
+
+    payment = _public_checkout_payment(
+        payment_reference
+    )
+
+    if payment is None:
+        return JsonResponse(
+            {
+                "ok": False,
+                "code": "PUBLIC_PAYMENT_NOT_FOUND",
+                "message": (
+                    "Public registration payment was not found."
+                ),
+            },
+            status=404,
+        )
+
+    if not _clean(payment.gateway_payment_id):
+        return JsonResponse(
+            {
+                "ok": False,
+                "code": "PROVIDER_PAYMENT_NOT_ATTACHED",
+                "message": (
+                    "Provider payment has not been attached yet."
+                ),
+            },
+            status=409,
+        )
+
+    try:
+        updated = verify_and_apply_gateway_payment(
+            payment=payment,
+            actor=None,
+        )
+    except PaymentGatewayError:
+        return JsonResponse(
+            {
+                "ok": False,
+                "code": "PAYMENT_VERIFICATION_UNAVAILABLE",
+                "message": (
+                    "Payment verification is temporarily unavailable."
+                ),
+            },
+            status=503,
+        )
+    except ValidationError as exc:
+        return JsonResponse(
+            {
+                "ok": False,
+                "code": "PAYMENT_VERIFICATION_CONFLICT",
+                "message": (
+                    "Payment state could not be verified."
+                ),
+                "errors": _errors(exc),
+            },
+            status=409,
+        )
+
+    updated.refresh_from_db()
+    subscription = updated.subscription
+    subscription.refresh_from_db()
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "code": "PAYMENT_VERIFIED",
+            "data": {
+                "payment": {
+                    "id": updated.id,
+                    "payment_reference": (
+                        updated.payment_reference
+                    ),
+                    "status": updated.status,
+                    "gateway": updated.gateway,
+                    "gateway_payment_id": (
+                        updated.gateway_payment_id
+                    ),
+                    "amount": str(updated.amount),
+                    "currency_code": (
+                        updated.currency_code
+                    ),
+                    "paid_at": (
+                        updated.paid_at.isoformat()
+                        if updated.paid_at
+                        else None
+                    ),
+                    "receipt_id": updated.receipt_id,
+                },
+                "subscription": {
+                    "id": subscription.id,
+                    "status": subscription.status,
+                    "activated_at": (
+                        subscription.activated_at.isoformat()
+                        if subscription.activated_at
+                        else None
+                    ),
+                },
+            },
+        }
+    )

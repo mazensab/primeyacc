@@ -93,6 +93,22 @@ def build_platform_payment_request(
         reference,
     )
 
+    callback_url = str(
+        request_metadata.pop("callback_url", "") or ""
+    ).strip()
+
+    customer_name = str(
+        request_metadata.pop("customer_name", "") or ""
+    ).strip()
+
+    customer_email = str(
+        request_metadata.pop("customer_email", "") or ""
+    ).strip()
+
+    customer_phone = str(
+        request_metadata.pop("customer_phone", "") or ""
+    ).strip()
+
     subscription = getattr(
         payment,
         "subscription",
@@ -127,7 +143,11 @@ def build_platform_payment_request(
             str(description or "").strip()
             or "Mhamcloud platform subscription"
         ),
+        callback_url=callback_url,
         reference=reference,
+        customer_name=customer_name,
+        customer_email=customer_email,
+        customer_phone=customer_phone,
         metadata=request_metadata,
     )
 

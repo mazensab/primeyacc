@@ -51,6 +51,37 @@ load_dotenv(BASE_DIR / ".env")
 
 
 # ---------------------------------------------------------------------
+# Platform payment gateways
+# ---------------------------------------------------------------------
+#
+# Provider credentials are environment-only.
+# Secret keys must never be exposed through NEXT_PUBLIC_* variables.
+#
+
+MOYASAR_SECRET_KEY = os.getenv(
+    "MOYASAR_SECRET_KEY",
+    "",
+).strip()
+
+MOYASAR_BASE_URL = os.getenv(
+    "MOYASAR_BASE_URL",
+    "https://api.moyasar.com/v1",
+).strip()
+
+MOYASAR_TIMEOUT = float(
+    os.getenv(
+        "MOYASAR_TIMEOUT",
+        "15",
+    )
+)
+
+MOYASAR_WEBHOOK_SECRET = os.getenv(
+    "MOYASAR_WEBHOOK_SECRET",
+    "",
+).strip()
+
+
+# ---------------------------------------------------------------------
 # Security
 # ---------------------------------------------------------------------
 
