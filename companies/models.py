@@ -240,6 +240,12 @@ class DefaultLanguage(models.TextChoices):
     EN = "en", "English"
 
 
+class CompanyOnboardingStatus(models.TextChoices):
+    REQUIRED = "REQUIRED", "Required"
+    IN_PROGRESS = "IN_PROGRESS", "In progress"
+    READY = "READY", "Ready"
+
+
 class Company(models.Model):
     """
     Mhamcloud company tenant.
@@ -767,6 +773,143 @@ class CompanySettings(models.Model):
         if not isinstance(self.settings_data, dict):
             return default
         return self.settings_data.get(key, default)
+
+
+class CompanyOnboarding(models.Model):
+    """
+    Formal company onboarding lifecycle.
+
+    This model does not duplicate Company, CompanySettings, Branch or
+    CompanyMembership data. It only stores the workflow state that determines
+    whether a newly provisioned paid tenant has finished initial setup.
+
+    Existing legacy companies without this record are treated as not managed
+    by the onboarding lifecycle so Phase 26 does not lock existing tenants.
+    """
+
+    company = models.OneToOneField(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="onboarding",
+        db_index=True,
+        verbose_name="Company",
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=CompanyOnboardingStatus.choices,
+        default=CompanyOnboardingStatus.REQUIRED,
+        db_index=True,
+        verbose_name="Onboarding status",
+    )
+
+    current_step = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+        verbose_name="Current onboarding step",
+    )
+
+    started_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="Started at",
+    )
+
+    completed_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="Completed at",
+    )
+
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="completed_company_onboardings",
+        verbose_name="Completed by",
+    )
+
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Onboarding extra data",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Created at",
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated at",
+    )
+
+    class Meta:
+        verbose_name = "Company onboarding"
+        verbose_name_plural = "Company onboardings"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["company", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.company.display_name} - {self.status}"
+
+    @property
+    def is_ready(self) -> bool:
+        return self.status == CompanyOnboardingStatus.READY
+
+    def mark_in_progress(self, *, step: str = "", save: bool = True) -> None:
+        if self.status == CompanyOnboardingStatus.READY:
+            return
+
+        self.status = CompanyOnboardingStatus.IN_PROGRESS
+
+        if not self.started_at:
+            self.started_at = timezone.now()
+
+        if step:
+            self.current_step = str(step).strip()[:80]
+
+        if save:
+            self.save(
+                update_fields=[
+                    "status",
+                    "started_at",
+                    "current_step",
+                    "updated_at",
+                ]
+            )
+
+    def mark_ready(self, *, user=None, save: bool = True) -> None:
+        self.status = CompanyOnboardingStatus.READY
+        self.current_step = "completed"
+
+        if not self.started_at:
+            self.started_at = timezone.now()
+
+        if not self.completed_at:
+            self.completed_at = timezone.now()
+
+        if user is not None:
+            self.completed_by = user
+
+        if save:
+            self.save(
+                update_fields=[
+                    "status",
+                    "current_step",
+                    "started_at",
+                    "completed_at",
+                    "completed_by",
+                    "updated_at",
+                ]
+            )
 
 
 class Branch(models.Model):

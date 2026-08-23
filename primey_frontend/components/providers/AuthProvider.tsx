@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 // ======================================================
 // ًں”گ Mhamcloud â€” Auth Provider
@@ -136,6 +136,22 @@ export type AuthSession = {
     [key: string]: unknown;
   } | null;
 
+  onboarding?: {
+    managed?: boolean;
+    required?: boolean;
+    ready?: boolean;
+    status?: "REQUIRED" | "IN_PROGRESS" | "READY" | string | null;
+    current_step?: string;
+    onboarding_id?: number | null;
+    [key: string]: unknown;
+  } | null;
+
+  can_use_company_workspace?: boolean;
+
+
+
+
+
   permission_codes?: PermissionCode[];
   permissions?: AuthPermissions | null;
   profile_permissions?: AuthProfilePermissions | null;
@@ -181,6 +197,9 @@ const DEFAULT_AUTH_SESSION: AuthSession = {
 
   user: null,
   subscription: null,
+  subscription_access: null,
+  onboarding: null,
+  can_use_company_workspace: false,
 
   permission_codes: [],
 
@@ -551,6 +570,15 @@ function normalizeSession(
         ? { ...input.subscription_access }
         : null,
 
+    onboarding:
+      input?.onboarding &&
+      typeof input.onboarding === "object"
+        ? { ...input.onboarding }
+        : null,
+
+    can_use_company_workspace:
+      input?.can_use_company_workspace === true,
+
     permission_codes: rawPermissionCodes,
     permissions: normalizedPermissions,
     profile_permissions: normalizedProfilePermissions,
@@ -705,6 +733,10 @@ export function AuthProvider({
           pathname === "/company/subscription" ||
           pathname.startsWith("/company/subscription/");
 
+        const isCompanySetupPath =
+          pathname === "/company/setup" ||
+          pathname.startsWith("/company/setup/");
+
         if (
           normalized.workspace === "company" &&
           subscriptionAccess === "BILLING_ONLY" &&
@@ -714,6 +746,38 @@ export function AuthProvider({
           router.replace("/company/subscription");
           return;
         }
+
+        const onboardingRequired =
+          normalized.onboarding?.managed === true &&
+          normalized.onboarding?.required === true &&
+          normalized.onboarding?.ready !== true;
+
+        if (
+          normalized.workspace === "company" &&
+          subscriptionAccess === "FULL" &&
+          onboardingRequired &&
+          isCompanyPath &&
+          !isCompanySetupPath
+        ) {
+          router.replace("/company/setup");
+          return;
+        }
+
+        if (
+          normalized.workspace === "company" &&
+          subscriptionAccess === "FULL" &&
+          normalized.onboarding?.ready === true &&
+          isCompanySetupPath
+        ) {
+          router.replace("/company");
+          return;
+        }
+
+
+
+
+
+
       } catch (error) {
         if (!active) return;
 

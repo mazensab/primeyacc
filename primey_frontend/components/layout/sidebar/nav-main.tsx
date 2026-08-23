@@ -944,6 +944,13 @@ const companyNavItems: NavGroup[] = [
         ],
       },
       {
+        title: { ar: "تهيئة الشركة", en: "Company Setup" },
+        href: "/company/setup",
+        icon: Settings,
+        permission: PERMISSIONS.PROVIDER_WORKSPACE_VIEW,
+        workspaces: ["company"],
+      },
+      {
         title: { ar: "الاشتراك والفوترة", en: "Subscription & Billing" },
         href: "/company/subscription",
         icon: Gift,
@@ -1596,6 +1603,26 @@ export function NavMain({ type }: NavMainProps) {
       (type === "company" || type === "center" || type === "provider") &&
       subscriptionAccess === "BILLING_ONLY";
 
+    const onboardingValue =
+      (
+        authSession as Record<string, unknown>
+      ).onboarding;
+
+    const onboardingRecord =
+      onboardingValue &&
+      typeof onboardingValue === "object"
+        ? (
+            onboardingValue as Record<string, unknown>
+          )
+        : null;
+
+    const isOnboardingCompany =
+      (type === "company" || type === "center" || type === "provider") &&
+      subscriptionAccess === "FULL" &&
+      onboardingRecord?.managed === true &&
+      onboardingRecord?.required === true &&
+      onboardingRecord?.ready !== true;
+
     const sourceGroups = isBillingOnlyCompany
       ? companyNavItems
           .map((group) => ({
@@ -1605,13 +1632,24 @@ export function NavMain({ type }: NavMainProps) {
             ),
           }))
           .filter((group) => group.items.length > 0)
-      : type === "system"
-        ? systemNavItems
-        : type === "customer"
-          ? customerNavItems
-          : type === "agent"
-            ? agentNavItems
-            : companyNavItems;
+      : isOnboardingCompany
+        ? companyNavItems
+            .map((group) => ({
+              ...group,
+              items: group.items.filter(
+                (item) =>
+                  item.href === "/company/setup" ||
+                  item.href === "/company/subscription",
+              ),
+            }))
+            .filter((group) => group.items.length > 0)
+        : type === "system"
+          ? systemNavItems
+          : type === "customer"
+            ? customerNavItems
+            : type === "agent"
+              ? agentNavItems
+              : companyNavItems;
 
     const filteredGroups = filterNavGroups(
       sourceGroups,

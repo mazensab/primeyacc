@@ -24,6 +24,8 @@ from companies.models import (
     ActivityProfile,
     Company,
     CompanyActivityProfile,
+    CompanyOnboarding,
+    CompanyOnboardingStatus,
     CompanySettings,
     CompanyStatus,
 )
@@ -299,6 +301,12 @@ def provision_company_tenant(
     subscription = None
 
     if initial_plan is not None:
+        CompanyOnboarding.objects.create(
+            company=company,
+            status=CompanyOnboardingStatus.REQUIRED,
+            current_step="payment",
+        )
+
         subscription = create_pending_subscription(
             company=company,
             plan=initial_plan,

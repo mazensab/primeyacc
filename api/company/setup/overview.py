@@ -21,16 +21,32 @@
 
 from __future__ import annotations
 
+import json
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from django.db import transaction
 from django.db.models import Count, Q
 from django.http import HttpRequest, JsonResponse
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_http_methods
 
 from accounts.models import CompanyMembership, MembershipStatus
 from api.permissions import attach_company_context
-from companies.models import Branch, Company, CompanySettings
+from companies.models import (
+    Branch,
+    BranchType,
+    Company,
+    CompanyOnboardingStatus,
+    CompanySettings,
+)
+from companies.onboarding import (
+    complete_company_onboarding,
+    get_company_onboarding_access,
+)
+from subscriptions.access_policy import (
+    SubscriptionWorkspaceAccess,
+    evaluate_subscription_access,
+)
 
 
 def _datetime_to_string(value: Any) -> str | None:
@@ -439,7 +455,7 @@ def _readiness_payload(checks: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-@require_GET
+@require_http_methods(["GET", "PATCH", "POST"])
 def company_setup_overview(request: HttpRequest) -> JsonResponse:
     """
     GET /api/company/setup/
@@ -481,9 +497,291 @@ def company_setup_overview(request: HttpRequest) -> JsonResponse:
             status=403,
         )
 
+    subscription_access = evaluate_subscription_access(company)
+
+    if subscription_access.access != SubscriptionWorkspaceAccess.FULL:
+        return JsonResponse(
+            {
+                "ok": False,
+                "message": "A valid active subscription is required before company setup.",
+                "code": "SUBSCRIPTION_ACCESS_REQUIRED",
+                "subscription_access": subscription_access.as_dict(),
+            },
+            status=403,
+        )
+
     settings_obj = _get_or_create_company_settings(company, request)
-    default_branch = _get_default_branch(company)
+
+    if request.method == "PATCH":
+        if membership.role not in {"OWNER", "ADMIN"}:
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "message": "Only a company owner or admin can update initial setup.",
+                    "code": "ONBOARDING_UPDATE_FORBIDDEN",
+                },
+                status=403,
+            )
+
+        try:
+            payload = json.loads(request.body.decode("utf-8") or "{}")
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "message": "Invalid JSON body.",
+                    "code": "INVALID_JSON",
+                },
+                status=400,
+            )
+
+        if not isinstance(payload, dict):
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "message": "JSON body must be an object.",
+                    "code": "INVALID_PAYLOAD",
+                },
+                status=400,
+            )
+
+        company_fields = {
+            "name",
+            "name_ar",
+            "name_en",
+            "commercial_registration",
+            "tax_number",
+            "email",
+            "phone",
+            "mobile",
+            "whatsapp_number",
+            "country",
+            "city",
+            "region",
+            "district",
+            "street_name",
+            "building_number",
+            "postal_code",
+            "short_address",
+            "address",
+            "currency_code",
+        }
+
+        settings_fields = {
+            "default_language",
+            "timezone_name",
+            "date_format",
+            "time_format",
+            "fiscal_year_start_month",
+            "fiscal_year_start_day",
+            "invoice_prefix",
+            "quotation_prefix",
+            "purchase_prefix",
+            "receipt_prefix",
+            "payment_prefix",
+            "allow_negative_stock",
+            "enable_inventory_tracking",
+            "enable_pos",
+            "enable_purchases",
+            "enable_hr",
+            "enable_vat",
+            "default_vat_percentage",
+            "require_customer_for_sales",
+            "require_supplier_for_purchases",
+        }
+
+        branch_payload = payload.get("default_branch")
+        if branch_payload is not None and not isinstance(branch_payload, dict):
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "message": "default_branch must be an object.",
+                    "code": "INVALID_DEFAULT_BRANCH",
+                },
+                status=400,
+            )
+
+        with transaction.atomic():
+            changed_company = []
+
+            for field in company_fields:
+                if field not in payload:
+                    continue
+
+                value = payload[field]
+
+                if isinstance(value, str):
+                    value = value.strip()
+
+                setattr(company, field, value)
+                changed_company.append(field)
+
+            if changed_company:
+                company.updated_by = request.user
+                company.full_clean(
+                    exclude=[
+                        "activity_profile_ref",
+                        "owner",
+                        "created_by",
+                    ]
+                )
+                company.save(
+                    update_fields=[
+                        *changed_company,
+                        "updated_by",
+                        "updated_at",
+                    ]
+                )
+
+            changed_settings = []
+
+            for field in settings_fields:
+                if field not in payload:
+                    continue
+
+                setattr(settings_obj, field, payload[field])
+                changed_settings.append(field)
+
+            if changed_settings:
+                settings_obj.updated_by = request.user
+                settings_obj.full_clean()
+                settings_obj.save(
+                    update_fields=[
+                        *changed_settings,
+                        "updated_by",
+                        "updated_at",
+                    ]
+                )
+
+            if branch_payload is not None:
+                default_branch = _get_default_branch(company)
+
+                if default_branch is None:
+                    default_branch = Branch(
+                        company=company,
+                        name=(
+                            str(branch_payload.get("name") or "").strip()
+                            or "Main Branch"
+                        ),
+                        name_ar=str(
+                            branch_payload.get("name_ar") or ""
+                        ).strip(),
+                        name_en=str(
+                            branch_payload.get("name_en") or ""
+                        ).strip(),
+                        branch_code="MAIN",
+                        branch_type=BranchType.HEAD_OFFICE,
+                        is_default=True,
+                        created_by=request.user,
+                        updated_by=request.user,
+                    )
+
+                editable_branch_fields = {
+                    "name",
+                    "name_ar",
+                    "name_en",
+                    "manager_name",
+                    "email",
+                    "phone",
+                    "mobile",
+                    "whatsapp_number",
+                    "country",
+                    "city",
+                    "region",
+                    "district",
+                    "street_name",
+                    "building_number",
+                    "postal_code",
+                    "short_address",
+                    "address",
+                    "opening_time",
+                    "closing_time",
+                }
+
+                for field in editable_branch_fields:
+                    if field not in branch_payload:
+                        continue
+
+                    value = branch_payload[field]
+
+                    if isinstance(value, str):
+                        value = value.strip()
+
+                    if field in {"opening_time", "closing_time"}:
+                        if value in {"", None}:
+                            value = None
+
+                    setattr(default_branch, field, value)
+
+                default_branch.is_default = True
+                default_branch.updated_by = request.user
+                default_branch.full_clean()
+                default_branch.save()
+
+            onboarding_access = get_company_onboarding_access(company)
+
+            if onboarding_access.managed and onboarding_access.required:
+                from companies.models import CompanyOnboarding
+
+                onboarding = CompanyOnboarding.objects.get(company=company)
+                onboarding.mark_in_progress(step="setup")
+
+        settings_obj.refresh_from_db()
+        default_branch = _get_default_branch(company)
+
+    else:
+        default_branch = _get_default_branch(company)
+
+    if request.method == "POST":
+        if membership.role not in {"OWNER", "ADMIN"}:
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "message": "Only a company owner or admin can complete initial setup.",
+                    "code": "ONBOARDING_COMPLETE_FORBIDDEN",
+                },
+                status=403,
+            )
+
+        onboarding_access = get_company_onboarding_access(company)
+
+        if not onboarding_access.managed:
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "message": "This company is not enrolled in the onboarding lifecycle.",
+                    "code": "ONBOARDING_NOT_MANAGED",
+                },
+                status=409,
+            )
+
+        try:
+            complete_company_onboarding(
+                company=company,
+                user=request.user,
+                settings_obj=settings_obj,
+                default_branch=default_branch,
+            )
+        except Exception as exc:
+            from django.core.exceptions import ValidationError
+
+            if isinstance(exc, ValidationError):
+                message_dict = getattr(exc, "message_dict", None)
+
+                return JsonResponse(
+                    {
+                        "ok": False,
+                        "message": "Company setup is incomplete.",
+                        "code": "ONBOARDING_INCOMPLETE",
+                        "errors": message_dict or {"onboarding": exc.messages},
+                    },
+                    status=400,
+                )
+
+            raise
+
     checklist = _setup_checklist(company, settings_obj, default_branch)
+    onboarding_access = get_company_onboarding_access(company)
 
     return JsonResponse(
         {
@@ -499,6 +797,13 @@ def company_setup_overview(request: HttpRequest) -> JsonResponse:
                 "users_summary": _users_summary(company),
                 "checklist": checklist,
                 "readiness": _readiness_payload(checklist),
+                "onboarding": onboarding_access.as_dict(),
+                "subscription_access": subscription_access.as_dict(),
+                "workspace_path": (
+                    "/company"
+                    if onboarding_access.ready
+                    else "/company/setup"
+                ),
                 "current_role": membership.role,
                 "current_permissions": membership.company_permissions,
                 "company_id": company.id,

@@ -40,6 +40,7 @@ from accounts.models import (
     MembershipStatus,
     UserProfile,
 )
+from companies.onboarding import get_company_onboarding_access
 from companies.models import CompanyStatus
 from subscriptions.access_policy import (
     SubscriptionWorkspaceAccess,
@@ -197,51 +198,210 @@ def get_requested_company_id(request: Request) -> int | None:
         return None
 
 
+def _request_path(
+    request: Request,
+) -> str:
+    path = getattr(
+        request,
+        "path",
+        None,
+    )
+
+    if path:
+        return str(path)
+
+    django_request = getattr(
+        request,
+        "_request",
+        None,
+    )
+
+    return str(
+        getattr(
+            django_request,
+            "path",
+            "",
+        )
+        or ""
+    )
+
+
+def _company_control_path_allowed(
+    request: Request,
+) -> bool:
+    """
+    Paths required to recover or finish access.
+
+    These routes perform their own subscription/onboarding
+    checks and must remain reachable to avoid redirect loops.
+    """
+    path = _request_path(request)
+
+    return any(
+        path.startswith(prefix)
+        for prefix in (
+            "/api/company/subscription/",
+            "/api/company/setup/",
+            "/api/company/me/",
+        )
+    )
+
+
+def _apply_company_workspace_gate(
+    request: Request,
+    membership: CompanyMembership | None,
+) -> CompanyMembership | None:
+    """
+    Central SaaS + onboarding guard for legacy Django and DRF views.
+
+    Legacy companies without CompanyOnboarding are treated as ready.
+    """
+    if membership is None:
+        return None
+
+    company = membership.company
+
+    policy = evaluate_subscription_access(
+        company
+    )
+
+    onboarding = (
+        get_company_onboarding_access(
+            company
+        )
+    )
+
+    setattr(
+        request,
+        "subscription_access_policy",
+        policy,
+    )
+
+    setattr(
+        request,
+        "subscription_access",
+        policy.access,
+    )
+
+    setattr(
+        request,
+        "company_onboarding_access",
+        onboarding,
+    )
+
+    setattr(
+        request,
+        "subscription_access_blocked",
+        False,
+    )
+
+    setattr(
+        request,
+        "company_onboarding_blocked",
+        False,
+    )
+
+    if _company_control_path_allowed(
+        request
+    ):
+        return membership
+
+    if (
+        policy.access
+        != SubscriptionWorkspaceAccess.FULL
+    ):
+        setattr(
+            request,
+            "subscription_access_blocked",
+            True,
+        )
+
+        setattr(
+            request,
+            "blocked_company_membership",
+            membership,
+        )
+
+        return None
+
+    if onboarding.required:
+        setattr(
+            request,
+            "company_onboarding_blocked",
+            True,
+        )
+
+        setattr(
+            request,
+            "blocked_company_membership",
+            membership,
+        )
+
+        return None
+
+    return membership
+
+
 def get_current_company_membership(
     request: Request,
 ) -> CompanyMembership | None:
     """
-    Resolve the current active company membership for the request.
+    Resolve the current active company membership.
 
-    Priority:
-    1. X-Company-ID header if it belongs to an active membership.
-    2. company_id query/body selector if it belongs to an active membership.
-    3. profile default active membership when UserProfile exists.
-    4. primary/latest active CompanyMembership fallback.
-
-    Important:
-    The provided company_id is only a selector.
-    It is never trusted unless a matching active CompanyMembership exists.
+    Tenant selection is validated first, then the central workspace
+    gate applies subscription and onboarding policy.
     """
     user = request.user
 
-    if not user or isinstance(user, AnonymousUser) or not user.is_authenticated:
+    if (
+        not user
+        or isinstance(
+            user,
+            AnonymousUser,
+        )
+        or not user.is_authenticated
+    ):
         return None
 
     profile = get_user_profile(user)
 
     if profile:
-        memberships = profile.active_company_memberships()
+        memberships = (
+            profile.active_company_memberships()
+        )
     else:
-        memberships = get_active_company_memberships(user)
+        memberships = (
+            get_active_company_memberships(
+                user
+            )
+        )
 
-    requested_company_id = get_requested_company_id(request)
+    requested_company_id = (
+        get_requested_company_id(
+            request
+        )
+    )
+
+    candidate = None
 
     if requested_company_id:
-        membership = memberships.filter(
+        candidate = memberships.filter(
             company_id=requested_company_id,
         ).first()
 
-        if membership:
-            return membership
+    if candidate is None and profile:
+        candidate = (
+            profile
+            .get_default_company_membership()
+        )
 
-    if profile:
-        default_membership = profile.get_default_company_membership()
-        if default_membership:
-            return default_membership
+    if candidate is None:
+        candidate = memberships.first()
 
-    return memberships.first()
-
+    return _apply_company_workspace_gate(
+        request,
+        candidate,
+    )
 
 def get_current_company(request: Request):
     """
@@ -567,7 +727,20 @@ class IsCompanyMember(BasePermission):
         membership = attach_company_context(request)
 
         if not membership or not membership.is_active_membership:
-            self.message = "Active company membership is required."
+            if getattr(
+                request,
+                "company_onboarding_blocked",
+                False,
+            ):
+                self.message = "ONBOARDING_REQUIRED"
+            elif getattr(
+                request,
+                "subscription_access_blocked",
+                False,
+            ):
+                self.message = "SUBSCRIPTION_ACCESS_REQUIRED"
+            else:
+                self.message = "Active company membership is required."
             return False
 
         policy = attach_subscription_access(request)
@@ -591,7 +764,20 @@ class HasCompanyPermission(BasePermission):
 
     def has_permission(self, request: Request, view: Any) -> bool:
         membership = attach_company_context(request)
+
         if not membership or not membership.is_active_membership:
+            if getattr(
+                request,
+                "company_onboarding_blocked",
+                False,
+            ):
+                self.message = "ONBOARDING_REQUIRED"
+            elif getattr(
+                request,
+                "subscription_access_blocked",
+                False,
+            ):
+                self.message = "SUBSCRIPTION_ACCESS_REQUIRED"
             return False
 
         policy = attach_subscription_access(request)
@@ -627,7 +813,20 @@ class HasAnyCompanyPermission(BasePermission):
 
     def has_permission(self, request: Request, view: Any) -> bool:
         membership = attach_company_context(request)
+
         if not membership or not membership.is_active_membership:
+            if getattr(
+                request,
+                "company_onboarding_blocked",
+                False,
+            ):
+                self.message = "ONBOARDING_REQUIRED"
+            elif getattr(
+                request,
+                "subscription_access_blocked",
+                False,
+            ):
+                self.message = "SUBSCRIPTION_ACCESS_REQUIRED"
             return False
 
         policy = attach_subscription_access(request)

@@ -10,7 +10,12 @@ from accounts.models import (
     UserProfile,
     WorkspaceType,
 )
-from companies.models import CompanySettings, CompanyStatus
+from companies.models import (
+    CompanyOnboarding,
+    CompanyOnboardingStatus,
+    CompanySettings,
+    CompanyStatus,
+)
 from companies.provisioning import provision_company_tenant
 from subscriptions.models import CompanySubscription, SubscriptionPlan
 
@@ -119,6 +124,60 @@ class TenantProvisioningTests(TestCase):
                 status=CompanySubscription.Status.ACTIVE,
             ).exists()
         )
+
+
+    def test_paid_provisioning_enrolls_company_in_onboarding(self):
+        plan = SubscriptionPlan.objects.create(
+            name="Onboarding Provisioning Plan",
+            code=SubscriptionPlan.PlanCode.BASIC,
+            slug="onboarding-provisioning-plan",
+            monthly_price=Decimal("125.00"),
+            yearly_price=Decimal("1250.00"),
+            is_active=True,
+            is_public=True,
+        )
+
+        result = provision_company_tenant(
+            name="Onboarding Provisioning Company",
+            owner=self.owner,
+            acting_user=self.owner,
+            initial_plan=plan,
+            billing_cycle=(
+                CompanySubscription
+                .BillingCycle
+                .MONTHLY
+            ),
+        )
+
+        onboarding = (
+            CompanyOnboarding.objects.get(
+                company=result.company
+            )
+        )
+
+        self.assertEqual(
+            onboarding.status,
+            CompanyOnboardingStatus.REQUIRED,
+        )
+
+        self.assertEqual(
+            onboarding.current_step,
+            "payment",
+        )
+
+    def test_non_paid_provisioning_keeps_legacy_compatibility(self):
+        result = provision_company_tenant(
+            name="Legacy Compatible Provisioning",
+            owner=self.owner,
+            acting_user=self.owner,
+        )
+
+        self.assertFalse(
+            CompanyOnboarding.objects.filter(
+                company=result.company
+            ).exists()
+        )
+
 
     def test_missing_billing_cycle_rolls_back_entire_tenant(self):
         plan = SubscriptionPlan.objects.create(

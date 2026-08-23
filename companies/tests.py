@@ -40,6 +40,7 @@ from django.test import Client, TestCase
 
 from accounts.models import CompanyMembership, CompanyRole, MembershipStatus, UserProfile
 from accounting.models import Account
+from subscriptions.models import CompanySubscription, SubscriptionPlan
 from companies.models import (
     ActivityProfile,
     Branch,
@@ -99,6 +100,51 @@ class CompanyWorkspacePhase3Tests(TestCase):
             city="Riyadh",
             currency_code="SAR",
         )
+
+        self.workspace_plan = SubscriptionPlan.objects.create(
+            name="Company Workspace Test Plan",
+            code=SubscriptionPlan.PlanCode.BASIC,
+            slug="company-workspace-phase3-plan",
+            monthly_price="100.00",
+            yearly_price="1000.00",
+            max_users=20,
+            max_branches=10,
+            max_warehouses=5,
+            max_pos=5,
+            features=[
+                "accounting",
+                "sales",
+                "inventory",
+            ],
+            is_active=True,
+            is_public=True,
+            sort_order=999,
+        )
+
+        today = timezone.localdate()
+
+        for tenant_company in (
+            self.company,
+            self.other_company,
+        ):
+            CompanySubscription.objects.create(
+                company=tenant_company,
+                plan=self.workspace_plan,
+                status=CompanySubscription.Status.ACTIVE,
+                action=CompanySubscription.SubscriptionAction.NEW,
+                billing_cycle=CompanySubscription.BillingCycle.MONTHLY,
+                start_date=today,
+                end_date=(
+                    today
+                    + __import__('datetime').timedelta(days=30)
+                ),
+                price="100.00",
+                discount_amount="0.00",
+                tax_amount="15.00",
+                total_amount="115.00",
+                paid_at=timezone.now(),
+                activated_at=timezone.now(),
+            )
 
         self.profile = UserProfile.objects.create(
             user=self.user,

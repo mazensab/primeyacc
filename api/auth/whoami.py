@@ -33,6 +33,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from accounts.models import CompanyMembership, UserProfile, WorkspaceType
+from companies.onboarding import get_company_onboarding_access
 from subscriptions.access_policy import (
     SubscriptionWorkspaceAccess,
     evaluate_subscription_access,
@@ -89,16 +90,27 @@ def _resolve_workspace_and_dashboard(
     """
     Resolve the safest frontend workspace and dashboard path.
 
-    Priority:
-    1. Respect default_workspace if the user can access it.
-    2. Fallback to system if available.
-    3. Fallback to company if available.
-    4. Return None when no workspace is available.
+    Subscription access owns billing/workspace eligibility.
+    Onboarding is evaluated only after FULL subscription access.
     """
     can_access_system = profile.can_access_system
 
-    subscription_policy = evaluate_subscription_access(
-        current_membership.company if current_membership else None
+    company = (
+        current_membership.company
+        if current_membership
+        else None
+    )
+
+    subscription_policy = (
+        evaluate_subscription_access(
+            company
+        )
+    )
+
+    onboarding_access = (
+        get_company_onboarding_access(
+            company
+        )
     )
 
     can_access_company = bool(
@@ -110,99 +122,179 @@ def _resolve_workspace_and_dashboard(
         }
     )
 
-    company_dashboard_path = (
-        "/company/subscription"
-        if (
-            current_membership
-            and subscription_policy.access
-            == SubscriptionWorkspaceAccess.BILLING_ONLY
+    if (
+        current_membership
+        and subscription_policy.access
+        == SubscriptionWorkspaceAccess.BILLING_ONLY
+    ):
+        company_dashboard_path = (
+            "/company/subscription"
         )
-        else "/company"
-    )
 
-    if profile.default_workspace == WorkspaceType.SYSTEM and can_access_system:
-        return WorkspaceType.SYSTEM, "/system"
+    elif (
+        current_membership
+        and subscription_policy.access
+        == SubscriptionWorkspaceAccess.FULL
+        and onboarding_access.required
+    ):
+        company_dashboard_path = (
+            "/company/setup"
+        )
 
-    if profile.default_workspace == WorkspaceType.COMPANY and can_access_company:
-        return WorkspaceType.COMPANY, company_dashboard_path
+    else:
+        company_dashboard_path = "/company"
+
+    if (
+        profile.default_workspace
+        == WorkspaceType.SYSTEM
+        and can_access_system
+    ):
+        return (
+            WorkspaceType.SYSTEM,
+            "/system",
+        )
+
+    if (
+        profile.default_workspace
+        == WorkspaceType.COMPANY
+        and can_access_company
+    ):
+        return (
+            WorkspaceType.COMPANY,
+            company_dashboard_path,
+        )
 
     if can_access_system:
-        return WorkspaceType.SYSTEM, "/system"
+        return (
+            WorkspaceType.SYSTEM,
+            "/system",
+        )
 
     if can_access_company:
-        return WorkspaceType.COMPANY, company_dashboard_path
+        return (
+            WorkspaceType.COMPANY,
+            company_dashboard_path,
+        )
 
     return None, None
 
-
-def _profile_payload(profile: UserProfile) -> dict[str, Any]:
+def _profile_payload(
+    profile: UserProfile,
+) -> dict[str, Any]:
     """
-    Build a safe profile payload for the frontend.
-
-    Important:
-    - memberships returned here are active memberships only.
-    - current_company is resolved from CompanyMembership, not direct company access.
-    - inactive/suspended/expired/cancelled companies are not used for /company access.
+    Build the authoritative frontend session snapshot.
     """
-    active_memberships = list(profile.active_company_memberships())
-    current_membership = profile.get_default_company_membership()
+    active_memberships = list(
+        profile.active_company_memberships()
+    )
 
-    workspace, dashboard_path = _resolve_workspace_and_dashboard(
-        profile=profile,
-        current_membership=current_membership,
+    current_membership = (
+        profile.get_default_company_membership()
+    )
+
+    workspace, dashboard_path = (
+        _resolve_workspace_and_dashboard(
+            profile=profile,
+            current_membership=current_membership,
+        )
     )
 
     current_company = (
-        _company_payload(current_membership.company)
+        _company_payload(
+            current_membership.company
+        )
         if current_membership
         else None
     )
 
     current_membership_payload = (
-        _membership_payload(current_membership)
+        _membership_payload(
+            current_membership
+        )
         if current_membership
         else None
     )
 
-    subscription_policy = evaluate_subscription_access(
-        current_membership.company if current_membership else None
+    company = (
+        current_membership.company
+        if current_membership
+        else None
+    )
+
+    subscription_policy = (
+        evaluate_subscription_access(
+            company
+        )
+    )
+
+    onboarding_access = (
+        get_company_onboarding_access(
+            company
+        )
+    )
+
+    can_access_company = bool(
+        current_membership
+        and subscription_policy.access
+        in {
+            SubscriptionWorkspaceAccess.FULL,
+            SubscriptionWorkspaceAccess.BILLING_ONLY,
+        }
+    )
+
+    can_use_company_workspace = bool(
+        current_membership
+        and subscription_policy.access
+        == SubscriptionWorkspaceAccess.FULL
+        and onboarding_access.ready
     )
 
     return {
         "id": profile.id,
         "display_name": profile.display_name,
         "status": profile.status,
-        "default_workspace": profile.default_workspace,
+        "default_workspace": (
+            profile.default_workspace
+        ),
         "workspace": workspace,
         "dashboard_path": dashboard_path,
-        "is_system_user": profile.is_system_user,
+        "is_system_user": (
+            profile.is_system_user
+        ),
         "system_role": profile.system_role,
-        "system_permissions": profile.system_permissions,
-        "can_access_system": profile.can_access_system,
+        "system_permissions": (
+            profile.system_permissions
+        ),
+        "can_access_system": (
+            profile.can_access_system
+        ),
         "can_access_company": (
-            bool(current_membership)
-            and subscription_policy.access
-            in {
-                SubscriptionWorkspaceAccess.FULL,
-                SubscriptionWorkspaceAccess.BILLING_ONLY,
-            }
+            can_access_company
         ),
         "can_use_company_workspace": (
-            bool(current_membership)
-            and subscription_policy.access == SubscriptionWorkspaceAccess.FULL
+            can_use_company_workspace
         ),
-        "subscription_access": subscription_policy.as_dict(),
+        "subscription_access": (
+            subscription_policy.as_dict()
+        ),
+        "onboarding": (
+            onboarding_access.as_dict()
+        ),
         "default_company": current_company,
         "current_company": current_company,
-        "current_membership": current_membership_payload,
+        "current_membership": (
+            current_membership_payload
+        ),
         "memberships": [
-            _membership_payload(membership)
-            for membership in active_memberships
+            _membership_payload(
+                membership
+            )
+            for membership
+            in active_memberships
         ],
         "language": profile.language,
         "timezone": profile.timezone,
     }
-
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
@@ -221,6 +313,7 @@ def whoami(request: Request) -> Response:
                 "can_access_company": False,
                 "can_use_company_workspace": False,
                 "subscription_access": None,
+                "onboarding": None,
                 "system_permissions": [],
                 "company_permissions": [],
                 "current_company": None,
@@ -264,6 +357,7 @@ def whoami(request: Request) -> Response:
             "can_access_company": profile_data["can_access_company"],
             "can_use_company_workspace": profile_data["can_use_company_workspace"],
             "subscription_access": profile_data["subscription_access"],
+            "onboarding": profile_data["onboarding"],
             "system_permissions": profile_data["system_permissions"],
             "company_permissions": company_permissions,
             "default_company": profile_data["default_company"],
