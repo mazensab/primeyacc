@@ -85,6 +85,18 @@ API_CONTRACTS: tuple[APIContract, ...] = (
         company_scoped=False,
     ),
     APIContract(
+        key="subscription-payments",
+        module="Platform Subscription Payments",
+        scope="system",
+        base_path="/api/system/subscription-payments/",
+        methods=("GET", "POST"),
+        description=(
+            "Platform subscription payments, gateway checkout, webhooks, "
+            "reconciliation, operational recovery, and gateway readiness contract."
+        ),
+        company_scoped=False,
+    ),
+    APIContract(
         key="customers",
         module="Customers",
         scope="company",

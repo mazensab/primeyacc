@@ -20,6 +20,10 @@ from typing import Any
 
 from django.apps import apps
 
+from integrations.payments.readiness import (
+    build_payment_gateway_readiness_payload,
+)
+
 from .contracts import API_CONTRACTS, contract_payload, grouped_contract_payload
 
 
@@ -176,12 +180,67 @@ def validate_company_scope() -> ReadinessCheckResult:
     )
 
 
+
+def validate_platform_payment_gateways() -> ReadinessCheckResult:
+    gateway_payload = (
+        build_payment_gateway_readiness_payload()
+    )
+
+    not_ready = [
+        row["gateway"]
+        for row in gateway_payload["gateways"]
+        if not row["ready"]
+    ]
+
+    if not_ready:
+        from django.conf import settings
+
+        production = not bool(
+            getattr(
+                settings,
+                "DEBUG",
+                False,
+            )
+        )
+
+        return ReadinessCheckResult(
+            key="platform_payment_gateways",
+            label="Platform payment gateways",
+            status=(
+                "failed"
+                if production
+                else "warning"
+            ),
+            message=(
+                "Payment gateway configuration is incomplete for: "
+                + ", ".join(not_ready)
+                + "."
+            ),
+            severity=(
+                "error"
+                if production
+                else "warning"
+            ),
+        )
+
+    return ReadinessCheckResult(
+        key="platform_payment_gateways",
+        label="Platform payment gateways",
+        status="passed",
+        message=(
+            "Moyasar, Tamara, and Tabby platform gateway "
+            "configuration is production-ready."
+        ),
+        severity="info",
+    )
+
 def build_readiness_checks() -> list[ReadinessCheckResult]:
     return [
         validate_installed_apps(),
         validate_contract_registry(),
         validate_contract_paths(),
         validate_company_scope(),
+        validate_platform_payment_gateways(),
     ]
 
 

@@ -24,6 +24,11 @@ from django.http import HttpRequest
 from django.utils.html import format_html
 
 from billing.models import (
+    PlatformPaymentReconciliation,
+    PlatformSubscriptionWebhookEvent,
+)
+
+from billing.models import (
     PlatformBillingDocument,
     PlatformBillingDocumentStatus,
     PlatformBillingDocumentType,
@@ -429,4 +434,138 @@ class PlatformBillingDocumentAdmin(admin.ModelAdmin):
 
         actions = super().get_actions(request)
         actions.pop("delete_selected", None)
+        return actions
+
+@admin.register(PlatformSubscriptionWebhookEvent)
+class PlatformSubscriptionWebhookEventAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "gateway",
+        "event_type",
+        "status",
+        "provider_payment_id",
+        "payment_id",
+        "attempt_count",
+        "duplicate_count",
+        "received_at",
+    )
+
+    list_filter = (
+        "gateway",
+        "status",
+        "event_type",
+    )
+
+    search_fields = (
+        "provider_event_id",
+        "provider_payment_id",
+        "event_fingerprint",
+        "payment__payment_reference",
+        "error_code",
+    )
+
+    ordering = (
+        "-received_at",
+        "-id",
+    )
+
+    readonly_fields = tuple(
+        field.name
+        for field
+        in PlatformSubscriptionWebhookEvent
+        ._meta
+        .fields
+    )
+
+    list_select_related = (
+        "payment",
+    )
+
+    list_per_page = 50
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(
+        self,
+        request,
+        obj=None,
+    ):
+        return False
+
+    def get_actions(self, request):
+        actions = super().get_actions(
+            request
+        )
+        actions.pop(
+            "delete_selected",
+            None,
+        )
+        return actions
+
+
+@admin.register(PlatformPaymentReconciliation)
+class PlatformPaymentReconciliationAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "payment",
+        "gateway",
+        "status",
+        "local_status",
+        "provider_status",
+        "provider_payment_id",
+        "reconciled_at",
+    )
+
+    list_filter = (
+        "gateway",
+        "status",
+        "local_status",
+        "provider_status",
+    )
+
+    search_fields = (
+        "payment__payment_reference",
+        "provider_payment_id",
+        "error_code",
+    )
+
+    ordering = (
+        "-reconciled_at",
+        "-id",
+    )
+
+    readonly_fields = tuple(
+        field.name
+        for field
+        in PlatformPaymentReconciliation
+        ._meta
+        .fields
+    )
+
+    list_select_related = (
+        "payment",
+        "reconciled_by",
+    )
+
+    list_per_page = 50
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(
+        self,
+        request,
+        obj=None,
+    ):
+        return False
+
+    def get_actions(self, request):
+        actions = super().get_actions(
+            request
+        )
+        actions.pop(
+            "delete_selected",
+            None,
+        )
         return actions

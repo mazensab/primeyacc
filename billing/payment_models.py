@@ -588,3 +588,303 @@ class PlatformSubscriptionWebhookEvent(models.Model):
 
         self.full_clean()
         return super().save(*args, **kwargs)
+
+
+# =====================================================================
+# PHASE29C_PLATFORM_PAYMENT_RECONCILIATION
+# Mhamcloud | Provider-authoritative platform payment reconciliation
+# =====================================================================
+
+
+class PlatformPaymentReconciliation(models.Model):
+    """
+    Immutable-style audit history for platform payment reconciliation.
+
+    Reconciliation is deliberately read-only with respect to the
+    subscription/payment lifecycle.
+
+    A reconciliation row compares Mhamcloud's persisted payment contract
+    against a fresh authoritative provider response. It never activates,
+    cancels, fails, refunds, or otherwise mutates the payment lifecycle.
+    """
+
+    class Status(models.TextChoices):
+        MATCHED = "MATCHED", "Matched"
+        DISCREPANCY = "DISCREPANCY", "Discrepancy"
+        ERROR = "ERROR", "Error"
+
+    payment = models.ForeignKey(
+        PlatformSubscriptionPayment,
+        on_delete=models.PROTECT,
+        related_name="reconciliations",
+    )
+
+    gateway = models.CharField(
+        max_length=30,
+        db_index=True,
+    )
+
+    provider_payment_id = models.CharField(
+        max_length=180,
+        blank=True,
+        db_index=True,
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        db_index=True,
+    )
+
+    local_status = models.CharField(
+        max_length=30,
+        blank=True,
+        db_index=True,
+    )
+
+    provider_status = models.CharField(
+        max_length=30,
+        blank=True,
+        db_index=True,
+    )
+
+    local_amount_minor = models.PositiveBigIntegerField(
+        default=0,
+    )
+
+    provider_amount_minor = models.PositiveBigIntegerField(
+        null=True,
+        blank=True,
+    )
+
+    local_currency = models.CharField(
+        max_length=10,
+        blank=True,
+    )
+
+    provider_currency = models.CharField(
+        max_length=10,
+        blank=True,
+    )
+
+    local_reference = models.CharField(
+        max_length=180,
+        blank=True,
+    )
+
+    provider_reference = models.CharField(
+        max_length=180,
+        blank=True,
+    )
+
+    checks = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    discrepancies = models.JSONField(
+        default=list,
+        blank=True,
+    )
+
+    warnings = models.JSONField(
+        default=list,
+        blank=True,
+    )
+
+    provider_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    error_code = models.CharField(
+        max_length=100,
+        blank=True,
+        db_index=True,
+    )
+
+    error_message = models.TextField(
+        blank=True,
+    )
+
+    reconciled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="platform_payment_reconciliations",
+    )
+
+    reconciled_at = models.DateTimeField(
+        default=timezone.now,
+        db_index=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+    )
+
+    class Meta:
+        ordering = [
+            "-reconciled_at",
+            "-id",
+        ]
+
+        indexes = [
+            models.Index(
+                fields=["gateway", "status"],
+                name="bill_rec_gw_status_idx",
+            ),
+            models.Index(
+                fields=["payment", "reconciled_at"],
+                name="bill_rec_pay_time_idx",
+            ),
+            models.Index(
+                fields=["status", "reconciled_at"],
+                name="bill_rec_status_time_idx",
+            ),
+            models.Index(
+                fields=["gateway", "provider_payment_id"],
+                name="bill_rec_provider_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.payment.payment_reference} - "
+            f"{self.gateway} - "
+            f"{self.status}"
+        )
+
+    def clean(self):
+        super().clean()
+
+        self.gateway = str(
+            self.gateway or ""
+        ).strip().upper()
+
+        self.provider_payment_id = str(
+            self.provider_payment_id or ""
+        ).strip()
+
+        self.local_status = str(
+            self.local_status or ""
+        ).strip().upper()
+
+        self.provider_status = str(
+            self.provider_status or ""
+        ).strip().lower()
+
+        self.local_currency = str(
+            self.local_currency or ""
+        ).strip().upper()
+
+        self.provider_currency = str(
+            self.provider_currency or ""
+        ).strip().upper()
+
+        self.local_reference = str(
+            self.local_reference or ""
+        ).strip()
+
+        self.provider_reference = str(
+            self.provider_reference or ""
+        ).strip()
+
+        self.error_code = str(
+            self.error_code or ""
+        ).strip().upper()
+
+        validate_json_object(
+            self.checks,
+            "checks",
+        )
+
+        validate_json_object(
+            self.provider_snapshot,
+            "provider_snapshot",
+        )
+
+        if not isinstance(
+            self.discrepancies,
+            list,
+        ):
+            raise ValidationError(
+                {
+                    "discrepancies": (
+                        "Reconciliation discrepancies must be a JSON list."
+                    )
+                }
+            )
+
+        if not isinstance(
+            self.warnings,
+            list,
+        ):
+            raise ValidationError(
+                {
+                    "warnings": (
+                        "Reconciliation warnings must be a JSON list."
+                    )
+                }
+            )
+
+        if not self.gateway:
+            raise ValidationError(
+                {
+                    "gateway": (
+                        "Reconciliation gateway is required."
+                    )
+                }
+            )
+
+        if self.payment_id:
+            payment_gateway = str(
+                self.payment.gateway or ""
+            ).strip().upper()
+
+            if (
+                payment_gateway
+                and payment_gateway != self.gateway
+            ):
+                raise ValidationError(
+                    {
+                        "gateway": (
+                            "Reconciliation gateway does not match "
+                            "platform payment gateway."
+                        )
+                    }
+                )
+
+    def save(self, *args, **kwargs):
+        self.gateway = str(
+            self.gateway or ""
+        ).strip().upper()
+
+        self.provider_payment_id = str(
+            self.provider_payment_id or ""
+        ).strip()
+
+        self.local_status = str(
+            self.local_status or ""
+        ).strip().upper()
+
+        self.provider_status = str(
+            self.provider_status or ""
+        ).strip().lower()
+
+        self.local_currency = str(
+            self.local_currency or ""
+        ).strip().upper()
+
+        self.provider_currency = str(
+            self.provider_currency or ""
+        ).strip().upper()
+
+        self.error_code = str(
+            self.error_code or ""
+        ).strip().upper()
+
+        self.full_clean()
+        return super().save(*args, **kwargs)

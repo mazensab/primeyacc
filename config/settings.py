@@ -82,6 +82,45 @@ MOYASAR_WEBHOOK_SECRET = os.getenv(
 
 
 # ---------------------------------------------------------------------
+# Phase 29 — Tamara / Tabby platform gateway credentials
+# ---------------------------------------------------------------------
+#
+# Credentials remain environment-only.
+# Never expose these values through NEXT_PUBLIC_*.
+#
+
+TAMARA_API_TOKEN = os.getenv(
+    "TAMARA_API_TOKEN",
+    "",
+).strip()
+
+TAMARA_NOTIFICATION_TOKEN = os.getenv(
+    "TAMARA_NOTIFICATION_TOKEN",
+    "",
+).strip()
+
+TABBY_SECRET_KEY = os.getenv(
+    "TABBY_SECRET_KEY",
+    "",
+).strip()
+
+TABBY_MERCHANT_CODE = os.getenv(
+    "TABBY_MERCHANT_CODE",
+    "",
+).strip()
+
+TABBY_WEBHOOK_HEADER_NAME = os.getenv(
+    "TABBY_WEBHOOK_HEADER_NAME",
+    "",
+).strip()
+
+TABBY_WEBHOOK_HEADER_VALUE = os.getenv(
+    "TABBY_WEBHOOK_HEADER_VALUE",
+    "",
+).strip()
+
+
+# ---------------------------------------------------------------------
 # Security
 # ---------------------------------------------------------------------
 
