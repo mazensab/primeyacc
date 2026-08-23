@@ -190,11 +190,7 @@ def apply_gateway_result(
     )
 
     if result.status is PaymentStatus.PAID:
-        (
-            paid_payment,
-            _subscription,
-            _receipt,
-        ) = confirm_subscription_payment(
+        return confirm_subscription_payment(
             payment=locked,
             actor=actor,
             gateway_payment_id=(
@@ -205,8 +201,6 @@ def apply_gateway_result(
             ),
             provider_verified=True,
         )
-
-        return paid_payment
 
     if result.status is PaymentStatus.FAILED:
         failed = fail_subscription_payment(

@@ -18,7 +18,7 @@ from integrations.payments.exceptions import (
 from integrations.payments.platform_webhooks import (
     PlatformWebhookPaymentAmbiguous,
     PlatformWebhookPaymentNotFound,
-    process_platform_payment_webhook,
+    process_durable_platform_payment_webhook as process_platform_payment_webhook,
 )
 from integrations.payments.types import PaymentGatewayName
 

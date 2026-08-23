@@ -242,3 +242,349 @@ class PlatformSubscriptionPaymentEvent(models.Model):
     def clean(self):
         super().clean()
         validate_json_object(self.payload, "payload")
+
+
+# =====================================================================
+# PHASE29B_PLATFORM_WEBHOOK_RELIABILITY
+# Mhamcloud | Durable Platform Subscription Webhook Event Ledger
+# =====================================================================
+
+
+class PlatformSubscriptionWebhookEvent(models.Model):
+    """
+    Durable authenticated platform-payment webhook event.
+
+    This model belongs to PLATFORM subscription billing only.
+
+    It must not be confused with payments.PaymentWebhookEvent, which
+    belongs to tenant/company payment operations.
+
+    Security and reliability rules:
+    - only authenticated/verified provider notifications are persisted;
+    - secrets are redacted before payload/header storage;
+    - event_fingerprint provides durable replay/idempotency protection;
+    - payment is nullable so valid provider events may be retained when
+      the local payment cannot yet be resolved;
+    - provider state is always re-fetched authoritatively before a
+      subscription payment state mutation;
+    - failed/unmatched events remain available for safe reprocessing.
+    """
+
+    class Status(models.TextChoices):
+        RECEIVED = "RECEIVED", "Received"
+        PROCESSING = "PROCESSING", "Processing"
+        PROCESSED = "PROCESSED", "Processed"
+        FAILED = "FAILED", "Failed"
+        UNMATCHED = "UNMATCHED", "Unmatched"
+
+    gateway = models.CharField(
+        max_length=30,
+        db_index=True,
+    )
+
+    provider_event_id = models.CharField(
+        max_length=180,
+        blank=True,
+        db_index=True,
+    )
+
+    event_type = models.CharField(
+        max_length=120,
+        db_index=True,
+    )
+
+    provider_payment_id = models.CharField(
+        max_length=180,
+        blank=True,
+        db_index=True,
+    )
+
+    event_fingerprint = models.CharField(
+        max_length=64,
+        unique=True,
+        db_index=True,
+    )
+
+    body_sha256 = models.CharField(
+        max_length=64,
+        blank=True,
+        db_index=True,
+    )
+
+    payment = models.ForeignKey(
+        PlatformSubscriptionPayment,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="webhook_events",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.RECEIVED,
+        db_index=True,
+    )
+
+    payload = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    headers = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    attempt_count = models.PositiveIntegerField(
+        default=0,
+    )
+
+    max_attempts = models.PositiveIntegerField(
+        default=5,
+    )
+
+    duplicate_count = models.PositiveIntegerField(
+        default=0,
+    )
+
+    error_code = models.CharField(
+        max_length=100,
+        blank=True,
+    )
+
+    error_message = models.TextField(
+        blank=True,
+    )
+
+    received_at = models.DateTimeField(
+        default=timezone.now,
+        db_index=True,
+    )
+
+    last_received_at = models.DateTimeField(
+        default=timezone.now,
+    )
+
+    last_attempt_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    next_retry_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+
+    processed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+
+    failed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = ["-received_at", "-id"]
+
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(max_attempts__gte=1),
+                name="bill_wh_max_attempts_gte1",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=["gateway", "status"],
+                name="bill_wh_gw_status_idx",
+            ),
+            models.Index(
+                fields=["payment", "status"],
+                name="bill_wh_pay_status_idx",
+            ),
+            models.Index(
+                fields=["status", "next_retry_at"],
+                name="bill_wh_retry_idx",
+            ),
+            models.Index(
+                fields=["gateway", "provider_payment_id"],
+                name="bill_wh_provider_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.gateway} - "
+            f"{self.event_type} - "
+            f"{self.status}"
+        )
+
+    def clean(self):
+        super().clean()
+
+        self.gateway = str(
+            self.gateway or ""
+        ).strip().upper()
+
+        self.provider_event_id = str(
+            self.provider_event_id or ""
+        ).strip()
+
+        self.event_type = str(
+            self.event_type or ""
+        ).strip().lower()
+
+        self.provider_payment_id = str(
+            self.provider_payment_id or ""
+        ).strip()
+
+        self.event_fingerprint = str(
+            self.event_fingerprint or ""
+        ).strip().lower()
+
+        self.body_sha256 = str(
+            self.body_sha256 or ""
+        ).strip().lower()
+
+        self.error_code = str(
+            self.error_code or ""
+        ).strip().upper()
+
+        if not self.gateway:
+            raise ValidationError(
+                {"gateway": "Webhook gateway is required."}
+            )
+
+        if not self.event_type:
+            raise ValidationError(
+                {"event_type": "Webhook event type is required."}
+            )
+
+        if not self.event_fingerprint:
+            raise ValidationError(
+                {
+                    "event_fingerprint": (
+                        "Webhook event fingerprint is required."
+                    )
+                }
+            )
+
+        if len(self.event_fingerprint) != 64:
+            raise ValidationError(
+                {
+                    "event_fingerprint": (
+                        "Webhook event fingerprint must be SHA-256."
+                    )
+                }
+            )
+
+        if self.body_sha256 and len(self.body_sha256) != 64:
+            raise ValidationError(
+                {
+                    "body_sha256": (
+                        "Webhook body hash must be SHA-256."
+                    )
+                }
+            )
+
+        validate_json_object(
+            self.payload,
+            "payload",
+        )
+
+        validate_json_object(
+            self.headers,
+            "headers",
+        )
+
+        if self.max_attempts < 1:
+            raise ValidationError(
+                {
+                    "max_attempts": (
+                        "Webhook max attempts must be at least 1."
+                    )
+                }
+            )
+
+        if self.payment_id:
+            payment_gateway = str(
+                self.payment.gateway or ""
+            ).strip().upper()
+
+            if (
+                payment_gateway
+                and payment_gateway != self.gateway
+            ):
+                raise ValidationError(
+                    {
+                        "payment": (
+                            "Webhook gateway does not match "
+                            "platform payment gateway."
+                        )
+                    }
+                )
+
+            payment_provider_id = str(
+                self.payment.gateway_payment_id or ""
+            ).strip()
+
+            if (
+                payment_provider_id
+                and self.provider_payment_id
+                and payment_provider_id
+                != self.provider_payment_id
+            ):
+                raise ValidationError(
+                    {
+                        "payment": (
+                            "Webhook provider payment ID does not "
+                            "match platform payment."
+                        )
+                    }
+                )
+
+    def save(self, *args, **kwargs):
+        self.gateway = str(
+            self.gateway or ""
+        ).strip().upper()
+
+        self.provider_event_id = str(
+            self.provider_event_id or ""
+        ).strip()
+
+        self.event_type = str(
+            self.event_type or ""
+        ).strip().lower()
+
+        self.provider_payment_id = str(
+            self.provider_payment_id or ""
+        ).strip()
+
+        self.event_fingerprint = str(
+            self.event_fingerprint or ""
+        ).strip().lower()
+
+        self.body_sha256 = str(
+            self.body_sha256 or ""
+        ).strip().lower()
+
+        self.error_code = str(
+            self.error_code or ""
+        ).strip().upper()
+
+        self.full_clean()
+        return super().save(*args, **kwargs)
