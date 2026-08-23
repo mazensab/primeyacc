@@ -554,18 +554,19 @@ def _store_result(
         else {}
     )
 
+    record_values = dict(base)
+
+    record_values["provider_payment_id"] = (
+        actual_provider_id
+        or base["provider_payment_id"]
+    )
+
     return (
         PlatformPaymentReconciliation
         .objects
         .create(
-            **base,
+            **record_values,
             status=status,
-            provider_payment_id=(
-                actual_provider_id
-                or base[
-                    "provider_payment_id"
-                ]
-            ),
             provider_status=(
                 result.status.value
             ),

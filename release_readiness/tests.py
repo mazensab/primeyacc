@@ -15,7 +15,7 @@ from io import StringIO
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 
 from accounts.models import SystemRole, UserProfile, UserProfileStatus
 from api.system.release_readiness.views import release_readiness_overview
@@ -134,6 +134,22 @@ class ReleaseReadinessAPITests(TestCase):
 
 
 class ReleaseReadinessCommandTests(TestCase):
+    @override_settings(
+        MOYASAR_SECRET_KEY="test-moyasar-secret",
+        MOYASAR_WEBHOOK_SECRET="test-moyasar-webhook-secret",
+        MOYASAR_BASE_URL="https://api.moyasar.com/v1",
+        MOYASAR_TIMEOUT=15,
+        TAMARA_API_TOKEN="test-tamara-token",
+        TAMARA_NOTIFICATION_TOKEN="test-tamara-notification-token",
+        TAMARA_BASE_URL="https://api-sandbox.tamara.co",
+        TAMARA_TIMEOUT=15,
+        TABBY_SECRET_KEY="test-tabby-secret",
+        TABBY_MERCHANT_CODE="test-merchant",
+        TABBY_WEBHOOK_HEADER_NAME="X-Webhook-Key",
+        TABBY_WEBHOOK_HEADER_VALUE="test-tabby-webhook-value",
+        TABBY_BASE_URL="https://api.tabby.ai",
+        TABBY_TIMEOUT=15,
+    )
     def test_check_release_readiness_command_outputs_summary(self):
         output = StringIO()
 
