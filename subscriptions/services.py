@@ -833,3 +833,175 @@ def build_subscription_summary(company) -> dict[str, Any]:
         "effective": serialize(effective),
         "latest": serialize(latest),
     }
+
+# ===== Phase 28B Commercial Rules Services =====
+
+
+@transaction.atomic
+def create_commercial_pending_subscription(
+    *,
+    company,
+    plan: SubscriptionPlan,
+    billing_cycle: str,
+    action: str = CompanySubscription.SubscriptionAction.NEW,
+    current_subscription: CompanySubscription | None = None,
+    previous_subscription: CompanySubscription | None = None,
+    start_date: date | None = None,
+    promotion_code: str = "",
+    manual_discount_amount: Decimal | int | str | None = None,
+    vat_rate: Decimal | int | str | None = DEFAULT_VAT_RATE,
+    auto_renew: bool = False,
+    billing_reference: str = "",
+    created_by=None,
+    notes: str = "",
+) -> CompanySubscription:
+    """
+    Phase 28 commercial subscription creator.
+
+    This service intentionally wraps the existing Phase 19
+    create_pending_subscription() contract instead of replacing it.
+
+    NEW / RENEWAL:
+        normal plan price is used.
+
+    UPGRADE / DOWNGRADE:
+        only the remaining-period positive adjustment is charged.
+        A downgrade credit is snapshotted but is not paid out here.
+
+    Promotion and manual discounts are applied before VAT.
+    """
+
+    from subscriptions.commercial import (
+        calculate_commercial_pricing,
+        redeem_promotion,
+    )
+
+    if not company:
+        raise ValidationError(
+            {"company": "Company is required."}
+        )
+
+    if not plan:
+        raise ValidationError(
+            {"plan": "Subscription plan is required."}
+        )
+
+    effective_previous = (
+        previous_subscription
+        or current_subscription
+    )
+
+    if (
+        effective_previous is not None
+        and effective_previous.company_id != company.id
+    ):
+        raise ValidationError(
+            {
+                "previous_subscription": (
+                    "Previous subscription must belong "
+                    "to the same company."
+                )
+            }
+        )
+
+    commercial = calculate_commercial_pricing(
+        plan=plan,
+        billing_cycle=billing_cycle,
+        company=company,
+        current_subscription=current_subscription,
+        action=action,
+        promotion_code=promotion_code,
+        manual_discount_amount=(
+            manual_discount_amount
+            if manual_discount_amount is not None
+            else ZERO_MONEY
+        ),
+        vat_rate=vat_rate,
+        effective_date=start_date,
+    )
+
+    subscription = create_pending_subscription(
+        company=company,
+        plan=plan,
+        billing_cycle=billing_cycle,
+        action=action,
+        previous_subscription=effective_previous,
+        start_date=start_date,
+        discount_amount=ZERO_MONEY,
+        vat_rate=vat_rate,
+        auto_renew=auto_renew,
+        billing_reference=billing_reference,
+        created_by=created_by,
+        notes=notes,
+    )
+
+    subscription.price = money(
+        commercial.subtotal
+    )
+    subscription.promotion_code = (
+        commercial.promotion.code
+        if commercial.promotion
+        else ""
+    )
+    subscription.promotion_discount_amount = money(
+        commercial.promotion_discount
+    )
+    subscription.manual_discount_amount = money(
+        commercial.manual_discount
+    )
+    subscription.discount_amount = money(
+        commercial.total_discount
+    )
+    subscription.proration_charge_amount = money(
+        commercial.proration_charge
+    )
+    subscription.proration_credit_amount = money(
+        commercial.proration_credit
+    )
+    subscription.tax_amount = money(
+        commercial.tax_amount
+    )
+    subscription.total_amount = money(
+        commercial.total_amount
+    )
+    subscription.commercial_snapshot = (
+        commercial.as_dict()
+    )
+
+    subscription.full_clean()
+
+    subscription.save(
+        update_fields=[
+            "price",
+            "promotion_code",
+            "promotion_discount_amount",
+            "manual_discount_amount",
+            "discount_amount",
+            "proration_charge_amount",
+            "proration_credit_amount",
+            "tax_amount",
+            "total_amount",
+            "commercial_snapshot",
+            "updated_at",
+        ]
+    )
+
+    if (
+        commercial.promotion
+        and commercial.promotion.promotion_id
+        and commercial.promotion_discount
+        > ZERO_MONEY
+    ):
+        redeem_promotion(
+            promotion_id=(
+                commercial.promotion.promotion_id
+            ),
+            company=company,
+            subscription=subscription,
+            discount_amount=(
+                commercial.promotion_discount
+            ),
+            actor=created_by,
+        )
+
+    return subscription

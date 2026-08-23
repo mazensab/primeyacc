@@ -307,6 +307,41 @@ class CompanySubscription(models.Model):
         verbose_name="تجديد تلقائي",
     )
 
+    promotion_code = models.CharField(
+        max_length=80,
+        blank=True,
+        db_index=True,
+        verbose_name="Promotion code",
+    )
+    promotion_discount_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=ZERO_MONEY,
+        verbose_name="Promotion discount",
+    )
+    manual_discount_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=ZERO_MONEY,
+        verbose_name="Manual discount",
+    )
+    proration_charge_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=ZERO_MONEY,
+        verbose_name="Proration charge",
+    )
+    proration_credit_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=ZERO_MONEY,
+        verbose_name="Proration credit",
+    )
+    commercial_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Commercial pricing snapshot",
+    )
     billing_reference = models.CharField(
         max_length=120,
         blank=True,
@@ -624,3 +659,369 @@ class CompanySubscription(models.Model):
                     "updated_at",
                 ]
             )
+
+# ===== Phase 28B Commercial Rules Models =====
+
+
+class SubscriptionPromotion(models.Model):
+    """
+    Platform subscription promotion/coupon.
+
+    Commercial rules:
+    - code is globally unique and case-normalized.
+    - percentage and fixed discounts are supported.
+    - promotion may be limited by plan and billing cycle.
+    - usage limits are enforced again under a database transaction
+      when the promotion is redeemed.
+    """
+
+    class DiscountType(models.TextChoices):
+        PERCENTAGE = "PERCENTAGE", "Percentage"
+        FIXED = "FIXED", "Fixed amount"
+
+    name = models.CharField(
+        max_length=160,
+    )
+    code = models.CharField(
+        max_length=80,
+        unique=True,
+        db_index=True,
+    )
+    description = models.TextField(
+        blank=True,
+    )
+
+    discount_type = models.CharField(
+        max_length=20,
+        choices=DiscountType.choices,
+        default=DiscountType.PERCENTAGE,
+        db_index=True,
+    )
+    discount_value = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+    )
+    maximum_discount_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=ZERO_MONEY,
+    )
+    minimum_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=ZERO_MONEY,
+    )
+
+    billing_cycle = models.CharField(
+        max_length=20,
+        choices=CompanySubscription.BillingCycle.choices,
+        blank=True,
+        db_index=True,
+        help_text="Blank means all billing cycles.",
+    )
+
+    plans = models.ManyToManyField(
+        SubscriptionPlan,
+        blank=True,
+        related_name="subscription_promotions",
+        help_text="Empty means all eligible plans.",
+    )
+
+    starts_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+    ends_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+
+    max_redemptions = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+    )
+    max_redemptions_per_company = models.PositiveIntegerField(
+        default=1,
+    )
+    redemption_count = models.PositiveIntegerField(
+        default=0,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+    )
+
+    created_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_subscription_promotions",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = [
+            "-is_active",
+            "-created_at",
+            "-id",
+        ]
+        indexes = [
+            models.Index(
+                fields=["is_active", "code"],
+                name="sub_promo_active_code_idx",
+            ),
+            models.Index(
+                fields=["starts_at", "ends_at"],
+                name="sub_promo_window_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.code} - {self.name}"
+
+    def clean(self) -> None:
+        super().clean()
+
+        self.code = str(
+            self.code or ""
+        ).strip().upper()
+
+        if not self.code:
+            raise ValidationError(
+                {"code": "Promotion code is required."}
+            )
+
+        if not self.code.replace("-", "").replace("_", "").isalnum():
+            raise ValidationError(
+                {
+                    "code": (
+                        "Promotion code may contain letters, numbers, "
+                        "hyphens, and underscores only."
+                    )
+                }
+            )
+
+        discount_value = money(
+            self.discount_value
+        )
+
+        if discount_value <= ZERO_MONEY:
+            raise ValidationError(
+                {
+                    "discount_value": (
+                        "Promotion discount value must be greater than zero."
+                    )
+                }
+            )
+
+        if (
+            self.discount_type
+            == self.DiscountType.PERCENTAGE
+            and discount_value > Decimal("100.00")
+        ):
+            raise ValidationError(
+                {
+                    "discount_value": (
+                        "Percentage discount cannot exceed 100."
+                    )
+                }
+            )
+
+        if money(self.maximum_discount_amount) < ZERO_MONEY:
+            raise ValidationError(
+                {
+                    "maximum_discount_amount": (
+                        "Maximum discount cannot be negative."
+                    )
+                }
+            )
+
+        if money(self.minimum_amount) < ZERO_MONEY:
+            raise ValidationError(
+                {
+                    "minimum_amount": (
+                        "Minimum amount cannot be negative."
+                    )
+                }
+            )
+
+        if (
+            self.starts_at
+            and self.ends_at
+            and self.ends_at <= self.starts_at
+        ):
+            raise ValidationError(
+                {
+                    "ends_at": (
+                        "Promotion end must be after its start."
+                    )
+                }
+            )
+
+        if (
+            self.max_redemptions is not None
+            and self.max_redemptions <= 0
+        ):
+            raise ValidationError(
+                {
+                    "max_redemptions": (
+                        "Maximum redemptions must be greater than zero."
+                    )
+                }
+            )
+
+        if self.max_redemptions_per_company <= 0:
+            raise ValidationError(
+                {
+                    "max_redemptions_per_company": (
+                        "Per-company redemption limit must be "
+                        "greater than zero."
+                    )
+                }
+            )
+
+        if (
+            self.max_redemptions is not None
+            and self.redemption_count > self.max_redemptions
+        ):
+            raise ValidationError(
+                {
+                    "redemption_count": (
+                        "Redemption count cannot exceed the global limit."
+                    )
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        self.code = str(
+            self.code or ""
+        ).strip().upper()
+
+        self.discount_value = money(
+            self.discount_value
+        )
+        self.maximum_discount_amount = money(
+            self.maximum_discount_amount
+        )
+        self.minimum_amount = money(
+            self.minimum_amount
+        )
+
+        self.full_clean()
+
+        return super().save(
+            *args,
+            **kwargs,
+        )
+
+
+class SubscriptionPromotionRedemption(models.Model):
+    """
+    Immutable record connecting an applied platform promotion to the
+    company subscription that consumed it.
+    """
+
+    promotion = models.ForeignKey(
+        SubscriptionPromotion,
+        on_delete=models.PROTECT,
+        related_name="redemptions",
+    )
+    company = models.ForeignKey(
+        "companies.Company",
+        on_delete=models.PROTECT,
+        related_name="subscription_promotion_redemptions",
+    )
+    subscription = models.OneToOneField(
+        CompanySubscription,
+        on_delete=models.PROTECT,
+        related_name="promotion_redemption",
+    )
+
+    discount_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+    )
+
+    redeemed_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="subscription_promotion_redemptions",
+    )
+
+    redeemed_at = models.DateTimeField(
+        default=timezone.now,
+        db_index=True,
+    )
+
+    class Meta:
+        ordering = [
+            "-redeemed_at",
+            "-id",
+        ]
+        indexes = [
+            models.Index(
+                fields=["promotion", "company"],
+                name="sub_promo_red_company_idx",
+            ),
+            models.Index(
+                fields=["company", "redeemed_at"],
+                name="sub_promo_red_time_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.promotion.code} - "
+            f"{self.company_id} - "
+            f"{self.subscription_id}"
+        )
+
+    def clean(self) -> None:
+        super().clean()
+
+        if (
+            self.subscription_id
+            and self.company_id
+            and self.subscription.company_id != self.company_id
+        ):
+            raise ValidationError(
+                {
+                    "company": (
+                        "Promotion redemption company must match "
+                        "the subscription company."
+                    )
+                }
+            )
+
+        if money(self.discount_amount) <= ZERO_MONEY:
+            raise ValidationError(
+                {
+                    "discount_amount": (
+                        "Redeemed discount must be greater than zero."
+                    )
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        self.discount_amount = money(
+            self.discount_amount
+        )
+
+        self.full_clean()
+
+        return super().save(
+            *args,
+            **kwargs,
+        )

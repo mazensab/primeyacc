@@ -28,6 +28,7 @@ from .list import system_subscriptions_list
 from .renew import system_subscription_renew
 from .suspend import system_subscription_suspend
 from .reactivate import system_subscription_reactivate
+from .refund import system_subscription_refund
 
 
 app_name = "system_subscriptions"
@@ -50,5 +51,10 @@ urlpatterns = [
         "<int:subscription_id>/confirm-payment/",
         system_subscription_confirm_payment,
         name="confirm_payment",
+    ),
+    path(
+        "<int:subscription_id>/refund/",
+        system_subscription_refund,
+        name="refund",
     ),
 ]

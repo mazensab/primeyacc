@@ -33,7 +33,7 @@ from django.views.decorators.http import require_POST
 from api.permissions import user_has_system_permission
 from companies.models import Company
 from subscriptions.models import CompanySubscription, SubscriptionPlan
-from subscriptions.services import create_pending_subscription, money
+from subscriptions.services import create_commercial_pending_subscription, money
 
 
 def _json_body(request: HttpRequest) -> dict[str, Any]:
@@ -429,14 +429,14 @@ def system_subscription_create(request: HttpRequest) -> JsonResponse:
     notes = _clean_text(_get_value(request, payload, "notes", ""))
 
     try:
-        subscription = create_pending_subscription(
+        subscription = create_commercial_pending_subscription(
             company=company,
             plan=plan,
             billing_cycle=billing_cycle,
             action=action,
             previous_subscription=previous_subscription,
             start_date=start_date,
-            discount_amount=discount_amount,
+            manual_discount_amount=discount_amount,
             vat_rate=vat_rate,
             auto_renew=auto_renew,
             billing_reference=billing_reference,

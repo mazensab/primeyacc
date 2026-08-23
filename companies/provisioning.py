@@ -30,7 +30,7 @@ from companies.models import (
     CompanyStatus,
 )
 from subscriptions.models import CompanySubscription, SubscriptionPlan
-from subscriptions.services import create_pending_subscription
+from subscriptions.services import create_commercial_pending_subscription
 
 
 User = get_user_model()
@@ -222,19 +222,19 @@ def provision_company_tenant(
     clean_name = str(name or "").strip()
 
     if not clean_name:
-        raise ValidationError({"name": "اسم الشركة مطلوب."})
+        raise ValidationError({"name": "ط§ط³ظ… ط§ظ„ط´ط±ظƒط© ظ…ط·ظ„ظˆط¨."})
 
     if status not in CompanyStatus.values:
-        raise ValidationError({"status": "حالة الشركة غير صحيحة."})
+        raise ValidationError({"status": "ط­ط§ظ„ط© ط§ظ„ط´ط±ظƒط© ط؛ظٹط± طµط­ظٹط­ط©."})
 
     if activity_profile not in CompanyActivityProfile.values:
         raise ValidationError(
-            {"activity_profile": "نوع نشاط الشركة غير صحيح."}
+            {"activity_profile": "ظ†ظˆط¹ ظ†ط´ط§ط· ط§ظ„ط´ط±ظƒط© ط؛ظٹط± طµط­ظٹط­."}
         )
 
     if initial_plan and not billing_cycle:
         raise ValidationError(
-            {"billing_cycle": "دورة الفوترة مطلوبة عند اختيار باقة."}
+            {"billing_cycle": "ط¯ظˆط±ط© ط§ظ„ظپظˆطھط±ط© ظ…ط·ظ„ظˆط¨ط© ط¹ظ†ط¯ ط§ط®طھظٹط§ط± ط¨ط§ظ‚ط©."}
         )
 
     company = Company(
@@ -307,7 +307,7 @@ def provision_company_tenant(
             current_step="payment",
         )
 
-        subscription = create_pending_subscription(
+        subscription = create_commercial_pending_subscription(
             company=company,
             plan=initial_plan,
             billing_cycle=billing_cycle,

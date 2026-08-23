@@ -21,7 +21,7 @@ from billing.models import (
 from billing.payment_services import create_or_get_subscription_payment
 from subscriptions.models import CompanySubscription, SubscriptionPlan
 from subscriptions.services import (
-    create_pending_subscription,
+    create_commercial_pending_subscription,
     create_plan_change_pending_subscription,
     create_renewal_pending_subscription,
     money,
@@ -551,12 +551,12 @@ def company_subscription_change_plan(request: HttpRequest) -> JsonResponse:
         if current is None:
             action = CompanySubscription.SubscriptionAction.NEW
 
-            pending = create_pending_subscription(
+            pending = create_commercial_pending_subscription(
                 company=company,
                 plan=new_plan,
                 billing_cycle=cycle,
                 action=action,
-                discount_amount=0,
+                manual_discount_amount=0,
                 auto_renew=auto_renew,
                 created_by=request.user,
                 notes="Company self-service initial subscription.",
