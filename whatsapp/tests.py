@@ -421,6 +421,85 @@ class CompanyWhatsAppFoundationTests(TestCase):
         self.assertEqual(payload["company_id"], self.company.id)
         self.assertEqual(payload["recipient_phone"], "+966500000000")
 
+
+
+def _phase27_create_active_subscription(
+    *,
+    company,
+    user,
+    suffix: str,
+):
+    """
+    Test-only helper.
+
+    Company operational APIs now require subscription access.
+    This fixture keeps legacy WhatsApp API tests aligned with
+    the current SaaS access contract without weakening production
+    permissions.
+    """
+
+    from datetime import timedelta
+    from decimal import Decimal
+
+    from django.utils import timezone
+
+    from subscriptions.models import (
+        CompanySubscription,
+        SubscriptionPlan,
+    )
+
+    normalized = (
+        str(suffix or company.id)
+        .strip()
+        .lower()
+        .replace("_", "-")
+    )
+
+    plan = SubscriptionPlan.objects.create(
+        name=f"WhatsApp Test Plan {normalized}",
+        code=SubscriptionPlan.PlanCode.BASIC,
+        slug=(
+            f"whatsapp-test-{company.id}-{normalized}"
+        ),
+        monthly_price=Decimal("100.00"),
+        yearly_price=Decimal("1000.00"),
+        max_users=10,
+        max_branches=5,
+        max_warehouses=5,
+        max_pos=5,
+        features=["whatsapp"],
+        is_active=True,
+        is_public=False,
+    )
+
+    today = timezone.localdate()
+
+    return CompanySubscription.objects.create(
+        company=company,
+        plan=plan,
+        status=CompanySubscription.Status.ACTIVE,
+        action=(
+            CompanySubscription
+            .SubscriptionAction
+            .NEW
+        ),
+        billing_cycle=(
+            CompanySubscription
+            .BillingCycle
+            .MONTHLY
+        ),
+        start_date=today,
+        end_date=today + timedelta(days=30),
+        price=Decimal("100.00"),
+        discount_amount=Decimal("0.00"),
+        tax_amount=Decimal("15.00"),
+        total_amount=Decimal("115.00"),
+        paid_at=timezone.now(),
+        activated_at=timezone.now(),
+        created_by=user,
+    )
+
+
 class CompanyWhatsAppAPITests(TestCase):
     def setUp(self):
         self.company = Company.objects.create(
@@ -461,6 +540,14 @@ class CompanyWhatsAppAPITests(TestCase):
             role=CompanyRole.ADMIN,
             status=MembershipStatus.ACTIVE,
             is_primary=True,
+        )
+
+        self.phase27_subscription = (
+            _phase27_create_active_subscription(
+                company=self.company,
+                user=self.user,
+                suffix="MAIN",
+            )
         )
 
         self.client = APIClient()
@@ -1176,6 +1263,14 @@ class CompanyWhatsAppConnectionGatewayAPITests(TestCase):
             status=MembershipStatus.ACTIVE,
             is_primary=True,
         )
+        self.phase27_subscription = (
+            _phase27_create_active_subscription(
+                company=self.company,
+                user=self.user,
+                suffix="GATEWAY",
+            )
+        )
+
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
     def test_company_connection_get_uses_current_company(self):
@@ -1318,6 +1413,14 @@ class CompanyWhatsAppInboxAPITests(TestCase):
             status=MembershipStatus.ACTIVE,
             is_primary=True,
         )
+        self.phase27_subscription = (
+            _phase27_create_active_subscription(
+                company=self.company,
+                user=self.user,
+                suffix="INBOX",
+            )
+        )
+
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
     def _create_conversation(self, *, company=None, body="Inbound hello"):

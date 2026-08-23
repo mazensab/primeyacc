@@ -158,6 +158,170 @@ def process_subscription_lifecycle(
 
     result = SubscriptionLifecycleResult()
 
+    from notifications.lifecycle import (
+        schedule_lifecycle_notification,
+    )
+
+    # --------------------------------------------------------
+    # Expiring soon
+    #
+    # One event per subscription/end_date. Re-running the daily
+    # processor remains safe because NotificationEvent event_key
+    # is idempotent.
+    # --------------------------------------------------------
+
+    expiring_upper_bound = (
+        effective_today + timedelta(days=7)
+    )
+
+    expiring_queryset = (
+        CompanySubscription.objects
+        .filter(
+            status__in=[
+                CompanySubscription.Status.TRIAL,
+                CompanySubscription.Status.ACTIVE,
+            ],
+            end_date__gte=effective_today,
+            end_date__lte=expiring_upper_bound,
+        )
+        .order_by("id")
+    )
+
+    if company_id is not None:
+        expiring_queryset = (
+            expiring_queryset.filter(
+                company_id=company_id
+            )
+        )
+
+    for expiring in expiring_queryset:
+        days_remaining = max(
+            (
+                expiring.end_date
+                - effective_today
+            ).days,
+            0,
+        )
+
+        schedule_lifecycle_notification(
+            company_id=expiring.company_id,
+            event_type="subscription.expiring_soon",
+            event_key=(
+                f"subscription:{expiring.id}:"
+                f"expiring-soon:{expiring.end_date.isoformat()}"
+            ),
+            title="الاشتراك يقترب من الانتهاء",
+            message=(
+                "اشتراك Mhamcloud يقترب من الانتهاء. "
+                f"الأيام المتبقية: {days_remaining}."
+            ),
+            metadata={
+                "subscription_id": expiring.id,
+                "status": expiring.status,
+                "end_date": expiring.end_date.isoformat(),
+                "days_remaining": days_remaining,
+            },
+            created_by_id=(
+                getattr(
+                    expiring.created_by,
+                    "id",
+                    None,
+                )
+            ),
+        )
+
+    # --------------------------------------------------------
+    # Grace started
+    #
+    # Query every ACTIVE subscription currently inside grace.
+    # The event key guarantees only one GRACE_STARTED event even
+    # if the lifecycle command did not run on grace day one.
+    # --------------------------------------------------------
+
+    grace_floor = (
+        effective_today
+        - timedelta(
+            days=SUBSCRIPTION_ACTIVE_GRACE_DAYS
+        )
+    )
+
+    grace_queryset = (
+        CompanySubscription.objects
+        .filter(
+            status=CompanySubscription.Status.ACTIVE,
+            end_date__lt=effective_today,
+            end_date__gte=grace_floor,
+        )
+        .order_by("id")
+    )
+
+    if company_id is not None:
+        grace_queryset = (
+            grace_queryset.filter(
+                company_id=company_id
+            )
+        )
+
+    for grace_subscription in grace_queryset:
+        grace_expires_at = (
+            grace_subscription.end_date
+            + timedelta(
+                days=SUBSCRIPTION_ACTIVE_GRACE_DAYS
+            )
+        )
+
+        grace_days_remaining = max(
+            (
+                grace_expires_at
+                - effective_today
+            ).days,
+            0,
+        )
+
+        schedule_lifecycle_notification(
+            company_id=(
+                grace_subscription.company_id
+            ),
+            event_type="subscription.grace_started",
+            event_key=(
+                f"subscription:{grace_subscription.id}:"
+                f"grace-started:"
+                f"{grace_subscription.end_date.isoformat()}"
+            ),
+            title="بدأت فترة السماح للاشتراك",
+            message=(
+                "انتهت فترة الاشتراك الأساسية وبدأت فترة السماح. "
+                f"الأيام المتبقية في السماح: "
+                f"{grace_days_remaining}."
+            ),
+            metadata={
+                "subscription_id": (
+                    grace_subscription.id
+                ),
+                "status": (
+                    grace_subscription.status
+                ),
+                "end_date": (
+                    grace_subscription
+                    .end_date
+                    .isoformat()
+                ),
+                "grace_expires_at": (
+                    grace_expires_at.isoformat()
+                ),
+                "grace_days_remaining": (
+                    grace_days_remaining
+                ),
+            },
+            created_by_id=(
+                getattr(
+                    grace_subscription.created_by,
+                    "id",
+                    None,
+                )
+            ),
+        )
+
     queryset = (
         _candidate_queryset(
             today=effective_today,
@@ -185,6 +349,37 @@ def process_subscription_lifecycle(
                 "status",
                 "updated_at",
             ]
+        )
+
+        schedule_lifecycle_notification(
+            company_id=subscription.company_id,
+            event_type="subscription.expired",
+            event_key=(
+                f"subscription:{subscription.id}:expired"
+            ),
+            title="انتهى الاشتراك",
+            message=(
+                "انتهى اشتراك Mhamcloud. "
+                "يمكنك التجديد من صفحة الاشتراك."
+            ),
+            metadata={
+                "subscription_id": subscription.id,
+                "from_status": from_status,
+                "to_status": (
+                    CompanySubscription.Status.EXPIRED
+                ),
+                "reason": reason,
+                "end_date": (
+                    subscription.end_date.isoformat()
+                ),
+            },
+            created_by_id=(
+                getattr(
+                    subscription.created_by,
+                    "id",
+                    None,
+                )
+            ),
         )
 
         result.changed += 1

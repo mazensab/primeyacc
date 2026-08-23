@@ -545,6 +545,70 @@ def activate_pending_subscription(
         raise ValidationError(
             {"accounting": f"تعذر تهيئة دليل الحسابات للشركة: {exc}"}
         ) from exc
+    from notifications.lifecycle import (
+        schedule_lifecycle_notification,
+    )
+
+    if (
+        subscription.action
+        == CompanySubscription.SubscriptionAction.RENEWAL
+    ):
+        lifecycle_event_type = (
+            "subscription.renewed"
+        )
+        lifecycle_title = (
+            "تم تجديد الاشتراك"
+        )
+        lifecycle_message = (
+            "تم تجديد اشتراك Mhamcloud بنجاح."
+        )
+
+    else:
+        lifecycle_event_type = (
+            "subscription.activated"
+        )
+        lifecycle_title = (
+            "تم تفعيل الاشتراك"
+        )
+        lifecycle_message = (
+            "تم تفعيل اشتراك Mhamcloud بنجاح."
+        )
+
+    schedule_lifecycle_notification(
+        company_id=subscription.company_id,
+        event_type=lifecycle_event_type,
+        event_key=(
+            f"subscription:{subscription.id}:"
+            f"{lifecycle_event_type}"
+        ),
+        title=lifecycle_title,
+        message=lifecycle_message,
+        metadata={
+            "subscription_id": subscription.id,
+            "plan_id": subscription.plan_id,
+            "status": subscription.status,
+            "action": subscription.action,
+            "billing_cycle": subscription.billing_cycle,
+            "start_date": (
+                subscription.start_date.isoformat()
+                if subscription.start_date
+                else None
+            ),
+            "end_date": (
+                subscription.end_date.isoformat()
+                if subscription.end_date
+                else None
+            ),
+        },
+        created_by_id=(
+            getattr(
+                subscription.created_by,
+                "id",
+                None,
+            )
+        ),
+    )
+
     return subscription
 
 

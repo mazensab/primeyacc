@@ -693,6 +693,35 @@ def confirm_subscription_payment(
         },
     )
 
+    from notifications.lifecycle import (
+        schedule_lifecycle_notification,
+    )
+
+    schedule_lifecycle_notification(
+        company_id=locked_payment.company_id,
+        event_type="payment.confirmed",
+        event_key=(
+            f"platform-payment:{locked_payment.id}:confirmed"
+        ),
+        title="تم تأكيد الدفع",
+        message=(
+            "تم استلام دفعة اشتراك Mhamcloud وتأكيدها بنجاح."
+        ),
+        metadata={
+            "payment_id": locked_payment.id,
+            "subscription_id": activated.id,
+            "invoice_id": locked_payment.invoice_id,
+            "receipt_id": receipt.id,
+            "payment_status": locked_payment.status,
+            "subscription_status": activated.status,
+            "gateway": locked_payment.gateway,
+            "payment_method": locked_payment.payment_method,
+        },
+        created_by_id=(
+            getattr(actor, "id", None)
+        ),
+    )
+
     return (
         locked_payment,
         activated,
@@ -779,6 +808,34 @@ def fail_subscription_payment(
         payload={
             "failure_code": locked.failure_code,
         },
+    )
+
+    from notifications.lifecycle import (
+        schedule_lifecycle_notification,
+    )
+
+    schedule_lifecycle_notification(
+        company_id=locked.company_id,
+        event_type="payment.failed",
+        event_key=(
+            f"platform-payment:{locked.id}:failed"
+        ),
+        title="تعذر إتمام الدفع",
+        message=(
+            locked.failure_message
+            or "تعذر إتمام دفعة اشتراك Mhamcloud."
+        ),
+        metadata={
+            "payment_id": locked.id,
+            "subscription_id": locked.subscription_id,
+            "invoice_id": locked.invoice_id,
+            "payment_status": locked.status,
+            "failure_code": locked.failure_code,
+            "gateway": locked.gateway,
+        },
+        created_by_id=(
+            getattr(actor, "id", None)
+        ),
     )
 
     return locked

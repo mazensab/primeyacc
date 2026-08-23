@@ -2552,6 +2552,124 @@ def _record_company_outbound_inbox_message_from_log(
             "updated_at",
         ]
     )
+
+def send_company_whatsapp_message(
+    *,
+    company: Company,
+    recipient_phone: str,
+    message_body: str,
+    recipient_name: str = "",
+    source_type: str = WhatsAppMessageSourceType.SYSTEM,
+    source_id: str | int = "",
+    user=None,
+) -> dict[str, Any]:
+    """
+    Production company WhatsApp text sender.
+
+    Reuses the existing company session gateway and message/inbox logging.
+    It intentionally does not use the test-message contract.
+    """
+    setting = get_or_create_company_whatsapp_connection(
+        company=company,
+        user=user,
+    )
+
+    config = _company_connection_config(setting)
+
+    phone = _normalize_company_whatsapp_test_phone(
+        phone_number=recipient_phone,
+        default_country_code=setting.default_country_code,
+    )
+
+    if not phone:
+        raise ValueError(
+            "WhatsApp recipient phone is required."
+        )
+
+    body = _company_safe_text(message_body)
+
+    if not body:
+        raise ValueError(
+            "WhatsApp message body is required."
+        )
+
+    result = _company_gateway_request(
+        path="/messages/send-text",
+        payload={
+            "session_name": _company_whatsapp_session_name(
+                setting
+            ),
+            "to_phone": phone,
+            "body": body,
+        },
+    )
+
+    log = create_message_log(
+        company=company,
+        recipient_name=_company_safe_text(
+            recipient_name
+        ),
+        recipient_phone=phone,
+        message_body=body,
+        provider=WhatsAppProvider.CUSTOM,
+        status=WhatsAppMessageStatus.QUEUED,
+        source_type=source_type,
+        source_id=source_id,
+        provider_response=result,
+        created_by=user,
+    )
+
+    if bool(result.get("success")):
+        log.status = WhatsAppMessageStatus.SENT
+        log.sent_at = timezone.now()
+        log.failed_at = None
+        log.provider_message_id = _company_safe_text(
+            result.get("external_message_id")
+            or result.get("message_id")
+            or result.get("provider_message_id")
+            or result.get("id")
+        )
+        log.error_message = ""
+    else:
+        log.status = WhatsAppMessageStatus.FAILED
+        log.failed_at = timezone.now()
+        log.error_message = _company_safe_text(
+            result.get("error_message")
+            or result.get("message"),
+            "Gateway failed to send message.",
+        )
+
+    log.provider_response = result
+    log.save()
+
+    _record_company_outbound_inbox_message_from_log(
+        setting=setting,
+        log=log,
+        result=result,
+        user=user,
+    )
+
+    setting = _sync_company_connection_from_gateway(
+        setting,
+        result,
+        user=user,
+    )
+
+    return {
+        "success": bool(result.get("success")),
+        "message": _company_safe_text(
+            result.get("message")
+        ),
+        "result": result,
+        "connection": serialize_company_whatsapp_connection(
+            setting
+        ),
+        "message_log": serialize_whatsapp_message_log(
+            log
+        ),
+    }
+
+
 def company_whatsapp_send_test_message(
     *,
     company: Company,

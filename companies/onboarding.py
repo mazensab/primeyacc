@@ -187,4 +187,33 @@ def complete_company_onboarding(
 
     onboarding.mark_ready(user=user)
 
+    from notifications.lifecycle import (
+        schedule_lifecycle_notification,
+    )
+
+    schedule_lifecycle_notification(
+        company_id=company.id,
+        event_type="onboarding.ready",
+        event_key=(
+            f"company:{company.id}:onboarding-ready"
+        ),
+        title="اكتمل إعداد الشركة",
+        message=(
+            "اكتمل إعداد شركة Mhamcloud وأصبحت مساحة العمل جاهزة."
+        ),
+        metadata={
+            "company_id": company.id,
+            "onboarding_id": onboarding.id,
+            "status": onboarding.status,
+            "current_step": onboarding.current_step,
+        },
+        created_by_id=(
+            getattr(
+                user,
+                "id",
+                None,
+            )
+        ),
+    )
+
     return onboarding

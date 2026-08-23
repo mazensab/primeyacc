@@ -14,12 +14,17 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import CompanyMembership, CompanyRole, MembershipStatus
 from companies.models import Company
+from subscriptions.models import CompanySubscription, SubscriptionPlan
 from notifications.models import (
     CompanyNotification,
     NotificationChannel,
@@ -349,6 +354,47 @@ class CompanyNotificationsFoundationTests(TestCase):
 
 
 class CompanyNotificationsAPITests(TestCase):
+    def _create_active_subscription(
+        self,
+        *,
+        company,
+        user,
+        suffix: str,
+    ):
+        plan = SubscriptionPlan.objects.create(
+            name=f"Notifications API Plan {suffix}",
+            code=SubscriptionPlan.PlanCode.BASIC,
+            slug=f"notifications-api-plan-{suffix.lower()}",
+            monthly_price=Decimal("100.00"),
+            yearly_price=Decimal("1000.00"),
+            max_users=10,
+            max_branches=2,
+            max_warehouses=1,
+            max_pos=1,
+            features=["notifications"],
+            is_active=True,
+            is_public=True,
+        )
+
+        today = timezone.localdate()
+
+        return CompanySubscription.objects.create(
+            company=company,
+            plan=plan,
+            status=CompanySubscription.Status.ACTIVE,
+            action=CompanySubscription.SubscriptionAction.NEW,
+            billing_cycle=CompanySubscription.BillingCycle.MONTHLY,
+            start_date=today,
+            end_date=today + timedelta(days=30),
+            price=Decimal("100.00"),
+            discount_amount=Decimal("0.00"),
+            tax_amount=Decimal("15.00"),
+            total_amount=Decimal("115.00"),
+            paid_at=timezone.now(),
+            activated_at=timezone.now(),
+            created_by=user,
+        )
+
     def setUp(self):
         self.company = Company.objects.create(
             name="Notifications API Company",
@@ -388,6 +434,18 @@ class CompanyNotificationsAPITests(TestCase):
             role=CompanyRole.ADMIN,
             status=MembershipStatus.ACTIVE,
             is_primary=True,
+        )
+
+        self.subscription = self._create_active_subscription(
+            company=self.company,
+            user=self.user,
+            suffix="MAIN",
+        )
+
+        self.other_subscription = self._create_active_subscription(
+            company=self.other_company,
+            user=self.other_user,
+            suffix="OTHER",
         )
 
         self.client = APIClient()
