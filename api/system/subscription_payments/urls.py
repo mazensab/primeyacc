@@ -30,6 +30,9 @@ from .views import (
     system_subscription_payment_events,
     system_subscription_payment_fail,
     system_subscription_payments_list,
+    system_subscription_payment_void,
+    system_subscription_payment_adjustment_create,
+    system_subscription_payment_adjustment_reverse,
 )
 
 
@@ -58,4 +61,15 @@ urlpatterns = [
     path("<int:payment_id>/confirm/", system_subscription_payment_confirm, name="confirm"),
     path("<int:payment_id>/fail/", system_subscription_payment_fail, name="fail"),
     path("<int:payment_id>/cancel/", system_subscription_payment_cancel, name="cancel"),
+    path("<int:payment_id>/void/", system_subscription_payment_void, name="void"),
+    path(
+        "<int:payment_id>/adjustments/",
+        system_subscription_payment_adjustment_create,
+        name="adjustment_create",
+    ),
+    path(
+        "<int:payment_id>/adjustments/<int:adjustment_id>/reverse/",
+        system_subscription_payment_adjustment_reverse,
+        name="adjustment_reverse",
+    ),
 ]

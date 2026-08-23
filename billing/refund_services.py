@@ -705,3 +705,84 @@ def cancel_pending_platform_refund(
         ),
     )
     return locked
+
+
+# =====================================================================
+# PHASE30_REFUND_FINANCIAL_STATE
+# Derived financial state without rewriting the original PAID payment.
+# =====================================================================
+
+
+def get_payment_refund_financial_summary(
+    payment: PlatformSubscriptionPayment,
+) -> dict[str, Any]:
+    """
+    Return the effective refund position of a platform payment.
+
+    The original payment remains PAID after successful refunds.
+    This helper exposes the derived financial state instead.
+    """
+
+    paid_amount = money(
+        getattr(payment, "amount", ZERO_MONEY)
+    )
+
+    successful = get_successful_refunded_amount(
+        payment
+    )
+
+    reserved_total = get_reserved_refund_amount(
+        payment
+    )
+
+    pending_or_processing = money(
+        max(
+            reserved_total - successful,
+            ZERO_MONEY,
+        )
+    )
+
+    remaining = money(
+        max(
+            paid_amount - reserved_total,
+            ZERO_MONEY,
+        )
+    )
+
+    if (
+        payment.status
+        == PlatformSubscriptionPayment.Status.PAID
+    ):
+        if (
+            paid_amount > ZERO_MONEY
+            and successful >= paid_amount
+        ):
+            financial_status = "REFUNDED"
+        elif successful > ZERO_MONEY:
+            financial_status = "PARTIALLY_REFUNDED"
+        else:
+            financial_status = "PAID"
+    else:
+        financial_status = str(
+            payment.status or ""
+        ).upper()
+
+    return {
+        "payment_status": str(
+            payment.status or ""
+        ).upper(),
+        "financial_status": financial_status,
+        "paid_amount": f"{paid_amount:.2f}",
+        "successful_refunded_amount": (
+            f"{successful:.2f}"
+        ),
+        "reserved_refund_amount": (
+            f"{pending_or_processing:.2f}"
+        ),
+        "remaining_refundable_amount": (
+            f"{remaining:.2f}"
+        ),
+        "currency_code": str(
+            payment.currency_code or "SAR"
+        ).upper(),
+    }

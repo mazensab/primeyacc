@@ -7,7 +7,10 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from billing.models import PlatformSubscriptionPayment
+from billing.models import (
+    PlatformSubscriptionPayment,
+    money,
+)
 from billing.payment_services import (
     cancel_subscription_payment_attempt,
     confirm_subscription_payment,
@@ -201,6 +204,71 @@ def apply_gateway_result(
             ),
             provider_verified=True,
         )
+
+    if result.status in {
+        PaymentStatus.PARTIALLY_REFUNDED,
+        PaymentStatus.REFUNDED,
+    }:
+        if locked.status != (
+            PlatformSubscriptionPayment
+            .Status
+            .PAID
+        ):
+            raise PaymentGatewayVerificationError(
+                "Provider refund state requires an original PAID "
+                "platform payment."
+            )
+
+        from billing.refund_services import (
+            get_successful_refunded_amount,
+        )
+
+        successful_refunded = (
+            get_successful_refunded_amount(
+                locked
+            )
+        )
+
+        payment_amount = money(
+            locked.amount
+        )
+
+        if (
+            result.status
+            is PaymentStatus.REFUNDED
+        ):
+            ledger_matches = (
+                payment_amount > 0
+                and successful_refunded
+                >= payment_amount
+            )
+        else:
+            ledger_matches = (
+                successful_refunded > 0
+                and successful_refunded
+                < payment_amount
+            )
+
+        if not ledger_matches:
+            raise PaymentGatewayVerificationError(
+                "Provider refund state does not match "
+                "the local platform refund ledger."
+            )
+
+        locked.provider_response_snapshot = (
+            provider_snapshot
+        )
+
+        locked.save(
+            update_fields=[
+                "provider_response_snapshot",
+                "updated_at",
+            ]
+        )
+
+        # Do not rewrite PAID. Refund history is stored in the
+        # dedicated immutable refund ledger.
+        return locked
 
     if result.status is PaymentStatus.FAILED:
         failed = fail_subscription_payment(

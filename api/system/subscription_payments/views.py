@@ -14,12 +14,26 @@ from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_GET, require_POST
 
 from api.permissions import user_has_system_permission
-from billing.models import PlatformSubscriptionPayment
+from billing.models import (
+    PlatformSubscriptionAdjustment,
+    PlatformSubscriptionPayment,
+)
 from billing.payment_services import (
     cancel_subscription_payment_attempt,
     confirm_subscription_payment,
     create_or_get_subscription_payment,
     fail_subscription_payment,
+)
+from billing.adjustment_services import (
+    create_or_get_platform_adjustment,
+    reverse_platform_adjustment,
+)
+from billing.refund_services import (
+    get_payment_refund_financial_summary,
+)
+from billing.void_services import (
+    supports_platform_provider_void,
+    void_platform_payment_attempt,
 )
 from subscriptions.models import CompanySubscription
 from integrations.payments.platform_bridge import (
@@ -177,6 +191,90 @@ def _payment_payload(
             _event_payload(event)
             for event in payment.events.select_related("actor").all()
         ]
+
+        payload["financial"] = (
+            get_payment_refund_financial_summary(
+                payment
+            )
+        )
+
+        payload["refunds"] = [
+            {
+                "id": row.id,
+                "refund_reference":
+                    row.refund_reference,
+                "status": row.status,
+                "gateway": row.gateway,
+                "provider_refund_id":
+                    row.provider_refund_id,
+                "amount": str(row.amount),
+                "currency_code":
+                    row.currency_code,
+                "reason": row.reason,
+                "refunded_at": (
+                    row.refunded_at.isoformat()
+                    if row.refunded_at
+                    else None
+                ),
+                "created_at": (
+                    row.created_at.isoformat()
+                    if row.created_at
+                    else None
+                ),
+            }
+            for row in payment.refunds.all()
+        ]
+
+        payload["adjustments"] = [
+            {
+                "id": row.id,
+                "adjustment_reference":
+                    row.adjustment_reference,
+                "adjustment_type":
+                    row.adjustment_type,
+                "status": row.status,
+                "amount": str(row.amount),
+                "currency_code":
+                    row.currency_code,
+                "reason": row.reason,
+                "accounting_reference":
+                    row.accounting_reference,
+                "posted_at": (
+                    row.posted_at.isoformat()
+                    if row.posted_at
+                    else None
+                ),
+                "reversed_at": (
+                    row.reversed_at.isoformat()
+                    if row.reversed_at
+                    else None
+                ),
+            }
+            for row in payment.adjustments.all()
+        ]
+
+        payload["allowed_actions"]["void"] = (
+            supports_platform_provider_void(
+                payment
+            )
+        )
+
+        payload["allowed_actions"]["refund"] = (
+            payment.status
+            == PlatformSubscriptionPayment
+            .Status
+            .PAID
+            and payload[
+                "financial"
+            ][
+                "remaining_refundable_amount"
+            ]
+            != "0.00"
+        )
+
+        payload["allowed_actions"][
+            "financial_adjustment"
+        ] = True
 
     return payload
 
@@ -671,6 +769,242 @@ def system_subscription_payment_moyasar_attach(
                     payment,
                     events=True,
                 ),
+            },
+        }
+    )
+
+
+# =====================================================================
+# PHASE30_PAYMENT_FINANCIAL_OPERATIONS
+# =====================================================================
+
+
+@login_required
+@csrf_protect
+@require_POST
+def system_subscription_payment_void(
+    request: HttpRequest,
+    payment_id: int,
+) -> JsonResponse:
+    if not user_has_system_permission(
+        request.user,
+        WRITE_PERMISSION,
+    ):
+        return _forbidden(
+            "You are not authorized to void subscription payments."
+        )
+
+    payment = get_object_or_404(
+        _payment_queryset(),
+        pk=payment_id,
+    )
+
+    payload = _json_body(
+        request
+    )
+
+    try:
+        payment = void_platform_payment_attempt(
+            payment=payment,
+            actor=request.user,
+            reason=_clean(
+                payload.get("reason")
+            ),
+        )
+
+    except ValidationError as exc:
+        return JsonResponse(
+            {
+                "ok": False,
+                "message":
+                    "Unable to void subscription payment.",
+                "errors": _errors(exc),
+            },
+            status=400,
+        )
+
+    payment = _payment_queryset().get(
+        pk=payment.pk
+    )
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "data": {
+                "payment": _payment_payload(
+                    payment,
+                    events=True,
+                )
+            },
+        }
+    )
+
+
+@login_required
+@csrf_protect
+@require_POST
+def system_subscription_payment_adjustment_create(
+    request: HttpRequest,
+    payment_id: int,
+) -> JsonResponse:
+    if not user_has_system_permission(
+        request.user,
+        WRITE_PERMISSION,
+    ):
+        return _forbidden(
+            "You are not authorized to create financial adjustments."
+        )
+
+    payment = get_object_or_404(
+        _payment_queryset(),
+        pk=payment_id,
+    )
+
+    payload = _json_body(
+        request
+    )
+
+    try:
+        adjustment, created = (
+            create_or_get_platform_adjustment(
+                payment=payment,
+                adjustment_type=_clean(
+                    payload.get(
+                        "adjustment_type"
+                    )
+                ),
+                amount=payload.get(
+                    "amount"
+                ),
+                idempotency_key=_clean(
+                    payload.get(
+                        "idempotency_key"
+                    )
+                ),
+                reason=_clean(
+                    payload.get(
+                        "reason"
+                    )
+                ),
+                accounting_reference=_clean(
+                    payload.get(
+                        "accounting_reference"
+                    )
+                ),
+                metadata=payload.get(
+                    "metadata"
+                ),
+                created_by=request.user,
+            )
+        )
+
+    except ValidationError as exc:
+        return JsonResponse(
+            {
+                "ok": False,
+                "message":
+                    "Unable to create financial adjustment.",
+                "errors": _errors(exc),
+            },
+            status=400,
+        )
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "created": created,
+            "data": {
+                "adjustment": {
+                    "id": adjustment.id,
+                    "adjustment_reference":
+                        adjustment.adjustment_reference,
+                    "payment_id":
+                        adjustment.payment_id,
+                    "subscription_id":
+                        adjustment.subscription_id,
+                    "adjustment_type":
+                        adjustment.adjustment_type,
+                    "status":
+                        adjustment.status,
+                    "amount":
+                        str(adjustment.amount),
+                    "currency_code":
+                        adjustment.currency_code,
+                    "reason":
+                        adjustment.reason,
+                    "accounting_reference":
+                        adjustment.accounting_reference,
+                }
+            },
+        },
+        status=201 if created else 200,
+    )
+
+
+@login_required
+@csrf_protect
+@require_POST
+def system_subscription_payment_adjustment_reverse(
+    request: HttpRequest,
+    payment_id: int,
+    adjustment_id: int,
+) -> JsonResponse:
+    if not user_has_system_permission(
+        request.user,
+        WRITE_PERMISSION,
+    ):
+        return _forbidden(
+            "You are not authorized to reverse financial adjustments."
+        )
+
+    adjustment = get_object_or_404(
+        PlatformSubscriptionAdjustment,
+        pk=adjustment_id,
+        payment_id=payment_id,
+    )
+
+    payload = _json_body(
+        request
+    )
+
+    try:
+        adjustment = (
+            reverse_platform_adjustment(
+                adjustment=adjustment,
+                actor=request.user,
+                reason=_clean(
+                    payload.get("reason")
+                ),
+            )
+        )
+
+    except ValidationError as exc:
+        return JsonResponse(
+            {
+                "ok": False,
+                "message":
+                    "Unable to reverse financial adjustment.",
+                "errors": _errors(exc),
+            },
+            status=400,
+        )
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "data": {
+                "adjustment": {
+                    "id": adjustment.id,
+                    "adjustment_reference":
+                        adjustment.adjustment_reference,
+                    "status":
+                        adjustment.status,
+                    "reversed_at": (
+                        adjustment.reversed_at.isoformat()
+                        if adjustment.reversed_at
+                        else None
+                    ),
+                }
             },
         }
     )

@@ -9,6 +9,7 @@ from django.utils import timezone
 from billing.models import (
     PlatformPaymentReconciliation,
     PlatformSubscriptionPayment,
+    money,
 )
 from integrations.payments.base import PaymentGatewayAdapter
 from integrations.payments.registry import (
@@ -184,6 +185,8 @@ def _status_matches(
         },
         PlatformSubscriptionPayment.Status.PAID: {
             PaymentStatus.PAID,
+            PaymentStatus.PARTIALLY_REFUNDED,
+            PaymentStatus.REFUNDED,
         },
         PlatformSubscriptionPayment.Status.FAILED: {
             PaymentStatus.FAILED,
@@ -529,6 +532,58 @@ def _store_result(
         discrepancies.append(
             "STATUS_MISMATCH"
         )
+
+    if result.status in {
+        PaymentStatus.PARTIALLY_REFUNDED,
+        PaymentStatus.REFUNDED,
+    }:
+        from billing.refund_services import (
+            get_successful_refunded_amount,
+        )
+
+        successful_refunded = (
+            get_successful_refunded_amount(
+                payment
+            )
+        )
+
+        payment_amount = money(
+            payment.amount
+        )
+
+        if (
+            result.status
+            is PaymentStatus.REFUNDED
+        ):
+            refund_ledger_match = (
+                payment_amount > 0
+                and successful_refunded
+                >= payment_amount
+            )
+        else:
+            refund_ledger_match = (
+                successful_refunded > 0
+                and successful_refunded
+                < payment_amount
+            )
+
+        checks["refund_ledger"] = _check(
+            expected=(
+                "full"
+                if result.status
+                is PaymentStatus.REFUNDED
+                else "partial"
+            ),
+            actual=(
+                f"{successful_refunded:.2f}"
+            ),
+            matched=refund_ledger_match,
+        )
+
+        if not refund_ledger_match:
+            discrepancies.append(
+                "REFUND_LEDGER_MISMATCH"
+            )
 
     status = (
         PlatformPaymentReconciliation

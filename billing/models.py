@@ -1120,4 +1120,9 @@ class PlatformBillingDocument(models.Model):
             )
 # Phase 19 platform subscription payment models.
 from billing.payment_models import PlatformSubscriptionPayment, PlatformSubscriptionPaymentEvent, PlatformSubscriptionWebhookEvent, PlatformPaymentReconciliation
-from billing.commercial_models import PlatformSubscriptionRefund, PlatformSubscriptionRefundEvent
+from billing.commercial_models import (
+    PlatformSubscriptionAdjustment,
+    PlatformSubscriptionAdjustmentEvent,
+    PlatformSubscriptionRefund,
+    PlatformSubscriptionRefundEvent,
+)
