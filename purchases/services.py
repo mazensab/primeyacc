@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📂 purchases/services.py
 # 🧠 Mhamcloud | Purchases Services V1.1
 # ------------------------------------------------------------
@@ -1310,7 +1310,7 @@ def update_purchase_request(
     """
     locked_request = (
         PurchaseRequest.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "company",
             "branch",
@@ -1664,7 +1664,7 @@ def convert_purchase_request_to_order(
 
     locked_request = (
         PurchaseRequest.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "company",
             "branch",
@@ -1788,7 +1788,7 @@ def convert_purchase_request_to_order(
     if requested_items in [None, []]:
         for request_item in (
             locked_request.items
-            .select_for_update()
+            .select_for_update(of=("self",))
             .select_related(
                 "item",
                 "item__unit",
@@ -2491,7 +2491,7 @@ def update_purchase_order(
     """
     locked_order = (
         PurchaseOrder.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "company",
             "branch",
@@ -2631,7 +2631,7 @@ def approve_purchase_order(
     """
     locked_order = (
         PurchaseOrder.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "company",
             "supplier",
@@ -2791,7 +2791,7 @@ def create_purchase_bill_from_order(
 
     locked_order = (
         PurchaseOrder.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "company",
             "branch",
@@ -3659,7 +3659,7 @@ def update_purchase_receipt(
     """
     locked_receipt = (
         PurchaseReceipt.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "company",
             "bill",
@@ -3910,7 +3910,7 @@ def post_purchase_receipt(
     """
     locked_receipt = (
         PurchaseReceipt.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "company",
             "branch",
@@ -3939,7 +3939,7 @@ def post_purchase_receipt(
 
     locked_items = list(
         locked_receipt.items
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "receipt",
             "receipt__warehouse",
@@ -4719,7 +4719,7 @@ def confirm_purchase_return(
     """
     locked_return = (
         PurchaseReturn.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "company",
             "bill",
@@ -4736,7 +4736,7 @@ def confirm_purchase_return(
 
     locked_items = list(
         locked_return.items
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "bill_item",
             "bill_item__bill",
@@ -5411,7 +5411,7 @@ def issue_supplier_debit_note(
     """
     locked_note = (
         SupplierDebitNote.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "company",
             "branch",
@@ -5452,7 +5452,7 @@ def issue_supplier_debit_note(
 
     locked_items = list(
         locked_note.items
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "purchase_return_item",
             "bill_item",
@@ -5733,7 +5733,7 @@ def post_purchase_return_item_to_inventory(
 
     stock_item = (
         StockItem.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related("location")
         .filter(
             company=return_item.company,
@@ -5838,7 +5838,7 @@ def post_supplier_debit_note(
     """
     locked_note = (
         SupplierDebitNote.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "company",
             "branch",
@@ -5878,7 +5878,7 @@ def post_supplier_debit_note(
 
     locked_return = (
         PurchaseReturn.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "company",
             "branch",
@@ -5929,7 +5929,7 @@ def post_supplier_debit_note(
 
     locked_items = list(
         locked_note.items
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "item",
             "bill_item",

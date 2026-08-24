@@ -97,7 +97,7 @@ class PlatformGatewayDatabaseLifecycleTests(TestCase):
         processed.refresh_from_db()
         self.assertEqual(processed.status, PlatformSubscriptionPayment.Status.PROCESSING)
 
-        paid, subscription, receipt = apply_gateway_result(
+        paid = apply_gateway_result(
             payment=processed,
             result=self.result(
                 processed,
@@ -106,6 +106,11 @@ class PlatformGatewayDatabaseLifecycleTests(TestCase):
             ),
             actor=self.user,
         )
+
+        paid.refresh_from_db()
+        subscription = paid.subscription
+        subscription.refresh_from_db()
+        receipt = paid.receipt
 
         paid.refresh_from_db()
         subscription.refresh_from_db()

@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📂 sales/tests.py
 # 🧠 Mhamcloud | Sales Tests V1.6
 # ------------------------------------------------------------
@@ -31,6 +31,8 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
+
+from subscriptions.models import CompanySubscription, SubscriptionPlan
 
 from accounting.models import (
     AccountingAccountPurpose,
@@ -116,6 +118,46 @@ from sales.services import (
 
 
 User = get_user_model()
+
+
+def ensure_test_workspace_subscription(company):
+    """
+    Ensure legacy company API fixtures have workspace access.
+
+    This helper is test-only. Production subscription enforcement
+    remains unchanged.
+    """
+    from django.utils import timezone
+
+    existing = CompanySubscription.objects.filter(
+        company=company,
+        status__in=[
+            CompanySubscription.Status.ACTIVE,
+            CompanySubscription.Status.TRIAL,
+        ],
+    ).first()
+
+    if existing:
+        return existing
+
+    plan, _ = SubscriptionPlan.objects.get_or_create(
+        code="phase32-test-workspace",
+        defaults={
+            "name": "Phase 32 Test Workspace",
+            "is_active": True,
+        },
+    )
+
+    today = timezone.localdate()
+
+    return CompanySubscription.objects.create(
+        company=company,
+        plan=plan,
+        status=CompanySubscription.Status.ACTIVE,
+        start_date=today,
+        end_date=today + timedelta(days=365),
+    )
+
 
 
 SALES_OWNER_PERMISSIONS = [
@@ -318,6 +360,7 @@ class SalesTestCase(TestCase):
             owner=self.user,
             created_by=self.user,
         )
+        ensure_test_workspace_subscription(self.company)
 
         safe_create(
             CompanySettings,
@@ -338,6 +381,7 @@ class SalesTestCase(TestCase):
             owner=self.other_user,
             created_by=self.other_user,
         )
+        ensure_test_workspace_subscription(self.other_company)
 
         safe_create(
             CompanySettings,

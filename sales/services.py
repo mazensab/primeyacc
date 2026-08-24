@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📂 sales/services.py
 # 🧠 Mhamcloud | Sales Services V1.5
 # ------------------------------------------------------------
@@ -1814,7 +1814,7 @@ def create_sales_order_from_quotation(
 
     quotation = (
         SalesQuotation.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "company",
             "branch",
@@ -2362,7 +2362,7 @@ def normalize_order_invoice_items(
     """
     order_items = list(
         SalesOrderItem.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "catalog_item",
             "catalog_item__unit",
@@ -2576,7 +2576,7 @@ def create_sales_invoice_from_order(
 
     locked_order = (
         SalesOrder.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "company",
             "branch",
@@ -2947,7 +2947,7 @@ def resolve_sales_return_invoice(
 
     if lock:
         queryset = (
-            queryset.select_for_update()
+            queryset.select_for_update(of=("self",))
         )
 
     invoice = queryset.first()
@@ -3050,7 +3050,7 @@ def normalize_sales_return_items(
     """
     invoice_items = list(
         SalesInvoiceItem.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "invoice",
             "catalog_item",
@@ -3489,7 +3489,7 @@ def confirm_sales_return(
 
     locked_return = (
         SalesReturn.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "company",
             "branch",
@@ -4198,7 +4198,7 @@ def create_sales_credit_note_from_return(
 
     return_items = list(
         SalesReturnItem.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "invoice_item",
             "catalog_item",
@@ -4400,7 +4400,7 @@ def issue_sales_credit_note(
 
     locked_credit_note = (
         SalesCreditNote.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "company",
             "branch",
@@ -4473,7 +4473,7 @@ def post_sales_credit_note(
 
     locked_credit_note = (
         SalesCreditNote.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "company",
             "branch",
@@ -5225,7 +5225,7 @@ def allocate_customer_credit(
 
     locked_credit_note = (
         SalesCreditNote.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "company",
             "customer",
@@ -5248,7 +5248,7 @@ def allocate_customer_credit(
 
     locked_invoice = (
         SalesInvoice.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "company",
             "customer",
@@ -5447,7 +5447,7 @@ def reverse_customer_credit_allocation(
 
     locked_allocation = (
         CustomerCreditAllocation.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related(
             "company",
             "customer",

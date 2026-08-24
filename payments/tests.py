@@ -24,6 +24,11 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
+
+from subscriptions.models import CompanySubscription, SubscriptionPlan
+
 from typing import Any
 
 from django.contrib.auth import get_user_model
@@ -48,6 +53,46 @@ from .services import (
 
 
 User = get_user_model()
+
+
+def ensure_test_workspace_subscription(company):
+    """
+    Ensure legacy company API fixtures have workspace access.
+
+    This helper is test-only. Production subscription enforcement
+    remains unchanged.
+    """
+    from django.utils import timezone
+
+    existing = CompanySubscription.objects.filter(
+        company=company,
+        status__in=[
+            CompanySubscription.Status.ACTIVE,
+            CompanySubscription.Status.TRIAL,
+        ],
+    ).first()
+
+    if existing:
+        return existing
+
+    plan, _ = SubscriptionPlan.objects.get_or_create(
+        code="phase32-test-workspace",
+        defaults={
+            "name": "Phase 32 Test Workspace",
+            "is_active": True,
+        },
+    )
+
+    today = timezone.localdate()
+
+    return CompanySubscription.objects.create(
+        company=company,
+        plan=plan,
+        status=CompanySubscription.Status.ACTIVE,
+        start_date=today,
+        end_date=today + timedelta(days=365),
+    )
+
 
 
 # ============================================================
@@ -384,6 +429,7 @@ class CompanyPaymentsAPITests(CompanyPaymentsAPITestFactoryMixin, TestCase):
             code="PAYMENTS-A",
             city="Jeddah",
         )
+        ensure_test_workspace_subscription(cls.company)
         cls.other_company = cls.create_company(
             name="Mhamcloud Other Payments Company",
             code="PAYMENTS-B",
@@ -963,11 +1009,13 @@ class CompanyPaymentsPhase23FoundationTests(CompanyPaymentsAPITestFactoryMixin, 
             code="PAY-PH23-A",
             city="Jeddah",
         )
+        ensure_test_workspace_subscription(cls.company)
         cls.other_company = cls.create_company(
             name="Mhamcloud Phase 23 Other",
             code="PAY-PH23-B",
             city="Riyadh",
         )
+        ensure_test_workspace_subscription(cls.other_company)
         cls.user = cls.create_user_with_company_membership(
             username="phase23_owner",
             email="phase23-owner@example.com",

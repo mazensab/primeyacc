@@ -193,7 +193,7 @@ def apply_gateway_result(
     )
 
     if result.status is PaymentStatus.PAID:
-        return confirm_subscription_payment(
+        paid_payment, _, _ = confirm_subscription_payment(
             payment=locked,
             actor=actor,
             gateway_payment_id=(
@@ -204,6 +204,8 @@ def apply_gateway_result(
             ),
             provider_verified=True,
         )
+
+        return paid_payment
 
     if result.status in {
         PaymentStatus.PARTIALLY_REFUNDED,
@@ -444,8 +446,18 @@ def verify_and_apply_gateway_payment(
             "Provider payment ID does not match platform payment."
         )
 
-    return apply_gateway_result(
+    applied_payment = apply_gateway_result(
         payment=payment,
         result=result,
         actor=actor,
     )
+
+    if result.status is PaymentStatus.PAID:
+        applied_payment.refresh_from_db()
+        return (
+            applied_payment,
+            applied_payment.subscription,
+            applied_payment.receipt,
+        )
+
+    return applied_payment

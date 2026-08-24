@@ -13,6 +13,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from decimal import Decimal
 from typing import Any
 
@@ -20,6 +22,8 @@ from django.contrib.auth import get_user_model
 from django.db.models import NOT_PROVIDED
 from django.test import TestCase
 from django.utils import timezone
+
+from subscriptions.models import CompanySubscription, SubscriptionPlan
 from rest_framework.test import APIClient
 
 from accounts.models import (
@@ -37,6 +41,46 @@ from accounting.services import (
 )
 from companies.models import Company
 from reports.services import get_reports_overview
+
+
+def ensure_test_workspace_subscription(company):
+    """
+    Ensure legacy company API fixtures have workspace access.
+
+    This helper is test-only. Production subscription enforcement
+    remains unchanged.
+    """
+    from django.utils import timezone
+
+    existing = CompanySubscription.objects.filter(
+        company=company,
+        status__in=[
+            CompanySubscription.Status.ACTIVE,
+            CompanySubscription.Status.TRIAL,
+        ],
+    ).first()
+
+    if existing:
+        return existing
+
+    plan, _ = SubscriptionPlan.objects.get_or_create(
+        code="phase32-test-workspace",
+        defaults={
+            "name": "Phase 32 Test Workspace",
+            "is_active": True,
+        },
+    )
+
+    today = timezone.localdate()
+
+    return CompanySubscription.objects.create(
+        company=company,
+        plan=plan,
+        status=CompanySubscription.Status.ACTIVE,
+        start_date=today,
+        end_date=today + timedelta(days=365),
+    )
+
 
 
 # ============================================================
@@ -253,6 +297,7 @@ class ReportsFoundationTests(TestCase):
             suffix="001",
             user=cls.owner,
         )
+        ensure_test_workspace_subscription(cls.company)
 
         _create_active_membership(
             user=cls.owner,
