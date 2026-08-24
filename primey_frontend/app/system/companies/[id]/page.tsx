@@ -3,7 +3,7 @@
 const BILLING_DOCUMENT_API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
-  "http://127.0.0.1:8000"
+  ""
 ).replace(/\/$/, "");
 function buildBillingDocumentPdfUrl(documentId: string | number) {
   return `${BILLING_DOCUMENT_API_BASE_URL}/api/system/billing-documents/${encodeURIComponent(String(documentId))}/pdf/`;
@@ -1419,7 +1419,7 @@ export default function SystemCompanyDetailPage() {
                             <td className="px-4 py-3 text-muted-foreground">{formatDateTime(item.issueDate)}</td>
                             <td className="px-4 py-3">
                               <Button asChild size="sm" variant="outline" className="h-8 rounded-lg bg-background">
-                                <Link href={`/system/platform-payments/${item.id}`}>
+                                <Link href={`/system/invoices/${item.id}`}>
                                   <ExternalLink className="h-3.5 w-3.5" />
                                   {t.openDetails}
                                 </Link>

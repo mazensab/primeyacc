@@ -1900,25 +1900,39 @@ function Detail({
               ) : null}
 
               {payment.invoiceId ? (
-                <div className="rounded-xl border p-3 text-sm">
-                  <div className="font-medium">
-                    {t.invoice}
-                  </div>
-                  <div className="mt-1 font-mono text-xs text-muted-foreground">
-                    {payment.invoiceNumber || `#${payment.invoiceId}`}
-                  </div>
-                </div>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="h-auto justify-start rounded-xl py-3"
+                >
+                  <Link href={`/system/invoices/${payment.invoiceId}`}>
+                    <FileText className="h-4 w-4" />
+                    <span className="min-w-0">
+                      <span className="block font-medium">{t.invoice}</span>
+                      <span className="block truncate font-mono text-xs text-muted-foreground">
+                        {payment.invoiceNumber || `#${payment.invoiceId}`}
+                      </span>
+                    </span>
+                  </Link>
+                </Button>
               ) : null}
 
               {payment.receiptId ? (
-                <div className="rounded-xl border p-3 text-sm">
-                  <div className="font-medium">
-                    {t.receipt}
-                  </div>
-                  <div className="mt-1 font-mono text-xs text-muted-foreground">
-                    {payment.receiptNumber || `#${payment.receiptId}`}
-                  </div>
-                </div>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="h-auto justify-start rounded-xl py-3"
+                >
+                  <Link href={`/system/invoices/${payment.receiptId}`}>
+                    <FileText className="h-4 w-4" />
+                    <span className="min-w-0">
+                      <span className="block font-medium">{t.receipt}</span>
+                      <span className="block truncate font-mono text-xs text-muted-foreground">
+                        {payment.receiptNumber || `#${payment.receiptId}`}
+                      </span>
+                    </span>
+                  </Link>
+                </Button>
               ) : null}
             </CardContent>
           </Card>

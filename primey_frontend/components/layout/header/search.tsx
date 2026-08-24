@@ -137,12 +137,13 @@ const systemSearchItems: SearchItem[] = [
     },
   },
   {
-    title: { ar: "الفواتير", en: "Invoices" },
+    title: { ar: "فواتير وإيصالات المنصة", en: "Platform Billing Documents" },
     href: "/system/invoices",
+    aliases: ["/system/invoices/list", "/system/invoices/receipts"],
     icon: ReceiptText,
     description: {
-      ar: "إدارة الفواتير",
-      en: "Manage invoices",
+      ar: "فواتير وإيصالات اشتراكات منصة Mhamcloud",
+      en: "Mhamcloud platform subscription invoices and receipts",
     },
   },
   {

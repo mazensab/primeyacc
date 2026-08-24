@@ -176,6 +176,14 @@ const systemNavItems: NavGroup[] = [
             workspaces: ["system"],
           },
           {
+            title: { ar: "فواتير وإيصالات المنصة", en: "Platform Billing Documents" },
+            href: "/system/invoices",
+            aliases: ["/system/invoices/list", "/system/invoices/receipts"],
+            icon: ReceiptText,
+            anyPermissions: [PERMISSIONS.SYSTEM_VIEW, PERMISSIONS.INVOICES_VIEW],
+            workspaces: ["system"],
+          },
+          {
             title: { ar: "مستخدمو النظام", en: "System Users" },
             href: "/system/users",
             icon: UserCog,
