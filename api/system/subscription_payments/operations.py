@@ -27,6 +27,7 @@ from billing.models import (
     PlatformSubscriptionPayment,
     PlatformSubscriptionWebhookEvent,
 )
+from billing.security import redact_sensitive_data
 from billing.reconciliation_services import (
     reconcile_platform_payment,
 )
@@ -177,8 +178,8 @@ def _reconciliation_payload(
         "warnings": list(
             row.warnings or []
         ),
-        "provider_snapshot": dict(
-            row.provider_snapshot or {}
+        "provider_snapshot": redact_sensitive_data(
+            dict(row.provider_snapshot or {})
         ),
         "error_code": row.error_code,
         "error_message": (
@@ -232,11 +233,11 @@ def _webhook_payload(
         "error_message": (
             row.error_message
         ),
-        "payload": dict(
-            row.payload or {}
+        "payload": redact_sensitive_data(
+            dict(row.payload or {})
         ),
-        "headers": dict(
-            row.headers or {}
+        "headers": redact_sensitive_data(
+            dict(row.headers or {})
         ),
         "received_at": (
             row.received_at.isoformat()

@@ -15,6 +15,7 @@ from billing.models import (
     PlatformSubscriptionPaymentEvent,
     money,
 )
+from billing.security import redact_sensitive_data
 from billing.services import (
     create_or_get_subscription_invoice,
     create_or_get_subscription_payment_receipt,
@@ -57,7 +58,8 @@ def _json_object(
             }
         )
 
-    return dict(value)
+    cleaned = redact_sensitive_data(dict(value))
+    return cleaned if isinstance(cleaned, dict) else {}
 
 
 def _payment_reference() -> str:

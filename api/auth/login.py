@@ -28,8 +28,9 @@ from typing import Any
 from django.contrib.auth import authenticate, get_user_model, login as django_login
 from django.db.models import Q
 from django.views.decorators.csrf import csrf_protect
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny
+from api.throttling import LoginRateThrottle
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -127,6 +128,7 @@ def _login_payload(user) -> dict[str, Any]:
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@throttle_classes([LoginRateThrottle])
 @csrf_protect
 def login(request: Request) -> Response:
     identifier = (
