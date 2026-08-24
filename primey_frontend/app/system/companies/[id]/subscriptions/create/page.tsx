@@ -11,6 +11,7 @@
    ? Arabic/English locale support
 ============================================================ */
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -25,6 +26,14 @@ import {
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 type Locale = "ar" | "en";
 type ApiRecord = Record<string, unknown>;
 type BillingCycle = "MONTHLY" | "YEARLY";
@@ -130,19 +139,35 @@ const translations = {
 function getApiBaseUrl() {
   const configured =
     process.env.NEXT_PUBLIC_API_BASE_URL ||
-    process.env.NEXT_PUBLIC_API_URL;
-  if (configured) {
-    return configured.replace(/\/$/, "");
+    process.env.NEXT_PUBLIC_API_URL ||
+    "";
+
+  const normalized = configured.replace(/\/+$/, "");
+
+  if (normalized.endsWith("/api")) {
+    return normalized.slice(0, -4);
   }
-  if (typeof window !== "undefined") {
-    return `${window.location.protocol}//${window.location.hostname}:8000`;
-  }
-  return "http://localhost:8000";
+
+  return normalized;
 }
 function makeApiUrl(path: string) {
   if (path.startsWith("http")) return path;
   return `${getApiBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
 }
+function isoToDate(value: string) {
+  if (!value) return undefined;
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+function dateToIso(value: Date | undefined) {
+  if (!value) return "";
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -508,12 +533,27 @@ export default function SystemCompanySubscriptionCreatePage() {
               </label>
               <label className="block text-sm font-medium">
                 <span>{t.startDate}</span>
-                <input
-                  type="date"
-                  value={form.startDate}
-                  onChange={(event) => updateField("startDate", event.target.value)}
-                  className={fieldClassName()}
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-2 h-11 w-full justify-start rounded-xl bg-background font-normal"
+                    >
+                      <CalendarDays className="h-4 w-4" />
+                      {form.startDate}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={isoToDate(form.startDate)}
+                      onSelect={(date) =>
+                        updateField("startDate", dateToIso(date))
+                      }
+                    />
+                  </PopoverContent>
+                </Popover>
               </label>
               <label className="block text-sm font-medium">
                 <span>{t.discountAmount}</span>
@@ -552,7 +592,19 @@ export default function SystemCompanySubscriptionCreatePage() {
             <div className="space-y-5">
               <div className="rounded-2xl border bg-muted/30 p-4">
                 <p className="text-sm font-medium text-muted-foreground">{t.selectedPrice}</p>
-                <p className="mt-2 text-2xl font-bold tabular-nums">{money(selectedPrice)} SAR</p>
+                <p
+                  dir="ltr"
+                  className="mt-2 inline-flex items-center gap-1 text-2xl font-bold tabular-nums"
+                >
+                  <Image
+                    src="/currency/sar.svg"
+                    alt="SAR"
+                    width={18}
+                    height={18}
+                    className="h-[18px] w-[18px]"
+                  />
+                  {money(selectedPrice)}
+                </p>
                 <p className="mt-2 text-xs leading-6 text-muted-foreground">{t.totalHint}</p>
               </div>
               <label className="flex items-center gap-3 rounded-2xl border bg-background p-4 text-sm font-medium">

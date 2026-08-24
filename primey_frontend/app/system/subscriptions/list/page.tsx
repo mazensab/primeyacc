@@ -20,11 +20,13 @@
 ============================================================ */
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import {
   Activity,
   ArrowUpDown,
   Building2,
+  CalendarDays,
   CheckCircle2,
   FileSpreadsheet,
   FileText,
@@ -42,6 +44,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Card,
   CardContent,
@@ -50,6 +53,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -90,6 +98,8 @@ type CompanyRecord = {
   owner: string;
   activity: string;
   subscription: string;
+  amount: string;
+  currency: string;
   email: string;
   phone: string;
   city: string;
@@ -291,6 +301,56 @@ function formatInteger(value: unknown) {
   );
 }
 
+function MoneyValue({
+  amount,
+  currency,
+}: {
+  amount: string;
+  currency: string;
+}) {
+  const parsed = Number.parseFloat(amount || "0");
+  const formatted = Number.isFinite(parsed) ? parsed.toFixed(2) : "0.00";
+  const normalizedCurrency = normalizeText(currency, "SAR").toUpperCase();
+
+  if (normalizedCurrency !== "SAR") {
+    return (
+      <span dir="ltr" className="tabular-nums">
+        {formatted} {normalizedCurrency}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      dir="ltr"
+      className="inline-flex items-center gap-1 font-medium tabular-nums"
+    >
+      <Image
+        src="/currency/sar.svg"
+        alt="SAR"
+        width={15}
+        height={15}
+        className="h-[15px] w-[15px]"
+      />
+      {formatted}
+    </span>
+  );
+}
+
+function isoToDate(value: string) {
+  if (!value) return undefined;
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+function dateToIso(value: Date | undefined) {
+  if (!value) return "";
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function formatDate(value: string | null | undefined) {
   if (!value) return "—";
   const parsed = new Date(value);
@@ -441,6 +501,7 @@ function normalizeStatus(value: unknown) {
   if (text === "false") return "inactive";
   if (text === "enabled") return "active";
   if (text === "disabled") return "inactive";
+  if (text === "pending_payment") return "pending";
 
   return text;
 }
@@ -500,6 +561,8 @@ function normalizeCompany(value: unknown): CompanyRecord {
     owner: planName,
     activity: cycle || "unknown",
     subscription: `${amount} ${currency}`,
+    amount,
+    currency,
     email: currency,
     phone: normalizeText(record.starts_at || record.start_date || record.started_at || record.valid_from),
     city: normalizeText(record.ends_at || record.end_date || record.expires_at || record.valid_to, "—"),
@@ -664,6 +727,8 @@ export default function SystemSubscriptionsListPage() {
 
   const [search, setSearch] = React.useState("");
   const [status, setStatus] = React.useState<StatusFilter>("all");
+  const [planFilter, setPlanFilter] = React.useState("all");
+  const [billingCycleFilter, setBillingCycleFilter] = React.useState("all");
   const [sort, setSort] = React.useState<SortKey>("newest");
   const [dateFrom, setDateFrom] = React.useState("");
   const [dateTo, setDateTo] = React.useState("");
@@ -730,10 +795,37 @@ export default function SystemSubscriptionsListPage() {
   const resetFilters = React.useCallback(() => {
     setSearch("");
     setStatus("all");
+    setPlanFilter("all");
+    setBillingCycleFilter("all");
     setSort("newest");
     setDateFrom("");
     setDateTo("");
   }, []);
+
+  const planOptions = React.useMemo(
+    () =>
+      [...new Set(
+        companies
+          .map((company) => company.owner)
+          .filter((value) => value && value !== "—"),
+      )].sort((a, b) => a.localeCompare(b)),
+    [companies],
+  );
+
+  const billingCycleOptions = React.useMemo(
+    () =>
+      [...new Set(
+        companies
+          .map((company) => company.activity)
+          .filter(
+            (value) =>
+              value &&
+              value !== "—" &&
+              value.toLowerCase() !== "unknown",
+          ),
+      )].sort((a, b) => a.localeCompare(b)),
+    [companies],
+  );
 
   const filteredCompanies = React.useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -755,6 +847,13 @@ export default function SystemSubscriptionsListPage() {
 
       if (needle && !haystack.includes(needle)) return false;
       if (status !== "all" && company.status !== status) return false;
+      if (planFilter !== "all" && company.owner !== planFilter) return false;
+      if (
+        billingCycleFilter !== "all" &&
+        company.activity !== billingCycleFilter
+      ) {
+        return false;
+      }
 
       return isWithinDate(company.created_at, dateFrom, dateTo);
     });
@@ -765,7 +864,16 @@ export default function SystemSubscriptionsListPage() {
       if (sort === "code") return a.code.localeCompare(b.code);
       return rowDateValue(b.created_at) - rowDateValue(a.created_at);
     });
-  }, [companies, dateFrom, dateTo, search, sort, status]);
+  }, [
+    billingCycleFilter,
+    companies,
+    dateFrom,
+    dateTo,
+    planFilter,
+    search,
+    sort,
+    status,
+  ]);
 
   const stats = React.useMemo<CompanyStats>(() => {
     return {
@@ -778,7 +886,15 @@ export default function SystemSubscriptionsListPage() {
     };
   }, [apiTotal, companies]);
 
-  const hasFilters = Boolean(search || status !== "all" || sort !== "newest" || dateFrom || dateTo);
+  const hasFilters = Boolean(
+    search ||
+      status !== "all" ||
+      planFilter !== "all" ||
+      billingCycleFilter !== "all" ||
+      sort !== "newest" ||
+      dateFrom ||
+      dateTo,
+  );
 
   function buildExportRows() {
     return filteredCompanies.map((company) => [
@@ -1025,28 +1141,79 @@ export default function SystemSubscriptionsListPage() {
                     ))}
                   </SelectContent>
                 </Select>
+
+                <Select value={planFilter} onValueChange={setPlanFilter}>
+                  <SelectTrigger className="h-10 rounded-xl bg-background md:w-[160px]">
+                    <SelectValue placeholder={t.owner} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t.all}</SelectItem>
+                    {planOptions.map((item) => (
+                      <SelectItem key={item} value={item}>
+                        {item}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={billingCycleFilter}
+                  onValueChange={setBillingCycleFilter}
+                >
+                  <SelectTrigger className="h-10 rounded-xl bg-background md:w-[160px]">
+                    <SelectValue placeholder={t.activity} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t.all}</SelectItem>
+                    {billingCycleOptions.map((item) => (
+                      <SelectItem key={item} value={item}>
+                        {item}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <div className="flex h-10 items-center gap-2 rounded-xl border bg-background px-3">
-                  <span className="text-xs text-muted-foreground">{t.from}</span>
-                  <Input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(event) => setDateFrom(event.target.value)}
-                    className="h-8 w-[135px] border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
-                  />
-                </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10 rounded-xl bg-background text-xs font-normal"
+                    >
+                      <CalendarDays className="h-4 w-4" />
+                      {t.from}: {dateFrom || "—"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="end">
+                    <Calendar
+                      mode="single"
+                      selected={isoToDate(dateFrom)}
+                      onSelect={(date) => setDateFrom(dateToIso(date))}
+                    />
+                  </PopoverContent>
+                </Popover>
 
-                <div className="flex h-10 items-center gap-2 rounded-xl border bg-background px-3">
-                  <span className="text-xs text-muted-foreground">{t.to}</span>
-                  <Input
-                    type="date"
-                    value={dateTo}
-                    onChange={(event) => setDateTo(event.target.value)}
-                    className="h-8 w-[135px] border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
-                  />
-                </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10 rounded-xl bg-background text-xs font-normal"
+                    >
+                      <CalendarDays className="h-4 w-4" />
+                      {t.to}: {dateTo || "—"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="end">
+                    <Calendar
+                      mode="single"
+                      selected={isoToDate(dateTo)}
+                      onSelect={(date) => setDateTo(dateToIso(date))}
+                    />
+                  </PopoverContent>
+                </Popover>
 
                 <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
                   <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[160px]">
@@ -1137,7 +1304,7 @@ export default function SystemSubscriptionsListPage() {
                           </TableCell>
                           <TableCell className={cn("h-[68px] overflow-hidden px-4 align-middle", alignClass)}>
                             <span className="block truncate text-sm text-muted-foreground">
-                              {company.subscription || "—"}
+                              <MoneyValue amount={company.amount} currency={company.currency} />
                             </span>
                           </TableCell>
                           <TableCell className={cn("h-[68px] overflow-hidden px-4 align-middle", alignClass)}>

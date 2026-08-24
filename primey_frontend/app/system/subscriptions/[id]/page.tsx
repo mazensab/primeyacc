@@ -17,6 +17,7 @@
 ============================================================ */
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -28,6 +29,7 @@ import {
   ChevronLeft,
   CircleAlert,
   Copy,
+  CreditCard,
   FileText,
   Hash,
   LayoutDashboard,
@@ -45,6 +47,16 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -72,6 +84,17 @@ type CompanyRecord = {
   owner: string;
   activity: string;
   subscription: string;
+  amount: string;
+  currency: string;
+  paidAt: string;
+  activatedAt: string;
+  suspendedAt: string;
+  cancelledAt: string;
+  previousSubscriptionId: string;
+  canConfirmPayment: boolean;
+  canRenew: boolean;
+  canChangePlan: boolean;
+  canCancel: boolean;
   email: string;
   phone: string;
   city: string;
@@ -314,6 +337,42 @@ function normalizeText(value: unknown, fallback = "") {
   return String(value).trim() || fallback;
 }
 
+function SubscriptionMoney({
+  amount,
+  currency,
+}: {
+  amount: string;
+  currency: string;
+}) {
+  const parsed = Number.parseFloat(amount || "0");
+  const formatted = Number.isFinite(parsed) ? parsed.toFixed(2) : "0.00";
+  const normalizedCurrency = normalizeText(currency, "SAR").toUpperCase();
+
+  if (normalizedCurrency !== "SAR") {
+    return (
+      <span dir="ltr" className="tabular-nums">
+        {formatted} {normalizedCurrency}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      dir="ltr"
+      className="inline-flex items-center gap-1 tabular-nums"
+    >
+      <Image
+        src="/currency/sar.svg"
+        alt="SAR"
+        width={15}
+        height={15}
+        className="h-[15px] w-[15px]"
+      />
+      {formatted}
+    </span>
+  );
+}
+
 function getInitialLocale(): Locale {
   if (typeof window === "undefined") return "ar";
   return window.localStorage.getItem("primey-locale") === "en" ? "en" : "ar";
@@ -500,6 +559,8 @@ function normalizeCompany(payload: unknown): CompanyRecord {
   const planRecord = asRecord(plan);
   const pricing = asRecord(record.pricing);
   const totals = asRecord(record.totals);
+  const lifecycle = asRecord(record.lifecycle);
+  const previousSubscription = asRecord(record.previous_subscription);
   const amount = normalizeText(
     record.amount ||
       record.price ||
@@ -549,9 +610,32 @@ function normalizeCompany(payload: unknown): CompanyRecord {
     owner: planName,
     activity: cycle || "unknown",
     subscription: `${amount} ${currency}`,
+    amount,
+    currency,
+    paidAt: normalizeText(lifecycle.paid_at || record.paid_at),
+    activatedAt: normalizeText(
+      lifecycle.activated_at || record.activated_at,
+    ),
+    suspendedAt: normalizeText(
+      lifecycle.suspended_at || record.suspended_at,
+    ),
+    cancelledAt: normalizeText(
+      lifecycle.cancelled_at || record.cancelled_at,
+    ),
+    previousSubscriptionId: normalizeText(
+      previousSubscription.id || record.previous_subscription_id,
+    ),
+    canConfirmPayment: Boolean(
+      lifecycle.can_confirm_payment ?? record.can_confirm_payment,
+    ),
+    canRenew: Boolean(lifecycle.can_renew ?? record.can_renew),
+    canChangePlan: Boolean(
+      lifecycle.can_change_plan ?? record.can_change_plan,
+    ),
+    canCancel: Boolean(lifecycle.can_cancel ?? record.can_cancel),
     email: currency,
-    phone: normalizeText(record.starts_at || record.start_date || record.started_at || record.valid_from),
-    city: normalizeText(record.ends_at || record.end_date || record.expires_at || record.valid_to, "—"),
+    phone: normalizeText(lifecycle.start_date || record.starts_at || record.start_date || record.started_at || record.valid_from),
+    city: normalizeText(lifecycle.end_date || record.ends_at || record.end_date || record.expires_at || record.valid_to, "—"),
     notes: normalizeText(record.notes || record.description || record.internal_notes),
     created_at: normalizeText(record.created_at || record.created || record.inserted_at) || null,
     updated_at: normalizeText(record.updated_at || record.modified_at || record.updated || record.last_modified) || null,
@@ -798,11 +882,49 @@ export default function SystemSubscriptionDetailPage() {
   const [selectedBillingCycle, setSelectedBillingCycle] = React.useState<BillingCycle>("MONTHLY");
   const [receiptPaymentMethod, setReceiptPaymentMethod] = React.useState<SystemReceiptPaymentMethod>("CASH");
   const [receiptReference, setReceiptReference] = React.useState("");
+  const [pendingConfirmation, setPendingConfirmation] =
+    React.useState<"suspend" | "reactivate" | "cancel" | null>(null);
   const [error, setError] = React.useState("");
 
   const t = translations[locale];
   const dir = locale === "ar" ? "rtl" : "ltr";
   const BackIcon = locale === "ar" ? ChevronLeft : ArrowRight;
+
+  const selectedPlan = React.useMemo(
+    () => plans.find((plan) => plan.id === selectedPlanId) || null,
+    [plans, selectedPlanId],
+  );
+
+  const currentPlan = React.useMemo(
+    () =>
+      plans.find(
+        (plan) =>
+          normalizeText(plan.name).toLowerCase() ===
+          normalizeText(company?.owner).toLowerCase(),
+      ) || null,
+    [plans, company?.owner],
+  );
+
+  const selectedPlanChangeAction = React.useMemo<"UPGRADE" | "DOWNGRADE">(() => {
+    if (!selectedPlan || !currentPlan) return "UPGRADE";
+
+    const targetPrice = Number.parseFloat(
+      selectedBillingCycle === "YEARLY"
+        ? selectedPlan.yearlyPrice
+        : selectedPlan.monthlyPrice,
+    );
+    const currentPrice = Number.parseFloat(
+      selectedBillingCycle === "YEARLY"
+        ? currentPlan.yearlyPrice
+        : currentPlan.monthlyPrice,
+    );
+
+    if (!Number.isFinite(targetPrice) || !Number.isFinite(currentPrice)) {
+      return "UPGRADE";
+    }
+
+    return targetPrice < currentPrice ? "DOWNGRADE" : "UPGRADE";
+  }, [currentPlan, selectedBillingCycle, selectedPlan]);
 
   React.useEffect(() => {
     const applyLocale = () => {
@@ -955,21 +1077,13 @@ export default function SystemSubscriptionDetailPage() {
       setActionLoading(null);
     }
   }
-  async function handleActiveSubscriptionAction(action: ActiveSubscriptionAction) {
+  async function executeActiveSubscriptionAction(action: ActiveSubscriptionAction) {
     if (!companyId || !company) return;
     if (action === "changePlan" && !selectedPlanId) {
       toast.error(t.planRequired);
       return;
     }
-    if (action === "suspend" && !window.confirm(t.suspendConfirm)) {
-      return;
-    }
-    if (action === "reactivate" && !window.confirm(t.reactivateConfirm)) {
-      return;
-    }
-    if (action === "cancel" && !window.confirm(t.cancelConfirm)) {
-      return;
-    }
+
     const actionConfig: Record<ActiveSubscriptionAction, { endpoint: string; message: string }> = {
       renew: {
         endpoint: `/api/system/subscriptions/${companyId}/renew/`,
@@ -1008,7 +1122,7 @@ export default function SystemSubscriptionDetailPage() {
       changePlan: {
         ...commonPendingBody,
         plan_id: Number.parseInt(selectedPlanId, 10),
-        action: "UPGRADE",
+        action: selectedPlanChangeAction,
         notes: "Subscription plan change request from system subscription detail.",
       },
       suspend: {
@@ -1043,6 +1157,25 @@ export default function SystemSubscriptionDetailPage() {
       setActionLoading(null);
     }
   }
+  async function handleActiveSubscriptionAction(action: ActiveSubscriptionAction) {
+    if (["suspend", "reactivate", "cancel"].includes(action)) {
+      setPendingConfirmation(
+        action as "suspend" | "reactivate" | "cancel",
+      );
+      return;
+    }
+
+    await executeActiveSubscriptionAction(action);
+  }
+
+  async function confirmPendingAction() {
+    const action = pendingConfirmation;
+    if (!action) return;
+
+    setPendingConfirmation(null);
+    await executeActiveSubscriptionAction(action);
+  }
+
   function buildPrintableHtml() {
     if (!company) return "";
 
@@ -1174,33 +1307,60 @@ export default function SystemSubscriptionDetailPage() {
   const companyProfileId = company.companyProfileId || "";
   const companyDetailsHref = companyProfileId ? `/system/companies/${companyProfileId}` : "/system/companies/list";
   const normalizedStatusForActions = company.status.toLowerCase().replace(/\s+/g, "_");
-  const canProcessPendingPayment =
-    normalizedStatusForActions === "pending_payment" ||
-    normalizedStatusForActions === "pending";
+  const canProcessPendingPayment = company.canConfirmPayment;
   const canProcessBillingActions = canProcessPendingPayment;
-  const canRenewSubscription =
-    normalizedStatusForActions === "active" ||
-    normalizedStatusForActions === "trial" ||
-    normalizedStatusForActions === "expired";
-  const canChangeSubscriptionPlan =
-    normalizedStatusForActions === "active" ||
-    normalizedStatusForActions === "trial";
+  const canRenewSubscription = company.canRenew;
+  const canChangeSubscriptionPlan = company.canChangePlan;
   const canSuspendSubscription =
     normalizedStatusForActions === "active" ||
     normalizedStatusForActions === "trial";
   const canReactivateSubscription = normalizedStatusForActions === "suspended";
-  const canCancelSubscription =
-    normalizedStatusForActions === "active" ||
-    normalizedStatusForActions === "trial" ||
-    normalizedStatusForActions === "suspended" ||
-    normalizedStatusForActions === "pending_payment" ||
-    normalizedStatusForActions === "pending";
+  const canCancelSubscription = company.canCancel;
   const canProcessActiveActions =
     canRenewSubscription ||
     canChangeSubscriptionPlan ||
     canSuspendSubscription ||
     canReactivateSubscription ||
     canCancelSubscription;
+
+  const lifecycleEvents = [
+    {
+      key: "created",
+      label: locale === "ar" ? "إنشاء الاشتراك" : "Created",
+      value: company.created_at,
+    },
+    {
+      key: "period_start",
+      label: locale === "ar" ? "بداية الفترة" : "Period started",
+      value: company.phone,
+    },
+    {
+      key: "paid",
+      label: locale === "ar" ? "تأكيد الدفع" : "Payment confirmed",
+      value: company.paidAt,
+    },
+    {
+      key: "activated",
+      label: locale === "ar" ? "تفعيل الاشتراك" : "Activated",
+      value: company.activatedAt,
+    },
+    {
+      key: "suspended",
+      label: locale === "ar" ? "تعليق الاشتراك" : "Suspended",
+      value: company.suspendedAt,
+    },
+    {
+      key: "cancelled",
+      label: locale === "ar" ? "إلغاء الاشتراك" : "Cancelled",
+      value: company.cancelledAt,
+    },
+    {
+      key: "period_end",
+      label: locale === "ar" ? "نهاية الفترة" : "Period end",
+      value: company.city,
+    },
+  ].filter((event) => Boolean(event.value));
+
   return (
     <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
@@ -1310,7 +1470,76 @@ export default function SystemSubscriptionDetailPage() {
               <CardContent className="grid gap-4 md:grid-cols-3">
                 <DetailRow label={t.status} value={<StatusBadge value={company.status} locale={locale} />} icon={ShieldCheck} />
                 <DetailRow label={t.activity} value={fallback(company.activity)} icon={Activity} />
-                <DetailRow label={t.subscription} value={fallback(company.subscription)} icon={CheckCircle2} />
+                <DetailRow
+                  label={t.subscription}
+                  value={
+                    <SubscriptionMoney
+                      amount={company.amount}
+                      currency={company.currency}
+                    />
+                  }
+                  icon={CheckCircle2}
+                />
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-2xl shadow-sm">
+              <CardHeader>
+                <CardTitle>
+                  {locale === "ar"
+                    ? "دورة حياة الاشتراك"
+                    : "Subscription lifecycle"}
+                </CardTitle>
+                <CardDescription>
+                  {locale === "ar"
+                    ? "الأحداث الفعلية المتاحة من عقد Backend المجمد."
+                    : "Actual events available from the frozen backend contract."}
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent className="space-y-3">
+                {lifecycleEvents.length ? (
+                  lifecycleEvents.map((event) => (
+                    <div
+                      key={event.key}
+                      className="flex items-start gap-3 rounded-2xl border bg-background p-4"
+                    >
+                      <span className="mt-1 h-3 w-3 shrink-0 rounded-full bg-primary" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-foreground">
+                          {event.label}
+                        </p>
+                        <p
+                          dir="ltr"
+                          className="mt-1 text-xs tabular-nums text-muted-foreground"
+                        >
+                          {formatDateTime(event.value)}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
+                    {t.notAvailable}
+                  </p>
+                )}
+
+                {company.previousSubscriptionId ? (
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="rounded-lg bg-background"
+                  >
+                    <Link
+                      href={`/system/subscriptions/${company.previousSubscriptionId}`}
+                    >
+                      {locale === "ar"
+                        ? "فتح الاشتراك السابق"
+                        : "Open previous subscription"}
+                    </Link>
+                  </Button>
+                ) : null}
               </CardContent>
             </Card>
 
@@ -1507,6 +1736,12 @@ export default function SystemSubscriptionDetailPage() {
                   </Link>
                 </Button>
                 <Button asChild variant="outline" className="justify-start rounded-xl bg-background">
+                  <Link href="/system/platform-payments">
+                    <CreditCard className="h-4 w-4" />
+                    {locale === "ar" ? "مدفوعات المنصة" : "Platform payments"}
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="justify-start rounded-xl bg-background">
                   <Link href="/system">
                     <LayoutDashboard className="h-4 w-4" />
                     {t.systemDashboard}
@@ -1525,6 +1760,44 @@ export default function SystemSubscriptionDetailPage() {
           </aside>
         </div>
       </div>
+
+      <AlertDialog
+        open={Boolean(pendingConfirmation)}
+        onOpenChange={(open) => {
+          if (!open && !actionLoading) setPendingConfirmation(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingConfirmation === "suspend"
+                ? t.suspendSubscription
+                : pendingConfirmation === "reactivate"
+                  ? t.reactivateSubscription
+                  : t.cancelSubscription}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingConfirmation === "suspend"
+                ? t.suspendConfirm
+                : pendingConfirmation === "reactivate"
+                  ? t.reactivateConfirm
+                  : t.cancelConfirm}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(actionLoading)}>
+              {locale === "ar" ? "تراجع" : "Back"}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant={pendingConfirmation === "cancel" ? "destructive" : "default"}
+              disabled={Boolean(actionLoading)}
+              onClick={() => void confirmPendingAction()}
+            >
+              {actionLoading ? t.processing : locale === "ar" ? "تأكيد" : "Confirm"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }

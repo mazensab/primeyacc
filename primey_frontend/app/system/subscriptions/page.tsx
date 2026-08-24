@@ -20,6 +20,7 @@
 ============================================================ */
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import {
   Activity,
@@ -92,6 +93,8 @@ type CompanyRecord = {
   owner: string;
   activity: string;
   subscription: string;
+  amount: string;
+  currency: string;
   email: string;
   phone: string;
   city: string;
@@ -314,6 +317,42 @@ function formatInteger(value: unknown) {
   );
 }
 
+function MoneyValue({
+  amount,
+  currency,
+}: {
+  amount: string;
+  currency: string;
+}) {
+  const parsed = Number.parseFloat(amount || "0");
+  const formatted = Number.isFinite(parsed) ? parsed.toFixed(2) : "0.00";
+  const normalizedCurrency = normalizeText(currency, "SAR").toUpperCase();
+
+  if (normalizedCurrency !== "SAR") {
+    return (
+      <span dir="ltr" className="tabular-nums">
+        {formatted} {normalizedCurrency}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      dir="ltr"
+      className="inline-flex items-center gap-1 font-medium tabular-nums"
+    >
+      <Image
+        src="/currency/sar.svg"
+        alt="SAR"
+        width={15}
+        height={15}
+        className="h-[15px] w-[15px]"
+      />
+      {formatted}
+    </span>
+  );
+}
+
 function formatDate(value: string | null | undefined) {
   if (!value) return "—";
   const parsed = new Date(value);
@@ -451,6 +490,7 @@ function normalizeStatus(value: unknown) {
   if (text === "false") return "inactive";
   if (text === "enabled") return "active";
   if (text === "disabled") return "inactive";
+  if (text === "pending_payment") return "pending";
 
   return text;
 }
@@ -511,6 +551,8 @@ function normalizeCompany(value: unknown): CompanyRecord {
     owner: planName,
     activity: cycle || "unknown",
     subscription: `${amount} ${currency}`,
+    amount,
+    currency,
     email: currency,
     phone: normalizeText(record.starts_at || record.start_date || record.started_at || record.valid_from),
     city: normalizeText(record.ends_at || record.end_date || record.expires_at || record.valid_to, "—"),
@@ -1173,7 +1215,7 @@ export default function SystemSubscriptionsPage() {
                           </TableCell>
                           <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
                             <span className="block truncate text-sm text-muted-foreground">
-                              {company.subscription || "—"}
+                              <MoneyValue amount={company.amount} currency={company.currency} />
                             </span>
                           </TableCell>
                           <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
@@ -1191,7 +1233,7 @@ export default function SystemSubscriptionsPage() {
                           </TableCell>
                           <TableCell className="sticky left-0 z-10 h-[64px] bg-background px-3 text-center align-middle">
                             <Button asChild variant="outline" size="sm" className="h-8 rounded-lg bg-background px-3">
-                              <Link href={company.id ? `/system/companies/${company.id}` : "/system/companies/list"}>
+                              <Link href={company.id ? `/system/subscriptions/${company.id}` : "/system/subscriptions/list"}>
                                 {t.open}
                               </Link>
                             </Button>

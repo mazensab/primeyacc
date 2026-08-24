@@ -20,6 +20,7 @@
 ============================================================ */
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import {
   Activity,
@@ -51,6 +52,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Card,
   CardContent,
@@ -59,6 +61,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -98,6 +105,8 @@ type CompanyRecord = {
   owner: string;
   activity: string;
   subscription: string;
+  amount: string;
+  currency: string;
   email: string;
   phone: string;
   city: string;
@@ -350,6 +359,56 @@ function formatPercent(value: number) {
   }).format(value)}%`;
 }
 
+function MoneyValue({
+  amount,
+  currency,
+}: {
+  amount: string;
+  currency: string;
+}) {
+  const parsed = Number.parseFloat(amount || "0");
+  const formatted = Number.isFinite(parsed) ? parsed.toFixed(2) : "0.00";
+  const normalizedCurrency = normalizeText(currency, "SAR").toUpperCase();
+
+  if (normalizedCurrency !== "SAR") {
+    return (
+      <span dir="ltr" className="tabular-nums">
+        {formatted} {normalizedCurrency}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      dir="ltr"
+      className="inline-flex items-center gap-1 font-medium tabular-nums"
+    >
+      <Image
+        src="/currency/sar.svg"
+        alt="SAR"
+        width={15}
+        height={15}
+        className="h-[15px] w-[15px]"
+      />
+      {formatted}
+    </span>
+  );
+}
+
+function isoToDate(value: string) {
+  if (!value) return undefined;
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+function dateToIso(value: Date | undefined) {
+  if (!value) return "";
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function formatDate(value: string | null | undefined) {
   if (!value) return "—";
   const parsed = new Date(value);
@@ -506,6 +565,7 @@ function normalizeStatus(value: unknown) {
   if (text === "false") return "inactive";
   if (text === "enabled") return "active";
   if (text === "disabled") return "inactive";
+  if (text === "pending_payment") return "pending";
 
   return text;
 }
@@ -565,6 +625,8 @@ function normalizeCompany(value: unknown): CompanyRecord {
     owner: planName,
     activity: cycle || "unknown",
     subscription: `${amount} ${currency}`,
+    amount,
+    currency,
     email: currency,
     phone: normalizeText(record.starts_at || record.start_date || record.started_at || record.valid_from),
     city: normalizeText(record.ends_at || record.end_date || record.expires_at || record.valid_to, "—"),
@@ -1239,21 +1301,45 @@ export default function SystemSubscriptionsReportsPage() {
                 </SelectContent>
               </Select>
 
-              <Input
-                type="date"
-                value={fromDate}
-                onChange={(event) => setFromDate(event.target.value)}
-                className="h-10 rounded-xl"
-                aria-label={t.fromDate}
-              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 justify-start rounded-xl bg-background text-xs font-normal"
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                    {fromDate || t.fromDate}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={isoToDate(fromDate)}
+                    onSelect={(date) => setFromDate(dateToIso(date))}
+                  />
+                </PopoverContent>
+              </Popover>
 
-              <Input
-                type="date"
-                value={toDate}
-                onChange={(event) => setToDate(event.target.value)}
-                className="h-10 rounded-xl"
-                aria-label={t.toDate}
-              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 justify-start rounded-xl bg-background text-xs font-normal"
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                    {toDate || t.toDate}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={isoToDate(toDate)}
+                    onSelect={(date) => setToDate(dateToIso(date))}
+                  />
+                </PopoverContent>
+              </Popover>
 
               <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
                 <SelectTrigger className="h-10 rounded-xl bg-background">
@@ -1381,7 +1467,7 @@ export default function SystemSubscriptionsReportsPage() {
                           </TableCell>
                           <TableCell className={cn("overflow-hidden px-4 align-middle", alignClass)}>
                             <span className="block truncate text-sm text-muted-foreground">
-                              {company.subscription || "—"}
+                              <MoneyValue amount={company.amount} currency={company.currency} />
                             </span>
                           </TableCell>
                           <TableCell className={cn("overflow-hidden px-4 align-middle", alignClass)}>
