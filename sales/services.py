@@ -4114,7 +4114,7 @@ def resolve_sales_credit_note_return(
     )
 
     if lock:
-        queryset = queryset.select_for_update()
+        queryset = queryset.select_for_update(of=("self",))
 
     sales_return = queryset.first()
 
