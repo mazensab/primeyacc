@@ -1622,7 +1622,7 @@ export function TreasuryVoucherDetailPage({
                   <div class="company-name">${escapeHtml(
                     displayCompanyName,
                   )}</div>
-                  <div class="system-name">PrimeyAcc</div>
+                  <div class="system-name">Mhamcloud</div>
                 </div>
                 <div class="title-block">
                   <div class="copy-label">${escapeHtml(t.originalCopy)}</div>

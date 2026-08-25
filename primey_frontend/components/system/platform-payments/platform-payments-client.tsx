@@ -1074,7 +1074,7 @@ function Register({
   const plans = React.useMemo(
     () =>
       [...new Set(payments.map((item) => item.planName))]
-        .filter((value) => value && value !== "—" && value !== "â€”")
+        .filter((value) => value && value !== "—" && value !== "—")
         .sort(),
     [payments],
   );

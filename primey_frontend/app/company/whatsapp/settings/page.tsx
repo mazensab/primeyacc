@@ -1015,7 +1015,7 @@ export default function CompanyWhatsAppSettingsPage() {
   <table><tbody>${settingsHtml}</tbody></table>
 
   <div class="note">${escapeHtml(note)}</div>
-  <div class="footer">PrimeyAcc</div>
+  <div class="footer">Mhamcloud</div>
 
   <script>
     window.addEventListener("load", function () {

@@ -807,7 +807,7 @@ export default function SystemRolesPage() {
 
                   <KeyRound className="me-1.5 h-3.5 w-3.5" />
 
-                  {textByLocale(locale, "\u0646\u0638\u0627\u0645 PrimeyAcc", "PrimeyAcc System")}
+                  {textByLocale(locale, "\u0646\u0638\u0627\u0645 Mhamcloud", "Mhamcloud System")}
 
                 </Badge>
 

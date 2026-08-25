@@ -182,7 +182,7 @@ const translations = {
     appliedFilters: "الفلاتر المطبقة",
     noFilter: "بدون فلاتر إضافية",
     companyLabel: "الشركة",
-    footer: "PrimeyAcc",
+    footer: "Mhamcloud",
     unknown: "غير معروف",
   },
   en: {
@@ -264,7 +264,7 @@ const translations = {
     appliedFilters: "Applied Filters",
     noFilter: "No additional filters",
     companyLabel: "Company",
-    footer: "PrimeyAcc",
+    footer: "Mhamcloud",
     unknown: "Unknown",
   },
 } as const;

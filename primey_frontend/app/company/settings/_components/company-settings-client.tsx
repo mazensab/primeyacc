@@ -6171,7 +6171,7 @@ export function CompanyPermissionsPage() {
         </head>
         <body>
           <div class="report-header">
-            <div class="brand">PrimeyAcc</div>
+            <div class="brand">Mhamcloud</div>
             <h1>${escapeReportHtml(
               reportTitle,
             )}</h1>
