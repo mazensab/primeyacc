@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { API_PATHS } from "@/lib/api/endpoints";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -82,9 +83,10 @@ type QuickAction = {
   icon: React.ComponentType<{ className?: string }>;
 };
 
-const API_ENDPOINT = "/api/system/plans/create/";
+const API_ENDPOINT = API_PATHS.systemPlans.create;
 const CSRF_ENDPOINT = "/api/auth/csrf";
 const DRAFT_KEY = "primeyacc-system-plan-create-draft-v2";
+const PLAN_CODES = ["STARTER", "BASIC", "PROFESSIONAL", "ENTERPRISE", "CUSTOM"] as const;
 
 const FEATURE_SUGGESTIONS = {
   ar: [
@@ -199,6 +201,7 @@ const translations = {
     publicHint: "إخفاء الباقة يمنع ظهورها مستقبلا فقط.",
     requiredName: "اسم الباقة مطلوب.",
     requiredCode: "كود الباقة مطلوب.",
+    invalidCode: "كود الباقة يجب أن يكون STARTER أو BASIC أو PROFESSIONAL أو ENTERPRISE أو CUSTOM.",
     invalidNumber: "القيم الرقمية يجب أن تكون صفر أو أكبر.",
     created: "تم إنشاء الباقة بنجاح.",
     draftSaved: "تم حفظ المسودة.",
@@ -271,6 +274,7 @@ const translations = {
     publicHint: "Hiding a plan only prevents future visibility.",
     requiredName: "Plan name is required.",
     requiredCode: "Plan code is required.",
+    invalidCode: "Plan code must be STARTER, BASIC, PROFESSIONAL, ENTERPRISE, or CUSTOM.",
     invalidNumber: "Numeric values must be zero or greater.",
     created: "Plan created successfully.",
     draftSaved: "Draft saved.",
@@ -308,6 +312,25 @@ function isRecord(value: unknown): value is ApiRecord {
 
 function asRecord(value: unknown): ApiRecord {
   return isRecord(value) ? value : {};
+}
+
+function extractFieldErrors(payload: unknown): Record<string, string> {
+  const record = asRecord(payload);
+  const rawErrors = asRecord(record.errors);
+  const result: Record<string, string> = {};
+
+  Object.entries(rawErrors).forEach(([field, value]) => {
+    if (Array.isArray(value)) {
+      const message = value.map((item) => normalizeText(item)).filter(Boolean).join(" ");
+      if (message) result[field] = message;
+      return;
+    }
+
+    const message = normalizeText(value);
+    if (message) result[field] = message;
+  });
+
+  return result;
 }
 
 function normalizeText(value: unknown, fallback = "") {
@@ -618,7 +641,11 @@ export default function SystemPlanCreatePage() {
     const nextErrors: Record<string, string> = {};
 
     if (!form.name.trim()) nextErrors.name = t.requiredName;
-    if (!form.code.trim()) nextErrors.code = t.requiredCode;
+    if (!form.code.trim()) {
+      nextErrors.code = t.requiredCode;
+    } else if (!PLAN_CODES.includes(form.code.trim().toUpperCase() as (typeof PLAN_CODES)[number])) {
+      nextErrors.code = t.invalidCode;
+    }
 
     const numericFields: Array<keyof PlanFormState> = [
       "monthly_price",
@@ -736,6 +763,10 @@ export default function SystemPlanCreatePage() {
         normalizeText(record.error);
 
       if (!response.ok) {
+        const fieldErrors = extractFieldErrors(responsePayload);
+        if (Object.keys(fieldErrors).length) {
+          setErrors((current) => ({ ...current, ...fieldErrors }));
+        }
         throw new Error(message || `Request failed with status ${response.status}`);
       }
 

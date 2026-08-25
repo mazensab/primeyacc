@@ -199,6 +199,11 @@ export const PERMISSIONS = {
   SYSTEM_VIEW: "system.view",
   SYSTEM_SETTINGS: "system.settings",
 
+  // System Plans
+  SYSTEM_PLANS_VIEW: "system.plans.view",
+  SYSTEM_PLANS_CREATE: "system.plans.create",
+  SYSTEM_PLANS_UPDATE: "system.plans.update",
+
   // System Integrations
   SYSTEM_INTEGRATIONS_VIEW: "system.integrations.view",
   SYSTEM_INTEGRATION_API_KEYS_VIEW: "system.integration_api_keys.view",
@@ -693,6 +698,20 @@ export const ROLE_WORKSPACE_MAP: Record<PrimeyRole, AppWorkspace> = {
 // ======================================================
 
 export const PATH_ACCESS_RULES: PathAccessRule[] = [
+  // ----------------------------
+  // System Plans
+  // ----------------------------
+  {
+    prefix: "/system/plans/create",
+    permissions: [PERMISSIONS.SYSTEM_PLANS_CREATE],
+    workspaces: ["system"],
+  },
+  {
+    prefix: "/system/plans",
+    permissions: [PERMISSIONS.SYSTEM_PLANS_VIEW],
+    workspaces: ["system"],
+  },
+
   // ----------------------------
   // System Users / Settings
   // ----------------------------

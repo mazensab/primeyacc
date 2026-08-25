@@ -57,6 +57,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { API_PATHS } from "@/lib/api/endpoints";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -159,6 +160,7 @@ type QuickAction = {
 };
 
 const CSRF_ENDPOINT = "/api/auth/csrf";
+const PLAN_CODES = ["STARTER", "BASIC", "PROFESSIONAL", "ENTERPRISE", "CUSTOM"] as const;
 
 const FEATURE_SUGGESTIONS = {
   ar: [
@@ -289,6 +291,7 @@ const translations = {
     dashboardDesc: "العودة إلى لوحة النظام الرئيسية.",
     requiredName: "اسم الباقة مطلوب.",
     requiredCode: "كود الباقة مطلوب.",
+    invalidCode: "كود الباقة يجب أن يكون STARTER أو BASIC أو PROFESSIONAL أو ENTERPRISE أو CUSTOM.",
     invalidNumber: "القيم الرقمية يجب أن تكون صفر أو أكبر.",
   },
   en: {
@@ -370,6 +373,7 @@ const translations = {
     dashboardDesc: "Return to the main system dashboard.",
     requiredName: "Plan name is required.",
     requiredCode: "Plan code is required.",
+    invalidCode: "Plan code must be STARTER, BASIC, PROFESSIONAL, ENTERPRISE, or CUSTOM.",
     invalidNumber: "Numeric values must be zero or greater.",
   },
 } as const;
@@ -384,6 +388,35 @@ function isRecord(value: unknown): value is ApiRecord {
 
 function asRecord(value: unknown): ApiRecord {
   return isRecord(value) ? value : {};
+}
+
+class ApiRequestError extends Error {
+  fieldErrors: Record<string, string>;
+
+  constructor(message: string, fieldErrors: Record<string, string> = {}) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.fieldErrors = fieldErrors;
+  }
+}
+
+function extractFieldErrors(payload: unknown): Record<string, string> {
+  const record = asRecord(payload);
+  const rawErrors = asRecord(record.errors);
+  const result: Record<string, string> = {};
+
+  Object.entries(rawErrors).forEach(([field, value]) => {
+    if (Array.isArray(value)) {
+      const message = value.map((item) => normalizeText(item)).filter(Boolean).join(" ");
+      if (message) result[field] = message;
+      return;
+    }
+
+    const message = normalizeText(value);
+    if (message) result[field] = message;
+  });
+
+  return result;
 }
 
 function normalizeText(value: unknown, fallback = "") {
@@ -588,11 +621,12 @@ async function postJson<T>(path: string, body: ApiRecord): Promise<T> {
 
   if (!response.ok) {
     const record = asRecord(payload);
-    throw new Error(
+    throw new ApiRequestError(
       normalizeText(record.message) ||
         normalizeText(record.detail) ||
         normalizeText(record.error) ||
         `Request failed with status ${response.status}`,
+      extractFieldErrors(payload),
     );
   }
 
@@ -911,7 +945,7 @@ export default function SystemPlanDetailPage() {
         setError("");
 
         const payload = await fetchJson<unknown>(
-          `/api/system/plans/${encodeURIComponent(planId)}/`,
+          API_PATHS.systemPlans.detail(encodeURIComponent(planId)),
         );
         const detail = extractDetail(payload);
 
@@ -1014,7 +1048,11 @@ export default function SystemPlanDetailPage() {
     const nextErrors: Record<string, string> = {};
 
     if (!editForm.name.trim()) nextErrors.name = t.requiredName;
-    if (!editForm.code.trim()) nextErrors.code = t.requiredCode;
+    if (!editForm.code.trim()) {
+      nextErrors.code = t.requiredCode;
+    } else if (!PLAN_CODES.includes(editForm.code.trim().toUpperCase() as (typeof PLAN_CODES)[number])) {
+      nextErrors.code = t.invalidCode;
+    }
 
     const numericFields: Array<keyof PlanFormState> = [
       "monthly_price",
@@ -1046,7 +1084,7 @@ export default function SystemPlanDetailPage() {
       setSaving(true);
 
       const payload = await postJson<unknown>(
-        `/api/system/plans/${encodeURIComponent(planId)}/update/`,
+        API_PATHS.systemPlans.update(encodeURIComponent(planId)),
         {
           name: editForm.name.trim(),
           code: editForm.code.trim().toUpperCase(),
@@ -1078,6 +1116,10 @@ export default function SystemPlanDetailPage() {
       toast.success(message);
       router.refresh();
     } catch (caughtError) {
+      if (caughtError instanceof ApiRequestError && Object.keys(caughtError.fieldErrors).length) {
+        setErrors((current) => ({ ...current, ...caughtError.fieldErrors }));
+      }
+
       const message = caughtError instanceof Error ? caughtError.message : t.errorDesc;
       toast.error(message);
     } finally {
@@ -1095,7 +1137,7 @@ export default function SystemPlanDetailPage() {
       setBusyAction(action);
 
       const payload = await postJson<unknown>(
-        `/api/system/plans/${encodeURIComponent(planId)}/status/`,
+        API_PATHS.systemPlans.status(encodeURIComponent(planId)),
         { action },
       );
 

@@ -59,6 +59,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { API_PATHS } from "@/lib/api/endpoints";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -136,7 +137,7 @@ type QuickAction = {
   icon: React.ComponentType<{ className?: string }>;
 };
 
-const API_ENDPOINT = "/api/system/plans/";
+const API_ENDPOINT = API_PATHS.systemPlans.list;
 const CSRF_ENDPOINT = "/api/auth/csrf";
 
 const translations = {
@@ -1168,7 +1169,7 @@ export default function SystemPlansPage() {
       setBusyAction(actionKey);
 
       const payload = await postJson<unknown>(
-        `/api/system/plans/${encodeURIComponent(plan.id)}/status/`,
+        API_PATHS.systemPlans.status(encodeURIComponent(plan.id)),
         { action },
       );
 

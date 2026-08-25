@@ -223,6 +223,14 @@ export const API_PATHS = {
     markRead: (id: ApiPathId) => `/api/company/notifications/${id}/read/`,
   },
 
+  systemPlans: {
+    list: "/api/system/plans/",
+    create: "/api/system/plans/create/",
+    detail: (id: ApiPathId) => `/api/system/plans/${id}/`,
+    update: (id: ApiPathId) => `/api/system/plans/${id}/update/`,
+    status: (id: ApiPathId) => `/api/system/plans/${id}/status/`,
+  },
+
   systemIntegrationApiKeys: {
     list: "/api/system/integration-api-keys/",
     create: "/api/system/integration-api-keys/",
