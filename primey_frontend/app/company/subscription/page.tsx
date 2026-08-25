@@ -54,7 +54,6 @@ import {
   type SubscriptionPlan,
   type SubscriptionSnapshot,
   asRecord,
-  extractCheckoutUrl,
   formatDate,
   formatInteger,
   formatMoney,
@@ -85,7 +84,11 @@ const copy = {
     yearly: "سنوي",
     grace: "فترة سماح",
     graceRemaining: "أيام السماح المتبقية",
+    startsAt: "تاريخ البداية",
     expiresAt: "تاريخ الانتهاء",
+    invoice: "الفاتورة",
+    receipt: "الإيصال",
+    notLinked: "غير مرتبط",
     access: "وصول مساحة الشركة",
     fullAccess: "كامل",
     billingOnly: "الفوترة فقط",
@@ -94,7 +97,7 @@ const copy = {
     renewDesc:
       "يُنشئ التجديد اشتراكًا جديدًا بانتظار الدفع دون إغلاق الاشتراك الحالي قبل تأكيد الدفع.",
     gateway: "بوابة الدفع",
-    renew: "تجديد ودفع",
+    renew: "إنشاء طلب التجديد",
     changing: "جارٍ الإنشاء...",
     plansTitle: "الباقات المتاحة",
     plansDesc:
@@ -137,6 +140,26 @@ const copy = {
       "تم إنشاء محاولة الدفع. حالة النجاح النهائية ستأتي فقط من تأكيد الباكند.",
     changeCreated: "تم إنشاء طلب تغيير الباقة.",
     samePlan: "هذه هي الباقة الحالية.",
+    requestOnly:
+      "هذه العملية تنشئ طلب اشتراك ومحاولة دفع فقط، ولا تعتبر عملية الدفع ناجحة من المتصفح.",
+    pendingAction:
+      "يوجد طلب اشتراك آخر بانتظار الدفع أو التحقق.",
+    renewUnavailable:
+      "التجديد غير متاح في حالة الاشتراك الحالية.",
+    changeUnavailable:
+      "تغيير الباقة غير متاح في حالة الاشتراك الحالية.",
+    deniedTitle: "الوصول إلى الاشتراك مقيد",
+    deniedDesc:
+      "حالة الاشتراك الحالية لا تسمح بالوصول إلى مساحة العمل، وتبقى صلاحيات الفوترة حسب سياسة الباكند.",
+    expiredTitle: "انتهى الاشتراك",
+    expiredDesc:
+      "انتهت مدة الاشتراك. استخدم الإجراءات التي يسمح بها الباكند لإنشاء طلب تجديد.",
+    suspendedTitle: "الاشتراك معلق",
+    suspendedDesc:
+      "الاشتراك معلق، والإجراءات المتاحة للفوترة يحددها الباكند.",
+    cancelledTitle: "الاشتراك ملغي",
+    cancelledDesc:
+      "الاشتراك ملغي. راجع الباقات والإجراءات التي يسمح بها الباكند.",
     sar: "ريال سعودي",
     pendingPayment: "بانتظار الدفع",
     processing: "قيد المعالجة",
@@ -163,7 +186,11 @@ const copy = {
     yearly: "Yearly",
     grace: "Grace period",
     graceRemaining: "Grace days remaining",
+    startsAt: "Starts at",
     expiresAt: "Expires at",
+    invoice: "Invoice",
+    receipt: "Receipt",
+    notLinked: "Not linked",
     access: "Workspace access",
     fullAccess: "Full",
     billingOnly: "Billing only",
@@ -172,7 +199,7 @@ const copy = {
     renewDesc:
       "Renewal creates a new pending subscription without closing the current subscription before payment is confirmed.",
     gateway: "Payment gateway",
-    renew: "Renew & Pay",
+    renew: "Create renewal request",
     changing: "Creating...",
     plansTitle: "Available plans",
     plansDesc:
@@ -215,6 +242,26 @@ const copy = {
       "Payment attempt created. Final success is only confirmed by the backend.",
     changeCreated: "Plan change request created.",
     samePlan: "This is the current plan.",
+    requestOnly:
+      "This action creates a subscription and payment request only. Browser return is never treated as payment success.",
+    pendingAction:
+      "Another subscription request is already awaiting payment or verification.",
+    renewUnavailable:
+      "Renewal is not available for the current subscription state.",
+    changeUnavailable:
+      "Plan changes are not available for the current subscription state.",
+    deniedTitle: "Subscription access is restricted",
+    deniedDesc:
+      "The current subscription state does not allow workspace access. Billing permissions remain controlled by the backend.",
+    expiredTitle: "Subscription expired",
+    expiredDesc:
+      "The subscription has expired. Use only the renewal actions currently allowed by the backend.",
+    suspendedTitle: "Subscription suspended",
+    suspendedDesc:
+      "The subscription is suspended. Available billing actions are controlled by the backend.",
+    cancelledTitle: "Subscription cancelled",
+    cancelledDesc:
+      "The subscription is cancelled. Review the plans and actions currently allowed by the backend.",
     sar: "Saudi Riyal",
     pendingPayment: "Pending payment",
     processing: "Processing",
@@ -416,6 +463,50 @@ export default function CompanySubscriptionPage() {
       latest?.status === "PENDING_PAYMENT" ||
       latestPendingPayment,
   );
+
+  const lifecycleStatus = (
+    effective?.status ||
+    access?.status ||
+    latest?.status ||
+    ""
+  ).toUpperCase();
+
+  const actionBlockedReason = hasPending
+    ? t.pendingAction
+    : !access?.can_manage_subscription
+      ? access?.reason || t.deniedDesc
+      : "";
+
+  const renewBlockedReason =
+    actionBlockedReason ||
+    (!access?.can_renew ? t.renewUnavailable : "");
+
+  const changeBlockedReason =
+    actionBlockedReason ||
+    (!access?.can_change_plan ? t.changeUnavailable : "");
+
+  const lifecycleNotice =
+    lifecycleStatus === "EXPIRED"
+      ? {
+          title: t.expiredTitle,
+          description: t.expiredDesc,
+        }
+      : lifecycleStatus === "SUSPENDED"
+        ? {
+            title: t.suspendedTitle,
+            description: t.suspendedDesc,
+          }
+        : lifecycleStatus === "CANCELLED"
+          ? {
+              title: t.cancelledTitle,
+              description: t.cancelledDesc,
+            }
+          : access?.access === "DENIED"
+            ? {
+                title: t.deniedTitle,
+                description: t.deniedDesc,
+              }
+            : null;
   async function createAction(
     path: string,
     payload: Record<string, unknown>,
@@ -423,16 +514,11 @@ export default function CompanySubscriptionPage() {
   ) {
     try {
       setWorking(true);
-      const response = await subscriptionRequest<unknown>(path, {
+      await subscriptionRequest<unknown>(path, {
         method: "POST",
         body: JSON.stringify(payload),
       });
       toast.success(successMessage);
-      const checkoutUrl = extractCheckoutUrl(response);
-      if (checkoutUrl) {
-        window.location.assign(checkoutUrl);
-        return;
-      }
       await loadAll(false);
       toast.info(t.paymentPending);
     } catch (caught) {
@@ -564,6 +650,22 @@ export default function CompanySubscriptionPage() {
             </Button>
           </div>
         </section>
+        {lifecycleNotice ? (
+          <Card className="gap-0 rounded-lg border-rose-200 bg-rose-50 py-0 shadow-none before:hidden after:hidden">
+            <CardContent className="flex gap-3 p-4 text-rose-950">
+              <CircleAlert className="mt-0.5 h-5 w-5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold">
+                  {lifecycleNotice.title}
+                </p>
+                <p className="mt-1 text-sm opacity-80">
+                  {lifecycleNotice.description}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
         {access?.is_in_grace ? (
           <Card className="gap-0 rounded-lg border-amber-200 bg-amber-50 py-0 shadow-none before:hidden after:hidden">
             <CardContent className="flex gap-3 p-4 text-amber-950">
@@ -607,6 +709,16 @@ export default function CompanySubscriptionPage() {
                 <p className="mt-2 text-xl font-bold">{planName}</p>
                 <p className="mt-3 text-xs text-muted-foreground">
                   {effective?.billing_cycle === "YEARLY" ? t.yearly : t.monthly}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t.startsAt}:{" "}
+                  <span
+                    dir="ltr"
+                    lang="en"
+                    className="tabular-nums"
+                  >
+                    {formatDate(effective?.start_date)}
+                  </span>
                 </p>
               </div>
               <span className="flex size-11 items-center justify-center rounded-full border bg-primary/5 text-primary">
@@ -697,8 +809,19 @@ export default function CompanySubscriptionPage() {
             <CardTitle>{t.renewTitle}</CardTitle>
             <CardDescription>{t.renewDesc}</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-3 lg:flex-row lg:items-end">
-            <div className="min-w-[180px] flex-1 space-y-2">
+          <CardContent className="space-y-3">
+            <div className="rounded-lg border bg-muted/20 px-4 py-3 text-xs leading-6 text-muted-foreground">
+              {t.requestOnly}
+            </div>
+
+            {renewBlockedReason ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-6 text-amber-950">
+                {renewBlockedReason}
+              </div>
+            ) : null}
+
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+              <div className="min-w-[180px] flex-1 space-y-2">
               <p className="text-xs font-medium text-muted-foreground">
                 {t.billingCycle}
               </p>
@@ -752,6 +875,7 @@ export default function CompanySubscriptionPage() {
               )}
               {working ? t.changing : t.renew}
             </Button>
+            </div>
           </CardContent>
         </Card>
         <Card className="rounded-lg shadow-none">
@@ -759,7 +883,13 @@ export default function CompanySubscriptionPage() {
             <CardTitle>{t.plansTitle}</CardTitle>
             <CardDescription>{t.plansDesc}</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            {changeBlockedReason ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-6 text-amber-950">
+                {changeBlockedReason}
+              </div>
+            ) : null}
+
             {plans.length ? (
               <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
                 {plans.map((plan) => {
@@ -890,6 +1020,8 @@ export default function CompanySubscriptionPage() {
                     <TableHead>{t.status}</TableHead>
                     <TableHead>{t.paymentGateway}</TableHead>
                     <TableHead>{t.amount}</TableHead>
+                    <TableHead>{t.invoice}</TableHead>
+                    <TableHead>{t.receipt}</TableHead>
                     <TableHead>{t.date}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -916,6 +1048,24 @@ export default function CompanySubscriptionPage() {
                         <TableCell>
                           <Money value={payment.amount} label={t.sar} />
                         </TableCell>
+                        <TableCell
+                          dir="ltr"
+                          lang="en"
+                          className="tabular-nums"
+                        >
+                          {payment.invoice?.document_number ||
+                            payment.invoice_id ||
+                            t.notLinked}
+                        </TableCell>
+                        <TableCell
+                          dir="ltr"
+                          lang="en"
+                          className="tabular-nums"
+                        >
+                          {payment.receipt?.document_number ||
+                            payment.receipt_id ||
+                            t.notLinked}
+                        </TableCell>
                         <TableCell dir="ltr" lang="en" className="tabular-nums">
                           {formatDate(
                             payment.paid_at ||
@@ -929,7 +1079,7 @@ export default function CompanySubscriptionPage() {
                   ) : (
                     <TableRow>
                       <TableCell
-                        colSpan={5}
+                        colSpan={7}
                         className="h-36 text-center text-muted-foreground"
                       >
                         {t.noPayments}

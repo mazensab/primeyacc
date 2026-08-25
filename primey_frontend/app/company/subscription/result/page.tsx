@@ -43,6 +43,7 @@ const copy = {
     unknownTitle: "تعذر تحديد نتيجة الدفع",
     unknownDesc: "أعد التحقق أو افتح صفحة الاشتراك لمراجعة السجل.",
     subscription: "إدارة الاشتراك",
+    verifiedByBackend: "تم التحقق من الحالة من سجلات فوترة الشركة",
     retry: "إعادة التحقق",
     active: "الاشتراك نشط",
     paymentPaid: "الدفع مدفوع",
@@ -62,6 +63,7 @@ const copy = {
     unknownTitle: "Payment result could not be determined",
     unknownDesc: "Check again or open subscription management to review billing.",
     subscription: "Manage subscription",
+    verifiedByBackend: "Status verified from company billing records",
     retry: "Check again",
     active: "Subscription active",
     paymentPaid: "Payment paid",
@@ -193,6 +195,9 @@ export default function CompanySubscriptionResultPage() {
             <data.Icon className="h-7 w-7" />
           </span>
           <Badge variant="outline">{data.badge}</Badge>
+          <p className="text-xs text-muted-foreground">
+            {t.verifiedByBackend}
+          </p>
           <CardTitle className="mt-2 text-2xl">{data.title}</CardTitle>
           <CardDescription className="max-w-md leading-6">
             {data.description}

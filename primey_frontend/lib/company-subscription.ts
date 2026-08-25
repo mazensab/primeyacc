@@ -78,6 +78,8 @@ export type SubscriptionPayment = {
   transaction_reference: string;
   billing_reference: string;
   gateway_payment_id: string;
+  invoice_id: number | string | null;
+  receipt_id: number | string | null;
   failure_code: string;
   failure_message: string;
   cancellation_reason: string;
@@ -230,10 +232,24 @@ export function normalizeSubscription(
   value: unknown,
 ): SubscriptionSnapshot | null {
   if (!isRecord(value)) return null;
+
+  const plan = asRecord(value.plan);
+
+  const rawPlanId =
+    value.plan_id ??
+    plan.id;
+
+  const rawPlanName =
+    value.plan_name ??
+    plan.name;
+
   return {
     id: numberValue(value.id),
-    plan_id: value.plan_id == null ? null : numberValue(value.plan_id),
-    plan_name: text(value.plan_name),
+    plan_id:
+      rawPlanId == null
+        ? null
+        : numberValue(rawPlanId),
+    plan_name: text(rawPlanName),
     status: text(value.status),
     action: text(value.action),
     billing_cycle: text(value.billing_cycle),
@@ -299,6 +315,14 @@ export function normalizePayment(value: unknown): SubscriptionPayment {
     transaction_reference: text(row.transaction_reference),
     billing_reference: text(row.billing_reference),
     gateway_payment_id: text(row.gateway_payment_id),
+    invoice_id:
+      row.invoice_id == null
+        ? null
+        : text(row.invoice_id),
+    receipt_id:
+      row.receipt_id == null
+        ? null
+        : text(row.receipt_id),
     failure_code: text(row.failure_code),
     failure_message: text(row.failure_message),
     cancellation_reason: text(row.cancellation_reason),
@@ -323,21 +347,54 @@ export function normalizeBilling(payload: unknown): BillingData {
   const documents = normalizeArray(data.documents, normalizeDocument);
   const explicitInvoices = normalizeArray(data.invoices, normalizeDocument);
   const explicitReceipts = normalizeArray(data.receipts, normalizeDocument);
+
+  const invoices =
+    explicitInvoices.length > 0
+      ? explicitInvoices
+      : documents.filter((row) =>
+          row.document_type.toUpperCase().includes("INVOICE"),
+        );
+
+  const receipts =
+    explicitReceipts.length > 0
+      ? explicitReceipts
+      : documents.filter((row) =>
+          row.document_type.toUpperCase().includes("RECEIPT"),
+        );
+
+  const documentsById = new Map(
+    documents.map((document) => [
+      String(document.id),
+      document,
+    ]),
+  );
+
+  const payments = normalizeArray(
+    data.payments,
+    normalizePayment,
+  ).map((payment) => ({
+    ...payment,
+    invoice:
+      payment.invoice ||
+      (
+        payment.invoice_id == null
+          ? null
+          : documentsById.get(String(payment.invoice_id)) || null
+      ),
+    receipt:
+      payment.receipt ||
+      (
+        payment.receipt_id == null
+          ? null
+          : documentsById.get(String(payment.receipt_id)) || null
+      ),
+  }));
+
   return {
-    payments: normalizeArray(data.payments, normalizePayment),
+    payments,
     documents,
-    invoices:
-      explicitInvoices.length > 0
-        ? explicitInvoices
-        : documents.filter((row) =>
-            row.document_type.toUpperCase().includes("INVOICE"),
-          ),
-    receipts:
-      explicitReceipts.length > 0
-        ? explicitReceipts
-        : documents.filter((row) =>
-            row.document_type.toUpperCase().includes("RECEIPT"),
-          ),
+    invoices,
+    receipts,
   };
 }
 export function formatMoney(value: unknown): string {
