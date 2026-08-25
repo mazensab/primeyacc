@@ -1048,6 +1048,8 @@ function Register({
   const [search, setSearch] = React.useState("");
   const [status, setStatus] = React.useState("all");
   const [gateway, setGateway] = React.useState("all");
+  const [method, setMethod] = React.useState("all");
+  const [plan, setPlan] = React.useState("all");
   const [company, setCompany] = React.useState("all");
   const [fromDate, setFromDate] = React.useState("");
   const [toDate, setToDate] = React.useState("");
@@ -1061,6 +1063,22 @@ function Register({
     () => [...new Set(payments.map((item) => item.gateway))].sort(),
     [payments],
   );
+  const methods = React.useMemo(
+    () =>
+      [...new Set(payments.map((item) => item.method))]
+        .filter(Boolean)
+        .sort(),
+    [payments],
+  );
+
+  const plans = React.useMemo(
+    () =>
+      [...new Set(payments.map((item) => item.planName))]
+        .filter((value) => value && value !== "—" && value !== "â€”")
+        .sort(),
+    [payments],
+  );
+
   const companies = React.useMemo(
     () =>
       [...new Set(payments.map((item) => item.companyName))]
@@ -1092,6 +1110,8 @@ function Register({
       if (needle && !haystack.includes(needle)) return false;
       if (status !== "all" && item.status !== status) return false;
       if (gateway !== "all" && item.gateway !== gateway) return false;
+      if (method !== "all" && item.method !== method) return false;
+      if (plan !== "all" && item.planName !== plan) return false;
       if (company !== "all" && item.companyName !== company) return false;
 
       const date = item.createdAt?.slice(0, 10) || "";
@@ -1111,7 +1131,9 @@ function Register({
     company,
     fromDate,
     gateway,
+    method,
     payments,
+    plan,
     search,
     sort,
     status,
@@ -1122,14 +1144,16 @@ function Register({
     mode === "overview" ? filtered.slice(0, 8) : filtered;
 
   const stats = React.useMemo(() => {
-    const paidRows = payments.filter((item) => item.status === "PAID");
+    const source = mode === "reports" ? filtered : payments;
+    const paidRows = source.filter((item) => item.status === "PAID");
+
     return {
-      total: payments.length,
+      total: source.length,
       paid: paidRows.length,
-      pending: payments.filter((item) =>
+      pending: source.filter((item) =>
         ["PENDING", "PROCESSING"].includes(item.status),
       ).length,
-      failed: payments.filter((item) =>
+      failed: source.filter((item) =>
         ["FAILED", "CANCELLED", "CANCELED", "VOIDED"].includes(item.status),
       ).length,
       collected: paidRows.reduce(
@@ -1137,12 +1161,14 @@ function Register({
         0,
       ),
     };
-  }, [payments]);
+  }, [filtered, mode, payments]);
 
   function reset() {
     setSearch("");
     setStatus("all");
     setGateway("all");
+    setMethod("all");
+    setPlan("all");
     setCompany("all");
     setFromDate("");
     setToDate("");
@@ -1209,10 +1235,11 @@ function Register({
 
   return (
     <>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <Kpi title={t.total} value={stats.total} />
         <Kpi title={t.paid} value={stats.paid} />
         <Kpi title={t.pending} value={stats.pending} />
+        <Kpi title={t.failed} value={stats.failed} />
         <Kpi
           title={t.collected}
           value={
@@ -1258,6 +1285,34 @@ function Register({
               <SelectContent>
                 <SelectItem value="all">{t.all}</SelectItem>
                 {gateways.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {value}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={method} onValueChange={setMethod}>
+              <SelectTrigger className="h-10 rounded-xl xl:w-[160px]">
+                <SelectValue placeholder={t.method} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t.all}</SelectItem>
+                {methods.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {value}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={plan} onValueChange={setPlan}>
+              <SelectTrigger className="h-10 rounded-xl xl:w-[180px]">
+                <SelectValue placeholder={t.subscription} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t.all}</SelectItem>
+                {plans.map((value) => (
                   <SelectItem key={value} value={value}>
                     {value}
                   </SelectItem>

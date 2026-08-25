@@ -94,6 +94,8 @@ type StatusFilter =
   | "pending"
   | "draft"
   | "cancelled"
+  | "expired"
+  | "past_due"
   | "unknown";
 type SortKey = "newest" | "oldest" | "name" | "code" | "status" | "activity" | "city";
 
@@ -132,6 +134,8 @@ const statusFilters: StatusFilter[] = [
   "pending",
   "draft",
   "cancelled",
+  "expired",
+  "past_due",
   "unknown",
 ];
 
@@ -154,8 +158,8 @@ const translations = {
 
     searchPlaceholder: "ابحث باسم الشركة أو كود الاشتراك أو الخطة أو دورة الفوترة أو تاريخ الانتهاء...",
     statusFilter: "الحالة",
-    activityFilter: "النشاط",
-    cityFilter: "المدينة",
+    activityFilter: "دورة الفوترة",
+    cityFilter: "الخطة",
     fromDate: "من تاريخ",
     toDate: "إلى تاريخ",
     sort: "الترتيب",
@@ -165,15 +169,15 @@ const translations = {
     nameSort: "الاسم",
     codeSort: "الكود",
     statusSort: "الحالة",
-    activitySort: "النشاط",
-    citySort: "المدينة",
+    activitySort: "دورة الفوترة",
+    citySort: "الخطة",
 
     totalCompanies: "إجمالي الاشتراكات",
     activeCompanies: "الاشتراكات النشطة",
     inactiveCompanies: "غير النشطة",
     subscribedCompanies: "اشتراكات بقيمة",
     uniqueActivities: "دورات فوترة مختلفة",
-    uniqueCities: "تواريخ انتهاء مختلفة",
+    uniqueCities: "خطط مختلفة",
     filteredRows: "نتائج التقرير",
     fromLiveApi: "من واجهات النظام الحقيقية",
 
@@ -181,8 +185,8 @@ const translations = {
     statusDistributionDesc: "عدد ونسبة الاشتراكات في كل حالة.",
     activityDistribution: "توزيع الاشتراكات حسب دورة الفوترة",
     activityDistributionDesc: "أكثر دورات الفوترة ظهورا ضمن الاشتراكات الحالية.",
-    cityDistribution: "توزيع الاشتراكات حسب تاريخ الانتهاء",
-    cityDistributionDesc: "أكثر تواريخ الانتهاء ظهورا ضمن الاشتراكات الحالية.",
+    cityDistribution: "توزيع الاشتراكات حسب الخطة",
+    cityDistributionDesc: "توزيع الخطط ضمن الاشتراكات بعد تطبيق الفلاتر الحالية.",
     reportTable: "جدول التقرير التحليلي",
     reportTableDesc:
       "بيانات الاشتراكات بعد تطبيق الفلاتر الحالية وهي نفس البيانات المستخدمة في التصدير والطباعة.",
@@ -245,8 +249,8 @@ const translations = {
 
     searchPlaceholder: "Search by company, subscription code, plan, billing cycle, or end date...",
     statusFilter: "Status",
-    activityFilter: "Activity",
-    cityFilter: "City",
+    activityFilter: "Billing cycle",
+    cityFilter: "Plan",
     fromDate: "From date",
     toDate: "To date",
     sort: "Sort",
@@ -256,15 +260,15 @@ const translations = {
     nameSort: "Name",
     codeSort: "Code",
     statusSort: "Status",
-    activitySort: "Activity",
-    citySort: "City",
+    activitySort: "Billing cycle",
+    citySort: "Plan",
 
     totalCompanies: "Total subscriptions",
     activeCompanies: "Active subscriptions",
     inactiveCompanies: "Inactive",
     subscribedCompanies: "With value",
     uniqueActivities: "Unique billing cycles",
-    uniqueCities: "Unique end dates",
+    uniqueCities: "Unique plans",
     filteredRows: "Report results",
     fromLiveApi: "From real system APIs",
 
@@ -272,8 +276,8 @@ const translations = {
     statusDistributionDesc: "Count and ratio of companies by operational status.",
     activityDistribution: "Subscriptions by billing cycle",
     activityDistributionDesc: "Top billing cycles appearing in current subscriptions.",
-    cityDistribution: "Subscriptions by end date",
-    cityDistributionDesc: "Top end dates appearing in current subscriptions.",
+    cityDistribution: "Subscriptions by plan",
+    cityDistributionDesc: "Plan distribution across the current filtered subscriptions.",
     reportTable: "Analytical report table",
     reportTableDesc:
       "Subscription data after current filters, used by export and print actions.",
@@ -948,7 +952,7 @@ export default function SystemSubscriptionsReportsPage() {
   }, [companies]);
 
   const cityOptions = React.useMemo(() => {
-    return [...new Set(companies.map((company) => company.city).filter((value) => value && value !== "—"))].sort();
+    return [...new Set(companies.map((company) => company.owner).filter((value) => value && value !== "—"))].sort();
   }, [companies]);
 
   const filteredCompanies = React.useMemo(() => {
@@ -976,7 +980,7 @@ export default function SystemSubscriptionsReportsPage() {
       if (needle && !haystack.includes(needle)) return false;
       if (status !== "all" && company.status !== status) return false;
       if (activity !== "all" && company.activity !== activity) return false;
-      if (city !== "all" && company.city !== city) return false;
+      if (city !== "all" && company.owner !== city) return false;
       if (fromTime && createdTime && createdTime < fromTime) return false;
       if (toTime && createdTime && createdTime > toTime) return false;
 
@@ -989,7 +993,7 @@ export default function SystemSubscriptionsReportsPage() {
       if (sort === "code") return a.code.localeCompare(b.code);
       if (sort === "status") return a.status.localeCompare(b.status);
       if (sort === "activity") return a.activity.localeCompare(b.activity);
-      if (sort === "city") return a.city.localeCompare(b.city);
+      if (sort === "city") return a.owner.localeCompare(b.owner);
       return rowDateValue(b.created_at) - rowDateValue(a.created_at);
     });
   }, [activity, city, companies, fromDate, search, sort, status, toDate]);
@@ -1019,7 +1023,7 @@ export default function SystemSubscriptionsReportsPage() {
   );
 
   const cityDistribution = React.useMemo(
-    () => makeDistribution(filteredCompanies, (row) => row.city, locale, { limit: 8 }),
+    () => makeDistribution(filteredCompanies, (row) => row.owner, locale, { limit: 8 }),
     [filteredCompanies, locale],
   );
 
@@ -1106,7 +1110,7 @@ export default function SystemSubscriptionsReportsPage() {
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = `Mhamcloud-system-companies-report-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-system-subscriptions-report-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();

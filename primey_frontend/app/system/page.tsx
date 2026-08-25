@@ -28,6 +28,7 @@ import {
   Activity,
   ArrowUpDown,
   Building2,
+  CalendarDays,
   CheckCircle2,
   CreditCard,
   FileSpreadsheet,
@@ -46,6 +47,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Card,
   CardContent,
@@ -54,6 +56,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -146,6 +153,7 @@ type DataColumn<T> = {
 const API_ENDPOINTS = {
   companies: "/api/system/companies/",
   subscriptions: "/api/system/subscriptions/",
+  platformPayments: "/api/system/subscription-payments/",
   releaseReadiness: "/api/system/release-readiness/",
 };
 
@@ -397,6 +405,23 @@ function formatMoney(value: unknown) {
 function formatPercent(value: unknown) {
   const nextValue = Math.max(0, Math.min(100, toNumber(value)));
   return `${formatInteger(nextValue)}%`;
+}
+
+function isoToDate(value: string) {
+  if (!value) return undefined;
+
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+function dateToIso(value: Date | undefined) {
+  if (!value) return "";
+
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function formatDate(value: string | null | undefined) {
@@ -877,24 +902,45 @@ function FiltersBar({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex h-10 items-center gap-2 rounded-xl border bg-background px-3">
-          <span className="text-xs text-muted-foreground">{t.from}</span>
-          <Input
-            type="date"
-            value={dateFrom}
-            onChange={(event) => onDateFromChange(event.target.value)}
-            className="h-8 w-[135px] border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
-          />
-        </div>
-        <div className="flex h-10 items-center gap-2 rounded-xl border bg-background px-3">
-          <span className="text-xs text-muted-foreground">{t.to}</span>
-          <Input
-            type="date"
-            value={dateTo}
-            onChange={(event) => onDateToChange(event.target.value)}
-            className="h-8 w-[135px] border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
-          />
-        </div>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 rounded-xl bg-background"
+            >
+              <CalendarDays className="h-4 w-4" />
+              {t.from}: {dateFrom || "—"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0">
+            <Calendar
+              mode="single"
+              selected={isoToDate(dateFrom)}
+              onSelect={(date) => onDateFromChange(dateToIso(date))}
+            />
+          </PopoverContent>
+        </Popover>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 rounded-xl bg-background"
+            >
+              <CalendarDays className="h-4 w-4" />
+              {t.to}: {dateTo || "—"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0">
+            <Calendar
+              mode="single"
+              selected={isoToDate(dateTo)}
+              onSelect={(date) => onDateToChange(dateToIso(date))}
+            />
+          </PopoverContent>
+        </Popover>
         <Select value={sort} onValueChange={(value) => onSortChange(value as SortKey)}>
           <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[160px]">
             <ArrowUpDown className="h-4 w-4" />
@@ -1080,19 +1126,36 @@ export default function SystemDashboardPage() {
         const rowsParams = new URLSearchParams({ page: "1", page_size: "12", ordering: "-created_at" });
 
         const results = await Promise.allSettled([
-          fetchJson<ApiResponse>(makeApiUrl(API_ENDPOINTS.companies, rowsParams), controller.signal),
-          fetchJson<ApiResponse>(makeApiUrl(API_ENDPOINTS.subscriptions, rowsParams), controller.signal),
-          fetchJson<ApiResponse>(makeApiUrl(API_ENDPOINTS.releaseReadiness), controller.signal),
+          fetchJson<ApiResponse>(
+            makeApiUrl(API_ENDPOINTS.companies, rowsParams),
+            controller.signal,
+          ),
+          fetchJson<ApiResponse>(
+            makeApiUrl(API_ENDPOINTS.subscriptions, rowsParams),
+            controller.signal,
+          ),
+          fetchJson<ApiResponse>(
+            makeApiUrl(API_ENDPOINTS.platformPayments, rowsParams),
+            controller.signal,
+          ),
+          fetchJson<ApiResponse>(
+            makeApiUrl(API_ENDPOINTS.releaseReadiness),
+            controller.signal,
+          ),
         ]);
 
         const failedMessages = results
           .filter((result): result is PromiseRejectedResult => result.status === "rejected")
           .map((result) => normalizeText(result.reason instanceof Error ? result.reason.message : result.reason));
 
-        const [companiesPayload, subscriptionsPayload, readinessPayload] = results.map(
+        const [
+          companiesPayload,
+          subscriptionsPayload,
+          paymentsPayload,
+          readinessPayload,
+        ] = results.map(
           (result) => (result.status === "fulfilled" ? result.value : {}),
         );
-        const paymentsPayload: ApiResponse = { results: [] };
 
         const companyRows = extractArray(companiesPayload).map(normalizeCompany);
         const subscriptionRows = extractArray(subscriptionsPayload).map(normalizeSubscription);
@@ -1122,7 +1185,11 @@ export default function SystemDashboardPage() {
               paymentsSummary.amount_total ??
               paymentsSummary.paid_amount ??
               paymentsSummary.collected_amount,
-            paymentRows.reduce((sum, item) => sum + item.amount, 0),
+            paymentRows
+              .filter((item) =>
+                ["paid", "confirmed"].includes(item.status),
+              )
+              .reduce((sum, item) => sum + item.amount, 0),
           ),
           apiContracts: toNumber(
             readinessSummary.api_contracts_count ??
