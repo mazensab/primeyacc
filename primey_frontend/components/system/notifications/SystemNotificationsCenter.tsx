@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 /* ============================================================
    📂 primey_frontend/components/system/notifications/SystemNotificationsCenter.tsx
    🔔 Mhamcloud — System Notifications Overview
@@ -154,7 +154,9 @@ const translations = {
     recipient: "المستلم",
     channel: "القناة",
     priority: "الأولوية",
-    status: "الحالة",
+    status: "حالة القراءة",
+    readStateHelp:
+      "حالة القراءة مستقلة عن حالة تسليم البريد أو واتساب. سجل Delivery غير معروض لعدم وجود عقد قراءة REST له.",
     source: "المصدر",
     createdAt: "تاريخ الإنشاء",
     markRead: "تعليم كمقروء",
@@ -236,7 +238,9 @@ const translations = {
     recipient: "Recipient",
     channel: "Channel",
     priority: "Priority",
-    status: "Status",
+    status: "Read state",
+    readStateHelp:
+      "Read state is separate from Email/WhatsApp delivery state. Delivery history is not shown because no read REST contract is available.",
     source: "Source",
     createdAt: "Created at",
     markRead: "Mark read",
@@ -677,6 +681,7 @@ export function SystemNotificationsCenter({ mode = "overview" }: { mode?: Notifi
         item.companyCode,
         item.recipientName,
         item.channel,
+        item.notificationType,
         item.priority,
         item.source,
       ]
@@ -759,6 +764,7 @@ export function SystemNotificationsCenter({ mode = "overview" }: { mode?: Notifi
       getChannelLabel(item.channel, locale),
       getPriorityLabel(item.priority, locale),
       item.isRead ? t.read : t.unread,
+      item.notificationType,
       item.source,
       formatDate(item.createdAt),
     ]);
@@ -773,6 +779,7 @@ export function SystemNotificationsCenter({ mode = "overview" }: { mode?: Notifi
       t.channel,
       t.priority,
       t.status,
+      "Event / Type",
       t.source,
       t.createdAt,
     ];
@@ -979,6 +986,10 @@ export function SystemNotificationsCenter({ mode = "overview" }: { mode?: Notifi
               <div>
                 <CardTitle>{t.tableTitle}</CardTitle>
                 <CardDescription className="mt-2">{t.tableDesc}</CardDescription>
+                <p className="mt-2 flex items-start gap-2 text-xs leading-5 text-muted-foreground">
+                  <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>{t.readStateHelp}</span>
+                </p>
               </div>
               <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
                 <Inbox className="h-3.5 w-3.5" />

@@ -136,7 +136,9 @@ const translations = {
     newest: "الأحدث",
     oldest: "الأقدم",
     prioritySort: "حسب الأولوية",
-    status: "الحالة",
+    status: "حالة القراءة",
+    readStateHelp:
+      "مقروء/غير مقروء هي حالة داخل التطبيق فقط، وليست حالة تسليم Email أو WhatsApp.",
     channel: "القناة",
     type: "النوع",
     priority: "الأولوية",
@@ -229,7 +231,9 @@ const translations = {
     newest: "Newest",
     oldest: "Oldest",
     prioritySort: "By priority",
-    status: "Status",
+    status: "Read state",
+    readStateHelp:
+      "Read/unread is the in-app read state only; it is not Email or WhatsApp delivery status.",
     channel: "Channel",
     type: "Type",
     priority: "Priority",
@@ -811,13 +815,17 @@ export default function CompanyNotificationsPage() {
         const rows = extractArray(listPayload).map(
           normalizeNotification,
         );
-        const unreadCount = rows.filter(
-          (row) => !row.isRead,
-        ).length;
+        const listRecord = asRecord(listPayload);
+        const dataRecord = asRecord(listRecord.data);
+        const apiUnreadCount = toNumber(
+          listRecord.unread_count ??
+            dataRecord.unread_count,
+          rows.filter((row) => !row.isRead).length,
+        );
 
         setState({
           count: extractCount(listPayload, rows),
-          unreadCount,
+          unreadCount: apiUnreadCount,
           notifications: rows,
         });
 
@@ -1609,6 +1617,10 @@ export default function CompanyNotificationsPage() {
                 <CardDescription className="mt-2">
                   {t.listDescription}
                 </CardDescription>
+                <p className="mt-2 flex items-start gap-2 text-xs leading-5 text-muted-foreground">
+                  <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>{t.readStateHelp}</span>
+                </p>
               </div>
 
               <div className="flex shrink-0 flex-wrap items-center gap-2">

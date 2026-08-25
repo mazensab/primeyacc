@@ -211,16 +211,12 @@ export const API_PATHS = {
 
   notificationCenter: {
     overview: "/api/company/notifications/",
-    list: "/api/company/notifications/list/",
-    notifications: "/api/company/notifications/notifications/",
-    events: "/api/company/notifications/events/",
-    deliveries: "/api/company/notifications/deliveries/",
-    logs: "/api/company/notifications/logs/",
-    settings: "/api/company/notifications/settings/",
-    preferences: "/api/company/notifications/preferences/",
-    readAll: "/api/company/notifications/read-all/",
+    list: "/api/company/notifications/",
+    unreadCount: "/api/company/notifications/unread-count/",
+    readAll: "/api/company/notifications/mark-all-read/",
     detail: (id: ApiPathId) => `/api/company/notifications/${id}/`,
     markRead: (id: ApiPathId) => `/api/company/notifications/${id}/read/`,
+    test: "/api/company/notifications/test/",
   },
 
   systemPlans: {
@@ -229,6 +225,18 @@ export const API_PATHS = {
     detail: (id: ApiPathId) => `/api/system/plans/${id}/`,
     update: (id: ApiPathId) => `/api/system/plans/${id}/update/`,
     status: (id: ApiPathId) => `/api/system/plans/${id}/status/`,
+  },
+
+  systemPaymentIntegrations: {
+    readiness: "/api/system/subscription-payments/gateway-readiness/",
+    webhookEvents: "/api/system/subscription-payments/webhook-events/",
+    webhookEventDetail: (id: ApiPathId) =>
+      `/api/system/subscription-payments/webhook-events/${id}/`,
+    webhookEventReprocess: (id: ApiPathId) =>
+      `/api/system/subscription-payments/webhook-events/${id}/reprocess/`,
+    reconciliations: "/api/system/subscription-payments/reconciliations/",
+    reconciliationDetail: (id: ApiPathId) =>
+      `/api/system/subscription-payments/reconciliations/${id}/`,
   },
 
   systemIntegrationApiKeys: {
@@ -244,14 +252,20 @@ export const API_PATHS = {
 
   systemNotifications: {
     list: "/api/system/notifications/",
-    readAll: "/api/system/notifications/read-all/",
-    markRead: (id: ApiPathId) => `/api/system/notifications/read/${id}/`,
+    unreadCount: "/api/system/notifications/unread-count/",
+    readAll: "/api/system/notifications/mark-all-read/",
+    detail: (id: ApiPathId) => `/api/system/notifications/${id}/`,
+    markRead: (id: ApiPathId) => `/api/system/notifications/${id}/read/`,
+    markUnread: (id: ApiPathId) => `/api/system/notifications/${id}/unread/`,
   },
 
   companyNotifications: {
     list: "/api/company/notifications/",
-    readAll: "/api/company/notifications/read-all/",
-    markRead: (id: ApiPathId) => `/api/company/notifications/read/${id}/`,
+    unreadCount: "/api/company/notifications/unread-count/",
+    readAll: "/api/company/notifications/mark-all-read/",
+    detail: (id: ApiPathId) => `/api/company/notifications/${id}/`,
+    markRead: (id: ApiPathId) => `/api/company/notifications/${id}/read/`,
+    test: "/api/company/notifications/test/",
   },
 
   systemLog: {

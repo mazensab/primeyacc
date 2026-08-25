@@ -1,41 +1,46 @@
 "use client";
+
 /* ============================================================
    📂 primey_frontend/app/system/integrations/page.tsx
    🔗 Mhamcloud — System Integrations Center
    ------------------------------------------------------------
-   ✅ Approved /system/companies visual pattern
-   ✅ Real API only: GET /api/system/integration-api-keys/
-   ✅ KPI cards + quick actions + recent API keys table
-   ✅ Search, status filter, environment filter, sorting, reset
-   ✅ Excel .xls export
-   ✅ Web print + PDF through browser print dialog
-   ✅ Skeleton loading
-   ✅ Error / Empty / No results states
-   ✅ sonner toast
-   ✅ Arabic/English via primey-locale
-   ✅ No localhost hardcoding
-   ✅ No fake demo data
+   ✅ Phase 39B
+   ✅ Platform payment providers readiness
+   ✅ Moyasar / Tamara / Tabby
+   ✅ Webhook operational visibility
+   ✅ Reconciliation operational visibility
+   ✅ API Keys remain an independent integration surface
+   ✅ No raw credentials / secrets displayed
+   ✅ Real frozen backend contracts only
+   ✅ sonner
+   ✅ Loading / error / empty states
+   ✅ Arabic / English
+   ✅ English digits and dates
 ============================================================ */
+
 import * as React from "react";
 import Link from "next/link";
 import {
-  ArrowUpDown,
-  FileBarChart2,
-  FileSpreadsheet,
-  FileText,
+  AlertTriangle,
+  CheckCircle2,
+  CircleSlash2,
+  FileKey2,
   KeyRound,
-  LayoutDashboard,
   Loader2,
+  MessageCircle,
   PlugZap,
-  Printer,
   RefreshCw,
   RotateCcw,
   Search,
   ShieldCheck,
   Sparkles,
   TriangleAlert,
+  Webhook,
+  Workflow,
+  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -63,242 +68,257 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { API_PATHS } from "@/lib/api/endpoints";
+
 type Locale = "ar" | "en";
 type ApiRecord = Record<string, unknown>;
-type SortKey = "newest" | "oldest" | "name" | "environment";
-type StatusFilter = "all" | "active" | "disabled" | "revoked" | "expired";
-type EnvironmentFilter = "all" | "live" | "test";
-type IntegrationKeyRecord = {
-  id: string;
+
+type GatewayName = "MOYASAR" | "TAMARA" | "TABBY";
+
+type GatewayCheck = {
   name: string;
-  keyPrefix: string;
-  status: string;
+  configured: boolean;
+  required: boolean;
+  message: string;
+};
+
+type GatewayReadiness = {
+  gateway: GatewayName | string;
+  configured: boolean;
+  ready: boolean;
   environment: string;
-  company: string;
-  scopes: string[];
-  lastUsedAt: string | null;
+  checks: GatewayCheck[];
+};
+
+type WebhookEvent = {
+  id: string;
+  gateway: string;
+  status: string;
+  eventType: string;
+  providerEventId: string;
+  providerPaymentId: string;
   createdAt: string | null;
-  expiresAt: string | null;
+  processedAt: string | null;
+  error: string;
 };
-type QuickAction = {
-  title: string;
-  description: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
+
+type ReconciliationRow = {
+  id: string;
+  gateway: string;
+  status: string;
+  paymentId: string;
+  providerPaymentId: string;
+  mismatchCount: number;
+  createdAt: string | null;
 };
-const statusFilters: StatusFilter[] = ["all", "active", "disabled", "revoked", "expired"];
-const environmentFilters: EnvironmentFilter[] = ["all", "live", "test"];
+
+type OperationalSummary = {
+  webhookTotal: number;
+  webhookFailed: number;
+  webhookPending: number;
+  reconciliationTotal: number;
+  reconciliationMismatch: number;
+};
+
+type GatewayFilter = "all" | "MOYASAR" | "TAMARA" | "TABBY";
+
 const translations = {
   ar: {
+    badge: "التكاملات",
     title: "مركز التكاملات",
     subtitle:
-      "مركز إدارة تكاملات Mhamcloud لمتابعة مفاتيح API وعقود الربط وجاهزية التكاملات من مكان واحد.",
-    badge: "التكاملات",
+      "متابعة جاهزية بوابات اشتراكات Mhamcloud، Webhooks والمطابقة المالية بدون كشف أي بيانات اعتماد سرية.",
     refresh: "تحديث",
-    exportExcel: "تصدير Excel",
-    print: "طباعة",
-    pdf: "PDF",
-    apiKeys: "مفاتيح API",
-    contracts: "عقود API",
-    readiness: "جاهزية الإصدار",
-    dashboard: "لوحة النظام",
-    reset: "إعادة ضبط",
-    searchPlaceholder: "ابحث باسم المفتاح أو الشركة أو البادئة أو الصلاحيات...",
-    all: "الكل",
-    sort: "الترتيب",
-    newest: "الأحدث",
-    oldest: "الأقدم",
-    nameSort: "الاسم",
-    environmentSort: "البيئة",
-    open: "فتح",
-    totalKeys: "إجمالي المفاتيح",
-    activeKeys: "المفاتيح النشطة",
-    liveKeys: "مفاتيح Live",
-    testKeys: "مفاتيح Test",
-    fromLiveApi: "من واجهات النظام الحقيقية",
-    actionsTitle: "اختصارات وحدة التكاملات",
-    actionsDesc: "تنقل سريع بين صفحات التكاملات الأساسية بنفس نمط إدارة المنصة.",
-    keysTitle: "إدارة مفاتيح API",
-    keysDesc: "عرض مفاتيح الربط وحالاتها والبيئة والصلاحيات.",
-    contractsTitle: "عقود API",
-    contractsDesc: "مراجعة عقود الواجهات ونقاط الربط المتاحة.",
-    readinessTitle: "جاهزية الإصدار",
-    readinessDesc: "فحص جاهزية النظام والعقود قبل الإطلاق.",
-    dashboardTitle: "لوحة النظام",
-    dashboardDesc: "العودة إلى لوحة تحكم النظام الرئيسية.",
-    tableTitle: "أحدث مفاتيح API",
-    tableDesc:
-      "نظرة سريعة على أحدث مفاتيح التكامل المسجلة في Mhamcloud مع البيئة والحالة والصلاحيات.",
-    keyName: "المفتاح",
-    prefix: "البادئة",
-    company: "الشركة",
-    environment: "البيئة",
-    scopes: "الصلاحيات",
-    status: "الحالة",
-    lastUsedAt: "آخر استخدام",
-    createdAt: "تاريخ الإنشاء",
-    expiresAt: "تاريخ الانتهاء",
-    active: "نشط",
-    disabled: "معطل",
-    revoked: "ملغي",
-    expired: "منتهي",
-    live: "Live",
-    test: "Test",
-    unknown: "غير محدد",
-    noDataTitle: "لا توجد مفاتيح API",
-    noDataDesc: "ستظهر مفاتيح التكامل هنا عند توفرها من API.",
-    noResultsTitle: "لا توجد نتائج مطابقة",
-    noResultsDesc: "غير البحث أو الفلاتر لعرض نتائج أخرى.",
-    errorTitle: "تعذر تحميل مركز التكاملات",
-    errorDesc:
-      "تأكد من تسجيل الدخول بصلاحية نظام ومن تشغيل الباكند ثم أعد المحاولة.",
-    tryAgain: "إعادة المحاولة",
-    exportEmpty: "لا توجد بيانات للتصدير.",
-    printEmpty: "لا توجد بيانات للطباعة.",
-    pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
-    reportTitle: "تقرير مركز تكاملات Mhamcloud",
-    generatedAt: "تاريخ الإنشاء",
-    showing: "عرض",
-    of: "من",
-    rows: "صفوف",
     refreshed: "تم تحديث مركز التكاملات.",
+    apiKeys: "مفاتيح API",
+    apiContracts: "عقود API",
+    whatsapp: "واتساب",
+    payments: "مدفوعات المنصة",
+    gatewaysTitle: "بوابات الدفع",
+    gatewaysDesc:
+      "حالة الإعداد الفعلية للبوابات الثلاث من عقد Gateway Readiness المجمد.",
+    configured: "مهيأة",
+    notConfigured: "غير مهيأة",
+    ready: "جاهزة",
+    notReady: "غير جاهزة",
+    environment: "البيئة",
+    checks: "فحوصات الإعداد",
+    required: "مطلوب",
+    optional: "اختياري",
+    available: "متوفر",
+    missing: "مفقود",
+    noSecret: "لا تُعرض أي قيمة Secret أو API credential في هذه الصفحة.",
+    webhookTitle: "حالة Webhooks",
+    webhookDesc:
+      "آخر أحداث Webhook المسجلة للبوابات مع حالة المعالجة فقط.",
+    reconciliationTitle: "المطابقة المالية",
+    reconciliationDesc:
+      "آخر سجلات reconciliation بين بيانات Mhamcloud ومزود الدفع.",
+    totalWebhook: "إجمالي Webhooks",
+    failedWebhook: "Webhooks فاشلة",
+    pendingWebhook: "بانتظار المعالجة",
+    totalReconciliation: "إجمالي المطابقات",
+    mismatches: "بها اختلافات",
+    gateway: "البوابة",
+    status: "الحالة",
+    event: "الحدث",
+    providerEvent: "Provider Event",
+    payment: "Payment",
+    createdAt: "تاريخ الإنشاء",
+    mismatchCount: "الاختلافات",
+    search: "بحث...",
+    all: "الكل",
+    noWebhook: "لا توجد أحداث Webhook مسجلة.",
+    noReconciliation: "لا توجد سجلات مطابقة مالية.",
+    loadError: "تعذر تحميل بعض بيانات مركز التكاملات.",
+    tryAgain: "إعادة المحاولة",
+    partial:
+      "تم تحميل المركز جزئيًا. بعض العقود لم تُرجع بيانات أو ليست متاحة للصلاحية الحالية.",
+    providerConfigured: "إعداد المزود مكتمل",
+    providerNotConfigured: "إعداد المزود غير مكتمل",
+    operational: "التشغيل",
+    credentialsSafety: "أمان بيانات الاعتماد",
+    credentialsSafetyDesc:
+      "يستخدم المركز مؤشرات readiness فقط؛ لا يقرأ أو يعرض Secret Key أو API Token أو Webhook Secret.",
+    apiKeysDesc:
+      "إدارة مفاتيح التكامل الخارجية بشكل مستقل عن مفاتيح بوابات الدفع.",
+    whatsappDesc:
+      "إدارة حالة واتساب والقنوات والرسائل من مركز التواصل الحالي.",
+    contractsDesc:
+      "مراجعة العقود المعتمدة ونقاط الربط المتاحة.",
+    paymentsDesc:
+      "فتح مركز مدفوعات اشتراكات المنصة وسجل العمليات.",
+    none: "—",
   },
   en: {
+    badge: "Integrations",
     title: "Integrations Center",
     subtitle:
-      "Mhamcloud integrations center for API keys, API contracts, and integration readiness in one place.",
-    badge: "Integrations",
+      "Monitor Mhamcloud subscription payment gateways, webhooks, and reconciliation without exposing provider credentials.",
     refresh: "Refresh",
-    exportExcel: "Export Excel",
-    print: "Print",
-    pdf: "PDF",
-    apiKeys: "API Keys",
-    contracts: "API Contracts",
-    readiness: "Release Readiness",
-    dashboard: "System dashboard",
-    reset: "Reset",
-    searchPlaceholder: "Search by key name, company, prefix, or scopes...",
-    all: "All",
-    sort: "Sort",
-    newest: "Newest",
-    oldest: "Oldest",
-    nameSort: "Name",
-    environmentSort: "Environment",
-    open: "Open",
-    totalKeys: "Total keys",
-    activeKeys: "Active keys",
-    liveKeys: "Live keys",
-    testKeys: "Test keys",
-    fromLiveApi: "From real system APIs",
-    actionsTitle: "Integrations module shortcuts",
-    actionsDesc: "Quick navigation between integrations pages using the platform management pattern.",
-    keysTitle: "Manage API keys",
-    keysDesc: "View integration keys, status, environment, and scopes.",
-    contractsTitle: "API contracts",
-    contractsDesc: "Review API contracts and available integration endpoints.",
-    readinessTitle: "Release readiness",
-    readinessDesc: "Check system and contract readiness before launch.",
-    dashboardTitle: "System dashboard",
-    dashboardDesc: "Return to the main system dashboard.",
-    tableTitle: "Latest API keys",
-    tableDesc:
-      "A quick view of the newest integration keys registered in Mhamcloud with environment, status, and scopes.",
-    keyName: "Key",
-    prefix: "Prefix",
-    company: "Company",
-    environment: "Environment",
-    scopes: "Scopes",
-    status: "Status",
-    lastUsedAt: "Last used",
-    createdAt: "Created at",
-    expiresAt: "Expires at",
-    active: "Active",
-    disabled: "Disabled",
-    revoked: "Revoked",
-    expired: "Expired",
-    live: "Live",
-    test: "Test",
-    unknown: "Unknown",
-    noDataTitle: "No API keys",
-    noDataDesc: "Integration keys will appear here when returned by the API.",
-    noResultsTitle: "No matching results",
-    noResultsDesc: "Change the search or filters to show other results.",
-    errorTitle: "Could not load integrations center",
-    errorDesc:
-      "Make sure you are signed in as a system user and the backend is running, then try again.",
-    tryAgain: "Try again",
-    exportEmpty: "There is no data to export.",
-    printEmpty: "There is no data to print.",
-    pdfHint: "Choose Save as PDF from the print dialog.",
-    reportTitle: "Mhamcloud Integrations Center Report",
-    generatedAt: "Generated at",
-    showing: "Showing",
-    of: "of",
-    rows: "rows",
     refreshed: "Integrations center refreshed.",
+    apiKeys: "API Keys",
+    apiContracts: "API Contracts",
+    whatsapp: "WhatsApp",
+    payments: "Platform Payments",
+    gatewaysTitle: "Payment Gateways",
+    gatewaysDesc:
+      "Actual configuration readiness for the three providers from the frozen Gateway Readiness contract.",
+    configured: "Configured",
+    notConfigured: "Not configured",
+    ready: "Ready",
+    notReady: "Not ready",
+    environment: "Environment",
+    checks: "Configuration checks",
+    required: "Required",
+    optional: "Optional",
+    available: "Available",
+    missing: "Missing",
+    noSecret: "No secret or provider credential value is displayed on this page.",
+    webhookTitle: "Webhook Status",
+    webhookDesc:
+      "Latest recorded gateway webhook events with processing status only.",
+    reconciliationTitle: "Reconciliation",
+    reconciliationDesc:
+      "Latest reconciliation records between Mhamcloud and payment providers.",
+    totalWebhook: "Total webhooks",
+    failedWebhook: "Failed webhooks",
+    pendingWebhook: "Pending",
+    totalReconciliation: "Reconciliations",
+    mismatches: "With mismatches",
+    gateway: "Gateway",
+    status: "Status",
+    event: "Event",
+    providerEvent: "Provider Event",
+    payment: "Payment",
+    createdAt: "Created at",
+    mismatchCount: "Mismatches",
+    search: "Search...",
+    all: "All",
+    noWebhook: "No webhook events are recorded.",
+    noReconciliation: "No reconciliation records are available.",
+    loadError: "Some integrations center data could not be loaded.",
+    tryAgain: "Try again",
+    partial:
+      "The center loaded partially. Some contracts returned no data or are unavailable for the current permission.",
+    providerConfigured: "Provider configuration complete",
+    providerNotConfigured: "Provider configuration incomplete",
+    operational: "Operations",
+    credentialsSafety: "Credential safety",
+    credentialsSafetyDesc:
+      "The center consumes readiness indicators only; it never reads or displays Secret Keys, API Tokens, or Webhook Secrets.",
+    apiKeysDesc:
+      "Manage external integration keys independently from payment provider credentials.",
+    whatsappDesc:
+      "Manage WhatsApp status, channels, and messages in the existing communications center.",
+    contractsDesc:
+      "Review approved API contracts and integration endpoints.",
+    paymentsDesc:
+      "Open the platform subscription payments center and operations register.",
+    none: "—",
   },
 } as const;
-function cn(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(" ");
-}
+
 function isRecord(value: unknown): value is ApiRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-function asRecord(value: unknown): ApiRecord {
+
+function record(value: unknown): ApiRecord {
   return isRecord(value) ? value : {};
 }
-function normalizeText(value: unknown, fallback = "") {
+
+function text(value: unknown, fallback = "") {
   if (value === null || value === undefined) return fallback;
   return String(value).trim() || fallback;
 }
-function toNumber(value: unknown, fallback = 0) {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const parsed = Number(value.replace(/,/g, ""));
-    return Number.isFinite(parsed) ? parsed : fallback;
+
+function bool(value: unknown, fallback = false) {
+  if (typeof value === "boolean") return value;
+
+  const normalized = text(value).toLowerCase();
+
+  if (["true", "1", "yes", "ready", "configured", "available", "ok"].includes(normalized)) {
+    return true;
   }
+
+  if (["false", "0", "no", "missing", "unavailable", "failed"].includes(normalized)) {
+    return false;
+  }
+
   return fallback;
 }
-function formatInteger(value: unknown) {
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(
-    Math.round(toNumber(value)),
-  );
+
+function numberValue(value: unknown, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
-function formatDate(value: string | null | undefined) {
-  if (!value) return "—";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return String(value).slice(0, 10);
-  return parsed.toISOString().slice(0, 10);
-}
-function escapeHtml(value: unknown) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-function getInitialLocale(): Locale {
+
+function getLocale(): Locale {
   if (typeof window === "undefined") return "ar";
   return window.localStorage.getItem("primey-locale") === "en" ? "en" : "ar";
 }
-function getApiBaseUrl() {
-  const envBase =
-    typeof process !== "undefined"
-      ? (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "").replace(
-          /\/+$/,
-          "",
-        )
-      : "";
-  if (envBase.endsWith("/api")) return envBase.slice(0, -4);
-  return envBase;
+
+function apiBase() {
+  const base = (
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    ""
+  ).replace(/\/+$/, "");
+
+  return base.endsWith("/api")
+    ? base.slice(0, -4)
+    : base;
 }
-function makeApiUrl(path: string, params?: URLSearchParams) {
+
+function apiUrl(path: string, params?: URLSearchParams) {
   const query = params?.toString();
-  return `${getApiBaseUrl()}${path}${query ? `?${query}` : ""}`;
+  return `${apiBase()}${path}${query ? `?${query}` : ""}`;
 }
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, {
+
+async function requestJson<T>(
+  path: string,
+  params?: URLSearchParams,
+): Promise<T> {
+  const response = await fetch(apiUrl(path, params), {
     method: "GET",
     credentials: "include",
     cache: "no-store",
@@ -308,800 +328,1146 @@ async function fetchJson<T>(url: string): Promise<T> {
       "X-Requested-With": "XMLHttpRequest",
     },
   });
-  const contentType = response.headers.get("content-type") || "";
-  const rawText = await response.text();
-  let payload: unknown = null;
-  if (rawText && contentType.includes("application/json")) {
+
+  const raw = await response.text();
+  let payload: unknown = {};
+
+  if (raw) {
     try {
-      payload = JSON.parse(rawText) as unknown;
+      payload = JSON.parse(raw) as unknown;
     } catch {
-      payload = null;
+      payload = {};
     }
   }
-  if (!response.ok) {
-    const record = asRecord(payload);
-    const message =
-      normalizeText(record.message) ||
-      normalizeText(record.detail) ||
-      normalizeText(record.error) ||
-      `Request failed with status ${response.status}`;
-    throw new Error(message);
+
+  const root = record(payload);
+
+  if (!response.ok || root.ok === false || root.success === false) {
+    throw new Error(
+      text(root.message) ||
+        text(root.detail) ||
+        text(root.error) ||
+        `Request failed with status ${response.status}`,
+    );
   }
-  return (payload || {}) as T;
+
+  return payload as T;
 }
-function extractArray(payload: unknown): unknown[] {
-  if (Array.isArray(payload)) return payload;
-  const record = asRecord(payload);
-  const dataRecord = asRecord(record.data);
-  const metaRecord = asRecord(record.meta);
-  if (Array.isArray(record.results)) return record.results;
-  if (Array.isArray(record.items)) return record.items;
-  if (Array.isArray(record.records)) return record.records;
-  if (Array.isArray(record.data)) return record.data;
-  if (Array.isArray(dataRecord.results)) return dataRecord.results;
-  if (Array.isArray(dataRecord.items)) return dataRecord.items;
-  if (Array.isArray(dataRecord.records)) return dataRecord.records;
-  if (Array.isArray(metaRecord.results)) return metaRecord.results;
-  return [];
-}
-function extractCount(payload: unknown) {
-  const record = asRecord(payload);
-  const dataRecord = asRecord(record.data);
-  const metaRecord = asRecord(record.meta);
-  const arrayCount = extractArray(payload).length;
-  return toNumber(
-    record.count ??
-      record.total ??
-      record.total_count ??
-      dataRecord.count ??
-      dataRecord.total ??
-      dataRecord.total_count ??
-      metaRecord.count ??
-      metaRecord.total ??
-      metaRecord.total_count,
-    arrayCount,
-  );
-}
-function normalizeNestedName(value: unknown, keys: string[] = ["name", "title", "full_name"]) {
-  if (typeof value === "string") return value;
-  const record = asRecord(value);
+
+function arrayFrom(
+  value: unknown,
+  keys: string[],
+): unknown[] {
+  if (Array.isArray(value)) return value;
+
+  const root = record(value);
+
   for (const key of keys) {
-    const text = normalizeText(record[key]);
-    if (text) return text;
+    if (Array.isArray(root[key])) {
+      return root[key] as unknown[];
+    }
   }
-  return "";
-}
-function normalizeStatus(value: unknown) {
-  if (typeof value === "boolean") return value ? "active" : "disabled";
-  const text = normalizeText(value, "active").toLowerCase();
-  if (text === "true" || text === "enabled") return "active";
-  if (text === "false") return "disabled";
-  if (text === "inactive") return "disabled";
-  if (text === "disable") return "disabled";
-  if (text === "revoke") return "revoked";
-  if (text === "expire") return "expired";
-  return text;
-}
-function normalizeEnvironment(value: unknown) {
-  const text = normalizeText(value, "test").toLowerCase();
-  if (text === "production") return "live";
-  if (text === "prod") return "live";
-  if (text === "sandbox") return "test";
-  return text === "live" ? "live" : "test";
-}
-function normalizeScopes(value: unknown) {
-  if (Array.isArray(value)) {
-    return value.map((item) => normalizeText(item)).filter(Boolean);
+
+  const data = record(root.data);
+
+  for (const key of keys) {
+    if (Array.isArray(data[key])) {
+      return data[key] as unknown[];
+    }
   }
-  if (typeof value === "string") {
-    return value
-      .split(/[,\n]/g)
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
+
   return [];
 }
-function normalizeApiKey(value: unknown): IntegrationKeyRecord {
-  const record = asRecord(value);
-  const company = record.company || record.company_ref || record.company_detail || record.owner_company;
+
+function normalizeCheck(value: unknown): GatewayCheck {
+  const row = record(value);
+
   return {
-    id: normalizeText(record.id || record.uuid || record.pk),
-    name: normalizeText(record.name || record.key_name || record.label || record.description, "—"),
-    keyPrefix: normalizeText(record.key_prefix || record.prefix || record.public_prefix || record.masked_key, "—"),
-    status: normalizeStatus(record.effective_status ?? record.status ?? record.state ?? record.is_active),
-    environment: normalizeEnvironment(record.environment ?? record.env ?? record.mode),
-    company:
-      normalizeText(record.company_name) ||
-      normalizeNestedName(company, ["name", "company_name", "title", "code"]) ||
-      "—",
-    scopes: normalizeScopes(record.scopes || record.permissions || record.allowed_scopes),
-    lastUsedAt: normalizeText(record.last_used_at || record.last_used || record.used_at) || null,
-    createdAt: normalizeText(record.created_at || record.created || record.inserted_at) || null,
-    expiresAt: normalizeText(record.expires_at || record.expired_at || record.valid_until) || null,
+    name:
+      text(row.name) ||
+      text(row.key) ||
+      text(row.check) ||
+      text(row.label) ||
+      "configuration",
+    configured: bool(
+      row.configured ??
+        row.available ??
+        row.present ??
+        row.ok ??
+        row.ready,
+    ),
+    required:
+      row.required === undefined
+        ? true
+        : bool(row.required, true),
+    message:
+      text(row.message) ||
+      text(row.description) ||
+      "",
   };
 }
-function getStatusLabel(value: string, locale: Locale) {
-  const normalized = value.toLowerCase().replace(/[^a-z_]/g, "") as keyof (typeof translations)["ar"];
-  const fallback = normalizeText(value, translations[locale].unknown);
-  return normalizeText(translations[locale][normalized], fallback);
+
+function normalizeGateway(value: unknown): GatewayReadiness {
+  const row = record(value);
+  const checks = arrayFrom(row.checks, ["checks"]).map(normalizeCheck);
+
+  const configured =
+    row.configured !== undefined
+      ? bool(row.configured)
+      : checks
+          .filter((item) => item.required)
+          .every((item) => item.configured);
+
+  const ready =
+    row.ready !== undefined
+      ? bool(row.ready)
+      : row.is_ready !== undefined
+        ? bool(row.is_ready)
+        : configured;
+
+  return {
+    gateway: text(
+      row.gateway ??
+        row.provider ??
+        row.name,
+      "UNKNOWN",
+    ).toUpperCase(),
+    configured,
+    ready,
+    environment: text(
+      row.environment ??
+        row.mode ??
+        row.env,
+      "—",
+    ).toUpperCase(),
+    checks,
+  };
 }
-function getEnvironmentLabel(value: string, locale: Locale) {
-  const normalized = value.toLowerCase().replace(/[^a-z_]/g, "") as keyof (typeof translations)["ar"];
-  const fallback = normalizeText(value, translations[locale].unknown);
-  return normalizeText(translations[locale][normalized], fallback);
+
+function normalizeWebhook(value: unknown): WebhookEvent {
+  const row = record(value);
+
+  return {
+    id: text(row.id),
+    gateway: text(row.gateway, "—").toUpperCase(),
+    status: text(row.status, "UNKNOWN").toUpperCase(),
+    eventType:
+      text(row.event_type) ||
+      text(row.type) ||
+      "—",
+    providerEventId:
+      text(row.provider_event_id) ||
+      text(row.external_event_id) ||
+      "—",
+    providerPaymentId:
+      text(row.provider_payment_id) ||
+      text(row.external_payment_id) ||
+      "—",
+    createdAt:
+      text(row.created_at) || null,
+    processedAt:
+      text(row.processed_at) || null,
+    error:
+      text(row.error_message) ||
+      text(row.last_error) ||
+      text(row.failure_reason),
+  };
 }
-function getStatusClass(value: string) {
-  const normalized = value.toLowerCase();
-  if (normalized === "active") {
+
+function normalizeReconciliation(value: unknown): ReconciliationRow {
+  const row = record(value);
+  const mismatches = row.mismatches;
+
+  return {
+    id: text(row.id),
+    gateway: text(row.gateway, "—").toUpperCase(),
+    status: text(
+      row.status ??
+        row.result_status ??
+        row.reconciliation_status,
+      "UNKNOWN",
+    ).toUpperCase(),
+    paymentId:
+      text(row.payment_id) ||
+      text(record(row.payment).id) ||
+      "—",
+    providerPaymentId:
+      text(row.provider_payment_id) ||
+      "—",
+    mismatchCount:
+      Array.isArray(mismatches)
+        ? mismatches.length
+        : numberValue(
+            row.mismatch_count ??
+              row.discrepancy_count,
+            0,
+          ),
+    createdAt:
+      text(row.created_at) || null,
+  };
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value.slice(0, 16).replace("T", " ");
+  }
+
+  const pad = (n: number) =>
+    String(n).padStart(2, "0");
+
+  return `${date.getFullYear()}-${pad(
+    date.getMonth() + 1,
+  )}-${pad(date.getDate())} ${pad(
+    date.getHours(),
+  )}:${pad(date.getMinutes())}`;
+}
+
+function statusClass(status: string) {
+  const value = status.toUpperCase();
+
+  if (
+    [
+      "PROCESSED",
+      "MATCHED",
+      "SUCCESS",
+      "COMPLETED",
+      "READY",
+      "SENT",
+    ].includes(value)
+  ) {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
-  if (normalized === "disabled" || normalized === "expired") {
-    return "border-amber-200 bg-amber-50 text-amber-700";
-  }
-  if (normalized === "revoked") {
+
+  if (
+    [
+      "FAILED",
+      "ERROR",
+      "MISMATCH",
+      "UNMATCHED",
+      "CONFLICT",
+    ].includes(value)
+  ) {
     return "border-rose-200 bg-rose-50 text-rose-700";
   }
-  return "border-slate-200 bg-slate-50 text-slate-700";
+
+  if (
+    [
+      "RECEIVED",
+      "PENDING",
+      "PROCESSING",
+      "PARTIAL",
+    ].includes(value)
+  ) {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+
+  if (value === "IGNORED") {
+    return "border-slate-200 bg-slate-50 text-slate-700";
+  }
+
+  return "border-blue-200 bg-blue-50 text-blue-700";
 }
-function getEnvironmentClass(value: string) {
-  return value.toLowerCase() === "live"
-    ? "border-sky-200 bg-sky-50 text-sky-700"
-    : "border-slate-200 bg-slate-50 text-slate-700";
-}
-function rowDateValue(value: string | null | undefined) {
-  if (!value) return 0;
-  const parsed = new Date(value).getTime();
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-function PillBadge({
+
+function StateBadge({
   value,
-  locale,
-  type,
 }: {
   value: string;
-  locale: Locale;
-  type: "status" | "environment";
 }) {
   return (
     <Badge
       variant="outline"
-      className={cn(
-        "whitespace-nowrap rounded-full px-2.5 py-1 text-xs",
-        type === "status" ? getStatusClass(value) : getEnvironmentClass(value),
-      )}
+      className={`rounded-full px-2.5 py-1 text-xs ${statusClass(value)}`}
     >
-      {type === "status" ? getStatusLabel(value, locale) : getEnvironmentLabel(value, locale)}
+      {value || "UNKNOWN"}
     </Badge>
   );
 }
-function KpiCard({
+
+function SummaryCard({
   title,
   value,
-  description,
   icon: Icon,
 }: {
   title: string;
   value: number;
-  description: string;
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <Card className="overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
-        <div className="min-w-0">
-          <CardDescription className="truncate text-sm">{title}</CardDescription>
-          <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
-            {formatInteger(value)}
-          </CardTitle>
+    <Card className="rounded-xl border bg-card shadow-none">
+      <CardContent className="flex min-h-[122px] items-start justify-between gap-4 p-5">
+        <div>
+          <p className="text-sm text-muted-foreground">
+            {title}
+          </p>
+          <p className="mt-3 text-2xl font-bold tabular-nums">
+            {new Intl.NumberFormat("en-US").format(value)}
+          </p>
         </div>
-        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
+
+        <span className="flex h-10 w-10 items-center justify-center rounded-lg border bg-muted/20 text-muted-foreground">
           <Icon className="h-5 w-5" />
         </span>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
       </CardContent>
     </Card>
   );
 }
-function QuickActionCard({ action }: { action: QuickAction }) {
-  const Icon = action.icon;
+
+function LoadingState() {
   return (
-    <Card className="group rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <Link href={action.href} className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
-          <div className="min-w-0">
-            <CardTitle className="text-base">{action.title}</CardTitle>
-            <CardDescription className="mt-2 line-clamp-2">{action.description}</CardDescription>
-          </div>
-          <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
-            <Icon className="h-5 w-5" />
-          </span>
-        </CardHeader>
-      </Link>
-    </Card>
-  );
-}
-function IntegrationsOverviewSkeleton() {
-  return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-      <div className="w-full space-y-6">
-        <div className="rounded-3xl border bg-card p-6 shadow-sm">
-          <Skeleton className="h-5 w-40" />
-          <Skeleton className="mt-3 h-8 w-72" />
-          <Skeleton className="mt-3 h-4 w-full max-w-3xl" />
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <Card key={index} className="rounded-2xl">
-              <CardHeader>
-                <Skeleton className="h-4 w-28" />
-                <Skeleton className="h-8 w-20" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-4 w-full" />
-              </CardContent>
-            </Card>
+    <main className="min-h-screen bg-background px-4 py-6 sm:px-6 lg:px-8">
+      <div className="space-y-6">
+        <Skeleton className="h-32 w-full rounded-xl" />
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <Skeleton
+              key={index}
+              className="h-72 rounded-xl"
+            />
           ))}
         </div>
-        <Card className="rounded-2xl">
-          <CardHeader>
-            <Skeleton className="h-6 w-52" />
-            <Skeleton className="h-4 w-96 max-w-full" />
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-80 w-full" />
-          </CardContent>
-        </Card>
+
+        <Skeleton className="h-80 w-full rounded-xl" />
       </div>
     </main>
   );
 }
-function EmptyState({
-  title,
-  description,
-  showReset,
-  resetLabel,
-  onReset,
-}: {
-  title: string;
-  description: string;
-  showReset?: boolean;
-  resetLabel: string;
-  onReset: () => void;
-}) {
-  return (
-    <div className="flex min-h-64 flex-col items-center justify-center gap-3 px-6 py-10 text-center">
-      <div className="rounded-full bg-muted p-4 text-muted-foreground">
-        <Search className="h-6 w-6" />
-      </div>
-      <div>
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-      </div>
-      {showReset ? (
-        <Button variant="outline" size="sm" onClick={onReset} className="rounded-lg">
-          <RotateCcw className="h-4 w-4" />
-          {resetLabel}
-        </Button>
-      ) : null}
-    </div>
-  );
-}
+
 export default function SystemIntegrationsPage() {
-  const [locale, setLocale] = React.useState<Locale>("ar");
-  const [keys, setKeys] = React.useState<IntegrationKeyRecord[]>([]);
-  const [apiTotal, setApiTotal] = React.useState(0);
-  const [loading, setLoading] = React.useState(true);
-  const [refreshing, setRefreshing] = React.useState(false);
-  const [apiWarning, setApiWarning] = React.useState("");
-  const [search, setSearch] = React.useState("");
-  const [status, setStatus] = React.useState<StatusFilter>("all");
-  const [environment, setEnvironment] = React.useState<EnvironmentFilter>("all");
-  const [sort, setSort] = React.useState<SortKey>("newest");
+  const [locale, setLocale] =
+    React.useState<Locale>("ar");
+
+  const [gateways, setGateways] =
+    React.useState<GatewayReadiness[]>([]);
+
+  const [webhooks, setWebhooks] =
+    React.useState<WebhookEvent[]>([]);
+
+  const [reconciliations, setReconciliations] =
+    React.useState<ReconciliationRow[]>([]);
+
+  const [loading, setLoading] =
+    React.useState(true);
+
+  const [refreshing, setRefreshing] =
+    React.useState(false);
+
+  const [errors, setErrors] =
+    React.useState<string[]>([]);
+
+  const [search, setSearch] =
+    React.useState("");
+
+  const [gatewayFilter, setGatewayFilter] =
+    React.useState<GatewayFilter>("all");
+
   const t = translations[locale];
   const dir = locale === "ar" ? "rtl" : "ltr";
-  const alignClass = locale === "ar" ? "text-right" : "text-left";
+
   React.useEffect(() => {
     const applyLocale = () => {
-      const nextLocale = getInitialLocale();
-      setLocale(nextLocale);
-      document.documentElement.lang = nextLocale;
-      document.documentElement.dir = nextLocale === "ar" ? "rtl" : "ltr";
-      document.body.dir = nextLocale === "ar" ? "rtl" : "ltr";
+      const next = getLocale();
+      setLocale(next);
+
+      document.documentElement.lang = next;
+      document.documentElement.dir =
+        next === "ar" ? "rtl" : "ltr";
+
+      document.body.dir =
+        next === "ar" ? "rtl" : "ltr";
     };
+
     applyLocale();
-    window.addEventListener("storage", applyLocale);
-    window.addEventListener("primey-locale-changed", applyLocale);
+
+    window.addEventListener(
+      "storage",
+      applyLocale,
+    );
+
+    window.addEventListener(
+      "primey-locale-changed",
+      applyLocale,
+    );
+
     return () => {
-      window.removeEventListener("storage", applyLocale);
-      window.removeEventListener("primey-locale-changed", applyLocale);
+      window.removeEventListener(
+        "storage",
+        applyLocale,
+      );
+
+      window.removeEventListener(
+        "primey-locale-changed",
+        applyLocale,
+      );
     };
   }, []);
-  const loadIntegrations = React.useCallback(
-    async ({ silent = false }: { silent?: boolean } = {}) => {
-      try {
-        if (!silent) setLoading(true);
-        setRefreshing(true);
-        setApiWarning("");
-        const payload = await fetchJson<unknown>(makeApiUrl(API_PATHS.systemIntegrationApiKeys.list));
-        const rows = extractArray(payload).map(normalizeApiKey);
-        setKeys(rows);
-        setApiTotal(extractCount(payload));
-        if (silent) toast.success(t.refreshed);
-      } catch (caughtError) {
-        const message = caughtError instanceof Error ? caughtError.message : t.errorDesc;
-        setApiWarning(message);
-        setKeys([]);
-        setApiTotal(0);
-        if (silent) toast.error(message);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
+
+  const loadData = React.useCallback(
+    async ({
+      silent = false,
+    }: {
+      silent?: boolean;
+    } = {}) => {
+      if (!silent) {
+        setLoading(true);
+      }
+
+      setRefreshing(true);
+
+      const nextErrors: string[] = [];
+
+      const [
+        readinessResult,
+        webhookResult,
+        reconciliationResult,
+      ] = await Promise.allSettled([
+        requestJson<unknown>(
+          API_PATHS.systemPaymentIntegrations.readiness,
+        ),
+        requestJson<unknown>(
+          API_PATHS.systemPaymentIntegrations.webhookEvents,
+          new URLSearchParams({
+            page: "1",
+            page_size: "25",
+          }),
+        ),
+        requestJson<unknown>(
+          API_PATHS.systemPaymentIntegrations.reconciliations,
+          new URLSearchParams({
+            page: "1",
+            page_size: "25",
+          }),
+        ),
+      ]);
+
+      if (readinessResult.status === "fulfilled") {
+        const root = record(readinessResult.value);
+        const data = record(root.data);
+
+        const rows = arrayFrom(
+          data.gateways ?? readinessResult.value,
+          ["gateways", "results", "items"],
+        ).map(normalizeGateway);
+
+        setGateways(rows);
+      } else {
+        setGateways([]);
+        nextErrors.push(
+          readinessResult.reason instanceof Error
+            ? readinessResult.reason.message
+            : t.loadError,
+        );
+      }
+
+      if (webhookResult.status === "fulfilled") {
+        const rows = arrayFrom(
+          webhookResult.value,
+          ["events", "results", "items"],
+        ).map(normalizeWebhook);
+
+        setWebhooks(rows);
+      } else {
+        setWebhooks([]);
+        nextErrors.push(
+          webhookResult.reason instanceof Error
+            ? webhookResult.reason.message
+            : t.loadError,
+        );
+      }
+
+      if (
+        reconciliationResult.status === "fulfilled"
+      ) {
+        const rows = arrayFrom(
+          reconciliationResult.value,
+          [
+            "reconciliations",
+            "results",
+            "items",
+          ],
+        ).map(normalizeReconciliation);
+
+        setReconciliations(rows);
+      } else {
+        setReconciliations([]);
+        nextErrors.push(
+          reconciliationResult.reason instanceof Error
+            ? reconciliationResult.reason.message
+            : t.loadError,
+        );
+      }
+
+      setErrors(
+        Array.from(new Set(nextErrors)),
+      );
+
+      setLoading(false);
+      setRefreshing(false);
+
+      if (silent) {
+        if (nextErrors.length) {
+          toast.warning(t.partial);
+        } else {
+          toast.success(t.refreshed);
+        }
       }
     },
-    [t.errorDesc, t.refreshed],
+    [t.loadError, t.partial, t.refreshed],
   );
+
   React.useEffect(() => {
-    void loadIntegrations();
-  }, [loadIntegrations]);
-  const resetFilters = React.useCallback(() => {
-    setSearch("");
-    setStatus("all");
-    setEnvironment("all");
-    setSort("newest");
-  }, []);
-  const filteredKeys = React.useMemo(() => {
+    void loadData();
+  }, [loadData]);
+
+  const summary = React.useMemo<OperationalSummary>(
+    () => ({
+      webhookTotal: webhooks.length,
+      webhookFailed: webhooks.filter((row) =>
+        ["FAILED", "ERROR"].includes(row.status),
+      ).length,
+      webhookPending: webhooks.filter((row) =>
+        ["RECEIVED", "PENDING", "PROCESSING"].includes(
+          row.status,
+        ),
+      ).length,
+      reconciliationTotal: reconciliations.length,
+      reconciliationMismatch: reconciliations.filter(
+        (row) =>
+          row.mismatchCount > 0 ||
+          ["MISMATCH", "UNMATCHED", "CONFLICT"].includes(
+            row.status,
+          ),
+      ).length,
+    }),
+    [reconciliations, webhooks],
+  );
+
+  const filteredWebhooks = React.useMemo(() => {
     const needle = search.trim().toLowerCase();
-    const rows = keys.filter((key) => {
-      const haystack = [
-        key.name,
-        key.keyPrefix,
-        key.company,
-        key.environment,
-        key.status,
-        key.scopes.join(" "),
+
+    return webhooks.filter((row) => {
+      if (
+        gatewayFilter !== "all" &&
+        row.gateway !== gatewayFilter
+      ) {
+        return false;
+      }
+
+      if (!needle) return true;
+
+      return [
+        row.gateway,
+        row.status,
+        row.eventType,
+        row.providerEventId,
+        row.providerPaymentId,
+        row.error,
       ]
         .join(" ")
-        .toLowerCase();
-      if (needle && !haystack.includes(needle)) return false;
-      if (status !== "all" && key.status !== status) return false;
-      if (environment !== "all" && key.environment !== environment) return false;
-      return true;
+        .toLowerCase()
+        .includes(needle);
     });
-    return [...rows].sort((a, b) => {
-      if (sort === "oldest") return rowDateValue(a.createdAt) - rowDateValue(b.createdAt);
-      if (sort === "name") return a.name.localeCompare(b.name);
-      if (sort === "environment") return a.environment.localeCompare(b.environment);
-      return rowDateValue(b.createdAt) - rowDateValue(a.createdAt);
-    });
-  }, [environment, keys, search, sort, status]);
-  const stats = React.useMemo(() => {
-    return {
-      total: apiTotal || keys.length,
-      active: keys.filter((key) => key.status === "active").length,
-      live: keys.filter((key) => key.environment === "live").length,
-      test: keys.filter((key) => key.environment === "test").length,
-    };
-  }, [apiTotal, keys]);
-  const quickActions: QuickAction[] = [
-    {
-      title: t.keysTitle,
-      description: t.keysDesc,
-      href: "/system/integrations/api-keys",
-      icon: KeyRound,
-    },
-    {
-      title: t.contractsTitle,
-      description: t.contractsDesc,
-      href: "/system/integrations/api-contracts",
-      icon: FileText,
-    },
-    {
-      title: t.readinessTitle,
-      description: t.readinessDesc,
-      href: "/system/release-readiness",
-      icon: ShieldCheck,
-    },
-    {
-      title: t.dashboardTitle,
-      description: t.dashboardDesc,
-      href: "/system",
-      icon: LayoutDashboard,
-    },
-  ];
-  const hasFilters = Boolean(search || status !== "all" || environment !== "all" || sort !== "newest");
-  const previewRows = filteredKeys.slice(0, 8);
-  function buildExportRows() {
-    return filteredKeys.map((key) => [
-      key.name,
-      key.keyPrefix,
-      key.company,
-      getEnvironmentLabel(key.environment, locale),
-      getStatusLabel(key.status, locale),
-      key.scopes.length ? key.scopes.join(", ") : "—",
-      formatDate(key.lastUsedAt),
-      formatDate(key.createdAt),
-      formatDate(key.expiresAt),
+  }, [gatewayFilter, search, webhooks]);
+
+  const filteredReconciliations =
+    React.useMemo(() => {
+      const needle =
+        search.trim().toLowerCase();
+
+      return reconciliations.filter((row) => {
+        if (
+          gatewayFilter !== "all" &&
+          row.gateway !== gatewayFilter
+        ) {
+          return false;
+        }
+
+        if (!needle) return true;
+
+        return [
+          row.gateway,
+          row.status,
+          row.paymentId,
+          row.providerPaymentId,
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(needle);
+      });
+    }, [
+      gatewayFilter,
+      reconciliations,
+      search,
     ]);
+
+  const resetFilters = () => {
+    setSearch("");
+    setGatewayFilter("all");
+  };
+
+  if (loading) {
+    return <LoadingState />;
   }
-  function buildTableHtml() {
-    const headers = [
-      t.keyName,
-      t.prefix,
-      t.company,
-      t.environment,
-      t.status,
-      t.scopes,
-      t.lastUsedAt,
-      t.createdAt,
-      t.expiresAt,
-    ];
-    const rows = buildExportRows();
-    return `
-      <table border="1" cellspacing="0" cellpadding="6">
-        <thead>
-          <tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>
-        </thead>
-        <tbody>
-          ${rows
-            .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
-            .join("")}
-        </tbody>
-      </table>
-    `;
-  }
-  function exportExcel() {
-    const rows = buildExportRows();
-    if (!rows.length) {
-      toast.error(t.exportEmpty);
-      return;
-    }
-    const html = `
-      <html dir="${dir}" lang="${locale}">
-        <head><meta charset="utf-8" /></head>
-        <body>
-          <h1>${escapeHtml(t.reportTitle)}</h1>
-          <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString())}</p>
-          ${buildTableHtml()}
-        </body>
-      </html>
-    `;
-    const blob = new Blob([`\ufeff${html}`], {
-      type: "application/vnd.ms-excel;charset=utf-8;",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `Mhamcloud-system-integrations-overview-${new Date().toISOString().slice(0, 10)}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-  }
-  function openPrintWindow(mode: "print" | "pdf") {
-    const rows = buildExportRows();
-    if (!rows.length) {
-      toast.error(t.printEmpty);
-      return;
-    }
-    if (mode === "pdf") {
-      toast.info(t.pdfHint);
-    }
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1200,height=800");
-    if (!printWindow) return;
-    printWindow.document.write(`
-      <!doctype html>
-      <html dir="${dir}" lang="${locale}">
-        <head>
-          <meta charset="utf-8" />
-          <title>${escapeHtml(t.reportTitle)}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 24px; color: #0f172a; }
-            h1 { margin: 0 0 8px; font-size: 24px; }
-            p { color: #64748b; }
-            table { width: 100%; border-collapse: collapse; margin-top: 18px; }
-            th, td {
-              border: 1px solid #cbd5e1;
-              padding: 8px;
-              font-size: 12px;
-              text-align: ${dir === "rtl" ? "right" : "left"};
-              vertical-align: top;
-            }
-            th { background: #f1f5f9; font-weight: 700; }
-          </style>
-        </head>
-        <body>
-          <h1>${escapeHtml(t.reportTitle)}</h1>
-          <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString())}</p>
-          ${buildTableHtml()}
-          <script>window.onload = function () { window.print(); };</script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-  }
-  if (loading) return <IntegrationsOverviewSkeleton />;
+
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main
+      dir={dir}
+      className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8"
+    >
       <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
-          <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-              <div className="max-w-4xl">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  {t.badge}
-                </div>
-                <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{t.title}</h1>
-                <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">{t.subtitle}</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="outline"
-                  className="rounded-xl bg-background"
-                  onClick={() => void loadIntegrations({ silent: true })}
-                  disabled={refreshing}
-                >
-                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  {t.refresh}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
-                  <FileSpreadsheet className="h-4 w-4" />
-                  {t.exportExcel}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("print")}>
-                  <Printer className="h-4 w-4" />
-                  {t.print}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("pdf")}>
-                  <FileText className="h-4 w-4" />
-                  {t.pdf}
-                </Button>
-                <Button asChild className="rounded-xl">
-                  <Link href="/system/integrations/api-keys">
-                    <KeyRound className="h-4 w-4" />
-                    {t.apiKeys}
-                  </Link>
-                </Button>
-              </div>
+        <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-4xl">
+            <Badge
+              variant="outline"
+              className="mb-3 rounded-full bg-background"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {t.badge}
+            </Badge>
+
+            <h1 className="text-3xl font-bold tracking-tight">
+              {t.title}
+            </h1>
+
+            <p className="mt-3 text-sm leading-7 text-muted-foreground">
+              {t.subtitle}
+            </p>
+
+            <div className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{t.noSecret}</span>
             </div>
           </div>
-        </section>
-        {apiWarning ? (
-          <Card className="rounded-2xl border-amber-200 bg-amber-50/70 shadow-sm">
-            <CardContent className="flex flex-col gap-3 p-4 text-amber-800 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-3">
-                <span className="rounded-full bg-amber-100 p-2">
-                  <TriangleAlert className="h-4 w-4" />
-                </span>
-                <div>
-                  <p className="text-sm font-semibold">{t.errorTitle}</p>
-                  <p className="mt-1 text-xs text-amber-700">{apiWarning}</p>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9"
+              onClick={() =>
+                void loadData({ silent: true })
+              }
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+
+              {t.refresh}
+            </Button>
+
+            <Button
+              asChild
+              variant="outline"
+              className="h-9"
+            >
+              <Link href="/system/integrations/api-keys">
+                <KeyRound className="h-4 w-4" />
+                {t.apiKeys}
+              </Link>
+            </Button>
+
+            <Button
+              asChild
+              variant="outline"
+              className="h-9"
+            >
+              <Link href="/system/integrations/api-contracts">
+                <FileKey2 className="h-4 w-4" />
+                {t.apiContracts}
+              </Link>
+            </Button>
+
+            <Button
+              asChild
+              variant="outline"
+              className="h-9"
+            >
+              <Link href="/system/whatsapp">
+                <MessageCircle className="h-4 w-4" />
+                {t.whatsapp}
+              </Link>
+            </Button>
+
+            <Button
+              asChild
+              className="h-9"
+            >
+              <Link href="/system/payments">
+                <PlugZap className="h-4 w-4" />
+                {t.payments}
+              </Link>
+            </Button>
+          </div>
+        </header>
+
+        {errors.length ? (
+          <Card className="border-amber-200 bg-amber-50 shadow-none">
+            <CardContent className="flex items-start gap-3 p-4 text-amber-900">
+              <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0" />
+
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold">
+                  {t.loadError}
+                </p>
+
+                <p className="mt-1 text-sm">
+                  {t.partial}
+                </p>
+
+                <div className="mt-2 space-y-1 text-xs">
+                  {errors.map((item) => (
+                    <p key={item}>
+                      • {item}
+                    </p>
+                  ))}
                 </div>
               </div>
+
               <Button
-                variant="outline"
+                type="button"
                 size="sm"
-                className="w-fit rounded-xl bg-background"
-                onClick={() => void loadIntegrations({ silent: true })}
-                disabled={refreshing}
+                variant="outline"
+                onClick={() =>
+                  void loadData({ silent: true })
+                }
               >
-                {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 {t.tryAgain}
               </Button>
             </CardContent>
           </Card>
-        ) : null}        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard title={t.totalKeys} value={stats.total} description={t.fromLiveApi} icon={KeyRound} />
-          <KpiCard title={t.activeKeys} value={stats.active} description={t.fromLiveApi} icon={ShieldCheck} />
-          <KpiCard title={t.liveKeys} value={stats.live} description={t.fromLiveApi} icon={PlugZap} />
-          <KpiCard title={t.testKeys} value={stats.test} description={t.fromLiveApi} icon={FileText} />
-        </div>
-        <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
-            <CardTitle>{t.actionsTitle}</CardTitle>
-            <CardDescription>{t.actionsDesc}</CardDescription>
+        ) : null}
+
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-lg font-bold">
+              {t.gatewaysTitle}
+            </h2>
+
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t.gatewaysDesc}
+            </p>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            {gateways.length ? (
+              gateways.map((gateway) => (
+                <Card
+                  key={gateway.gateway}
+                  className="rounded-xl border bg-card shadow-none"
+                >
+                  <CardHeader className="border-b">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <CardTitle className="text-lg">
+                          {gateway.gateway}
+                        </CardTitle>
+
+                        <CardDescription className="mt-1">
+                          {gateway.configured
+                            ? t.providerConfigured
+                            : t.providerNotConfigured}
+                        </CardDescription>
+                      </div>
+
+                      {gateway.ready ? (
+                        <CheckCircle2 className="h-6 w-6 text-emerald-600" />
+                      ) : (
+                        <AlertTriangle className="h-6 w-6 text-amber-600" />
+                      )}
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="space-y-4 p-5">
+                    <div className="flex flex-wrap gap-2">
+                      <StateBadge
+                        value={
+                          gateway.configured
+                            ? t.configured
+                            : t.notConfigured
+                        }
+                      />
+
+                      <StateBadge
+                        value={
+                          gateway.ready
+                            ? t.ready
+                            : t.notReady
+                        }
+                      />
+
+                      {gateway.environment !== "—" ? (
+                        <Badge
+                          variant="outline"
+                          className="rounded-full"
+                        >
+                          {t.environment}:{" "}
+                          {gateway.environment}
+                        </Badge>
+                      ) : null}
+                    </div>
+
+                    <div>
+                      <p className="mb-2 text-xs font-semibold text-muted-foreground">
+                        {t.checks}
+                      </p>
+
+                      <div className="space-y-2">
+                        {gateway.checks.length ? (
+                          gateway.checks.map(
+                            (check, index) => (
+                              <div
+                                key={`${check.name}-${index}`}
+                                className="flex items-start justify-between gap-3 rounded-lg border bg-muted/10 px-3 py-2.5"
+                              >
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-medium">
+                                    {check.name}
+                                  </p>
+
+                                  {check.message ? (
+                                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                                      {check.message}
+                                    </p>
+                                  ) : null}
+
+                                  <p className="mt-1 text-[11px] text-muted-foreground">
+                                    {check.required
+                                      ? t.required
+                                      : t.optional}
+                                  </p>
+                                </div>
+
+                                {check.configured ? (
+                                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                                ) : (
+                                  <XCircle className="h-4 w-4 shrink-0 text-rose-600" />
+                                )}
+                              </div>
+                            ),
+                          )
+                        ) : (
+                          <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                            {t.none}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <Card className="lg:col-span-3 rounded-xl border border-dashed shadow-none">
+                <CardContent className="flex min-h-44 items-center justify-center text-sm text-muted-foreground">
+                  {t.none}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <SummaryCard
+            title={t.totalWebhook}
+            value={summary.webhookTotal}
+            icon={Webhook}
+          />
+
+          <SummaryCard
+            title={t.failedWebhook}
+            value={summary.webhookFailed}
+            icon={XCircle}
+          />
+
+          <SummaryCard
+            title={t.pendingWebhook}
+            value={summary.webhookPending}
+            icon={AlertTriangle}
+          />
+
+          <SummaryCard
+            title={t.totalReconciliation}
+            value={summary.reconciliationTotal}
+            icon={Workflow}
+          />
+
+          <SummaryCard
+            title={t.mismatches}
+            value={summary.reconciliationMismatch}
+            icon={CircleSlash2}
+          />
+        </section>
+
+        <Card className="rounded-xl shadow-none">
+          <CardHeader className="border-b">
+            <CardTitle>
+              {t.operational}
+            </CardTitle>
+
+            <CardDescription>
+              {t.webhookDesc} {t.reconciliationDesc}
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {quickActions.map((action) => (
-                <QuickActionCard key={action.href} action={action} />
-              ))}
+
+          <CardContent className="space-y-4 p-5">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto]">
+              <div className="relative">
+                <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
+                <Input
+                  value={search}
+                  onChange={(event) =>
+                    setSearch(event.target.value)
+                  }
+                  placeholder={t.search}
+                  className="h-10 ps-9"
+                />
+              </div>
+
+              <Select
+                value={gatewayFilter}
+                onValueChange={(value) =>
+                  setGatewayFilter(
+                    value as GatewayFilter,
+                  )
+                }
+              >
+                <SelectTrigger className="h-10">
+                  <SelectValue />
+                </SelectTrigger>
+
+                <SelectContent>
+                  <SelectItem value="all">
+                    {t.all}
+                  </SelectItem>
+
+                  <SelectItem value="MOYASAR">
+                    MOYASAR
+                  </SelectItem>
+
+                  <SelectItem value="TAMARA">
+                    TAMARA
+                  </SelectItem>
+
+                  <SelectItem value="TABBY">
+                    TABBY
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10"
+                onClick={resetFilters}
+              >
+                <RotateCcw className="h-4 w-4" />
+                {t.all}
+              </Button>
+            </div>
+
+            <div className="grid gap-6 xl:grid-cols-2">
+              <Card className="rounded-xl border shadow-none">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Webhook className="h-4 w-4" />
+                    {t.webhookTitle}
+                  </CardTitle>
+
+                  <CardDescription>
+                    {t.webhookDesc}
+                  </CardDescription>
+                </CardHeader>
+
+                <CardContent>
+                  <div className="overflow-hidden rounded-lg border">
+                    <div className="overflow-x-auto">
+                      <Table className="min-w-[760px]">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>
+                              {t.gateway}
+                            </TableHead>
+                            <TableHead>
+                              {t.status}
+                            </TableHead>
+                            <TableHead>
+                              {t.event}
+                            </TableHead>
+                            <TableHead>
+                              {t.providerEvent}
+                            </TableHead>
+                            <TableHead>
+                              {t.createdAt}
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+
+                        <TableBody>
+                          {filteredWebhooks.length ? (
+                            filteredWebhooks.map(
+                              (row) => (
+                                <TableRow key={row.id}>
+                                  <TableCell className="font-medium">
+                                    {row.gateway}
+                                  </TableCell>
+
+                                  <TableCell>
+                                    <StateBadge
+                                      value={row.status}
+                                    />
+                                  </TableCell>
+
+                                  <TableCell className="max-w-[180px] truncate">
+                                    {row.eventType}
+                                  </TableCell>
+
+                                  <TableCell
+                                    dir="ltr"
+                                    className="max-w-[180px] truncate font-mono text-xs"
+                                  >
+                                    {row.providerEventId}
+                                  </TableCell>
+
+                                  <TableCell
+                                    dir="ltr"
+                                    className="whitespace-nowrap text-xs tabular-nums"
+                                  >
+                                    {formatDateTime(
+                                      row.createdAt,
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              ),
+                            )
+                          ) : (
+                            <TableRow>
+                              <TableCell
+                                colSpan={5}
+                                className="h-36 text-center text-muted-foreground"
+                              >
+                                {t.noWebhook}
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-xl border shadow-none">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Workflow className="h-4 w-4" />
+                    {t.reconciliationTitle}
+                  </CardTitle>
+
+                  <CardDescription>
+                    {t.reconciliationDesc}
+                  </CardDescription>
+                </CardHeader>
+
+                <CardContent>
+                  <div className="overflow-hidden rounded-lg border">
+                    <div className="overflow-x-auto">
+                      <Table className="min-w-[720px]">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>
+                              {t.gateway}
+                            </TableHead>
+                            <TableHead>
+                              {t.status}
+                            </TableHead>
+                            <TableHead>
+                              {t.payment}
+                            </TableHead>
+                            <TableHead>
+                              {t.mismatchCount}
+                            </TableHead>
+                            <TableHead>
+                              {t.createdAt}
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+
+                        <TableBody>
+                          {filteredReconciliations.length ? (
+                            filteredReconciliations.map(
+                              (row) => (
+                                <TableRow key={row.id}>
+                                  <TableCell className="font-medium">
+                                    {row.gateway}
+                                  </TableCell>
+
+                                  <TableCell>
+                                    <StateBadge
+                                      value={row.status}
+                                    />
+                                  </TableCell>
+
+                                  <TableCell
+                                    dir="ltr"
+                                    className="font-mono text-xs"
+                                  >
+                                    #{row.paymentId}
+                                  </TableCell>
+
+                                  <TableCell className="tabular-nums">
+                                    {row.mismatchCount}
+                                  </TableCell>
+
+                                  <TableCell
+                                    dir="ltr"
+                                    className="whitespace-nowrap text-xs tabular-nums"
+                                  >
+                                    {formatDateTime(
+                                      row.createdAt,
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              ),
+                            )
+                          ) : (
+                            <TableRow>
+                              <TableCell
+                                colSpan={5}
+                                className="h-36 text-center text-muted-foreground"
+                              >
+                                {t.noReconciliation}
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </CardContent>
         </Card>
-        <Card className="w-full rounded-2xl shadow-sm">
-          <CardHeader className="gap-3">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <CardTitle>{t.tableTitle}</CardTitle>
-                <CardDescription className="mt-2">{t.tableDesc}</CardDescription>
-              </div>
-              <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
-                <KeyRound className="h-3.5 w-3.5" />
-                {t.showing} {formatInteger(previewRows.length)} {t.of} {formatInteger(apiTotal || keys.length)} {t.rows}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row md:items-center">
-                <div className="relative min-w-0 flex-1">
-                  <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder={t.searchPlaceholder}
-                    className="h-10 rounded-xl ps-9"
-                  />
-                </div>
-                <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background md:w-[170px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {statusFilters.map((item) => (
-                      <SelectItem key={item} value={item}>
-                        {item === "all" ? t.all : getStatusLabel(item, locale)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={environment} onValueChange={(value) => setEnvironment(value as EnvironmentFilter)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background md:w-[150px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {environmentFilters.map((item) => (
-                      <SelectItem key={item} value={item}>
-                        {item === "all" ? t.all : getEnvironmentLabel(item, locale)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[160px]">
-                    <ArrowUpDown className="h-4 w-4" />
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="newest">{t.newest}</SelectItem>
-                    <SelectItem value="oldest">{t.oldest}</SelectItem>
-                    <SelectItem value="name">{t.nameSort}</SelectItem>
-                    <SelectItem value="environment">{t.environmentSort}</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={resetFilters}>
-                  <RotateCcw className="h-4 w-4" />
-                  {t.reset}
-                </Button>
-              </div>
-            </div>
-            <div className="overflow-hidden rounded-2xl border bg-background">
-              <div className="w-full overflow-x-auto">
-                <Table className="w-full min-w-[980px] table-fixed">
-                  <TableHeader>
-                    <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
-                      <TableHead className={cn("h-11 w-[220px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
-                        {t.keyName}
-                      </TableHead>
-                      <TableHead className={cn("h-11 w-[135px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
-                        {t.prefix}
-                      </TableHead>
-                      <TableHead className={cn("h-11 w-[150px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
-                        {t.company}
-                      </TableHead>
-                      <TableHead className={cn("h-11 w-[110px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
-                        {t.environment}
-                      </TableHead>
-                      <TableHead className={cn("h-11 w-[110px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
-                        {t.status}
-                      </TableHead>
-                      <TableHead className={cn("h-11 w-[190px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
-                        {t.scopes}
-                      </TableHead>
-                      <TableHead className={cn("h-11 w-[115px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
-                        {t.lastUsedAt}
-                      </TableHead>
-                      <TableHead className={cn("h-11 w-[115px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
-                        {t.createdAt}
-                      </TableHead>
-                      <TableHead className="sticky left-0 z-10 h-11 w-[76px] bg-muted/40 px-3 text-center text-xs font-semibold text-muted-foreground">
-                        {t.open}
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {previewRows.length ? (
-                      previewRows.map((key) => (
-                        <TableRow key={key.id || key.keyPrefix || key.name} className="h-[64px]">
-                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
-                            <div className="min-w-0">
-                              <span className="block truncate text-sm font-semibold text-foreground">
-                                {key.name || t.unknown}
-                              </span>
-                              <span className="block truncate text-xs text-muted-foreground">
-                                #{key.id || key.keyPrefix || "—"}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
-                            <span className="block truncate text-sm tabular-nums text-muted-foreground">
-                              {key.keyPrefix || "—"}
-                            </span>
-                          </TableCell>
-                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
-                            <span className="block truncate text-sm text-muted-foreground">
-                              {key.company || "—"}
-                            </span>
-                          </TableCell>
-                          <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
-                            <PillBadge value={key.environment} locale={locale} type="environment" />
-                          </TableCell>
-                          <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
-                            <PillBadge value={key.status} locale={locale} type="status" />
-                          </TableCell>
-                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
-                            <span className="block truncate text-sm text-muted-foreground">
-                              {key.scopes.length ? key.scopes.join(", ") : "—"}
-                            </span>
-                          </TableCell>
-                          <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
-                            <span className="text-sm tabular-nums text-muted-foreground">
-                              {formatDate(key.lastUsedAt)}
-                            </span>
-                          </TableCell>
-                          <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
-                            <span className="text-sm tabular-nums text-muted-foreground">
-                              {formatDate(key.createdAt)}
-                            </span>
-                          </TableCell>
-                          <TableCell className="sticky left-0 z-10 h-[64px] bg-background px-3 text-center align-middle">
-                            <Button asChild variant="outline" size="sm" className="h-8 rounded-lg bg-background px-3">
-                              <Link href="/system/integrations/api-keys">{t.open}</Link>
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={9}>
-                          <EmptyState
-                            title={hasFilters ? t.noResultsTitle : t.noDataTitle}
-                            description={hasFilters ? t.noResultsDesc : t.noDataDesc}
-                            showReset={hasFilters}
-                            resetLabel={t.reset}
-                            onReset={resetFilters}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-            <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-              <p>
-                {t.showing}{" "}
-                <span className="font-medium text-foreground tabular-nums">
-                  {formatInteger(previewRows.length)}
-                </span>{" "}
-                {t.of}{" "}
-                <span className="font-medium text-foreground tabular-nums">
-                  {formatInteger(apiTotal || keys.length)}
-                </span>{" "}
-                {t.rows}
+
+        <Card className="rounded-xl border-emerald-200 bg-emerald-50/60 shadow-none">
+          <CardContent className="flex items-start gap-3 p-5 text-emerald-900">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
+
+            <div>
+              <p className="font-semibold">
+                {t.credentialsSafety}
               </p>
-              <Button asChild variant="outline" className="w-fit rounded-xl bg-background">
-                <Link href="/system/integrations/api-keys">
-                  <KeyRound className="h-4 w-4" />
-                  {t.apiKeys}
-                </Link>
-              </Button>
+
+              <p className="mt-1 text-sm leading-6">
+                {t.credentialsSafetyDesc}
+              </p>
             </div>
           </CardContent>
         </Card>
