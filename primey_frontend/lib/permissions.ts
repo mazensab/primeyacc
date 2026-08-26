@@ -731,6 +731,11 @@ export const PATH_ACCESS_RULES: PathAccessRule[] = [
     workspaces: ["system"],
   },
   {
+    prefix: "/system/profile",
+    permissions: [PERMISSIONS.SYSTEM_VIEW],
+    workspaces: ["system"],
+  },
+  {
     prefix: "/system/integrations/api-keys",
     permissions: [PERMISSIONS.SYSTEM_INTEGRATION_API_KEYS_VIEW],
     workspaces: ["system"],
@@ -738,143 +743,6 @@ export const PATH_ACCESS_RULES: PathAccessRule[] = [
   {
     prefix: "/system/integrations",
     permissions: [PERMISSIONS.SYSTEM_VIEW],
-    workspaces: ["system"],
-  },
-
-  // ----------------------------
-  // Accounting
-  // ----------------------------
-  {
-    prefix: "/system/accounting/reports",
-    permissions: [PERMISSIONS.ACCOUNTING_REPORTS_VIEW, PERMISSIONS.REPORTS_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/accounting/trial-balance",
-    permissions: [PERMISSIONS.ACCOUNTING_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/accounting/profit-loss",
-    permissions: [PERMISSIONS.ACCOUNTING_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/accounting/balance-sheet",
-    permissions: [PERMISSIONS.ACCOUNTING_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/accounting/ledger",
-    permissions: [PERMISSIONS.ACCOUNTING_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/accounting/accounts",
-    permissions: [PERMISSIONS.ACCOUNTING_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/accounting/journals",
-    permissions: [PERMISSIONS.ACCOUNTING_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/accounting",
-    permissions: [PERMISSIONS.ACCOUNTING_VIEW],
-    workspaces: ["system"],
-  },
-
-  // ----------------------------
-  // Treasury
-  // ----------------------------
-  {
-    prefix: "/system/treasury/settings",
-    permissions: [PERMISSIONS.TREASURY_SETTINGS],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/treasury/reports",
-    permissions: [PERMISSIONS.TREASURY_REPORTS_VIEW, PERMISSIONS.REPORTS_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/treasury/accounts/create",
-    permissions: [PERMISSIONS.TREASURY_CREATE],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/treasury/transactions/create",
-    permissions: [PERMISSIONS.TREASURY_CREATE],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/treasury/transfers",
-    permissions: [PERMISSIONS.TREASURY_VIEW, PERMISSIONS.TREASURY_TRANSFER],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/treasury/accounts",
-    permissions: [PERMISSIONS.TREASURY_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/treasury/cashboxes",
-    permissions: [PERMISSIONS.TREASURY_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/treasury/banks",
-    permissions: [PERMISSIONS.TREASURY_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/treasury/transactions",
-    permissions: [PERMISSIONS.TREASURY_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/treasury",
-    permissions: [PERMISSIONS.TREASURY_VIEW],
-    workspaces: ["system"],
-  },
-
-  // ----------------------------
-  // Reports
-  // ----------------------------
-  {
-    prefix: "/system/reports/customers",
-    permissions: [PERMISSIONS.REPORTS_VIEW, PERMISSIONS.REPORTS_CUSTOMERS_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/reports/providers",
-    permissions: [PERMISSIONS.REPORTS_VIEW, PERMISSIONS.REPORTS_PROVIDERS_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/reports/orders",
-    permissions: [PERMISSIONS.REPORTS_VIEW, PERMISSIONS.REPORTS_ORDERS_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/reports/invoices",
-    permissions: [PERMISSIONS.REPORTS_VIEW, PERMISSIONS.REPORTS_INVOICES_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/reports/payments",
-    permissions: [PERMISSIONS.REPORTS_VIEW, PERMISSIONS.REPORTS_PAYMENTS_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/reports/accounting",
-    permissions: [PERMISSIONS.REPORTS_VIEW, PERMISSIONS.REPORTS_ACCOUNTING_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/reports",
-    permissions: [PERMISSIONS.REPORTS_VIEW],
     workspaces: ["system"],
   },
 
@@ -894,80 +762,6 @@ export const PATH_ACCESS_RULES: PathAccessRule[] = [
   {
     prefix: "/system/platform-payments",
     permissions: [PERMISSIONS.PAYMENTS_VIEW],
-    workspaces: ["system"],
-  },
-
-  // ----------------------------
-  // Main System Modules
-  // ----------------------------
-  {
-    prefix: "/system/customers/create",
-    permissions: [PERMISSIONS.CUSTOMERS_CREATE],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/customers",
-    permissions: [PERMISSIONS.CUSTOMERS_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/providers/create",
-    permissions: [PERMISSIONS.PROVIDERS_CREATE],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/providers",
-    permissions: [PERMISSIONS.PROVIDERS_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/centers/create",
-    permissions: [PERMISSIONS.PROVIDERS_CREATE],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/centers",
-    permissions: [PERMISSIONS.PROVIDERS_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/agents/create",
-    permissions: [PERMISSIONS.AGENTS_CREATE],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/agents",
-    permissions: [PERMISSIONS.AGENTS_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/products/create",
-    permissions: [PERMISSIONS.PRODUCTS_CREATE],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/products",
-    permissions: [PERMISSIONS.PRODUCTS_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/contracts/create",
-    permissions: [PERMISSIONS.CONTRACTS_CREATE],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/contracts",
-    permissions: [PERMISSIONS.CONTRACTS_VIEW],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/orders/create",
-    permissions: [PERMISSIONS.ORDERS_CREATE],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/orders",
-    permissions: [PERMISSIONS.ORDERS_VIEW],
     workspaces: ["system"],
   },
 

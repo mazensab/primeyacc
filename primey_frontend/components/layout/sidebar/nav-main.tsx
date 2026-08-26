@@ -996,13 +996,6 @@ function inferPermissionInputByHref(item: NavItem): PermissionCheckInput {
     };
   }
 
-  if (href.startsWith("/system/reports")) {
-    return {
-      permission: PERMISSIONS.REPORTS_VIEW,
-      workspaces: ["system"],
-    };
-  }
-
   if (href.startsWith("/system/users/create")) {
     return {
       permission: PERMISSIONS.USERS_CREATE,
@@ -1024,65 +1017,9 @@ function inferPermissionInputByHref(item: NavItem): PermissionCheckInput {
     };
   }
 
-  if (href.startsWith("/system/centers") || href.startsWith("/system/providers")) {
+  if (href.startsWith("/system/profile")) {
     return {
-      permission: href.includes("/create")
-        ? PERMISSIONS.PROVIDERS_CREATE
-        : PERMISSIONS.PROVIDERS_VIEW,
-      workspaces: ["system"],
-    };
-  }
-
-  if (href.startsWith("/system/customers")) {
-    return {
-      permission: href.includes("/create")
-        ? PERMISSIONS.CUSTOMERS_CREATE
-        : PERMISSIONS.CUSTOMERS_VIEW,
-      workspaces: ["system"],
-    };
-  }
-
-  if (href.startsWith("/system/brokers")) {
-    return {
-      permission: href.includes("/create")
-        ? PERMISSIONS.AGENTS_CREATE
-        : PERMISSIONS.AGENTS_VIEW,
-      workspaces: ["system"],
-    };
-  }
-
-  if (href.startsWith("/system/agents")) {
-    return {
-      permission: href.includes("/create")
-        ? PERMISSIONS.AGENTS_CREATE
-        : PERMISSIONS.AGENTS_VIEW,
-      workspaces: ["system"],
-    };
-  }
-
-  if (href.startsWith("/system/products")) {
-    return {
-      permission: href.includes("/create")
-        ? PERMISSIONS.PRODUCTS_CREATE
-        : PERMISSIONS.PRODUCTS_VIEW,
-      workspaces: ["system"],
-    };
-  }
-
-  if (href.startsWith("/system/orders")) {
-    return {
-      permission: href.includes("/create")
-        ? PERMISSIONS.ORDERS_CREATE
-        : PERMISSIONS.ORDERS_VIEW,
-      workspaces: ["system"],
-    };
-  }
-
-  if (href.startsWith("/system/contracts")) {
-    return {
-      permission: href.includes("/create")
-        ? PERMISSIONS.CONTRACTS_CREATE
-        : PERMISSIONS.CONTRACTS_VIEW,
+      permission: PERMISSIONS.SYSTEM_VIEW,
       workspaces: ["system"],
     };
   }
@@ -1101,38 +1038,6 @@ function inferPermissionInputByHref(item: NavItem): PermissionCheckInput {
       permission: href.includes("/create")
         ? PERMISSIONS.PAYMENTS_CREATE
         : PERMISSIONS.PAYMENTS_VIEW,
-      workspaces: ["system"],
-    };
-  }
-
-  if (href.startsWith("/system/accounting")) {
-    return {
-      permission: PERMISSIONS.ACCOUNTING_VIEW,
-      workspaces: ["system"],
-    };
-  }
-
-  if (href.startsWith("/system/treasury")) {
-    if (href.includes("/settings")) {
-      return {
-        permission: PERMISSIONS.TREASURY_EDIT,
-        workspaces: ["system"],
-      };
-    }
-
-    if (
-      href.includes("/create") ||
-      href.includes("/vouchers/receipt") ||
-      href.includes("/vouchers/payment")
-    ) {
-      return {
-        permission: PERMISSIONS.TREASURY_CREATE,
-        workspaces: ["system"],
-      };
-    }
-
-    return {
-      permission: PERMISSIONS.TREASURY_VIEW,
       workspaces: ["system"],
     };
   }
