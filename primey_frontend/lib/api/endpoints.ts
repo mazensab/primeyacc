@@ -23,9 +23,25 @@ export const API_PATHS = {
     resetPasswordConfirm: "/api/auth/reset-password/confirm/",
   },
 
+  systemUsers: {
+    list: "/api/system/users/",
+    create: "/api/system/users/create/",
+    detail: (id: ApiPathId) => `/api/system/users/${id}/`,
+  },
+
+  systemCompanies: {
+    list: "/api/system/companies/",
+    options: "/api/system/companies/options/",
+    create: "/api/system/companies/create/",
+    detail: (id: ApiPathId) => `/api/system/companies/${id}/`,
+    update: (id: ApiPathId) => `/api/system/companies/${id}/update/`,
+    status: (id: ApiPathId) => `/api/system/companies/${id}/status/`,
+    createUser: (id: ApiPathId) => `/api/system/companies/${id}/users/create/`,
+  },
+
   users: {
     list: "/api/users/",
-    create: "/api/users/",
+    create: "/api/users/create/",
     detail: (id: ApiPathId) => `/api/users/${id}/`,
     activate: (id: ApiPathId) => `/api/users/${id}/activate/`,
     deactivate: (id: ApiPathId) => `/api/users/${id}/deactivate/`,
@@ -46,7 +62,7 @@ export const API_PATHS = {
 
   centers: {
     list: "/api/system/companies/",
-    create: "/api/system/companies/",
+    create: "/api/system/companies/create/",
     reports: "/api/system/companies/reports/",
     export: "/api/system/companies/export/",
     detail: (id: ApiPathId) => `/api/system/companies/${id}/`,
@@ -56,7 +72,7 @@ export const API_PATHS = {
 
   providers: {
     list: "/api/system/companies/",
-    create: "/api/system/companies/",
+    create: "/api/system/companies/create/",
     reports: "/api/system/companies/reports/",
     export: "/api/system/companies/export/",
     detail: (id: ApiPathId) => `/api/system/companies/${id}/`,

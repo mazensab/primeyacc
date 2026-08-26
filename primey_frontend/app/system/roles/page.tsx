@@ -1031,7 +1031,7 @@ export default function SystemRolesPage() {
 
                 {
 
-                  href: "/system/users/permissions",
+                  href: "/system/permissions",
 
                   title: textByLocale(locale, "\u0635\u0644\u0627\u062d\u064a\u0627\u062a \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645\u064a\u0646", "User permissions"),
 

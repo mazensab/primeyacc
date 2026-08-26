@@ -2170,7 +2170,7 @@ export default function SystemPermissionsPage() {
 
 
 
-                  href: "/system/users/permissions",
+                  href: "/system/users/reports",
 
 
 

@@ -1,14 +1,14 @@
 "use client";
 
 /* ============================================================
-   📂 primey_frontend/app/system/users/reports/page.tsx
-   🏢 Mhamcloud — System Users Reports
+   📂 primey_frontend/app/system/users/page.tsx
+   🏢 Mhamcloud — System Users Overview
    ------------------------------------------------------------
-   ✅ Premium PrimeyCare reports pattern adapted for Mhamcloud
+   ✅ Premium PrimeyCare admin pattern adapted for Mhamcloud
+   ✅ System users module center page
    ✅ Real API only: GET /api/users/
-   ✅ Summary KPIs + status/role/access-type distributions
-   ✅ Analytical full-width table
-   ✅ Search, status, role, access-type, date filters
+   ✅ KPI cards + quick actions + recent users table
+   ✅ Search, status filter, sorting, reset
    ✅ Excel .xls export
    ✅ Web print + PDF through browser print dialog
    ✅ Skeleton loading
@@ -24,18 +24,13 @@ import Link from "next/link";
 import {
   Activity,
   ArrowUpDown,
-  BarChart3,
   Building2,
-  CalendarDays,
   CheckCircle2,
-  CircleAlert,
+  FileBarChart2,
   FileSpreadsheet,
   FileText,
-  LayoutDashboard,
   ListChecks,
   Loader2,
-  MapPin,
-  PieChart,
   Plus,
   Printer,
   RefreshCw,
@@ -43,7 +38,6 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
-  TableProperties,
   TriangleAlert,
   UsersRound,
 } from "lucide-react";
@@ -78,6 +72,7 @@ import {
 
 type Locale = "ar" | "en";
 type ApiRecord = Record<string, unknown>;
+type SortKey = "newest" | "oldest" | "name" | "code";
 type StatusFilter =
   | "all"
   | "active"
@@ -86,9 +81,7 @@ type StatusFilter =
   | "trial"
   | "pending"
   | "draft"
-  | "cancelled"
-  | "unknown";
-type SortKey = "newest" | "oldest" | "name" | "code" | "status" | "activity" | "city";
+  | "cancelled";
 
 type UserRecord = {
   id: string;
@@ -102,14 +95,13 @@ type UserRecord = {
   phone: string;
   city: string;
   created_at: string | null;
-  updated_at: string | null;
 };
 
-type DistributionRow = {
-  key: string;
-  label: string;
-  count: number;
-  percent: number;
+type QuickAction = {
+  title: string;
+  description: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
 };
 
 const API_ENDPOINT = "/api/system/users/";
@@ -123,61 +115,51 @@ const statusFilters: StatusFilter[] = [
   "pending",
   "draft",
   "cancelled",
-  "unknown",
 ];
 
 const translations = {
   ar: {
-    title: "تقارير المستخدمين",
+    title: "مستخدمو النظام",
     subtitle:
-      "تحليلات مستخدمي Mhamcloud حسب الحالة والدور ونوع الوصول مبنية على بيانات API الحقيقية.",
+      "مركز إدارة مستخدمي نظام Mhamcloud لمتابعة الحسابات، الأدوار، حالة التفعيل، والصلاحيات من مكان واحد.",
     badge: "إدارة المنصة",
     refresh: "تحديث",
     exportExcel: "تصدير Excel",
     print: "طباعة",
     pdf: "PDF",
-    pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
     addUser: "إضافة مستخدم",
-    usersList: "قائمة المستخدمين",
-    usersCenter: "مركز المستخدمين",
-    systemDashboard: "لوحة النظام",
+    list: "قائمة المستخدمين",
+    reports: "تقارير المستخدمين",
     reset: "إعادة ضبط",
-
-    searchPlaceholder: "ابحث باسم المستخدم أو الكود أو اسم المستخدم أو الدور أو نوع الوصول...",
-    statusFilter: "الحالة",
-    activityFilter: "الدور",
-    cityFilter: "نوع الوصول",
-    fromDate: "من تاريخ",
-    toDate: "إلى تاريخ",
-    sort: "الترتيب",
+    searchPlaceholder: "ابحث بالاسم أو اسم المستخدم أو البريد الإلكتروني أو الدور أو نوع الوصول...",
     all: "الكل",
+    sort: "الترتيب",
     newest: "الأحدث",
     oldest: "الأقدم",
     nameSort: "الاسم",
     codeSort: "الكود",
-    statusSort: "الحالة",
-    activitySort: "الدور",
-    citySort: "نوع الوصول",
+    open: "فتح",
 
     totalUsers: "إجمالي المستخدمين",
-    activeUsers: "المستخدمين النشطة",
+    activeUsers: "المستخدمون النشطون",
     inactiveUsers: "غير النشطة",
-    subscribedUsers: "مستخدمون ببريد مسجل",
-    uniqueActivities: "أدوار مختلفة",
-    uniqueCities: "أنواع وصول",
-    filteredRows: "نتائج التقرير",
+    subscribedUsers: "مستخدمون بصلاحية نظام",
     fromLiveApi: "من واجهات النظام الحقيقية",
 
-    statusDistribution: "توزيع المستخدمين حسب الحالة",
-    statusDistributionDesc: "عدد ونسبة المستخدمين في كل حالة تشغيلية.",
-    activityDistribution: "توزيع المستخدمين حسب الدور",
-    activityDistributionDesc: "أكثر الأدوار ظهورا ضمن المستخدمين الحاليين.",
-    cityDistribution: "توزيع المستخدمين حسب نوع الوصول",
-    cityDistributionDesc: "أكثر أنواع الوصول ظهورا ضمن المستخدمين الحاليين.",
-    reportTable: "جدول التقرير التحليلي",
-    reportTableDesc:
-      "بيانات المستخدمين بعد تطبيق الفلاتر الحالية وهي نفس البيانات المستخدمة في التصدير والطباعة.",
+    actionsTitle: "اختصارات وحدة المستخدمين",
+    actionsDesc: "تنقل سريع بين صفحات المستخدمين الأساسية بنفس نمط إدارة المنصة.",
+    openListTitle: "عرض قائمة المستخدمين",
+    openListDesc: "جدول كامل للمستخدمين مع الفلاتر والتصدير والطباعة.",
+    createTitle: "إضافة مستخدم جديدة",
+    createDesc: "إنشاء مستخدم جديد وربطه بإعدادات المنصة.",
+    permissionsTitle: "صلاحيات المستخدمين",
+    permissionsDesc: "مراجعة أدوار وصلاحيات مستخدمي النظام من واجهات النظام الحقيقية.",
+    reportsTitle: "تقارير المستخدمين",
+    reportsDesc: "تحليل المستخدمين حسب الحالة والدور وصلاحيات النظام.",
 
+    tableTitle: "أحدث المستخدمين",
+    tableDesc:
+      "نظرة سريعة على أحدث مستخدمي Mhamcloud مع الحالة والدور والبريد والصلاحيات.",
     user: "المستخدم",
     code: "الكود",
     owner: "اسم المستخدم",
@@ -186,8 +168,6 @@ const translations = {
     city: "نوع الوصول",
     status: "الحالة",
     createdAt: "تاريخ الإنشاء",
-    updatedAt: "آخر تحديث",
-    open: "فتح",
 
     active: "نشط",
     inactive: "غير نشط",
@@ -197,76 +177,67 @@ const translations = {
     draft: "مسودة",
     cancelled: "ملغي",
     unknown: "غير محدد",
-    notAvailable: "غير متوفر",
 
-    showing: "عرض",
-    of: "من",
-    rows: "صفوف",
-    noDataTitle: "لا يوجد مستخدمون",
-    noDataDesc: "ستظهر تقارير المستخدمين عند توفر بيانات من API.",
+    noDataTitle: "لا توجد مستخدمين",
+    noDataDesc: "سيظهر المستخدمون هنا عند توفرهم من API.",
     noResultsTitle: "لا توجد نتائج مطابقة",
     noResultsDesc: "غير البحث أو الفلاتر لعرض نتائج أخرى.",
-    errorTitle: "تعذر تحميل تقارير المستخدمين",
+    errorTitle: "تعذر تحميل مركز المستخدمين",
     errorDesc:
       "تأكد من تسجيل الدخول بصلاحية نظام ومن تشغيل الباكند ثم أعد المحاولة.",
     tryAgain: "إعادة المحاولة",
     exportEmpty: "لا توجد بيانات للتصدير.",
     printEmpty: "لا توجد بيانات للطباعة.",
-    reportTitle: "تقرير مستخدمي Mhamcloud",
+    pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
+    reportTitle: "تقرير مركز مستخدمين Mhamcloud",
     generatedAt: "تاريخ الإنشاء",
-    refreshed: "تم تحديث تقارير المستخدمين.",
+    showing: "عرض",
+    of: "من",
+    rows: "صفوف",
+    refreshed: "تم تحديث مركز المستخدمين.",
   },
   en: {
-    title: "Users reports",
+    title: "Users",
     subtitle:
-      "Mhamcloud user analytics by status, role, access type, and permissions, based on real API data.",
+      "Mhamcloud system users center for accounts, roles, activation status, and permissions in one place.",
     badge: "Platform management",
     refresh: "Refresh",
     exportExcel: "Export Excel",
     print: "Print",
     pdf: "PDF",
-    pdfHint: "Choose Save as PDF from the print dialog.",
     addUser: "Add user",
-    usersList: "Users list",
-    usersCenter: "Users center",
-    systemDashboard: "System dashboard",
+    list: "Users list",
+    reports: "Users reports",
     reset: "Reset",
-
-    searchPlaceholder: "Search by user, username, email, role, or access type...",
-    statusFilter: "Status",
-    activityFilter: "Role",
-    cityFilter: "Access type",
-    fromDate: "From date",
-    toDate: "To date",
-    sort: "Sort",
+    searchPlaceholder: "Search by name, username, email, role, or access type...",
     all: "All",
+    sort: "Sort",
     newest: "Newest",
     oldest: "Oldest",
     nameSort: "Name",
     codeSort: "Code",
-    statusSort: "Status",
-    activitySort: "Role",
-    citySort: "Access type",
+    open: "Open",
 
     totalUsers: "Total users",
     activeUsers: "Active users",
     inactiveUsers: "Inactive",
-    subscribedUsers: "With email",
-    uniqueActivities: "Unique roles",
-    uniqueCities: "Access types",
-    filteredRows: "Report results",
+    subscribedUsers: "System access",
     fromLiveApi: "From real system APIs",
 
-    statusDistribution: "Users by status",
-    statusDistributionDesc: "Count and ratio of users by operational status.",
-    activityDistribution: "Users by role",
-    activityDistributionDesc: "Top roles appearing among current users.",
-    cityDistribution: "Users by access type",
-    cityDistributionDesc: "Top access types appearing among current users.",
-    reportTable: "Analytical report table",
-    reportTableDesc:
-      "User data after current filters, used by export and print actions.",
+    actionsTitle: "Users module shortcuts",
+    actionsDesc: "Quick navigation between users pages using the platform management pattern.",
+    openListTitle: "Open users list",
+    openListDesc: "Full users table with filters, export, and print.",
+    createTitle: "Add a new user",
+    createDesc: "Create a new user and connect it to platform settings.",
+    permissionsTitle: "Users permissions",
+    permissionsDesc: "Review platform user roles and system permissions from live API data.",
+    reportsTitle: "Users reports",
+    reportsDesc: "Analyze users by status, role, and system permissions.",
 
+    tableTitle: "Latest users",
+    tableDesc:
+      "A quick view of the newest Mhamcloud users with status, role, email, and permissions.",
     user: "User",
     code: "Code",
     owner: "Username",
@@ -275,8 +246,6 @@ const translations = {
     city: "Access type",
     status: "Status",
     createdAt: "Created at",
-    updatedAt: "Updated at",
-    open: "Open",
 
     active: "Active",
     inactive: "Inactive",
@@ -286,24 +255,24 @@ const translations = {
     draft: "Draft",
     cancelled: "Cancelled",
     unknown: "Unknown",
-    notAvailable: "Not available",
 
-    showing: "Showing",
-    of: "of",
-    rows: "rows",
     noDataTitle: "No users",
-    noDataDesc: "User reports will appear when the API returns data.",
+    noDataDesc: "Users will appear here when returned by the API.",
     noResultsTitle: "No matching results",
     noResultsDesc: "Change the search or filters to show other results.",
-    errorTitle: "Could not load users reports",
+    errorTitle: "Could not load users center",
     errorDesc:
       "Make sure you are signed in as a system user and the backend is running, then try again.",
     tryAgain: "Try again",
     exportEmpty: "There is no data to export.",
     printEmpty: "There is no data to print.",
-    reportTitle: "Mhamcloud Users Report",
+    pdfHint: "Choose Save as PDF from the print dialog.",
+    reportTitle: "Mhamcloud Users Center Report",
     generatedAt: "Generated at",
-    refreshed: "Users reports refreshed.",
+    showing: "Showing",
+    of: "of",
+    rows: "rows",
+    refreshed: "Users center refreshed.",
   },
 } as const;
 
@@ -339,24 +308,11 @@ function formatInteger(value: unknown) {
   );
 }
 
-function formatPercent(value: number) {
-  return `${new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: 1,
-    minimumFractionDigits: 0,
-  }).format(value)}%`;
-}
-
 function formatDate(value: string | null | undefined) {
   if (!value) return "—";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return String(value).slice(0, 10);
   return parsed.toISOString().slice(0, 10);
-}
-
-function rowDateValue(value: string | null | undefined) {
-  if (!value) return 0;
-  const parsed = new Date(value).getTime();
-  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function escapeHtml(value: unknown) {
@@ -376,11 +332,10 @@ function getInitialLocale(): Locale {
 function getApiBaseUrl() {
   const envBase =
     typeof process !== "undefined"
-      ? (
-          process.env.NEXT_PUBLIC_API_BASE_URL ||
-          process.env.NEXT_PUBLIC_API_URL ||
-          ""
-        ).replace(/\/+$/, "")
+      ? (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "").replace(
+          /\/+$/,
+          "",
+        )
       : "";
 
   if (envBase.endsWith("/api")) return envBase.slice(0, -4);
@@ -435,23 +390,16 @@ function extractArray(payload: unknown): unknown[] {
 
   const record = asRecord(payload);
   const dataRecord = asRecord(record.data);
-  const resultRecord = asRecord(record.result);
+  const metaRecord = asRecord(record.meta);
 
   if (Array.isArray(record.results)) return record.results;
   if (Array.isArray(record.items)) return record.items;
   if (Array.isArray(record.records)) return record.records;
-  if (Array.isArray(record.users)) return record.users;
   if (Array.isArray(record.data)) return record.data;
-
   if (Array.isArray(dataRecord.results)) return dataRecord.results;
   if (Array.isArray(dataRecord.items)) return dataRecord.items;
   if (Array.isArray(dataRecord.records)) return dataRecord.records;
-  if (Array.isArray(dataRecord.users)) return dataRecord.users;
-
-  if (Array.isArray(resultRecord.results)) return resultRecord.results;
-  if (Array.isArray(resultRecord.items)) return resultRecord.items;
-  if (Array.isArray(resultRecord.records)) return resultRecord.records;
-  if (Array.isArray(resultRecord.users)) return resultRecord.users;
+  if (Array.isArray(metaRecord.results)) return metaRecord.results;
 
   return [];
 }
@@ -489,12 +437,10 @@ function normalizeNestedName(value: unknown, keys: string[] = ["name", "title", 
 }
 
 function normalizeStatus(value: unknown) {
-  if (value === null || value === undefined || value === "") return "unknown";
   if (typeof value === "boolean") return value ? "active" : "inactive";
 
-  const text = normalizeText(value).toLowerCase();
+  const text = normalizeText(value, "active").toLowerCase();
 
-  if (!text) return "unknown";
   if (text === "true") return "active";
   if (text === "false") return "inactive";
   if (text === "enabled") return "active";
@@ -505,103 +451,90 @@ function normalizeStatus(value: unknown) {
 
 function normalizeUser(value: unknown): UserRecord {
   const record = asRecord(value);
-  const profile = asRecord(record.profile);
-  const defaultWorkspace = asRecord(record.default_workspace);
-  const membership = asRecord(
-    record.default_membership || record.membership || record.company_membership
-  );
-  const rawId = normalizeText(record.id || record.pk || record.user_id);
-  const userId = normalizeText(record.user_id || rawId);
+  const user = record.user || record.account || record.auth_user || record.django_user;
+  const userRecord = asRecord(user);
+  const profile = record.profile || record.user_profile || record.profile_ref;
+  const profileRecord = asRecord(profile);
+  const membership = record.membership || record.default_membership || record.company_membership;
+  const membershipRecord = asRecord(membership);
   const username = normalizeText(
-    record.username || profile.username || record.code || userId,
-    "—"
+    record.username ||
+      record.user_name ||
+      record.login ||
+      userRecord.username ||
+      userRecord.user_name ||
+      profileRecord.username,
+    "—",
   );
-  const firstName = normalizeText(record.first_name || profile.first_name);
-  const lastName = normalizeText(record.last_name || profile.last_name);
-  const joinedName = `${firstName} ${lastName}`.trim();
-  const displayName = normalizeText(
-    record.display_name ||
-      record.full_name ||
-      record.name ||
-      joinedName ||
-      username ||
-      record.email,
-    "—"
+  const email = normalizeText(
+    record.email ||
+      record.user_email ||
+      userRecord.email ||
+      profileRecord.email ||
+      profileRecord.user_email,
+    "—",
   );
-  const email = normalizeText(record.email || profile.email, "—");
-  const phone = normalizeText(
-    record.phone ||
-      record.mobile ||
-      record.whatsapp ||
-      profile.phone ||
-      profile.mobile,
-    "—"
-  );
+  const firstName = normalizeText(record.first_name || userRecord.first_name || profileRecord.first_name, "");
+  const lastName = normalizeText(record.last_name || userRecord.last_name || profileRecord.last_name, "");
+  const combinedName = normalizeText(`${firstName} ${lastName}`.trim(), "");
+  const displayName =
+    normalizeText(
+      record.display_name ||
+        record.full_name ||
+        record.name ||
+        profileRecord.display_name ||
+        profileRecord.full_name ||
+        userRecord.get_full_name ||
+        combinedName,
+      "",
+    ) ||
+    username ||
+    email ||
+    "—";
   const role = normalizeText(
     record.system_role ||
       record.role ||
-      record.access_role ||
-      membership.role,
-    "—"
+      record.user_role ||
+      profileRecord.system_role ||
+      profileRecord.role ||
+      membershipRecord.role,
+    "—",
   );
-  const accessType = normalizeText(
-    record.access_type ||
-      record.default_workspace ||
-      defaultWorkspace.type ||
-      defaultWorkspace.code ||
-      defaultWorkspace.name,
-    "—"
+  const isSystemUser = Boolean(
+    record.is_system_user ||
+      record.can_access_system ||
+      profileRecord.is_system_user ||
+      profileRecord.can_access_system,
   );
-  const status = normalizeText(
-    record.status || (record.is_active === false ? "inactive" : "active"),
-    "unknown"
-  ).toLowerCase();
+  const accessType = isSystemUser ? "system" : normalizeText(record.workspace_type || profileRecord.workspace_type, "company");
   return {
-    id: rawId || userId || username,
+    id: normalizeText(record.id || record.uuid || record.pk || userRecord.id || profileRecord.id || username || email),
     name: displayName,
     code: username,
-    status,
+    status: normalizeStatus(record.status || record.is_active || profileRecord.status || userRecord.is_active),
     owner: username,
     activity: role,
     subscription: email,
     email,
-    phone,
+    phone: normalizeText(record.phone || record.mobile || profileRecord.phone || profileRecord.mobile, "—"),
     city: accessType,
     created_at:
-      normalizeText(record.created_at || record.date_joined || profile.created_at) ||
-      null,
-    updated_at:
-      normalizeText(record.updated_at || record.last_login || profile.updated_at) ||
-      null,
+      normalizeText(
+        record.created_at ||
+          record.date_joined ||
+          record.created ||
+          userRecord.date_joined ||
+          profileRecord.created_at ||
+          profileRecord.created,
+      ) || null,
   };
 }
 
+
 function getStatusLabel(value: string, locale: Locale) {
-  const normalized = value.toLowerCase();
-
-  const ar: Record<string, string> = {
-    active: "نشط",
-    inactive: "غير نشط",
-    suspended: "موقوف",
-    trial: "تجريبي",
-    pending: "معلق",
-    draft: "مسودة",
-    cancelled: "ملغي",
-    unknown: "غير محدد",
-  };
-
-  const en: Record<string, string> = {
-    active: "Active",
-    inactive: "Inactive",
-    suspended: "Suspended",
-    trial: "Trial",
-    pending: "Pending",
-    draft: "Draft",
-    cancelled: "Cancelled",
-    unknown: "Unknown",
-  };
-
-  return locale === "ar" ? ar[normalized] || value : en[normalized] || value;
+  const normalized = value.toLowerCase().replace(/[^a-z_]/g, "") as keyof (typeof translations)["ar"];
+  const fallback = normalizeText(value, translations[locale].unknown);
+  return normalizeText(translations[locale][normalized], fallback);
 }
 
 function getStatusClass(value: string) {
@@ -622,6 +555,12 @@ function getStatusClass(value: string) {
   return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
+function rowDateValue(value: string | null | undefined) {
+  if (!value) return 0;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function StatusBadge({ value, locale }: { value: string; locale: Locale }) {
   return (
     <Badge
@@ -633,33 +572,58 @@ function StatusBadge({ value, locale }: { value: string; locale: Locale }) {
   );
 }
 
-function makeDistribution(
-  rows: UserRecord[],
-  pick: (row: UserRecord) => string,
-  locale: Locale,
-  options?: { status?: boolean; limit?: number },
-): DistributionRow[] {
-  const counts = new Map<string, number>();
-
-  rows.forEach((row) => {
-    const key = normalizeText(pick(row), "—");
-    counts.set(key, (counts.get(key) || 0) + 1);
-  });
-
-  const total = rows.length || 1;
-
-  return [...counts.entries()]
-    .map(([key, count]) => ({
-      key,
-      label: options?.status ? getStatusLabel(key, locale) : key,
-      count,
-      percent: (count / total) * 100,
-    }))
-    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
-    .slice(0, options?.limit || 10);
+function KpiCard({
+  title,
+  value,
+  description,
+  icon: Icon,
+}: {
+  title: string;
+  value: number;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+}) {
+  return (
+    <Card className="overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
+        <div className="min-w-0">
+          <CardDescription className="truncate text-sm">{title}</CardDescription>
+          <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
+            {formatInteger(value)}
+          </CardTitle>
+        </div>
+        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
+          <Icon className="h-5 w-5" />
+        </span>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
+      </CardContent>
+    </Card>
+  );
 }
 
-function ReportSkeleton() {
+function QuickActionCard({ action }: { action: QuickAction }) {
+  const Icon = action.icon;
+
+  return (
+    <Card className="group rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <Link href={action.href} className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+          <div className="min-w-0">
+            <CardTitle className="text-base">{action.title}</CardTitle>
+            <CardDescription className="mt-2 line-clamp-2">{action.description}</CardDescription>
+          </div>
+          <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+            <Icon className="h-5 w-5" />
+          </span>
+        </CardHeader>
+      </Link>
+    </Card>
+  );
+}
+
+function UsersOverviewSkeleton() {
   return (
     <main className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
@@ -695,86 +659,6 @@ function ReportSkeleton() {
   );
 }
 
-function KpiCard({
-  title,
-  value,
-  description,
-  icon: Icon,
-}: {
-  title: string;
-  value: number;
-  description: string;
-  icon: React.ComponentType<{ className?: string }>;
-}) {
-  return (
-    <Card className="overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
-        <div className="min-w-0">
-          <CardDescription className="truncate text-sm">{title}</CardDescription>
-          <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
-            {formatInteger(value)}
-          </CardTitle>
-        </div>
-        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
-          <Icon className="h-5 w-5" />
-        </span>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function DistributionCard({
-  title,
-  description,
-  rows,
-  locale,
-}: {
-  title: string;
-  description: string;
-  rows: DistributionRow[];
-  locale: Locale;
-}) {
-  return (
-    <Card className="rounded-2xl shadow-sm">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {rows.length ? (
-          rows.map((row) => (
-            <div key={row.key} className="rounded-2xl border bg-background p-3">
-              <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-                <span className="truncate font-medium text-foreground">{row.label}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {formatInteger(row.count)} · {formatPercent(row.percent)}
-                </span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-muted">
-                <div
-                  className={cn(
-                    "h-full rounded-full",
-                    locale === "ar" ? "origin-right" : "origin-left",
-                    "bg-primary",
-                  )}
-                  style={{ width: `${Math.max(3, Math.min(100, row.percent))}%` }}
-                />
-              </div>
-            </div>
-          ))
-        ) : (
-          <div className="flex min-h-32 items-center justify-center rounded-2xl border bg-muted/20 text-sm text-muted-foreground">
-            —
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 function EmptyState({
   title,
   description,
@@ -807,20 +691,17 @@ function EmptyState({
   );
 }
 
-export default function SystemUsersReportsPage() {
+export function SystemUsersView({ mode = "overview" }: { mode?: "overview" | "list" }) {
   const [locale, setLocale] = React.useState<Locale>("ar");
   const [users, setUsers] = React.useState<UserRecord[]>([]);
   const [apiTotal, setApiTotal] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [apiUnavailable, setApiUnavailable] = React.useState(false);
 
   const [search, setSearch] = React.useState("");
   const [status, setStatus] = React.useState<StatusFilter>("all");
-  const [activity, setRole] = React.useState("all");
-  const [city, setCity] = React.useState("all");
-  const [fromDate, setFromDate] = React.useState("");
-  const [toDate, setToDate] = React.useState("");
   const [sort, setSort] = React.useState<SortKey>("newest");
 
   const t = translations[locale];
@@ -883,8 +764,16 @@ export default function SystemUsersReportsPage() {
         setApiTotal(apiCount || allRows.length);
 
         if (silent) toast.success(t.refreshed);
-      } catch (caughtError) {
+            } catch (caughtError) {
         const message = caughtError instanceof Error ? caughtError.message : t.errorDesc;
+        const isMissingApi = message.includes("404") || message.toLowerCase().includes("not found");
+        if (isMissingApi) {
+          setUsers([]);
+          setApiTotal(0);
+          setApiUnavailable(true);
+          setError("");
+          return;
+        }
         setError(message);
         if (silent) toast.error(message);
       } finally {
@@ -899,18 +788,14 @@ export default function SystemUsersReportsPage() {
     void loadUsers();
   }, [loadUsers]);
 
-  const activityOptions = React.useMemo(() => {
-    return [...new Set(users.map((user) => user.activity).filter((value) => value && value !== "—"))].sort();
-  }, [users]);
-
-  const cityOptions = React.useMemo(() => {
-    return [...new Set(users.map((user) => user.city).filter((value) => value && value !== "—"))].sort();
-  }, [users]);
+  const resetFilters = React.useCallback(() => {
+    setSearch("");
+    setStatus("all");
+    setSort("newest");
+  }, []);
 
   const filteredUsers = React.useMemo(() => {
     const needle = search.trim().toLowerCase();
-    const fromTime = fromDate ? new Date(`${fromDate}T00:00:00`).getTime() : 0;
-    const toTime = toDate ? new Date(`${toDate}T23:59:59`).getTime() : 0;
 
     const rows = users.filter((user) => {
       const haystack = [
@@ -921,20 +806,12 @@ export default function SystemUsersReportsPage() {
         user.subscription,
         user.city,
         user.status,
-        user.email,
-        user.phone,
       ]
         .join(" ")
         .toLowerCase();
 
-      const createdTime = rowDateValue(user.created_at);
-
       if (needle && !haystack.includes(needle)) return false;
       if (status !== "all" && user.status !== status) return false;
-      if (activity !== "all" && user.activity !== activity) return false;
-      if (city !== "all" && user.city !== city) return false;
-      if (fromTime && createdTime && createdTime < fromTime) return false;
-      if (toTime && createdTime && createdTime > toTime) return false;
 
       return true;
     });
@@ -943,12 +820,9 @@ export default function SystemUsersReportsPage() {
       if (sort === "oldest") return rowDateValue(a.created_at) - rowDateValue(b.created_at);
       if (sort === "name") return a.name.localeCompare(b.name);
       if (sort === "code") return a.code.localeCompare(b.code);
-      if (sort === "status") return a.status.localeCompare(b.status);
-      if (sort === "activity") return a.activity.localeCompare(b.activity);
-      if (sort === "city") return a.city.localeCompare(b.city);
       return rowDateValue(b.created_at) - rowDateValue(a.created_at);
     });
-  }, [activity, city, users, fromDate, search, sort, status, toDate]);
+  }, [users, search, sort, status]);
 
   const stats = React.useMemo(() => {
     return {
@@ -957,41 +831,43 @@ export default function SystemUsersReportsPage() {
       inactive: users.filter((user) =>
         ["inactive", "suspended", "cancelled"].includes(user.status),
       ).length,
-      subscribed: users.filter((user) => user.subscription && user.subscription !== "—").length,
-      activities: activityOptions.length,
-      cities: cityOptions.length,
-      filtered: filteredUsers.length,
+      subscribed: users.filter((user) => user.city && user.city !== "—" && user.city !== "none").length,
     };
-  }, [activityOptions.length, apiTotal, cityOptions.length, users, filteredUsers.length]);
+  }, [apiTotal, users]);
 
-  const statusDistribution = React.useMemo(
-    () => makeDistribution(filteredUsers, (row) => row.status, locale, { status: true, limit: 8 }),
-    [filteredUsers, locale],
+  const quickActions = React.useMemo<QuickAction[]>(
+    () => [
+      {
+        title: t.openListTitle,
+        description: t.openListDesc,
+        href: "/system/users/list",
+        icon: ListChecks,
+      },
+      {
+        title: t.createTitle,
+        description: t.createDesc,
+        href: "/system/users/create",
+        icon: Plus,
+      },
+            {
+        title: t.permissionsTitle,
+        description: t.permissionsDesc,
+        href: "/system/users/permissions",
+        icon: ShieldCheck,
+      },
+      {
+        title: t.reportsTitle,
+        description: t.reportsDesc,
+        href: "/system/users/reports",
+        icon: FileBarChart2,
+      },
+    ],
+    [t.createDesc, t.createTitle, t.openListDesc, t.openListTitle, t.permissionsDesc, t.permissionsTitle, t.reportsDesc, t.reportsTitle],
   );
 
-  const activityDistribution = React.useMemo(
-    () => makeDistribution(filteredUsers, (row) => row.activity, locale, { limit: 8 }),
-    [filteredUsers, locale],
-  );
-
-  const cityDistribution = React.useMemo(
-    () => makeDistribution(filteredUsers, (row) => row.city, locale, { limit: 8 }),
-    [filteredUsers, locale],
-  );
-
-  const hasFilters = Boolean(
-    search || status !== "all" || activity !== "all" || city !== "all" || fromDate || toDate || sort !== "newest",
-  );
-
-  function resetFilters() {
-    setSearch("");
-    setStatus("all");
-    setRole("all");
-    setCity("all");
-    setFromDate("");
-    setToDate("");
-    setSort("newest");
-  }
+  const hasFilters = Boolean(search || status !== "all" || sort !== "newest");
+  const previewRows = mode === "overview" ? filteredUsers.slice(0, 8) : filteredUsers;
+  const apiStatusNote = apiUnavailable ? "api-unavailable" : "api-ready";
 
   function buildExportRows() {
     return filteredUsers.map((user) => [
@@ -1003,7 +879,6 @@ export default function SystemUsersReportsPage() {
       user.city,
       getStatusLabel(user.status, locale),
       formatDate(user.created_at),
-      formatDate(user.updated_at),
     ]);
   }
 
@@ -1017,7 +892,6 @@ export default function SystemUsersReportsPage() {
       t.city,
       t.status,
       t.createdAt,
-      t.updatedAt,
     ];
 
     const rows = buildExportRows();
@@ -1062,7 +936,7 @@ export default function SystemUsersReportsPage() {
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = `Mhamcloud-system-users-report-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `Mhamcloud-system-users-overview-${apiStatusNote}-${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -1116,9 +990,9 @@ export default function SystemUsersReportsPage() {
     printWindow.document.close();
   }
 
-  if (loading) return <ReportSkeleton />;
+  if (loading) return <UsersOverviewSkeleton />;
 
-  if (error) {
+  if (error && !apiUnavailable) {
     return (
       <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
         <Card className="mx-auto max-w-3xl rounded-3xl border-destructive/30 bg-card shadow-sm">
@@ -1197,225 +1071,165 @@ export default function SystemUsersReportsPage() {
           <KpiCard title={t.subscribedUsers} value={stats.subscribed} description={t.fromLiveApi} icon={Activity} />
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <KpiCard title={t.uniqueActivities} value={stats.activities} description={t.fromLiveApi} icon={PieChart} />
-          <KpiCard title={t.uniqueCities} value={stats.cities} description={t.fromLiveApi} icon={MapPin} />
-          <KpiCard title={t.filteredRows} value={stats.filtered} description={t.fromLiveApi} icon={TableProperties} />
-        </div>
-
         <Card className="rounded-2xl shadow-sm">
-          <CardContent className="pt-6">
-            <div className="grid gap-3 xl:grid-cols-[minmax(260px,1fr)_160px_160px_160px_150px_150px_170px_auto]">
-              <div className="relative">
-                <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder={t.searchPlaceholder}
-                  className="h-10 rounded-xl ps-9"
-                />
-              </div>
-
-              <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
-                <SelectTrigger className="h-10 rounded-xl bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {statusFilters.map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {item === "all" ? t.all : getStatusLabel(item, locale)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={activity} onValueChange={setRole}>
-                <SelectTrigger className="h-10 rounded-xl bg-background">
-                  <SelectValue placeholder={t.activityFilter} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t.all}</SelectItem>
-                  {activityOptions.map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {item}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={city} onValueChange={setCity}>
-                <SelectTrigger className="h-10 rounded-xl bg-background">
-                  <SelectValue placeholder={t.cityFilter} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t.all}</SelectItem>
-                  {cityOptions.map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {item}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Input
-                type="date"
-                value={fromDate}
-                onChange={(event) => setFromDate(event.target.value)}
-                className="h-10 rounded-xl"
-                aria-label={t.fromDate}
-              />
-
-              <Input
-                type="date"
-                value={toDate}
-                onChange={(event) => setToDate(event.target.value)}
-                className="h-10 rounded-xl"
-                aria-label={t.toDate}
-              />
-
-              <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
-                <SelectTrigger className="h-10 rounded-xl bg-background">
-                  <ArrowUpDown className="h-4 w-4" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="newest">{t.newest}</SelectItem>
-                  <SelectItem value="oldest">{t.oldest}</SelectItem>
-                  <SelectItem value="name">{t.nameSort}</SelectItem>
-                  <SelectItem value="code">{t.codeSort}</SelectItem>
-                  <SelectItem value="status">{t.statusSort}</SelectItem>
-                  <SelectItem value="activity">{t.activitySort}</SelectItem>
-                  <SelectItem value="city">{t.citySort}</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={resetFilters}>
-                <RotateCcw className="h-4 w-4" />
-                {t.reset}
-              </Button>
+          <CardHeader>
+            <CardTitle>{t.actionsTitle}</CardTitle>
+            <CardDescription>{t.actionsDesc}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {quickActions.map((action) => (
+                <QuickActionCard key={action.href} action={action} />
+              ))}
             </div>
           </CardContent>
         </Card>
-
-        <div className="grid gap-4 xl:grid-cols-3">
-          <DistributionCard
-            title={t.statusDistribution}
-            description={t.statusDistributionDesc}
-            rows={statusDistribution}
-            locale={locale}
-          />
-          <DistributionCard
-            title={t.activityDistribution}
-            description={t.activityDistributionDesc}
-            rows={activityDistribution}
-            locale={locale}
-          />
-          <DistributionCard
-            title={t.cityDistribution}
-            description={t.cityDistributionDesc}
-            rows={cityDistribution}
-            locale={locale}
-          />
-        </div>
 
         <Card className="w-full rounded-2xl shadow-sm">
           <CardHeader className="gap-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <CardTitle>{t.reportTable}</CardTitle>
-                <CardDescription className="mt-2">{t.reportTableDesc}</CardDescription>
+                <CardTitle>{mode === "overview" ? t.tableTitle : t.openListTitle}</CardTitle>
+                <CardDescription className="mt-2">{mode === "overview" ? t.tableDesc : t.openListDesc}</CardDescription>
               </div>
               <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
                 <UsersRound className="h-3.5 w-3.5" />
-                {t.showing} {formatInteger(filteredUsers.length)} {t.of} {formatInteger(apiTotal || users.length)} {t.rows}
+                {t.showing} {formatInteger(previewRows.length)} {t.of} {formatInteger(apiTotal || users.length)} {t.rows}
               </Badge>
             </div>
           </CardHeader>
 
           <CardContent className="space-y-4">
+            <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row md:items-center">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder={t.searchPlaceholder}
+                    className="h-10 rounded-xl ps-9"
+                  />
+                </div>
+
+                <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
+                  <SelectTrigger className="h-10 rounded-xl bg-background md:w-[170px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statusFilters.map((item) => (
+                      <SelectItem key={item} value={item}>
+                        {item === "all" ? t.all : getStatusLabel(item, locale)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
+                  <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[160px]">
+                    <ArrowUpDown className="h-4 w-4" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="newest">{t.newest}</SelectItem>
+                    <SelectItem value="oldest">{t.oldest}</SelectItem>
+                    <SelectItem value="name">{t.nameSort}</SelectItem>
+                    <SelectItem value="code">{t.codeSort}</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={resetFilters}>
+                  <RotateCcw className="h-4 w-4" />
+                  {t.reset}
+                </Button>
+              </div>
+            </div>
+
             <div className="overflow-hidden rounded-2xl border bg-background">
               <div className="w-full overflow-x-auto">
-                <Table className="w-full min-w-[1120px] table-fixed">
+                <Table className="w-full min-w-[980px] table-fixed">
                   <TableHeader>
                     <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
-                      <TableHead className={cn("w-[220px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                      <TableHead className={cn("h-11 w-[220px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
                         {t.user}
                       </TableHead>
-                      <TableHead className={cn("w-[130px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                      <TableHead className={cn("h-11 w-[135px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
                         {t.code}
                       </TableHead>
-                      <TableHead className={cn("w-[130px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                      <TableHead className={cn("h-11 w-[130px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
                         {t.owner}
                       </TableHead>
-                      <TableHead className={cn("w-[130px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                      <TableHead className={cn("h-11 w-[130px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
                         {t.activity}
                       </TableHead>
-                      <TableHead className={cn("w-[130px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                      <TableHead className={cn("h-11 w-[130px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
                         {t.subscription}
                       </TableHead>
-                      <TableHead className={cn("w-[120px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                      <TableHead className={cn("h-11 w-[115px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
                         {t.city}
                       </TableHead>
-                      <TableHead className={cn("w-[110px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                      <TableHead className={cn("h-11 w-[110px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
                         {t.status}
                       </TableHead>
-                      <TableHead className={cn("w-[115px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                      <TableHead className={cn("h-11 w-[115px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
                         {t.createdAt}
                       </TableHead>
-                      <TableHead className="sticky left-0 z-10 w-[76px] bg-muted/40 px-3 text-center text-xs font-semibold text-muted-foreground">
+                      <TableHead className="sticky left-0 z-10 h-11 w-[76px] bg-muted/40 px-3 text-center text-xs font-semibold text-muted-foreground">
                         {t.open}
                       </TableHead>
                     </TableRow>
                   </TableHeader>
 
                   <TableBody>
-                    {filteredUsers.length ? (
-                      filteredUsers.map((user) => (
+                    {previewRows.length ? (
+                      previewRows.map((user) => (
                         <TableRow key={user.id || user.code || user.name} className="h-[64px]">
-                          <TableCell className={cn("overflow-hidden px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
                             <div className="min-w-0">
                               <span className="block truncate text-sm font-semibold text-foreground">
-                                {user.name || t.notAvailable}
+                                {user.name || t.unknown}
                               </span>
                               <span className="block truncate text-xs text-muted-foreground">
                                 #{user.id || user.code || "—"}
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell className={cn("overflow-hidden px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
                             <span className="block truncate text-sm tabular-nums text-muted-foreground">
                               {user.code || "—"}
                             </span>
                           </TableCell>
-                          <TableCell className={cn("overflow-hidden px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
                             <span className="block truncate text-sm text-muted-foreground">
                               {user.owner || "—"}
                             </span>
                           </TableCell>
-                          <TableCell className={cn("overflow-hidden px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
                             <span className="block truncate text-sm text-muted-foreground">
                               {user.activity || "—"}
                             </span>
                           </TableCell>
-                          <TableCell className={cn("overflow-hidden px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
                             <span className="block truncate text-sm text-muted-foreground">
                               {user.subscription || "—"}
                             </span>
                           </TableCell>
-                          <TableCell className={cn("overflow-hidden px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
                             <span className="block truncate text-sm text-muted-foreground">
                               {user.city || "—"}
                             </span>
                           </TableCell>
-                          <TableCell className={cn("px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
                             <StatusBadge value={user.status} locale={locale} />
                           </TableCell>
-                          <TableCell className={cn("px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
                             <span className="text-sm tabular-nums text-muted-foreground">
                               {formatDate(user.created_at)}
                             </span>
                           </TableCell>
-                          <TableCell className="sticky left-0 z-10 bg-background px-3 text-center align-middle">
+                          <TableCell className="sticky left-0 z-10 h-[64px] bg-background px-3 text-center align-middle">
                             <Button asChild variant="outline" size="sm" className="h-8 rounded-lg bg-background px-3">
                               <Link href={user.id ? `/system/users/${user.id}` : "/system/users/list"}>
                                 {t.open}
@@ -1446,7 +1260,7 @@ export default function SystemUsersReportsPage() {
               <p>
                 {t.showing}{" "}
                 <span className="font-medium text-foreground tabular-nums">
-                  {formatInteger(filteredUsers.length)}
+                  {formatInteger(previewRows.length)}
                 </span>{" "}
                 {t.of}{" "}
                 <span className="font-medium text-foreground tabular-nums">
@@ -1454,26 +1268,12 @@ export default function SystemUsersReportsPage() {
                 </span>{" "}
                 {t.rows}
               </p>
-              <div className="flex flex-wrap gap-2">
-                <Button asChild variant="outline" className="rounded-xl bg-background">
-                  <Link href="/system/users">
-                    <BarChart3 className="h-4 w-4" />
-                    {t.usersCenter}
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="rounded-xl bg-background">
-                  <Link href="/system/users/list">
-                    <ListChecks className="h-4 w-4" />
-                    {t.usersList}
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="rounded-xl bg-background">
-                  <Link href="/system">
-                    <LayoutDashboard className="h-4 w-4" />
-                    {t.systemDashboard}
-                  </Link>
-                </Button>
-              </div>
+              <Button asChild variant="outline" className="w-fit rounded-xl bg-background">
+                <Link href="/system/users/list">
+                  <ListChecks className="h-4 w-4" />
+                  {t.list}
+                </Link>
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -1481,6 +1281,14 @@ export default function SystemUsersReportsPage() {
     </main>
   );
 }
+
+
+
+
+
+
+
+
 
 
 
