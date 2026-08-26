@@ -52,6 +52,8 @@ from catalog.services import (
     update_catalog_item,
 )
 
+from subscriptions.testing import ensure_test_workspace_access
+
 
 User = get_user_model()
 
@@ -486,6 +488,8 @@ class CatalogApiTests(TestCase):
             role=CompanyRole.EMPLOYEE,
             is_primary=True,
         )
+        # Phase 41 test-only workspace contract fixture.
+        ensure_test_workspace_access()
 
     def test_api_user_without_membership_cannot_access_categories(self) -> None:
         self.client.force_login(self.no_membership_user)

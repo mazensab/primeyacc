@@ -474,7 +474,9 @@ def create_treasury_opening_balance_entry(
     ensure_same_company(company, treasury_account, field_name="treasury_account")
     with transaction.atomic():
         treasury_account = (
-            TreasuryAccount.objects.select_for_update()
+            TreasuryAccount.objects.select_for_update(
+                of=("self",)
+            )
             .select_related(
                 "accounting_account",
                 "opening_accounting_entry",

@@ -38,6 +38,8 @@ from parties.models import (
     BusinessPartyType,
 )
 
+from subscriptions.testing import ensure_test_workspace_access
+
 
 User = get_user_model()
 
@@ -135,6 +137,8 @@ class BusinessPartyAPITests(TestCase):
             created_by=self.user_b,
             updated_by=self.user_b,
         )
+        # Phase 41 test-only workspace contract fixture.
+        ensure_test_workspace_access()
 
     # ========================================================
     # Flexible factories

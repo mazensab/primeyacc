@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # ًں“‚ treasury/tests.py
 # ًں§  Mhamcloud | Treasury & Payments Tests V1.1
 # ------------------------------------------------------------
@@ -60,6 +60,8 @@ from .services import (
     get_treasury_summary,
     post_treasury_transaction,
 )
+
+from subscriptions.testing import ensure_test_workspace_access
 
 
 # ============================================================
@@ -2209,6 +2211,8 @@ class TreasuryAPITests(MhamcloudTestFactoryMixin, TestCase):
     def setUp(self) -> None:
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
+        # Phase 41 test-only workspace contract fixture.
+        ensure_test_workspace_access()
 
     def test_summary_api_returns_company_scoped_summary(self) -> None:
         account = create_treasury_account(

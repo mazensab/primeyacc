@@ -2024,7 +2024,9 @@ def post_stock_movement(
         )
 
     stock_item = (
-        StockItem.objects.select_for_update()
+        StockItem.objects.select_for_update(
+            of=("self",)
+        )
         .select_related("location")
         .get(
             id=movement.stock_item_id,
@@ -3995,7 +3997,9 @@ def issue_serial_stock(
     )
 
     locked_serials = list(
-        InventorySerialNumber.objects.select_for_update()
+        InventorySerialNumber.objects.select_for_update(
+            of=("self",)
+        )
         .select_related(
             "item",
             "warehouse",
@@ -4591,7 +4595,9 @@ def transfer_serial_stock(
         )
 
     locked_serials = list(
-        InventorySerialNumber.objects.select_for_update()
+        InventorySerialNumber.objects.select_for_update(
+            of=("self",)
+        )
         .select_related(
             "item",
             "warehouse",
@@ -4826,22 +4832,51 @@ def generate_stock_reservation_number(
     company: Company,
 ) -> str:
     """
-    Generate the next company-scoped reservation number.
+    Generate the next company-scoped stock reservation number.
+
+    Legacy/custom reservation numbers still consume one position in
+    the company-local sequence. Generated RSV-000001-style numbers
+    contribute their numeric value. The global database PK is never
+    used.
     """
     if company is None:
         raise ValidationError(
             {"company": "Company context is required."}
         )
 
-    last_id = (
+    prefix = "RSV-"
+
+    company_numbers = list(
         StockReservation.objects
         .filter(company=company)
-        .aggregate(max_id=Max("id"))
-        .get("max_id")
-        or 0
+        .values_list("reservation_number", flat=True)
     )
 
-    return f"RSV-{last_id + 1:06d}"
+    highest_numeric = 0
+
+    for value in company_numbers:
+        normalized = str(value or "").strip().upper()
+
+        if not normalized.startswith(prefix):
+            continue
+
+        numeric = normalized[len(prefix):]
+
+        if numeric.isdigit():
+            highest_numeric = max(
+                highest_numeric,
+                int(numeric),
+            )
+
+    current_position = max(
+        len(company_numbers),
+        highest_numeric,
+    )
+
+    return f"{prefix}{current_position + 1:06d}"
+
+
+
 
 
 def get_company_stock_reservations(
@@ -5475,7 +5510,7 @@ def allocate_stock_reservation(
 
     locked_reservation = (
         StockReservation.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related("sales_order")
         .get(
             id=reservation.id,
@@ -5510,7 +5545,9 @@ def allocate_stock_reservation(
 
     locked_order_item = (
         SalesOrderItem.objects
-        .select_for_update()
+        .select_for_update(
+            of=("self",)
+        )
         .select_related(
             "order",
             "catalog_item",
@@ -5529,7 +5566,9 @@ def allocate_stock_reservation(
 
     locked_stock_item = (
         StockItem.objects
-        .select_for_update()
+        .select_for_update(
+            of=("self",)
+        )
         .select_related(
             "warehouse",
             "location",
@@ -6007,7 +6046,9 @@ def release_stock_reservation_allocation(
     """
     locked_allocation = (
         StockReservationAllocation.objects
-        .select_for_update()
+        .select_for_update(
+            of=("self",)
+        )
         .select_related(
             "reservation",
             "stock_item",
@@ -6249,7 +6290,9 @@ def _release_all_locked_reservation_allocations(
 
     allocations = list(
         StockReservationAllocation.objects
-        .select_for_update()
+        .select_for_update(
+            of=("self",)
+        )
         .select_related(
             "stock_item",
             "warehouse",
@@ -6584,7 +6627,7 @@ def _lock_reservation_for_tracked_allocation(
     """
     locked_reservation = (
         StockReservation.objects
-        .select_for_update()
+        .select_for_update(of=("self",))
         .select_related("sales_order")
         .filter(
             id=reservation.id,
@@ -6645,7 +6688,9 @@ def _lock_sales_order_item_for_tracked_allocation(
     """
     locked_order_item = (
         SalesOrderItem.objects
-        .select_for_update()
+        .select_for_update(
+            of=("self",)
+        )
         .select_related(
             "order",
             "catalog_item",
@@ -6875,7 +6920,9 @@ def allocate_batch_stock_reservation(
 
     locked_batch_balance = (
         InventoryBatchBalance.objects
-        .select_for_update()
+        .select_for_update(
+            of=("self",)
+        )
         .select_related(
             "warehouse",
             "location",
@@ -6922,7 +6969,9 @@ def allocate_batch_stock_reservation(
 
     locked_stock_item = (
         StockItem.objects
-        .select_for_update()
+        .select_for_update(
+            of=("self",)
+        )
         .select_related(
             "warehouse",
             "location",
@@ -7144,7 +7193,9 @@ def allocate_serial_stock_reservation(
 
     locked_serial = (
         InventorySerialNumber.objects
-        .select_for_update()
+        .select_for_update(
+            of=("self",)
+        )
         .select_related(
             "warehouse",
             "location",
@@ -7194,7 +7245,9 @@ def allocate_serial_stock_reservation(
 
     locked_stock_item = (
         StockItem.objects
-        .select_for_update()
+        .select_for_update(
+            of=("self",)
+        )
         .select_related(
             "warehouse",
             "location",
@@ -7491,7 +7544,9 @@ def _resolve_goods_issue_sales_order(
 
     order = (
         SalesOrder.objects
-        .select_for_update()
+        .select_for_update(
+            of=("self",)
+        )
         .select_related(
             "company",
             "branch",
@@ -7638,7 +7693,9 @@ def _resolve_goods_issue_allocation(
     """
     allocation = (
         StockReservationAllocation.objects
-        .select_for_update()
+        .select_for_update(
+            of=("self",)
+        )
         .select_related(
             "reservation",
             "sales_order_item",
@@ -7708,7 +7765,9 @@ def _resolve_goods_issue_order_item(
 
     order_item = (
         SalesOrderItem.objects
-        .select_for_update()
+        .select_for_update(
+            of=("self",)
+        )
         .select_related(
             "order",
             "catalog_item",
@@ -7811,7 +7870,9 @@ def _consume_reserved_allocation_for_goods_issue(
 
     allocation = (
         StockReservationAllocation.objects
-        .select_for_update()
+        .select_for_update(
+            of=("self",)
+        )
         .select_related(
             "reservation",
             "stock_item",
@@ -8447,7 +8508,9 @@ def post_goods_issue(
     """
     locked_issue = (
         GoodsIssue.objects
-        .select_for_update()
+        .select_for_update(
+            of=("self",)
+        )
         .select_related(
             "company",
             "sales_order",
@@ -8467,7 +8530,9 @@ def post_goods_issue(
 
     locked_items = list(
         locked_issue.items
-        .select_for_update()
+        .select_for_update(
+            of=("self",)
+        )
         .select_related(
             "issue",
             "issue__sales_order",
@@ -9415,7 +9480,9 @@ def post_physical_inventory_count(
         )
 
     count_items = (
-        count.items.select_for_update()
+        count.items.select_for_update(
+            of=("self",)
+        )
         .select_related(
             "stock_item",
             "warehouse",

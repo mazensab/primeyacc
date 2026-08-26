@@ -50,6 +50,8 @@ from accounting.services import (
 )
 from companies.models import Company
 
+from subscriptions.testing import ensure_test_workspace_access
+
 
 # ============================================================
 # 🛠️ Test Helpers
@@ -659,6 +661,8 @@ class AccountingCompanyApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.client.force_authenticate(user=self.user_one)
+        # Phase 41: satisfy the real subscription contract inside legacy operational API tests only.
+        ensure_test_workspace_access()
 
     def _balanced_api_payload(self) -> dict[str, Any]:
         return {

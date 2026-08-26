@@ -90,6 +90,8 @@ from .services import (
     update_salary_component,
 )
 
+from subscriptions.testing import ensure_test_workspace_access
+
 
 User = get_user_model()
 
@@ -807,6 +809,8 @@ class EmployeeAPITests(TestCase):
             created_by=self.other_owner,
             updated_by=self.other_owner,
         )
+        # Phase 41 test-only workspace contract fixture.
+        ensure_test_workspace_access()
 
     def test_employees_list_requires_authentication(self):
         response = self.client.get("/api/company/hr/employees/")
@@ -1118,6 +1122,8 @@ class AttendanceAPITests(TestCase):
             created_by=self.other_owner,
             updated_by=self.other_owner,
         )
+        # Phase 41 test-only workspace contract fixture.
+        ensure_test_workspace_access()
 
     def test_attendance_list_requires_authentication(self):
         response = self.client.get("/api/company/hr/attendance/")
@@ -1966,6 +1972,8 @@ class LeaveManagementAPITests(TestCase):
             created_by=self.other_owner,
             updated_by=self.other_owner,
         )
+        # Phase 41 test-only workspace contract fixture.
+        ensure_test_workspace_access()
 
     def test_leave_types_list_requires_authentication(self):
         response = self.client.get("/api/company/hr/leave-types/")
@@ -2956,6 +2964,8 @@ class PayrollSalaryComponentsAPITests(TestCase):
         )
         self.client = Client()
         self.client.force_login(self.user)
+        # Phase 41 test-only workspace contract fixture.
+        ensure_test_workspace_access()
 
     def test_salary_components_list_api(self):
         create_salary_component(
@@ -3184,6 +3194,8 @@ class PayrollSalaryProfilesAPITests(TestCase):
         )
         self.client = Client()
         self.client.force_login(self.user)
+        # Phase 41 test-only workspace contract fixture.
+        ensure_test_workspace_access()
 
     def test_salary_profiles_list_api(self):
         create_employee_salary_profile(
@@ -3407,6 +3419,8 @@ class PayrollPeriodsAPITests(TestCase):
         )
         self.client = Client()
         self.client.force_login(self.user)
+        # Phase 41 test-only workspace contract fixture.
+        ensure_test_workspace_access()
 
     def test_payroll_periods_list_api(self):
         create_payroll_period(
@@ -3651,6 +3665,8 @@ class PayrollRunsAPITests(TestCase):
         )
         self.client = Client()
         self.client.force_login(self.user)
+        # Phase 41 test-only workspace contract fixture.
+        ensure_test_workspace_access()
 
     def test_payroll_runs_list_api(self):
         create_payroll_run(
@@ -3926,6 +3942,8 @@ class PayrollPayslipsAPITests(TestCase):
         )
         self.client = Client()
         self.client.force_login(self.user)
+        # Phase 41 test-only workspace contract fixture.
+        ensure_test_workspace_access()
 
     def test_payslips_list_api(self):
         response = self.client.get("/api/company/hr/payroll/payslips/")
@@ -4164,6 +4182,8 @@ class PayrollPayslipItemsAPITests(TestCase):
         ).first()
         self.client = Client()
         self.client.force_login(self.user)
+        # Phase 41 test-only workspace contract fixture.
+        ensure_test_workspace_access()
 
     def test_payslip_items_list_api(self):
         response = self.client.get("/api/company/hr/payroll/payslip-items/")
@@ -4340,6 +4360,8 @@ class PerformanceCyclesAPITests(TestCase):
         )
 
         self.client.force_login(self.user)
+        # Phase 41 test-only workspace contract fixture.
+        ensure_test_workspace_access()
 
     def test_create_performance_cycle_api(self):
         response = self.client.post(
@@ -4557,6 +4579,8 @@ class PerformanceCriteriaAPITests(TestCase):
         )
 
         self.client.force_login(self.user)
+        # Phase 41 test-only workspace contract fixture.
+        ensure_test_workspace_access()
 
     def test_create_performance_criterion_api(self):
         response = self.client.post(
@@ -4792,6 +4816,8 @@ class PerformanceReviewsAPITests(TestCase):
         )
 
         self.client.force_login(self.user)
+        # Phase 41 test-only workspace contract fixture.
+        ensure_test_workspace_access()
 
     def test_create_performance_review_api(self):
         response = self.client.post(
@@ -5076,6 +5102,8 @@ class PerformanceScoresAPITests(TestCase):
         )
 
         self.client.force_login(self.user)
+        # Phase 41 test-only workspace contract fixture.
+        ensure_test_workspace_access()
 
     def test_create_performance_score_api(self):
         response = self.client.post(
@@ -5298,6 +5326,8 @@ class EmployeeGoalsAPITests(TestCase):
         )
 
         self.client.force_login(self.user)
+        # Phase 41 test-only workspace contract fixture.
+        ensure_test_workspace_access()
 
     def test_create_employee_goal_api(self):
         response = self.client.post(

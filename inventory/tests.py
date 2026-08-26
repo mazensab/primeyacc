@@ -212,6 +212,8 @@ from inventory.services import (
     serialize_goods_issue,
 )
 
+from subscriptions.testing import ensure_test_workspace_access
+
 
 User = get_user_model()
 
@@ -352,6 +354,8 @@ class InventoryTestBase(TestCase):
             name="Other Warehouse",
             warehouse_type=WarehouseType.MAIN,
         )
+        # Phase 41 test-only workspace contract fixture.
+        ensure_test_workspace_access()
 
 
 class InventoryUtilityTests(InventoryTestBase):
@@ -636,15 +640,15 @@ class WarehouseStockSummaryTests(InventoryTestBase):
         )
         self.assertEqual(
             summary["total_quantity_on_hand"],
-            "22",
+            "22.0000",
         )
         self.assertEqual(
             summary["total_reserved_quantity"],
-            "3",
+            "3.0000",
         )
         self.assertEqual(
             summary["total_available_quantity"],
-            "19",
+            "19.0000",
         )
 
     def test_warehouse_summary_returns_zero_values_without_stock(self):

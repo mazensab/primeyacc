@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📂 documents/tests.py
 # 🧠 Mhamcloud | Documents Templates Tests V1.1
 # ------------------------------------------------------------
@@ -413,6 +413,8 @@ class CompanyDocumentTemplatesAPITests(TestCase):
             status=MembershipStatus.ACTIVE,
             is_primary=True,
         )
+        # Phase 41 test-only workspace contract fixture.
+        ensure_test_workspace_access()
 
     def auth_owner(self):
         self.client.force_login(self.owner)
@@ -757,6 +759,8 @@ from documents.rendering import (
     supported_document_rendering_options,
 )
 
+from subscriptions.testing import ensure_test_workspace_access
+
 
 class DocumentRenderingServicesTests(TestCase):
     def setUp(self):
@@ -875,6 +879,8 @@ class CompanyDocumentRenderingAPITests(TestCase):
         )
 
         self.client.force_login(self.owner)
+        # Phase 41 test-only workspace contract fixture.
+        ensure_test_workspace_access()
 
     def company_headers(self) -> dict:
         return {"HTTP_X_COMPANY_ID": str(self.company.id)}
