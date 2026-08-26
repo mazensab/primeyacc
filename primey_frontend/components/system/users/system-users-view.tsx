@@ -6,7 +6,7 @@
    ------------------------------------------------------------
    ✅ Premium PrimeyCare admin pattern adapted for Mhamcloud
    ✅ System users module center page
-   ✅ Real API only: GET /api/users/
+   ✅ Real API only: GET /api/system/users/
    ✅ KPI cards + quick actions + recent users table
    ✅ Search, status filter, sorting, reset
    ✅ Excel .xls export
@@ -150,7 +150,7 @@ const translations = {
     actionsDesc: "تنقل سريع بين صفحات المستخدمين الأساسية بنفس نمط إدارة المنصة.",
     openListTitle: "عرض قائمة المستخدمين",
     openListDesc: "جدول كامل للمستخدمين مع الفلاتر والتصدير والطباعة.",
-    createTitle: "إضافة مستخدم جديدة",
+    createTitle: "إضافة مستخدم جديد",
     createDesc: "إنشاء مستخدم جديد وربطه بإعدادات المنصة.",
     permissionsTitle: "صلاحيات المستخدمين",
     permissionsDesc: "مراجعة أدوار وصلاحيات مستخدمي النظام من واجهات النظام الحقيقية.",
@@ -178,7 +178,7 @@ const translations = {
     cancelled: "ملغي",
     unknown: "غير محدد",
 
-    noDataTitle: "لا توجد مستخدمين",
+    noDataTitle: "لا يوجد مستخدمون",
     noDataDesc: "سيظهر المستخدمون هنا عند توفرهم من API.",
     noResultsTitle: "لا توجد نتائج مطابقة",
     noResultsDesc: "غير البحث أو الفلاتر لعرض نتائج أخرى.",
@@ -764,7 +764,7 @@ export function SystemUsersView({ mode = "overview" }: { mode?: "overview" | "li
         setApiTotal(apiCount || allRows.length);
 
         if (silent) toast.success(t.refreshed);
-            } catch (caughtError) {
+      } catch (caughtError) {
         const message = caughtError instanceof Error ? caughtError.message : t.errorDesc;
         const isMissingApi = message.includes("404") || message.toLowerCase().includes("not found");
         if (isMissingApi) {
@@ -849,10 +849,10 @@ export function SystemUsersView({ mode = "overview" }: { mode?: "overview" | "li
         href: "/system/users/create",
         icon: Plus,
       },
-            {
+      {
         title: t.permissionsTitle,
         description: t.permissionsDesc,
-        href: "/system/users/permissions",
+        href: "/system/permissions",
         icon: ShieldCheck,
       },
       {
@@ -1281,16 +1281,3 @@ export function SystemUsersView({ mode = "overview" }: { mode?: "overview" | "li
     </main>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

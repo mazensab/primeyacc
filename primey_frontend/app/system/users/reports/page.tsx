@@ -5,7 +5,7 @@
    🏢 Mhamcloud — System Users Reports
    ------------------------------------------------------------
    ✅ Premium PrimeyCare reports pattern adapted for Mhamcloud
-   ✅ Real API only: GET /api/users/
+   ✅ Real API only: GET /api/system/users/
    ✅ Summary KPIs + status/role/access-type distributions
    ✅ Analytical full-width table
    ✅ Search, status, role, access-type, date filters
@@ -1481,8 +1481,3 @@ export default function SystemUsersReportsPage() {
     </main>
   );
 }
-
-
-
-
-
