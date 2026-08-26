@@ -1372,7 +1372,10 @@ export function CompanyPartyDetailPage({ kind }: { kind: PartyKind }) {
                 `/api/company/sales/invoices/?customer_id=${encodeURIComponent(id)}&page_size=50`,
                 `/api/company/sales/invoices/?party_id=${encodeURIComponent(id)}&page_size=50`,
               ],
-              (item) => normalizeDocumentRow(item, "/company/sales/invoices"),
+              (item) => ({
+                ...normalizeDocumentRow(item, "/company/sales/invoices"),
+                href: "/company#sales-invoices",
+              }),
               controller.signal,
             )
           : fetchFirstCollection(
@@ -1380,7 +1383,10 @@ export function CompanyPartyDetailPage({ kind }: { kind: PartyKind }) {
                 `/api/company/purchases/bills/?supplier_id=${encodeURIComponent(id)}&page_size=50`,
                 `/api/company/purchases/bills/?party_id=${encodeURIComponent(id)}&page_size=50`,
               ],
-              (item) => normalizeDocumentRow(item, "/company/purchases/bills"),
+              (item) => ({
+                ...normalizeDocumentRow(item, "/company/purchases/bills"),
+                href: `/company/suppliers/${encodeURIComponent(id)}`,
+              }),
               controller.signal,
             );
 
@@ -2428,7 +2434,13 @@ export function CompanyPartyDetailPage({ kind }: { kind: PartyKind }) {
               </CardHeader>
               <CardContent className="grid gap-2 px-5 pb-5">
                 <Button asChild variant="outline" className="justify-start bg-background">
-                  <Link href={isCustomer ? "/company/sales/invoices" : "/company/purchases/bills"}>
+                  <Link
+                    href={
+                      isCustomer
+                        ? "/company#sales-invoices"
+                        : `/company/suppliers/${encodeURIComponent(id)}`
+                    }
+                  >
                     <FileText className="h-4 w-4" />
                     {currentDocumentTitle}
                   </Link>

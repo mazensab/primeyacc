@@ -2000,7 +2000,7 @@ export default function CompanyDashboardPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align={locale === "ar" ? "start" : "end"}>
               <DropdownMenuItem asChild>
-                <Link href="/company/sales/invoices">
+                <Link href="/company#sales-invoices">
                   <ExternalLink className="h-4 w-4" />
                   {t.openSales}
                 </Link>
@@ -2408,8 +2408,8 @@ export default function CompanyDashboardPage() {
         <CompanySubscriptionAlert />
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard title={t.salesTotal} value={stats.salesTotal} description={t.salesDesc} href="/company/sales/invoices" icon={ShoppingCart} money currencyLabel={t.sar} />
-          <KpiCard title={t.salesInvoices} value={stats.salesInvoices} description={t.invoicesDesc} href="/company/sales/invoices" icon={FileText} currencyLabel={t.sar} />
+          <KpiCard title={t.salesTotal} value={stats.salesTotal} description={t.salesDesc} href="/company#sales-invoices" icon={ShoppingCart} money currencyLabel={t.sar} />
+          <KpiCard title={t.salesInvoices} value={stats.salesInvoices} description={t.invoicesDesc} href="/company#sales-invoices" icon={FileText} currencyLabel={t.sar} />
           <KpiCard title={t.receiptTotal} value={stats.receiptTotal} description={t.receiptsDesc} href="/company/treasury/receipt-vouchers" icon={ArrowDownLeft} money currencyLabel={t.sar} />
           <KpiCard title={t.paymentTotal} value={stats.paymentTotal} description={t.paymentsDesc} href="/company/treasury/payment-vouchers" icon={ArrowUpRight} money currencyLabel={t.sar} />
           <KpiCard title={t.customers} value={stats.customers} description={t.customersDesc} href="/company/customers" icon={Users} currencyLabel={t.sar} />
@@ -2418,7 +2418,10 @@ export default function CompanyDashboardPage() {
           <KpiCard title={t.netFlow} value={stats.netFlow} description={t.netFlowDesc} href="/company/treasury" icon={WalletCards} money currencyLabel={t.sar} />
         </div>
 
-        <Card className="rounded-lg border shadow-none">
+        <Card
+          id="sales-invoices"
+          className="scroll-mt-6 rounded-lg border shadow-none"
+        >
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle>{t.invoicesTitle}</CardTitle>

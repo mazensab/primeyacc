@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Image from "next/image";
 import { createElement, useEffect, useMemo, useState } from "react";
@@ -785,7 +785,7 @@ function useDashboardComputed() {
         title: text.unreadNotifications,
         description: text.unreadNotificationsDesc,
         value: unreadNotifications,
-        href: "/system/notification-center",
+        href: "/system/notifications",
         icon: Bell,
         tone: unreadNotifications > 0 ? "warning" : "success",
         status: unreadNotifications > 0 ? "warning" : "done",

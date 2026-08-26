@@ -17,26 +17,15 @@ import { usePathname } from "next/navigation";
 import { Command } from "cmdk";
 import {
   ArrowUpRight,
-  BarChart3,
-  Boxes,
-  Briefcase,
-  Building2,
   CreditCard,
-  FileText,
-  Gift,
   Globe2,
   Home,
   MessageCircle,
-  Package,
   ReceiptText,
   SearchIcon,
   Settings,
   ShieldCheck,
-  ShoppingCart,
-  Stethoscope,
-  UserCircle2,
   Users,
-  Wallet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -51,7 +40,13 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
 type AppLocale = "ar" | "en";
-type WorkspaceType = "system" | "company" | "center" | "provider" | "customer" | "agent";
+type WorkspaceType =
+  | "system"
+  | "company"
+  | "center"
+  | "provider"
+  | "customer"
+  | "agent";
 
 type SearchItem = {
   title: {
@@ -82,61 +77,6 @@ const systemSearchItems: SearchItem[] = [
     },
   },
   {
-    title: { ar: "مقدمو الخدمة", en: "Providers" },
-    href: "/system/providers",
-    aliases: ["/system/centers"],
-    icon: Stethoscope,
-    description: {
-      ar: "إدارة مقدمي الخدمة والشبكة الطبية",
-      en: "Manage providers and medical network",
-    },
-  },
-  {
-    title: { ar: "العملاء", en: "Customers" },
-    href: "/system/customers",
-    icon: Users,
-    description: {
-      ar: "إدارة العملاء",
-      en: "Manage customers",
-    },
-  },
-  {
-    title: { ar: "المندوبون", en: "Agents" },
-    href: "/system/agents",
-    icon: Briefcase,
-    description: {
-      ar: "إدارة المندوبين والعمولات",
-      en: "Manage agents and commissions",
-    },
-  },
-  {
-    title: { ar: "المنتجات والبرامج", en: "Products & Programs" },
-    href: "/system/products",
-    icon: Boxes,
-    description: {
-      ar: "إدارة كتالوج المنتجات والبرامج",
-      en: "Manage products and programs catalog",
-    },
-  },
-  {
-    title: { ar: "الطلبات", en: "Orders" },
-    href: "/system/orders",
-    icon: ShoppingCart,
-    description: {
-      ar: "إدارة الطلبات ودورة التنفيذ",
-      en: "Manage orders and fulfillment lifecycle",
-    },
-  },
-  {
-    title: { ar: "العقود", en: "Contracts" },
-    href: "/system/contracts",
-    icon: FileText,
-    description: {
-      ar: "إدارة عقود مقدمي الخدمة والعروض",
-      en: "Manage provider contracts and offers",
-    },
-  },
-  {
     title: { ar: "فواتير وإيصالات المنصة", en: "Platform Billing Documents" },
     href: "/system/invoices",
     aliases: ["/system/invoices/list", "/system/invoices/receipts"],
@@ -146,16 +86,6 @@ const systemSearchItems: SearchItem[] = [
       en: "Mhamcloud platform subscription invoices and receipts",
     },
   },
-  {
-    title: { ar: "المدفوعات", en: "Payments" },
-    href: "/system/payments",
-    icon: CreditCard,
-    description: {
-      ar: "إدارة المدفوعات والتحصيل",
-      en: "Manage payments and collections",
-    },
-  },
-
   {
     title: { ar: "اشتراكات الشركات", en: "Company Subscriptions" },
     href: "/system/subscriptions",
@@ -174,42 +104,6 @@ const systemSearchItems: SearchItem[] = [
     description: {
       ar: "مراقبة مدفوعات المنصة والتحصيل",
       en: "Monitor platform payments and collections",
-    },
-  },
-  {
-    title: { ar: "الخزينة", en: "Treasury" },
-    href: "/system/treasury",
-    icon: Wallet,
-    description: {
-      ar: "إدارة الخزينة والبنوك",
-      en: "Manage treasury and banks",
-    },
-  },
-  {
-    title: { ar: "المحاسبة", en: "Accounting" },
-    href: "/system/accounting",
-    icon: BarChart3,
-    description: {
-      ar: "التقارير والقيود المحاسبية",
-      en: "Accounting reports and journals",
-    },
-  },
-  {
-    title: { ar: "التقارير", en: "Reports" },
-    href: "/system/reports",
-    icon: BarChart3,
-    description: {
-      ar: "مركز تقارير النظام",
-      en: "System reports center",
-    },
-  },
-  {
-    title: { ar: "تقارير الطلبات", en: "Orders Reports" },
-    href: "/system/reports/orders",
-    icon: ShoppingCart,
-    description: {
-      ar: "تقرير الطلبات التشغيلي",
-      en: "Operational orders report",
     },
   },
   {
@@ -272,39 +166,8 @@ const providerSearchItems: SearchItem[] = [
     },
   },
   {
-    title: { ar: "الطلبات", en: "Orders" },
-    href: "/company/orders",
-    aliases: ["/center/orders", "/provider/orders"],
-    icon: ShoppingCart,
-    description: {
-      ar: "إدارة طلبات مقدم الخدمة",
-      en: "Manage provider orders",
-    },
-  },
-  {
-    title: { ar: "المنتجات", en: "Products" },
-    href: "/company/products",
-    aliases: ["/center/products", "/provider/products"],
-    icon: Boxes,
-    description: {
-      ar: "منتجات وخدمات مقدم الخدمة",
-      en: "Provider products and services",
-    },
-  },
-  {
-    title: { ar: "العقود", en: "Contracts" },
-    href: "/company/contracts",
-    aliases: ["/center/contracts", "/provider/contracts"],
-    icon: FileText,
-    description: {
-      ar: "عقود مقدم الخدمة",
-      en: "Provider contracts",
-    },
-  },
-  {
     title: { ar: "الفواتير", en: "Invoices" },
-    href: "/company/invoices",
-    aliases: ["/center/invoices", "/provider/invoices"],
+    href: "/company#sales-invoices",
     icon: ReceiptText,
     description: {
       ar: "فواتير مقدم الخدمة",
@@ -334,87 +197,6 @@ const providerSearchItems: SearchItem[] = [
 ];
 
 const customerSearchItems: SearchItem[] = [
-  {
-    title: { ar: "الرئيسية", en: "Home" },
-    href: "/customer",
-    icon: Home,
-    description: {
-      ar: "لوحة العميل",
-      en: "Customer dashboard home",
-    },
-  },
-  {
-    title: { ar: "العروض والخصومات", en: "Offers & Discounts" },
-    href: "/customer/offers",
-    icon: Gift,
-    description: {
-      ar: "استعراض العروض والخصومات",
-      en: "Browse offers and discounts",
-    },
-  },
-  {
-    title: { ar: "الشبكة الطبية", en: "Medical Network" },
-    href: "/customer/network",
-    icon: Stethoscope,
-    description: {
-      ar: "استعراض مقدمي الخدمة",
-      en: "Browse service providers",
-    },
-  },
-  {
-    title: { ar: "طلباتي", en: "My Orders" },
-    href: "/customer/orders",
-    icon: ShoppingCart,
-    description: {
-      ar: "متابعة طلبات العميل",
-      en: "Track customer orders",
-    },
-  },
-  {
-    title: { ar: "فواتيري", en: "My Invoices" },
-    href: "/customer/invoices",
-    icon: ReceiptText,
-    description: {
-      ar: "فواتير العميل",
-      en: "Customer invoices",
-    },
-  },
-  {
-    title: { ar: "مدفوعاتي", en: "My Payments" },
-    href: "/customer/payments",
-    icon: CreditCard,
-    description: {
-      ar: "مدفوعات العميل",
-      en: "Customer payments",
-    },
-  },
-  {
-    title: { ar: "بطاقاتي", en: "My Cards" },
-    href: "/customer/cards",
-    icon: Package,
-    description: {
-      ar: "بطاقات العميل",
-      en: "Customer cards",
-    },
-  },
-  {
-    title: { ar: "الدعم", en: "Support" },
-    href: "/customer/support",
-    icon: MessageCircle,
-    description: {
-      ar: "التواصل مع الدعم",
-      en: "Contact support",
-    },
-  },
-  {
-    title: { ar: "حسابي", en: "My Profile" },
-    href: "/customer/profile",
-    icon: UserCircle2,
-    description: {
-      ar: "بيانات حساب العميل",
-      en: "Customer profile details",
-    },
-  },
 ];
 
 const agentSearchItems: SearchItem[] = [
@@ -425,60 +207,6 @@ const agentSearchItems: SearchItem[] = [
     description: {
       ar: "لوحة المندوب",
       en: "Agent dashboard home",
-    },
-  },
-  {
-    title: { ar: "عملائي", en: "My Customers" },
-    href: "/agent/customers",
-    icon: Users,
-    description: {
-      ar: "عملاء المندوب",
-      en: "Agent customers",
-    },
-  },
-  {
-    title: { ar: "طلباتي", en: "My Orders" },
-    href: "/agent/orders",
-    icon: ShoppingCart,
-    description: {
-      ar: "طلبات المندوب",
-      en: "Agent orders",
-    },
-  },
-  {
-    title: { ar: "عمولاتي", en: "My Commissions" },
-    href: "/agent/commissions",
-    icon: Wallet,
-    description: {
-      ar: "عمولات المندوب",
-      en: "Agent commissions",
-    },
-  },
-  {
-    title: { ar: "مدفوعاتي", en: "My Payments" },
-    href: "/agent/payments",
-    icon: CreditCard,
-    description: {
-      ar: "مدفوعات المندوب",
-      en: "Agent payments",
-    },
-  },
-  {
-    title: { ar: "حسابي", en: "My Account" },
-    href: "/agent/account",
-    icon: ShieldCheck,
-    description: {
-      ar: "حساب المندوب",
-      en: "Agent account",
-    },
-  },
-  {
-    title: { ar: "الإعدادات", en: "Settings" },
-    href: "/agent/settings",
-    icon: Settings,
-    description: {
-      ar: "إعدادات المندوب",
-      en: "Agent settings",
     },
   },
 ];

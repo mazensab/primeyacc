@@ -417,12 +417,3 @@ export function formatDate(value: unknown): string {
   }
   return parsed.toISOString().slice(0, 10);
 }
-export function extractCheckoutUrl(payload: unknown): string {
-  const data = unwrapData(payload);
-  const checkout = asRecord(data.checkout);
-  return text(
-    checkout.checkout_url ||
-      data.checkout_url ||
-      asRecord(data.payment).checkout_url,
-  );
-}

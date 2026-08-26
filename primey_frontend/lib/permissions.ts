@@ -892,12 +892,7 @@ export const PATH_ACCESS_RULES: PathAccessRule[] = [
     workspaces: ["system"],
   },
   {
-    prefix: "/system/payments/create",
-    permissions: [PERMISSIONS.PAYMENTS_CREATE],
-    workspaces: ["system"],
-  },
-  {
-    prefix: "/system/payments",
+    prefix: "/system/platform-payments",
     permissions: [PERMISSIONS.PAYMENTS_VIEW],
     workspaces: ["system"],
   },

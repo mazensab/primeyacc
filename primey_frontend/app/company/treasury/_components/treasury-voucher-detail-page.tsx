@@ -1187,11 +1187,13 @@ export function TreasuryVoucherDetailPage({
 
   const linkedDocumentHref = React.useMemo(() => {
     if (!voucher?.linkedDocumentId && !voucher?.linkedDocumentNumber) return "";
-    const identifier = voucher.linkedDocumentId || voucher.linkedDocumentNumber;
-    return variant === "receipt"
-      ? `/company/sales/invoices/${encodeURIComponent(identifier)}`
-      : `/company/purchases/bills/${encodeURIComponent(identifier)}`;
-  }, [variant, voucher]);
+
+    if (variant === "receipt") {
+      return "/company#sales-invoices";
+    }
+
+    return partyHref || "/company/suppliers";
+  }, [partyHref, variant, voucher]);
 
   async function confirmVoucher() {
     if (!voucher?.id || !canConfirm) return;

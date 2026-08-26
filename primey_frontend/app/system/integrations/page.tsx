@@ -999,7 +999,7 @@ export default function SystemIntegrationsPage() {
               asChild
               className="h-9"
             >
-              <Link href="/system/payments">
+              <Link href="/system/platform-payments">
                 <PlugZap className="h-4 w-4" />
                 {t.payments}
               </Link>

@@ -215,7 +215,7 @@ const shortcuts: ShortcutRecord[] = [
     icon: Landmark,
   },
   {
-    href: "/company/treasury/transactions",
+    href: "/company/treasury#treasury-transactions",
     titleAr: "سجل الحركات",
     titleEn: "Treasury Ledger",
     descAr: "متابعة الوارد والصادر والتحويلات والتسويات.",
@@ -1506,7 +1506,7 @@ export default function CompanyTreasuryPage() {
       title: t.postedInflows,
       value: stats.postedInflows,
       description: t.inflow,
-      href: "/company/treasury/transactions?transaction_type=INFLOW",
+      href: "/company/treasury#treasury-transactions",
       icon: ArrowDownLeft,
       money: true,
     },
@@ -1514,7 +1514,7 @@ export default function CompanyTreasuryPage() {
       title: t.postedOutflows,
       value: stats.postedOutflows,
       description: t.outflow,
-      href: "/company/treasury/transactions?transaction_type=OUTFLOW",
+      href: "/company/treasury#treasury-transactions",
       icon: ArrowUpRight,
       money: true,
     },
@@ -1529,7 +1529,7 @@ export default function CompanyTreasuryPage() {
       title: t.transactions,
       value: stats.postedTransactions + stats.draftTransactions + stats.cancelledTransactions,
       description: `${t.postedTransactions}: ${formatInteger(stats.postedTransactions)} · ${t.draftTransactions}: ${formatInteger(stats.draftTransactions)}`,
-      href: "/company/treasury/transactions",
+      href: "/company/treasury#treasury-transactions",
       icon: FileText,
     },
   ];
@@ -2311,7 +2311,7 @@ export default function CompanyTreasuryPage() {
             />
           </CardContent>
         </Card>
-        <Card className="overflow-hidden rounded-lg border bg-card shadow-none">
+        <Card id="treasury-transactions" className="scroll-mt-6 overflow-hidden rounded-lg border bg-card shadow-none">
           <CardHeader className="px-5 pt-5 sm:px-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
