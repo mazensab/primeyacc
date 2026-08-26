@@ -1576,7 +1576,7 @@ export default function SystemDashboardPage() {
           <KpiCard title={t.activeSubscriptions} value={stats.activeSubscriptions} description={t.connectedToLiveApis} href="/system/subscriptions/list" icon={Activity} t={t} />
           <KpiCard title={t.platformPayments} value={stats.platformPayments} description={t.payments} href="/system/platform-payments/list" icon={CreditCard} t={t} />
           <KpiCard title={t.platformPaymentAmount} value={stats.platformPaymentAmount} description={t.sar} href="/system/platform-payments/reports" icon={Gauge} money t={t} />
-          <KpiCard title={t.apiContracts} value={stats.apiContracts} description={t.connectedToLiveApis} href="/system/api-contracts" icon={ServerCog} t={t} />
+          <KpiCard title={t.apiContracts} value={stats.apiContracts} description={t.connectedToLiveApis} href="/system/integrations/api-contracts" icon={ServerCog} t={t} />
           <KpiCard title={t.readinessScore} value={stats.readinessScore} description={t.connectedToLiveApis} href="/system/release-readiness" icon={ShieldCheck} percent t={t} />
         </div>
 

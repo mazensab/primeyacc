@@ -17,14 +17,22 @@ import { usePathname } from "next/navigation";
 import { Command } from "cmdk";
 import {
   ArrowUpRight,
+  Boxes,
+  Briefcase,
+  Building2,
+  Calculator,
   CreditCard,
-  Globe2,
+  FileText,
+  Gift,
   Home,
+  KeyRound,
   MessageCircle,
   ReceiptText,
   SearchIcon,
   Settings,
   ShieldCheck,
+  Stethoscope,
+  UserCog,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -68,38 +76,96 @@ type SearchItem = {
 
 const systemSearchItems: SearchItem[] = [
   {
-    title: { ar: "الرئيسية", en: "Home" },
+    title: { ar: "لوحة النظام", en: "System Dashboard" },
     href: "/system",
     icon: Home,
     description: {
-      ar: "لوحة النظام الرئيسية",
-      en: "System dashboard home",
+      ar: "لوحة التحكم الرئيسية للنظام",
+      en: "Main system dashboard",
     },
   },
   {
-    title: { ar: "فواتير وإيصالات المنصة", en: "Platform Billing Documents" },
-    href: "/system/invoices",
-    aliases: ["/system/invoices/list", "/system/invoices/receipts"],
-    icon: ReceiptText,
+    title: { ar: "الشركات", en: "Companies" },
+    href: "/system/companies",
+    aliases: ["/system/companies/list", "/system/companies/reports"],
+    icon: Building2,
     description: {
-      ar: "فواتير وإيصالات اشتراكات منصة Mhamcloud",
-      en: "Mhamcloud platform subscription invoices and receipts",
+      ar: "إدارة الشركات وحالاتها وبياناتها",
+      en: "Manage companies, status, and company data",
     },
   },
   {
-    title: { ar: "اشتراكات الشركات", en: "Company Subscriptions" },
+    title: {
+      ar: "اشتراكات الشركات",
+      en: "Company Subscriptions",
+    },
     href: "/system/subscriptions",
-    aliases: ["/system/subscriptions/list", "/system/subscriptions/reports"],
-    icon: ReceiptText,
+    aliases: [
+      "/system/subscriptions/list",
+      "/system/subscriptions/reports",
+    ],
+    icon: Gift,
     description: {
-      ar: "متابعة اشتراكات الشركات وخطط المنصة",
-      en: "Track company subscriptions and platform plans",
+      ar: "متابعة اشتراكات الشركات ودوراتها",
+      en: "Track company subscriptions and lifecycle",
     },
   },
   {
-    title: { ar: "مدفوعات المنصة", en: "Platform Payments" },
+    title: {
+      ar: "الخطط والأسعار",
+      en: "Plans & Pricing",
+    },
+    href: "/system/plans",
+    aliases: [
+      "/system/plans/create",
+      "/system/plans/reports",
+    ],
+    icon: Gift,
+    description: {
+      ar: "إدارة خطط المنصة والأسعار",
+      en: "Manage platform plans and pricing",
+    },
+  },
+  {
+    title: {
+      ar: "مستخدمو النظام",
+      en: "System Users",
+    },
+    href: "/system/users",
+    aliases: [
+      "/system/users/list",
+      "/system/users/reports",
+      "/system/users/permissions",
+    ],
+    icon: UserCog,
+    description: {
+      ar: "إدارة مستخدمي النظام",
+      en: "Manage system users",
+    },
+  },
+  {
+    title: {
+      ar: "ملفات الأنشطة",
+      en: "Activity Profiles",
+    },
+    href: "/system/activity-profiles",
+    aliases: ["/system/activity-profiles/list"],
+    icon: Stethoscope,
+    description: {
+      ar: "إدارة ملفات أنشطة الشركات",
+      en: "Manage company activity profiles",
+    },
+  },
+  {
+    title: {
+      ar: "مدفوعات المنصة",
+      en: "Platform Payments",
+    },
     href: "/system/platform-payments",
-    aliases: ["/system/platform-payments/list", "/system/platform-payments/reports"],
+    aliases: [
+      "/system/platform-payments/list",
+      "/system/platform-payments/reports",
+    ],
     icon: CreditCard,
     description: {
       ar: "مراقبة مدفوعات المنصة والتحصيل",
@@ -107,39 +173,180 @@ const systemSearchItems: SearchItem[] = [
     },
   },
   {
-    title: { ar: "الإشعارات", en: "Notifications" },
-    href: "/system/notifications",
-    icon: Globe2,
+    title: {
+      ar: "الفواتير والإيصالات",
+      en: "Invoices & Receipts",
+    },
+    href: "/system/invoices",
+    aliases: [
+      "/system/invoices/list",
+      "/system/invoices/receipts",
+    ],
+    icon: ReceiptText,
     description: {
-      ar: "مركز الإشعارات",
-      en: "Notifications center",
+      ar: "فواتير وإيصالات اشتراكات المنصة",
+      en: "Platform subscription invoices and receipts",
     },
   },
   {
-    title: { ar: "واتساب", en: "WhatsApp" },
-    href: "/system/whatsapp",
+    title: {
+      ar: "الإشعارات",
+      en: "Notifications",
+    },
+    href: "/system/notifications",
+    aliases: [
+      "/system/notifications/list",
+      "/system/notifications/unread",
+    ],
     icon: MessageCircle,
     description: {
-      ar: "إدارة واتساب والرسائل",
-      en: "Manage WhatsApp and messages",
+      ar: "مركز إشعارات النظام",
+      en: "System notifications center",
     },
   },
   {
-    title: { ar: "مستخدمو النظام", en: "System Users" },
-    href: "/system/users",
+    title: {
+      ar: "واتساب",
+      en: "WhatsApp",
+    },
+    href: "/system/whatsapp",
+    aliases: [
+      "/system/whatsapp/inbox",
+      "/system/whatsapp/messages",
+      "/system/whatsapp/templates",
+      "/system/whatsapp/settings",
+    ],
+    icon: MessageCircle,
+    description: {
+      ar: "إدارة واتساب ورسائل المنصة",
+      en: "Manage platform WhatsApp and messages",
+    },
+  },
+  {
+    title: {
+      ar: "مركز التكاملات",
+      en: "Integrations Center",
+    },
+    href: "/system/integrations",
+    icon: Briefcase,
+    description: {
+      ar: "إدارة تكاملات المنصة",
+      en: "Manage platform integrations",
+    },
+  },
+  {
+    title: {
+      ar: "مفاتيح API",
+      en: "API Keys",
+    },
+    href: "/system/integrations/api-keys",
+    icon: KeyRound,
+    description: {
+      ar: "إدارة مفاتيح تكامل API",
+      en: "Manage API integration keys",
+    },
+  },
+  {
+    title: {
+      ar: "عقود API",
+      en: "API Contracts",
+    },
+    href: "/system/integrations/api-contracts",
+    aliases: ["/system/api-contracts"],
+    icon: FileText,
+    description: {
+      ar: "عرض عقود واجهات API المعتمدة",
+      en: "View approved API contracts",
+    },
+  },
+  {
+    title: {
+      ar: "جاهزية الإصدار",
+      en: "Release Readiness",
+    },
+    href: "/system/release-readiness",
     icon: ShieldCheck,
     description: {
-      ar: "إدارة مستخدمي النظام والصلاحيات",
-      en: "Manage system users and permissions",
+      ar: "متابعة جاهزية النظام للإصدار",
+      en: "Track system release readiness",
     },
   },
   {
-    title: { ar: "الإعدادات", en: "Settings" },
+    title: {
+      ar: "ضوابط الأعمال",
+      en: "Business Controls",
+    },
+    href: "/system/business-controls",
+    icon: Calculator,
+    description: {
+      ar: "مراجعة ضوابط وحوكمة العمليات",
+      en: "Review business controls and governance",
+    },
+  },
+  {
+    title: {
+      ar: "محركات الأنشطة",
+      en: "Activity Backends",
+    },
+    href: "/system/activity-backends",
+    icon: Boxes,
+    description: {
+      ar: "إدارة محركات الأنشطة المرتبطة بالمنصة",
+      en: "Manage platform activity backends",
+    },
+  },
+  {
+    title: {
+      ar: "المستندات والطباعة",
+      en: "Documents & Printing",
+    },
+    href: "/system/documents",
+    aliases: [
+      "/system/documents/templates",
+      "/system/documents/settings",
+      "/system/documents/rendering",
+      "/system/documents/thermal",
+    ],
+    icon: FileText,
+    description: {
+      ar: "إدارة المستندات والقوالب والطباعة",
+      en: "Manage documents, templates, and printing",
+    },
+  },
+  {
+    title: {
+      ar: "الأدوار",
+      en: "Roles",
+    },
+    href: "/system/roles",
+    icon: ShieldCheck,
+    description: {
+      ar: "إدارة أدوار مستخدمي النظام",
+      en: "Manage system user roles",
+    },
+  },
+  {
+    title: {
+      ar: "الصلاحيات",
+      en: "Permissions",
+    },
+    href: "/system/permissions",
+    icon: ShieldCheck,
+    description: {
+      ar: "إدارة صلاحيات الوصول للنظام",
+      en: "Manage system access permissions",
+    },
+  },
+  {
+    title: {
+      ar: "إعدادات النظام",
+      en: "System Settings",
+    },
     href: "/system/settings",
     icon: Settings,
     description: {
-      ar: "إعدادات النظام",
-      en: "System settings",
+      ar: "إعدادات النظام العامة",
+      en: "General system settings",
     },
   },
 ];
