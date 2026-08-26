@@ -906,7 +906,7 @@ export default function SystemBusinessControlsPage() {
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {[
                 {
-                  href: "/system/api-contracts",
+                  href: "/system/integrations/api-contracts",
                   title: t.apiContracts,
                   description: t.apiContractsDesc,
                   icon: TableProperties,

@@ -1088,7 +1088,7 @@ export function SystemDocumentsCenter({ mode }: { mode: Mode }) {
                   <RotateCcw className="h-4 w-4" />
                   {t.reset}
                 </Button>
-                <Link href="/system/api-contracts" className="inline-flex h-10 items-center gap-2 rounded-xl border bg-background px-4 text-sm font-medium hover:bg-muted">
+                <Link href="/system/integrations/api-contracts" className="inline-flex h-10 items-center gap-2 rounded-xl border bg-background px-4 text-sm font-medium hover:bg-muted">
                   <ClipboardList className="h-4 w-4" />
                   {t.apiContracts}
                 </Link>

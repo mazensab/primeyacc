@@ -291,7 +291,7 @@ export function SystemReadinessView({ mode }: { mode: ViewMode }) {
               </Link>
 
               <Link
-                href="/system/api-contracts"
+                href="/system/integrations/api-contracts"
                 className="inline-flex items-center rounded-2xl border bg-primary px-4 py-2 text-sm font-bold text-primary-foreground shadow-sm transition hover:opacity-90"
               >
                 <FileText className="me-2 h-4 w-4" />
@@ -336,7 +336,7 @@ export function SystemReadinessView({ mode }: { mode: ViewMode }) {
                 <Panel title="آخر فحوصات الجاهزية" href="/system/release-readiness">
                   <ChecksTable checks={checks.slice(0, 6)} compact />
                 </Panel>
-                <Panel title="عقود API" href="/system/api-contracts">
+                <Panel title="عقود API" href="/system/integrations/api-contracts">
                   <ContractsTable contracts={contracts.slice(0, 6)} compact />
                 </Panel>
               </div>
