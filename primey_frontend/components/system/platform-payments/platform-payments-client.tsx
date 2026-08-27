@@ -1,5 +1,7 @@
 "use client";
 
+// phase47D_batch1_remaining_system_dashboard_contract=true
+
 /* ============================================================
    Mhamcloud — Phase 34B System Platform Payments Center
    ------------------------------------------------------------
@@ -89,6 +91,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+
+import { downloadExcelHtmlReport } from "@/lib/excel-report";
+
+import { openPrintHtmlReport } from "@/lib/print-report";
 
 export type PlatformPaymentsMode =
   | "overview"
@@ -735,7 +741,7 @@ function Kpi({
   return (
     <Card className="rounded-2xl border-border/70 shadow-sm">
       <CardHeader className="pb-2">
-        <CardDescription>{title}</CardDescription>
+        <CardDescription className="font-semibold text-foreground">{title}</CardDescription>
         <CardTitle className="mt-2 text-2xl tabular-nums">
           {value}
         </CardTitle>
@@ -781,9 +787,8 @@ function Header({
           : t.overviewDesc;
 
   return (
-    <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+    <section className="overflow-hidden rounded-lg border bg-card shadow-none">
       <div className="relative p-6 sm:p-8">
-        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
 
         <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div className="max-w-4xl">
@@ -803,7 +808,7 @@ function Header({
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
-              className="rounded-xl bg-background"
+              className="rounded-lg bg-background shadow-none"
               onClick={onRefresh}
               disabled={refreshing}
             >
@@ -815,21 +820,21 @@ function Header({
               {t.refresh}
             </Button>
 
-            <Button asChild variant="outline" className="rounded-xl bg-background">
+            <Button asChild variant="outline" className="rounded-lg bg-background shadow-none">
               <Link href="/system/platform-payments/list">
                 <ListChecks className="h-4 w-4" />
                 {t.list}
               </Link>
             </Button>
 
-            <Button asChild variant="outline" className="rounded-xl bg-background">
+            <Button asChild variant="outline" className="rounded-lg bg-background shadow-none">
               <Link href="/system/platform-payments/reports">
                 <FileBarChart2 className="h-4 w-4" />
                 {t.reports}
               </Link>
             </Button>
 
-            <Button asChild variant="outline" className="rounded-xl bg-background">
+            <Button asChild variant="outline" className="rounded-lg bg-background shadow-none">
               <Link href="/system/subscriptions">
                 <CreditCard className="h-4 w-4" />
                 {t.subscriptions}
@@ -894,7 +899,7 @@ function Distribution({
   const total = values.reduce((sum, [, count]) => sum + count, 0) || 1;
 
   return (
-    <Card className="rounded-2xl shadow-sm">
+    <Card className="rounded-lg border bg-card shadow-none">
       <CardHeader>
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
@@ -950,9 +955,9 @@ function PaymentTable({
   const t = dictionaries[locale];
 
   return (
-    <div className="overflow-hidden rounded-2xl border bg-background">
+    <div className="overflow-hidden rounded-lg border bg-background">
       <div className="overflow-x-auto">
-        <Table className="min-w-[1150px]">
+        <Table variant="register" minWidth={1150}>
           <TableHeader>
             <TableRow className="bg-muted/40">
               <TableHead>{t.company}</TableHead>
@@ -1176,7 +1181,8 @@ function Register({
   }
 
   function print() {
-    window.print();
+    const opened = openPrintHtmlReport(document.documentElement.outerHTML);
+    if (!opened) toast.error(locale === "ar" ? "تعذر فتح نافذة الطباعة." : "Could not open the print window.");
   }
 
   function exportExcel() {
@@ -1217,20 +1223,7 @@ function Register({
 <tbody>${rows}</tbody>
 </table>`;
 
-    const blob = new Blob([`\ufeff${html}`], {
-      type: "application/vnd.ms-excel;charset=utf-8;",
-    });
-
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Mhamcloud-platform-payments-${new Date()
-      .toISOString()
-      .slice(0, 10)}.xls`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    downloadExcelHtmlReport(html, `Mhamcloud-platform-payments-${new Date().toISOString().slice(0, 10)}.xls`);
   }
 
   return (
@@ -1251,7 +1244,7 @@ function Register({
         />
       </div>
 
-      <Card className="rounded-2xl shadow-sm">
+      <Card className="rounded-lg border bg-card shadow-none">
         <CardContent className="space-y-3 pt-6">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
             <div className="relative min-w-0 flex-1">
@@ -1260,12 +1253,12 @@ function Register({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t.search}
-                className="h-10 rounded-xl ps-9"
+                className="h-9 rounded-lg ps-9"
               />
             </div>
 
             <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger className="h-10 rounded-xl xl:w-[150px]">
+              <SelectTrigger className="h-9 rounded-lg xl:w-[150px]">
                 <SelectValue placeholder={t.status} />
               </SelectTrigger>
               <SelectContent>
@@ -1279,7 +1272,7 @@ function Register({
             </Select>
 
             <Select value={gateway} onValueChange={setGateway}>
-              <SelectTrigger className="h-10 rounded-xl xl:w-[150px]">
+              <SelectTrigger className="h-9 rounded-lg xl:w-[150px]">
                 <SelectValue placeholder={t.gateway} />
               </SelectTrigger>
               <SelectContent>
@@ -1293,7 +1286,7 @@ function Register({
             </Select>
 
             <Select value={method} onValueChange={setMethod}>
-              <SelectTrigger className="h-10 rounded-xl xl:w-[160px]">
+              <SelectTrigger className="h-9 rounded-lg xl:w-[160px]">
                 <SelectValue placeholder={t.method} />
               </SelectTrigger>
               <SelectContent>
@@ -1307,7 +1300,7 @@ function Register({
             </Select>
 
             <Select value={plan} onValueChange={setPlan}>
-              <SelectTrigger className="h-10 rounded-xl xl:w-[180px]">
+              <SelectTrigger className="h-9 rounded-lg xl:w-[180px]">
                 <SelectValue placeholder={t.subscription} />
               </SelectTrigger>
               <SelectContent>
@@ -1321,7 +1314,7 @@ function Register({
             </Select>
 
             <Select value={company} onValueChange={setCompany}>
-              <SelectTrigger className="h-10 rounded-xl xl:w-[180px]">
+              <SelectTrigger className="h-9 rounded-lg xl:w-[180px]">
                 <SelectValue placeholder={t.company} />
               </SelectTrigger>
               <SelectContent>
@@ -1339,7 +1332,7 @@ function Register({
             <div className="flex flex-wrap gap-2">
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-10 rounded-xl">
+                  <Button variant="outline" className="h-9 rounded-lg">
                     <CalendarDays className="h-4 w-4" />
                     {t.from}: {fromDate || "—"}
                   </Button>
@@ -1355,7 +1348,7 @@ function Register({
 
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-10 rounded-xl">
+                  <Button variant="outline" className="h-9 rounded-lg">
                     <CalendarDays className="h-4 w-4" />
                     {t.to}: {toDate || "—"}
                   </Button>
@@ -1382,7 +1375,7 @@ function Register({
                 </SelectContent>
               </Select>
 
-              <Button variant="outline" onClick={reset} className="h-10 rounded-xl">
+              <Button variant="outline" onClick={reset} className="h-9 rounded-lg">
                 <RotateCcw className="h-4 w-4" />
                 {t.reset}
               </Button>
@@ -1390,13 +1383,13 @@ function Register({
               <Button
                 variant="outline"
                 onClick={exportExcel}
-                className="h-10 rounded-xl"
+                className="h-9 rounded-lg"
               >
                 <FileSpreadsheet className="h-4 w-4" />
                 {t.export}
               </Button>
 
-              <Button variant="outline" onClick={print} className="h-10 rounded-xl">
+              <Button variant="outline" onClick={print} className="h-9 rounded-lg">
                 <Printer className="h-4 w-4" />
                 {t.print}
               </Button>
@@ -1422,7 +1415,7 @@ function Register({
         </div>
       ) : null}
 
-      <Card className="rounded-2xl shadow-sm">
+      <Card className="rounded-lg border bg-card shadow-none">
         <CardHeader className="flex-row items-center justify-between">
           <div>
             <CardTitle>{t.title}</CardTitle>
@@ -1455,7 +1448,7 @@ function KeyValue({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border bg-background p-4">
+    <div className="rounded-lg border bg-background p-4">
       <p className="text-xs text-muted-foreground">{label}</p>
       <div className="mt-1 break-words text-sm font-medium">
         {children}
@@ -1703,7 +1696,7 @@ function Detail({
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-6">
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <CardTitle>{t.identity}</CardTitle>
             </CardHeader>
@@ -1746,7 +1739,7 @@ function Detail({
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <CardTitle>{t.paymentInfo}</CardTitle>
             </CardHeader>
@@ -1785,7 +1778,7 @@ function Detail({
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <CardTitle>{t.lifecycle}</CardTitle>
             </CardHeader>
@@ -1810,7 +1803,7 @@ function Detail({
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <CardTitle>{t.events}</CardTitle>
             </CardHeader>
@@ -1860,7 +1853,7 @@ function Detail({
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <CardTitle>{t.reconciliation}</CardTitle>
               <CardDescription>{t.safePayload}</CardDescription>
@@ -1889,7 +1882,7 @@ function Detail({
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <CardTitle>{t.webhooks}</CardTitle>
               <CardDescription>{t.safePayload}</CardDescription>
@@ -1934,7 +1927,7 @@ function Detail({
         </div>
 
         <aside className="space-y-6">
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <CardTitle>{t.links}</CardTitle>
             </CardHeader>
@@ -1992,7 +1985,7 @@ function Detail({
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <CardTitle>{t.readiness}</CardTitle>
             </CardHeader>
@@ -2069,7 +2062,7 @@ function Detail({
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl shadow-sm xl:sticky xl:top-6">
+          <Card className="rounded-lg border bg-card shadow-none xl:sticky xl:top-6">
             <CardContent className="grid gap-2 pt-6">
               <Button asChild variant="outline" className="justify-start">
                 <Link href="/system/platform-payments/list">
@@ -2231,7 +2224,7 @@ export function PlatformPaymentsClient({
   return (
     <main
       dir={dir}
-      className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8"
+      className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8"
     >
       <div className="w-full space-y-6">
         {loading ? (

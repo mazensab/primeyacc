@@ -1,4 +1,6 @@
-﻿"use client";
+"use client";
+
+// phase47D_batch2_system_dashboard_design_contract=true
 
 /* ============================================================
    📂 primey_frontend/app/system/users/[id]/page.tsx
@@ -44,6 +46,13 @@ import {
   UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
+import { openPrintReport } from "@/lib/print-report";
+import { SystemKpiCard } from "@/components/ui/system-kpi-card";
+import {
+  DataRegisterToolbar,
+  registerBrandButtonClass,
+  registerOutlineButtonClass,
+} from "@/components/ui/data-register";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -529,15 +538,15 @@ function InfoCard({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <Card className="rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <Card className="rounded-lg border-border/70 bg-card shadow-none transition hover:-translate-y-0.5 hover:shadow-md">
       <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
         <div className="min-w-0">
-          <CardDescription className="truncate text-sm">{title}</CardDescription>
+          <CardDescription className="truncate text-sm font-semibold text-foreground">{title}</CardDescription>
           <CardTitle className="mt-2 truncate text-lg font-bold tracking-tight">
             {value}
           </CardTitle>
         </div>
-        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-full border border-border/70 bg-white/80 text-[#a57b3d] shadow-sm backdrop-blur-sm">
           <Icon className="h-5 w-5" />
         </span>
       </CardHeader>
@@ -560,7 +569,7 @@ function DetailRow({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <div className="flex items-start gap-3 rounded-2xl border bg-background p-4">
+    <div className="flex items-start gap-3 rounded-lg border bg-background p-4">
       <span className="rounded-xl bg-muted p-2 text-muted-foreground">
         <Icon className="h-4 w-4" />
       </span>
@@ -574,7 +583,7 @@ function DetailRow({
 
 function UserDetailSkeleton() {
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
         <div className="rounded-3xl border bg-card p-6 shadow-sm">
           <Skeleton className="h-5 w-40" />
@@ -732,52 +741,32 @@ export default function SystemUserDetailPage() {
 
   function openPrintWindow(mode: "print" | "pdf") {
     if (!user) return;
-
     if (mode === "pdf") {
       toast.info(t.pdfHint);
     }
-
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1000,height=800");
-    if (!printWindow) return;
-
-    printWindow.document.write(`
-      <!doctype html>
-      <html dir="${dir}" lang="${locale}">
-        <head>
-          <meta charset="utf-8" />
-          <title>${escapeHtml(t.reportTitle)}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 24px; color: #0f172a; }
-            h1 { margin: 0 0 8px; font-size: 24px; }
-            p { color: #64748b; }
-            table { width: 100%; border-collapse: collapse; margin-top: 18px; }
-            th, td {
-              border: 1px solid #cbd5e1;
-              padding: 10px;
-              font-size: 13px;
-              text-align: ${dir === "rtl" ? "right" : "left"};
-              vertical-align: top;
-            }
-            th { width: 220px; background: #f1f5f9; font-weight: 700; }
-          </style>
-        </head>
-        <body>
-          <h1>${escapeHtml(t.reportTitle)}</h1>
-          <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString())}</p>
-          ${buildPrintableHtml()}
-          <script>window.onload = function () { window.print(); };</script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+    const opened = openPrintReport({
+      locale,
+      title: t.reportTitle,
+      tableHtml: buildPrintableHtml(),
+      recordsCount: 1,
+      recordsLabel: locale === "ar" ? "مستخدم" : "user",
+      generatedAtLabel: t.generatedAt,
+    });
+    if (!opened) {
+      toast.error(
+        locale === "ar"
+          ? "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة."
+          : "Could not open the print window. Allow pop-ups and try again.",
+      );
+    }
   }
 
   if (loading) return <UserDetailSkeleton />;
 
   if (error) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-        <Card className="mx-auto max-w-3xl rounded-3xl border-destructive/30 bg-card shadow-sm">
+      <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
+        <Card className="mx-auto max-w-3xl rounded-lg border-destructive/30 bg-card shadow-none">
           <CardHeader className="text-center">
             <div className="mx-auto mb-2 rounded-full bg-destructive/10 p-4 text-destructive">
               <TriangleAlert className="h-8 w-8" />
@@ -799,8 +788,8 @@ export default function SystemUserDetailPage() {
 
   if (!user) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-        <Card className="mx-auto max-w-3xl rounded-3xl bg-card shadow-sm">
+      <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
+        <Card className="mx-auto max-w-3xl rounded-lg border bg-card shadow-none">
           <CardHeader className="text-center">
             <div className="mx-auto mb-2 rounded-full bg-muted p-4 text-muted-foreground">
               <CircleAlert className="h-8 w-8" />
@@ -822,11 +811,10 @@ export default function SystemUserDetailPage() {
   }
 
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+        <section className="overflow-hidden rounded-lg border bg-card shadow-none">
           <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
               <div className="max-w-4xl">
                 <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -845,7 +833,7 @@ export default function SystemUserDetailPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <Button asChild variant="outline" className="rounded-xl bg-background">
+                <Button asChild variant="outline" className="rounded-lg bg-background shadow-none">
                   <Link href="/system/users">
                     <BackIcon className="h-4 w-4" />
                     {t.backToUsers}
@@ -853,18 +841,18 @@ export default function SystemUserDetailPage() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="rounded-xl bg-background"
+                  className="rounded-lg bg-background shadow-none"
                   onClick={() => void loadUser({ silent: true })}
                   disabled={refreshing}
                 >
                   {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                   {t.refresh}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("print")}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={() => openPrintWindow("print")}>
                   <Printer className="h-4 w-4" />
                   {t.print}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("pdf")}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={() => openPrintWindow("pdf")}>
                   <FileText className="h-4 w-4" />
                   {t.pdf}
                 </Button>
@@ -882,7 +870,7 @@ export default function SystemUserDetailPage() {
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-6">
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.identity}</CardTitle>
                 <CardDescription>{t.identityDesc}</CardDescription>
@@ -909,7 +897,7 @@ export default function SystemUserDetailPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.contact}</CardTitle>
                 <CardDescription>{t.contactDesc}</CardDescription>
@@ -922,7 +910,7 @@ export default function SystemUserDetailPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.operations}</CardTitle>
                 <CardDescription>{t.operationsDesc}</CardDescription>
@@ -934,13 +922,13 @@ export default function SystemUserDetailPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.notes}</CardTitle>
                 <CardDescription>{t.notesDesc}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="min-h-24 rounded-2xl border bg-background p-4 text-sm leading-7 text-muted-foreground">
+                <div className="min-h-24 rounded-lg border bg-background p-4 text-sm leading-7 text-muted-foreground">
                   {user.notes || t.notAvailable}
                 </div>
               </CardContent>
@@ -948,35 +936,35 @@ export default function SystemUserDetailPage() {
           </div>
 
           <aside className="space-y-6">
-            <Card className="rounded-2xl shadow-sm xl:sticky xl:top-6">
+            <Card className="rounded-lg border bg-card shadow-none xl:sticky xl:top-6">
               <CardHeader>
                 <CardTitle>{t.quickLinks}</CardTitle>
                 <CardDescription>{t.quickLinksDesc}</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-2">
-                <Button asChild variant="outline" className="justify-start rounded-xl bg-background">
+                <Button asChild variant="outline" className="justify-start rounded-lg bg-background shadow-none">
                   <Link href="/system/users/list">
                     <ListChecks className="h-4 w-4" />
                     {t.usersList}
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="justify-start rounded-xl bg-background">
+                <Button asChild variant="outline" className="justify-start rounded-lg bg-background shadow-none">
                   <Link href="/system/users">
                     <Building2 className="h-4 w-4" />
                     {t.backToUsers}
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="justify-start rounded-xl bg-background">
+                <Button asChild variant="outline" className="justify-start rounded-lg bg-background shadow-none">
                   <Link href="/system">
                     <LayoutDashboard className="h-4 w-4" />
                     {t.systemDashboard}
                   </Link>
                 </Button>
-                <Button type="button" variant="outline" className="justify-start rounded-xl bg-background" onClick={() => openPrintWindow("print")}>
+                <Button type="button" variant="outline" className="justify-start rounded-lg bg-background shadow-none" onClick={() => openPrintWindow("print")}>
                   <Printer className="h-4 w-4" />
                   {t.print}
                 </Button>
-                <Button type="button" variant="outline" className="justify-start rounded-xl bg-background" onClick={() => openPrintWindow("pdf")}>
+                <Button type="button" variant="outline" className="justify-start rounded-lg bg-background shadow-none" onClick={() => openPrintWindow("pdf")}>
                   <FileText className="h-4 w-4" />
                   {t.pdf}
                 </Button>
@@ -988,6 +976,3 @@ export default function SystemUserDetailPage() {
     </main>
   );
 }
-
-
-

@@ -1,4 +1,6 @@
 "use client";
+
+// phase47D_batch1_remaining_system_dashboard_contract=true
 /* ============================================================
    📂 primey_frontend/app/system/integrations/api-keys/page.tsx
    🔑 Mhamcloud — System Integration API Keys
@@ -42,6 +44,11 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  downloadExcelReport,
+  type ExcelReportSection,
+} from "@/lib/excel-report";
+import { openPrintReport } from "@/lib/print-report";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -596,7 +603,7 @@ function KpiCard({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <Card className="overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <Card className="overflow-hidden rounded-lg border-border/70 bg-card shadow-none transition hover:-translate-y-0.5 hover:shadow-md">
       <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
         <div className="min-w-0">
           <CardDescription className="truncate text-sm">{title}</CardDescription>
@@ -604,7 +611,7 @@ function KpiCard({
             {formatInteger(value)}
           </CardTitle>
         </div>
-        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-full border border-border/70 bg-white/80 text-[#a57b3d] shadow-sm backdrop-blur-sm">
           <Icon className="h-5 w-5" />
         </span>
       </CardHeader>
@@ -616,7 +623,7 @@ function KpiCard({
 }
 function ApiKeysSkeleton() {
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
         <div className="rounded-3xl border bg-card p-6 shadow-sm">
           <Skeleton className="h-5 w-40" />
@@ -927,31 +934,46 @@ export default function SystemIntegrationApiKeysPage() {
   }
   function exportExcel() {
     const rows = buildExportRows();
+
     if (!rows.length) {
       toast.error(t.exportEmpty);
       return;
     }
-    const html = `
-      <html dir="${dir}" lang="${locale}">
-        <head><meta charset="utf-8" /></head>
-        <body>
-          <h1>${escapeHtml(t.reportTitle)}</h1>
-          <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString())}</p>
-          ${buildTableHtml()}
-        </body>
-      </html>
-    `;
-    const blob = new Blob([`\ufeff${html}`], {
-      type: "application/vnd.ms-excel;charset=utf-8;",
+
+    const section: ExcelReportSection = {
+      title: t.reportTitle,
+      headers: [
+      t.keyName,
+      t.prefix,
+      t.company,
+      t.environment,
+      t.status,
+      t.scopes,
+      t.lastUsedAt,
+      t.createdAt,
+      t.expiresAt,
+    ],
+      rows: rows.map((row) =>
+        row.map((value) => ({
+          value: String(value ?? ""),
+          type: "text" as const,
+        })),
+      ),
+    };
+
+    downloadExcelReport({
+      locale,
+      title: t.reportTitle,
+      filename: `Mhamcloud-app-system-integrations-api-keys-${new Date().toISOString().slice(0, 10)}.xls`,
+      generatedAtLabel: t.generatedAt,
+      sections: [section],
     });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `Mhamcloud-system-api-keys-${new Date().toISOString().slice(0, 10)}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+
+    toast.success(
+      locale === "ar"
+        ? "تم تجهيز ملف Excel بنجاح."
+        : "Excel file prepared successfully.",
+    );
   }
   function openPrintWindow(mode: "print" | "pdf") {
     const rows = buildExportRows();
@@ -959,49 +981,34 @@ export default function SystemIntegrationApiKeysPage() {
       toast.error(t.printEmpty);
       return;
     }
-    if (mode === "pdf") {
-      toast.info(t.pdfHint);
+
+    if (mode === "pdf" && "pdfHint" in t) {
+      toast.info(String(t.pdfHint));
     }
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1200,height=800");
-    if (!printWindow) return;
-    printWindow.document.write(`
-      <!doctype html>
-      <html dir="${dir}" lang="${locale}">
-        <head>
-          <meta charset="utf-8" />
-          <title>${escapeHtml(t.reportTitle)}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 24px; color: #0f172a; }
-            h1 { margin: 0 0 8px; font-size: 24px; }
-            p { color: #64748b; }
-            table { width: 100%; border-collapse: collapse; margin-top: 18px; }
-            th, td {
-              border: 1px solid #cbd5e1;
-              padding: 8px;
-              font-size: 12px;
-              text-align: ${dir === "rtl" ? "right" : "left"};
-              vertical-align: top;
-            }
-            th { background: #f1f5f9; font-weight: 700; }
-          </style>
-        </head>
-        <body>
-          <h1>${escapeHtml(t.reportTitle)}</h1>
-          <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString())}</p>
-          ${buildTableHtml()}
-          <script>window.onload = function () { window.print(); };</script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+
+    const opened = openPrintReport({
+      locale,
+      title: t.reportTitle,
+      tableHtml: buildTableHtml(),
+      recordsCount: rows.length,
+      recordsLabel: t.rows,
+      generatedAtLabel: t.generatedAt,
+    });
+
+    if (!opened) {
+      toast.error(
+        locale === "ar"
+          ? "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة."
+          : "Could not open the print window. Allow pop-ups and try again.",
+      );
+    }
   }
   if (loading) return <ApiKeysSkeleton />;
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+        <section className="overflow-hidden rounded-lg border bg-card shadow-none">
           <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
               <div className="max-w-4xl">
                 <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -1014,22 +1021,22 @@ export default function SystemIntegrationApiKeysPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
-                  className="rounded-xl bg-background"
+                  className="rounded-lg bg-background shadow-none"
                   onClick={() => void loadApiKeys({ silent: true })}
                   disabled={refreshing}
                 >
                   {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                   {t.refresh}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={exportExcel}>
                   <FileSpreadsheet className="h-4 w-4" />
                   {t.exportExcel}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("print")}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={() => openPrintWindow("print")}>
                   <Printer className="h-4 w-4" />
                   {t.print}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("pdf")}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={() => openPrintWindow("pdf")}>
                   <FileText className="h-4 w-4" />
                   {t.pdf}
                 </Button>
@@ -1039,7 +1046,7 @@ export default function SystemIntegrationApiKeysPage() {
                     {t.createApiKey}
                   </Button>
                 ) : null}
-                <Button asChild variant="outline" className="rounded-xl bg-background">
+                <Button asChild variant="outline" className="rounded-lg bg-background shadow-none">
                   <Link href="/system/integrations">
                     <KeyRound className="h-4 w-4" />
                     {t.center}
@@ -1064,7 +1071,7 @@ export default function SystemIntegrationApiKeysPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="w-fit rounded-xl bg-background"
+                className="w-fit rounded-lg bg-background shadow-none"
                 onClick={() => void loadApiKeys({ silent: true })}
                 disabled={refreshing}
               >
@@ -1080,7 +1087,7 @@ export default function SystemIntegrationApiKeysPage() {
           <KpiCard title={t.liveKeys} value={stats.live} description={t.fromLiveApi} icon={PlugZap} />
           <KpiCard title={t.revokedKeys} value={stats.revoked} description={t.fromLiveApi} icon={XCircle} />
         </div>
-        <Card className="w-full rounded-2xl shadow-sm">
+        <Card className="w-full rounded-lg border bg-card shadow-none">
           <CardHeader className="gap-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -1094,7 +1101,7 @@ export default function SystemIntegrationApiKeysPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row md:items-center">
                 <div className="relative min-w-0 flex-1">
                   <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -1102,11 +1109,11 @@ export default function SystemIntegrationApiKeysPage() {
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder={t.searchPlaceholder}
-                    className="h-10 rounded-xl ps-9"
+                    className="h-9 rounded-lg ps-9"
                   />
                 </div>
                 <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background md:w-[170px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background md:w-[170px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1118,7 +1125,7 @@ export default function SystemIntegrationApiKeysPage() {
                   </SelectContent>
                 </Select>
                 <Select value={environment} onValueChange={(value) => setEnvironment(value as EnvironmentFilter)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background md:w-[150px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background md:w-[150px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1132,7 +1139,7 @@ export default function SystemIntegrationApiKeysPage() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[160px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background sm:w-[160px]">
                     <ArrowUpDown className="h-4 w-4" />
                     <SelectValue />
                   </SelectTrigger>
@@ -1143,15 +1150,15 @@ export default function SystemIntegrationApiKeysPage() {
                     <SelectItem value="environment">{t.environmentSort}</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={resetFilters}>
+                <Button variant="outline" className="h-9 rounded-lg bg-background" onClick={resetFilters}>
                   <RotateCcw className="h-4 w-4" />
                   {t.reset}
                 </Button>
               </div>
             </div>
-            <div className="overflow-hidden rounded-2xl border bg-background">
+            <div className="overflow-hidden rounded-lg border bg-background">
               <div className="w-full overflow-x-auto">
-                <Table className="w-full min-w-[980px] table-fixed">
+                <Table variant="register" minWidth={980}>
                   <TableHeader>
                     <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
                       <TableHead className={cn("h-11 w-[220px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
@@ -1256,7 +1263,7 @@ export default function SystemIntegrationApiKeysPage() {
                 </span>{" "}
                 {t.rows}
               </p>
-              <Button asChild variant="outline" className="w-fit rounded-xl bg-background">
+              <Button asChild variant="outline" className="w-fit rounded-lg bg-background shadow-none">
                 <Link href="/system/integrations">
                   <KeyRound className="h-4 w-4" />
                   {t.center}
@@ -1290,12 +1297,12 @@ export default function SystemIntegrationApiKeysPage() {
                 <div className="space-y-4">
                   <div className="rounded-2xl border bg-muted/40 p-4">
                     <p className="mb-2 text-xs font-semibold text-muted-foreground">{t.secretTitle}</p>
-                    <code className="block break-all rounded-xl bg-background p-4 text-sm text-foreground shadow-inner">
+                    <code className="block break-all rounded-lg bg-background shadow-none p-4 text-sm text-foreground shadow-inner">
                       {createdSecret}
                     </code>
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-2">
-                    <Button variant="outline" className="rounded-xl bg-background" onClick={copySecret}>
+                    <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={copySecret}>
                       {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                       {t.copySecret}
                     </Button>
@@ -1315,7 +1322,7 @@ export default function SystemIntegrationApiKeysPage() {
                           setCreateForm((current) => ({ ...current, name: event.target.value }))
                         }
                         placeholder={t.namePlaceholder}
-                        className="h-11 rounded-xl"
+                        className="h-9 rounded-lg"
                       />
                     </div>
                     <div className="space-y-2">
@@ -1326,7 +1333,7 @@ export default function SystemIntegrationApiKeysPage() {
                           setCreateForm((current) => ({ ...current, companyId: value }))
                         }
                       >
-                        <SelectTrigger className="h-11 rounded-xl bg-background">
+                        <SelectTrigger className="h-9 rounded-lg bg-background">
                           <Building2 className="h-4 w-4" />
                           <SelectValue />
                         </SelectTrigger>
@@ -1351,7 +1358,7 @@ export default function SystemIntegrationApiKeysPage() {
                           }))
                         }
                       >
-                        <SelectTrigger className="h-11 rounded-xl bg-background">
+                        <SelectTrigger className="h-9 rounded-lg bg-background">
                           <PlugZap className="h-4 w-4" />
                           <SelectValue />
                         </SelectTrigger>
@@ -1369,7 +1376,7 @@ export default function SystemIntegrationApiKeysPage() {
                         onChange={(event) =>
                           setCreateForm((current) => ({ ...current, expiresAt: event.target.value }))
                         }
-                        className="h-11 rounded-xl"
+                        className="h-9 rounded-lg"
                       />
                     </div>
                   </div>
@@ -1396,7 +1403,7 @@ export default function SystemIntegrationApiKeysPage() {
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-4">
-                    <Button variant="outline" className="rounded-xl bg-background" onClick={closeCreateModal}>
+                    <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={closeCreateModal}>
                       {t.cancel}
                     </Button>
                     <Button className="rounded-xl" onClick={createApiKey} disabled={creating}>

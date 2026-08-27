@@ -1,5 +1,7 @@
 "use client";
 
+// phase47D1B1_system_dashboard_design_contract=true
+
 const BILLING_DOCUMENT_API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
@@ -41,6 +43,7 @@ import {
   ReceiptText,
   ExternalLink,
   CreditCard,
+  FileSpreadsheet,
   FileText,
   Hash,
   LayoutDashboard,
@@ -57,6 +60,16 @@ import {
   UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
+
+import {
+  registerBrandButtonClass,
+  registerOutlineButtonClass,
+} from "@/components/ui/data-register";
+import {
+  downloadExcelReport,
+  type ExcelReportSection,
+} from "@/lib/excel-report";
+import { openPrintReport } from "@/lib/print-report";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -785,15 +798,15 @@ function InfoCard({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <Card className="rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <Card className="group rounded-lg border bg-card shadow-none transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-sm">
       <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
         <div className="min-w-0">
-          <CardDescription className="truncate text-sm">{title}</CardDescription>
+          <CardDescription className="truncate text-sm font-semibold text-foreground">{title}</CardDescription>
           <CardTitle className="mt-2 truncate text-lg font-bold tracking-tight">
             {value}
           </CardTitle>
         </div>
-        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-full border border-border/70 bg-white/80 text-[#a57b3d] shadow-sm backdrop-blur-sm transition group-hover:border-primary/30 group-hover:bg-white/95">
           <Icon className="h-5 w-5" />
         </span>
       </CardHeader>
@@ -816,8 +829,8 @@ function DetailRow({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <div className="flex items-start gap-3 rounded-2xl border bg-background p-4">
-      <span className="rounded-xl bg-muted p-2 text-muted-foreground">
+    <div className="flex items-start gap-3 rounded-lg border bg-background p-4">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border/70 bg-white/80 text-[#a57b3d]">
         <Icon className="h-4 w-4" />
       </span>
       <div className="min-w-0 flex-1">
@@ -830,7 +843,7 @@ function DetailRow({
 
 function CompanyDetailSkeleton() {
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
         <div className="rounded-3xl border bg-card p-6 shadow-sm">
           <Skeleton className="h-5 w-40" />
@@ -1037,6 +1050,184 @@ export default function SystemCompanyDetailPage() {
     `;
   }
 
+
+  function getRelatedRegisterSection(
+    kind: "users" | "subscriptions" | "billing",
+  ): ExcelReportSection {
+    if (kind === "users") {
+      return {
+        title: t.companyUsers,
+        headers: [t.userName, t.userEmail, t.userRole, t.membershipStatus, t.joinedAt],
+        widths: [210, 230, 150, 150, 170],
+        rows: companyUsers.map((item) => [
+          { value: item.name || t.notAvailable, type: "text" as const },
+          { value: item.email || t.notAvailable, type: "text" as const },
+          { value: item.role || t.notAvailable, type: "text" as const },
+          { value: getStatusLabel(item.status, locale), type: "text" as const },
+          { value: formatDateTime(item.joinedAt), type: "text" as const },
+        ]),
+      };
+    }
+
+    if (kind === "subscriptions") {
+      return {
+        title: t.companySubscriptions,
+        headers: ["#", t.plan, t.status, t.actionType, t.billingCycle, t.amount, t.endDate],
+        widths: [90, 200, 130, 160, 140, 150, 170],
+        rows: companySubscriptions.map((item) => [
+          { value: item.id, type: "text" as const },
+          {
+            value: item.planCode
+              ? `${item.planName} (${item.planCode})`
+              : item.planName,
+            type: "text" as const,
+          },
+          { value: getStatusLabel(item.status, locale), type: "text" as const },
+          { value: formatSubscriptionActionValue(item.action, locale), type: "text" as const },
+          { value: formatBillingCycleValue(item.billingCycle, locale), type: "text" as const },
+          { value: formatMoneyValue(item.totalAmount, "SAR"), type: "text" as const },
+          { value: formatDateTime(item.endDate), type: "text" as const },
+        ]),
+      };
+    }
+
+    return {
+      title: t.companyBillingDocs,
+      headers: [
+        t.documentNumber,
+        t.documentType,
+        t.status,
+        t.subscription,
+        t.amount,
+        t.paymentMethod,
+        t.reference,
+        t.issueDate,
+      ],
+      widths: [180, 170, 130, 120, 150, 160, 190, 170],
+      rows: companyBillingDocuments.map((item) => [
+        { value: item.documentNumber, type: "text" as const },
+        { value: formatDocumentType(item.documentType, locale), type: "text" as const },
+        { value: getStatusLabel(item.status, locale), type: "text" as const },
+        { value: item.subscriptionId || t.notAvailable, type: "text" as const },
+        { value: formatMoneyValue(item.totalAmount, item.currencyCode), type: "text" as const },
+        { value: formatPaymentMethodValue(item.paymentMethod, locale), type: "text" as const },
+        {
+          value: item.transactionReference || item.billingReference || t.notAvailable,
+          type: "text" as const,
+        },
+        { value: formatDateTime(item.issueDate), type: "text" as const },
+      ]),
+    };
+  }
+
+  function relatedRegisterCount(
+    kind: "users" | "subscriptions" | "billing",
+  ) {
+    if (kind === "users") return companyUsers.length;
+    if (kind === "subscriptions") return companySubscriptions.length;
+    return companyBillingDocuments.length;
+  }
+
+  function exportRelatedRegister(
+    kind: "users" | "subscriptions" | "billing",
+  ) {
+    const count = relatedRegisterCount(kind);
+
+    if (!count) {
+      toast.error(
+        locale === "ar"
+          ? "لا توجد بيانات للتصدير."
+          : "There is no data to export.",
+      );
+      return;
+    }
+
+    const section = getRelatedRegisterSection(kind);
+
+    downloadExcelReport({
+      locale,
+      title: `${company?.name || t.title} — ${section.title}`,
+      subtitle: t.subtitle,
+      filename: `Mhamcloud-company-${company?.id || companyId}-${kind}-${new Date()
+        .toISOString()
+        .slice(0, 10)}.xls`,
+      generatedAtLabel: t.generatedAt,
+      sections: [section],
+    });
+
+    toast.success(
+      locale === "ar"
+        ? "تم تجهيز ملف Excel بنجاح."
+        : "Excel file prepared successfully.",
+    );
+  }
+
+  function printRelatedRegister(
+    kind: "users" | "subscriptions" | "billing",
+  ) {
+    const count = relatedRegisterCount(kind);
+
+    if (!count) {
+      toast.error(
+        locale === "ar"
+          ? "لا توجد بيانات للطباعة."
+          : "There is no data to print.",
+      );
+      return;
+    }
+
+    const section = getRelatedRegisterSection(kind);
+
+    const tableHtml = `
+      <section class="report-section">
+        <h2>${escapeHtml(section.title)}</h2>
+        <table class="data">
+          <thead>
+            <tr>
+              ${section.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}
+            </tr>
+          </thead>
+          <tbody>
+            ${section.rows
+              .map(
+                (row) => `
+                  <tr>
+                    ${row.map((cell) => `<td>${escapeHtml(cell.value)}</td>`).join("")}
+                  </tr>
+                `,
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </section>
+    `;
+
+    const opened = openPrintReport({
+      locale,
+      title: `${company?.name || t.title} — ${section.title}`,
+      subtitle: t.subtitle,
+      tableHtml,
+      recordsCount: count,
+      recordsLabel: t.openDetails,
+      generatedAtLabel: t.generatedAt,
+    });
+
+    if (!opened) {
+      toast.error(
+        locale === "ar"
+          ? "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة."
+          : "Could not open the print window. Allow pop-ups and try again.",
+      );
+      return;
+    }
+
+    toast.success(
+      locale === "ar"
+        ? "تم تجهيز صفحة الطباعة."
+        : "Print page prepared.",
+    );
+  }
+
   function openPrintWindow(mode: "print" | "pdf") {
     if (!company) return;
 
@@ -1044,47 +1235,38 @@ export default function SystemCompanyDetailPage() {
       toast.info(t.pdfHint);
     }
 
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1000,height=800");
-    if (!printWindow) return;
+    const opened = openPrintReport({
+      locale,
+      title: t.reportTitle,
+      subtitle: `${company.name} · ${company.code}`,
+      tableHtml: buildPrintableHtml(),
+      recordsCount: 1,
+      recordsLabel: locale === "ar" ? "شركة" : "company",
+      generatedAtLabel: t.generatedAt,
+    });
 
-    printWindow.document.write(`
-      <!doctype html>
-      <html dir="${dir}" lang="${locale}">
-        <head>
-          <meta charset="utf-8" />
-          <title>${escapeHtml(t.reportTitle)}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 24px; color: #0f172a; }
-            h1 { margin: 0 0 8px; font-size: 24px; }
-            p { color: #64748b; }
-            table { width: 100%; border-collapse: collapse; margin-top: 18px; }
-            th, td {
-              border: 1px solid #cbd5e1;
-              padding: 10px;
-              font-size: 13px;
-              text-align: ${dir === "rtl" ? "right" : "left"};
-              vertical-align: top;
-            }
-            th { width: 220px; background: #f1f5f9; font-weight: 700; }
-          </style>
-        </head>
-        <body>
-          <h1>${escapeHtml(t.reportTitle)}</h1>
-          <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString())}</p>
-          ${buildPrintableHtml()}
-          <script>window.onload = function () { window.print(); };</script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+    if (!opened) {
+      toast.error(
+        locale === "ar"
+          ? "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة."
+          : "Could not open the print window. Allow pop-ups and try again.",
+      );
+      return;
+    }
+
+    toast.success(
+      locale === "ar"
+        ? "تم تجهيز صفحة الطباعة."
+        : "Print page prepared.",
+    );
   }
 
   if (loading) return <CompanyDetailSkeleton />;
 
   if (error) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-        <Card className="mx-auto max-w-3xl rounded-3xl border-destructive/30 bg-card shadow-sm">
+      <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
+        <Card className="mx-auto max-w-3xl rounded-lg border-destructive/30 bg-card shadow-none">
           <CardHeader className="text-center">
             <div className="mx-auto mb-2 rounded-full bg-destructive/10 p-4 text-destructive">
               <TriangleAlert className="h-8 w-8" />
@@ -1106,8 +1288,8 @@ export default function SystemCompanyDetailPage() {
 
   if (!company) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-        <Card className="mx-auto max-w-3xl rounded-3xl bg-card shadow-sm">
+      <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
+        <Card className="mx-auto max-w-3xl rounded-lg bg-card shadow-none">
           <CardHeader className="text-center">
             <div className="mx-auto mb-2 rounded-full bg-muted p-4 text-muted-foreground">
               <CircleAlert className="h-8 w-8" />
@@ -1129,56 +1311,60 @@ export default function SystemCompanyDetailPage() {
   }
 
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
-          <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-              <div className="max-w-4xl">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  {t.badge}
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                    {company.name || t.title}
-                  </h1>
-                  <StatusBadge value={company.status} locale={locale} />
-                </div>
-                <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">
-                  {t.subtitle}
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <Button asChild variant="outline" className="rounded-xl bg-background">
-                  <Link href="/system/companies">
-                    <BackIcon className="h-4 w-4" />
-                    {t.backToCompanies}
-                  </Link>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="rounded-xl bg-background"
-                  onClick={() => { void loadCompany({ silent: true }); void loadCompanyRelations({ silent: true }); }}
-                  disabled={refreshing}
-                >
-                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  {t.refresh}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("print")}>
-                  <Printer className="h-4 w-4" />
-                  {t.print}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("pdf")}>
-                  <FileText className="h-4 w-4" />
-                  {t.pdf}
-                </Button>
-              </div>
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-4xl">
+            <div className="mb-2 inline-flex items-center gap-2 text-sm font-medium text-[#9a7139]">
+              <Building2 className="h-4 w-4 text-[#a57b3d]" />
+              {t.badge}
             </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-3xl font-bold tracking-tight">
+                {company.name || t.title}
+              </h1>
+              <StatusBadge value={company.status} locale={locale} />
+            </div>
+            <p className="mt-2 max-w-3xl text-sm leading-7 text-muted-foreground">
+              {t.subtitle}
+            </p>
           </div>
-        </section>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button asChild variant="outline" className={registerOutlineButtonClass}>
+              <Link href="/system/companies">
+                <BackIcon className="h-4 w-4" />
+                {t.backToCompanies}
+              </Link>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className={registerOutlineButtonClass}
+              onClick={() => {
+                void loadCompany({ silent: true });
+                void loadCompanyRelations({ silent: true });
+              }}
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {t.refresh}
+            </Button>
+            <Button
+              type="button"
+              variant="brand"
+              className={registerBrandButtonClass}
+              onClick={() => openPrintWindow("print")}
+            >
+              <Printer className="h-4 w-4" />
+              {t.print}
+            </Button>
+          </div>
+        </header>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <InfoCard title={t.companyCode} value={company.code || t.notAvailable} description={t.identity} icon={Hash} />
@@ -1189,7 +1375,7 @@ export default function SystemCompanyDetailPage() {
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-6">
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.identity}</CardTitle>
                 <CardDescription>{t.identityDesc}</CardDescription>
@@ -1216,7 +1402,7 @@ export default function SystemCompanyDetailPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.contact}</CardTitle>
                 <CardDescription>{t.contactDesc}</CardDescription>
@@ -1229,7 +1415,7 @@ export default function SystemCompanyDetailPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.operations}</CardTitle>
                 <CardDescription>{t.operationsDesc}</CardDescription>
@@ -1241,19 +1427,19 @@ export default function SystemCompanyDetailPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.notes}</CardTitle>
                 <CardDescription>{t.notesDesc}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="min-h-24 rounded-2xl border bg-background p-4 text-sm leading-7 text-muted-foreground">
+                <div className="min-h-24 rounded-lg border bg-background p-4 text-sm leading-7 text-muted-foreground">
                   {company.notes || t.notAvailable}
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
@@ -1262,34 +1448,54 @@ export default function SystemCompanyDetailPage() {
                   </CardTitle>
                   <CardDescription>{t.companyUsersDesc}</CardDescription>
                 </div>
-                <Badge variant="outline" className="w-fit rounded-full">{companyUsers.length}</Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline" className="w-fit rounded-full">{companyUsers.length}</Badge>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={registerOutlineButtonClass}
+                    onClick={() => exportRelatedRegister("users")}
+                  >
+                    <FileSpreadsheet className="h-4 w-4" />
+                    Excel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="brand"
+                    className={registerBrandButtonClass}
+                    onClick={() => printRelatedRegister("users")}
+                  >
+                    <Printer className="h-4 w-4" />
+                    {t.print}
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {relatedLoading && !companyUsers.length ? (
-                  <p className="rounded-2xl border bg-background p-4 text-sm text-muted-foreground">{t.loadingRelated}</p>
+                  <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">{t.loadingRelated}</p>
                 ) : companyUsers.length ? (
-                  <div className="overflow-x-auto rounded-2xl border bg-background">
-                    <table className="w-full min-w-[760px] text-sm">
-                      <thead className="bg-muted/60 text-xs text-muted-foreground">
+                  <div className="overflow-x-auto rounded-lg border bg-background">
+                    <table className="w-full min-w-[760px] border-collapse text-sm">
+                      <thead className="bg-muted/40 text-xs text-muted-foreground">
                         <tr>
-                          <th className="px-4 py-3 text-start font-medium">{t.userName}</th>
-                          <th className="px-4 py-3 text-start font-medium">{t.userEmail}</th>
-                          <th className="px-4 py-3 text-start font-medium">{t.userRole}</th>
-                          <th className="px-4 py-3 text-start font-medium">{t.membershipStatus}</th>
-                          <th className="px-4 py-3 text-start font-medium">{t.joinedAt}</th>
-                          <th className="px-4 py-3 text-start font-medium">{t.openDetails}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.userName}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.userEmail}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.userRole}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.membershipStatus}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.joinedAt}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.openDetails}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">
                         {companyUsers.map((item) => (
                           <tr key={item.membershipId || item.userId || item.email}>
-                            <td className="px-4 py-3 font-medium">{item.name || t.notAvailable}</td>
-                            <td className="px-4 py-3 text-muted-foreground">{item.email || t.notAvailable}</td>
-                            <td className="px-4 py-3">{item.role || t.notAvailable}</td>
-                            <td className="px-4 py-3"><StatusBadge value={item.status} locale={locale} /></td>
-                            <td className="px-4 py-3 text-muted-foreground">{formatDateTime(item.joinedAt)}</td>
-                            <td className="px-4 py-3">
-                              <Button asChild size="sm" variant="outline" className="h-8 rounded-lg bg-background">
+                            <td className="px-4 py-3 align-middle font-medium">{item.name || t.notAvailable}</td>
+                            <td className="px-4 py-3 align-middle text-muted-foreground">{item.email || t.notAvailable}</td>
+                            <td className="px-4 py-3 align-middle">{item.role || t.notAvailable}</td>
+                            <td className="px-4 py-3 align-middle"><StatusBadge value={item.status} locale={locale} /></td>
+                            <td className="px-4 py-3 align-middle text-muted-foreground">{formatDateTime(item.joinedAt)}</td>
+                            <td className="px-4 py-3 align-middle">
+                              <Button asChild size="sm" variant="outline" className="h-9 rounded-lg bg-background shadow-none">
                                 <Link href={`/system/users/${item.userId || item.id}`}>
                                   <ExternalLink className="h-3.5 w-3.5" />
                                   {t.openDetails}
@@ -1302,11 +1508,11 @@ export default function SystemCompanyDetailPage() {
                     </table>
                   </div>
                 ) : (
-                  <p className="rounded-2xl border bg-background p-4 text-sm text-muted-foreground">{t.emptyUsers}</p>
+                  <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">{t.emptyUsers}</p>
                 )}
               </CardContent>
             </Card>
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
@@ -1315,41 +1521,61 @@ export default function SystemCompanyDetailPage() {
                   </CardTitle>
                   <CardDescription>{t.companySubscriptionsDesc}</CardDescription>
                 </div>
-                <Badge variant="outline" className="w-fit rounded-full">{companySubscriptions.length}</Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline" className="w-fit rounded-full">{companySubscriptions.length}</Badge>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={registerOutlineButtonClass}
+                    onClick={() => exportRelatedRegister("subscriptions")}
+                  >
+                    <FileSpreadsheet className="h-4 w-4" />
+                    Excel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="brand"
+                    className={registerBrandButtonClass}
+                    onClick={() => printRelatedRegister("subscriptions")}
+                  >
+                    <Printer className="h-4 w-4" />
+                    {t.print}
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {relatedLoading && !companySubscriptions.length ? (
-                  <p className="rounded-2xl border bg-background p-4 text-sm text-muted-foreground">{t.loadingRelated}</p>
+                  <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">{t.loadingRelated}</p>
                 ) : companySubscriptions.length ? (
-                  <div className="overflow-x-auto rounded-2xl border bg-background">
-                    <table className="w-full min-w-[860px] text-sm">
-                      <thead className="bg-muted/60 text-xs text-muted-foreground">
+                  <div className="overflow-x-auto rounded-lg border bg-background">
+                    <table className="w-full min-w-[860px] border-collapse text-sm">
+                      <thead className="bg-muted/40 text-xs text-muted-foreground">
                         <tr>
-                          <th className="px-4 py-3 text-start font-medium">#</th>
-                          <th className="px-4 py-3 text-start font-medium">{t.plan}</th>
-                          <th className="px-4 py-3 text-start font-medium">{t.status}</th>
-                          <th className="px-4 py-3 text-start font-medium">{t.actionType}</th>
-                          <th className="px-4 py-3 text-start font-medium">{t.billingCycle}</th>
-                          <th className="px-4 py-3 text-start font-medium">{t.amount}</th>
-                          <th className="px-4 py-3 text-start font-medium">{t.endDate}</th>
-                          <th className="px-4 py-3 text-start font-medium">{t.openDetails}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">#</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.plan}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.status}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.actionType}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.billingCycle}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.amount}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.endDate}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.openDetails}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">
                         {companySubscriptions.map((item) => (
                           <tr key={item.id}>
                             <td className="px-4 py-3 font-mono text-xs">{item.id}</td>
-                            <td className="px-4 py-3 font-medium">
+                            <td className="px-4 py-3 align-middle font-medium">
                               {item.planName}
                               {item.planCode ? <span className="ms-1 text-xs text-muted-foreground">({item.planCode})</span> : null}
                             </td>
-                            <td className="px-4 py-3"><StatusBadge value={item.status} locale={locale} /></td>
-                            <td className="px-4 py-3 text-muted-foreground">{formatSubscriptionActionValue(item.action, locale)}</td>
-                            <td className="px-4 py-3">{formatBillingCycleValue(item.billingCycle, locale)}</td>
-                            <td className="px-4 py-3 font-medium">{formatMoneyValue(item.totalAmount, company.code ? "SAR" : "SAR")}</td>
-                            <td className="px-4 py-3 text-muted-foreground">{formatDateTime(item.endDate)}</td>
-                            <td className="px-4 py-3">
-                              <Button asChild size="sm" variant="outline" className="h-8 rounded-lg bg-background">
+                            <td className="px-4 py-3 align-middle"><StatusBadge value={item.status} locale={locale} /></td>
+                            <td className="px-4 py-3 align-middle text-muted-foreground">{formatSubscriptionActionValue(item.action, locale)}</td>
+                            <td className="px-4 py-3 align-middle">{formatBillingCycleValue(item.billingCycle, locale)}</td>
+                            <td className="px-4 py-3 align-middle font-medium">{formatMoneyValue(item.totalAmount, company.code ? "SAR" : "SAR")}</td>
+                            <td className="px-4 py-3 align-middle text-muted-foreground">{formatDateTime(item.endDate)}</td>
+                            <td className="px-4 py-3 align-middle">
+                              <Button asChild size="sm" variant="outline" className="h-9 rounded-lg bg-background shadow-none">
                                 <Link href={`/system/subscriptions/${item.id}`}>
                                   <ExternalLink className="h-3.5 w-3.5" />
                                   {t.openDetails}
@@ -1362,11 +1588,11 @@ export default function SystemCompanyDetailPage() {
                     </table>
                   </div>
                 ) : (
-                  <p className="rounded-2xl border bg-background p-4 text-sm text-muted-foreground">{t.emptySubscriptions}</p>
+                  <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">{t.emptySubscriptions}</p>
                 )}
               </CardContent>
             </Card>
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
@@ -1375,25 +1601,45 @@ export default function SystemCompanyDetailPage() {
                   </CardTitle>
                   <CardDescription>{t.companyBillingDocsDesc}</CardDescription>
                 </div>
-                <Badge variant="outline" className="w-fit rounded-full">{companyBillingDocuments.length}</Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline" className="w-fit rounded-full">{companyBillingDocuments.length}</Badge>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={registerOutlineButtonClass}
+                    onClick={() => exportRelatedRegister("billing")}
+                  >
+                    <FileSpreadsheet className="h-4 w-4" />
+                    Excel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="brand"
+                    className={registerBrandButtonClass}
+                    onClick={() => printRelatedRegister("billing")}
+                  >
+                    <Printer className="h-4 w-4" />
+                    {t.print}
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {relatedLoading && !companyBillingDocuments.length ? (
-                  <p className="rounded-2xl border bg-background p-4 text-sm text-muted-foreground">{t.loadingRelated}</p>
+                  <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">{t.loadingRelated}</p>
                 ) : companyBillingDocuments.length ? (
-                  <div className="overflow-x-auto rounded-2xl border bg-background">
-                    <table className="w-full min-w-[980px] text-sm">
-                      <thead className="bg-muted/60 text-xs text-muted-foreground">
+                  <div className="overflow-x-auto rounded-lg border bg-background">
+                    <table className="w-full min-w-[980px] border-collapse text-sm">
+                      <thead className="bg-muted/40 text-xs text-muted-foreground">
                         <tr>
-                          <th className="px-4 py-3 text-start font-medium">{t.documentNumber}</th>
-                          <th className="px-4 py-3 text-start font-medium">{t.documentType}</th>
-                          <th className="px-4 py-3 text-start font-medium">{t.status}</th>
-                          <th className="px-4 py-3 text-start font-medium">{t.subscription}</th>
-                          <th className="px-4 py-3 text-start font-medium">{t.amount}</th>
-                          <th className="px-4 py-3 text-start font-medium">{t.paymentMethod}</th>
-                          <th className="px-4 py-3 text-start font-medium">{t.reference}</th>
-                          <th className="px-4 py-3 text-start font-medium">{t.issueDate}</th>
-                          <th className="px-4 py-3 text-start font-medium">{t.openDetails}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.documentNumber}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.documentType}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.status}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.subscription}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.amount}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.paymentMethod}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.reference}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.issueDate}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.openDetails}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">
@@ -1410,15 +1656,15 @@ export default function SystemCompanyDetailPage() {
                                 <ExternalLink className="h-3 w-3" />
                               </Link>
                             </td>
-                            <td className="px-4 py-3">{formatDocumentType(item.documentType, locale)}</td>
-                            <td className="px-4 py-3"><StatusBadge value={item.status} locale={locale} /></td>
+                            <td className="px-4 py-3 align-middle">{formatDocumentType(item.documentType, locale)}</td>
+                            <td className="px-4 py-3 align-middle"><StatusBadge value={item.status} locale={locale} /></td>
                             <td className="px-4 py-3 font-mono text-xs">{item.subscriptionId || t.notAvailable}</td>
-                            <td className="px-4 py-3 font-medium">{formatMoneyValue(item.totalAmount, item.currencyCode)}</td>
-                            <td className="px-4 py-3">{formatPaymentMethodValue(item.paymentMethod, locale)}</td>
-                            <td className="px-4 py-3 text-muted-foreground">{item.transactionReference || item.billingReference || t.notAvailable}</td>
-                            <td className="px-4 py-3 text-muted-foreground">{formatDateTime(item.issueDate)}</td>
-                            <td className="px-4 py-3">
-                              <Button asChild size="sm" variant="outline" className="h-8 rounded-lg bg-background">
+                            <td className="px-4 py-3 align-middle font-medium">{formatMoneyValue(item.totalAmount, item.currencyCode)}</td>
+                            <td className="px-4 py-3 align-middle">{formatPaymentMethodValue(item.paymentMethod, locale)}</td>
+                            <td className="px-4 py-3 align-middle text-muted-foreground">{item.transactionReference || item.billingReference || t.notAvailable}</td>
+                            <td className="px-4 py-3 align-middle text-muted-foreground">{formatDateTime(item.issueDate)}</td>
+                            <td className="px-4 py-3 align-middle">
+                              <Button asChild size="sm" variant="outline" className="h-9 rounded-lg bg-background shadow-none">
                                 <Link href={`/system/invoices/${item.id}`}>
                                   <ExternalLink className="h-3.5 w-3.5" />
                                   {t.openDetails}
@@ -1431,54 +1677,54 @@ export default function SystemCompanyDetailPage() {
                     </table>
                   </div>
                 ) : (
-                  <p className="rounded-2xl border bg-background p-4 text-sm text-muted-foreground">{t.emptyBillingDocs}</p>
+                  <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">{t.emptyBillingDocs}</p>
                 )}
               </CardContent>
             </Card>
           </div>
 
           <aside className="space-y-6">
-            <Card className="rounded-2xl shadow-sm xl:sticky xl:top-6">
+            <Card className="rounded-lg border bg-card shadow-none xl:sticky xl:top-6">
               <CardHeader>
                 <CardTitle>{t.quickLinks}</CardTitle>
                 <CardDescription>{t.quickLinksDesc}</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-2">
-                <Button asChild variant="outline" className="justify-start rounded-xl bg-background">
+                <Button asChild variant="outline" className="h-9 justify-start rounded-lg bg-background shadow-none">
                   <Link href="/system/companies/list">
                     <ListChecks className="h-4 w-4" />
                     {t.companiesList}
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="justify-start rounded-xl bg-background">
+                <Button asChild variant="outline" className="h-9 justify-start rounded-lg bg-background shadow-none">
                   <Link href={`/system/companies/${company.id}/users/create`}>
                     <UserRound className="h-4 w-4" />
                     {t.addCompanyUser}
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="justify-start rounded-xl bg-background">
+                <Button asChild variant="outline" className="h-9 justify-start rounded-lg bg-background shadow-none">
                   <Link href={`/system/companies/${company.id}/subscriptions/create`}>
                     <Sparkles className="h-4 w-4" />
                     {t.addCompanySubscription}
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="justify-start rounded-xl bg-background">
+                <Button asChild variant="outline" className="h-9 justify-start rounded-lg bg-background shadow-none">
                   <Link href="/system/companies">
                     <Building2 className="h-4 w-4" />
                     {t.backToCompanies}
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="justify-start rounded-xl bg-background">
+                <Button asChild variant="outline" className="h-9 justify-start rounded-lg bg-background shadow-none">
                   <Link href="/system">
                     <LayoutDashboard className="h-4 w-4" />
                     {t.systemDashboard}
                   </Link>
                 </Button>
-                <Button type="button" variant="outline" className="justify-start rounded-xl bg-background" onClick={() => openPrintWindow("print")}>
+                <Button type="button" variant="outline" className="h-9 justify-start rounded-lg bg-background shadow-none" onClick={() => openPrintWindow("print")}>
                   <Printer className="h-4 w-4" />
                   {t.print}
                 </Button>
-                <Button type="button" variant="outline" className="justify-start rounded-xl bg-background" onClick={() => openPrintWindow("pdf")}>
+                <Button type="button" variant="outline" className="h-9 justify-start rounded-lg bg-background shadow-none" onClick={() => openPrintWindow("pdf")}>
                   <FileText className="h-4 w-4" />
                   {t.pdf}
                 </Button>

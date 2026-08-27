@@ -1,5 +1,7 @@
 "use client";
 
+// phase47D_batch1_remaining_system_dashboard_contract=true
+
 /* ============================================================
    📂 primey_frontend/app/system/integrations/page.tsx
    🔗 Mhamcloud — System Integrations Center
@@ -1288,7 +1290,7 @@ export default function SystemIntegrationsPage() {
                 <CardContent>
                   <div className="overflow-hidden rounded-lg border">
                     <div className="overflow-x-auto">
-                      <Table className="min-w-[760px]">
+                      <Table variant="register" minWidth={760}>
                         <TableHeader>
                           <TableRow>
                             <TableHead>
@@ -1378,7 +1380,7 @@ export default function SystemIntegrationsPage() {
                 <CardContent>
                   <div className="overflow-hidden rounded-lg border">
                     <div className="overflow-x-auto">
-                      <Table className="min-w-[720px]">
+                      <Table variant="register" minWidth={720}>
                         <TableHeader>
                           <TableRow>
                             <TableHead>

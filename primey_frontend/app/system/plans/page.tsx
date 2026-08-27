@@ -1,4 +1,6 @@
-﻿"use client";
+"use client";
+
+// phase47D_batch1_remaining_system_dashboard_contract=true
 
 /* ============================================================
    📂 primey_frontend/app/system/plans/page.tsx
@@ -58,6 +60,11 @@ import {
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  downloadExcelReport,
+  type ExcelReportSection,
+} from "@/lib/excel-report";
+import { openPrintReport } from "@/lib/print-report";
 
 import { API_PATHS } from "@/lib/api/endpoints";
 import { Badge } from "@/components/ui/badge";
@@ -751,13 +758,13 @@ function MetricCard({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <Card className="rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <Card className="rounded-lg border-border/70 bg-card shadow-none transition hover:-translate-y-0.5 hover:shadow-md">
       <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-2">
         <div className="space-y-1">
-          <CardDescription>{title}</CardDescription>
+          <CardDescription className="font-semibold text-foreground">{title}</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums">{value}</CardTitle>
         </div>
-        <div className="rounded-2xl bg-primary/10 p-2.5 text-primary">
+        <div className="flex size-11 shrink-0 items-center justify-center rounded-full border border-border/70 bg-white/80 text-[#a57b3d] shadow-sm backdrop-blur-sm">
           <Icon className="h-5 w-5" />
         </div>
       </CardHeader>
@@ -815,7 +822,7 @@ function EmptyState({
       <h3 className="text-base font-semibold">{title}</h3>
       <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">{description}</p>
       {showReset && onReset ? (
-        <Button variant="outline" className="mt-4 rounded-xl bg-background" onClick={onReset}>
+        <Button variant="outline" className="mt-4 rounded-lg bg-background shadow-none" onClick={onReset}>
           <RotateCcw className="h-4 w-4" />
           {resetLabel}
         </Button>
@@ -826,7 +833,7 @@ function EmptyState({
 
 function PlansManagementSkeleton() {
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-transparent px-4 py-6 sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
         <Skeleton className="h-48 rounded-3xl" />
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -1086,75 +1093,72 @@ export default function SystemPlansPage() {
       return;
     }
 
-    const html = `
-      <html dir="${dir}" lang="${locale}">
-        <head><meta charset="utf-8" /></head>
-        <body>
-          <h1>${escapeHtml(t.reportTitle)}</h1>
-          <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString("en-US"))}</p>
-          ${buildTableHtml()}
-        </body>
-      </html>
-    `;
+    const section: ExcelReportSection = {
+      title: t.reportTitle,
+      headers: [
+      t.plan,
+      t.code,
+      t.monthly,
+      t.yearly,
+      t.users,
+      t.branches,
+      t.warehouses,
+      t.pos,
+      t.companies,
+      t.status,
+      t.visibility,
+      t.updatedAt,
+    ],
+      rows: rows.map((row) =>
+        row.map((value) => ({
+          value: String(value ?? ""),
+          type: "text" as const,
+        })),
+      ),
+    };
 
-    const blob = new Blob([`\ufeff${html}`], {
-      type: "application/vnd.ms-excel;charset=utf-8;",
+    downloadExcelReport({
+      locale,
+      title: t.reportTitle,
+      filename: `Mhamcloud-app-system-plans-${new Date().toISOString().slice(0, 10)}.xls`,
+      generatedAtLabel: t.generatedAt,
+      sections: [section],
     });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
 
-    link.href = url;
-    link.download = `Mhamcloud-system-plans-management-${new Date().toISOString().slice(0, 10)}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    toast.success(
+      locale === "ar"
+        ? "تم تجهيز ملف Excel بنجاح."
+        : "Excel file prepared successfully.",
+    );
   }
 
   function openPrintWindow(mode: "print" | "pdf") {
     const rows = buildExportRows();
-
     if (!rows.length) {
       toast.error(t.printEmpty);
       return;
     }
 
-    if (mode === "pdf") toast.info(t.pdfHint);
+    if (mode === "pdf" && "pdfHint" in t) {
+      toast.info(String(t.pdfHint));
+    }
 
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1200,height=800");
+    const opened = openPrintReport({
+      locale,
+      title: t.reportTitle,
+      tableHtml: buildTableHtml(),
+      recordsCount: rows.length,
+      recordsLabel: t.rows,
+      generatedAtLabel: t.generatedAt,
+    });
 
-    if (!printWindow) return;
-
-    printWindow.document.write(`
-      <!doctype html>
-      <html dir="${dir}" lang="${locale}">
-        <head>
-          <meta charset="utf-8" />
-          <title>${escapeHtml(t.reportTitle)}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 24px; color: #0f172a; }
-            h1 { margin: 0 0 8px; font-size: 24px; }
-            p { color: #64748b; }
-            table { width: 100%; border-collapse: collapse; margin-top: 18px; }
-            th, td {
-              border: 1px solid #cbd5e1;
-              padding: 8px;
-              font-size: 12px;
-              text-align: ${dir === "rtl" ? "right" : "left"};
-              vertical-align: top;
-            }
-            th { background: #f1f5f9; font-weight: 700; }
-          </style>
-        </head>
-        <body>
-          <h1>${escapeHtml(t.reportTitle)}</h1>
-          <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString("en-US"))}</p>
-          ${buildTableHtml()}
-          <script>window.onload = function () { window.print(); };</script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+    if (!opened) {
+      toast.error(
+        locale === "ar"
+          ? "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة."
+          : "Could not open the print window. Allow pop-ups and try again.",
+      );
+    }
   }
 
   async function runPlanAction(plan: PlanRecord, action: PlanAction) {
@@ -1194,9 +1198,9 @@ export default function SystemPlansPage() {
 
   if (error) {
     return (
-      <main className="min-h-screen bg-muted/30 px-4 py-6 sm:px-6 lg:px-8" dir={dir}>
+      <main className="min-h-screen bg-transparent px-4 py-6 sm:px-6 lg:px-8" dir={dir}>
         <div className="w-full">
-          <Card className="rounded-3xl border-destructive/30 bg-card shadow-sm">
+          <Card className="rounded-lg border-destructive/30 bg-card shadow-none">
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="rounded-2xl bg-destructive/10 p-3 text-destructive">
@@ -1221,11 +1225,10 @@ export default function SystemPlansPage() {
   }
 
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 sm:px-6 lg:px-8" dir={dir}>
+    <main className="min-h-screen bg-transparent px-4 py-6 sm:px-6 lg:px-8" dir={dir}>
       <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+        <section className="overflow-hidden rounded-lg border bg-card shadow-none">
           <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
               <div className="max-w-4xl">
                 <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -1239,7 +1242,7 @@ export default function SystemPlansPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
-                  className="rounded-xl bg-background"
+                  className="rounded-lg bg-background shadow-none"
                   onClick={() => void loadPlans({ silent: true })}
                   disabled={refreshing}
                 >
@@ -1252,7 +1255,7 @@ export default function SystemPlansPage() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="rounded-xl bg-background"
+                  className="rounded-lg bg-background shadow-none"
                   onClick={exportExcel}
                 >
                   <FileSpreadsheet className="h-4 w-4" />
@@ -1260,7 +1263,7 @@ export default function SystemPlansPage() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="rounded-xl bg-background"
+                  className="rounded-lg bg-background shadow-none"
                   onClick={() => openPrintWindow("print")}
                 >
                   <Printer className="h-4 w-4" />
@@ -1268,7 +1271,7 @@ export default function SystemPlansPage() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="rounded-xl bg-background"
+                  className="rounded-lg bg-background shadow-none"
                   onClick={() => openPrintWindow("pdf")}
                 >
                   <FileText className="h-4 w-4" />
@@ -1312,7 +1315,7 @@ export default function SystemPlansPage() {
           />
         </div>
 
-        <Card className="rounded-2xl shadow-sm">
+        <Card className="rounded-lg border bg-card shadow-none">
           <CardHeader>
             <CardTitle>{t.actionsTitle}</CardTitle>
             <CardDescription>{t.actionsDesc}</CardDescription>
@@ -1326,7 +1329,7 @@ export default function SystemPlansPage() {
           </CardContent>
         </Card>
 
-        <Card className="w-full rounded-2xl shadow-sm">
+        <Card className="w-full rounded-lg border bg-card shadow-none">
           <CardHeader className="gap-3">
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div>
@@ -1353,14 +1356,14 @@ export default function SystemPlansPage() {
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder={t.searchPlaceholder}
                   className={cn(
-                    "h-11 rounded-xl bg-background",
+                    "h-9 rounded-lg bg-background",
                     locale === "ar" ? "pr-10" : "pl-10",
                   )}
                 />
               </div>
 
               <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
-                <SelectTrigger className="h-11 rounded-xl bg-background">
+                <SelectTrigger className="h-9 rounded-lg bg-background">
                   <SelectValue placeholder={t.allStatuses} />
                 </SelectTrigger>
                 <SelectContent>
@@ -1374,7 +1377,7 @@ export default function SystemPlansPage() {
                 value={visibility}
                 onValueChange={(value) => setVisibility(value as VisibilityFilter)}
               >
-                <SelectTrigger className="h-11 rounded-xl bg-background">
+                <SelectTrigger className="h-9 rounded-lg bg-background">
                   <SelectValue placeholder={t.allVisibility} />
                 </SelectTrigger>
                 <SelectContent>
@@ -1385,7 +1388,7 @@ export default function SystemPlansPage() {
               </Select>
 
               <Select value={code} onValueChange={setCode}>
-                <SelectTrigger className="h-11 rounded-xl bg-background">
+                <SelectTrigger className="h-9 rounded-lg bg-background">
                   <SelectValue placeholder={t.allCodes} />
                 </SelectTrigger>
                 <SelectContent>
@@ -1399,7 +1402,7 @@ export default function SystemPlansPage() {
               </Select>
 
               <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
-                <SelectTrigger className="h-11 rounded-xl bg-background">
+                <SelectTrigger className="h-9 rounded-lg bg-background">
                   <ArrowUpDown className="h-4 w-4" />
                   <SelectValue placeholder={t.sort} />
                 </SelectTrigger>
@@ -1426,9 +1429,9 @@ export default function SystemPlansPage() {
           </CardHeader>
 
           <CardContent className="space-y-4">
-            <div className="overflow-hidden rounded-2xl border bg-background">
+            <div className="overflow-hidden rounded-lg border bg-background">
               <div className="overflow-x-auto">
-                <Table className="w-full min-w-[1120px] table-fixed">
+                <Table variant="register" minWidth={1120}>
                   <TableHeader>
                     <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
                       <TableHead className={cn("h-11 w-[220px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
@@ -1690,7 +1693,7 @@ export default function SystemPlansPage() {
                 </span>{" "}
                 {t.rows}
               </p>
-              <Button asChild variant="outline" className="w-fit rounded-xl bg-background">
+              <Button asChild variant="outline" className="w-fit rounded-lg bg-background shadow-none">
                 <Link href="/system/plans/create">
                   <Plus className="h-4 w-4" />
                   {t.createPlan}

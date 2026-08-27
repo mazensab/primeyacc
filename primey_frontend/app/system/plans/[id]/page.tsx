@@ -1,5 +1,7 @@
 "use client";
 
+// phase47D_batch1_remaining_system_dashboard_contract=true
+
 /* ============================================================
    📂 primey_frontend/app/system/plans/[id]/page.tsx
    💼 PrimeyAcc — System Plan Detail + Edit
@@ -760,7 +762,7 @@ function formFromPlan(plan: PlanRecord): PlanFormState {
 }
 
 function numericInputClass(extra = "") {
-  return cn("h-11 rounded-xl bg-background text-left font-mono tabular-nums", extra);
+  return cn("h-9 rounded-lg bg-background text-left font-mono tabular-nums", extra);
 }
 
 function MoneyIcon() {
@@ -832,13 +834,13 @@ function MetricCard({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <Card className="rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <Card className="rounded-lg border-border/70 bg-card shadow-none transition hover:-translate-y-0.5 hover:shadow-md">
       <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-2">
         <div className="space-y-1">
-          <CardDescription>{title}</CardDescription>
+          <CardDescription className="font-semibold text-foreground">{title}</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums">{value}</CardTitle>
         </div>
-        <div className="rounded-2xl bg-primary/10 p-2.5 text-primary">
+        <div className="flex size-11 shrink-0 items-center justify-center rounded-full border border-border/70 bg-white/80 text-[#a57b3d] shadow-sm backdrop-blur-sm">
           <Icon className="h-5 w-5" />
         </div>
       </CardHeader>
@@ -877,7 +879,7 @@ function QuickActionCard({ action }: { action: QuickAction }) {
 
 function DetailSkeleton() {
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-transparent px-4 py-6 sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
         <Skeleton className="h-44 rounded-3xl" />
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -1174,8 +1176,8 @@ export default function SystemPlanDetailPage() {
 
   if (error || !plan) {
     return (
-      <main className="min-h-screen bg-muted/30 px-4 py-6 sm:px-6 lg:px-8" dir={dir}>
-        <Card className="rounded-3xl border-destructive/30 bg-card shadow-sm">
+      <main className="min-h-screen bg-transparent px-4 py-6 sm:px-6 lg:px-8" dir={dir}>
+        <Card className="rounded-lg border-destructive/30 bg-card shadow-none">
           <CardHeader>
             <div className="flex items-center gap-3">
               <div className="rounded-2xl bg-destructive/10 p-3 text-destructive">
@@ -1201,11 +1203,10 @@ export default function SystemPlanDetailPage() {
   const stats = plan.stats || emptyStats();
 
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 sm:px-6 lg:px-8" dir={dir}>
+    <main className="min-h-screen bg-transparent px-4 py-6 sm:px-6 lg:px-8" dir={dir}>
       <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+        <section className="overflow-hidden rounded-lg border bg-card shadow-none">
           <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
               <div className="max-w-4xl">
                 <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -1226,7 +1227,7 @@ export default function SystemPlanDetailPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <Button asChild variant="outline" className="rounded-xl bg-background">
+                <Button asChild variant="outline" className="rounded-lg bg-background shadow-none">
                   <Link href="/system/plans">
                     <ArrowLeft className="h-4 w-4" />
                     {t.back}
@@ -1234,7 +1235,7 @@ export default function SystemPlanDetailPage() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="rounded-xl bg-background"
+                  className="rounded-lg bg-background shadow-none"
                   onClick={() => void loadPlan({ silent: true })}
                   disabled={refreshing}
                 >
@@ -1258,7 +1259,7 @@ export default function SystemPlanDetailPage() {
                 {plan.is_active ? (
                   <Button
                     variant="outline"
-                    className="rounded-xl bg-background"
+                    className="rounded-lg bg-background shadow-none"
                     disabled={Boolean(busyAction)}
                     onClick={() => void runPlanAction("deactivate")}
                   >
@@ -1272,7 +1273,7 @@ export default function SystemPlanDetailPage() {
                 ) : (
                   <Button
                     variant="outline"
-                    className="rounded-xl bg-background"
+                    className="rounded-lg bg-background shadow-none"
                     disabled={Boolean(busyAction)}
                     onClick={() => void runPlanAction("activate")}
                   >
@@ -1288,7 +1289,7 @@ export default function SystemPlanDetailPage() {
                 {plan.is_public ? (
                   <Button
                     variant="outline"
-                    className="rounded-xl bg-background"
+                    className="rounded-lg bg-background shadow-none"
                     disabled={Boolean(busyAction)}
                     onClick={() => void runPlanAction("hide")}
                   >
@@ -1302,7 +1303,7 @@ export default function SystemPlanDetailPage() {
                 ) : (
                   <Button
                     variant="outline"
-                    className="rounded-xl bg-background"
+                    className="rounded-lg bg-background shadow-none"
                     disabled={Boolean(busyAction)}
                     onClick={() => void runPlanAction("publish")}
                   >
@@ -1354,7 +1355,7 @@ export default function SystemPlanDetailPage() {
 
         {editMode && editForm ? (
           <form onSubmit={saveChanges} className="space-y-6">
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.edit}</CardTitle>
                 <CardDescription>{t.subtitle}</CardDescription>
@@ -1365,7 +1366,7 @@ export default function SystemPlanDetailPage() {
                   <Input
                     value={editForm.name}
                     onChange={(event) => updateField("name", event.target.value)}
-                    className="h-11 rounded-xl bg-background"
+                    className="h-9 rounded-lg bg-background"
                     disabled={saving}
                   />
                   {errors.name ? <p className="text-xs text-destructive">{errors.name}</p> : null}
@@ -1376,7 +1377,7 @@ export default function SystemPlanDetailPage() {
                   <Input
                     value={editForm.code}
                     onChange={(event) => updateField("code", event.target.value.toUpperCase())}
-                    className="h-11 rounded-xl bg-background font-mono uppercase"
+                    className="h-9 rounded-lg bg-background font-mono uppercase"
                     disabled={saving}
                   />
                   {errors.code ? <p className="text-xs text-destructive">{errors.code}</p> : null}
@@ -1387,7 +1388,7 @@ export default function SystemPlanDetailPage() {
                   <Input
                     value={editForm.slug}
                     onChange={(event) => updateField("slug", event.target.value)}
-                    className="h-11 rounded-xl bg-background"
+                    className="h-9 rounded-lg bg-background"
                     disabled={saving}
                   />
                 </div>
@@ -1422,7 +1423,7 @@ export default function SystemPlanDetailPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.pricing}</CardTitle>
               </CardHeader>
@@ -1479,7 +1480,7 @@ export default function SystemPlanDetailPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.limits}</CardTitle>
               </CardHeader>
@@ -1514,7 +1515,7 @@ export default function SystemPlanDetailPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.features}</CardTitle>
               </CardHeader>
@@ -1530,12 +1531,12 @@ export default function SystemPlanDetailPage() {
                       }
                     }}
                     placeholder={t.featureInputPlaceholder}
-                    className="h-11 rounded-xl bg-background"
+                    className="h-9 rounded-lg bg-background"
                     disabled={saving}
                   />
                   <Button
                     type="button"
-                    className="h-11 rounded-xl"
+                    className="h-9 rounded-lg"
                     onClick={() => addFeature(featureInput)}
                     disabled={saving || !featureInput.trim()}
                   >
@@ -1573,7 +1574,7 @@ export default function SystemPlanDetailPage() {
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground">{t.selectedFeatures}</p>
                   {selectedFeatures.length ? (
-                    <div className="flex flex-wrap gap-2 rounded-2xl border bg-background p-3">
+                    <div className="flex flex-wrap gap-2 rounded-lg border bg-background p-3">
                       {selectedFeatures.map((feature) => (
                         <Badge
                           key={feature}
@@ -1602,7 +1603,7 @@ export default function SystemPlanDetailPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.statusVisibility}</CardTitle>
               </CardHeader>
@@ -1635,7 +1636,7 @@ export default function SystemPlanDetailPage() {
               <Button
                 type="button"
                 variant="outline"
-                className="rounded-xl bg-background"
+                className="rounded-lg bg-background shadow-none"
                 onClick={() => {
                   setEditForm(formFromPlan(plan));
                   setEditMode(false);
@@ -1656,24 +1657,24 @@ export default function SystemPlanDetailPage() {
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="space-y-6">
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.planInfo}</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-2xl border bg-background p-4">
+                <div className="rounded-lg border bg-background p-4">
                   <p className="text-xs text-muted-foreground">{t.name}</p>
                   <p className="mt-2 font-semibold">{plan.name}</p>
                 </div>
-                <div className="rounded-2xl border bg-background p-4">
+                <div className="rounded-lg border bg-background p-4">
                   <p className="text-xs text-muted-foreground">{t.code}</p>
                   <p className="mt-2 font-mono font-semibold">{plan.code}</p>
                 </div>
-                <div className="rounded-2xl border bg-background p-4">
+                <div className="rounded-lg border bg-background p-4">
                   <p className="text-xs text-muted-foreground">{t.slug}</p>
                   <p className="mt-2 font-semibold">{plan.slug}</p>
                 </div>
-                <div className="rounded-2xl border bg-background p-4">
+                <div className="rounded-lg border bg-background p-4">
                   <p className="text-xs text-muted-foreground">{t.sortOrder}</p>
                   <p dir="ltr" className="mt-2 font-semibold tabular-nums">
                     {formatInteger(plan.sort_order)}
@@ -1682,15 +1683,15 @@ export default function SystemPlanDetailPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.recentSubscriptions}</CardTitle>
                 <CardDescription>{t.recentSubscriptionsDesc}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="overflow-hidden rounded-2xl border bg-background">
+                <div className="overflow-hidden rounded-lg border bg-background">
                   <div className="overflow-x-auto">
-                    <Table className="w-full min-w-[980px] table-fixed">
+                    <Table variant="register" minWidth={980}>
                       <TableHeader>
                         <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
                           <TableHead className={cn("w-[260px] px-4 text-xs", alignClass)}>
@@ -1795,18 +1796,18 @@ export default function SystemPlanDetailPage() {
           </div>
 
           <aside className="space-y-6">
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.pricing}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="rounded-2xl border bg-background p-4">
+                <div className="rounded-lg border bg-background p-4">
                   <p className="text-xs text-muted-foreground">{t.monthly}</p>
                   <div className="mt-2 text-lg">
                     <MoneyValue value={plan.monthly_price} />
                   </div>
                 </div>
-                <div className="rounded-2xl border bg-background p-4">
+                <div className="rounded-lg border bg-background p-4">
                   <p className="text-xs text-muted-foreground">{t.yearly}</p>
                   <div className="mt-2 text-lg">
                     <MoneyValue value={plan.yearly_price} />
@@ -1815,33 +1816,33 @@ export default function SystemPlanDetailPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.limits}</CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-2 gap-3">
-                <div className="rounded-2xl border bg-background p-3">
+                <div className="rounded-lg border bg-background p-3">
                   <UsersRound className="mb-2 h-4 w-4 text-muted-foreground" />
                   <p dir="ltr" className="font-semibold tabular-nums">
                     {formatInteger(plan.max_users)}
                   </p>
                   <p className="text-xs text-muted-foreground">{t.users}</p>
                 </div>
-                <div className="rounded-2xl border bg-background p-3">
+                <div className="rounded-lg border bg-background p-3">
                   <Activity className="mb-2 h-4 w-4 text-muted-foreground" />
                   <p dir="ltr" className="font-semibold tabular-nums">
                     {formatInteger(plan.max_branches)}
                   </p>
                   <p className="text-xs text-muted-foreground">{t.branches}</p>
                 </div>
-                <div className="rounded-2xl border bg-background p-3">
+                <div className="rounded-lg border bg-background p-3">
                   <Warehouse className="mb-2 h-4 w-4 text-muted-foreground" />
                   <p dir="ltr" className="font-semibold tabular-nums">
                     {formatInteger(plan.max_warehouses)}
                   </p>
                   <p className="text-xs text-muted-foreground">{t.warehouses}</p>
                 </div>
-                <div className="rounded-2xl border bg-background p-3">
+                <div className="rounded-lg border bg-background p-3">
                   <Zap className="mb-2 h-4 w-4 text-muted-foreground" />
                   <p dir="ltr" className="font-semibold tabular-nums">
                     {formatInteger(plan.max_pos)}
@@ -1851,7 +1852,7 @@ export default function SystemPlanDetailPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.features}</CardTitle>
               </CardHeader>

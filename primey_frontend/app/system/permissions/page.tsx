@@ -1,5 +1,7 @@
 "use client";
 
+// phase47D_batch2_system_dashboard_design_contract=true
+
 
 
 /* ============================================================
@@ -153,6 +155,17 @@ import {
 
 
 import { toast } from "sonner";
+import {
+  downloadExcelReport,
+  type ExcelReportSection,
+} from "@/lib/excel-report";
+import { openPrintReport } from "@/lib/print-report";
+import { SystemKpiCard } from "@/components/ui/system-kpi-card";
+import {
+  DataRegisterToolbar,
+  registerBrandButtonClass,
+  registerOutlineButtonClass,
+} from "@/components/ui/data-register";
 
 
 
@@ -259,6 +272,10 @@ import {
 } from "@/components/ui/table";
 
 
+
+import { downloadExcelHtmlReport } from "@/lib/excel-report";
+
+import { openPrintHtmlReport } from "@/lib/print-report";
 
 type Locale = "ar" | "en";
 
@@ -1550,47 +1567,7 @@ export default function SystemPermissionsPage() {
 
 
 
-    const blob = new Blob([`\uFEFF${html}`], {
-
-
-
-      type: "application/vnd.ms-excel;charset=utf-8;",
-
-
-
-    });
-
-
-
-    const url = URL.createObjectURL(blob);
-
-
-
-    const link = document.createElement("a");
-
-
-
-    link.href = url;
-
-
-
-    link.download = "primeyacc-system-permissions.xls";
-
-
-
-    document.body.appendChild(link);
-
-
-
-    link.click();
-
-
-
-    link.remove();
-
-
-
-    URL.revokeObjectURL(url);
+    downloadExcelHtmlReport(html, "primeyacc-system-permissions.xls");
 
 
 
@@ -1606,7 +1583,7 @@ export default function SystemPermissionsPage() {
 
 
 
-    window.print();
+    openPrintHtmlReport(document.documentElement.outerHTML);
 
 
 
@@ -1682,7 +1659,7 @@ export default function SystemPermissionsPage() {
 
 
 
-      className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8 print:bg-white"
+      className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8 print:bg-white"
 
 
 
@@ -1694,15 +1671,11 @@ export default function SystemPermissionsPage() {
 
 
 
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+        <section className="overflow-hidden rounded-lg border bg-card shadow-none">
 
 
 
           <div className="relative p-6 sm:p-8">
-
-
-
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
 
 
 
@@ -1786,7 +1759,7 @@ export default function SystemPermissionsPage() {
 
 
 
-                <Button type="button" variant="outline" className="rounded-xl bg-background" onClick={printPage}>
+                <Button type="button" variant="outline" className="rounded-lg bg-background shadow-none" onClick={printPage}>
 
 
 
@@ -1802,7 +1775,7 @@ export default function SystemPermissionsPage() {
 
 
 
-                <Button type="button" variant="outline" className="rounded-xl bg-background" onClick={printPage}>
+                <Button type="button" variant="outline" className="rounded-lg bg-background shadow-none" onClick={printPage}>
 
 
 
@@ -1818,7 +1791,7 @@ export default function SystemPermissionsPage() {
 
 
 
-                <Button type="button" variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
+                <Button type="button" variant="outline" className="rounded-lg bg-background shadow-none" onClick={exportExcel}>
 
 
 
@@ -1846,7 +1819,7 @@ export default function SystemPermissionsPage() {
 
 
 
-                  className="rounded-xl bg-background"
+                  className="rounded-lg bg-background shadow-none"
 
 
 
@@ -1910,7 +1883,7 @@ export default function SystemPermissionsPage() {
         <Card className="rounded-2xl border-primary/20 bg-primary/5 shadow-sm">
           <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
-              <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-full border border-border/70 bg-white/80 text-[#a57b3d] shadow-sm backdrop-blur-sm">
                 <ShieldCheck className="h-5 w-5" />
               </span>
               <div>
@@ -2043,7 +2016,7 @@ export default function SystemPermissionsPage() {
 
 
 
-                className="overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                className="overflow-hidden rounded-lg border-border/70 bg-card shadow-none transition hover:-translate-y-0.5 hover:shadow-md"
 
 
 
@@ -2079,7 +2052,7 @@ export default function SystemPermissionsPage() {
 
 
 
-                  <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-full border border-border/70 bg-white/80 text-[#a57b3d] shadow-sm backdrop-blur-sm">
 
 
 
@@ -2131,7 +2104,7 @@ export default function SystemPermissionsPage() {
 
 
 
-        <Card className="rounded-2xl shadow-sm">
+        <Card className="rounded-lg border bg-card shadow-none">
 
 
 
@@ -2287,7 +2260,7 @@ export default function SystemPermissionsPage() {
 
 
 
-                    <Card className="group h-full rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                    <Card className="group h-full rounded-lg border-border/70 bg-card shadow-none transition hover:-translate-y-0.5 hover:shadow-md">
 
 
 
@@ -2355,7 +2328,7 @@ export default function SystemPermissionsPage() {
 
 
 
-        <Card className="w-full rounded-2xl shadow-sm">
+        <Card className="w-full rounded-lg border bg-card shadow-none">
 
 
 
@@ -2415,7 +2388,7 @@ export default function SystemPermissionsPage() {
 
 
 
-            <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between print:hidden">
+            <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between print:hidden">
 
 
 
@@ -2439,7 +2412,7 @@ export default function SystemPermissionsPage() {
 
 
 
-                  className="h-10 rounded-xl bg-background ps-10"
+                  className="h-9 rounded-lg bg-background ps-10"
 
 
 
@@ -2459,7 +2432,7 @@ export default function SystemPermissionsPage() {
 
 
 
-                <SelectTrigger className="h-10 rounded-xl bg-background md:w-[170px]">
+                <SelectTrigger className="h-9 rounded-lg bg-background md:w-[170px]">
 
 
 
@@ -2499,7 +2472,7 @@ export default function SystemPermissionsPage() {
 
 
 
-                <SelectTrigger className="h-10 rounded-xl bg-background md:w-[190px]">
+                <SelectTrigger className="h-9 rounded-lg bg-background md:w-[190px]">
 
 
 
@@ -2551,7 +2524,7 @@ export default function SystemPermissionsPage() {
 
 
 
-                <SelectTrigger className="h-10 rounded-xl bg-background md:w-[170px]">
+                <SelectTrigger className="h-9 rounded-lg bg-background md:w-[170px]">
 
 
 
@@ -2591,7 +2564,7 @@ export default function SystemPermissionsPage() {
 
 
 
-              <Button type="button" variant="outline" className="h-10 rounded-xl bg-background" onClick={resetFilters}>
+              <Button type="button" variant="outline" className={registerOutlineButtonClass} onClick={resetFilters}>
 
 
 
@@ -2779,7 +2752,7 @@ export default function SystemPermissionsPage() {
 
 
 
-              <div className="overflow-hidden rounded-2xl border bg-background">
+              <div className="overflow-hidden rounded-lg border bg-background">
 
 
 
@@ -2787,7 +2760,7 @@ export default function SystemPermissionsPage() {
 
 
 
-                  <Table className="w-full min-w-[980px] table-fixed">
+                  <Table variant="register" layout="fixed" minWidth={980}>
 
 
 

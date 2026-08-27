@@ -41,7 +41,7 @@ export function SystemKpiCard({
   const content = (
     <div className="flex h-full min-h-[126px] items-start justify-between gap-4 p-5">
       <div className="flex min-w-0 flex-1 flex-col self-stretch text-start">
-        <p className="truncate text-sm leading-5 text-muted-foreground">
+        <p className="truncate text-sm font-semibold leading-5 text-foreground">
           {title}
         </p>
         <div className="mt-1.5 flex items-center gap-1.5">
@@ -71,7 +71,7 @@ export function SystemKpiCard({
           {description}
         </p>
       </div>
-      <span className="mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-full border border-border bg-primary/5 text-primary shadow-sm transition group-hover:border-primary/30 group-hover:bg-primary group-hover:text-primary-foreground dark:bg-white/[0.06]">
+      <span className="mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-full border border-border/70 bg-white/80 text-[#a57b3d] shadow-sm backdrop-blur-sm transition group-hover:border-primary/30 group-hover:bg-white/95 group-hover:text-[#a57b3d] dark:border-white/10 dark:bg-white/[0.06] dark:text-[#a57b3d] dark:group-hover:bg-white/[0.09]">
         <Icon className="h-5 w-5" />
       </span>
     </div>

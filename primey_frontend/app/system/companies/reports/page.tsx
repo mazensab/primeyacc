@@ -26,6 +26,8 @@ import {
   ArrowUpDown,
   BarChart3,
   Building2,
+  ExternalLink,
+  MoreVertical,
   CalendarDays,
   CheckCircle2,
   CircleAlert,
@@ -49,8 +51,29 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  DataRegisterDatePicker,
+  DataRegisterEmptyState,
+  DataRegisterSearch,
+  DataRegisterToolbar,
+  registerBrandButtonClass,
+  registerOutlineButtonClass,
+} from "@/components/ui/data-register";
+import { SystemKpiCard } from "@/components/ui/system-kpi-card";
+import {
+  downloadExcelReport,
+  type ExcelReportSection,
+} from "@/lib/excel-report";
+import { openPrintReport } from "@/lib/print-report";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Card,
   CardContent,
@@ -58,7 +81,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -637,6 +659,44 @@ function StatusBadge({ value, locale }: { value: string; locale: Locale }) {
   );
 }
 
+function RegisterActionMenu({
+  href,
+  label,
+  locale,
+}: {
+  href: string;
+  label: string;
+  locale: Locale;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-9 w-9 rounded-lg bg-background"
+          aria-label={label}
+        >
+          <MoreVertical className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align={locale === "ar" ? "start" : "end"}
+        className="w-44"
+      >
+        <DropdownMenuItem asChild>
+          <Link href={href} className="flex items-center gap-2">
+            <ExternalLink className="h-4 w-4 text-[#a57b3d]" />
+            {label}
+          </Link>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+
 function makeDistribution(
   rows: CompanyRecord[],
   pick: (row: CompanyRecord) => string,
@@ -665,7 +725,7 @@ function makeDistribution(
 
 function ReportSkeleton() {
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
         <div className="rounded-3xl border bg-card p-6 shadow-sm">
           <Skeleton className="h-5 w-40" />
@@ -699,37 +759,6 @@ function ReportSkeleton() {
   );
 }
 
-function KpiCard({
-  title,
-  value,
-  description,
-  icon: Icon,
-}: {
-  title: string;
-  value: number;
-  description: string;
-  icon: React.ComponentType<{ className?: string }>;
-}) {
-  return (
-    <Card className="overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
-        <div className="min-w-0">
-          <CardDescription className="truncate text-sm">{title}</CardDescription>
-          <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
-            {formatInteger(value)}
-          </CardTitle>
-        </div>
-        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
-          <Icon className="h-5 w-5" />
-        </span>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
 function DistributionCard({
   title,
   description,
@@ -742,7 +771,7 @@ function DistributionCard({
   locale: Locale;
 }) {
   return (
-    <Card className="rounded-2xl shadow-sm">
+    <Card className="rounded-lg border bg-card shadow-none">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         <CardDescription>{description}</CardDescription>
@@ -776,38 +805,6 @@ function DistributionCard({
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function EmptyState({
-  title,
-  description,
-  showReset,
-  resetLabel,
-  onReset,
-}: {
-  title: string;
-  description: string;
-  showReset?: boolean;
-  resetLabel: string;
-  onReset: () => void;
-}) {
-  return (
-    <div className="flex min-h-64 flex-col items-center justify-center gap-3 px-6 py-10 text-center">
-      <div className="rounded-full bg-muted p-4 text-muted-foreground">
-        <Search className="h-6 w-6" />
-      </div>
-      <div>
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-      </div>
-      {showReset ? (
-        <Button variant="outline" size="sm" onClick={onReset} className="rounded-lg">
-          <RotateCcw className="h-4 w-4" />
-          {resetLabel}
-        </Button>
-      ) : null}
-    </div>
   );
 }
 
@@ -1023,6 +1020,20 @@ export default function SystemCompaniesReportsPage() {
     `;
   }
 
+  function buildExcelSection(): ExcelReportSection {
+    return {
+      title: t.reportTable,
+      headers: [t.company, t.code, t.owner, t.activity, t.subscription, t.city, t.status, t.createdAt, t.updatedAt],
+      widths: [230, 140, 160, 160, 170, 130, 130, 160, 160],
+      rows: buildExportRows().map((row) =>
+        row.map((value) => ({
+          value,
+          type: "text" as const,
+        })),
+      ),
+    };
+  }
+
   function exportExcel() {
     const rows = buildExportRows();
 
@@ -1031,29 +1042,20 @@ export default function SystemCompaniesReportsPage() {
       return;
     }
 
-    const html = `
-      <html dir="${dir}" lang="${locale}">
-        <head><meta charset="utf-8" /></head>
-        <body>
-          <h1>${escapeHtml(t.reportTitle)}</h1>
-          <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString())}</p>
-          ${buildTableHtml()}
-        </body>
-      </html>
-    `;
-
-    const blob = new Blob([`\ufeff${html}`], {
-      type: "application/vnd.ms-excel;charset=utf-8;",
+    downloadExcelReport({
+      locale,
+      title: t.reportTitle,
+      subtitle: t.subtitle,
+      filename: `Mhamcloud-system-companies-report-${new Date().toISOString().slice(0, 10)}.xls`,
+      generatedAtLabel: t.generatedAt,
+      sections: [buildExcelSection()],
     });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
 
-    link.href = url;
-    link.download = `Mhamcloud-system-companies-report-${new Date().toISOString().slice(0, 10)}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    toast.success(
+      locale === "ar"
+        ? "تم تجهيز ملف Excel بنجاح."
+        : "Excel file prepared successfully.",
+    );
   }
 
   function openPrintWindow(mode: "print" | "pdf") {
@@ -1068,47 +1070,38 @@ export default function SystemCompaniesReportsPage() {
       toast.info(t.pdfHint);
     }
 
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1200,height=800");
-    if (!printWindow) return;
+    const opened = openPrintReport({
+      locale,
+      title: t.reportTitle,
+      subtitle: t.subtitle,
+      tableHtml: buildTableHtml(),
+      recordsCount: rows.length,
+      recordsLabel: t.rows,
+      generatedAtLabel: t.generatedAt,
+    });
 
-    printWindow.document.write(`
-      <!doctype html>
-      <html dir="${dir}" lang="${locale}">
-        <head>
-          <meta charset="utf-8" />
-          <title>${escapeHtml(t.reportTitle)}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 24px; color: #0f172a; }
-            h1 { margin: 0 0 8px; font-size: 24px; }
-            p { color: #64748b; }
-            table { width: 100%; border-collapse: collapse; margin-top: 18px; }
-            th, td {
-              border: 1px solid #cbd5e1;
-              padding: 8px;
-              font-size: 12px;
-              text-align: ${dir === "rtl" ? "right" : "left"};
-              vertical-align: top;
-            }
-            th { background: #f1f5f9; font-weight: 700; }
-          </style>
-        </head>
-        <body>
-          <h1>${escapeHtml(t.reportTitle)}</h1>
-          <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString())}</p>
-          ${buildTableHtml()}
-          <script>window.onload = function () { window.print(); };</script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+    if (!opened) {
+      toast.error(
+        locale === "ar"
+          ? "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة."
+          : "Could not open the print window. Allow pop-ups and try again.",
+      );
+      return;
+    }
+
+    toast.success(
+      locale === "ar"
+        ? "تم تجهيز صفحة الطباعة."
+        : "Print page prepared.",
+    );
   }
 
   if (loading) return <ReportSkeleton />;
 
   if (error) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-        <Card className="mx-auto max-w-3xl rounded-3xl border-destructive/30 bg-card shadow-sm">
+      <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
+        <Card className="mx-auto max-w-3xl rounded-lg border-destructive/30 bg-card shadow-none">
           <CardHeader className="text-center">
             <div className="mx-auto mb-2 rounded-full bg-destructive/10 p-4 text-destructive">
               <TriangleAlert className="h-8 w-8" />
@@ -1129,82 +1122,90 @@ export default function SystemCompaniesReportsPage() {
   }
 
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
-          <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-              <div className="max-w-4xl">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  {t.badge}
-                </div>
-                <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{t.title}</h1>
-                <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">{t.subtitle}</p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="outline"
-                  className="rounded-xl bg-background"
-                  onClick={() => void loadCompanies({ silent: true })}
-                  disabled={refreshing}
-                >
-                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  {t.refresh}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
-                  <FileSpreadsheet className="h-4 w-4" />
-                  {t.exportExcel}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("print")}>
-                  <Printer className="h-4 w-4" />
-                  {t.print}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("pdf")}>
-                  <FileText className="h-4 w-4" />
-                  {t.pdf}
-                </Button>
-                <Button asChild className="rounded-xl">
-                  <Link href="/system/companies/create">
-                    <Plus className="h-4 w-4" />
-                    {t.addCompany}
-                  </Link>
-                </Button>
-              </div>
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-4xl">
+            <div className="mb-2 inline-flex items-center gap-2 text-sm font-medium text-[#9a7139]">
+              <Sparkles className="h-4 w-4 text-[#a57b3d]" />
+              {t.badge}
             </div>
+            <h1 className="text-3xl font-bold tracking-tight">{t.title}</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-7 text-muted-foreground">
+              {t.subtitle}
+            </p>
           </div>
-        </section>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className={registerOutlineButtonClass}
+              onClick={() => void loadCompanies({ silent: true })}
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {t.refresh}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className={registerOutlineButtonClass}
+              onClick={exportExcel}
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              {t.exportExcel}
+            </Button>
+            <Button
+              type="button"
+              variant="brand"
+              className={registerBrandButtonClass}
+              onClick={() => openPrintWindow("print")}
+            >
+              <Printer className="h-4 w-4" />
+              {t.print}
+            </Button>
+            <Button
+              asChild
+              variant="brand"
+              className={registerBrandButtonClass}
+            >
+              <Link href="/system/companies/create">
+                <Plus className="h-4 w-4" />
+                {t.addCompany}
+              </Link>
+            </Button>
+          </div>
+        </header>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard title={t.totalCompanies} value={stats.total} description={t.fromLiveApi} icon={Building2} />
-          <KpiCard title={t.activeCompanies} value={stats.active} description={t.fromLiveApi} icon={CheckCircle2} />
-          <KpiCard title={t.inactiveCompanies} value={stats.inactive} description={t.fromLiveApi} icon={ShieldCheck} />
-          <KpiCard title={t.subscribedCompanies} value={stats.subscribed} description={t.fromLiveApi} icon={Activity} />
+          <SystemKpiCard title={t.totalCompanies} value={stats.total} description={t.fromLiveApi} icon={Building2} />
+          <SystemKpiCard title={t.activeCompanies} value={stats.active} description={t.fromLiveApi} icon={CheckCircle2} />
+          <SystemKpiCard title={t.inactiveCompanies} value={stats.inactive} description={t.fromLiveApi} icon={ShieldCheck} />
+          <SystemKpiCard title={t.subscribedCompanies} value={stats.subscribed} description={t.fromLiveApi} icon={Activity} />
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
-          <KpiCard title={t.uniqueActivities} value={stats.activities} description={t.fromLiveApi} icon={PieChart} />
-          <KpiCard title={t.uniqueCities} value={stats.cities} description={t.fromLiveApi} icon={MapPin} />
-          <KpiCard title={t.filteredRows} value={stats.filtered} description={t.fromLiveApi} icon={TableProperties} />
+          <SystemKpiCard title={t.uniqueActivities} value={stats.activities} description={t.fromLiveApi} icon={PieChart} />
+          <SystemKpiCard title={t.uniqueCities} value={stats.cities} description={t.fromLiveApi} icon={MapPin} />
+          <SystemKpiCard title={t.filteredRows} value={stats.filtered} description={t.fromLiveApi} icon={TableProperties} />
         </div>
 
-        <Card className="rounded-2xl shadow-sm">
-          <CardContent className="pt-6">
-            <div className="grid gap-3 xl:grid-cols-[minmax(260px,1fr)_160px_160px_160px_150px_150px_170px_auto]">
-              <div className="relative">
-                <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
+        <DataRegisterToolbar className="grid gap-3 xl:grid-cols-[minmax(260px,1fr)_160px_160px_160px_150px_150px_170px_auto]">
+
+              <DataRegisterSearch
                   value={search}
-                  onChange={(event) => setSearch(event.target.value)}
+                  onChange={setSearch}
                   placeholder={t.searchPlaceholder}
-                  className="h-10 rounded-xl ps-9"
+                  className="min-w-0 flex-1"
                 />
-              </div>
 
               <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
-                <SelectTrigger className="h-10 rounded-xl bg-background">
+                <SelectTrigger className="h-9 bg-background shadow-none">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1217,7 +1218,7 @@ export default function SystemCompaniesReportsPage() {
               </Select>
 
               <Select value={activity} onValueChange={setActivity}>
-                <SelectTrigger className="h-10 rounded-xl bg-background">
+                <SelectTrigger className="h-9 bg-background shadow-none">
                   <SelectValue placeholder={t.activityFilter} />
                 </SelectTrigger>
                 <SelectContent>
@@ -1231,7 +1232,7 @@ export default function SystemCompaniesReportsPage() {
               </Select>
 
               <Select value={city} onValueChange={setCity}>
-                <SelectTrigger className="h-10 rounded-xl bg-background">
+                <SelectTrigger className="h-9 bg-background shadow-none">
                   <SelectValue placeholder={t.cityFilter} />
                 </SelectTrigger>
                 <SelectContent>
@@ -1244,24 +1245,12 @@ export default function SystemCompaniesReportsPage() {
                 </SelectContent>
               </Select>
 
-              <Input
-                type="date"
-                value={fromDate}
-                onChange={(event) => setFromDate(event.target.value)}
-                className="h-10 rounded-xl"
-                aria-label={t.fromDate}
-              />
+              <DataRegisterDatePicker label={t.fromDate} value={fromDate} onChange={setFromDate} locale={locale} />
 
-              <Input
-                type="date"
-                value={toDate}
-                onChange={(event) => setToDate(event.target.value)}
-                className="h-10 rounded-xl"
-                aria-label={t.toDate}
-              />
+              <DataRegisterDatePicker label={t.toDate} value={toDate} onChange={setToDate} locale={locale} />
 
               <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
-                <SelectTrigger className="h-10 rounded-xl bg-background">
+                <SelectTrigger className="h-9 bg-background shadow-none">
                   <ArrowUpDown className="h-4 w-4" />
                   <SelectValue />
                 </SelectTrigger>
@@ -1276,13 +1265,11 @@ export default function SystemCompaniesReportsPage() {
                 </SelectContent>
               </Select>
 
-              <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={resetFilters}>
+              <Button variant="outline" className="h-9 bg-background shadow-none" onClick={resetFilters}>
                 <RotateCcw className="h-4 w-4" />
                 {t.reset}
               </Button>
-            </div>
-          </CardContent>
-        </Card>
+        </DataRegisterToolbar>
 
         <div className="grid gap-4 xl:grid-cols-3">
           <DistributionCard
@@ -1305,24 +1292,44 @@ export default function SystemCompaniesReportsPage() {
           />
         </div>
 
-        <Card className="w-full rounded-2xl shadow-sm">
+        <Card className="w-full rounded-lg border bg-card shadow-none">
           <CardHeader className="gap-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <CardTitle>{t.reportTable}</CardTitle>
                 <CardDescription className="mt-2">{t.reportTableDesc}</CardDescription>
               </div>
-              <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
                 <UsersRound className="h-3.5 w-3.5" />
                 {t.showing} {formatInteger(filteredCompanies.length)} {t.of} {formatInteger(apiTotal || companies.length)} {t.rows}
               </Badge>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={registerOutlineButtonClass}
+                  onClick={exportExcel}
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  {t.exportExcel}
+                </Button>
+                <Button
+                  type="button"
+                  variant="brand"
+                  className={registerBrandButtonClass}
+                  onClick={() => openPrintWindow("print")}
+                >
+                  <Printer className="h-4 w-4" />
+                  {t.print}
+                </Button>
+              </div>
             </div>
           </CardHeader>
 
           <CardContent className="space-y-4">
             <div className="overflow-hidden rounded-2xl border bg-background">
               <div className="w-full overflow-x-auto">
-                <Table className="w-full min-w-[1120px] table-fixed">
+                <Table variant="register" layout="fixed" minWidth="1120px">
                   <TableHeader>
                     <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
                       <TableHead className={cn("w-[220px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
@@ -1349,7 +1356,7 @@ export default function SystemCompaniesReportsPage() {
                       <TableHead className={cn("w-[115px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
                         {t.createdAt}
                       </TableHead>
-                      <TableHead className="sticky left-0 z-10 w-[76px] bg-muted/40 px-3 text-center text-xs font-semibold text-muted-foreground">
+                      <TableHead className="sticky end-0 z-10 w-[76px] bg-muted/40 px-3 text-center text-xs font-semibold text-muted-foreground">
                         {t.open}
                       </TableHead>
                     </TableRow>
@@ -1402,19 +1409,15 @@ export default function SystemCompaniesReportsPage() {
                               {formatDate(company.created_at)}
                             </span>
                           </TableCell>
-                          <TableCell className="sticky left-0 z-10 bg-background px-3 text-center align-middle">
-                            <Button asChild variant="outline" size="sm" className="h-8 rounded-lg bg-background px-3">
-                              <Link href={company.id ? `/system/companies/${company.id}` : "/system/companies/list"}>
-                                {t.open}
-                              </Link>
-                            </Button>
+                          <TableCell className="sticky end-0 z-10 bg-background px-3 text-center align-middle">
+                            <RegisterActionMenu href={company.id ? `/system/companies/${company.id}` : "/system/companies/list"} label={t.open} locale={locale} />
                           </TableCell>
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
                         <TableCell colSpan={9}>
-                          <EmptyState
+                          <DataRegisterEmptyState
                             title={hasFilters ? t.noResultsTitle : t.noDataTitle}
                             description={hasFilters ? t.noResultsDesc : t.noDataDesc}
                             showReset={hasFilters}
@@ -1442,19 +1445,19 @@ export default function SystemCompaniesReportsPage() {
                 {t.rows}
               </p>
               <div className="flex flex-wrap gap-2">
-                <Button asChild variant="outline" className="rounded-xl bg-background">
+                <Button asChild variant="outline" className={registerOutlineButtonClass}>
                   <Link href="/system/companies">
                     <BarChart3 className="h-4 w-4" />
                     {t.companiesCenter}
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="rounded-xl bg-background">
+                <Button asChild variant="outline" className={registerOutlineButtonClass}>
                   <Link href="/system/companies/list">
                     <ListChecks className="h-4 w-4" />
                     {t.companiesList}
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="rounded-xl bg-background">
+                <Button asChild variant="outline" className={registerOutlineButtonClass}>
                   <Link href="/system">
                     <LayoutDashboard className="h-4 w-4" />
                     {t.systemDashboard}

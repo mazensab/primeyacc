@@ -1,4 +1,6 @@
-﻿"use client";
+"use client";
+
+// phase47D_batch2_system_dashboard_design_contract=true
 /* ============================================================
    📂 primey_frontend/components/system/activity-profiles/SystemActivityProfilesCenter.tsx
    🧩 Mhamcloud — System Activity Profiles Center
@@ -40,6 +42,12 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
+import { SystemKpiCard } from "@/components/ui/system-kpi-card";
+import {
+  DataRegisterToolbar,
+  registerBrandButtonClass,
+  registerOutlineButtonClass,
+} from "@/components/ui/data-register";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -66,6 +74,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { downloadExcelHtmlReport } from "@/lib/excel-report";
+
+import { openPrintHtmlReport } from "@/lib/print-report";
+
 type Locale = "ar" | "en";
 type PageMode = "overview" | "list";
 type ApiRecord = Record<string, unknown>;
@@ -372,39 +384,9 @@ function statusBadgeClass(value: string) {
   }
   return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
 }
-function MetricCard({
-  title,
-  value,
-  description,
-  icon: Icon,
-}: {
-  title: string;
-  value: string | number;
-  description: string;
-  icon: LucideIcon;
-}) {
-  return (
-    <Card className="rounded-2xl border-border/70 bg-card shadow-sm">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="mt-3 truncate text-3xl font-bold tabular-nums">
-              {typeof value === "number" ? formatInteger(value) : value}
-            </p>
-            <p className="mt-4 text-xs text-muted-foreground">{description}</p>
-          </div>
-          <div className="rounded-2xl bg-muted p-3 text-primary">
-            <Icon className="h-5 w-5" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 function ActivityProfilesSkeleton() {
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-transparent px-4 py-6 sm:px-6 lg:px-8">
       <div className="space-y-6">
         <Card className="rounded-3xl">
           <CardHeader className="space-y-4">
@@ -598,21 +580,15 @@ export function SystemActivityProfilesCenter({ mode = "overview" }: { mode?: Pag
         <body>
           <h1>${escapeHtml(t.reportTitle)}</h1>
           <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString())}</p>
+
           ${buildTableHtml(rows)}
         </body>
       </html>
     `;
-    const blob = new Blob([`\ufeff${html}`], {
-      type: "application/vnd.ms-excel;charset=utf-8;",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `Mhamcloud-activity-profiles-${new Date().toISOString().slice(0, 10)}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    downloadExcelHtmlReport(
+      html,
+      `Mhamcloud-activity-profiles-${new Date().toISOString().slice(0, 10)}.xls`,
+    );
   }
   function openPrintWindow(modeName: "print" | "pdf") {
     const rows = exportRows();
@@ -621,9 +597,8 @@ export function SystemActivityProfilesCenter({ mode = "overview" }: { mode?: Pag
       return;
     }
     if (modeName === "pdf") toast.info(t.pdfHint);
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1200,height=800");
-    if (!printWindow) return;
-    printWindow.document.write(`
+
+    const html = `
       <!doctype html>
       <html dir="${dir}" lang="${locale}">
         <head>
@@ -647,18 +622,26 @@ export function SystemActivityProfilesCenter({ mode = "overview" }: { mode?: Pag
         <body>
           <h1>${escapeHtml(t.reportTitle)}</h1>
           <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString())}</p>
+
           ${buildTableHtml(rows)}
         </body>
       </html>
-    `);
-    printWindow.document.close();
-    window.setTimeout(() => printWindow.print(), 250);
+    `;
+
+    const opened = openPrintHtmlReport(html);
+    if (!opened) {
+      toast.error(
+        locale === "ar"
+          ? "تعذر فتح نافذة الطباعة."
+          : "Could not open the print window.",
+      );
+    }
   }
   if (loading) return <ActivityProfilesSkeleton />;
   if (error) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-        <Card className="mx-auto max-w-3xl rounded-3xl border-destructive/30 bg-card shadow-sm">
+      <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
+        <Card className="mx-auto max-w-3xl rounded-lg border-destructive/30 bg-card shadow-none">
           <CardHeader className="text-center">
             <div className="mx-auto mb-2 rounded-full bg-destructive/10 p-4 text-destructive">
               <TriangleAlert className="h-8 w-8" />
@@ -678,11 +661,10 @@ export function SystemActivityProfilesCenter({ mode = "overview" }: { mode?: Pag
     );
   }
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+        <section className="overflow-hidden rounded-lg border bg-card shadow-none">
           <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
               <div className="max-w-4xl">
                 <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -695,22 +677,22 @@ export function SystemActivityProfilesCenter({ mode = "overview" }: { mode?: Pag
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
-                  className="rounded-xl bg-background"
+                  className="rounded-lg bg-background shadow-none"
                   onClick={() => void loadProfiles({ silent: true })}
                   disabled={refreshing}
                 >
                   {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                   {t.refresh}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={exportExcel}>
                   <FileSpreadsheet className="h-4 w-4" />
                   {t.exportExcel}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("print")}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={() => openPrintWindow("print")}>
                   <Printer className="h-4 w-4" />
                   {t.print}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("pdf")}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={() => openPrintWindow("pdf")}>
                   <FileText className="h-4 w-4" />
                   {t.pdf}
                 </Button>
@@ -719,12 +701,12 @@ export function SystemActivityProfilesCenter({ mode = "overview" }: { mode?: Pag
           </div>
         </section>
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <MetricCard title={t.totalProfiles} value={summary.total || profiles.length} description={t.fromLiveApi} icon={Layers3} />
-          <MetricCard title={t.activeProfiles} value={summary.active} description={t.fromLiveApi} icon={CheckCircle2} />
-          <MetricCard title={t.inactiveProfiles} value={summary.inactive} description={t.fromLiveApi} icon={XCircle} />
-          <MetricCard title={t.companiesLinked} value={summary.companiesCount} description={t.fromLiveApi} icon={Building2} />
+          <SystemKpiCard title={t.totalProfiles} value={summary.total || profiles.length} description={t.fromLiveApi} icon={Layers3} />
+          <SystemKpiCard title={t.activeProfiles} value={summary.active} description={t.fromLiveApi} icon={CheckCircle2} />
+          <SystemKpiCard title={t.inactiveProfiles} value={summary.inactive} description={t.fromLiveApi} icon={XCircle} />
+          <SystemKpiCard title={t.companiesLinked} value={summary.companiesCount} description={t.fromLiveApi} icon={Building2} />
         </section>
-        <Card className="w-full rounded-2xl shadow-sm">
+        <Card className="w-full rounded-lg border bg-card shadow-none">
           <CardHeader className="gap-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -738,7 +720,7 @@ export function SystemActivityProfilesCenter({ mode = "overview" }: { mode?: Pag
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row md:items-center">
                 <div className="relative min-w-0 flex-1">
                   <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -746,11 +728,11 @@ export function SystemActivityProfilesCenter({ mode = "overview" }: { mode?: Pag
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder={t.searchPlaceholder}
-                    className="h-10 rounded-xl ps-9"
+                    className="h-9 rounded-lg ps-9"
                   />
                 </div>
                 <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background md:w-[150px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background md:w-[150px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -760,7 +742,7 @@ export function SystemActivityProfilesCenter({ mode = "overview" }: { mode?: Pag
                   </SelectContent>
                 </Select>
                 <Select value={typeFilter} onValueChange={setTypeFilter}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background md:w-[180px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background md:w-[180px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -773,7 +755,7 @@ export function SystemActivityProfilesCenter({ mode = "overview" }: { mode?: Pag
                   </SelectContent>
                 </Select>
                 <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background md:w-[160px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background md:w-[160px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -786,7 +768,7 @@ export function SystemActivityProfilesCenter({ mode = "overview" }: { mode?: Pag
                 </Select>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={resetFilters}>
+                <Button variant="outline" className={registerOutlineButtonClass} onClick={resetFilters}>
                   <RotateCcw className="h-4 w-4" />
                   {t.reset}
                 </Button>
@@ -800,9 +782,9 @@ export function SystemActivityProfilesCenter({ mode = "overview" }: { mode?: Pag
                 </Link>
               </div>
             </div>
-            <div className="overflow-hidden rounded-2xl border bg-background">
+            <div className="overflow-hidden rounded-lg border bg-background">
               <div className="w-full overflow-x-auto">
-                <Table className="w-full min-w-[1180px] table-fixed">
+                <Table variant="register" layout="fixed" minWidth={1180}>
                   <TableHeader>
                     <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
                       <TableHead className={cn("w-[150px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>

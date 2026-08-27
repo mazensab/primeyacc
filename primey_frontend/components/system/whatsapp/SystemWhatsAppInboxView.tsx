@@ -1,4 +1,6 @@
 "use client";
+
+// phase47D_batch2_system_dashboard_design_contract=true
 /*
 ================================================================================
 📂 primey_frontend/components/system/whatsapp/SystemWhatsAppInboxView.tsx
@@ -31,6 +33,12 @@ import {
   Wifi,
 } from "lucide-react";
 import { toast } from "sonner";
+import { SystemKpiCard } from "@/components/ui/system-kpi-card";
+import {
+  DataRegisterToolbar,
+  registerBrandButtonClass,
+  registerOutlineButtonClass,
+} from "@/components/ui/data-register";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -382,40 +390,10 @@ function statusClass(status: string | undefined): string {
   if (value === "SPAM") return "border-rose-200 bg-rose-50 text-rose-700";
   return "border-slate-200 bg-slate-50 text-slate-700";
 }
-function KpiCard({
-  title,
-  value,
-  description,
-  icon: Icon,
-}: {
-  title: string;
-  value: number;
-  description: string;
-  icon: React.ComponentType<{ className?: string }>;
-}) {
-  return (
-    <Card className="overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
-        <div className="min-w-0">
-          <CardDescription className="truncate text-sm">{title}</CardDescription>
-          <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
-            {formatInteger(value)}
-          </CardTitle>
-        </div>
-        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
-          <Icon className="h-5 w-5" />
-        </span>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
-      </CardContent>
-    </Card>
-  );
-}
 function QuickActionCard({ action }: { action: QuickAction }) {
   const Icon = action.icon;
   return (
-    <Card className="group rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <Card className="group rounded-lg border-border/70 bg-card shadow-none transition hover:-translate-y-0.5 hover:shadow-md">
       <Link
         href={action.href}
         className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -436,7 +414,7 @@ function QuickActionCard({ action }: { action: QuickAction }) {
 function InboxSkeleton({ locale }: { locale: Locale }) {
   const dir = locale === "ar" ? "rtl" : "ltr";
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8" dir={dir}>
+    <main className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8" dir={dir}>
       <div className="w-full space-y-6">
         <div className="rounded-3xl border bg-card p-6 shadow-sm">
           <Skeleton className="h-5 w-40" />
@@ -606,9 +584,9 @@ export default function SystemWhatsAppInboxView() {
     return <InboxSkeleton locale={locale} />;
   }
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8" dir={dir}>
+    <main className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8" dir={dir}>
       <div className="w-full space-y-6">
-        <Card className="overflow-hidden rounded-3xl border-border/70 bg-card shadow-sm">
+        <Card className="overflow-hidden rounded-lg border-border/70 bg-card shadow-none">
           <CardHeader className="gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className={cn("min-w-0 space-y-3", alignClass)}>
               <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
@@ -660,32 +638,32 @@ export default function SystemWhatsAppInboxView() {
           </CardHeader>
         </Card>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard
+          <SystemKpiCard
             title={t.total}
             value={summary.total_conversations || conversations.length || 0}
             description={t.fromLiveApi}
             icon={Inbox}
           />
-          <KpiCard
+          <SystemKpiCard
             title={t.unread}
             value={summary.unread_conversations || 0}
             description={t.fromLiveApi}
             icon={AlertCircle}
           />
-          <KpiCard
+          <SystemKpiCard
             title={t.resolved}
             value={summary.resolved_conversations || 0}
             description={t.fromLiveApi}
             icon={CheckCircle2}
           />
-          <KpiCard
+          <SystemKpiCard
             title={t.openCount}
             value={summary.open_conversations || 0}
             description={t.fromLiveApi}
             icon={Wifi}
           />
         </div>
-        <Card className="rounded-2xl border-border/70 bg-card shadow-sm">
+        <Card className="rounded-lg border-border/70 bg-card shadow-none">
           <CardHeader className={alignClass}>
             <CardTitle className="text-lg">{t.actionsTitle}</CardTitle>
             <CardDescription>{t.actionsDesc}</CardDescription>
@@ -697,7 +675,7 @@ export default function SystemWhatsAppInboxView() {
           </CardContent>
         </Card>
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-          <Card className="rounded-2xl border-border/70 bg-card shadow-sm">
+          <Card className="rounded-lg border-border/70 bg-card shadow-none">
             {!selectedConversation ? (
               <CardContent className="flex min-h-[640px] flex-col items-center justify-center gap-3 px-6 py-10 text-center">
                 <div className="rounded-full bg-muted p-4 text-muted-foreground">
@@ -831,7 +809,7 @@ export default function SystemWhatsAppInboxView() {
               </>
             )}
           </Card>
-          <Card className="rounded-2xl border-border/70 bg-card shadow-sm">
+          <Card className="rounded-lg border-border/70 bg-card shadow-none">
             <CardHeader className={alignClass}>
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -840,7 +818,7 @@ export default function SystemWhatsAppInboxView() {
                     {formatInteger(summary.total_conversations || conversations.length || 0)} {t.conversationCount}
                   </CardDescription>
                 </div>
-                <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-full border border-border/70 bg-white/80 text-[#a57b3d] shadow-sm backdrop-blur-sm">
                   <Inbox className="h-5 w-5" />
                 </span>
               </div>
@@ -859,7 +837,7 @@ export default function SystemWhatsAppInboxView() {
                     onChange={(event) => setSearchInput(event.target.value)}
                     placeholder={t.searchPlaceholder}
                     className={cn(
-                      "h-11 rounded-xl",
+                      "h-9 rounded-lg",
                       locale === "ar" ? "pr-10 text-right" : "pl-10 text-left",
                     )}
                   />
@@ -869,7 +847,7 @@ export default function SystemWhatsAppInboxView() {
                     {t.search}
                   </Button>
                   <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
-                    <SelectTrigger className="h-11 rounded-xl">
+                    <SelectTrigger className="h-9 rounded-lg">
                       <SelectValue placeholder={t.all} />
                     </SelectTrigger>
                     <SelectContent align={locale === "ar" ? "end" : "start"}>

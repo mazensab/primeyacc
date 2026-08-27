@@ -1,4 +1,6 @@
 "use client";
+// phase47C_central_register_print_excel=true
+// phase47C1_system_dashboard_polish=true
 
 /* ============================================================
    📂 primey_frontend/app/system/page.tsx
@@ -28,16 +30,16 @@ import {
   Activity,
   ArrowUpDown,
   Building2,
-  CalendarDays,
   CheckCircle2,
   CreditCard,
+  ExternalLink,
   FileSpreadsheet,
   Gauge,
   Loader2,
+  MoreVertical,
   Printer,
   RefreshCw,
   RotateCcw,
-  Search,
   ServerCog,
   ShieldCheck,
   Sparkles,
@@ -47,7 +49,20 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  DataRegisterDatePicker,
+  DataRegisterEmptyState,
+  DataRegisterSearch,
+  DataRegisterToolbar,
+  registerBrandButtonClass,
+  registerOutlineButtonClass,
+} from "@/components/ui/data-register";
 import {
   Card,
   CardContent,
@@ -55,12 +70,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -69,6 +78,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SystemKpiCard } from "@/components/ui/system-kpi-card";
 import {
   Table,
   TableBody,
@@ -77,6 +87,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  downloadExcelReport,
+  type ExcelReportSection,
+} from "@/lib/excel-report";
+import { openPrintReport } from "@/lib/print-report";
 
 type Locale = "ar" | "en";
 type ApiRecord = Record<string, unknown>;
@@ -150,6 +165,14 @@ type DataColumn<T> = {
   render: (row: T) => React.ReactNode;
 };
 
+type DashboardExportSection = {
+  title: string;
+  headers: string[];
+  rows: Array<Array<string | number>>;
+  widths: number[];
+  moneyColumns?: number[];
+};
+
 const API_ENDPOINTS = {
   companies: "/api/system/companies/",
   subscriptions: "/api/system/subscriptions/",
@@ -165,6 +188,11 @@ const translations = {
     refresh: "تحديث",
     export: "تصدير Excel",
     print: "طباعة",
+    actions: "الإجراءات",
+    openDetails: "فتح التفاصيل",
+    exportReady: "تم تجهيز ملف Excel بنجاح.",
+    printReady: "تم تجهيز صفحة الطباعة.",
+    printBlocked: "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة.",
     reset: "إعادة ضبط",
     search: "بحث",
     all: "الكل",
@@ -259,6 +287,11 @@ const translations = {
     refresh: "Refresh",
     export: "Export Excel",
     print: "Print",
+    actions: "Actions",
+    openDetails: "Open details",
+    exportReady: "Excel file prepared successfully.",
+    printReady: "Print page prepared.",
+    printBlocked: "Could not open the print window. Allow pop-ups and try again.",
     reset: "Reset",
     search: "Search",
     all: "All",
@@ -363,6 +396,156 @@ const statusFilters: StatusFilter[] = [
   "refunded",
 ];
 
+type BusinessLabelKind =
+  | "status"
+  | "billing_cycle"
+  | "activity"
+  | "subscription"
+  | "plan"
+  | "gateway"
+  | "payment_method";
+
+const businessLabels: Record<Locale, Record<BusinessLabelKind, Record<string, string>>> = {
+  ar: {
+    status: {
+      active: "نشط", inactive: "غير نشط", trial: "تجريبي", pending: "معلّق",
+      pending_payment: "بانتظار الدفع", payment_pending: "بانتظار الدفع", awaiting_payment: "بانتظار الدفع",
+      processing: "قيد المعالجة", processing_payment: "جاري معالجة الدفع",
+      paid: "مدفوع", confirmed: "مؤكد", completed: "مكتمل", success: "ناجح", succeeded: "ناجح",
+      failed: "فشل", cancelled: "ملغي", canceled: "ملغي", expired: "منتهي", suspended: "موقوف",
+      blocked: "محظور", refunded: "مسترد", partially_refunded: "مسترد جزئيًا",
+      past_due: "متأخر السداد", overdue: "متأخر السداد", draft: "مسودة", ready: "جاهز", passed: "مجتاز",
+      true: "نشط", false: "غير نشط",
+    },
+    billing_cycle: {
+      monthly: "شهري", month: "شهري", yearly: "سنوي", annual: "سنوي", annually: "سنوي", year: "سنوي",
+      quarterly: "ربع سنوي", quarter: "ربع سنوي", weekly: "أسبوعي", week: "أسبوعي",
+      daily: "يومي", day: "يومي", one_time: "مرة واحدة", lifetime: "مدى الحياة",
+    },
+    activity: {
+      general: "عام", retail: "تجزئة", wholesale: "جملة", services: "خدمات", service: "خدمات",
+      professional_services: "خدمات مهنية", medical: "طبي", healthcare: "رعاية صحية",
+      restaurant: "مطاعم", ecommerce: "تجارة إلكترونية", e_commerce: "تجارة إلكترونية",
+      contracting: "مقاولات", manufacturing: "تصنيع", education: "تعليم", real_estate: "عقارات",
+    },
+    subscription: {
+      active: "نشط", inactive: "غير نشط", trial: "تجريبي", pending: "معلّق",
+      pending_payment: "بانتظار الدفع", expired: "منتهي", suspended: "موقوف",
+      cancelled: "ملغي", canceled: "ملغي", past_due: "متأخر السداد",
+    },
+    plan: {
+      basic: "الأساسية", starter: "البداية", standard: "القياسية", professional: "الاحترافية",
+      pro: "الاحترافية", premium: "المميزة", enterprise: "المؤسسات", free: "المجانية", trial: "التجريبية",
+      "الأساسية": "الأساسية", "القياسية": "القياسية", "الاحترافية": "الاحترافية",
+      "المميزة": "المميزة", "المؤسسات": "المؤسسات",
+    },
+    gateway: { moyasar: "Moyasar", tamara: "Tamara", tabby: "Tabby", stripe: "Stripe", paypal: "PayPal", hyperpay: "HyperPay" },
+    payment_method: {
+      card: "بطاقة", credit_card: "بطاقة ائتمانية", debit_card: "بطاقة خصم", mada: "مدى",
+      visa: "Visa", mastercard: "Mastercard", apple_pay: "Apple Pay", stc_pay: "stc pay",
+      bank_transfer: "تحويل بنكي", bank: "تحويل بنكي", transfer: "تحويل", cash: "نقدي",
+      online: "إلكتروني", wallet: "محفظة رقمية",
+    },
+  },
+  en: {
+    status: {
+      active: "Active", inactive: "Inactive", trial: "Trial", pending: "Pending",
+      pending_payment: "Awaiting payment", payment_pending: "Awaiting payment", awaiting_payment: "Awaiting payment",
+      processing: "Processing", processing_payment: "Processing payment",
+      paid: "Paid", confirmed: "Confirmed", completed: "Completed", success: "Successful", succeeded: "Successful",
+      failed: "Failed", cancelled: "Cancelled", canceled: "Cancelled", expired: "Expired", suspended: "Suspended",
+      blocked: "Blocked", refunded: "Refunded", partially_refunded: "Partially refunded",
+      past_due: "Past due", overdue: "Overdue", draft: "Draft", ready: "Ready", passed: "Passed",
+      true: "Active", false: "Inactive",
+    },
+    billing_cycle: {
+      monthly: "Monthly", month: "Monthly", yearly: "Yearly", annual: "Annual", annually: "Annual", year: "Yearly",
+      quarterly: "Quarterly", quarter: "Quarterly", weekly: "Weekly", week: "Weekly",
+      daily: "Daily", day: "Daily", one_time: "One time", lifetime: "Lifetime",
+    },
+    activity: {
+      general: "General", retail: "Retail", wholesale: "Wholesale", services: "Services", service: "Services",
+      professional_services: "Professional services", medical: "Medical", healthcare: "Healthcare",
+      restaurant: "Restaurant", ecommerce: "E-commerce", e_commerce: "E-commerce",
+      contracting: "Contracting", manufacturing: "Manufacturing", education: "Education", real_estate: "Real estate",
+    },
+    subscription: {
+      active: "Active", inactive: "Inactive", trial: "Trial", pending: "Pending",
+      pending_payment: "Awaiting payment", expired: "Expired", suspended: "Suspended",
+      cancelled: "Cancelled", canceled: "Cancelled", past_due: "Past due",
+    },
+    plan: {
+      basic: "Basic", starter: "Starter", standard: "Standard", professional: "Professional", pro: "Professional",
+      premium: "Premium", enterprise: "Enterprise", free: "Free", trial: "Trial",
+      "الأساسية": "Basic", "القياسية": "Standard", "الاحترافية": "Professional", "المميزة": "Premium", "المؤسسات": "Enterprise",
+    },
+    gateway: { moyasar: "Moyasar", tamara: "Tamara", tabby: "Tabby", stripe: "Stripe", paypal: "PayPal", hyperpay: "HyperPay" },
+    payment_method: {
+      card: "Card", credit_card: "Credit card", debit_card: "Debit card", mada: "Mada",
+      visa: "Visa", mastercard: "Mastercard", apple_pay: "Apple Pay", stc_pay: "stc pay",
+      bank_transfer: "Bank transfer", bank: "Bank transfer", transfer: "Transfer", cash: "Cash",
+      online: "Online", wallet: "Digital wallet",
+    },
+  },
+};
+
+function firstDefined(...values: unknown[]) {
+  return values.find((value) => value !== null && value !== undefined);
+}
+
+function normalizeBusinessCode(value: unknown) {
+  return normalizeText(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[\s\-./]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function containsArabic(value: string) {
+  return /[\u0600-\u06FF]/.test(value);
+}
+
+function humanizeBusinessCode(value: string) {
+  const clean = normalizeText(value).trim();
+  if (!clean || containsArabic(clean)) return clean;
+  const words = clean.replace(/[._\-]+/g, " ").replace(/\s+/g, " ").trim();
+  return words.split(" ").filter(Boolean).map((word) => {
+    const lower = word.toLowerCase();
+    if (["api", "id", "url", "vat"].includes(lower)) return lower.toUpperCase();
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
+  }).join(" ");
+}
+
+function getBusinessLabel(value: unknown, locale: Locale, kind: BusinessLabelKind) {
+  const raw = normalizeText(value);
+  if (!raw) return "—";
+  const key = normalizeBusinessCode(raw);
+  const direct = businessLabels[locale][kind][key];
+  if (direct) return direct;
+  if ((kind === "status" || kind === "subscription") && businessLabels[locale].status[key]) {
+    return businessLabels[locale].status[key];
+  }
+  if (containsArabic(raw)) return raw;
+  return humanizeBusinessCode(raw) || raw;
+}
+
+function getStatusFilterKey(value: unknown): StatusFilter | "" {
+  const key = normalizeBusinessCode(value);
+  if (["active", "enabled", "true", "ready", "success", "succeeded"].includes(key)) return "active";
+  if (["inactive", "disabled", "false"].includes(key)) return "inactive";
+  if (key === "trial") return "trial";
+  if (["pending", "pending_payment", "payment_pending", "awaiting_payment", "processing", "processing_payment", "draft", "past_due", "overdue"].includes(key)) return "pending";
+  if (["paid", "completed"].includes(key)) return "paid";
+  if (key === "confirmed") return "confirmed";
+  if (key === "failed") return "failed";
+  if (["cancelled", "canceled"].includes(key)) return "cancelled";
+  if (key === "expired") return "expired";
+  if (["suspended", "blocked"].includes(key)) return "suspended";
+  if (["refunded", "partially_refunded"].includes(key)) return "refunded";
+  return "";
+}
+
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
@@ -400,28 +583,6 @@ function formatMoney(value: unknown) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(toNumber(value));
-}
-
-function formatPercent(value: unknown) {
-  const nextValue = Math.max(0, Math.min(100, toNumber(value)));
-  return `${formatInteger(nextValue)}%`;
-}
-
-function isoToDate(value: string) {
-  if (!value) return undefined;
-
-  const parsed = new Date(`${value}T00:00:00`);
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
-}
-
-function dateToIso(value: Date | undefined) {
-  if (!value) return "";
-
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
 }
 
 function formatDate(value: string | null | undefined) {
@@ -592,7 +753,7 @@ function normalizeCompany(value: unknown): CompanyRecord {
     id: normalizeText(record.id || record.uuid || record.pk || record.slug),
     name: normalizeText(record.name || record.company_name || record.title),
     code: normalizeText(record.code || record.company_code || record.slug || record.registration_number),
-    status: normalizeText(record.status || record.state || record.is_active, "active").toLowerCase(),
+    status: normalizeText(firstDefined(record.status, record.state, record.is_active), "active").toLowerCase(),
     owner: normalizeNestedName(owner, ["name", "full_name", "email", "username"]),
     activity: normalizeNestedName(activity, ["name", "code", "title"]),
     subscription: normalizeNestedName(subscription, ["plan_name", "name", "title", "status"]),
@@ -609,7 +770,7 @@ function normalizeSubscription(value: unknown): SubscriptionRecord {
     id: normalizeText(record.id || record.uuid || record.pk),
     company_name: normalizeText(record.company_name) || normalizeNestedName(company),
     plan_name: normalizeText(record.plan_name) || normalizeNestedName(plan),
-    status: normalizeText(record.status || record.state, "active").toLowerCase(),
+    status: normalizeText(firstDefined(record.status, record.state), "active").toLowerCase(),
     billing_cycle: normalizeText(record.billing_cycle || record.cycle || record.interval),
     amount: toNumber(record.amount || record.total_amount || record.price || record.grand_total),
     starts_at: normalizeText(record.starts_at || record.start_date || record.current_period_start) || null,
@@ -632,7 +793,7 @@ function normalizePlatformPayment(value: unknown): PlatformPaymentRecord {
     company_name: normalizeText(record.company_name) || normalizeNestedName(company),
     gateway: normalizeText(record.gateway_name) || normalizeNestedName(gateway),
     method: normalizeText(record.method_name) || normalizeNestedName(method) || normalizeText(record.payment_method),
-    status: normalizeText(record.status || record.state, "pending").toLowerCase(),
+    status: normalizeText(firstDefined(record.status, record.state), "pending").toLowerCase(),
     amount: toNumber(record.amount || record.total_amount || record.paid_amount || record.net_amount),
     paid_at: normalizeText(record.paid_at || record.confirmed_at || record.settled_at) || null,
     created_at: normalizeText(record.created_at || record.created || record.inserted_at) || null,
@@ -664,26 +825,20 @@ function normalizeReadinessScore(payload: unknown) {
 }
 
 function getStatusLabel(value: string, locale: Locale) {
-  const key = value.toLowerCase().replace(/[^a-z_]/g, "") as keyof (typeof translations)["ar"];
-  const fallback = normalizeText(value, translations[locale].unknown);
-  return normalizeText(translations[locale][key], fallback);
+  return getBusinessLabel(value, locale, "status");
 }
 
 function getBadgeClass(value: string) {
-  const normalized = value.toLowerCase();
-
-  if (["active", "paid", "confirmed", "passed", "ready", "success"].includes(normalized)) {
+  const normalized = getStatusFilterKey(value);
+  if (["active", "paid", "confirmed"].includes(normalized)) {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
-
-  if (["pending", "trial", "processing", "draft"].includes(normalized)) {
+  if (["pending", "trial"].includes(normalized)) {
     return "border-amber-200 bg-amber-50 text-amber-700";
   }
-
-  if (["failed", "cancelled", "expired", "suspended", "blocked", "refunded"].includes(normalized)) {
+  if (["failed", "cancelled", "expired", "suspended", "refunded"].includes(normalized)) {
     return "border-rose-200 bg-rose-50 text-rose-700";
   }
-
   return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
@@ -734,112 +889,21 @@ function StatusBadge({ value, label }: { value: string; label: string }) {
   );
 }
 
-function KpiCard({
-  title,
-  value,
-  description,
-  href,
-  icon: Icon,
-  money,
-  percent,
-  t,
-}: {
-  title: string;
-  value: number;
-  description: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  money?: boolean;
-  percent?: boolean;
-  t: (typeof translations)[Locale];
-}) {
-  return (
-    <Card className="group overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <Link href={href} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
-          <div className="min-w-0">
-            <CardDescription className="truncate text-sm">{title}</CardDescription>
-            <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
-              {money ? <MoneyValue value={value} label={t.sar} /> : percent ? formatPercent(value) : formatInteger(value)}
-            </CardTitle>
-          </div>
-          <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
-            <Icon className="h-5 w-5" />
-          </span>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
-        </CardContent>
-      </Link>
-    </Card>
-  );
-}
-
 function DashboardSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="rounded-3xl border bg-card p-6 shadow-sm">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="mt-3 h-8 w-72" />
-        <Skeleton className="mt-3 h-4 w-full max-w-2xl" />
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 8 }).map((_, index) => (
-          <Card key={index} className="rounded-2xl">
-            <CardHeader>
-              <Skeleton className="h-4 w-28" />
-              <Skeleton className="h-8 w-20" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-4 w-full" />
-            </CardContent>
-          </Card>
+    <main className="min-h-screen bg-transparent px-4 py-6 sm:px-6 lg:px-8">
+      <div className="w-full space-y-5">
+        <Skeleton className="h-28 rounded-lg" />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, index) => (
+            <Skeleton key={index} className="h-[126px] rounded-lg" />
+          ))}
+        </div>
+        {Array.from({ length: 3 }).map((_, index) => (
+          <Skeleton key={index} className="h-[520px] rounded-lg" />
         ))}
       </div>
-      {Array.from({ length: 3 }).map((_, index) => (
-        <Card key={index} className="rounded-2xl">
-          <CardHeader>
-            <Skeleton className="h-6 w-52" />
-            <Skeleton className="h-4 w-80" />
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-72 w-full" />
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
-}
-
-function EmptyTableState({
-  title,
-  description,
-  showReset,
-  onReset,
-  resetLabel,
-}: {
-  title: string;
-  description: string;
-  showReset?: boolean;
-  onReset?: () => void;
-  resetLabel: string;
-}) {
-  return (
-    <div className="flex h-full min-h-64 flex-col items-center justify-center gap-3 px-6 py-10 text-center">
-      <div className="rounded-full bg-muted p-4 text-muted-foreground">
-        <Search className="h-6 w-6" />
-      </div>
-      <div>
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-      </div>
-      {showReset && onReset ? (
-        <Button variant="outline" size="sm" onClick={onReset} className="rounded-lg">
-          <RotateCcw className="h-4 w-4" />
-          {resetLabel}
-        </Button>
-      ) : null}
-    </div>
+    </main>
   );
 }
 
@@ -875,20 +939,17 @@ function FiltersBar({
   locale: Locale;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
-      <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(event) => onSearchChange(event.target.value)}
-            placeholder={searchPlaceholder}
-            className="h-10 rounded-xl ps-9"
-          />
-        </div>
+    <DataRegisterToolbar className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <DataRegisterSearch
+          value={search}
+          onChange={onSearchChange}
+          placeholder={searchPlaceholder}
+          className="w-full sm:min-w-[280px] sm:flex-1"
+        />
 
         <Select value={status} onValueChange={(value) => onStatusChange(value as StatusFilter)}>
-          <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[150px]">
+          <SelectTrigger className="h-9 bg-background shadow-none sm:w-[150px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -902,48 +963,22 @@ function FiltersBar({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-10 rounded-xl bg-background"
-            >
-              <CalendarDays className="h-4 w-4" />
-              {t.from}: {dateFrom || "—"}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0">
-            <Calendar
-              mode="single"
-              selected={isoToDate(dateFrom)}
-              onSelect={(date) => onDateFromChange(dateToIso(date))}
-            />
-          </PopoverContent>
-        </Popover>
+        <DataRegisterDatePicker
+          label={t.from}
+          value={dateFrom}
+          onChange={onDateFromChange}
+          locale={locale}
+        />
+        <DataRegisterDatePicker
+          label={t.to}
+          value={dateTo}
+          onChange={onDateToChange}
+          locale={locale}
+        />
 
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-10 rounded-xl bg-background"
-            >
-              <CalendarDays className="h-4 w-4" />
-              {t.to}: {dateTo || "—"}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0">
-            <Calendar
-              mode="single"
-              selected={isoToDate(dateTo)}
-              onSelect={(date) => onDateToChange(dateToIso(date))}
-            />
-          </PopoverContent>
-        </Popover>
         <Select value={sort} onValueChange={(value) => onSortChange(value as SortKey)}>
-          <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[160px]">
-            <ArrowUpDown className="h-4 w-4" />
+          <SelectTrigger className="h-9 bg-background shadow-none sm:w-[160px]">
+            <ArrowUpDown className="h-4 w-4 text-primary" />
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -954,12 +989,18 @@ function FiltersBar({
             <SelectItem value="name">{t.nameSort}</SelectItem>
           </SelectContent>
         </Select>
-        <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={onReset}>
+
+        <Button
+          type="button"
+          variant="outline"
+          className={registerOutlineButtonClass}
+          onClick={onReset}
+        >
           <RotateCcw className="h-4 w-4" />
           {t.reset}
         </Button>
       </div>
-    </div>
+    </DataRegisterToolbar>
   );
 }
 
@@ -996,16 +1037,16 @@ function DataTable<T extends { id: string }>({
 }) {
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-2xl border bg-background">
+      <div className="overflow-hidden rounded-lg border bg-background">
         <div className="overflow-x-auto">
-          <Table className="min-w-[1080px] table-fixed">
+          <Table variant="register" layout="fixed" minWidth="1080px">
             <TableHeader>
               <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
                 {columns.map((column) => (
                   <TableHead
                     key={column.key}
                     className={cn(
-                      "h-11 whitespace-nowrap px-4 text-right text-xs font-semibold text-muted-foreground",
+                      "h-11 whitespace-nowrap px-4 text-start text-xs font-semibold text-muted-foreground",
                       column.className,
                     )}
                   >
@@ -1021,7 +1062,7 @@ function DataTable<T extends { id: string }>({
                     {columns.map((column) => (
                       <TableCell
                         key={column.key}
-                        className={cn("h-[62px] overflow-hidden px-4 text-right align-middle", column.className)}
+                        className={cn("h-[62px] overflow-hidden px-4 text-start align-middle", column.className)}
                       >
                         {column.render(row)}
                       </TableCell>
@@ -1030,8 +1071,8 @@ function DataTable<T extends { id: string }>({
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={columns.length} className="h-72">
-                    <EmptyTableState
+                  <TableCell colSpan={columns.length} className="p-0">
+                    <DataRegisterEmptyState
                       title={hasFilters ? noResultsTitle : emptyTitle}
                       description={hasFilters ? noResultsDescription : emptyDescription}
                       showReset={hasFilters}
@@ -1172,12 +1213,12 @@ export default function SystemDashboardPage() {
           companies: extractCount(companiesPayload),
           activeCompanies: toNumber(
             companiesSummary.active_count ?? companiesSummary.active ?? companiesSummary.active_companies,
-            companyRows.filter((item) => item.status === "active" || item.status === "true").length,
+            companyRows.filter((item) => getStatusFilterKey(item.status) === "active").length,
           ),
           subscriptions: extractCount(subscriptionsPayload),
           activeSubscriptions: toNumber(
             subscriptionsSummary.active_count ?? subscriptionsSummary.active ?? subscriptionsSummary.active_subscriptions,
-            subscriptionRows.filter((item) => item.status === "active" || item.status === "trial").length,
+            subscriptionRows.filter((item) => ["active", "trial"].includes(getStatusFilterKey(item.status))).length,
           ),
           platformPayments: extractCount(paymentsPayload),
           platformPaymentAmount: toNumber(
@@ -1262,7 +1303,7 @@ export default function SystemDashboardPage() {
         .toLowerCase();
 
       if (needle && !haystack.includes(needle)) return false;
-      if (companyStatus !== "all" && company.status !== companyStatus) return false;
+      if (companyStatus !== "all" && getStatusFilterKey(company.status) !== companyStatus) return false;
       return isWithinDate(company.created_at, companyDateFrom, companyDateTo);
     });
 
@@ -1282,7 +1323,7 @@ export default function SystemDashboardPage() {
         .toLowerCase();
 
       if (needle && !haystack.includes(needle)) return false;
-      if (subscriptionStatus !== "all" && subscription.status !== subscriptionStatus) return false;
+      if (subscriptionStatus !== "all" && getStatusFilterKey(subscription.status) !== subscriptionStatus) return false;
       return isWithinDate(subscription.created_at || subscription.starts_at, subscriptionDateFrom, subscriptionDateTo);
     });
 
@@ -1297,7 +1338,7 @@ export default function SystemDashboardPage() {
         .toLowerCase();
 
       if (needle && !haystack.includes(needle)) return false;
-      if (paymentStatus !== "all" && payment.status !== paymentStatus) return false;
+      if (paymentStatus !== "all" && getStatusFilterKey(payment.status) !== paymentStatus) return false;
       return isWithinDate(payment.paid_at || payment.created_at, paymentDateFrom, paymentDateTo);
     });
 
@@ -1315,7 +1356,7 @@ export default function SystemDashboardPage() {
       {
         key: "company",
         label: t.company,
-        className: "w-[240px]",
+        className: "sticky start-0 z-10 w-[240px] bg-background",
         render: (company) => (
           <div className="min-w-0">
             <span className="block truncate text-sm font-semibold text-foreground">{company.name || t.unknown}</span>
@@ -1325,176 +1366,282 @@ export default function SystemDashboardPage() {
       },
       { key: "code", label: t.code, className: "w-[130px]", render: (company) => <span className="truncate text-sm tabular-nums text-muted-foreground">{company.code || "—"}</span> },
       { key: "owner", label: t.owner, className: "w-[180px]", render: (company) => <span className="truncate text-sm text-muted-foreground">{company.owner || "—"}</span> },
-      { key: "activity", label: t.activity, className: "w-[170px]", render: (company) => <span className="truncate text-sm text-muted-foreground">{company.activity || "—"}</span> },
-      { key: "subscription", label: t.subscription, className: "w-[170px]", render: (company) => <span className="truncate text-sm text-muted-foreground">{company.subscription || "—"}</span> },
+      { key: "activity", label: t.activity, className: "w-[170px]", render: (company) => <span className="truncate text-sm text-muted-foreground">{getBusinessLabel(company.activity, locale, "activity")}</span> },
+      { key: "subscription", label: t.subscription, className: "w-[170px]", render: (company) => <span className="truncate text-sm text-muted-foreground">{getBusinessLabel(company.subscription, locale, "subscription")}</span> },
       { key: "status", label: t.status, className: "w-[125px]", render: (company) => <StatusBadge value={company.status} label={getStatusLabel(company.status, locale)} /> },
       { key: "created", label: t.createdAt, className: "w-[150px]", render: (company) => <span className="text-sm tabular-nums text-muted-foreground">{formatDateTime(company.created_at)}</span> },
-      { key: "open", label: t.open, className: "w-[80px] text-center", render: (company) => <Button asChild variant="ghost" size="sm" className="h-8 rounded-lg"><Link href={`/system/companies/${company.id}`}>{t.open}</Link></Button> },
+      {
+        key: "actions",
+        label: t.actions,
+        className: "sticky end-0 z-10 w-[76px] bg-background text-center",
+        render: (company) => (
+          <div className="flex items-center justify-center">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-lg bg-background" aria-label={t.actions}>
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align={locale === "ar" ? "start" : "end"} className="w-44">
+                <DropdownMenuItem asChild>
+                  <Link href={`/system/companies/${company.id}`} className="flex items-center gap-2">
+                    <ExternalLink className="h-4 w-4" />
+                    {t.openDetails}
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ),
+      },
     ],
-    [locale, t.activity, t.code, t.company, t.createdAt, t.open, t.owner, t.status, t.subscription, t.unknown],
+    [locale, t.actions, t.activity, t.code, t.company, t.createdAt, t.openDetails, t.owner, t.status, t.subscription, t.unknown],
   );
 
   const subscriptionColumns = React.useMemo<DataColumn<SubscriptionRecord>[]>(
     () => [
-      { key: "company", label: t.company, className: "w-[230px]", render: (subscription) => <span className="block truncate text-sm font-semibold text-foreground">{subscription.company_name || t.unknown}</span> },
-      { key: "plan", label: t.plan, className: "w-[170px]", render: (subscription) => <span className="truncate text-sm text-muted-foreground">{subscription.plan_name || "—"}</span> },
+      { key: "company", label: t.company, className: "sticky start-0 z-10 w-[230px] bg-background", render: (subscription) => <span className="block truncate text-sm font-semibold text-foreground">{subscription.company_name || t.unknown}</span> },
+      { key: "plan", label: t.plan, className: "w-[170px]", render: (subscription) => <span className="truncate text-sm text-muted-foreground">{getBusinessLabel(subscription.plan_name, locale, "plan")}</span> },
       { key: "status", label: t.status, className: "w-[125px]", render: (subscription) => <StatusBadge value={subscription.status} label={getStatusLabel(subscription.status, locale)} /> },
-      { key: "cycle", label: t.billingCycle, className: "w-[140px]", render: (subscription) => <span className="truncate text-sm text-muted-foreground">{subscription.billing_cycle || "—"}</span> },
+      { key: "cycle", label: t.billingCycle, className: "w-[140px]", render: (subscription) => <span className="truncate text-sm text-muted-foreground">{getBusinessLabel(subscription.billing_cycle, locale, "billing_cycle")}</span> },
       { key: "amount", label: t.amount, className: "w-[150px]", render: (subscription) => <MoneyValue value={subscription.amount} label={t.sar} /> },
       { key: "starts", label: t.startsAt, className: "w-[135px]", render: (subscription) => <span className="text-sm tabular-nums text-muted-foreground">{formatDate(subscription.starts_at)}</span> },
       { key: "ends", label: t.endsAt, className: "w-[135px]", render: (subscription) => <span className="text-sm tabular-nums text-muted-foreground">{formatDate(subscription.ends_at)}</span> },
-      { key: "open", label: t.open, className: "w-[80px] text-center", render: (subscription) => <Button asChild variant="ghost" size="sm" className="h-8 rounded-lg"><Link href={`/system/subscriptions/${subscription.id}`}>{t.open}</Link></Button> },
+      {
+        key: "actions",
+        label: t.actions,
+        className: "sticky end-0 z-10 w-[76px] bg-background text-center",
+        render: (subscription) => (
+          <div className="flex items-center justify-center">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-lg bg-background" aria-label={t.actions}>
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align={locale === "ar" ? "start" : "end"} className="w-44">
+                <DropdownMenuItem asChild>
+                  <Link href={`/system/subscriptions/${subscription.id}`} className="flex items-center gap-2">
+                    <ExternalLink className="h-4 w-4" />
+                    {t.openDetails}
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ),
+      },
     ],
-    [locale, t.amount, t.billingCycle, t.company, t.endsAt, t.open, t.plan, t.sar, t.startsAt, t.status, t.unknown],
+    [locale, t.actions, t.amount, t.billingCycle, t.company, t.endsAt, t.openDetails, t.plan, t.sar, t.startsAt, t.status, t.unknown],
   );
 
   const paymentColumns = React.useMemo<DataColumn<PlatformPaymentRecord>[]>(
     () => [
-      { key: "reference", label: t.reference, className: "w-[170px]", render: (payment) => <span className="truncate text-sm font-semibold tabular-nums text-foreground">{payment.reference || `#${payment.id || "—"}`}</span> },
+      { key: "reference", label: t.reference, className: "sticky start-0 z-10 w-[170px] bg-background", render: (payment) => <span className="truncate text-sm font-semibold tabular-nums text-foreground">{payment.reference || `#${payment.id || "—"}`}</span> },
       { key: "company", label: t.company, className: "w-[220px]", render: (payment) => <span className="truncate text-sm text-muted-foreground">{payment.company_name || t.unknown}</span> },
-      { key: "gateway", label: t.gateway, className: "w-[150px]", render: (payment) => <span className="truncate text-sm text-muted-foreground">{payment.gateway || "—"}</span> },
-      { key: "method", label: t.method, className: "w-[140px]", render: (payment) => <span className="truncate text-sm text-muted-foreground">{payment.method || "—"}</span> },
+      { key: "gateway", label: t.gateway, className: "w-[150px]", render: (payment) => <span className="truncate text-sm text-muted-foreground">{getBusinessLabel(payment.gateway, locale, "gateway")}</span> },
+      { key: "method", label: t.method, className: "w-[140px]", render: (payment) => <span className="truncate text-sm text-muted-foreground">{getBusinessLabel(payment.method, locale, "payment_method")}</span> },
       { key: "status", label: t.status, className: "w-[125px]", render: (payment) => <StatusBadge value={payment.status} label={getStatusLabel(payment.status, locale)} /> },
       { key: "amount", label: t.amount, className: "w-[150px]", render: (payment) => <MoneyValue value={payment.amount} label={t.sar} /> },
       { key: "paid", label: t.paidAt, className: "w-[150px]", render: (payment) => <span className="text-sm tabular-nums text-muted-foreground">{formatDateTime(payment.paid_at || payment.created_at)}</span> },
-      { key: "open", label: t.open, className: "w-[80px] text-center", render: (payment) => <Button asChild variant="ghost" size="sm" className="h-8 rounded-lg"><Link href={`/system/platform-payments/${payment.id}`}>{t.open}</Link></Button> },
+      {
+        key: "actions",
+        label: t.actions,
+        className: "sticky end-0 z-10 w-[76px] bg-background text-center",
+        render: (payment) => (
+          <div className="flex items-center justify-center">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-lg bg-background" aria-label={t.actions}>
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align={locale === "ar" ? "start" : "end"} className="w-44">
+                <DropdownMenuItem asChild>
+                  <Link href={`/system/platform-payments/${payment.id}`} className="flex items-center gap-2">
+                    <ExternalLink className="h-4 w-4" />
+                    {t.openDetails}
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ),
+      },
     ],
-    [locale, t.amount, t.company, t.gateway, t.method, t.open, t.paidAt, t.reference, t.sar, t.status, t.unknown],
+    [locale, t.actions, t.amount, t.company, t.gateway, t.method, t.openDetails, t.paidAt, t.reference, t.sar, t.status, t.unknown],
   );
 
-  function buildExportSections() {
+  function buildExportSections(): DashboardExportSection[] {
     return [
       {
         title: t.latestCompanies,
         headers: [t.company, t.code, t.owner, t.activity, t.subscription, t.status, t.createdAt],
+        widths: [240, 150, 180, 170, 170, 130, 170],
         rows: filteredCompanies.map((company) => [
           company.name,
           company.code,
           company.owner,
-          company.activity,
-          company.subscription,
+          getBusinessLabel(company.activity, locale, "activity"),
+          getBusinessLabel(company.subscription, locale, "subscription"),
           getStatusLabel(company.status, locale),
           formatDateTime(company.created_at),
         ]),
       },
       {
         title: t.latestSubscriptions,
-        headers: [t.company, t.plan, t.status, t.billingCycle, t.amount, t.startsAt, t.endsAt],
+        headers: [t.company, t.plan, t.status, t.billingCycle, `${t.amount} (${t.sar})`, t.startsAt, t.endsAt],
+        widths: [230, 170, 130, 145, 150, 135, 135],
+        moneyColumns: [4],
         rows: filteredSubscriptions.map((subscription) => [
           subscription.company_name,
-          subscription.plan_name,
+          getBusinessLabel(subscription.plan_name, locale, "plan"),
           getStatusLabel(subscription.status, locale),
-          subscription.billing_cycle,
-          formatMoney(subscription.amount),
+          getBusinessLabel(subscription.billing_cycle, locale, "billing_cycle"),
+          subscription.amount,
           formatDate(subscription.starts_at),
           formatDate(subscription.ends_at),
         ]),
       },
       {
         title: t.latestPayments,
-        headers: [t.reference, t.company, t.gateway, t.method, t.status, t.amount, t.paidAt],
+        headers: [t.reference, t.company, t.gateway, t.method, t.status, `${t.amount} (${t.sar})`, t.paidAt],
+        widths: [170, 220, 150, 140, 125, 150, 170],
+        moneyColumns: [5],
         rows: filteredPayments.map((payment) => [
           payment.reference,
           payment.company_name,
-          payment.gateway,
-          payment.method,
+          getBusinessLabel(payment.gateway, locale, "gateway"),
+          getBusinessLabel(payment.method, locale, "payment_method"),
           getStatusLabel(payment.status, locale),
-          formatMoney(payment.amount),
+          payment.amount,
           formatDateTime(payment.paid_at || payment.created_at),
         ]),
       },
     ];
   }
 
-  function tableHtmlForSections(sections: ReturnType<typeof buildExportSections>) {
+  function tableHtmlForSections(sections: DashboardExportSection[]) {
     return sections
       .filter((section) => section.rows.length)
       .map(
         (section) => `
-          <h2>${escapeHtml(section.title)}</h2>
-          <table border="1" cellspacing="0" cellpadding="6">
-            <thead><tr>${section.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
-            <tbody>
-              ${section.rows
-                .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
-                .join("")}
-            </tbody>
-          </table>`
+          <section class="report-section">
+            <h2>${escapeHtml(section.title)}</h2>
+            <table class="data">
+              <colgroup>
+                ${section.widths.map((width) => `<col style="width:${width}px" />`).join("")}
+              </colgroup>
+              <thead>
+                <tr>${section.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>
+              </thead>
+              <tbody>
+                ${section.rows
+                  .map(
+                    (row) => `<tr>${row
+                      .map((cell, index) => {
+                        const isMoney = section.moneyColumns?.includes(index);
+                        return `<td class="${isMoney ? "number" : "text"}">${escapeHtml(
+                          isMoney ? formatMoney(cell) : cell,
+                        )}</td>`;
+                      })
+                      .join("")}</tr>`,
+                  )
+                  .join("")}
+              </tbody>
+            </table>
+          </section>`,
       )
-      .join("<br />");
+      .join("");
+  }
+
+  function toExcelSections(sections: DashboardExportSection[]): ExcelReportSection[] {
+    return sections.map((section) => ({
+      title: section.title,
+      headers: section.headers,
+      widths: section.widths,
+      rows: section.rows.map((row) =>
+        row.map((value, index) => ({
+          value,
+          type: section.moneyColumns?.includes(index) ? "money" : "text",
+        })),
+      ),
+    }));
+  }
+
+  function exportSectionsExcel(sections: DashboardExportSection[], filename: string) {
+    const populated = sections.filter((section) => section.rows.length);
+    if (!populated.length) {
+      toast.warning(t.exportEmpty);
+      return;
+    }
+
+    downloadExcelReport({
+      locale,
+      title: t.printTitle,
+      subtitle: t.subtitle,
+      filename,
+      generatedAtLabel: t.generatedAt,
+      sections: toExcelSections(populated),
+    });
+    toast.success(t.exportReady);
   }
 
   function exportExcel() {
-    const sections = buildExportSections();
-    const totalRows = sections.reduce((sum, section) => sum + section.rows.length, 0);
+    exportSectionsExcel(
+      buildExportSections(),
+      `Mhamcloud-system-dashboard-${new Date().toISOString().slice(0, 10)}.xls`,
+    );
+  }
+
+  function exportRegisterExcel(index: number, slug: string) {
+    const section = buildExportSections()[index];
+    exportSectionsExcel(
+      section ? [section] : [],
+      `Mhamcloud-system-${slug}-${new Date().toISOString().slice(0, 10)}.xls`,
+    );
+  }
+
+  function printSections(sections: DashboardExportSection[], title: string, subtitle?: string) {
+    const populated = sections.filter((section) => section.rows.length);
+    const totalRows = populated.reduce((sum, section) => sum + section.rows.length, 0);
 
     if (!totalRows) {
-      toast.error(t.exportEmpty);
+      toast.warning(t.printEmpty);
       return;
     }
 
-    const html = `
-      <html dir="${dir}" lang="${locale}">
-        <head><meta charset="utf-8" /></head>
-        <body>
-          <h1>${escapeHtml(t.printTitle)}</h1>
-          <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString())}</p>
-          ${tableHtmlForSections(sections)}
-        </body>
-      </html>`;
+    const opened = openPrintReport({
+      locale,
+      title,
+      subtitle,
+      tableHtml: tableHtmlForSections(populated),
+      recordsCount: totalRows,
+      recordsLabel: t.rows,
+      generatedAtLabel: t.generatedAt,
+    });
 
-    const blob = new Blob([`\ufeff${html}`], { type: "application/vnd.ms-excel;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `Mhamcloud-system-dashboard-${new Date().toISOString().slice(0, 10)}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    if (!opened) {
+      toast.error(t.printBlocked);
+      return;
+    }
+
+    toast.success(t.printReady);
   }
 
   function printPage() {
-    const sections = buildExportSections();
-    const totalRows = sections.reduce((sum, section) => sum + section.rows.length, 0);
+    printSections(buildExportSections(), t.printTitle, t.subtitle);
+  }
 
-    if (!totalRows) {
-      toast.error(t.printEmpty);
-      return;
-    }
-
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1200,height=800");
-    if (!printWindow) return;
-
-    printWindow.document.write(`
-      <!doctype html>
-      <html dir="${dir}" lang="${locale}">
-        <head>
-          <meta charset="utf-8" />
-          <title>${escapeHtml(t.printTitle)}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 24px; color: #0f172a; }
-            h1 { margin: 0 0 8px; font-size: 24px; }
-            h2 { margin: 24px 0 10px; font-size: 18px; }
-            p { color: #64748b; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            th, td { border: 1px solid #cbd5e1; padding: 8px; font-size: 12px; text-align: ${dir === "rtl" ? "right" : "left"}; }
-            th { background: #f1f5f9; }
-          </style>
-        </head>
-        <body>
-          <h1>${escapeHtml(t.printTitle)}</h1>
-          <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString())}</p>
-          ${tableHtmlForSections(sections)}
-          <script>window.onload = function () { window.print(); };</script>
-        </body>
-      </html>`);
-    printWindow.document.close();
+  function printRegister(index: number) {
+    const section = buildExportSections()[index];
+    if (!section) return;
+    printSections([section], section.title);
   }
 
   if (loading) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+      <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
         <DashboardSkeleton />
       </main>
     );
@@ -1502,8 +1649,8 @@ export default function SystemDashboardPage() {
 
   if (error) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-        <Card className="mx-auto max-w-3xl rounded-3xl border-destructive/30 bg-card shadow-sm">
+      <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
+        <Card className="mx-auto max-w-3xl rounded-lg border-destructive/30 bg-card shadow-none">
           <CardHeader className="text-center">
             <div className="mx-auto mb-2 rounded-full bg-destructive/10 p-4 text-destructive">
               <TriangleAlert className="h-8 w-8" />
@@ -1512,8 +1659,8 @@ export default function SystemDashboardPage() {
             <CardDescription>{t.errorDesc}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-center">
-            <p className="rounded-2xl bg-muted px-4 py-3 text-sm text-muted-foreground">{error}</p>
-            <Button onClick={() => void loadDashboard({ silent: true })} className="rounded-xl">
+            <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">{error}</p>
+            <Button onClick={() => void loadDashboard({ silent: true })}>
               <RefreshCw className="h-4 w-4" />
               {t.tryAgain}
             </Button>
@@ -1524,41 +1671,62 @@ export default function SystemDashboardPage() {
   }
 
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-[1500px] space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
-          <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-              <div className="max-w-3xl">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  {t.systemHealth}
-                </div>
-                <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{t.title}</h1>
-                <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">{t.subtitle}</p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => void loadDashboard({ silent: true })} disabled={refreshing}>
-                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  {t.refresh}
-                </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
-                  <FileSpreadsheet className="h-4 w-4" />
-                  {t.export}
-                </Button>
-                <Button className="rounded-xl" onClick={printPage}>
-                  <Printer className="h-4 w-4" />
-                  {t.print}
-                </Button>
-              </div>
+    <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-[1600px] space-y-5">
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-4xl">
+            <div className="mb-2 inline-flex items-center gap-2 text-sm font-medium text-[#9a7139]">
+              <Sparkles className="h-4 w-4" />
+              {t.systemHealth}
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight">{t.title}</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-7 text-muted-foreground">
+              {t.subtitle}
+            </p>
+            <div className="mt-3 inline-flex items-center gap-2 text-xs text-muted-foreground">
+              <Activity className="h-3.5 w-3.5 text-emerald-600" />
+              {t.connectedToLiveApis}
             </div>
           </div>
-        </section>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className={registerOutlineButtonClass}
+              onClick={() => void loadDashboard({ silent: true })}
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {t.refresh}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className={registerOutlineButtonClass}
+              onClick={exportExcel}
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              {t.export}
+            </Button>
+            <Button
+              type="button"
+              variant="brand"
+              className={registerBrandButtonClass}
+              onClick={printPage}
+            >
+              <Printer className="h-4 w-4" />
+              {t.print}
+            </Button>
+          </div>
+        </header>
 
         {warnings.length ? (
-          <Card className="rounded-2xl border-amber-200 bg-amber-50 text-amber-950 shadow-sm">
+          <Card className="rounded-lg border-amber-200 bg-amber-50 text-amber-950 shadow-none">
             <CardContent className="flex gap-3 p-4">
               <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0" />
               <div>
@@ -1569,23 +1737,91 @@ export default function SystemDashboardPage() {
           </Card>
         ) : null}
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard title={t.totalCompanies} value={stats.companies} description={t.companies} href="/system/companies/list" icon={Building2} t={t} />
-          <KpiCard title={t.activeCompanies} value={stats.activeCompanies} description={t.connectedToLiveApis} href="/system/companies/list" icon={CheckCircle2} t={t} />
-          <KpiCard title={t.totalSubscriptions} value={stats.subscriptions} description={t.subscriptions} href="/system/subscriptions/list" icon={ShieldCheck} t={t} />
-          <KpiCard title={t.activeSubscriptions} value={stats.activeSubscriptions} description={t.connectedToLiveApis} href="/system/subscriptions/list" icon={Activity} t={t} />
-          <KpiCard title={t.platformPayments} value={stats.platformPayments} description={t.payments} href="/system/platform-payments/list" icon={CreditCard} t={t} />
-          <KpiCard title={t.platformPaymentAmount} value={stats.platformPaymentAmount} description={t.sar} href="/system/platform-payments/reports" icon={Gauge} money t={t} />
-          <KpiCard title={t.apiContracts} value={stats.apiContracts} description={t.connectedToLiveApis} href="/system/integrations/api-contracts" icon={ServerCog} t={t} />
-          <KpiCard title={t.readinessScore} value={stats.readinessScore} description={t.connectedToLiveApis} href="/system/release-readiness" icon={ShieldCheck} percent t={t} />
-        </div>
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <SystemKpiCard
+            title={t.totalCompanies}
+            value={stats.companies}
+            description={t.companies}
+            href="/system/companies/list"
+            icon={Building2}
+          />
+          <SystemKpiCard
+            title={t.activeCompanies}
+            value={stats.activeCompanies}
+            description={t.connectedToLiveApis}
+            href="/system/companies/list"
+            icon={CheckCircle2}
+          />
+          <SystemKpiCard
+            title={t.totalSubscriptions}
+            value={stats.subscriptions}
+            description={t.subscriptions}
+            href="/system/subscriptions/list"
+            icon={ShieldCheck}
+          />
+          <SystemKpiCard
+            title={t.activeSubscriptions}
+            value={stats.activeSubscriptions}
+            description={t.connectedToLiveApis}
+            href="/system/subscriptions/list"
+            icon={Activity}
+          />
+          <SystemKpiCard
+            title={t.platformPayments}
+            value={stats.platformPayments}
+            description={t.payments}
+            href="/system/platform-payments/list"
+            icon={CreditCard}
+          />
+          <SystemKpiCard
+            title={t.platformPaymentAmount}
+            value={formatMoney(stats.platformPaymentAmount)}
+            description={t.sar}
+            href="/system/platform-payments/reports"
+            icon={Gauge}
+            currencyIcon
+            currencyAlt={t.sar}
+          />
+          <SystemKpiCard
+            title={t.apiContracts}
+            value={stats.apiContracts}
+            description={t.connectedToLiveApis}
+            href="/system/integrations/api-contracts"
+            icon={ServerCog}
+          />
+          <SystemKpiCard
+            title={t.readinessScore}
+            value={stats.readinessScore}
+            valueSuffix="%"
+            description={t.connectedToLiveApis}
+            href="/system/release-readiness"
+            icon={ShieldCheck}
+          />
+        </section>
 
-        <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
-            <CardTitle>{t.latestCompanies}</CardTitle>
-            <CardDescription>{t.latestCompaniesDesc}</CardDescription>
+        <Card className="overflow-hidden rounded-lg border bg-card shadow-none">
+          <CardHeader className="px-5 pt-5 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 text-start">
+                <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight">
+                  <Building2 className="h-4 w-4 text-[#a57b3d]" />
+                  {t.latestCompanies}
+                </CardTitle>
+                <CardDescription className="mt-1 leading-6">{t.latestCompaniesDesc}</CardDescription>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" className={registerOutlineButtonClass} onClick={() => exportRegisterExcel(0, "companies")}>
+                  <FileSpreadsheet className="h-4 w-4" />
+                  {t.export}
+                </Button>
+                <Button type="button" variant="brand" className={registerBrandButtonClass} onClick={() => printRegister(0)}>
+                  <Printer className="h-4 w-4" />
+                  {t.print}
+                </Button>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 px-5 pb-5 sm:px-6">
             <FiltersBar
               search={companySearch}
               onSearchChange={setCompanySearch}
@@ -1621,12 +1857,29 @@ export default function SystemDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
-            <CardTitle>{t.latestSubscriptions}</CardTitle>
-            <CardDescription>{t.latestSubscriptionsDesc}</CardDescription>
+        <Card className="overflow-hidden rounded-lg border bg-card shadow-none">
+          <CardHeader className="px-5 pt-5 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 text-start">
+                <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight">
+                  <ShieldCheck className="h-4 w-4 text-[#a57b3d]" />
+                  {t.latestSubscriptions}
+                </CardTitle>
+                <CardDescription className="mt-1 leading-6">{t.latestSubscriptionsDesc}</CardDescription>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" className={registerOutlineButtonClass} onClick={() => exportRegisterExcel(1, "subscriptions")}>
+                  <FileSpreadsheet className="h-4 w-4" />
+                  {t.export}
+                </Button>
+                <Button type="button" variant="brand" className={registerBrandButtonClass} onClick={() => printRegister(1)}>
+                  <Printer className="h-4 w-4" />
+                  {t.print}
+                </Button>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 px-5 pb-5 sm:px-6">
             <FiltersBar
               search={subscriptionSearch}
               onSearchChange={setSubscriptionSearch}
@@ -1662,12 +1915,29 @@ export default function SystemDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
-            <CardTitle>{t.latestPayments}</CardTitle>
-            <CardDescription>{t.latestPaymentsDesc}</CardDescription>
+        <Card className="overflow-hidden rounded-lg border bg-card shadow-none">
+          <CardHeader className="px-5 pt-5 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 text-start">
+                <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight">
+                  <CreditCard className="h-4 w-4 text-[#a57b3d]" />
+                  {t.latestPayments}
+                </CardTitle>
+                <CardDescription className="mt-1 leading-6">{t.latestPaymentsDesc}</CardDescription>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" className={registerOutlineButtonClass} onClick={() => exportRegisterExcel(2, "platform-payments")}>
+                  <FileSpreadsheet className="h-4 w-4" />
+                  {t.export}
+                </Button>
+                <Button type="button" variant="brand" className={registerBrandButtonClass} onClick={() => printRegister(2)}>
+                  <Printer className="h-4 w-4" />
+                  {t.print}
+                </Button>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 px-5 pb-5 sm:px-6">
             <FiltersBar
               search={paymentSearch}
               onSearchChange={setPaymentSearch}

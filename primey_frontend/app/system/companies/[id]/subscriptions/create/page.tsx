@@ -1,4 +1,6 @@
 "use client";
+
+// phase47D1B2_system_dashboard_design_contract=true
 /* ============================================================
    ?? primey_frontend/app/system/companies/[id]/subscriptions/create/page.tsx
    ?? Mhamcloud ? System Company Subscription Create Page V1.0
@@ -283,7 +285,7 @@ function errorMessage(payload: unknown, fallback: string) {
   return text(root.message || root.detail || firstError, fallback);
 }
 function fieldClassName() {
-  return "mt-2 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15";
+  return "mt-2 h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15";
 }
 function money(value: string) {
   const numberValue = Number.parseFloat(value || "0");
@@ -430,7 +432,7 @@ export default function SystemCompanySubscriptionCreatePage() {
     }
   }
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
         <section className="rounded-3xl border bg-background p-5 shadow-sm">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
@@ -449,14 +451,14 @@ export default function SystemCompanySubscriptionCreatePage() {
                 type="button"
                 onClick={() => void loadData()}
                 disabled={loading}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border bg-background px-4 text-sm font-medium transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border bg-background px-4 text-sm font-medium transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 {t.refresh}
               </button>
               <Link
                 href={`/system/companies/${companyId}`}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border bg-background px-4 text-sm font-medium transition hover:bg-muted"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border bg-background px-4 text-sm font-medium transition hover:bg-muted"
               >
                 <ArrowLeft className="h-4 w-4" />
                 {t.back}
@@ -483,7 +485,7 @@ export default function SystemCompanySubscriptionCreatePage() {
               </div>
             </div>
             {companyError ? (
-              <p className="max-w-xl rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+              <p className="max-w-xl rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
                 {t.companyFallback}
               </p>
             ) : null}
@@ -538,7 +540,7 @@ export default function SystemCompanySubscriptionCreatePage() {
                     <Button
                       type="button"
                       variant="outline"
-                      className="mt-2 h-11 w-full justify-start rounded-xl bg-background font-normal"
+                      className="mt-2 h-11 w-full justify-start rounded-lg bg-background font-normal"
                     >
                       <CalendarDays className="h-4 w-4" />
                       {form.startDate}
@@ -590,7 +592,7 @@ export default function SystemCompanySubscriptionCreatePage() {
               </div>
             </div>
             <div className="space-y-5">
-              <div className="rounded-2xl border bg-muted/30 p-4">
+              <div className="rounded-lg border bg-muted/30 p-4">
                 <p className="text-sm font-medium text-muted-foreground">{t.selectedPrice}</p>
                 <p
                   dir="ltr"
@@ -607,7 +609,7 @@ export default function SystemCompanySubscriptionCreatePage() {
                 </p>
                 <p className="mt-2 text-xs leading-6 text-muted-foreground">{t.totalHint}</p>
               </div>
-              <label className="flex items-center gap-3 rounded-2xl border bg-background p-4 text-sm font-medium">
+              <label className="flex items-center gap-3 rounded-lg border bg-background p-4 text-sm font-medium">
                 <input
                   type="checkbox"
                   checked={form.autoRenew}
@@ -629,10 +631,10 @@ export default function SystemCompanySubscriptionCreatePage() {
                 <textarea
                   value={form.notes}
                   onChange={(event) => updateField("notes", event.target.value)}
-                  className="mt-2 min-h-[110px] w-full rounded-xl border border-input bg-background px-3 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+                  className="mt-2 min-h-[110px] w-full rounded-lg border border-input bg-background px-3 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
                 />
               </label>
-              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
                 <div className="flex items-center gap-2 font-semibold">
                   <CheckCircle2 className="h-4 w-4" />
                   {t.nextStepTitle}
@@ -643,7 +645,7 @@ export default function SystemCompanySubscriptionCreatePage() {
               <button
                 type="submit"
                 disabled={submitting || loading || !form.planId}
-                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 {submitting ? t.creating : t.create}

@@ -1,4 +1,6 @@
-﻿"use client";
+"use client";
+
+// phase47D_batch2_system_dashboard_design_contract=true
 /* ============================================================
    📂 primey_frontend/app/system/users/create/page.tsx
    👤 Mhamcloud — Create System User
@@ -13,6 +15,12 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { SystemKpiCard } from "@/components/ui/system-kpi-card";
+import {
+  DataRegisterToolbar,
+  registerBrandButtonClass,
+  registerOutlineButtonClass,
+} from "@/components/ui/data-register";
 type Locale = "ar" | "en";
 type FormState = {
   username: string;
@@ -237,7 +245,7 @@ export default function SystemUsersCreatePage() {
     }
   }
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
         <section className="rounded-3xl border bg-card p-6 shadow-sm">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">

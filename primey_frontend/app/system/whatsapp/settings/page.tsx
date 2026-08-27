@@ -1,4 +1,6 @@
-﻿"use client";
+"use client";
+
+// phase47D_batch2_system_dashboard_design_contract=true
 /* ============================================================
    📂 primey_frontend/app/system/whatsapp/settings/page.tsx
    💬 Mhamcloud — System WhatsApp Settings Page
@@ -38,6 +40,13 @@ import {
   Wifi,
 } from "lucide-react";
 import { toast } from "sonner";
+import { openPrintReport } from "@/lib/print-report";
+import { SystemKpiCard } from "@/components/ui/system-kpi-card";
+import {
+  DataRegisterToolbar,
+  registerBrandButtonClass,
+  registerOutlineButtonClass,
+} from "@/components/ui/data-register";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -490,40 +499,10 @@ function formatDate(value: string, locale: Locale, fallback: string): string {
     timeStyle: "short",
   }).format(date);
 }
-function KpiCard({
-  title,
-  value,
-  description,
-  icon: Icon,
-}: {
-  title: string;
-  value: string;
-  description: string;
-  icon: React.ComponentType<{ className?: string }>;
-}) {
-  return (
-    <Card className="overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
-        <div className="min-w-0">
-          <CardDescription className="truncate text-sm">{title}</CardDescription>
-          <CardTitle className="mt-2 truncate text-2xl font-bold tracking-tight">
-            {value}
-          </CardTitle>
-        </div>
-        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
-          <Icon className="h-5 w-5" />
-        </span>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
-      </CardContent>
-    </Card>
-  );
-}
 function QuickLinkCard({ action }: { action: QuickLink }) {
   const Icon = action.icon;
   return (
-    <Card className="group rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <Card className="group rounded-lg border-border/70 bg-card shadow-none transition hover:-translate-y-0.5 hover:shadow-md">
       <Link href={action.href} className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
           <div className="min-w-0">
@@ -582,7 +561,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 }
 function InfoBox({ label, value, alignClass }: { label: string; value: string; alignClass: string }) {
   return (
-    <div className={cn("rounded-2xl border bg-background p-4", alignClass)}>
+    <div className={cn("rounded-lg border bg-background p-4", alignClass)}>
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-2 break-words text-sm font-semibold">{value}</p>
     </div>
@@ -598,7 +577,7 @@ function ToggleRow({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="flex items-center justify-between gap-3 rounded-2xl border bg-background px-4 py-3 text-sm">
+    <label className="flex items-center justify-between gap-3 rounded-lg border bg-background px-4 py-3 text-sm">
       <span className="font-medium">{label}</span>
       <input
         type="checkbox"
@@ -611,7 +590,7 @@ function ToggleRow({
 }
 function SettingsSkeleton({ dir }: { dir: "rtl" | "ltr" }) {
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
         <div className="rounded-3xl border bg-card p-6 shadow-sm">
           <Skeleton className="h-5 w-40" />
@@ -795,7 +774,35 @@ export default function SystemWhatsAppSettingsPage() {
   }
   function openPrintWindow(kind: "print" | "pdf") {
     if (kind === "pdf") toast.info(t.pdfHint);
-    window.print();
+    const rows = [
+      [t.connectionStatus, statusText],
+      [t.gatewayStatus, gatewayText],
+      [t.tokenStatus, tokenText],
+      [t.sessionMode, modeText],
+      [t.phoneNumber, connection?.phoneNumber || t.noData],
+      [t.connectedPhone, connection?.sessionConnectedPhone || t.noData],
+      [t.deviceLabel, connection?.sessionDeviceLabel || t.noData],
+      [t.lastConnected, formatDate(connection?.sessionLastConnectedAt || "", locale, t.noData)],
+      [t.lastHealth, formatDate(connection?.lastHealthCheckAt || "", locale, t.noData)],
+    ];
+    const tableHtml = `
+      <table class="data">
+        <tbody>
+          ${rows.map(([label, value]) => `<tr><th>${label}</th><td>${value}</td></tr>`).join("")}
+        </tbody>
+      </table>
+    `;
+    const opened = openPrintReport({
+      locale,
+      title: t.title,
+      subtitle: t.subtitle,
+      tableHtml,
+      recordsCount: rows.length,
+      recordsLabel: locale === "ar" ? "حقل" : "fields",
+    });
+    if (!opened) {
+      toast.error(locale === "ar" ? "تعذر فتح نافذة الطباعة." : "Could not open the print window.");
+    }
   }
   async function copyPairingCode() {
     if (!connection?.sessionPairingCode || typeof navigator === "undefined" || !navigator.clipboard) return;
@@ -835,8 +842,8 @@ export default function SystemWhatsAppSettingsPage() {
   if (loading) return <SettingsSkeleton dir={dir} />;
   if (error) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-        <Card className="mx-auto max-w-3xl rounded-3xl border-destructive/30 bg-card shadow-sm">
+      <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
+        <Card className="mx-auto max-w-3xl rounded-lg border-destructive/30 bg-card shadow-none">
           <CardHeader className="text-center">
             <div className="mx-auto mb-2 rounded-full bg-destructive/10 p-4 text-destructive">
               <TriangleAlert className="h-8 w-8" />
@@ -856,11 +863,10 @@ export default function SystemWhatsAppSettingsPage() {
     );
   }
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+        <section className="overflow-hidden rounded-lg border bg-card shadow-none">
           <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
               <div className="max-w-4xl">
                 <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -879,22 +885,22 @@ export default function SystemWhatsAppSettingsPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
-                  className="rounded-xl bg-background"
+                  className="rounded-lg bg-background shadow-none"
                   onClick={() => void loadConnection({ silent: true })}
                   disabled={refreshing}
                 >
                   {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                   {t.refresh}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("print")}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={() => openPrintWindow("print")}>
                   <Printer className="h-4 w-4" />
                   {t.print}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("pdf")}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={() => openPrintWindow("pdf")}>
                   <FileText className="h-4 w-4" />
                   {t.pdf}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={resetLocalForm}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={resetLocalForm}>
                   <RotateCcw className="h-4 w-4" />
                   {t.reset}
                 </Button>
@@ -907,12 +913,12 @@ export default function SystemWhatsAppSettingsPage() {
           </div>
         </section>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard title={t.connectionStatus} value={statusText} description={t.fromLiveApi} icon={Power} />
-          <KpiCard title={t.gatewayStatus} value={gatewayText} description={t.fromLiveApi} icon={Webhook} />
-          <KpiCard title={t.tokenStatus} value={tokenText} description={t.fromLiveApi} icon={KeyRound} />
-          <KpiCard title={t.sessionMode} value={modeText} description={t.fromLiveApi} icon={Wifi} />
+          <SystemKpiCard title={t.connectionStatus} value={statusText} description={t.fromLiveApi} icon={Power} />
+          <SystemKpiCard title={t.gatewayStatus} value={gatewayText} description={t.fromLiveApi} icon={Webhook} />
+          <SystemKpiCard title={t.tokenStatus} value={tokenText} description={t.fromLiveApi} icon={KeyRound} />
+          <SystemKpiCard title={t.sessionMode} value={modeText} description={t.fromLiveApi} icon={Wifi} />
         </div>
-        <Card className="rounded-2xl shadow-sm">
+        <Card className="rounded-lg border bg-card shadow-none">
           <CardHeader>
             <CardTitle>{t.pageLinksTitle}</CardTitle>
             <CardDescription>{t.pageLinksDesc}</CardDescription>
@@ -925,7 +931,7 @@ export default function SystemWhatsAppSettingsPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="rounded-2xl shadow-sm">
+        <Card className="rounded-lg border bg-card shadow-none">
           <CardHeader>
             <CardTitle>{t.actionsTitle}</CardTitle>
             <CardDescription>{t.actionsDesc}</CardDescription>
@@ -969,7 +975,7 @@ export default function SystemWhatsAppSettingsPage() {
           </CardContent>
         </Card>
         <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Settings2 className="h-5 w-5" />
@@ -984,7 +990,7 @@ export default function SystemWhatsAppSettingsPage() {
                   <select
                     value={form.provider}
                     onChange={(event) => updateField("provider", event.target.value)}
-                    className="h-10 rounded-xl border bg-background px-3 text-sm"
+                    className="h-9 rounded-lg border bg-background px-3 text-sm"
                   >
                     <option value="WEB_SESSION">WEB_SESSION</option>
                     <option value="WHATSAPP_CLOUD">WHATSAPP_CLOUD</option>
@@ -994,22 +1000,22 @@ export default function SystemWhatsAppSettingsPage() {
                 </div>
                 <div className="grid gap-2">
                   <FieldLabel>{t.businessName}</FieldLabel>
-                  <Input className="h-10 rounded-xl" value={form.business_name} onChange={(event) => updateField("business_name", event.target.value)} />
+                  <Input className="h-9 rounded-lg" value={form.business_name} onChange={(event) => updateField("business_name", event.target.value)} />
                 </div>
                 <div className="grid gap-2">
                   <FieldLabel>{t.phoneNumber}</FieldLabel>
-                  <Input className="h-10 rounded-xl" value={form.phone_number} onChange={(event) => updateField("phone_number", event.target.value)} placeholder="+9665XXXXXXXX" />
+                  <Input className="h-9 rounded-lg" value={form.phone_number} onChange={(event) => updateField("phone_number", event.target.value)} placeholder="+9665XXXXXXXX" />
                 </div>
                 <div className="grid gap-2">
                   <FieldLabel>{t.sessionName}</FieldLabel>
-                  <Input className="h-10 rounded-xl" value={form.session_name} onChange={(event) => updateField("session_name", event.target.value)} />
+                  <Input className="h-9 rounded-lg" value={form.session_name} onChange={(event) => updateField("session_name", event.target.value)} />
                 </div>
                 <div className="grid gap-2">
                   <FieldLabel>{t.sessionMode}</FieldLabel>
                   <select
                     value={form.session_mode}
                     onChange={(event) => updateField("session_mode", event.target.value)}
-                    className="h-10 rounded-xl border bg-background px-3 text-sm"
+                    className="h-9 rounded-lg border bg-background px-3 text-sm"
                   >
                     <option value="qr">QR</option>
                     <option value="pairing_code">Pairing Code</option>
@@ -1017,27 +1023,27 @@ export default function SystemWhatsAppSettingsPage() {
                 </div>
                 <div className="grid gap-2">
                   <FieldLabel>{t.apiVersion}</FieldLabel>
-                  <Input className="h-10 rounded-xl" value={form.api_version} onChange={(event) => updateField("api_version", event.target.value)} />
+                  <Input className="h-9 rounded-lg" value={form.api_version} onChange={(event) => updateField("api_version", event.target.value)} />
                 </div>
                 <div className="grid gap-2">
                   <FieldLabel>{t.defaultLanguage}</FieldLabel>
-                  <Input className="h-10 rounded-xl" value={form.default_language_code} onChange={(event) => updateField("default_language_code", event.target.value)} />
+                  <Input className="h-9 rounded-lg" value={form.default_language_code} onChange={(event) => updateField("default_language_code", event.target.value)} />
                 </div>
                 <div className="grid gap-2">
                   <FieldLabel>{t.defaultCountry}</FieldLabel>
-                  <Input className="h-10 rounded-xl" value={form.default_country_code} onChange={(event) => updateField("default_country_code", event.target.value)} />
+                  <Input className="h-9 rounded-lg" value={form.default_country_code} onChange={(event) => updateField("default_country_code", event.target.value)} />
                 </div>
                 <div className="grid gap-2">
                   <FieldLabel>{t.phoneNumberId}</FieldLabel>
-                  <Input className="h-10 rounded-xl" value={form.phone_number_id} onChange={(event) => updateField("phone_number_id", event.target.value)} />
+                  <Input className="h-9 rounded-lg" value={form.phone_number_id} onChange={(event) => updateField("phone_number_id", event.target.value)} />
                 </div>
                 <div className="grid gap-2">
                   <FieldLabel>{t.businessAccountId}</FieldLabel>
-                  <Input className="h-10 rounded-xl" value={form.business_account_id} onChange={(event) => updateField("business_account_id", event.target.value)} />
+                  <Input className="h-9 rounded-lg" value={form.business_account_id} onChange={(event) => updateField("business_account_id", event.target.value)} />
                 </div>
                 <div className="grid gap-2 md:col-span-2">
                   <FieldLabel>{t.appId}</FieldLabel>
-                  <Input className="h-10 rounded-xl" value={form.app_id} onChange={(event) => updateField("app_id", event.target.value)} />
+                  <Input className="h-9 rounded-lg" value={form.app_id} onChange={(event) => updateField("app_id", event.target.value)} />
                 </div>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
@@ -1048,7 +1054,7 @@ export default function SystemWhatsAppSettingsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Power className="h-5 w-5" />
@@ -1057,7 +1063,7 @@ export default function SystemWhatsAppSettingsPage() {
               <CardDescription>{t.connectionDetailsDesc}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className={cn("rounded-2xl border bg-background p-4", alignClass)}>
+              <div className={cn("rounded-lg border bg-background p-4", alignClass)}>
                 <p className="text-xs text-muted-foreground">{t.connectionStatus}</p>
                 <Badge variant="outline" className={cn("mt-2 rounded-full", statusBadgeClass(connection?.sessionStatus || ""))}>
                   {statusText}
@@ -1074,7 +1080,7 @@ export default function SystemWhatsAppSettingsPage() {
           </Card>
         </section>
         <section className="grid gap-6 xl:grid-cols-2">
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Webhook className="h-5 w-5" />
@@ -1085,18 +1091,18 @@ export default function SystemWhatsAppSettingsPage() {
             <CardContent className="space-y-4">
               <div className="grid gap-2">
                 <FieldLabel>{t.callbackUrl}</FieldLabel>
-                <Input className="h-10 rounded-xl" value={form.webhook_callback_url} onChange={(event) => updateField("webhook_callback_url", event.target.value)} />
+                <Input className="h-9 rounded-lg" value={form.webhook_callback_url} onChange={(event) => updateField("webhook_callback_url", event.target.value)} />
               </div>
               <div className="grid gap-2">
                 <FieldLabel>{t.accessToken}</FieldLabel>
-                <Input type="password" className="h-10 rounded-xl" value={form.access_token} onChange={(event) => updateField("access_token", event.target.value)} placeholder={t.accessTokenHint} />
+                <Input type="password" className="h-9 rounded-lg" value={form.access_token} onChange={(event) => updateField("access_token", event.target.value)} placeholder={t.accessTokenHint} />
                 <Badge variant={connection?.hasAccessToken ? "default" : "secondary"} className="w-fit rounded-full">
                   {connection?.hasAccessToken ? t.saved : t.missing}
                 </Badge>
               </div>
               <div className="grid gap-2">
                 <FieldLabel>{t.verifyToken}</FieldLabel>
-                <Input type="password" className="h-10 rounded-xl" value={form.webhook_verify_token} onChange={(event) => updateField("webhook_verify_token", event.target.value)} placeholder={t.verifyTokenHint} />
+                <Input type="password" className="h-9 rounded-lg" value={form.webhook_verify_token} onChange={(event) => updateField("webhook_verify_token", event.target.value)} placeholder={t.verifyTokenHint} />
                 <Badge variant={connection?.hasWebhookVerifyToken ? "default" : "secondary"} className="w-fit rounded-full">
                   {connection?.hasWebhookVerifyToken ? t.saved : t.missing}
                 </Badge>
@@ -1104,7 +1110,7 @@ export default function SystemWhatsAppSettingsPage() {
               <ToggleRow label={t.webhookVerified} checked={form.webhook_verified} onChange={(checked) => updateField("webhook_verified", checked)} />
             </CardContent>
           </Card>
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <SendHorizontal className="h-5 w-5" />
@@ -1115,11 +1121,11 @@ export default function SystemWhatsAppSettingsPage() {
             <CardContent className="space-y-4">
               <div className="grid gap-2">
                 <FieldLabel>{t.defaultRecipient}</FieldLabel>
-                <Input className="h-10 rounded-xl" value={form.default_test_recipient} onChange={(event) => updateField("default_test_recipient", event.target.value)} placeholder="+9665XXXXXXXX" />
+                <Input className="h-9 rounded-lg" value={form.default_test_recipient} onChange={(event) => updateField("default_test_recipient", event.target.value)} placeholder="+9665XXXXXXXX" />
               </div>
               <div className="grid gap-2">
                 <FieldLabel>{t.recipientPhone}</FieldLabel>
-                <Input className="h-10 rounded-xl" value={testRecipient} onChange={(event) => setTestRecipient(event.target.value)} placeholder="+9665XXXXXXXX" />
+                <Input className="h-9 rounded-lg" value={testRecipient} onChange={(event) => setTestRecipient(event.target.value)} placeholder="+9665XXXXXXXX" />
               </div>
               <div className="grid gap-2">
                 <FieldLabel>{t.messageBody}</FieldLabel>
@@ -1138,7 +1144,7 @@ export default function SystemWhatsAppSettingsPage() {
           </Card>
         </section>
         <section className="grid gap-6 xl:grid-cols-2">
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <QrCode className="h-5 w-5" />
@@ -1159,7 +1165,7 @@ export default function SystemWhatsAppSettingsPage() {
               )}
             </CardContent>
           </Card>
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Smartphone className="h-5 w-5" />
@@ -1168,7 +1174,7 @@ export default function SystemWhatsAppSettingsPage() {
               <CardDescription>{t.pairingDesc}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center gap-2 rounded-2xl border bg-background p-4">
+              <div className="flex items-center gap-2 rounded-lg border bg-background p-4">
                 <code className="flex-1 break-all text-lg font-bold tracking-widest">
                   {connection?.sessionPairingCode || t.pairingEmpty}
                 </code>
@@ -1185,7 +1191,7 @@ export default function SystemWhatsAppSettingsPage() {
               </div>
               <div className="grid gap-2">
                 <FieldLabel>{t.recipientPhone}</FieldLabel>
-                <Input className="h-10 rounded-xl" value={testRecipient} onChange={(event) => setTestRecipient(event.target.value)} placeholder="+9665XXXXXXXX" />
+                <Input className="h-9 rounded-lg" value={testRecipient} onChange={(event) => setTestRecipient(event.target.value)} placeholder="+9665XXXXXXXX" />
               </div>
             </CardContent>
           </Card>
@@ -1194,4 +1200,3 @@ export default function SystemWhatsAppSettingsPage() {
     </main>
   );
 }
-

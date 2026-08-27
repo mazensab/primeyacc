@@ -1,4 +1,6 @@
-﻿"use client";
+"use client";
+
+// phase47D_batch2_system_dashboard_design_contract=true
 /* ============================================================
    📂 primey_frontend/components/system/activity-profiles/SystemActivityProfileDetail.tsx
    🧩 Mhamcloud — System Activity Profile Detail
@@ -23,6 +25,12 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
+import { SystemKpiCard } from "@/components/ui/system-kpi-card";
+import {
+  DataRegisterToolbar,
+  registerBrandButtonClass,
+  registerOutlineButtonClass,
+} from "@/components/ui/data-register";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -271,39 +279,9 @@ function statusLabel(value: string, locale: Locale) {
   const t = translations[locale];
   return value.toUpperCase() === "ACTIVE" ? t.active : t.inactive;
 }
-function MetricCard({
-  title,
-  value,
-  description,
-  icon: Icon,
-}: {
-  title: string;
-  value: string | number;
-  description: string;
-  icon: LucideIcon;
-}) {
-  return (
-    <Card className="rounded-2xl border-border/70 bg-card shadow-sm">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="mt-3 truncate text-3xl font-bold tabular-nums">
-              {typeof value === "number" ? formatInteger(value) : value}
-            </p>
-            <p className="mt-4 text-xs text-muted-foreground">{description}</p>
-          </div>
-          <div className="rounded-2xl bg-muted p-3 text-primary">
-            <Icon className="h-5 w-5" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 function DetailSkeleton() {
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-transparent px-4 py-6 sm:px-6 lg:px-8">
       <div className="space-y-6">
         <Card className="rounded-3xl">
           <CardHeader className="space-y-4">
@@ -379,8 +357,8 @@ export function SystemActivityProfileDetail({ profileId }: { profileId: string }
   if (loading) return <DetailSkeleton />;
   if (error) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-        <Card className="mx-auto max-w-3xl rounded-3xl border-destructive/30 bg-card shadow-sm">
+      <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
+        <Card className="mx-auto max-w-3xl rounded-lg border-destructive/30 bg-card shadow-none">
           <CardHeader className="text-center">
             <div className="mx-auto mb-2 rounded-full bg-destructive/10 p-4 text-destructive">
               <TriangleAlert className="h-8 w-8" />
@@ -400,11 +378,10 @@ export function SystemActivityProfileDetail({ profileId }: { profileId: string }
     );
   }
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+        <section className="overflow-hidden rounded-lg border bg-card shadow-none">
           <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
               <div className="max-w-4xl">
                 <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -425,7 +402,7 @@ export function SystemActivityProfileDetail({ profileId }: { profileId: string }
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
-                  className="rounded-xl bg-background"
+                  className="rounded-lg bg-background shadow-none"
                   onClick={() => void loadDetail({ silent: true })}
                   disabled={refreshing}
                 >
@@ -441,11 +418,11 @@ export function SystemActivityProfileDetail({ profileId }: { profileId: string }
           </div>
         </section>
         <section className="grid gap-4 md:grid-cols-3">
-          <MetricCard title={t.companies} value={profile.companiesCount || companies.length} description={t.fromLiveApi} icon={Building2} />
-          <MetricCard title={t.modules} value={profile.modules.length} description={t.fromLiveApi} icon={Layers3} />
-          <MetricCard title={t.features} value={profile.features.length} description={t.fromLiveApi} icon={CheckCircle2} />
+          <SystemKpiCard title={t.companies} value={profile.companiesCount || companies.length} description={t.fromLiveApi} icon={Building2} />
+          <SystemKpiCard title={t.modules} value={profile.modules.length} description={t.fromLiveApi} icon={Layers3} />
+          <SystemKpiCard title={t.features} value={profile.features.length} description={t.fromLiveApi} icon={CheckCircle2} />
         </section>
-        <Card className="rounded-2xl shadow-sm">
+        <Card className="rounded-lg border bg-card shadow-none">
           <CardHeader>
             <CardTitle>{t.profileInfo}</CardTitle>
             <CardDescription>{profile.description || t.description}</CardDescription>
@@ -462,22 +439,22 @@ export function SystemActivityProfileDetail({ profileId }: { profileId: string }
               [t.features, profile.features.join(", ")],
               [t.description, profile.description],
             ].map(([label, value]) => (
-              <div key={label} className="rounded-2xl border bg-muted/20 p-4">
+              <div key={label} className="rounded-lg border bg-muted/20 p-4">
                 <p className="text-xs text-muted-foreground">{label}</p>
                 <p className="mt-2 break-words text-sm font-medium">{value || "—"}</p>
               </div>
             ))}
           </CardContent>
         </Card>
-        <Card className="rounded-2xl shadow-sm">
+        <Card className="rounded-lg border bg-card shadow-none">
           <CardHeader>
             <CardTitle>{t.linkedCompanies}</CardTitle>
             <CardDescription>{t.linkedCompaniesDesc}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-hidden rounded-2xl border bg-background">
+            <div className="overflow-hidden rounded-lg border bg-background">
               <div className="w-full overflow-x-auto">
-                <Table className="w-full min-w-[940px] table-fixed">
+                <Table variant="register" layout="fixed" minWidth={940}>
                   <TableHeader>
                     <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
                       <TableHead className={cn("w-[220px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>{t.name}</TableHead>

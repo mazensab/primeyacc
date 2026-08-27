@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 /* ============================================================
    📂 components/system/companies/SystemCompaniesView.tsx
@@ -28,6 +28,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { apiGet, apiPost, getDataObject, getResults } from "@/lib/api";
+
+import { openPrintHtmlReport } from "@/lib/print-report";
 
 type ViewMode = "overview" | "list" | "create" | "detail" | "reports";
 
@@ -582,12 +584,19 @@ export function SystemCompaniesView({
 
   function handleExport() {
     if (typeof window === "undefined") return;
-    window.open(COMPANY_API.export, "_blank", "noopener,noreferrer");
+    const anchor = document.createElement("a");
+    anchor.href = COMPANY_API.export;
+    anchor.target = "_blank";
+    anchor.rel = "noopener noreferrer";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
   }
 
   function handlePrint() {
     if (typeof window === "undefined") return;
-    window.print();
+    const opened = openPrintHtmlReport(document.documentElement.outerHTML);
+    if (!opened) toast.error(isArabic ? "تعذر فتح نافذة الطباعة." : "Could not open the print window.");
   }
 
   const title =
@@ -1056,5 +1065,3 @@ export function SystemCompanyDetailFromRoute() {
 
   return <SystemCompaniesView mode="detail" companyId={id} />;
 }
-
-

@@ -1,4 +1,6 @@
-﻿"use client";
+"use client";
+
+// phase47D2B1_system_dashboard_design_contract=true
 
 /* ============================================================
    📂 primey_frontend/app/system/subscriptions/list/page.tsx
@@ -41,6 +43,13 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { toast } from "sonner";
+import { SystemKpiCard } from "@/components/ui/system-kpi-card";
+import {
+  registerBrandButtonClass,
+  registerOutlineButtonClass,
+} from "@/components/ui/data-register";
+import { downloadExcelReport, type ExcelReportSection } from "@/lib/excel-report";
+import { openPrintReport } from "@/lib/print-report";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -575,6 +584,24 @@ function getStatusLabel(value: string, locale: Locale) {
   return normalizeText(translations[locale][normalized], fallback);
 }
 
+
+function getBillingCycleLabel(value: string, locale: Locale) {
+  const key = normalizeText(value, "unknown").toLowerCase().replace(/[\s-]+/g, "_");
+  const ar: Record<string, string> = {
+    monthly: "شهري", month: "شهري", yearly: "سنوي", year: "سنوي",
+    annual: "سنوي", annually: "سنوي", quarterly: "ربع سنوي",
+    semi_annual: "نصف سنوي", semiannual: "نصف سنوي",
+    one_time: "مرة واحدة", unknown: "غير محدد",
+  };
+  const en: Record<string, string> = {
+    monthly: "Monthly", month: "Monthly", yearly: "Yearly", year: "Yearly",
+    annual: "Yearly", annually: "Yearly", quarterly: "Quarterly",
+    semi_annual: "Semi-annual", semiannual: "Semi-annual",
+    one_time: "One-time", unknown: "Unknown",
+  };
+  return (locale === "ar" ? ar : en)[key] || value;
+}
+
 function getStatusClass(value: string) {
   const normalized = value.toLowerCase();
 
@@ -618,40 +645,9 @@ function StatusBadge({ value, locale }: { value: string; locale: Locale }) {
   );
 }
 
-function KpiCard({
-  title,
-  value,
-  description,
-  icon: Icon,
-}: {
-  title: string;
-  value: number;
-  description: string;
-  icon: React.ComponentType<{ className?: string }>;
-}) {
-  return (
-    <Card className="overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
-        <div className="min-w-0">
-          <CardDescription className="truncate text-sm">{title}</CardDescription>
-          <CardTitle className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
-            {formatInteger(value)}
-          </CardTitle>
-        </div>
-        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
-          <Icon className="h-5 w-5" />
-        </span>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
 function CompaniesSkeleton() {
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
         <div className="rounded-3xl border bg-card p-6 shadow-sm">
           <Skeleton className="h-5 w-40" />
@@ -901,7 +897,7 @@ export default function SystemSubscriptionsListPage() {
       company.name,
       company.code,
       company.owner,
-      company.activity,
+      getBillingCycleLabel(company.activity, locale),
       company.subscription,
       company.email || "—",
       company.phone || "—",
@@ -943,90 +939,59 @@ export default function SystemSubscriptionsListPage() {
 
   function exportExcel() {
     const rows = buildExportRows();
-
     if (!rows.length) {
       toast.error(t.exportEmpty);
       return;
     }
-
-    const html = `
-      <html dir="${dir}" lang="${locale}">
-        <head><meta charset="utf-8" /></head>
-        <body>
-          <h1>${escapeHtml(t.reportTitle)}</h1>
-          <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString())}</p>
-          ${buildTableHtml()}
-        </body>
-      </html>
-    `;
-
-    const blob = new Blob([`\ufeff${html}`], {
-      type: "application/vnd.ms-excel;charset=utf-8;",
+    const headers = [
+      t.company, t.code, t.owner, t.activity, t.subscription,
+      t.city, t.status, t.createdAt
+    ];
+    const section: ExcelReportSection = {
+      title: t.reportTitle,
+      headers,
+      rows: rows.map((row) =>
+        row.map((value) => ({ value: String(value ?? ""), type: "text" as const })),
+      ),
+    };
+    downloadExcelReport({
+      locale,
+      title: t.reportTitle,
+      filename: `Mhamcloud-system-subscriptions-${new Date().toISOString().slice(0, 10)}.xls`,
+      generatedAtLabel: t.generatedAt,
+      sections: [section],
     });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-
-    link.href = url;
-    link.download = `Mhamcloud-system-companies-${new Date().toISOString().slice(0, 10)}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    toast.success(locale === "ar" ? "تم تجهيز ملف Excel بنجاح." : "Excel file prepared successfully.");
   }
 
   function openPrintWindow(mode: "print" | "pdf") {
     const rows = buildExportRows();
-
     if (!rows.length) {
       toast.error(t.printEmpty);
       return;
     }
-
-    if (mode === "pdf") {
-      toast.info(t.pdfHint);
+    if (mode === "pdf") toast.info(t.pdfHint);
+    const opened = openPrintReport({
+      locale,
+      title: t.reportTitle,
+      tableHtml: buildTableHtml(),
+      recordsCount: rows.length,
+      recordsLabel: t.rows,
+      generatedAtLabel: t.generatedAt,
+    });
+    if (!opened) {
+      toast.error(locale === "ar"
+        ? "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة."
+        : "Could not open the print window. Allow pop-ups and try again.");
     }
-
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1200,height=800");
-    if (!printWindow) return;
-
-    printWindow.document.write(`
-      <!doctype html>
-      <html dir="${dir}" lang="${locale}">
-        <head>
-          <meta charset="utf-8" />
-          <title>${escapeHtml(t.reportTitle)}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 24px; color: #0f172a; }
-            h1 { margin: 0 0 8px; font-size: 24px; }
-            p { color: #64748b; }
-            table { width: 100%; border-collapse: collapse; margin-top: 18px; }
-            th, td {
-              border: 1px solid #cbd5e1;
-              padding: 8px;
-              font-size: 12px;
-              text-align: ${dir === "rtl" ? "right" : "left"};
-              vertical-align: top;
-            }
-            th { background: #f1f5f9; font-weight: 700; }
-          </style>
-        </head>
-        <body>
-          <h1>${escapeHtml(t.reportTitle)}</h1>
-          <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString())}</p>
-          ${buildTableHtml()}
-          <script>window.onload = function () { window.print(); };</script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
   }
 
   if (loading) return <CompaniesSkeleton />;
 
   if (error) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-        <Card className="mx-auto max-w-3xl rounded-3xl border-destructive/30 bg-card shadow-sm">
+      <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
+        <Card className="mx-auto max-w-3xl rounded-lg border-destructive/30 bg-card shadow-none">
           <CardHeader className="text-center">
             <div className="mx-auto mb-2 rounded-full bg-destructive/10 p-4 text-destructive">
               <TriangleAlert className="h-8 w-8" />
@@ -1047,11 +1012,11 @@ export default function SystemSubscriptionsListPage() {
   }
 
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+        <section className="overflow-hidden rounded-lg border bg-card shadow-none">
           <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
+
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
               <div className="max-w-4xl">
                 <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -1065,22 +1030,22 @@ export default function SystemSubscriptionsListPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
-                  className="rounded-xl bg-background"
+                  className={registerOutlineButtonClass}
                   onClick={() => void loadCompanies({ silent: true })}
                   disabled={refreshing}
                 >
                   {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                   {t.refresh}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
+                <Button variant="outline" className={registerOutlineButtonClass} onClick={exportExcel}>
                   <FileSpreadsheet className="h-4 w-4" />
                   {t.exportExcel}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("print")}>
+                <Button variant="outline" className={registerOutlineButtonClass} onClick={() => openPrintWindow("print")}>
                   <Printer className="h-4 w-4" />
                   {t.print}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("pdf")}>
+                <Button variant="outline" className={registerOutlineButtonClass} onClick={() => openPrintWindow("pdf")}>
                   <FileText className="h-4 w-4" />
                   {t.pdf}
                 </Button>
@@ -1096,13 +1061,17 @@ export default function SystemSubscriptionsListPage() {
         </section>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard title={t.totalCompanies} value={stats.total} description={t.fromLiveApi} icon={Building2} />
-          <KpiCard title={t.activeCompanies} value={stats.active} description={t.fromLiveApi} icon={CheckCircle2} />
-          <KpiCard title={t.inactiveCompanies} value={stats.inactive} description={t.fromLiveApi} icon={ShieldCheck} />
-          <KpiCard title={t.subscribedCompanies} value={stats.subscribed} description={t.fromLiveApi} icon={Activity} />
+          <SystemKpiCard title={t.totalCompanies} value={stats.total}
+            description={t.fromLiveApi} icon={Building2} />
+          <SystemKpiCard title={t.activeCompanies} value={stats.active}
+            description={t.fromLiveApi} icon={CheckCircle2} />
+          <SystemKpiCard title={t.inactiveCompanies} value={stats.inactive}
+            description={t.fromLiveApi} icon={ShieldCheck} />
+          <SystemKpiCard title={t.subscribedCompanies} value={stats.subscribed}
+            description={t.fromLiveApi} icon={Activity} />
         </div>
 
-        <Card className="w-full rounded-2xl shadow-sm">
+        <Card className="w-full rounded-lg border bg-card shadow-none">
           <CardHeader className="gap-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -1117,7 +1086,7 @@ export default function SystemSubscriptionsListPage() {
           </CardHeader>
 
           <CardContent className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row md:items-center">
                 <div className="relative min-w-0 flex-1">
                   <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -1125,12 +1094,12 @@ export default function SystemSubscriptionsListPage() {
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder={t.searchPlaceholder}
-                    className="h-10 rounded-xl ps-9"
+                    className="h-9 rounded-lg ps-9"
                   />
                 </div>
 
                 <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background md:w-[170px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background md:w-[170px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1143,7 +1112,7 @@ export default function SystemSubscriptionsListPage() {
                 </Select>
 
                 <Select value={planFilter} onValueChange={setPlanFilter}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background md:w-[160px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background md:w-[160px]">
                     <SelectValue placeholder={t.owner} />
                   </SelectTrigger>
                   <SelectContent>
@@ -1160,7 +1129,7 @@ export default function SystemSubscriptionsListPage() {
                   value={billingCycleFilter}
                   onValueChange={setBillingCycleFilter}
                 >
-                  <SelectTrigger className="h-10 rounded-xl bg-background md:w-[160px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background md:w-[160px]">
                     <SelectValue placeholder={t.activity} />
                   </SelectTrigger>
                   <SelectContent>
@@ -1180,7 +1149,7 @@ export default function SystemSubscriptionsListPage() {
                     <Button
                       type="button"
                       variant="outline"
-                      className="h-10 rounded-xl bg-background text-xs font-normal"
+                      className="h-9 rounded-lg bg-background text-xs font-normal"
                     >
                       <CalendarDays className="h-4 w-4" />
                       {t.from}: {dateFrom || "—"}
@@ -1200,7 +1169,7 @@ export default function SystemSubscriptionsListPage() {
                     <Button
                       type="button"
                       variant="outline"
-                      className="h-10 rounded-xl bg-background text-xs font-normal"
+                      className="h-9 rounded-lg bg-background text-xs font-normal"
                     >
                       <CalendarDays className="h-4 w-4" />
                       {t.to}: {dateTo || "—"}
@@ -1216,7 +1185,7 @@ export default function SystemSubscriptionsListPage() {
                 </Popover>
 
                 <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background sm:w-[160px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background sm:w-[160px]">
                     <ArrowUpDown className="h-4 w-4" />
                     <SelectValue />
                   </SelectTrigger>
@@ -1228,16 +1197,16 @@ export default function SystemSubscriptionsListPage() {
                   </SelectContent>
                 </Select>
 
-                <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={resetFilters}>
+                <Button variant="outline" className={registerOutlineButtonClass} onClick={resetFilters}>
                   <RotateCcw className="h-4 w-4" />
                   {t.reset}
                 </Button>
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-2xl border bg-background">
+            <div className="overflow-hidden rounded-lg border bg-background">
               <div className="w-full overflow-x-auto">
-                <Table className="w-full min-w-[1080px] table-fixed">
+                <Table variant="register" layout="fixed" minWidth={1080}>
                   <TableHeader>
                     <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
                       <TableHead className={cn("h-11 w-[215px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
@@ -1299,7 +1268,7 @@ export default function SystemSubscriptionsListPage() {
                           </TableCell>
                           <TableCell className={cn("h-[68px] overflow-hidden px-4 align-middle", alignClass)}>
                             <span className="block truncate text-sm text-muted-foreground">
-                              {company.activity || "—"}
+                              {getBillingCycleLabel(company.activity, locale)}
                             </span>
                           </TableCell>
                           <TableCell className={cn("h-[68px] overflow-hidden px-4 align-middle", alignClass)}>

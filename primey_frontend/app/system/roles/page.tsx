@@ -1,5 +1,7 @@
 "use client";
 
+// phase47D_batch2_system_dashboard_design_contract=true
+
 /* ============================================================
    📂 primey_frontend/app/system/roles/page.tsx
    🏢 PrimeyAcc — System Roles Catalog
@@ -81,6 +83,17 @@ import {
 } from "lucide-react";
 
 import { toast } from "sonner";
+import {
+  downloadExcelReport,
+  type ExcelReportSection,
+} from "@/lib/excel-report";
+import { openPrintReport } from "@/lib/print-report";
+import { SystemKpiCard } from "@/components/ui/system-kpi-card";
+import {
+  DataRegisterToolbar,
+  registerBrandButtonClass,
+  registerOutlineButtonClass,
+} from "@/components/ui/data-register";
 
 import { Badge } from "@/components/ui/badge";
 
@@ -133,6 +146,10 @@ import {
   TableRow,
 
 } from "@/components/ui/table";
+
+import { downloadExcelHtmlReport } from "@/lib/excel-report";
+
+import { openPrintHtmlReport } from "@/lib/print-report";
 
 type Locale = "ar" | "en";
 
@@ -721,27 +738,7 @@ export default function SystemRolesPage() {
 
     const html = buildExcelHtml(filteredRoles, locale);
 
-    const blob = new Blob([`\uFEFF${html}`], {
-
-      type: "application/vnd.ms-excel;charset=utf-8;",
-
-    });
-
-    const url = URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-
-    link.href = url;
-
-    link.download = "primeyacc-system-roles.xls";
-
-    document.body.appendChild(link);
-
-    link.click();
-
-    link.remove();
-
-    URL.revokeObjectURL(url);
+    downloadExcelHtmlReport(html, "primeyacc-system-roles.xls");
 
     toast.success(textByLocale(locale, "تم تصدير Excel", "Excel exported"));
 
@@ -749,7 +746,7 @@ export default function SystemRolesPage() {
 
   const printPage = () => {
 
-    window.print();
+    openPrintHtmlReport(document.documentElement.outerHTML);
 
   };
 
@@ -787,17 +784,15 @@ export default function SystemRolesPage() {
 
       dir={direction}
 
-      className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8 print:bg-white"
+      className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8 print:bg-white"
 
     >
 
       <div className="w-full space-y-6">
 
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+        <section className="overflow-hidden rounded-lg border bg-card shadow-none">
 
           <div className="relative p-6 sm:p-8">
-
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
 
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
 
@@ -839,7 +834,7 @@ export default function SystemRolesPage() {
 
                 </Button>
 
-                <Button type="button" variant="outline" className="rounded-xl bg-background" onClick={printPage}>
+                <Button type="button" variant="outline" className="rounded-lg bg-background shadow-none" onClick={printPage}>
 
                   PDF
 
@@ -847,7 +842,7 @@ export default function SystemRolesPage() {
 
                 </Button>
 
-                <Button type="button" variant="outline" className="rounded-xl bg-background" onClick={printPage}>
+                <Button type="button" variant="outline" className="rounded-lg bg-background shadow-none" onClick={printPage}>
 
                   {textByLocale(locale, "\u0637\u0628\u0627\u0639\u0629", "Print")}
 
@@ -855,7 +850,7 @@ export default function SystemRolesPage() {
 
                 </Button>
 
-                <Button type="button" variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
+                <Button type="button" variant="outline" className="rounded-lg bg-background shadow-none" onClick={exportExcel}>
 
                   {textByLocale(locale, "\u062a\u0635\u062f\u064a\u0631 Excel", "Export Excel")}
 
@@ -869,7 +864,7 @@ export default function SystemRolesPage() {
 
                   variant="outline"
 
-                  className="rounded-xl bg-background"
+                  className="rounded-lg bg-background shadow-none"
 
                   onClick={() => void loadCatalog("refresh")}
 
@@ -903,7 +898,7 @@ export default function SystemRolesPage() {
         <Card className="rounded-2xl border-primary/20 bg-primary/5 shadow-sm">
           <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
-              <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-full border border-border/70 bg-white/80 text-[#a57b3d] shadow-sm backdrop-blur-sm">
                 <ShieldCheck className="h-5 w-5" />
               </span>
 
@@ -989,7 +984,7 @@ export default function SystemRolesPage() {
 
                 key={item.title}
 
-                className="overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                className="overflow-hidden rounded-lg border-border/70 bg-card shadow-none transition hover:-translate-y-0.5 hover:shadow-md"
 
               >
 
@@ -1007,7 +1002,7 @@ export default function SystemRolesPage() {
 
                   </div>
 
-                  <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-full border border-border/70 bg-white/80 text-[#a57b3d] shadow-sm backdrop-blur-sm">
 
                     <Icon className="h-5 w-5" />
 
@@ -1033,7 +1028,7 @@ export default function SystemRolesPage() {
 
         </section>
 
-        <Card className="rounded-2xl shadow-sm">
+        <Card className="rounded-lg border bg-card shadow-none">
 
           <CardHeader>
 
@@ -1113,7 +1108,7 @@ export default function SystemRolesPage() {
 
                   <Link key={action.href} href={action.href}>
 
-                    <Card className="group h-full rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                    <Card className="group h-full rounded-lg border-border/70 bg-card shadow-none transition hover:-translate-y-0.5 hover:shadow-md">
 
                       <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
 
@@ -1147,7 +1142,7 @@ export default function SystemRolesPage() {
 
         </Card>
 
-        <Card className="w-full rounded-2xl shadow-sm">
+        <Card className="w-full rounded-lg border bg-card shadow-none">
 
           <CardHeader className="gap-3">
 
@@ -1177,7 +1172,7 @@ export default function SystemRolesPage() {
 
           <CardContent className="space-y-4">
 
-            <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between print:hidden">
+            <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between print:hidden">
 
               <div className="relative min-w-0 flex-1">
 
@@ -1189,7 +1184,7 @@ export default function SystemRolesPage() {
 
                   onChange={(event) => setSearchTerm(event.target.value)}
 
-                  className="h-10 rounded-xl bg-background ps-10"
+                  className="h-9 rounded-lg bg-background ps-10"
 
                   placeholder={textByLocale(locale, "\u0627\u0628\u062d\u062b \u0628\u0643\u0648\u062f \u0627\u0644\u062f\u0648\u0631 \u0623\u0648 \u0627\u0644\u0646\u0637\u0627\u0642 \u0623\u0648 \u0627\u0644\u0627\u0633\u0645...", "Search by role code, scope, or name...")}
 
@@ -1199,7 +1194,7 @@ export default function SystemRolesPage() {
 
               <Select value={scopeFilter} onValueChange={(value) => setScopeFilter(value as ScopeFilter)}>
 
-                <SelectTrigger className="h-10 rounded-xl bg-background md:w-[170px]">
+                <SelectTrigger className="h-9 rounded-lg bg-background md:w-[170px]">
 
                   <SelectValue placeholder={textByLocale(locale, "\u0627\u0644\u0646\u0637\u0627\u0642", "Scope")} />
 
@@ -1219,7 +1214,7 @@ export default function SystemRolesPage() {
 
               <Select value={sortKey} onValueChange={(value) => setSortKey(value as SortKey)}>
 
-                <SelectTrigger className="h-10 rounded-xl bg-background md:w-[170px]">
+                <SelectTrigger className="h-9 rounded-lg bg-background md:w-[170px]">
 
                   <SelectValue placeholder={textByLocale(locale, "\u0627\u0644\u062a\u0631\u062a\u064a\u0628", "Sort")} />
 
@@ -1239,7 +1234,7 @@ export default function SystemRolesPage() {
 
               </Select>
 
-              <Button type="button" variant="outline" className="h-10 rounded-xl bg-background" onClick={resetFilters}>
+              <Button type="button" variant="outline" className={registerOutlineButtonClass} onClick={resetFilters}>
 
                 <RotateCcw className="me-2 h-4 w-4" />
 
@@ -1333,11 +1328,11 @@ export default function SystemRolesPage() {
 
             ) : (
 
-              <div className="overflow-hidden rounded-2xl border bg-background">
+              <div className="overflow-hidden rounded-lg border bg-background">
 
                 <div className="w-full overflow-x-auto">
 
-                  <Table className="w-full min-w-[980px] table-fixed">
+                  <Table variant="register" layout="fixed" minWidth={980}>
 
                     <TableHeader>
 

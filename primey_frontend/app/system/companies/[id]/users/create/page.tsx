@@ -1,4 +1,6 @@
 "use client";
+
+// phase47D1B2_system_dashboard_design_contract=true
 /* ============================================================
    primey_frontend/app/system/companies/[id]/users/create/page.tsx
    Mhamcloud - System Company User Create Page V1.0
@@ -222,7 +224,7 @@ function getInitialLocale(): Locale {
   return stored === "en" ? "en" : "ar";
 }
 function fieldClassName() {
-  return "mt-2 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15";
+  return "mt-2 h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15";
 }
 function TextField({
   label,
@@ -303,7 +305,7 @@ export default function SystemCompanyUserCreatePage() {
         }
       } catch {
         if (active) {
-          setCompanyError(false);
+          setCompanyError(true);
           setCompany({
             id: companyId,
             name: companyId,
@@ -383,7 +385,7 @@ export default function SystemCompanyUserCreatePage() {
   return (
     <main
       dir={dir}
-      className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8"
+      className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8"
     >
       <div className="w-full space-y-6">
         <section className="rounded-3xl border bg-background p-5 shadow-sm">
@@ -404,7 +406,7 @@ export default function SystemCompanyUserCreatePage() {
             </div>
             <Link
               href={`/system/companies/${companyId}`}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border bg-background px-4 text-sm font-medium transition hover:bg-muted"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border bg-background px-4 text-sm font-medium transition hover:bg-muted"
             >
               <ArrowLeft className="h-4 w-4" />
               {t.back}
@@ -440,7 +442,7 @@ export default function SystemCompanyUserCreatePage() {
               </div>
             </div>
             {companyError ? (
-              <p className="max-w-xl rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+              <p className="max-w-xl rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
                 {t.companyUnavailable}
               </p>
             ) : null}
@@ -546,7 +548,7 @@ export default function SystemCompanyUserCreatePage() {
                 >
                   {ROLE_OPTIONS.map((role) => (
                     <option key={role.value} value={role.value}>
-                      {role.value} - {t[role.key]}
+                      {t[role.key]}
                     </option>
                   ))}
                 </select>
@@ -567,7 +569,7 @@ export default function SystemCompanyUserCreatePage() {
                   value={form.notes}
                   rows={5}
                   onChange={(event) => updateField("notes", event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-input bg-background px-3 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+                  className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
                 />
               </label>
               <button

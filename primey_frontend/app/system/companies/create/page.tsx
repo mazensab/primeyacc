@@ -1,5 +1,7 @@
 "use client";
 
+// phase47D1B2_system_dashboard_design_contract=true
+
 /* ============================================================
    📂 primey_frontend/app/system/companies/create/page.tsx
    🏢 Mhamcloud — Create System Company
@@ -693,7 +695,7 @@ function TextAreaField({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="min-h-28 w-full resize-y rounded-xl border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none transition placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+      className="min-h-28 w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none transition placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
     />
   );
 }
@@ -983,11 +985,11 @@ export default function SystemCompaniesCreatePage() {
   const BackIcon = backIcon;
 
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+        <section className="overflow-hidden rounded-lg border bg-card shadow-none">
           <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
+            <div className="absolute inset-x-0 top-0 h-1 bg-transparent" />
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
               <div className="max-w-4xl">
                 <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -999,13 +1001,13 @@ export default function SystemCompaniesCreatePage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <Button asChild variant="outline" className="rounded-xl bg-background">
+                <Button asChild variant="outline" className="rounded-lg bg-background">
                   <Link href="/system/companies">
                     <BackIcon className="h-4 w-4" />
                     {t.backToCompanies}
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="rounded-xl bg-background">
+                <Button asChild variant="outline" className="rounded-lg bg-background">
                   <Link href="/system/companies/list">
                     <ListChecks className="h-4 w-4" />
                     {t.companiesList}
@@ -1014,7 +1016,7 @@ export default function SystemCompaniesCreatePage() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="rounded-xl bg-background"
+                  className="rounded-lg bg-background"
                   onClick={saveDraft}
                   disabled={submitting}
                 >
@@ -1024,7 +1026,7 @@ export default function SystemCompaniesCreatePage() {
                 <Button
                   type="submit"
                   form="company-create-form"
-                  className="rounded-xl"
+                  className="h-9 rounded-lg"
                   disabled={submitting || !isReady}
                 >
                   {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
@@ -1037,7 +1039,7 @@ export default function SystemCompaniesCreatePage() {
 
         <form id="company-create-form" onSubmit={submitForm} className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-6">
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.basicInfo}</CardTitle>
                 <CardDescription>{t.basicInfoDesc}</CardDescription>
@@ -1093,7 +1095,7 @@ export default function SystemCompaniesCreatePage() {
                     onValueChange={(value) => updateField("activity_profile_id", value)}
                     disabled={optionsLoading}
                   >
-                    <SelectTrigger className="h-11 rounded-xl bg-background">
+                    <SelectTrigger className="h-11 rounded-lg bg-background">
                       <SelectValue placeholder={optionsLoading ? t.saving : t.activityPlaceholder} />
                     </SelectTrigger>
                     <SelectContent>
@@ -1109,7 +1111,7 @@ export default function SystemCompaniesCreatePage() {
                 <div>
                   <FieldLabel>{t.status}</FieldLabel>
                   <Select value={form.status} onValueChange={(value) => updateField("status", normalizeStatus(value))}>
-                    <SelectTrigger className="h-11 rounded-xl bg-background">
+                    <SelectTrigger className="h-11 rounded-lg bg-background">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1124,7 +1126,7 @@ export default function SystemCompaniesCreatePage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.legalInfo}</CardTitle>
                 <CardDescription>{t.legalInfoDesc}</CardDescription>
@@ -1158,7 +1160,7 @@ export default function SystemCompaniesCreatePage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.contactInfo}</CardTitle>
                 <CardDescription>{t.contactInfoDesc}</CardDescription>
@@ -1230,7 +1232,7 @@ export default function SystemCompaniesCreatePage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.nationalAddress}</CardTitle>
                 <CardDescription>{t.nationalAddressDesc}</CardDescription>
@@ -1343,7 +1345,7 @@ export default function SystemCompaniesCreatePage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.notesInfo}</CardTitle>
                 <CardDescription>{t.notesInfoDesc}</CardDescription>
@@ -1360,13 +1362,13 @@ export default function SystemCompaniesCreatePage() {
           </div>
 
           <aside className="space-y-6">
-            <Card className="rounded-2xl shadow-sm xl:sticky xl:top-6">
+            <Card className="rounded-lg border bg-card shadow-none xl:sticky xl:top-6">
               <CardHeader>
                 <CardTitle>{t.readiness}</CardTitle>
                 <CardDescription>{t.readinessDesc}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="rounded-2xl border bg-muted/20 p-4">
+                <div className="rounded-lg border bg-muted/20 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-sm text-muted-foreground">{t.completedFields}</span>
                     <span className="text-2xl font-bold tabular-nums">{completedFields}</span>
@@ -1413,7 +1415,7 @@ export default function SystemCompaniesCreatePage() {
                 </div>
 
                 {validationErrors.length ? (
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950">
                     <p className="text-sm font-semibold">{t.validationTitle}</p>
                     <ul className="mt-2 list-inside list-disc space-y-1 text-sm">
                       {validationErrors.map((error) => (
@@ -1423,19 +1425,19 @@ export default function SystemCompaniesCreatePage() {
                   </div>
                 ) : null}
 
-                <div className="space-y-2 rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
+                <div className="space-y-2 rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">
                   <p>{t.apiHint}</p>
                   <p>{t.noFakeData}</p>
                   <p>{t.afterSaveHint}</p>
                 </div>
 
                 <div className="grid gap-2">
-                  <Button type="submit" form="company-create-form" disabled={submitting || !isReady} className="rounded-xl">
+                  <Button type="submit" form="company-create-form" disabled={submitting || !isReady} className="h-9 rounded-lg">
                     {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                     {submitting ? t.saving : t.submitCreate}
                   </Button>
 
-                  <Button type="button" variant="outline" className="rounded-xl bg-background" onClick={saveDraft}>
+                  <Button type="button" variant="outline" className="rounded-lg bg-background" onClick={saveDraft}>
                     <Save className="h-4 w-4" />
                     {t.saveDraft}
                   </Button>
@@ -1443,7 +1445,7 @@ export default function SystemCompaniesCreatePage() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="rounded-xl bg-background"
+                    className="rounded-lg bg-background"
                     onClick={restoreDraft}
                     disabled={!draftAvailable}
                   >
@@ -1451,12 +1453,12 @@ export default function SystemCompaniesCreatePage() {
                     {t.restoreDraft}
                   </Button>
 
-                  <Button type="button" variant="outline" className="rounded-xl bg-background" onClick={clearDraft} disabled={!draftAvailable}>
+                  <Button type="button" variant="outline" className="rounded-lg bg-background" onClick={clearDraft} disabled={!draftAvailable}>
                     <Eraser className="h-4 w-4" />
                     {t.clearDraft}
                   </Button>
 
-                  <Button type="button" variant="ghost" className="rounded-xl" onClick={resetForm}>
+                  <Button type="button" variant="ghost" className="h-9 rounded-lg" onClick={resetForm}>
                     <Eraser className="h-4 w-4" />
                     {t.reset}
                   </Button>
@@ -1464,31 +1466,31 @@ export default function SystemCompaniesCreatePage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.quickLinks}</CardTitle>
                 <CardDescription>{t.quickLinksDesc}</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-2">
-                <Button asChild variant="outline" className="justify-start rounded-xl bg-background">
+                <Button asChild variant="outline" className="justify-start rounded-lg bg-background">
                   <Link href="/system/companies/list">
                     <ListChecks className="h-4 w-4" />
                     {t.companiesList}
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="justify-start rounded-xl bg-background">
+                <Button asChild variant="outline" className="justify-start rounded-lg bg-background">
                   <Link href="/system/companies">
                     <Building2 className="h-4 w-4" />
                     {t.backToCompanies}
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="justify-start rounded-xl bg-background">
+                <Button asChild variant="outline" className="justify-start rounded-lg bg-background">
                   <Link href="/system">
                     <LayoutDashboard className="h-4 w-4" />
                     {t.systemDashboard}
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="justify-start rounded-xl bg-background">
+                <Button asChild variant="outline" className="justify-start rounded-lg bg-background">
                   <Link href="/system/companies/reports">
                     <FileText className="h-4 w-4" />
                     {t.reportsTitle}

@@ -1,4 +1,4 @@
-﻿/* ============================================================
+/* ============================================================
    📂 components/system/billing/SystemBillingView.tsx
    🧠 Mhamcloud | Frontend Phase 5.4 — System Subscriptions + Platform Payments
 ===============================================================
@@ -23,6 +23,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { apiRequest, buildApiUrl } from "@/lib/api";
+
+import { openPrintHtmlReport } from "@/lib/print-report";
 
 type BillingEntity = "subscriptions" | "payments";
 type ViewMode = "overview" | "list" | "detail" | "reports";
@@ -790,12 +792,19 @@ export function SystemBillingView({
       search: query || undefined,
     });
 
-    window.open(exportUrl, "_blank", "noopener,noreferrer");
+    const anchor = document.createElement("a");
+    anchor.href = exportUrl;
+    anchor.target = "_blank";
+    anchor.rel = "noopener noreferrer";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
   }
 
   function handlePrint() {
     if (typeof window === "undefined") return;
-    window.print();
+    const opened = openPrintHtmlReport(document.documentElement.outerHTML);
+    if (!opened) toast.error(isArabic ? "تعذر فتح نافذة الطباعة." : "Could not open the print window.");
   }
 
   async function copyEndpoint(endpoint: string) {

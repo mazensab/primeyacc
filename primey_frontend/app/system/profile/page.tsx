@@ -1,5 +1,7 @@
 "use client";
 
+// phase47D_batch2_system_dashboard_design_contract=true
+
 /* ============================================================
    📂 primey_frontend/app/system/profile/page.tsx
    👤 Mhamcloud — System Account Profile
@@ -28,6 +30,12 @@ import {
   UserCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { SystemKpiCard } from "@/components/ui/system-kpi-card";
+import {
+  DataRegisterToolbar,
+  registerBrandButtonClass,
+  registerOutlineButtonClass,
+} from "@/components/ui/data-register";
 
 import {
   useAuthContext,
@@ -361,7 +369,7 @@ function InfoRow({
   }>;
 }) {
   return (
-    <div className="flex min-h-14 items-center gap-3 rounded-2xl border bg-background px-4 py-3">
+    <div className="flex min-h-14 items-center gap-3 rounded-lg border bg-background px-4 py-3">
       <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
         <Icon className="h-4 w-4" />
       </span>
@@ -382,7 +390,7 @@ function InfoRow({
 
 function ProfileSkeleton() {
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-transparent px-4 py-6 sm:px-6 lg:px-8">
       <div className="space-y-6">
         <Card className="rounded-3xl">
           <CardHeader>
@@ -583,12 +591,11 @@ export default function SystemProfilePage() {
   return (
     <main
       dir={dir}
-      className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8"
+      className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8"
     >
       <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+        <section className="overflow-hidden rounded-lg border bg-card shadow-none">
           <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
 
             <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-center">
@@ -630,7 +637,7 @@ export default function SystemProfilePage() {
 
               <Button
                 variant="outline"
-                className="h-9 rounded-xl bg-background"
+                className="h-9 rounded-lg bg-background shadow-none"
                 disabled={refreshing}
                 onClick={() =>
                   void handleRefresh()
@@ -669,7 +676,7 @@ export default function SystemProfilePage() {
         </Card>
 
         <div className="grid gap-5 xl:grid-cols-3">
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <CardTitle className="text-lg">
                 {t.identity}
@@ -720,7 +727,7 @@ export default function SystemProfilePage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <CardTitle className="text-lg">
                 {t.profile}
@@ -784,7 +791,7 @@ export default function SystemProfilePage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="rounded-lg border bg-card shadow-none">
             <CardHeader>
               <CardTitle className="text-lg">
                 {t.access}
@@ -822,7 +829,7 @@ export default function SystemProfilePage() {
                 icon={ShieldCheck}
               />
 
-              <div className="rounded-2xl border bg-background px-4 py-4">
+              <div className="rounded-lg border bg-background px-4 py-4">
                 <p className="text-xs text-muted-foreground">
                   {t.accountStatus}
                 </p>

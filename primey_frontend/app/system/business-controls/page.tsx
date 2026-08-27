@@ -1,4 +1,6 @@
-﻿"use client";
+"use client";
+
+// phase47D_batch2_system_dashboard_design_contract=true
 /* ============================================================
    📂 primey_frontend/app/system/business-controls/page.tsx
    🧩 Mhamcloud — System Business Controls Center
@@ -47,6 +49,12 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
+import { SystemKpiCard } from "@/components/ui/system-kpi-card";
+import {
+  DataRegisterToolbar,
+  registerBrandButtonClass,
+  registerOutlineButtonClass,
+} from "@/components/ui/data-register";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -73,6 +81,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { downloadExcelHtmlReport } from "@/lib/excel-report";
+
+import { openPrintHtmlReport } from "@/lib/print-report";
+
 type Locale = "ar" | "en";
 type ApiRecord = Record<string, unknown>;
 type RowType = "all" | "audit" | "idempotency" | "reference";
@@ -580,39 +592,9 @@ function buildTableHtml(headers: string[], rows: string[][]) {
     </table>
   `;
 }
-function KpiCard({
-  title,
-  value,
-  description,
-  icon: Icon,
-}: {
-  title: string;
-  value: string | number;
-  description: string;
-  icon: LucideIcon;
-}) {
-  return (
-    <Card className="rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="mt-3 truncate text-3xl font-bold tabular-nums">
-              {typeof value === "number" ? formatInteger(value) : value}
-            </p>
-            <p className="mt-4 text-xs text-muted-foreground">{description}</p>
-          </div>
-          <div className="rounded-2xl bg-muted p-3 text-primary">
-            <Icon className="h-5 w-5" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 function BusinessControlsSkeleton() {
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-transparent px-4 py-6 sm:px-6 lg:px-8">
       <div className="space-y-6">
         <Card className="rounded-3xl">
           <CardHeader className="space-y-4">
@@ -767,17 +749,7 @@ export default function SystemBusinessControlsPage() {
         </body>
       </html>
     `;
-    const blob = new Blob([`\ufeff${html}`], {
-      type: "application/vnd.ms-excel;charset=utf-8;",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `Mhamcloud-business-controls-${new Date().toISOString().slice(0, 10)}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    downloadExcelHtmlReport(html, `Mhamcloud-business-controls-${new Date().toISOString().slice(0, 10)}.xls`);
   }
   function openPrintWindow(mode: "print" | "pdf") {
     const exportRows = buildExportRows(filteredRows, locale);
@@ -786,9 +758,7 @@ export default function SystemBusinessControlsPage() {
       return;
     }
     if (mode === "pdf") toast.info(t.pdfHint);
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1200,height=800");
-    if (!printWindow) return;
-    printWindow.document.write(`
+    const opened = openPrintHtmlReport(`
       <!doctype html>
       <html dir="${dir}" lang="${locale}">
         <head>
@@ -808,7 +778,7 @@ export default function SystemBusinessControlsPage() {
             }
             th { background: #f1f5f9; font-weight: 700; }
           </style>
-          <script>window.onload = function () { window.print(); };</script>
+
         </head>
         <body>
           <h1>${escapeHtml(t.reportTitle)}</h1>
@@ -817,13 +787,15 @@ export default function SystemBusinessControlsPage() {
         </body>
       </html>
     `);
-    printWindow.document.close();
+    if (!opened) {
+      toast.error(locale === "ar" ? "تعذر فتح نافذة الطباعة." : "Could not open the print window.");
+    }
   }
   if (loading) return <BusinessControlsSkeleton />;
   if (error) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-        <Card className="mx-auto max-w-3xl rounded-3xl border-destructive/30 bg-card shadow-sm">
+      <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
+        <Card className="mx-auto max-w-3xl rounded-lg border-destructive/30 bg-card shadow-none">
           <CardHeader className="text-center">
             <div className="mx-auto mb-2 rounded-full bg-destructive/10 p-4 text-destructive">
               <TriangleAlert className="h-8 w-8" />
@@ -843,11 +815,10 @@ export default function SystemBusinessControlsPage() {
     );
   }
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+        <section className="overflow-hidden rounded-lg border bg-card shadow-none">
           <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
               <div className="max-w-4xl">
                 <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -866,21 +837,21 @@ export default function SystemBusinessControlsPage() {
                     <Activity className="ms-2 h-4 w-4" />
                   </Link>
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("pdf")}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={() => openPrintWindow("pdf")}>
                   {t.pdf}
                   <FileText className="ms-2 h-4 w-4" />
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("print")}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={() => openPrintWindow("print")}>
                   {t.print}
                   <Printer className="ms-2 h-4 w-4" />
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={exportExcel}>
                   {t.exportExcel}
                   <FileSpreadsheet className="ms-2 h-4 w-4" />
                 </Button>
                 <Button
                   variant="outline"
-                  className="rounded-xl bg-background"
+                  className="rounded-lg bg-background shadow-none"
                   onClick={() => void loadBusinessControls({ silent: true })}
                   disabled={refreshing}
                 >
@@ -892,12 +863,12 @@ export default function SystemBusinessControlsPage() {
           </div>
         </section>
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard title={t.totalAuditEvents} value={summary.auditEventsCount} description={t.fromLiveApi} icon={History} />
-          <KpiCard title={t.criticalAuditEvents} value={summary.auditCriticalCount} description={`${t.warning}: ${formatInteger(summary.auditWarningCount)}`} icon={AlertTriangle} />
-          <KpiCard title={t.idempotencyKeys} value={summary.idempotencyKeysCount} description={`${t.succeeded}: ${formatInteger(summary.idempotencySucceededCount)} · ${t.failed}: ${formatInteger(summary.idempotencyFailedCount)}`} icon={Fingerprint} />
-          <KpiCard title={t.referenceSequences} value={summary.referenceSequencesCount} description={`${t.active}: ${formatInteger(summary.activeReferenceSequencesCount)}`} icon={KeyRound} />
+          <SystemKpiCard title={t.totalAuditEvents} value={summary.auditEventsCount} description={t.fromLiveApi} icon={History} />
+          <SystemKpiCard title={t.criticalAuditEvents} value={summary.auditCriticalCount} description={`${t.warning}: ${formatInteger(summary.auditWarningCount)}`} icon={AlertTriangle} />
+          <SystemKpiCard title={t.idempotencyKeys} value={summary.idempotencyKeysCount} description={`${t.succeeded}: ${formatInteger(summary.idempotencySucceededCount)} · ${t.failed}: ${formatInteger(summary.idempotencyFailedCount)}`} icon={Fingerprint} />
+          <SystemKpiCard title={t.referenceSequences} value={summary.referenceSequencesCount} description={`${t.active}: ${formatInteger(summary.activeReferenceSequencesCount)}`} icon={KeyRound} />
         </section>
-        <Card className="rounded-2xl shadow-sm">
+        <Card className="rounded-lg border bg-card shadow-none">
           <CardHeader className="gap-1">
             <CardTitle>{t.shortcutsTitle}</CardTitle>
             <CardDescription>{t.shortcutsDesc}</CardDescription>
@@ -933,7 +904,7 @@ export default function SystemBusinessControlsPage() {
                 const Icon = action.icon;
                 return (
                   <Link key={action.href} href={action.href}>
-                    <Card className="group h-full rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                    <Card className="group h-full rounded-lg border-border/70 bg-card shadow-none transition hover:-translate-y-0.5 hover:shadow-md">
                       <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
                         <div className="min-w-0">
                           <CardTitle className="text-base">{action.title}</CardTitle>
@@ -950,7 +921,7 @@ export default function SystemBusinessControlsPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="w-full rounded-2xl shadow-sm">
+        <Card className="w-full rounded-lg border bg-card shadow-none">
           <CardHeader className="gap-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -964,7 +935,7 @@ export default function SystemBusinessControlsPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row md:items-center">
                 <div className="relative min-w-0 flex-1">
                   <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -972,11 +943,11 @@ export default function SystemBusinessControlsPage() {
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder={t.searchPlaceholder}
-                    className="h-10 rounded-xl ps-9"
+                    className="h-9 rounded-lg ps-9"
                   />
                 </div>
                 <Select value={typeFilter} onValueChange={(value) => setTypeFilter(value as RowType)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background md:w-[160px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background md:w-[160px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -987,7 +958,7 @@ export default function SystemBusinessControlsPage() {
                   </SelectContent>
                 </Select>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background md:w-[160px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background md:w-[160px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1000,7 +971,7 @@ export default function SystemBusinessControlsPage() {
                   </SelectContent>
                 </Select>
                 <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
-                  <SelectTrigger className="h-10 rounded-xl bg-background md:w-[150px]">
+                  <SelectTrigger className="h-9 rounded-lg bg-background md:w-[150px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1012,15 +983,15 @@ export default function SystemBusinessControlsPage() {
                 </Select>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={resetFilters}>
+                <Button variant="outline" className={registerOutlineButtonClass} onClick={resetFilters}>
                   {t.reset}
                   <RotateCcw className="ms-2 h-4 w-4" />
                 </Button>
               </div>
             </div>
-            <div className="overflow-hidden rounded-2xl border bg-background">
+            <div className="overflow-hidden rounded-lg border bg-background">
               <div className="w-full overflow-x-auto">
-                <Table className="w-full min-w-[1260px] table-fixed">
+                <Table variant="register" layout="fixed" minWidth={1260}>
                   <TableHeader>
                     <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
                       <TableHead className={cn("w-[130px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>

@@ -1,4 +1,6 @@
-﻿"use client";
+"use client";
+
+// phase47D_batch2_system_dashboard_design_contract=true
 /* ============================================================
    📂 primey_frontend/components/system/activity-profiles/SystemActivityBackendsCenter.tsx
    🧩 Mhamcloud — System Activity Backends Center
@@ -28,6 +30,12 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
+import { SystemKpiCard } from "@/components/ui/system-kpi-card";
+import {
+  DataRegisterToolbar,
+  registerBrandButtonClass,
+  registerOutlineButtonClass,
+} from "@/components/ui/data-register";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,6 +55,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { downloadExcelHtmlReport } from "@/lib/excel-report";
+
+import { openPrintHtmlReport } from "@/lib/print-report";
+
 type Locale = "ar" | "en";
 type ApiRecord = Record<string, unknown>;
 type BackendModel = {
@@ -279,39 +291,9 @@ function normalizeCompanySummary(value: unknown, index: number): CompanyBackendS
     summaryText: compactSummary(summary),
   };
 }
-function MetricCard({
-  title,
-  value,
-  description,
-  icon: Icon,
-}: {
-  title: string;
-  value: string | number;
-  description: string;
-  icon: LucideIcon;
-}) {
-  return (
-    <Card className="rounded-2xl border-border/70 bg-card shadow-sm">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="mt-3 truncate text-3xl font-bold tabular-nums">
-              {typeof value === "number" ? formatInteger(value) : value}
-            </p>
-            <p className="mt-4 text-xs text-muted-foreground">{description}</p>
-          </div>
-          <div className="rounded-2xl bg-muted p-3 text-primary">
-            <Icon className="h-5 w-5" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 function BackendsSkeleton() {
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-transparent px-4 py-6 sm:px-6 lg:px-8">
       <div className="space-y-6">
         <Card className="rounded-3xl">
           <CardHeader className="space-y-4">
@@ -448,21 +430,15 @@ export function SystemActivityBackendsCenter() {
         <body>
           <h1>${escapeHtml(t.reportTitle)}</h1>
           <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString())}</p>
+
           ${buildTableHtml(rows)}
         </body>
       </html>
     `;
-    const blob = new Blob([`\ufeff${html}`], {
-      type: "application/vnd.ms-excel;charset=utf-8;",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `Mhamcloud-activity-backends-${new Date().toISOString().slice(0, 10)}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    downloadExcelHtmlReport(
+      html,
+      `Mhamcloud-activity-backends-${new Date().toISOString().slice(0, 10)}.xls`,
+    );
   }
   function openPrintWindow(modeName: "print" | "pdf") {
     const rows = exportRows();
@@ -471,9 +447,8 @@ export function SystemActivityBackendsCenter() {
       return;
     }
     if (modeName === "pdf") toast.info(t.pdfHint);
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1200,height=800");
-    if (!printWindow) return;
-    printWindow.document.write(`
+
+    const html = `
       <!doctype html>
       <html dir="${dir}" lang="${locale}">
         <head>
@@ -497,18 +472,26 @@ export function SystemActivityBackendsCenter() {
         <body>
           <h1>${escapeHtml(t.reportTitle)}</h1>
           <p>${escapeHtml(t.generatedAt)}: ${escapeHtml(new Date().toLocaleString())}</p>
+
           ${buildTableHtml(rows)}
         </body>
       </html>
-    `);
-    printWindow.document.close();
-    window.setTimeout(() => printWindow.print(), 250);
+    `;
+
+    const opened = openPrintHtmlReport(html);
+    if (!opened) {
+      toast.error(
+        locale === "ar"
+          ? "تعذر فتح نافذة الطباعة."
+          : "Could not open the print window.",
+      );
+    }
   }
   if (loading) return <BackendsSkeleton />;
   if (error) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-        <Card className="mx-auto max-w-3xl rounded-3xl border-destructive/30 bg-card shadow-sm">
+      <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
+        <Card className="mx-auto max-w-3xl rounded-lg border-destructive/30 bg-card shadow-none">
           <CardHeader className="text-center">
             <div className="mx-auto mb-2 rounded-full bg-destructive/10 p-4 text-destructive">
               <TriangleAlert className="h-8 w-8" />
@@ -528,11 +511,10 @@ export function SystemActivityBackendsCenter() {
     );
   }
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+        <section className="overflow-hidden rounded-lg border bg-card shadow-none">
           <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
               <div className="max-w-4xl">
                 <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -545,22 +527,22 @@ export function SystemActivityBackendsCenter() {
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
-                  className="rounded-xl bg-background"
+                  className="rounded-lg bg-background shadow-none"
                   onClick={() => void loadBackends({ silent: true })}
                   disabled={refreshing}
                 >
                   {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                   {t.refresh}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={exportExcel}>
                   <FileSpreadsheet className="h-4 w-4" />
                   {t.exportExcel}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("print")}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={() => openPrintWindow("print")}>
                   <Printer className="h-4 w-4" />
                   {t.print}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => openPrintWindow("pdf")}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={() => openPrintWindow("pdf")}>
                   <FileText className="h-4 w-4" />
                   {t.pdf}
                 </Button>
@@ -569,12 +551,12 @@ export function SystemActivityBackendsCenter() {
           </div>
         </section>
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <MetricCard title={t.modelsCount} value={numberValue(summary.models_count, models.length)} description={t.fromLiveApi} icon={Database} />
-          <MetricCard title={t.recordsCount} value={numberValue(summary.records_count)} description={t.fromLiveApi} icon={Layers3} />
-          <MetricCard title={t.companiesWithRecords} value={numberValue(summary.companies_with_activity_records)} description={t.fromLiveApi} icon={Building2} />
-          <MetricCard title={t.companiesLoaded} value={companySummaries.length} description={t.fromLiveApi} icon={Boxes} />
+          <SystemKpiCard title={t.modelsCount} value={numberValue(summary.models_count, models.length)} description={t.fromLiveApi} icon={Database} />
+          <SystemKpiCard title={t.recordsCount} value={numberValue(summary.records_count)} description={t.fromLiveApi} icon={Layers3} />
+          <SystemKpiCard title={t.companiesWithRecords} value={numberValue(summary.companies_with_activity_records)} description={t.fromLiveApi} icon={Building2} />
+          <SystemKpiCard title={t.companiesLoaded} value={companySummaries.length} description={t.fromLiveApi} icon={Boxes} />
         </section>
-        <Card className="rounded-2xl shadow-sm">
+        <Card className="rounded-lg border bg-card shadow-none">
           <CardContent className="p-4">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="relative min-w-0 flex-1">
@@ -583,11 +565,11 @@ export function SystemActivityBackendsCenter() {
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder={t.searchPlaceholder}
-                  className="h-10 rounded-xl ps-9"
+                  className="h-9 rounded-lg ps-9"
                 />
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" className="h-10 rounded-xl bg-background" onClick={resetFilters}>
+                <Button variant="outline" className={registerOutlineButtonClass} onClick={resetFilters}>
                   <RotateCcw className="h-4 w-4" />
                   {t.reset}
                 </Button>
@@ -599,15 +581,15 @@ export function SystemActivityBackendsCenter() {
             </div>
           </CardContent>
         </Card>
-        <Card className="rounded-2xl shadow-sm">
+        <Card className="rounded-lg border bg-card shadow-none">
           <CardHeader>
             <CardTitle>{t.modelsTable}</CardTitle>
             <CardDescription>{t.modelsTableDesc}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-hidden rounded-2xl border bg-background">
+            <div className="overflow-hidden rounded-lg border bg-background">
               <div className="w-full overflow-x-auto">
-                <Table className="w-full min-w-[920px] table-fixed">
+                <Table variant="register" layout="fixed" minWidth={920}>
                   <TableHeader>
                     <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
                       <TableHead className={cn("w-[220px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>{t.model}</TableHead>
@@ -659,15 +641,15 @@ export function SystemActivityBackendsCenter() {
             </div>
           </CardContent>
         </Card>
-        <Card className="rounded-2xl shadow-sm">
+        <Card className="rounded-lg border bg-card shadow-none">
           <CardHeader>
             <CardTitle>{t.companiesTable}</CardTitle>
             <CardDescription>{t.companiesTableDesc}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-hidden rounded-2xl border bg-background">
+            <div className="overflow-hidden rounded-lg border bg-background">
               <div className="w-full overflow-x-auto">
-                <Table className="w-full min-w-[980px] table-fixed">
+                <Table variant="register" layout="fixed" minWidth={980}>
                   <TableHeader>
                     <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
                       <TableHead className={cn("w-[240px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>{t.company}</TableHead>

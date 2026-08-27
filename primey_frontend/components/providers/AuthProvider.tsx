@@ -523,7 +523,18 @@ function normalizeSession(
     ...DEFAULT_AUTH_SESSION,
     ...(input || {}),
 
-    authenticated: input?.authenticated === true,
+    // Legacy whoami payloads can omit the explicit authenticated boolean.
+    // Identity returned by the authenticated whoami endpoint establishes the
+    // session; existing role/workspace/permission checks still authorize access.
+    authenticated:
+      input?.authenticated === true ||
+      Boolean(input?.user) ||
+      input?.is_superuser === true ||
+      permissions.is_superuser === true ||
+      profilePermissions.is_superuser === true ||
+      input?.is_staff === true ||
+      permissions.is_staff === true ||
+      profilePermissions.is_staff === true,
 
     is_superuser:
       input?.is_superuser === true ||

@@ -1,4 +1,6 @@
-﻿"use client";
+"use client";
+
+// phase47D_batch2_system_dashboard_design_contract=true
 /* ============================================================
    📂 primey_frontend/app/system/whatsapp/messages/page.tsx
    💬 Mhamcloud — System WhatsApp Message Logs Page
@@ -32,6 +34,12 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { SystemKpiCard } from "@/components/ui/system-kpi-card";
+import {
+  DataRegisterToolbar,
+  registerBrandButtonClass,
+  registerOutlineButtonClass,
+} from "@/components/ui/data-register";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +47,10 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { downloadExcelHtmlReport } from "@/lib/excel-report";
+
+import { openPrintHtmlReport } from "@/lib/print-report";
+
 type Locale = "ar" | "en";
 type ApiRecord = Record<string, unknown>;
 type StatusFilter = "all" | "DRAFT" | "QUEUED" | "SENT" | "DELIVERED" | "READ" | "FAILED" | "CANCELLED";
@@ -296,27 +308,65 @@ function directionBadgeClass(value: string): string {
 function csvCell(value: string): string {
   return `"${value.replaceAll('"', '""')}"`;
 }
-function KpiCard({ title, value, description, icon: Icon }: { title: string; value: number; description: string; icon: React.ComponentType<{ className?: string }> }) {
-  return (
-    <Card className="overflow-hidden rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
-        <div className="min-w-0">
-          <CardDescription className="truncate text-sm">{title}</CardDescription>
-          <CardTitle className="mt-2 text-3xl font-bold tracking-tight">{formatInteger(value)}</CardTitle>
-        </div>
-        <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
-          <Icon className="h-5 w-5" />
-        </span>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
-      </CardContent>
-    </Card>
-  );
+
+function escapeReportHtml(value: unknown): string {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function buildSimpleReportHtml(
+  title: string,
+  headers: string[],
+  rows: string[][],
+  locale: Locale,
+): string {
+  const dir = locale === "ar" ? "rtl" : "ltr";
+  return `
+    <!doctype html>
+    <html dir="${dir}" lang="${locale}">
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeReportHtml(title)}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 24px; color: #0f172a; }
+          h1 { margin: 0 0 16px; font-size: 24px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+          th, td {
+            border: 1px solid #cbd5e1;
+            padding: 8px;
+            font-size: 12px;
+            text-align: ${dir === "rtl" ? "right" : "left"};
+            vertical-align: top;
+          }
+          th { background: #f1f5f9; font-weight: 700; }
+        </style>
+      </head>
+      <body>
+        <h1>${escapeReportHtml(title)}</h1>
+        <table>
+          <thead>
+            <tr>${headers.map((header) => `<th>${escapeReportHtml(header)}</th>`).join("")}</tr>
+          </thead>
+          <tbody>
+            ${rows
+              .map(
+                (row) =>
+                  `<tr>${row.map((cell) => `<td>${escapeReportHtml(cell)}</td>`).join("")}</tr>`,
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </body>
+    </html>
+  `;
 }
 function MessagesSkeleton({ dir }: { dir: "rtl" | "ltr" }) {
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
         <div className="rounded-3xl border bg-card p-6 shadow-sm">
           <Skeleton className="h-5 w-40" />
@@ -439,7 +489,17 @@ export default function SystemWhatsAppMessagesPage() {
       toast.error(t.exportEmpty);
       return;
     }
-    const headers = [t.company, t.recipient, t.template, t.status, t.direction, t.provider, t.createdAt, t.body, t.error];
+    const headers = [
+      t.company,
+      t.recipient,
+      t.template,
+      t.status,
+      t.direction,
+      t.provider,
+      t.createdAt,
+      t.body,
+      t.error,
+    ];
     const rows = filteredMessages.map((item) => [
       item.companyName || t.unknown,
       item.recipientName || item.recipientPhone || "—",
@@ -451,14 +511,8 @@ export default function SystemWhatsAppMessagesPage() {
       item.messageBody || "—",
       item.errorMessage || "—",
     ]);
-    const csv = [headers, ...rows].map((row) => row.map((cell) => csvCell(String(cell))).join(",")).join("\n");
-    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "Mhamcloud-system-whatsapp-messages.csv";
-    link.click();
-    URL.revokeObjectURL(url);
+    const html = buildSimpleReportHtml(t.title, headers, rows, locale);
+    downloadExcelHtmlReport(html, "Mhamcloud-system-whatsapp-messages.xls");
   }
   function printPage(mode: "print" | "pdf") {
     if (!filteredMessages.length) {
@@ -466,7 +520,40 @@ export default function SystemWhatsAppMessagesPage() {
       return;
     }
     if (mode === "pdf") toast.info(t.pdfHint);
-    window.print();
+
+    const headers = [
+      t.company,
+      t.recipient,
+      t.template,
+      t.status,
+      t.direction,
+      t.provider,
+      t.createdAt,
+      t.body,
+      t.error,
+    ];
+    const rows = filteredMessages.map((item) => [
+      item.companyName || t.unknown,
+      item.recipientName || item.recipientPhone || "—",
+      item.templateName || "—",
+      labelFor(item.status, locale),
+      labelFor(item.direction, locale),
+      item.provider || "—",
+      formatDate(item.createdAt, locale),
+      item.messageBody || "—",
+      item.errorMessage || "—",
+    ]);
+
+    const opened = openPrintHtmlReport(
+      buildSimpleReportHtml(t.title, headers, rows, locale),
+    );
+    if (!opened) {
+      toast.error(
+        locale === "ar"
+          ? "تعذر فتح نافذة الطباعة."
+          : "Could not open the print window.",
+      );
+    }
   }
   const sentCount = messages.filter((item) => ["SENT", "DELIVERED", "READ"].includes(item.status)).length;
   const failedCount = messages.filter((item) => ["FAILED", "CANCELLED"].includes(item.status)).length;
@@ -480,8 +567,8 @@ export default function SystemWhatsAppMessagesPage() {
   if (loading) return <MessagesSkeleton dir={dir} />;
   if (error) {
     return (
-      <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-        <Card className="mx-auto max-w-3xl rounded-3xl border-destructive/30 bg-card shadow-sm">
+      <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
+        <Card className="mx-auto max-w-3xl rounded-lg border-destructive/30 bg-card shadow-none">
           <CardHeader className="text-center">
             <div className="mx-auto mb-2 rounded-full bg-destructive/10 p-4 text-destructive">
               <TriangleAlert className="h-8 w-8" />
@@ -501,11 +588,10 @@ export default function SystemWhatsAppMessagesPage() {
     );
   }
   return (
-    <main dir={dir} className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+        <section className="overflow-hidden rounded-lg border bg-card shadow-none">
           <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
               <div className="max-w-4xl">
                 <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -516,19 +602,19 @@ export default function SystemWhatsAppMessagesPage() {
                 <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">{t.subtitle}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => void loadMessages({ silent: true })} disabled={refreshing}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={() => void loadMessages({ silent: true })} disabled={refreshing}>
                   {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                   {t.refresh}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={exportExcel}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={exportExcel}>
                   <FileSpreadsheet className="h-4 w-4" />
                   {t.excel}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => printPage("print")}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={() => printPage("print")}>
                   <Printer className="h-4 w-4" />
                   {t.print}
                 </Button>
-                <Button variant="outline" className="rounded-xl bg-background" onClick={() => printPage("pdf")}>
+                <Button variant="outline" className="rounded-lg bg-background shadow-none" onClick={() => printPage("pdf")}>
                   <FileText className="h-4 w-4" />
                   {t.pdf}
                 </Button>
@@ -537,12 +623,12 @@ export default function SystemWhatsAppMessagesPage() {
           </div>
         </section>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard title={t.total} value={messages.length} description={t.live} icon={MessageCircle} />
-          <KpiCard title={t.sent} value={sentCount} description={t.live} icon={CheckCircle2} />
-          <KpiCard title={t.failed} value={failedCount} description={t.live} icon={XCircle} />
-          <KpiCard title={t.pending} value={pendingCount} description={t.live} icon={Clock3} />
+          <SystemKpiCard title={t.total} value={messages.length} description={t.live} icon={MessageCircle} />
+          <SystemKpiCard title={t.sent} value={sentCount} description={t.live} icon={CheckCircle2} />
+          <SystemKpiCard title={t.failed} value={failedCount} description={t.live} icon={XCircle} />
+          <SystemKpiCard title={t.pending} value={pendingCount} description={t.live} icon={Clock3} />
         </div>
-        <Card className="rounded-2xl shadow-sm">
+        <Card className="rounded-lg border bg-card shadow-none">
           <CardHeader>
             <CardTitle>{t.pagesTitle}</CardTitle>
             <CardDescription>{t.pagesDesc}</CardDescription>
@@ -552,7 +638,7 @@ export default function SystemWhatsAppMessagesPage() {
               {pageLinks.map((item) => {
                 const Icon = item.icon;
                 return (
-                  <Card key={item.href} className="group rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                  <Card key={item.href} className="group rounded-lg border-border/70 bg-card shadow-none transition hover:-translate-y-0.5 hover:shadow-md">
                     <Link href={item.href} className="block h-full">
                       <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
                         <div className="min-w-0">
@@ -570,7 +656,7 @@ export default function SystemWhatsAppMessagesPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="w-full rounded-2xl shadow-sm">
+        <Card className="w-full rounded-lg border bg-card shadow-none">
           <CardHeader className="gap-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -584,17 +670,17 @@ export default function SystemWhatsAppMessagesPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-3 rounded-2xl border bg-background p-3 lg:grid-cols-[1fr_170px_150px_160px_auto]">
+            <div className="grid gap-3 rounded-lg border bg-background p-3 lg:grid-cols-[1fr_170px_150px_160px_auto]">
               <div className="relative">
                 <Search className="pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground ltr:left-3 rtl:right-3" />
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder={t.search}
-                  className="h-10 rounded-xl bg-muted/30 ltr:pl-9 rtl:pr-9"
+                  className="h-9 rounded-lg bg-muted/30 ltr:pl-9 rtl:pr-9"
                 />
               </div>
-              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="h-10 rounded-xl border bg-muted/30 px-3 text-sm">
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="h-9 rounded-lg border bg-muted/30 px-3 text-sm">
                 <option value="all">{t.all}</option>
                 <option value="DRAFT">{t.DRAFT}</option>
                 <option value="QUEUED">{t.QUEUED}</option>
@@ -604,12 +690,12 @@ export default function SystemWhatsAppMessagesPage() {
                 <option value="FAILED">{t.FAILED}</option>
                 <option value="CANCELLED">{t.CANCELLED}</option>
               </select>
-              <select value={directionFilter} onChange={(event) => setDirectionFilter(event.target.value as DirectionFilter)} className="h-10 rounded-xl border bg-muted/30 px-3 text-sm">
+              <select value={directionFilter} onChange={(event) => setDirectionFilter(event.target.value as DirectionFilter)} className="h-9 rounded-lg border bg-muted/30 px-3 text-sm">
                 <option value="all">{t.all}</option>
                 <option value="OUTBOUND">{t.OUTBOUND}</option>
                 <option value="INBOUND">{t.INBOUND}</option>
               </select>
-              <select value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)} className="h-10 rounded-xl border bg-muted/30 px-3 text-sm">
+              <select value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)} className="h-9 rounded-lg border bg-muted/30 px-3 text-sm">
                 <option value="newest">{t.newest}</option>
                 <option value="oldest">{t.oldest}</option>
                 <option value="recipient">{t.recipientSort}</option>
@@ -617,14 +703,14 @@ export default function SystemWhatsAppMessagesPage() {
                 <option value="provider">{t.providerSort}</option>
                 <option value="direction">{t.directionSort}</option>
               </select>
-              <Button variant="outline" className="h-10 rounded-xl bg-muted/30" onClick={resetFilters}>
+              <Button variant="outline" className="h-9 rounded-lg bg-muted/30" onClick={resetFilters}>
                 <RotateCcw className="h-4 w-4" />
                 {t.reset}
               </Button>
             </div>
-            <div className="overflow-hidden rounded-2xl border bg-background">
+            <div className="overflow-hidden rounded-lg border bg-background">
               <div className="w-full overflow-x-auto">
-                <Table className="w-full min-w-[1180px] table-fixed">
+                <Table variant="register" layout="fixed" minWidth={1180}>
                   <TableHeader>
                     <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
                       <TableHead className={cn("h-11 w-[190px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>{t.company}</TableHead>
@@ -678,7 +764,7 @@ export default function SystemWhatsAppMessagesPage() {
                             <h3 className="mt-4 text-base font-semibold">{hasFilters ? t.noResults : t.noData}</h3>
                             <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">{hasFilters ? t.noResultsDesc : t.noDataDesc}</p>
                             {hasFilters ? (
-                              <Button variant="outline" className="mt-4 rounded-xl bg-background" onClick={resetFilters}>
+                              <Button variant="outline" className="mt-4 rounded-lg bg-background shadow-none" onClick={resetFilters}>
                                 <RotateCcw className="h-4 w-4" />
                                 {t.reset}
                               </Button>

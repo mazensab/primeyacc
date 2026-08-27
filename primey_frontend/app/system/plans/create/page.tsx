@@ -1,5 +1,7 @@
 "use client";
 
+// phase47D_batch1_remaining_system_dashboard_contract=true
+
 /* ============================================================
    📂 primey_frontend/app/system/plans/create/page.tsx
    💼 PrimeyAcc — Create System Subscription Plan
@@ -421,7 +423,7 @@ function cleanIntegerInput(value: string) {
 }
 
 function numericInputClass(extra = "") {
-  return cn("h-11 rounded-xl bg-background text-left font-mono tabular-nums", extra);
+  return cn("h-9 rounded-lg bg-background text-left font-mono tabular-nums", extra);
 }
 
 function formatMoney(value: string) {
@@ -509,7 +511,7 @@ function PreviewItem({
   value: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border bg-background p-4">
+    <div className="rounded-lg border bg-background p-4">
       <p className="text-xs text-muted-foreground">{label}</p>
       <div className="mt-2 text-sm font-semibold text-foreground tabular-nums">{value}</div>
     </div>
@@ -784,11 +786,10 @@ export default function SystemPlanCreatePage() {
   }
 
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 sm:px-6 lg:px-8" dir={dir}>
+    <main className="min-h-screen bg-transparent px-4 py-6 sm:px-6 lg:px-8" dir={dir}>
       <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+        <section className="overflow-hidden rounded-lg border bg-card shadow-none">
           <div className="relative p-6 sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
               <div className="max-w-4xl">
                 <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -802,7 +803,7 @@ export default function SystemPlanCreatePage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <Button asChild variant="outline" className="rounded-xl bg-background">
+                <Button asChild variant="outline" className="rounded-lg bg-background shadow-none">
                   <Link href="/system/plans">
                     <ArrowLeft className="h-4 w-4" />
                     {t.back}
@@ -811,7 +812,7 @@ export default function SystemPlanCreatePage() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="rounded-xl bg-background"
+                  className="rounded-lg bg-background shadow-none"
                   onClick={saveDraft}
                   disabled={submitting}
                 >
@@ -821,7 +822,7 @@ export default function SystemPlanCreatePage() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="rounded-xl bg-background"
+                  className="rounded-lg bg-background shadow-none"
                   onClick={restoreDraft}
                   disabled={submitting}
                 >
@@ -841,7 +842,7 @@ export default function SystemPlanCreatePage() {
 
         <form onSubmit={handleSubmit} className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-6">
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.basicInfo}</CardTitle>
                 <CardDescription>{t.basicInfoDesc}</CardDescription>
@@ -855,7 +856,7 @@ export default function SystemPlanCreatePage() {
                     id="name"
                     value={form.name}
                     onChange={(event) => updateField("name", event.target.value)}
-                    className="h-11 rounded-xl bg-background"
+                    className="h-9 rounded-lg bg-background"
                     disabled={submitting}
                   />
                   <FieldError message={errors.name} />
@@ -869,7 +870,7 @@ export default function SystemPlanCreatePage() {
                     id="code"
                     value={form.code}
                     onChange={(event) => updateField("code", event.target.value.toUpperCase())}
-                    className="h-11 rounded-xl bg-background font-mono uppercase"
+                    className="h-9 rounded-lg bg-background font-mono uppercase"
                     disabled={submitting}
                   />
                   <FieldError message={errors.code} />
@@ -883,7 +884,7 @@ export default function SystemPlanCreatePage() {
                     id="slug"
                     value={form.slug}
                     onChange={(event) => updateField("slug", event.target.value)}
-                    className="h-11 rounded-xl bg-background"
+                    className="h-9 rounded-lg bg-background"
                     disabled={submitting}
                   />
                   <p className={hintClass()}>
@@ -927,7 +928,7 @@ export default function SystemPlanCreatePage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.pricing}</CardTitle>
                 <CardDescription>{t.pricingDesc}</CardDescription>
@@ -993,7 +994,7 @@ export default function SystemPlanCreatePage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.limits}</CardTitle>
                 <CardDescription>{t.limitsDesc}</CardDescription>
@@ -1077,7 +1078,7 @@ export default function SystemPlanCreatePage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.featuresTitle}</CardTitle>
                 <CardDescription>{t.featuresDesc}</CardDescription>
@@ -1094,12 +1095,12 @@ export default function SystemPlanCreatePage() {
                       }
                     }}
                     placeholder={t.featureInputPlaceholder}
-                    className="h-11 rounded-xl bg-background"
+                    className="h-9 rounded-lg bg-background"
                     disabled={submitting}
                   />
                   <Button
                     type="button"
-                    className="h-11 rounded-xl"
+                    className="h-9 rounded-lg"
                     onClick={() => addFeature(featureInput)}
                     disabled={submitting || !featureInput.trim()}
                   >
@@ -1137,7 +1138,7 @@ export default function SystemPlanCreatePage() {
                 <div className="space-y-2">
                   <p className={hintClass()}>{t.selectedFeatures}</p>
                   {selectedFeatures.length ? (
-                    <div className="flex flex-wrap gap-2 rounded-2xl border bg-background p-3">
+                    <div className="flex flex-wrap gap-2 rounded-lg border bg-background p-3">
                       {selectedFeatures.map((feature) => (
                         <Badge
                           key={feature}
@@ -1166,13 +1167,13 @@ export default function SystemPlanCreatePage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.statusTitle}</CardTitle>
                 <CardDescription>{t.statusDesc}</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-2xl border bg-background p-4">
+                <div className="rounded-lg border bg-background p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="font-semibold">{form.is_active ? t.active : t.inactive}</p>
@@ -1191,7 +1192,7 @@ export default function SystemPlanCreatePage() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border bg-background p-4">
+                <div className="rounded-lg border bg-background p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="font-semibold">{form.is_public ? t.public : t.internal}</p>
@@ -1214,7 +1215,7 @@ export default function SystemPlanCreatePage() {
           </div>
 
           <aside className="space-y-6">
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.previewTitle}</CardTitle>
                 <CardDescription>{t.previewDesc}</CardDescription>
@@ -1256,29 +1257,29 @@ export default function SystemPlanCreatePage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardHeader>
                 <CardTitle>{t.sideTitle}</CardTitle>
                 <CardDescription>{t.sideDesc}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="rounded-2xl border bg-background p-3">
+                  <div className="rounded-lg border bg-background p-3">
                     <UsersRound className="mb-2 h-4 w-4 text-muted-foreground" />
                     <p dir="ltr" className="font-semibold tabular-nums">{form.max_users || "0"}</p>
                     <p className="text-xs text-muted-foreground">{t.maxUsers}</p>
                   </div>
-                  <div className="rounded-2xl border bg-background p-3">
+                  <div className="rounded-lg border bg-background p-3">
                     <Zap className="mb-2 h-4 w-4 text-muted-foreground" />
                     <p dir="ltr" className="font-semibold tabular-nums">{form.max_branches || "0"}</p>
                     <p className="text-xs text-muted-foreground">{t.maxBranches}</p>
                   </div>
-                  <div className="rounded-2xl border bg-background p-3">
+                  <div className="rounded-lg border bg-background p-3">
                     <Warehouse className="mb-2 h-4 w-4 text-muted-foreground" />
                     <p dir="ltr" className="font-semibold tabular-nums">{form.max_warehouses || "0"}</p>
                     <p className="text-xs text-muted-foreground">{t.maxWarehouses}</p>
                   </div>
-                  <div className="rounded-2xl border bg-background p-3">
+                  <div className="rounded-lg border bg-background p-3">
                     <Coins className="mb-2 h-4 w-4 text-muted-foreground" />
                     <p dir="ltr" className="font-semibold tabular-nums">{form.max_pos || "0"}</p>
                     <p className="text-xs text-muted-foreground">{t.maxPos}</p>
@@ -1287,7 +1288,7 @@ export default function SystemPlanCreatePage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm">
+            <Card className="rounded-lg border bg-card shadow-none">
               <CardContent className="space-y-3 p-4">
                 <Button type="submit" className="h-11 w-full rounded-xl" disabled={submitting}>
                   {submitting ? (
@@ -1302,7 +1303,7 @@ export default function SystemPlanCreatePage() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="rounded-xl bg-background"
+                    className="rounded-lg bg-background shadow-none"
                     onClick={resetForm}
                     disabled={submitting}
                   >
@@ -1312,7 +1313,7 @@ export default function SystemPlanCreatePage() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="rounded-xl bg-background"
+                    className="rounded-lg bg-background shadow-none"
                     onClick={clearDraft}
                     disabled={submitting}
                   >
