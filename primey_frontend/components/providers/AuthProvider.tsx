@@ -73,6 +73,16 @@ export type AuthProfile = {
   user_type?: string | null;
   role?: AppRole | string | null;
   workspace?: AppWorkspace | string | null;
+
+  // Official /api/auth/whoami/ profile fields.
+  system_role?: AppRole | string | null;
+  system_permissions?: PermissionCode[];
+  is_system_user?: boolean;
+  can_access_system?: boolean;
+  can_access_company?: boolean;
+  default_workspace?: AppWorkspace | string | null;
+  language?: "ar" | "en" | string | null;
+
   is_phone_verified?: boolean;
   is_whatsapp_verified?: boolean;
   is_email_verified?: boolean;
@@ -89,6 +99,9 @@ export type AuthUser = {
   last_name?: string;
   full_name?: string;
   last_login?: string | null;
+  is_staff?: boolean;
+  is_superuser?: boolean;
+  is_active?: boolean;
   [key: string]: unknown;
 };
 
@@ -98,6 +111,8 @@ export type AuthSession = {
   is_superuser: boolean;
   is_staff?: boolean;
   is_system_user?: boolean;
+  can_access_system?: boolean;
+  can_access_company?: boolean;
 
   workspace?: AppWorkspace | string | null;
   dashboard_path?: string | null;
@@ -111,6 +126,10 @@ export type AuthSession = {
 
   company?: unknown;
   company_id?: number | null;
+  current_company?: unknown;
+  default_company?: unknown;
+  current_membership?: unknown;
+  memberships?: unknown[];
   provider_id?: number | null;
   center_id?: number | null;
   customer_id?: number | null;
@@ -153,6 +172,8 @@ export type AuthSession = {
 
 
   permission_codes?: PermissionCode[];
+  system_permissions?: PermissionCode[];
+  company_permissions?: PermissionCode[];
   permissions?: AuthPermissions | null;
   profile_permissions?: AuthProfilePermissions | null;
   profile?: AuthProfile | null;
@@ -395,6 +416,11 @@ function normalizeProfile(input?: AuthProfile | null): AuthProfile {
   return {
     ...DEFAULT_AUTH_SESSION.profile,
     ...(input || {}),
+    preferred_language:
+      input?.preferred_language ||
+      input?.language ||
+      DEFAULT_AUTH_SESSION.profile?.preferred_language ||
+      "ar",
     tags: uniqueStrings(input?.tags || []),
     extra_data: normalizeRecord(input?.extra_data),
   };
@@ -453,6 +479,7 @@ function normalizeSession(
 
   const role: AppRole | string | null =
     normalizeRole(input?.role) ||
+    normalizeRole(profile.system_role) ||
     normalizeRole(profilePermissions.role) ||
     normalizeRole(profile.role) ||
     normalizeRole(input?.user_type) ||
@@ -463,23 +490,42 @@ function normalizeSession(
     normalizeWorkspace(input?.workspace) ||
     normalizeWorkspace(profilePermissions.workspace) ||
     normalizeWorkspace(profile.workspace) ||
+    normalizeWorkspace(profile.default_workspace) ||
     inferWorkspaceFromRole(role) ||
     null;
+
+  const systemPermissionCodes = uniqueStrings([
+    ...(input?.system_permissions || []),
+    ...(profile.system_permissions || []),
+  ]);
+  const companyPermissionCodes = uniqueStrings(
+    input?.company_permissions || [],
+  );
+
+  const workspacePermissionCodes =
+    workspace === "system"
+      ? systemPermissionCodes
+      : workspace === "company"
+        ? companyPermissionCodes
+        : [];
 
   const rawPermissionCodes = uniqueStrings([
     ...(input?.permission_codes || []),
     ...(permissions.codes || []),
     ...(profilePermissions.codes || []),
+    ...workspacePermissionCodes,
   ]);
 
   const normalizedPermissions: AuthPermissions = {
     ...permissions,
     is_superuser:
       input?.is_superuser === true ||
+      input?.user?.is_superuser === true ||
       permissions.is_superuser === true ||
       profilePermissions.is_superuser === true,
     is_staff:
       input?.is_staff === true ||
+      input?.user?.is_staff === true ||
       permissions.is_staff === true ||
       profilePermissions.is_staff === true,
     groups: uniqueStrings([
@@ -493,10 +539,12 @@ function normalizeSession(
     ...profilePermissions,
     is_superuser:
       input?.is_superuser === true ||
+      input?.user?.is_superuser === true ||
       permissions.is_superuser === true ||
       profilePermissions.is_superuser === true,
     is_staff:
       input?.is_staff === true ||
+      input?.user?.is_staff === true ||
       permissions.is_staff === true ||
       profilePermissions.is_staff === true,
     role,
@@ -513,6 +561,9 @@ function normalizeSession(
 
   const isSystemUser =
     input?.is_system_user === true ||
+    profile.is_system_user === true ||
+    input?.can_access_system === true ||
+    profile.can_access_system === true ||
     workspace === "system" ||
     role === "system_admin" ||
     role === "accountant" ||
@@ -533,20 +584,30 @@ function normalizeSession(
       permissions.is_superuser === true ||
       profilePermissions.is_superuser === true ||
       input?.is_staff === true ||
+      input?.user?.is_staff === true ||
       permissions.is_staff === true ||
       profilePermissions.is_staff === true,
 
     is_superuser:
       input?.is_superuser === true ||
+      input?.user?.is_superuser === true ||
       permissions.is_superuser === true ||
       profilePermissions.is_superuser === true,
 
     is_staff:
       input?.is_staff === true ||
+      input?.user?.is_staff === true ||
       permissions.is_staff === true ||
       profilePermissions.is_staff === true,
 
     is_system_user: isSystemUser,
+    can_access_system:
+      input?.can_access_system === true ||
+      profile.can_access_system === true ||
+      isSystemUser,
+    can_access_company:
+      input?.can_access_company === true ||
+      profile.can_access_company === true,
 
     workspace,
     dashboard_path: resolveDashboardPath(input?.dashboard_path, workspace),
@@ -558,8 +619,16 @@ function normalizeSession(
     entity_type: input?.entity_type || null,
     entity_id: normalizeNumberId(input?.entity_id),
 
-    company: input?.company || null,
-    company_id: normalizeNumberId(input?.company_id),
+    company: input?.company || input?.current_company || null,
+    company_id:
+      normalizeNumberId(input?.company_id) ||
+      normalizeNumberId(normalizeRecord(input?.current_company).id),
+    current_company: input?.current_company || null,
+    default_company: input?.default_company || null,
+    current_membership: input?.current_membership || null,
+    memberships: Array.isArray(input?.memberships)
+      ? [...input.memberships]
+      : [],
     provider_id: normalizeNumberId(input?.provider_id),
     center_id: normalizeNumberId(input?.center_id),
     customer_id: normalizeNumberId(input?.customer_id),
@@ -591,6 +660,8 @@ function normalizeSession(
       input?.can_use_company_workspace === true,
 
     permission_codes: rawPermissionCodes,
+    system_permissions: systemPermissionCodes,
+    company_permissions: companyPermissionCodes,
     permissions: normalizedPermissions,
     profile_permissions: normalizedProfilePermissions,
     profile: normalizedProfile,

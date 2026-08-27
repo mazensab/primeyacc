@@ -1,4 +1,4 @@
-"use client";
+
 
 /* =====================================================
    📂 components/layout/sidebar/nav-main.tsx
@@ -1267,6 +1267,40 @@ export function NavMain({ type }: NavMainProps) {
               ? agentNavItems
               : companyNavItems;
 
+    const authRecord = authSession as Record<string, unknown>;
+    const normalizedRole = currentRole.trim().toLowerCase();
+
+    const workspaceHint = String(
+      authRecord.workspace ||
+        authRecord.workspace_type ||
+        authRecord.active_workspace ||
+        "",
+    )
+      .trim()
+      .toLowerCase();
+
+    const hasAuthenticatedUser = Boolean(
+      authSession.authenticated === true ||
+        authSession.user ||
+        authRecord.user ||
+        authRecord.email ||
+        authRecord.id ||
+        authRecord.user_id,
+    );
+
+    const isSystemNavigationAdmin =
+      type === "system" &&
+      hasAuthenticatedUser &&
+      isSystemAdmin(authSession);
+
+    // Some valid authenticated sessions do not expose `authenticated: true`
+    // even though the user/session payload is already present. Treat the
+    // resolved session identity as the authentication signal, then rely on the
+    // centralized isSystemAdmin() contract for the privileged system bypass.
+    if (isSystemNavigationAdmin) {
+      return sourceGroups;
+    }
+
     const filteredGroups = filterNavGroups(
       sourceGroups,
       authSession,
@@ -1277,34 +1311,6 @@ export function NavMain({ type }: NavMainProps) {
     if (filteredGroups.length > 0) {
       return filteredGroups;
     }
-
-    const normalizedRole = currentRole.trim().toLowerCase();
-    const authRecord = authSession as Record<string, unknown>;
-    const workspaceHint = String(
-      authRecord.workspace ||
-        authRecord.workspace_type ||
-        authRecord.active_workspace ||
-        "",
-    )
-      .trim()
-      .toLowerCase();
-    const hasAuthenticatedUser = Boolean(
-      authSession.user ||
-        authRecord.user ||
-        authRecord.email ||
-        authRecord.id ||
-        authRecord.user_id,
-    );
-    const canUseSystemFallback =
-      type === "system" &&
-      hasAuthenticatedUser &&
-      (authSession.is_superuser === true ||
-        authSession.is_staff === true ||
-        authSession.is_system_user === true ||
-        normalizedRole === "super_admin" ||
-        normalizedRole === "system_admin" ||
-        normalizedRole === "admin" ||
-        normalizedRole === "staff");
     const companyFallbackRoles = [
       "owner",
       "admin",
@@ -1333,10 +1339,13 @@ export function NavMain({ type }: NavMainProps) {
             authRecord.active_company,
         ) ||
         companyFallbackRoles.includes(normalizedRole));
-    if (canUseSystemFallback || canUseCompanyFallback) {
+
+    if (canUseCompanyFallback) {
       return sourceGroups;
     }
-    return filteredGroups;}, [type, authSession, currentRole, enabledApps]);
+
+    return filteredGroups;
+  }, [type, authSession, currentRole, enabledApps]);
 
   const getRowClassName = (level: number) =>
     cn(
@@ -1358,12 +1367,17 @@ export function NavMain({ type }: NavMainProps) {
           "flex shrink-0 items-center justify-center rounded-xl transition",
           level === 0 ? "size-8" : "size-7",
           active
-            ? "bg-primary/12 text-primary"
-            : "bg-slate-100/70 text-muted-foreground group-hover/nav-row:bg-primary/10 group-hover/nav-row:text-primary",
+            ? "bg-primary/12"
+            : "bg-slate-100/70 group-hover/nav-row:bg-primary/10",
           "dark:bg-white/[0.055] dark:group-hover/nav-row:bg-primary/15",
         )}
       >
-        <Icon className={cn(level === 0 ? "size-4" : "size-3.5")} />
+        <Icon
+          className={cn(
+            level === 0 ? "size-4" : "size-3.5",
+            "text-[#a57b3d]",
+          )}
+        />
       </span>
     );
   };

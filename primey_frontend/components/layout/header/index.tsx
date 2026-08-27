@@ -98,7 +98,7 @@ export function SiteHeader() {
     <header
       className={cn(
         "relative z-40 w-full overflow-hidden rounded-[inherit]",
-        "bg-transparent text-foreground"
+        "bg-transparent text-foreground [&_svg]:text-[#a57b3d]"
       )}
     >
       <div className="w-full overflow-hidden rounded-[inherit] p-0">
