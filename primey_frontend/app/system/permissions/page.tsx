@@ -1658,11 +1658,11 @@ export default function SystemPermissionsPage() {
 
 
 
-    "عرض وتحليل صلاحيات النظام والشركات من API الحقيقي.",
+    "كتالوج مرجعي للقراءة فقط يعرض صلاحيات النظام والشركات ومجموعاتها من API الحقيقي.",
 
 
 
-    "View and analyze system and company permissions from the real API.",
+    "Read-only reference catalog for system and company permissions from the real API.",
 
 
 
@@ -1905,6 +1905,35 @@ export default function SystemPermissionsPage() {
         </section>
 
 
+
+
+        <Card className="rounded-2xl border-primary/20 bg-primary/5 shadow-sm">
+          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="rounded-2xl bg-primary/10 p-2.5 text-primary">
+                <ShieldCheck className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="font-semibold text-foreground">
+                  {textByLocale(locale, "كتالوج صلاحيات للقراءة فقط", "Read-only permissions catalog")}
+                </p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  {textByLocale(
+                    locale,
+                    "هذه الصفحة تعرض تعريفات الصلاحيات المعتمدة فقط. إسناد الصلاحيات وإدارة المستخدمين يتمان من عقود المستخدمين الحالية، ولا توجد هنا عمليات إنشاء أو تعديل أو حذف وهمية.",
+                    "This page exposes the approved permission definitions only. User access remains governed by the existing user contracts; no unsupported create, edit, delete, or assignment actions are presented here.",
+                  )}
+                </p>
+              </div>
+            </div>
+            <Badge
+              variant="outline"
+              className="w-fit rounded-full border-primary/20 bg-background px-3 py-1 text-xs font-semibold text-primary"
+            >
+              {textByLocale(locale, "قراءة فقط", "READ ONLY")}
+            </Badge>
+          </CardContent>
+        </Card>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 
@@ -2174,11 +2203,15 @@ export default function SystemPermissionsPage() {
 
 
 
-                  title: textByLocale(locale, "\u0635\u0644\u0627\u062d\u064a\u0627\u062a \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645\u064a\u0646", "User permissions"),
+                  title: textByLocale(locale, "تحليلات المستخدمين", "User analytics"),
 
 
 
-                  description: textByLocale(locale, "\u0645\u0631\u0627\u062c\u0639\u0629 \u0635\u0644\u0627\u062d\u064a\u0627\u062a \u0648\u0639\u0636\u0648\u064a\u0627\u062a \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645\u064a\u0646.", "Review user permissions and memberships."),
+                  description: textByLocale(
+                    locale,
+                    "مراجعة أدوار المستخدمين وعضوياتهم وصلاحياتهم من تقارير المستخدمين الحقيقية.",
+                    "Review user roles, memberships, and permissions from the real users analytics page.",
+                  ),
 
 
 

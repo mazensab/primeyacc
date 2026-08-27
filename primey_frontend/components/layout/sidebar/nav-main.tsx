@@ -197,7 +197,6 @@ const systemNavItems: NavGroup[] = [
             aliases: [
               "/system/users/list",
               "/system/users/reports",
-              "/system/users/permissions",
             ],
             icon: UserCog,
             anyPermissions: [
@@ -347,10 +346,7 @@ const systemNavItems: NavGroup[] = [
             },
             href: "/system/integrations/api-keys",
             icon: KeyRound,
-            anyPermissions: [
-              PERMISSIONS.SYSTEM_INTEGRATION_API_KEYS_VIEW,
-              PERMISSIONS.SYSTEM_VIEW,
-            ],
+            permission: PERMISSIONS.SYSTEM_INTEGRATION_API_KEYS_VIEW,
             workspaces: ["system"],
           },
           {

@@ -45,6 +45,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useSidebar } from "@/components/ui/sidebar";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { hasPermission, PERMISSIONS } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 type AppLocale = "ar" | "en";
@@ -68,6 +70,7 @@ type SearchItem = {
     ar: string;
     en: string;
   };
+  permission?: string;
 };
 
 /* =====================================================
@@ -135,7 +138,6 @@ const systemSearchItems: SearchItem[] = [
     aliases: [
       "/system/users/list",
       "/system/users/reports",
-      "/system/users/permissions",
     ],
     icon: UserCog,
     description: {
@@ -245,6 +247,7 @@ const systemSearchItems: SearchItem[] = [
       ar: "إدارة مفاتيح تكامل API",
       en: "Manage API integration keys",
     },
+    permission: PERMISSIONS.SYSTEM_INTEGRATION_API_KEYS_VIEW,
   },
   {
     title: {
@@ -321,9 +324,10 @@ const systemSearchItems: SearchItem[] = [
     href: "/system/roles",
     icon: ShieldCheck,
     description: {
-      ar: "إدارة أدوار مستخدمي النظام",
-      en: "Manage system user roles",
+      ar: "عرض كتالوج أدوار النظام والشركات للقراءة فقط",
+      en: "View the read-only system and company roles catalog",
     },
+    permission: PERMISSIONS.SYSTEM_VIEW,
   },
   {
     title: {
@@ -333,9 +337,10 @@ const systemSearchItems: SearchItem[] = [
     href: "/system/permissions",
     icon: ShieldCheck,
     description: {
-      ar: "إدارة صلاحيات الوصول للنظام",
-      en: "Manage system access permissions",
+      ar: "عرض كتالوج صلاحيات النظام والشركات للقراءة فقط",
+      en: "View the read-only system and company permissions catalog",
     },
+    permission: PERMISSIONS.SYSTEM_VIEW,
   },
   {
     title: {
@@ -348,6 +353,7 @@ const systemSearchItems: SearchItem[] = [
       ar: "إعدادات النظام العامة",
       en: "General system settings",
     },
+    permission: PERMISSIONS.SYSTEM_SETTINGS,
   },
 ];
 
@@ -520,6 +526,8 @@ export default function Search() {
   const pathname = usePathname();
   const { isMobile } = useSidebar();
 
+  const authSession = useAuth();
+
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [locale, setLocale] = useState<AppLocale>("ar");
@@ -586,12 +594,19 @@ export default function Search() {
     return providerSearchItems;
   }, [workspace]);
 
+  const authorizedSearchItems = useMemo(() => {
+    return searchItems.filter((item) => {
+      if (!item.permission) return true;
+      return hasPermission(authSession, item.permission);
+    });
+  }, [authSession, searchItems]);
+
   const filteredItems = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    if (!normalizedQuery) return searchItems;
+    if (!normalizedQuery) return authorizedSearchItems;
 
-    return searchItems.filter((item) => {
+    return authorizedSearchItems.filter((item) => {
       const arTitle = item.title.ar.toLowerCase();
       const enTitle = item.title.en.toLowerCase();
       const arDescription = item.description?.ar?.toLowerCase() || "";
@@ -604,7 +619,7 @@ export default function Search() {
         enDescription.includes(normalizedQuery)
       );
     });
-  }, [query, searchItems]);
+  }, [authorizedSearchItems, query]);
 
   const placeholder = isArabic
     ? "ابحث داخل مساحة العمل الحالية..."

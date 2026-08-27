@@ -42,6 +42,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/components/providers/AuthProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,6 +70,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { API_PATHS } from "@/lib/api/endpoints";
+import { hasPermission, PERMISSIONS } from "@/lib/permissions";
 type Locale = "ar" | "en";
 type ApiRecord = Record<string, unknown>;
 type SortKey = "newest" | "oldest" | "name" | "environment";
@@ -679,6 +681,7 @@ function EmptyState({
   );
 }
 export default function SystemIntegrationApiKeysPage() {
+  const authSession = useAuth();
   const [locale, setLocale] = React.useState<Locale>("ar");
   const [keys, setKeys] = React.useState<ApiKeyRecord[]>([]);
   const [companies, setCompanies] = React.useState<CompanyOption[]>([]);
@@ -696,6 +699,10 @@ export default function SystemIntegrationApiKeysPage() {
   const [environment, setEnvironment] = React.useState<EnvironmentFilter>("all");
   const [sort, setSort] = React.useState<SortKey>("newest");
   const t = translations[locale];
+  const canCreateApiKey = hasPermission(
+    authSession,
+    PERMISSIONS.SYSTEM_INTEGRATION_API_KEYS_CREATE,
+  );
   const dir = locale === "ar" ? "rtl" : "ltr";
   const alignClass = locale === "ar" ? "text-right" : "text-left";
   React.useEffect(() => {
@@ -828,7 +835,16 @@ export default function SystemIntegrationApiKeysPage() {
     } finally {
       setCreating(false);
     }
-  }, [createForm, loadApiKeys, t.createFailed, t.created, t.nameRequired, t.scopeRequired, t.secretMissing]);
+  }, [
+    createForm,
+    loadApiKeys,
+    t.companyRequired,
+    t.createFailed,
+    t.created,
+    t.nameRequired,
+    t.scopeRequired,
+    t.secretMissing,
+  ]);
   const copySecret = React.useCallback(async () => {
     if (!createdSecret) return;
     await navigator.clipboard.writeText(createdSecret);
@@ -1017,10 +1033,12 @@ export default function SystemIntegrationApiKeysPage() {
                   <FileText className="h-4 w-4" />
                   {t.pdf}
                 </Button>
-                <Button className="rounded-xl" onClick={openCreateModal}>
-                  <Plus className="h-4 w-4" />
-                  {t.createApiKey}
-                </Button>
+                {canCreateApiKey ? (
+                  <Button className="rounded-xl" onClick={openCreateModal}>
+                    <Plus className="h-4 w-4" />
+                    {t.createApiKey}
+                  </Button>
+                ) : null}
                 <Button asChild variant="outline" className="rounded-xl bg-background">
                   <Link href="/system/integrations">
                     <KeyRound className="h-4 w-4" />
@@ -1248,7 +1266,7 @@ export default function SystemIntegrationApiKeysPage() {
           </CardContent>
         </Card>
       </div>
-      {createOpen ? (
+      {createOpen && canCreateApiKey ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 px-4 py-6 backdrop-blur-sm">
           <Card className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border bg-card shadow-2xl">
             <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 border-b">
