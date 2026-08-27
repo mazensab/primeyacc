@@ -67,3 +67,15 @@ whatsapp_session_gateway/gateway.pid
 whatsapp_session_gateway/logs/*.log
 _audit/
 legacy-analysis/
+
+# PrimeyAcc local phase / audit working artifacts
+# Temporary phase scripts, reports, snapshots and rollback copies.
+# Final source-of-truth remains Git history and committed project files.
+
+/backups/phase*
+
+/phase*.txt
+/phase*.py
+/phase*.ps1
+
+*.before_phase*
