@@ -742,7 +742,7 @@ export const PATH_ACCESS_RULES: PathAccessRule[] = [
   },
   {
     prefix: "/system/integrations",
-    permissions: [PERMISSIONS.SYSTEM_VIEW],
+    permissions: [PERMISSIONS.SYSTEM_INTEGRATIONS_VIEW],
     workspaces: ["system"],
   },
 

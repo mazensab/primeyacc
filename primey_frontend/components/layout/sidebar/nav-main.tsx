@@ -321,7 +321,7 @@ const systemNavItems: NavGroup[] = [
         href: "/system/integrations",
         icon: Briefcase,
         anyPermissions: [
-          PERMISSIONS.SYSTEM_VIEW,
+          PERMISSIONS.SYSTEM_INTEGRATIONS_VIEW,
           PERMISSIONS.SYSTEM_INTEGRATION_API_KEYS_VIEW,
         ],
         workspaces: ["system"],
@@ -333,10 +333,7 @@ const systemNavItems: NavGroup[] = [
             },
             href: "/system/integrations",
             icon: Briefcase,
-            anyPermissions: [
-              PERMISSIONS.SYSTEM_VIEW,
-              PERMISSIONS.SYSTEM_INTEGRATION_API_KEYS_VIEW,
-            ],
+            permission: PERMISSIONS.SYSTEM_INTEGRATIONS_VIEW,
             workspaces: ["system"],
           },
           {
@@ -358,7 +355,7 @@ const systemNavItems: NavGroup[] = [
             aliases: ["/system/api-contracts"],
             icon: FileText,
             anyPermissions: [
-              PERMISSIONS.SYSTEM_VIEW,
+              PERMISSIONS.SYSTEM_INTEGRATIONS_VIEW,
               PERMISSIONS.SYSTEM_SETTINGS,
             ],
             workspaces: ["system"],

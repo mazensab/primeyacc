@@ -235,6 +235,7 @@ const systemSearchItems: SearchItem[] = [
       ar: "إدارة تكاملات المنصة",
       en: "Manage platform integrations",
     },
+    permission: PERMISSIONS.SYSTEM_INTEGRATIONS_VIEW,
   },
   {
     title: {
@@ -261,6 +262,7 @@ const systemSearchItems: SearchItem[] = [
       ar: "عرض عقود واجهات API المعتمدة",
       en: "View approved API contracts",
     },
+    permission: PERMISSIONS.SYSTEM_INTEGRATIONS_VIEW,
   },
   {
     title: {
