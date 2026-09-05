@@ -79,6 +79,10 @@ urlpatterns = [
         include("api.system.integration_api_keys.urls"),
     ),
     path(
+        "mhamcloud/",
+        include("api.system.mhamcloud.urls"),
+    ),
+    path(
         "business-controls/",
         include("api.system.business_controls.urls"),
     ),

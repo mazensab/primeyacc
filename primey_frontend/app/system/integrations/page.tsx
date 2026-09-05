@@ -969,6 +969,16 @@ export default function SystemIntegrationsPage() {
               variant="outline"
               className="h-9"
             >
+              <Link href="/system/integrations/mhamcloud">
+                <Card className="group h-full gap-0 rounded-lg border bg-card py-0 shadow-none transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-sm">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div><CardTitle className="text-base">MhamCloud Legacy Sync</CardTitle><CardDescription className="mt-1">{locale === "ar" ? "إدارة اتصال مهام القديم، مزامنة الشركات، الأخطاء وسجل التشغيل." : "Manage legacy MhamCloud connection, company sync, errors, and run history."}</CardDescription></div>
+                      <span className="flex size-10 items-center justify-center rounded-full border bg-white/80 text-[#a57b3d] shadow-sm dark:bg-white/[0.06]"><PlugZap className="h-4 w-4" /></span>
+                    </div>
+                  </CardHeader>
+                </Card>
+              </Link>
               <Link href="/system/integrations/api-keys">
                 <KeyRound className="h-4 w-4" />
                 {t.apiKeys}

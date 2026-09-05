@@ -243,6 +243,17 @@ export const API_PATHS = {
     status: (id: ApiPathId) => `/api/system/plans/${id}/status/`,
   },
 
+  systemMhamCloud: {
+    status: "/api/system/mhamcloud/status/",
+    settings: "/api/system/mhamcloud/settings/",
+    testConnection: "/api/system/mhamcloud/test-connection/",
+    companies: "/api/system/mhamcloud/companies/",
+    companyDetail: (businessId: ApiPathId) => `/api/system/mhamcloud/companies/${businessId}/`,
+    retry: (businessId: ApiPathId) => `/api/system/mhamcloud/companies/${businessId}/retry/`,
+    runs: "/api/system/mhamcloud/runs/",
+    runSync: "/api/system/mhamcloud/run-sync/",
+  },
+
   systemPaymentIntegrations: {
     readiness: "/api/system/subscription-payments/gateway-readiness/",
     webhookEvents: "/api/system/subscription-payments/webhook-events/",
