@@ -454,17 +454,17 @@ function normalizeProfilePermissions(
 
 function resolveDashboardPath(
   dashboardPath: unknown,
-  workspace: AppWorkspace | string | null,
+  _workspace: AppWorkspace | string | null,
 ): string {
   const explicit = String(dashboardPath || "").trim();
 
-  if (explicit) return explicit;
+  if (explicit.startsWith("/") && !explicit.startsWith("//")) {
+    return explicit;
+  }
 
-  if (workspace === "company") return "/company";
-  if (workspace === "customer") return "/company";
-  if (workspace === "agent") return "/agent";
-  if (workspace === "system") return "/system";
-
+  // Current whoami is authoritative. Missing dashboard_path means that the
+  // account has no active workspace and must not be guessed from a role or
+  // stored preference on the client.
   return "/login";
 }
 
@@ -486,13 +486,17 @@ function normalizeSession(
     normalizeRole(profile.user_type) ||
     null;
 
-  const workspace: AppWorkspace | string | null =
-    normalizeWorkspace(input?.workspace) ||
-    normalizeWorkspace(profilePermissions.workspace) ||
-    normalizeWorkspace(profile.workspace) ||
-    normalizeWorkspace(profile.default_workspace) ||
-    inferWorkspaceFromRole(role) ||
-    null;
+  const hasAuthoritativeWorkspace = Boolean(
+    input && Object.prototype.hasOwnProperty.call(input, "workspace"),
+  );
+
+  const workspace: AppWorkspace | string | null = hasAuthoritativeWorkspace
+    ? normalizeWorkspace(input?.workspace)
+    : normalizeWorkspace(profilePermissions.workspace) ||
+      normalizeWorkspace(profile.workspace) ||
+      normalizeWorkspace(profile.default_workspace) ||
+      inferWorkspaceFromRole(role) ||
+      null;
 
   const systemPermissionCodes = uniqueStrings([
     ...(input?.system_permissions || []),
@@ -798,7 +802,12 @@ export function AuthProvider({
         }
 
         if (pathname === "/login") {
-          router.replace(normalized.dashboard_path || "/system");
+          const destination = normalized.dashboard_path || "/login";
+
+          if (destination !== "/login") {
+            router.replace(destination);
+          }
+
           return;
         }
 

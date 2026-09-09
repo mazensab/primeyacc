@@ -7,3 +7,6 @@ python-dotenv==1.2.2
 sqlparse==0.5.5
 tzdata==2026.2
 psycopg[binary]==3.2.9
+
+# Laravel legacy password compatibility
+bcrypt==5.0.0

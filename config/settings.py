@@ -315,6 +315,18 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
+# PRIMEY_LEGACY_LARAVEL_BCRYPT_COMPAT_START
+# New passwords stay on Django PBKDF2; this last entry verifies imported Laravel hashes.
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
+    "django.contrib.auth.hashers.ScryptPasswordHasher",
+    "accounts.password_hashers.LaravelBCryptPasswordHasher",
+]
+# PRIMEY_LEGACY_LARAVEL_BCRYPT_COMPAT_END
+
 # ---------------------------------------------------------------------
 # Internationalization
 # ---------------------------------------------------------------------

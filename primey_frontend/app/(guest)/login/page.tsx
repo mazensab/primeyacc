@@ -1,19 +1,19 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
 import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   BarChart3,
   Building2,
   CheckCircle2,
-  CreditCard,
   Eye,
   EyeOff,
   Languages,
   Loader2,
   LockKeyhole,
+  Route,
   ShieldCheck,
   User2,
 } from "lucide-react";
@@ -23,85 +23,59 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 /* =========================================================
-   📌 Mhamcloud - Unified Login Page
+   📌 Mhamcloud - Authoritative Unified Login
    Path: primey_frontend/app/(guest)/login/page.tsx
 
-   ✅ صفحة دخول موحدة للنظام والشركات
-   ✅ دخول آمن: username/password
-   ✅ يدعم العربية والإنجليزية
-   ✅ يدعم RTL / LTR
-   ✅ CSRF + Cookies Session
-   ✅ Redirect ذكي حسب whoami/dashboard_path
-   ✅ Sonner Toasts
+   ✅ بوابة دخول واحدة للنظام والشركات
+   ✅ username / email / phone
+   ✅ Session + CSRF
+   ✅ التوجيه حصريًا من whoami.dashboard_path
+   ✅ لا يوجد اختيار يدوي لمساحة العمل
+   ✅ Sonner + RTL/LTR + SAR icon
 ========================================================= */
 
 type AppLocale = "ar" | "en";
-type LoginMode = "system" | "company";
-
-type MembershipSnapshot = {
-  company_id?: number | string | null;
-  role?: string | null;
-  workspace?: string | null;
-  company?: {
-    id?: number | string | null;
-  } | null;
-};
-
-type WhoAmIResponse = {
-  authenticated?: boolean;
-  workspace?: string | null;
-  dashboard_path?: string | null;
-  is_system_user?: boolean;
-  is_superuser?: boolean;
-  is_staff?: boolean;
-  role?: string | null;
-  user_type?: string | null;
-  scope_type?: string | null;
-  company_id?: number | string | null;
-  default_company_id?: number | string | null;
-  agent_id?: number | string | null;
-  default_membership?: MembershipSnapshot | null;
-  memberships?: MembershipSnapshot[] | null;
-  permissions?: {
-    is_superuser?: boolean;
-    is_staff?: boolean;
-    groups?: string[];
-  } | null;
-  profile?: {
-    role?: string | null;
-    user_type?: string | null;
-    extra_data?: Record<string, unknown> | null;
-  } | null;
-};
-
 type JsonObject = Record<string, unknown>;
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "") || "";
+type AuthPayload = {
+  authenticated?: boolean;
+  code?: string | null;
+  detail?: unknown;
+  message?: unknown;
+  error?: unknown;
+  errors?: unknown;
+  dashboard_path?: string | null;
+};
 
-function getCookie(name: string): string | null {
-  if (typeof document === "undefined") return null;
-
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-
-  if (parts.length === 2) {
-    return parts.pop()?.split(";").shift() ?? null;
-  }
-
-  return null;
+function normalizeApiBase(value: string | undefined): string {
+  const clean = String(value || "").trim().replace(/\/+$/, "");
+  return clean.endsWith("/api") ? clean.slice(0, -4) : clean;
 }
+
+const API_BASE = normalizeApiBase(
+  process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL,
+);
 
 function resolveApiUrl(path: string): string {
   const safePath = path.startsWith("/") ? path : `/${path}`;
   return API_BASE ? `${API_BASE}${safePath}` : safePath;
 }
 
-function normalizeUpper(value: unknown): string {
-  return String(value || "").trim().toUpperCase();
-}
+function getCookie(name: string): string {
+  if (typeof document === "undefined") return "";
 
-function extractBoolean(value: unknown): boolean {
-  return value === true;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+
+  if (parts.length !== 2) return "";
+
+  const raw = parts.pop()?.split(";").shift() || "";
+
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
 }
 
 function asString(value: unknown): string {
@@ -109,169 +83,86 @@ function asString(value: unknown): string {
 }
 
 function firstString(value: unknown): string {
-  if (asString(value)) return asString(value);
+  const direct = asString(value);
+  if (direct) return direct;
 
   if (Array.isArray(value)) {
-    const found = value.find((item) => asString(item));
-    return asString(found);
+    for (const item of value) {
+      const text = firstString(item);
+      if (text) return text;
+    }
   }
 
   return "";
 }
 
-function extractApiMessage(data: unknown, fallback: string): string {
-  if (!data || typeof data !== "object") return fallback;
+function asRecord(value: unknown): JsonObject {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as JsonObject)
+    : {};
+}
 
-  const payload = data as JsonObject;
-
-  const directMessage =
-    firstString(payload.message) ||
-    firstString(payload.detail) ||
-    firstString(payload.error) ||
-    firstString(payload.non_field_errors);
-
-  if (directMessage) return directMessage;
-
-  const errors = payload.errors;
-  if (errors && typeof errors === "object") {
-    const firstValue = Object.values(errors as JsonObject)[0];
-    const message = firstString(firstValue);
-
-    if (message) return message;
+async function readJson(response: Response): Promise<AuthPayload> {
+  try {
+    const payload = await response.json();
+    return asRecord(payload) as AuthPayload;
+  } catch {
+    return {};
   }
-
-  return fallback;
 }
 
-function toPositiveId(value: unknown): number | null {
-  const num = Number(value);
-  return Number.isFinite(num) && num > 0 ? num : null;
+function applyDocumentLocale(locale: AppLocale): void {
+  if (typeof document === "undefined") return;
+
+  const direction = locale === "ar" ? "rtl" : "ltr";
+  document.documentElement.lang = locale;
+  document.documentElement.dir = direction;
+  document.body.dir = direction;
 }
 
-function extractIds(user: WhoAmIResponse | null) {
-  const profileExtra = user?.profile?.extra_data ?? {};
-  const defaultMembership = user?.default_membership ?? null;
-  const firstMembership = Array.isArray(user?.memberships)
-    ? user?.memberships?.[0]
-    : null;
-
-  return {
-    companyId: toPositiveId(
-      user?.company_id ??
-        user?.default_company_id ??
-        defaultMembership?.company_id ??
-        defaultMembership?.company?.id ??
-        firstMembership?.company_id ??
-        firstMembership?.company?.id ??
-        profileExtra["company_id"] ??
-        profileExtra["default_company_id"]
-    ),
-    agentId: toPositiveId(user?.agent_id ?? profileExtra["agent_id"]),
-  };
-}
-
-function isSystemUser(user: WhoAmIResponse | null): boolean {
-  if (!user) return false;
-
-  const normalizedRole = normalizeUpper(
-    user.role || user.profile?.role || user.default_membership?.role
-  );
-  const normalizedUserType = normalizeUpper(
-    user.user_type || user.profile?.user_type
-  );
-  const normalizedScope = normalizeUpper(user.scope_type || user.workspace);
-  const permissions = user.permissions || {};
-  const groups = Array.isArray(permissions.groups)
-    ? permissions.groups.map((item) => normalizeUpper(item))
-    : [];
-
-  const systemRoles = [
-    "SYSTEM",
-    "SUPER_ADMIN",
-    "SYSTEM_ADMIN",
-    "SUPPORT",
-    "BILLING_MANAGER",
-    "INTERNAL",
-  ];
-
-  return (
-    extractBoolean(user.is_system_user) ||
-    extractBoolean(user.is_superuser) ||
-    extractBoolean(user.is_staff) ||
-    extractBoolean(permissions.is_superuser) ||
-    extractBoolean(permissions.is_staff) ||
-    systemRoles.includes(normalizedRole) ||
-    systemRoles.includes(normalizedUserType) ||
-    normalizedScope === "SYSTEM" ||
-    groups.some((group) => systemRoles.includes(group))
-  );
-}
-
-function resolveRedirectPath(
-  user: WhoAmIResponse | null,
-  preferredMode: LoginMode
+function authoritativeDashboardPath(
+  payload: AuthPayload,
+  noWorkspaceMessage: string,
 ): string {
-  if (!user) {
-    return preferredMode === "company" ? "/company" : "/system";
+  if (payload.authenticated !== true) {
+    throw new Error(noWorkspaceMessage);
   }
 
-  const dashboardPath = String(user.dashboard_path || "").trim();
-  if (dashboardPath.startsWith("/")) {
-    return dashboardPath;
-  }
+  const path = asString(payload.dashboard_path);
+  const isSystemPath = path === "/system" || path.startsWith("/system/");
+  const isCompanyPath = path === "/company" || path.startsWith("/company/");
 
-  const workspace = normalizeUpper(
-    user.workspace || user.scope_type || user.default_membership?.workspace
-  );
-  const { companyId, agentId } = extractIds(user);
-  const role = normalizeUpper(user.role || user.profile?.role);
+  if (isSystemPath || isCompanyPath) return path;
 
-  if (workspace === "SYSTEM" || isSystemUser(user)) {
-    return "/system";
-  }
-
-  if (workspace === "COMPANY" || companyId) {
-    return "/company";
-  }
-
-  if (workspace === "AGENT" || role === "AGENT" || agentId) {
-    return "/agent";
-  }
-
-  return preferredMode === "company" ? "/company" : "/system";
+  throw new Error(noWorkspaceMessage);
 }
 
 async function prepareCsrf(errorMessage: string): Promise<string> {
-  const csrfResponse = await fetch(resolveApiUrl("/api/auth/csrf/"), {
+  const response = await fetch(resolveApiUrl("/api/auth/csrf/"), {
     method: "GET",
     credentials: "include",
     cache: "no-store",
+    headers: {
+      Accept: "application/json",
+    },
   });
 
-  if (!csrfResponse.ok) {
-    throw new Error(errorMessage);
-  }
+  if (!response.ok) throw new Error(errorMessage);
 
-  const csrfToken = getCookie("csrftoken");
+  const token = getCookie("csrftoken");
+  if (!token) throw new Error(errorMessage);
 
-  if (!csrfToken) {
-    throw new Error(errorMessage);
-  }
-
-  return csrfToken;
+  return token;
 }
 
 export default function Page() {
   const router = useRouter();
 
   const [locale, setLocale] = useState<AppLocale>("ar");
-  const [mode, setMode] = useState<LoginMode>("company");
-
-  const [username, setUsername] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -279,145 +170,162 @@ export default function Page() {
 
   const content = useMemo(
     () => ({
-      title: isArabic ? "مرحبا بعودتك إلى Mhamcloud" : "Welcome back to Mhamcloud",
+      title: isArabic
+        ? "مرحبًا بعودتك إلى Mhamcloud"
+        : "Welcome back to Mhamcloud",
       subtitle: isArabic
-        ? "سجل الدخول لإدارة المحاسبة والفواتير والمخزون والاشتراكات من منصة واحدة آمنة."
-        : "Sign in to manage accounting, invoicing, inventory, and subscriptions from one secure platform.",
-
-      systemTab: isArabic ? "إدارة المنصة" : "Platform admin",
-      companyTab: isArabic ? "بوابة الشركة" : "Company portal",
-
-      usernameLabel: isArabic ? "اسم المستخدم" : "Username",
+        ? "بوابة واحدة وآمنة لجميع مستخدمي المنصة والشركات."
+        : "One secure portal for every platform and company user.",
+      identifierLabel: isArabic
+        ? "اسم المستخدم أو البريد الإلكتروني أو رقم الجوال"
+        : "Username, email, or mobile number",
+      identifierPlaceholder: isArabic
+        ? "أدخل بيانات حسابك"
+        : "Enter your account identifier",
       passwordLabel: isArabic ? "كلمة المرور" : "Password",
+      passwordPlaceholder: isArabic ? "أدخل كلمة المرور" : "Enter password",
       remember: isArabic ? "تذكرني" : "Remember me",
-      resetPassword: isArabic ? "إعادة تعيين كلمة المرور" : "Reset password?",
+      resetPassword: isArabic ? "نسيت كلمة المرور؟" : "Forgot password?",
       login: isArabic ? "تسجيل الدخول" : "Sign in",
-      loading: isArabic ? "جار تسجيل الدخول..." : "Signing in...",
+      loading: isArabic ? "جاري التحقق والتوجيه..." : "Signing in and routing...",
       passwordShow: isArabic ? "إظهار كلمة المرور" : "Show password",
       passwordHide: isArabic ? "إخفاء كلمة المرور" : "Hide password",
       securityNote: isArabic
         ? "جلسة دخول آمنة ومحمية"
         : "Secure protected session",
-      welcomeBadge: isArabic ? "بوابة الدخول" : "Access portal",
-      invalidCredentials: isArabic
-        ? "اسم المستخدم أو كلمة المرور غير صحيحة"
-        : "Invalid username or password",
-      csrfMissing: isArabic
-        ? "تعذر تجهيز جلسة الأمان حاول مرة أخرى"
-        : "Unable to initialize secure session, please try again",
-      sessionFailed: isArabic
-        ? "تم تسجيل الدخول لكن تعذر التحقق من الجلسة"
-        : "Signed in, but session validation failed",
-      loginFailed: isArabic ? "فشل تسجيل الدخول" : "Login failed",
+      portalBadge: isArabic ? "بوابة الدخول الموحدة" : "Unified access portal",
+      formTitle: isArabic ? "دخول واحد لكل الحسابات" : "One sign-in for every account",
+      formSubtitle: isArabic
+        ? "بعد التحقق من الحساب يوجهك النظام تلقائيًا إلى إدارة المنصة أو مساحة الشركة حسب الصلاحيات والعضوية."
+        : "After verification, the system automatically routes you to the platform or company workspace based on permissions and membership.",
+      routingTitle: isArabic ? "توجيه تلقائي موثوق" : "Authoritative automatic routing",
+      routingText: isArabic
+        ? "لا تحتاج لاختيار نوع البوابة. الباكند هو مصدر الحقيقة لمساحة العمل والصلاحيات."
+        : "You do not choose a portal type. The backend is the source of truth for workspace and permissions.",
       requiredFields: isArabic
-        ? "يرجى تعبئة اسم المستخدم وكلمة المرور"
-        : "Please enter username and password",
+        ? "يرجى إدخال بيانات الحساب وكلمة المرور."
+        : "Enter your account identifier and password.",
+      invalidCredentials: isArabic
+        ? "بيانات الدخول غير صحيحة، أو لم يتم إعداد كلمة مرور لهذا الحساب بعد."
+        : "Invalid credentials, or this account does not have a password set yet.",
+      accountInactive: isArabic
+        ? "هذا الحساب غير فعال. تواصل مع مسؤول النظام."
+        : "This account is inactive. Contact the system administrator.",
+      profileDenied: isArabic
+        ? "ملف المستخدم موقوف أو غير مسموح له بالدخول."
+        : "This user profile is suspended or not allowed to sign in.",
+      noWorkspace: isArabic
+        ? "تم التحقق من الحساب، لكن لا توجد له مساحة نظام أو عضوية شركة فعالة."
+        : "The account was verified, but it has no active system workspace or company membership.",
+      csrfMissing: isArabic
+        ? "تعذر تجهيز جلسة الأمان. حدّث الصفحة ثم حاول مرة أخرى."
+        : "Unable to initialize the secure session. Refresh and try again.",
+      sessionFailed: isArabic
+        ? "تم قبول بيانات الدخول لكن تعذر تثبيت الجلسة."
+        : "Credentials were accepted, but the session could not be verified.",
+      throttled: isArabic
+        ? "تم تجاوز عدد محاولات الدخول المسموح. انتظر قليلًا ثم حاول مرة أخرى."
+        : "Too many sign-in attempts. Wait briefly and try again.",
+      loginFailed: isArabic ? "تعذر تسجيل الدخول." : "Unable to sign in.",
       loginSuccess: isArabic
-        ? "تم تسجيل الدخول بنجاح"
-        : "Signed in successfully",
-      usernamePlaceholder: isArabic ? "أدخل اسم المستخدم" : "Enter username",
-      passwordPlaceholder: isArabic ? "أدخل كلمة المرور" : "Enter password",
-      modeNote:
-        mode === "system"
-          ? isArabic
-            ? "دخول إدارة المنصة مخصص لفريق Mhamcloud وصلاحيات النظام العليا."
-            : "Platform admin access is for Mhamcloud internal and system-level roles."
-          : isArabic
-            ? "دخول الشركة مخصص للمالك والمدير والمحاسب والموظفين حسب صلاحيات العضوية."
-            : "Company portal access is for owners, admins, accountants, and staff based on membership permissions.",
-      formTitle:
-        mode === "system"
-          ? isArabic
-            ? "دخول إدارة Mhamcloud"
-            : "Mhamcloud admin sign in"
-          : isArabic
-            ? "دخول حساب الشركة"
-            : "Company account sign in",
-      formSubtitle:
-        mode === "system"
-          ? isArabic
-            ? "استخدم بيانات حساب النظام للوصول إلى لوحة إدارة المنصة."
-            : "Use your system account credentials to access the platform dashboard."
-          : isArabic
-            ? "استخدم بيانات حسابك للوصول إلى مساحة شركتك وعملياتك المالية."
-            : "Use your account credentials to access your company workspace and financial operations.",
+        ? "تم تسجيل الدخول وسيتم توجيهك إلى مساحتك."
+        : "Signed in. Redirecting to your workspace.",
+      systemFeature: isArabic ? "إدارة المنصة" : "Platform management",
+      systemFeatureText: isArabic
+        ? "حسابات السوبر أدمن وموظفي النظام توجه إلى مركز النظام."
+        : "Super-admin and system staff accounts are routed to the system center.",
+      companyFeature: isArabic ? "مساحات الشركات" : "Company workspaces",
+      companyFeatureText: isArabic
+        ? "المالك والمدير والمحاسب والموظفون يوجهون حسب العضوية الفعالة."
+        : "Owners, admins, accountants, and employees are routed by active membership.",
+      reportsFeature: isArabic ? "تقارير مالية" : "Financial reporting",
+      reportsFeatureText: isArabic
+        ? "المحاسبة والفواتير والمخزون والخزينة في مساحة موحدة."
+        : "Accounting, invoicing, inventory, and treasury in one workspace.",
+      saudiFeature: isArabic ? "جاهز للسعودية" : "Saudi-ready",
+      saudiFeatureText: isArabic
+        ? "الريال السعودي وضريبة القيمة المضافة وتجربة عربية أولًا."
+        : "SAR, VAT, and an Arabic-first business experience.",
     }),
-    [isArabic, mode]
+    [isArabic],
   );
+
+  function apiMessage(
+    payload: AuthPayload,
+    responseStatus: number,
+  ): string {
+    if (responseStatus === 429) return content.throttled;
+
+    const code = asString(payload.code).toLowerCase();
+    const byCode: Record<string, string> = {
+      credentials_required: content.requiredFields,
+      invalid_credentials: content.invalidCredentials,
+      account_inactive: content.accountInactive,
+      profile_access_denied: content.profileDenied,
+      workspace_access_denied: content.noWorkspace,
+    };
+
+    if (byCode[code]) return byCode[code];
+
+    const direct =
+      firstString(payload.message) ||
+      firstString(payload.detail) ||
+      firstString(payload.error);
+
+    const normalized = direct.toLowerCase();
+    if (normalized.includes("invalid username/email/phone")) {
+      return content.invalidCredentials;
+    }
+    if (normalized.includes("account is inactive")) {
+      return content.accountInactive;
+    }
+    if (normalized.includes("profile is not allowed")) {
+      return content.profileDenied;
+    }
+
+    const errors = asRecord(payload.errors);
+    const firstError = Object.values(errors)
+      .map((value) => firstString(value))
+      .find(Boolean);
+
+    return firstError || direct || content.loginFailed;
+  }
 
   useEffect(() => {
     try {
-      const savedLocale =
-        typeof window !== "undefined"
-          ? ((window.localStorage.getItem("Mhamcloud-locale") ||
-              window.localStorage.getItem("primey-locale")) as AppLocale | null)
-          : null;
+      const saved =
+        window.localStorage.getItem("primey-locale") ||
+        window.localStorage.getItem("Mhamcloud-locale");
+      const nextLocale: AppLocale = saved === "en" ? "en" : "ar";
 
-      const nextLocale: AppLocale = savedLocale === "en" ? "en" : "ar";
       setLocale(nextLocale);
-
-      if (typeof document !== "undefined") {
-        document.documentElement.lang = nextLocale;
-        document.documentElement.dir = nextLocale === "ar" ? "rtl" : "ltr";
-        document.body.setAttribute("dir", nextLocale === "ar" ? "rtl" : "ltr");
-      }
-    } catch (err) {
-      console.error("Login locale initialization error:", err);
+      applyDocumentLocale(nextLocale);
+    } catch (caught) {
+      console.error("Login locale initialization error:", caught);
     }
   }, []);
 
-  const toggleLanguage = () => {
+  function toggleLanguage(): void {
     try {
       const nextLocale: AppLocale = locale === "ar" ? "en" : "ar";
       setLocale(nextLocale);
-
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem("Mhamcloud-locale", nextLocale);
-      }
-
-      if (typeof document !== "undefined") {
-        document.documentElement.lang = nextLocale;
-        document.documentElement.dir = nextLocale === "ar" ? "rtl" : "ltr";
-        document.body.setAttribute("dir", nextLocale === "ar" ? "rtl" : "ltr");
-      }
-    } catch (err) {
-      console.error("Login language toggle error:", err);
+      window.localStorage.setItem("primey-locale", nextLocale);
+      window.localStorage.setItem("Mhamcloud-locale", nextLocale);
+      applyDocumentLocale(nextLocale);
+      window.dispatchEvent(new Event("primey-locale-changed"));
+    } catch (caught) {
+      console.error("Login language toggle error:", caught);
     }
-  };
+  }
 
-  const switchMode = (nextMode: LoginMode) => {
-    if (loading) return;
-
-    setMode(nextMode);
-    setError(null);
-  };
-
-  const fetchWhoamiAndRedirect = async (preferredMode: LoginMode) => {
-    const whoamiResponse = await fetch(resolveApiUrl("/api/auth/whoami/"), {
-      method: "GET",
-      credentials: "include",
-      cache: "no-store",
-    });
-
-    if (!whoamiResponse.ok) {
-      throw new Error(content.sessionFailed);
-    }
-
-    const user = (await whoamiResponse.json()) as WhoAmIResponse;
-    const redirectPath = resolveRedirectPath(user, preferredMode);
-
-    router.replace(redirectPath);
-  };
-
-  /* =========================================================
-     🚀 Mhamcloud Login Handler
-  ========================================================= */
-  const handleLoginSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  async function handleLoginSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> {
     event.preventDefault();
-
     if (loading) return;
 
-    if (!username.trim() || !password.trim()) {
+    const cleanIdentifier = identifier.trim();
+    if (!cleanIdentifier || !password) {
       setError(content.requiredFields);
       toast.error(content.requiredFields);
       return;
@@ -428,397 +336,363 @@ export default function Page() {
 
     try {
       const csrfToken = await prepareCsrf(content.csrfMissing);
-
       const loginResponse = await fetch(resolveApiUrl("/api/auth/login/"), {
         method: "POST",
         credentials: "include",
+        cache: "no-store",
         headers: {
+          Accept: "application/json",
           "Content-Type": "application/json",
+          "X-Requested-With": "XMLHttpRequest",
           "X-CSRFToken": csrfToken,
         },
         body: JSON.stringify({
-          username: username.trim(),
+          identifier: cleanIdentifier,
           password,
           remember,
         }),
       });
+      const loginPayload = await readJson(loginResponse);
 
       if (!loginResponse.ok) {
-        let payload: unknown = null;
-
-        try {
-          payload = await loginResponse.json();
-        } catch {
-          payload = null;
-        }
-
-        throw new Error(extractApiMessage(payload, content.invalidCredentials));
+        throw new Error(apiMessage(loginPayload, loginResponse.status));
       }
 
+      const whoamiResponse = await fetch(resolveApiUrl("/api/auth/whoami/"), {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+        headers: {
+          Accept: "application/json",
+          "X-Requested-With": "XMLHttpRequest",
+        },
+      });
+      const whoamiPayload = await readJson(whoamiResponse);
+
+      if (!whoamiResponse.ok || whoamiPayload.authenticated !== true) {
+        throw new Error(content.sessionFailed);
+      }
+
+      const redirectPath = authoritativeDashboardPath(
+        whoamiPayload,
+        content.noWorkspace,
+      );
+
       toast.success(content.loginSuccess);
-      await fetchWhoamiAndRedirect(mode);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : content.loginFailed;
+      router.replace(redirectPath);
+      router.refresh();
+    } catch (caught) {
+      const message =
+        caught instanceof Error ? caught.message : content.loginFailed;
 
       setError(message);
       toast.error(message);
-      console.error("Mhamcloud login error:", err);
+      console.error("Mhamcloud login error:", caught);
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
     <main
       dir={isArabic ? "rtl" : "ltr"}
-      className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(67,42,88,0.14),_transparent_32%),radial-gradient(circle_at_bottom,_rgba(140,156,220,0.14),_transparent_36%),linear-gradient(to_bottom_right,_hsl(var(--background)),_hsl(var(--muted)/0.55))]"
+      className="relative min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_8%_10%,rgba(67,42,88,0.09),transparent_27%),radial-gradient(circle_at_92%_88%,rgba(140,156,220,0.14),transparent_30%),linear-gradient(135deg,#f8f8fb_0%,#f4f5f8_45%,#f8f9fc_100%)] dark:bg-[radial-gradient(circle_at_8%_10%,rgba(67,42,88,0.22),transparent_27%),radial-gradient(circle_at_92%_88%,rgba(140,156,220,0.12),transparent_30%),linear-gradient(135deg,#11131a_0%,#151821_45%,#11131a_100%)]"
     >
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-primary/10 to-transparent" />
-        <div className="absolute -left-16 top-24 h-52 w-52 rounded-full bg-primary/10 blur-3xl" />
-        <div className="absolute -right-16 bottom-16 h-60 w-60 rounded-full bg-[#8c9cdc]/15 blur-3xl" />
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -left-28 -top-28 h-80 w-80 rounded-full bg-[#432a58]/10 blur-[110px]" />
+        <div className="absolute -bottom-32 -right-24 h-96 w-96 rounded-full bg-[#8c9cdc]/20 blur-[120px]" />
       </div>
 
-      <div className="relative mx-auto flex min-h-screen w-full max-w-7xl items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
-        <div className="grid w-full max-w-6xl overflow-hidden rounded-[32px] border border-white/20 bg-background/80 shadow-2xl backdrop-blur-xl lg:grid-cols-2">
-          <section className="relative hidden min-h-[720px] overflow-hidden bg-gradient-to-br from-[#432a58] via-primary to-[#8c9cdc] text-white lg:flex">
-            <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
-            <div className="absolute right-[-80px] top-[-80px] h-72 w-72 rounded-full bg-white/10 blur-3xl" />
-            <div className="absolute bottom-[-90px] left-[-90px] h-80 w-80 rounded-full bg-black/10 blur-3xl" />
+      <div className="relative mx-auto flex min-h-screen w-full items-center justify-center px-3 py-5 sm:px-5 sm:py-7 lg:px-8 lg:py-8">
+        <div className="grid w-full max-w-[1180px] overflow-hidden rounded-[26px] border border-white/70 bg-white/80 shadow-[0_32px_90px_-34px_rgba(15,23,42,0.32)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/70 lg:grid-cols-[1.08fr_0.92fr] lg:rounded-[32px]">
 
-            <div className="relative z-10 flex h-full w-full flex-col justify-between p-10 xl:p-14">
-              <div
-                className={`flex items-center gap-3 ${
-                  isArabic ? "flex-row-reverse" : ""
-                }`}
-              >
-                <div className="rounded-2xl bg-white/15 p-3 backdrop-blur">
-                  <ShieldCheck className="h-6 w-6" />
+          <section className="relative hidden min-h-[660px] overflow-hidden bg-[linear-gradient(145deg,#2a2039_0%,#20243a_50%,#6076b5_100%)] text-white lg:flex">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.10),transparent_30%),radial-gradient(circle_at_88%_85%,rgba(140,156,220,0.30),transparent_38%)]" />
+
+            <div className="relative z-10 flex min-h-full w-full flex-col px-9 py-9 xl:px-11 xl:py-10">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-white/15 bg-white/10">
+                  <ShieldCheck className="h-5 w-5" />
                 </div>
                 <div className={isArabic ? "text-right" : "text-left"}>
-                  <p className="text-sm font-medium text-white/80">
-                    {content.welcomeBadge}
+                  <p className="whitespace-nowrap text-[11px] font-medium text-white/60">
+                    {isArabic ? "نظام محاسبي متكامل" : "Integrated accounting system"}
                   </p>
-                  <h1 className="text-2xl font-bold tracking-tight">
-                    Mhamcloud
-                  </h1>
+                  <h1 className="whitespace-nowrap text-[21px] font-bold">Mhamcloud</h1>
                 </div>
               </div>
 
-              <div className={isArabic ? "text-right" : "text-left"}>
-                <div
-                  className={`mb-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm backdrop-blur ${
-                    isArabic ? "flex-row-reverse" : ""
-                  }`}
-                >
-                  <LockKeyhole className="h-4 w-4" />
-                  <span>{content.securityNote}</span>
+              <div className={`mt-11 ${isArabic ? "text-right" : "text-left"}`}>
+                <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.08] px-3.5 py-2 text-xs text-white/90">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span className="whitespace-nowrap">
+                    {isArabic ? "منصة أعمال متكاملة" : "Integrated business platform"}
+                  </span>
                 </div>
 
-                <h2 className="max-w-xl text-4xl font-extrabold leading-tight xl:text-5xl">
+                <h2 className="whitespace-nowrap text-[30px] font-extrabold tracking-[-0.025em] xl:text-[36px]">
                   {isArabic
-                    ? "دخول موحد لإدارة المنصة ومساحات الشركات"
-                    : "Unified access for platform and company workspaces"}
+                    ? "حلول محاسبية متكاملة لنمو أعمالك"
+                    : "Integrated accounting solutions for growth"}
                 </h2>
 
-                <p className="mt-6 max-w-xl text-base leading-8 text-white/85 xl:text-lg">
+                <p className="mt-4 whitespace-nowrap text-[13px] text-white/70 xl:text-[14px]">
                   {isArabic
-                    ? "Mhamcloud يجمع المحاسبة والفواتير والمخزون والمدفوعات والتقارير المالية في تجربة واحدة آمنة ومهيأة للشركات داخل السعودية."
-                    : "Mhamcloud brings accounting, invoicing, inventory, payments, and financial reports into one secure experience for Saudi businesses."}
+                    ? "إدارة أسهل • قرارات أذكى • رؤية مالية أوضح"
+                    : "Simpler operations • Smarter decisions • Clearer finance"}
                 </p>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-3xl border border-white/15 bg-white/10 p-5 backdrop-blur-md">
-                  <div
-                    className={`mb-3 flex items-center gap-3 ${
-                      isArabic ? "flex-row-reverse" : ""
-                    }`}
-                  >
-                    <div className="rounded-2xl bg-white/10 p-2">
-                      <Building2 className="h-5 w-5" />
+              <div className="mt-8 grid grid-cols-2 gap-3.5">
+                {[
+                  {
+                    icon: BarChart3,
+                    title: isArabic ? "المحاسبة والتقارير" : "Accounting & reports",
+                    text: isArabic ? "تقارير مالية لحظية ودقيقة" : "Accurate real-time financial reports",
+                  },
+                  {
+                    icon: Building2,
+                    title: isArabic ? "إدارة الشركات" : "Company management",
+                    text: isArabic ? "إدارة العمليات من مساحة موحدة" : "Run operations from one workspace",
+                  },
+                  {
+                    icon: Route,
+                    title: isArabic ? "المبيعات والمشتريات" : "Sales & purchases",
+                    text: isArabic ? "دورة عمل مترابطة وسريعة" : "Connected and efficient workflows",
+                  },
+                  {
+                    icon: ShieldCheck,
+                    title: isArabic ? "الامتثال والأمان" : "Compliance & security",
+                    text: isArabic ? "صلاحيات وحماية بمستوى مؤسسي" : "Enterprise-grade access and protection",
+                  },
+                ].map((feature) => {
+                  const Icon = feature.icon;
+                  return (
+                    <div
+                      key={feature.title}
+                      className="flex min-h-[92px] flex-col justify-center rounded-[20px] border border-white/12 bg-white/[0.075] p-4 backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/[0.11]"
+                    >
+                      <div className="mb-3 flex items-center gap-2.5">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] border border-white/10 bg-white/10">
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <h3 className="whitespace-nowrap text-[12.5px] font-semibold">
+                          {feature.title}
+                        </h3>
+                      </div>
+                      <p className="whitespace-nowrap text-[10.5px] text-white/65 xl:text-[11px]">
+                        {feature.text}
+                      </p>
                     </div>
-                    <h3 className="font-semibold">
-                      {isArabic ? "شركات متعددة" : "Multi-company"}
-                    </h3>
-                  </div>
-                  <p className="text-sm leading-7 text-white/80">
-                    {isArabic
-                      ? "توجيه تلقائي لمساحة الشركة حسب عضوية المستخدم وصلاحياته."
-                      : "Automatic routing to the correct company workspace by membership and permissions."}
-                  </p>
-                </div>
+                  );
+                })}
+              </div>
 
-                <div className="rounded-3xl border border-white/15 bg-white/10 p-5 backdrop-blur-md">
-                  <div
-                    className={`mb-3 flex items-center gap-3 ${
-                      isArabic ? "flex-row-reverse" : ""
-                    }`}
-                  >
-                    <div className="rounded-2xl bg-white/10 p-2">
-                      <BarChart3 className="h-5 w-5" />
-                    </div>
-                    <h3 className="font-semibold">
-                      {isArabic ? "تقارير مالية" : "Financial reports"}
-                    </h3>
-                  </div>
-                  <p className="text-sm leading-7 text-white/80">
-                    {isArabic
-                      ? "جاهزية للتقارير القيود الفواتير الخزينة والمدفوعات."
-                      : "Ready for reports, journals, invoices, treasury, and payments."}
-                  </p>
-                </div>
-
-                <div className="rounded-3xl border border-white/15 bg-white/10 p-5 backdrop-blur-md">
-                  <div
-                    className={`mb-3 flex items-center gap-3 ${
-                      isArabic ? "flex-row-reverse" : ""
-                    }`}
-                  >
-                    <div className="rounded-2xl bg-white/10 p-2">
-                      <CreditCard className="h-5 w-5" />
-                    </div>
-                    <h3 className="font-semibold">
-                      {isArabic ? "اشتراكات ومدفوعات" : "Billing & payments"}
-                    </h3>
-                  </div>
-                  <p className="text-sm leading-7 text-white/80">
-                    {isArabic
-                      ? "إدارة اشتراكات الشركات ومدفوعات المنصة من نفس النظام."
-                      : "Manage company subscriptions and platform payments from the same system."}
-                  </p>
-                </div>
-
-                <div className="rounded-3xl border border-white/15 bg-white/10 p-5 backdrop-blur-md">
-                  <div
-                    className={`mb-3 flex items-center gap-3 ${
-                      isArabic ? "flex-row-reverse" : ""
-                    }`}
-                  >
-                    <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white/90 p-2">
+              <div className="mt-4 grid grid-cols-2 gap-3.5">
+                <div className="flex min-h-[92px] flex-col justify-center rounded-[20px] border border-white/12 bg-white/[0.075] p-4 backdrop-blur-xl">
+                  <div className="mb-3 flex items-center gap-2.5">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] bg-white/90">
                       <Image
                         src="/currency/sar.svg"
                         alt="SAR"
-                        width={20}
-                        height={20}
-                        className="h-5 w-5"
+                        width={17}
+                        height={17}
+                        className="h-[17px] w-[17px]"
                       />
                     </div>
-                    <h3 className="font-semibold">
+                    <h3 className="whitespace-nowrap text-[12.5px] font-semibold">
                       {isArabic ? "جاهز للسعودية" : "Saudi-ready"}
                     </h3>
                   </div>
-                  <p className="text-sm leading-7 text-white/80">
-                    {isArabic
-                      ? "تصميم مناسب للريال السعودي ضريبة القيمة المضافة واللغة العربية."
-                      : "Designed for SAR, VAT, and Arabic-first business workflows."}
+                  <p className="whitespace-nowrap text-[10.5px] text-white/65 xl:text-[11px]">
+                    {isArabic ? "الريال السعودي وضريبة القيمة المضافة" : "SAR and VAT-ready operations"}
                   </p>
+                </div>
+
+                <div className="flex min-h-[92px] flex-col justify-center rounded-[20px] border border-white/12 bg-white/[0.075] p-4 backdrop-blur-xl">
+                  <div className="mb-3 flex items-center gap-2.5">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] border border-white/10 bg-white/10">
+                      <LockKeyhole className="h-4 w-4" />
+                    </div>
+                    <h3 className="whitespace-nowrap text-[12.5px] font-semibold">
+                      {isArabic ? "تحكم وصلاحيات" : "Access control"}
+                    </h3>
+                  </div>
+                  <p className="whitespace-nowrap text-[10.5px] text-white/65 xl:text-[11px]">
+                    {isArabic ? "أدوار وصلاحيات تناسب فريقك" : "Roles and permissions built for teams"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-auto pt-5">
+                <div className="flex items-center justify-between gap-4 rounded-[18px] border border-white/15 bg-white/[0.10] px-4 py-4 shadow-[0_14px_40px_-28px_rgba(0,0,0,0.75)] backdrop-blur-xl">
+                  <div className={isArabic ? "text-right" : "text-left"}>
+                    <p className="whitespace-nowrap text-[12px] font-semibold text-white/95">
+                      {isArabic ? "نظام واحد لإدارة أعمالك بثقة" : "One system to run your business with confidence"}
+                    </p>
+                    <p className="mt-1 whitespace-nowrap text-[10.5px] text-white/55">
+                      {isArabic ? "محاسبة • مبيعات • مشتريات • مخزون • تقارير" : "Accounting • Sales • Purchases • Inventory • Reports"}
+                    </p>
+                  </div>
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-white/10">
+                    <ShieldCheck className="h-4 w-4" />
+                  </div>
                 </div>
               </div>
             </div>
           </section>
 
-          <section className="flex min-h-[720px] items-center justify-center p-5 sm:p-8 lg:p-10">
-            <div className="w-full max-w-md">
-              <div className="mb-6 flex items-center justify-between">
-                <div className="flex items-center gap-3">
+          <section className="relative flex min-h-[640px] items-center justify-center bg-white/70 px-4 py-7 dark:bg-slate-950/45 sm:px-7 lg:min-h-[660px] lg:px-8 xl:px-10">
+            <div
+              className={`absolute top-5 z-20 sm:top-6 ${
+                isArabic ? "left-5 sm:left-6" : "right-5 sm:right-6"
+              }`}
+            >
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={toggleLanguage}
+                className="h-9 rounded-xl border-border/60 bg-white/75 px-3 text-xs font-medium shadow-sm backdrop-blur-md transition hover:bg-white dark:bg-slate-900/70 dark:hover:bg-slate-900"
+              >
+                <Languages className="h-3.5 w-3.5" />
+                <span>{isArabic ? "EN" : "عربي"}</span>
+              </Button>
+            </div>
+
+            <div className="w-full max-w-[430px]">
+              <div className="mb-5 flex w-full flex-col items-center justify-center pt-7 sm:pt-5">
+                <div className="flex min-h-[78px] w-full items-center justify-center">
                   <Image
                     src="/logo/primey.svg"
                     alt="Mhamcloud"
-                    width={132}
-                    height={44}
+                    width={210}
+                    height={70}
                     priority
-                    className="h-auto w-[132px]"
+                    className="h-auto w-[155px] object-contain sm:w-[175px] md:w-[188px] lg:w-[198px] xl:w-[215px]"
                   />
                 </div>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={toggleLanguage}
-                  className="h-10 rounded-2xl px-3"
-                >
-                  <span
-                    className={`flex items-center gap-2 ${
-                      isArabic ? "flex-row-reverse" : ""
-                    }`}
-                  >
-                    <Languages className="h-4 w-4" />
-                    <span>{isArabic ? "EN" : "عربي"}</span>
-                  </span>
-                </Button>
+                <div className="mt-3 h-px w-14 bg-gradient-to-r from-transparent via-border to-transparent" />
               </div>
 
-              <div className={isArabic ? "text-right" : "text-left"}>
-                <div
-                  className={`mb-3 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-medium text-primary ${
-                    isArabic ? "flex-row-reverse" : ""
-                  }`}
-                >
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  <span>{content.securityNote}</span>
+              <div className={`mx-auto max-w-[390px] ${isArabic ? "text-right" : "text-left"}`}>
+                <div className="mb-3 flex justify-center">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-[#8c9cdc]/20 bg-[#8c9cdc]/[0.08] px-3 py-1.5 text-[11px] font-medium text-foreground/75">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-[#6578b4]" />
+                    <span>{content.securityNote}</span>
+                  </div>
                 </div>
 
-                <h2 className="text-3xl font-extrabold tracking-tight text-foreground">
+                <h2 className="text-center text-[25px] font-extrabold tracking-[-0.02em] text-foreground sm:text-[28px]">
                   {content.title}
                 </h2>
-                <p className="mt-3 text-sm leading-7 text-muted-foreground">
+
+                <p className="mx-auto mt-2 max-w-[350px] text-center text-[12.5px] leading-6 text-muted-foreground">
                   {content.subtitle}
                 </p>
               </div>
 
-              <div className="mt-8 rounded-[28px] border border-border/70 bg-card/95 p-4 shadow-xl shadow-primary/5">
-                <div className="mb-5 grid grid-cols-2 gap-2 rounded-2xl bg-muted/50 p-1">
-                  <button
-                    type="button"
-                    onClick={() => switchMode("company")}
-                    className={`flex h-11 items-center justify-center gap-2 rounded-xl text-sm font-semibold transition ${
-                      mode === "company"
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
-                    } ${isArabic ? "flex-row-reverse" : ""}`}
-                  >
-                    <Building2 className="h-4 w-4" />
-                    <span>{content.companyTab}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => switchMode("system")}
-                    className={`flex h-11 items-center justify-center gap-2 rounded-xl text-sm font-semibold transition ${
-                      mode === "system"
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
-                    } ${isArabic ? "flex-row-reverse" : ""}`}
-                  >
-                    <ShieldCheck className="h-4 w-4" />
-                    <span>{content.systemTab}</span>
-                  </button>
-                </div>
-
+              <div className="mt-5 rounded-[24px] border border-border/60 bg-white/80 p-4 shadow-[0_18px_50px_-30px_rgba(15,23,42,0.3)] backdrop-blur-xl dark:bg-slate-900/60 sm:p-5">
                 <div
-                  className={`mb-5 rounded-3xl border border-[#8c9cdc]/25 bg-[#8c9cdc]/10 p-4 ${
+                  className={`mb-4 rounded-[18px] border border-[#8c9cdc]/20 bg-[linear-gradient(135deg,rgba(140,156,220,0.10),rgba(67,42,88,0.035))] px-4 py-3 ${
                     isArabic ? "text-right" : "text-left"
                   }`}
                 >
-                  <div
-                    className={`mb-2 flex items-center gap-2 font-semibold text-foreground ${
-                      isArabic ? "flex-row-reverse" : ""
-                    }`}
-                  >
-                    {mode === "system" ? (
-                      <ShieldCheck className="h-4 w-4 text-primary" />
-                    ) : (
-                      <Building2 className="h-4 w-4 text-primary" />
-                    )}
-                    <span>{content.formTitle}</span>
+                  <div className="mb-1.5 flex items-center gap-2 font-semibold text-foreground">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-[9px] bg-white/80 shadow-sm dark:bg-slate-900/70">
+                      <Route className="h-3.5 w-3.5 text-[#6578b4]" />
+                    </div>
+                    <span className="text-[12.5px]">{content.formTitle}</span>
                   </div>
-                  <p className="text-sm leading-7 text-muted-foreground">
+                  <p className="text-[11px] leading-[1.75] text-muted-foreground">
                     {content.formSubtitle}
                   </p>
                 </div>
 
-                <form onSubmit={handleLoginSubmit} className="space-y-5">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">
-                      {content.usernameLabel}
+                <form onSubmit={handleLoginSubmit} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label htmlFor="login-identifier" className="block text-[12px] font-medium text-foreground/85">
+                      {content.identifierLabel}
                     </label>
-                    <div className="relative">
+                    <div className="group relative">
                       <User2
-                        className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground ${
-                          isArabic ? "right-4" : "left-4"
+                        className={`pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70 transition group-focus-within:text-[#6578b4] ${
+                          isArabic ? "right-3.5" : "left-3.5"
                         }`}
                       />
                       <Input
+                        id="login-identifier"
+                        name="identifier"
                         required
                         autoComplete="username"
-                        dir={isArabic ? "rtl" : "ltr"}
-                        placeholder={content.usernamePlaceholder}
-                        value={username}
-                        onChange={(e) => {
-                          setUsername(e.target.value);
+                        dir="auto"
+                        placeholder={content.identifierPlaceholder}
+                        value={identifier}
+                        onChange={(event) => {
+                          setIdentifier(event.target.value);
                           setError(null);
                         }}
-                        className={`h-12 rounded-2xl border-border/70 bg-muted/30 shadow-sm ${
-                          isArabic ? "pr-11 text-right" : "pl-11 text-left"
+                        className={`h-11 rounded-[13px] border-border/65 bg-muted/20 text-[13px] shadow-none transition-all duration-200 placeholder:text-muted-foreground/55 hover:border-[#8c9cdc]/40 focus-visible:border-[#6578b4]/60 focus-visible:ring-2 focus-visible:ring-[#8c9cdc]/15 ${
+                          isArabic ? "pr-10 text-right" : "pl-10 text-left"
                         }`}
                       />
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">
+                  <div className="space-y-1.5">
+                    <label htmlFor="login-password" className="block text-[12px] font-medium text-foreground/85">
                       {content.passwordLabel}
                     </label>
-                    <div className="relative">
+                    <div className="group relative">
                       <LockKeyhole
-                        className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground ${
-                          isArabic ? "right-4" : "left-4"
+                        className={`pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70 transition group-focus-within:text-[#6578b4] ${
+                          isArabic ? "right-3.5" : "left-3.5"
                         }`}
                       />
-
                       <Input
+                        id="login-password"
+                        name="password"
                         required
                         autoComplete="current-password"
                         type={showPassword ? "text" : "password"}
-                        dir={isArabic ? "rtl" : "ltr"}
+                        dir="ltr"
                         placeholder={content.passwordPlaceholder}
                         value={password}
-                        onChange={(e) => {
-                          setPassword(e.target.value);
+                        onChange={(event) => {
+                          setPassword(event.target.value);
                           setError(null);
                         }}
-                        className={`h-12 rounded-2xl border-border/70 bg-muted/30 shadow-sm ${
-                          isArabic
-                            ? "pr-11 pl-12 text-right"
-                            : "pl-11 pr-12 text-left"
+                        className={`h-11 rounded-[13px] border-border/65 bg-muted/20 text-[13px] shadow-none transition-all duration-200 placeholder:text-muted-foreground/55 hover:border-[#8c9cdc]/40 focus-visible:border-[#6578b4]/60 focus-visible:ring-2 focus-visible:ring-[#8c9cdc]/15 ${
+                          isArabic ? "pr-10 pl-11 text-right" : "pl-10 pr-11 text-left"
                         }`}
                       />
-
                       <button
                         type="button"
-                        onClick={() => setShowPassword((prev) => !prev)}
-                        className={`absolute top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground ${
-                          isArabic ? "left-2" : "right-2"
+                        onClick={() => setShowPassword((current) => !current)}
+                        className={`absolute top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-[9px] text-muted-foreground/70 transition hover:bg-muted hover:text-foreground ${
+                          isArabic ? "left-1.5" : "right-1.5"
                         }`}
-                        aria-label={
-                          showPassword
-                            ? content.passwordHide
-                            : content.passwordShow
-                        }
+                        aria-label={showPassword ? content.passwordHide : content.passwordShow}
                       >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
                   </div>
 
-                  <div
-                    className={`flex items-center justify-between gap-3 text-sm ${
-                      isArabic ? "flex-row-reverse" : ""
-                    }`}
-                  >
-                    <label
-                      className={`flex cursor-pointer items-center gap-2 text-muted-foreground ${
-                        isArabic ? "flex-row-reverse" : ""
-                      }`}
-                    >
+                  <div className="flex items-center justify-between gap-3 text-[11.5px]">
+                    <label className="flex cursor-pointer items-center gap-2 text-muted-foreground">
                       <input
                         type="checkbox"
                         checked={remember}
-                        onChange={() => setRemember((prev) => !prev)}
-                        className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                        onChange={() => setRemember((current) => !current)}
+                        className="h-3.5 w-3.5 rounded border-border accent-[#6578b4]"
                       />
                       <span>{content.remember}</span>
                     </label>
 
                     <Link
                       href="/reset-password"
-                      className="font-medium text-primary transition hover:underline"
+                      className="font-medium text-[#6578b4] transition hover:text-[#432a58] hover:underline"
                     >
                       {content.resetPassword}
                     </Link>
@@ -826,7 +700,8 @@ export default function Page() {
 
                   {error ? (
                     <div
-                      className={`rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400 ${
+                      role="alert"
+                      className={`rounded-[13px] border border-red-200/80 bg-red-50/80 px-3 py-2.5 text-[11.5px] leading-5 text-red-600 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400 ${
                         isArabic ? "text-right" : "text-left"
                       }`}
                     >
@@ -837,14 +712,10 @@ export default function Page() {
                   <Button
                     type="submit"
                     disabled={loading}
-                    className="h-12 w-full rounded-2xl text-base font-semibold shadow-lg"
+                    className="h-11 w-full rounded-[13px] bg-[#151b2b] text-[13px] font-semibold text-white shadow-[0_10px_24px_-12px_rgba(15,23,42,0.75)] transition-all duration-200 hover:-translate-y-[1px] hover:bg-[#20283c] active:translate-y-0 disabled:translate-y-0 disabled:opacity-65 dark:bg-white dark:text-slate-950 dark:hover:bg-white/90"
                   >
                     {loading ? (
-                      <span
-                        className={`flex items-center justify-center gap-2 ${
-                          isArabic ? "flex-row-reverse" : ""
-                        }`}
-                      >
+                      <span className="flex items-center justify-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span>{content.loading}</span>
                       </span>
@@ -853,16 +724,6 @@ export default function Page() {
                     )}
                   </Button>
                 </form>
-
-                <div className="mt-6 border-t border-border/60 pt-5">
-                  <p
-                    className={`text-xs leading-6 text-muted-foreground ${
-                      isArabic ? "text-right" : "text-left"
-                    }`}
-                  >
-                    {content.modeNote}
-                  </p>
-                </div>
               </div>
             </div>
           </section>
