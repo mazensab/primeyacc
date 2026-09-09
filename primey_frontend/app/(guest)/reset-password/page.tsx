@@ -141,7 +141,7 @@ export default function ResetPasswordPage() {
         ? "أدخل اسم المستخدم أو البريد الإلكتروني وحدد كلمة مرور جديدة لحسابك في Mhamcloud."
         : "Enter your username or email and choose a new password for your Mhamcloud account.",
       badge: isArabic ? "استعادة الوصول" : "Restore access",
-      secureSession: isArabic ? "إجراء آمن ومحمي" : "Secure protected action",
+      secureSession: isArabic ? "استعادة الحساب" : "Account recovery",
 
       successTitle: isArabic
         ? "تم إرسال طلب إعادة التعيين"
@@ -203,8 +203,8 @@ export default function ResetPasswordPage() {
         ? "استعادة آمنة لحساب Mhamcloud"
         : "Secure Mhamcloud account recovery",
       sideDescription: isArabic
-        ? "تساعدك هذه الصفحة على استعادة الوصول لحساب النظام أو حساب الشركة مع الحفاظ على حماية الجلسة والتحقق من الطلب عبر الـ Backend."
-        : "This page helps restore access for platform and company accounts while keeping the session protected and the backend in control.",
+        ? "استعد الوصول إلى حسابك بسهولة، ثم عد مباشرة إلى إدارة أعمالك وخدماتك في Mhamcloud."
+        : "Restore access to your account easily, then return directly to managing your business and Mhamcloud services.",
       pointOneTitle: isArabic ? "حسابات النظام" : "System accounts",
       pointOneDescription: isArabic
         ? "مناسب لمستخدمي إدارة المنصة والصلاحيات العليا."
@@ -213,10 +213,10 @@ export default function ResetPasswordPage() {
       pointTwoDescription: isArabic
         ? "مناسب للمالك والمدير والمحاسب والموظفين حسب صلاحيات العضوية."
         : "Suitable for owners, admins, accountants, and staff based on memberships.",
-      pointThreeTitle: isArabic ? "جاهز للسعودية" : "Saudi-ready",
+      pointThreeTitle: isArabic ? "الفاتورة الإلكترونية" : "E-Invoicing",
       pointThreeDescription: isArabic
-        ? "متوافق مع تجربة Mhamcloud العربية والريال السعودي."
-        : "Aligned with Arabic-first Mhamcloud workflows and SAR.",
+        ? "متوافق مع متطلبات هيئة الزكاة والضريبة والجمارك."
+        : "Compliant with ZATCA requirements.",
     }),
     [isArabic]
   );
@@ -348,110 +348,121 @@ export default function ResetPasswordPage() {
   return (
     <main
       dir={isArabic ? "rtl" : "ltr"}
-      className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(67,42,88,0.14),_transparent_32%),radial-gradient(circle_at_bottom,_rgba(140,156,220,0.14),_transparent_36%),linear-gradient(to_bottom_right,_hsl(var(--background)),_hsl(var(--muted)/0.55))]"
+      className="relative min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_16%_14%,rgba(255,255,255,0.96),transparent_28%),radial-gradient(circle_at_84%_18%,rgba(226,232,240,0.72),transparent_30%),radial-gradient(circle_at_52%_100%,rgba(203,213,225,0.48),transparent_42%),linear-gradient(135deg,#f8fafc_0%,#f1f5f9_42%,#e9edf3_72%,#f8fafc_100%)]"
     >
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+        <div className="absolute -left-20 top-[35%] h-52 w-52 rotate-45 rounded-[38%] bg-slate-300/25" />
+        <div className="absolute -right-16 top-[8%] h-72 w-72 rotate-45 rounded-[42%] bg-slate-300/22" />
+        <div className="absolute right-[8%] bottom-[7%] h-36 w-36 rotate-45 rounded-[40%] bg-slate-300/20" />
+        <div className="absolute left-[6%] top-[10%] h-12 w-12 rotate-45 bg-slate-400/16" />
+        <div className="absolute right-[11%] top-[45%] h-12 w-12 rotate-45 bg-slate-400/18" />
+        <div className="absolute left-[8%] bottom-[12%] h-10 w-10 rotate-45 bg-slate-300/20" />
+        <div className="absolute left-[13%] top-[48%] h-3 w-3 rotate-45 bg-slate-200/95 shadow-[0_0_22px_8px_rgba(148,163,184,0.28)]" />
+        <div className="absolute right-[9%] top-[38%] h-3 w-3 rotate-45 bg-slate-200/95 shadow-[0_0_24px_9px_rgba(148,163,184,0.30)]" />
+        <div className="absolute right-[4%] bottom-[20%] h-2.5 w-2.5 rotate-45 bg-slate-200/90 shadow-[0_0_20px_7px_rgba(148,163,184,0.24)]" />
+      </div>
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-primary/10 to-transparent" />
         <div className="absolute -left-16 top-24 h-52 w-52 rounded-full bg-primary/10 blur-3xl" />
         <div className="absolute -right-16 bottom-16 h-60 w-60 rounded-full bg-[#8c9cdc]/15 blur-3xl" />
       </div>
 
-      <div className="relative mx-auto flex min-h-screen w-full max-w-7xl items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
-        <div className="grid w-full max-w-6xl overflow-hidden rounded-[32px] border border-white/20 bg-background/80 shadow-2xl backdrop-blur-xl lg:grid-cols-2">
-          <section className="relative hidden min-h-[720px] overflow-hidden bg-gradient-to-br from-[#432a58] via-primary to-[#8c9cdc] text-white lg:flex">
-            <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
-            <div className="absolute right-[-80px] top-[-80px] h-72 w-72 rounded-full bg-white/10 blur-3xl" />
+      <div className="relative mx-auto flex min-h-screen w-full items-center justify-center px-3 py-5 sm:px-5 sm:py-7 lg:px-8 lg:py-8">
+        <div className="grid w-full max-w-[1180px] overflow-hidden rounded-[26px] border border-white/70 bg-white/80 shadow-[0_32px_90px_-34px_rgba(15,23,42,0.32)] backdrop-blur-2xl lg:grid-cols-[1.08fr_0.92fr] lg:rounded-[32px]">
+          <section className="relative hidden min-h-[660px] overflow-hidden bg-[radial-gradient(circle_at_82%_12%,rgba(71,103,165,0.30),transparent_34%),radial-gradient(circle_at_18%_88%,rgba(59,84,132,0.22),transparent_38%),linear-gradient(145deg,#0b1728_0%,#10233c_48%,#17365d_100%)] text-white lg:flex">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_14%,rgba(255,255,255,0.94),transparent_34%),radial-gradient(circle_at_84%_78%,rgba(148,163,184,0.22),transparent_38%),radial-gradient(circle_at_52%_40%,rgba(99,102,241,0.07),transparent_30%)]" />
+            <div className="absolute right-[-80px] top-[-80px] h-72 w-72 rounded-full bg-white/[0.075] blur-3xl" />
             <div className="absolute bottom-[-90px] left-[-90px] h-80 w-80 rounded-full bg-black/10 blur-3xl" />
 
-            <div className="relative z-10 flex h-full w-full flex-col justify-between p-10 xl:p-14">
+            <div className="relative z-10 flex min-h-full w-full flex-col px-9 py-9 xl:px-11 xl:py-10">
               <div
                 className={`flex items-center gap-3 ${
                   isArabic ? "flex-row-reverse" : ""
                 }`}
               >
-                <div className="rounded-2xl bg-white/15 p-3 backdrop-blur">
-                  <ShieldCheck className="h-6 w-6" />
+                <div className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-white/15 bg-white/[0.075] backdrop-blur">
+                  <ShieldCheck className="h-5 w-5" />
                 </div>
                 <div className={isArabic ? "text-right" : "text-left"}>
-                  <p className="text-sm font-medium text-white/80">
+                  <p className="whitespace-nowrap text-[11px] font-medium text-white/60">
                     {content.badge}
                   </p>
-                  <h1 className="text-2xl font-bold tracking-tight">
+                  <h1 className="whitespace-nowrap text-[21px] font-bold tracking-tight">
                     Mhamcloud
                   </h1>
                 </div>
               </div>
 
-              <div className={isArabic ? "text-right" : "text-left"}>
+              <div className={`mt-9 ${isArabic ? "text-right" : "text-left"}`}>
                 <div
-                  className={`mb-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm backdrop-blur ${
+                  className={`mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.075] px-3.5 py-2 text-xs backdrop-blur ${
                     isArabic ? "flex-row-reverse" : ""
                   }`}
                 >
-                  <LockKeyhole className="h-4 w-4" />
+                  <LockKeyhole className="h-3.5 w-3.5" />
                   <span>{content.secureSession}</span>
                 </div>
 
-                <h2 className="max-w-xl text-4xl font-extrabold leading-tight xl:text-5xl">
+                <h2 className="max-w-xl text-[30px] font-extrabold leading-tight tracking-[-0.025em] xl:text-[36px] bg-gradient-to-l from-[#2563eb] via-[#7c3aed] to-[#0ea5e9] bg-clip-text text-transparent">
                   {content.sideTitle}
                 </h2>
 
-                <p className="mt-6 max-w-xl text-base leading-8 text-white/85 xl:text-lg">
+                <p className="mt-4 max-w-xl text-[13px] leading-6 text-white/75 xl:text-[14px]">
                   {content.sideDescription}
                 </p>
               </div>
 
-              <div className="grid gap-4">
-                <div className="rounded-3xl border border-white/15 bg-white/10 p-5 backdrop-blur-md">
+              <div className="mt-8 grid gap-3.5">
+                <div className="flex min-h-[92px] flex-col justify-center rounded-[20px] border border-white/15 bg-white/[0.09] p-4 shadow-[0_18px_45px_-28px_rgba(0,0,0,0.55)] backdrop-blur-xl">
                   <div
-                    className={`mb-3 flex items-center gap-3 ${
+                    className={`mb-2.5 flex items-center gap-2.5 ${
                       isArabic ? "flex-row-reverse" : ""
                     }`}
                   >
-                    <div className="rounded-2xl bg-white/10 p-2">
-                      <ShieldCheck className="h-5 w-5" />
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] border border-white/10 bg-white/[0.075]">
+                      <ShieldCheck className="h-4 w-4" />
                     </div>
-                    <h3 className="font-semibold">{content.pointOneTitle}</h3>
+                    <h3 className="whitespace-nowrap text-[12.5px] font-semibold">{content.pointOneTitle}</h3>
                   </div>
-                  <p className="text-sm leading-7 text-white/80">
+                  <p className="text-[10.5px] leading-5 text-white/70 xl:text-[11px]">
                     {content.pointOneDescription}
                   </p>
                 </div>
 
-                <div className="rounded-3xl border border-white/15 bg-white/10 p-5 backdrop-blur-md">
+                <div className="flex min-h-[92px] flex-col justify-center rounded-[20px] border border-white/15 bg-white/[0.09] p-4 shadow-[0_18px_45px_-28px_rgba(0,0,0,0.55)] backdrop-blur-xl">
                   <div
-                    className={`mb-3 flex items-center gap-3 ${
+                    className={`mb-2.5 flex items-center gap-2.5 ${
                       isArabic ? "flex-row-reverse" : ""
                     }`}
                   >
-                    <div className="rounded-2xl bg-white/10 p-2">
-                      <Building2 className="h-5 w-5" />
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] border border-white/10 bg-white/[0.075]">
+                      <Building2 className="h-4 w-4" />
                     </div>
-                    <h3 className="font-semibold">{content.pointTwoTitle}</h3>
+                    <h3 className="whitespace-nowrap text-[12.5px] font-semibold">{content.pointTwoTitle}</h3>
                   </div>
-                  <p className="text-sm leading-7 text-white/80">
+                  <p className="text-[10.5px] leading-5 text-white/70 xl:text-[11px]">
                     {content.pointTwoDescription}
                   </p>
                 </div>
 
-                <div className="rounded-3xl border border-white/15 bg-white/10 p-5 backdrop-blur-md">
+                <div className="flex min-h-[92px] flex-col justify-center rounded-[20px] border border-white/15 bg-white/[0.09] p-4 shadow-[0_18px_45px_-28px_rgba(0,0,0,0.55)] backdrop-blur-xl">
                   <div
-                    className={`mb-3 flex items-center gap-3 ${
+                    className={`mb-2.5 flex items-center gap-2.5 ${
                       isArabic ? "flex-row-reverse" : ""
                     }`}
                   >
-                    <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white/90 p-2">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] bg-white/90">
                       <Image
                         src="/currency/sar.svg"
                         alt="SAR"
-                        width={20}
-                        height={20}
-                        className="h-5 w-5"
+                        width={17}
+                        height={17}
+                        className="h-[17px] w-[17px]"
                       />
                     </div>
-                    <h3 className="font-semibold">{content.pointThreeTitle}</h3>
+                    <h3 className="whitespace-nowrap text-[12.5px] font-semibold">{content.pointThreeTitle}</h3>
                   </div>
-                  <p className="text-sm leading-7 text-white/80">
+                  <p className="text-[10.5px] leading-5 text-white/70 xl:text-[11px]">
                     {content.pointThreeDescription}
                   </p>
                 </div>
@@ -459,9 +470,9 @@ export default function ResetPasswordPage() {
             </div>
           </section>
 
-          <section className="flex min-h-[720px] items-center justify-center p-5 sm:p-8 lg:p-10">
-            <div className="w-full max-w-md">
-              <div className="mb-6 flex items-center justify-between">
+          <section className="relative flex min-h-[640px] items-center justify-center bg-white/70 px-4 py-7 sm:px-7 lg:min-h-[660px] lg:px-8 xl:px-10">
+            <div className="w-full max-w-[430px]">
+              <div className="mb-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Image
                     src="/logo/primey.svg"
@@ -478,7 +489,7 @@ export default function ResetPasswordPage() {
                   variant="outline"
                   size="sm"
                   onClick={toggleLanguage}
-                  className="h-10 rounded-2xl px-3"
+                  className="h-9 rounded-xl border-border/60 bg-white/75 px-3 text-xs font-medium shadow-sm backdrop-blur-md transition hover:bg-white"
                 >
                   <span
                     className={`flex items-center gap-2 ${
@@ -501,15 +512,15 @@ export default function ResetPasswordPage() {
                   <span>{content.badge}</span>
                 </div>
 
-                <h2 className="text-3xl font-extrabold tracking-tight text-foreground">
+                <h2 className="text-[25px] font-extrabold tracking-[-0.02em] text-slate-950 dark:text-white sm:text-[28px]">
                   {content.title}
                 </h2>
-                <p className="mt-3 text-sm leading-7 text-muted-foreground">
+                <p className="mt-2 text-[12.5px] leading-6 text-muted-foreground">
                   {content.subtitle}
                 </p>
               </div>
 
-              <div className="mt-8 rounded-[28px] border border-border/70 bg-card/95 p-4 shadow-xl shadow-primary/5">
+              <div className="mt-5 rounded-[24px] border border-border/60 bg-white/80 p-4 shadow-[0_18px_50px_-30px_rgba(15,23,42,0.30)] backdrop-blur-xl dark:bg-slate-900/60 sm:p-5">
                 {done ? (
                   <div className="space-y-5">
                     <div
@@ -553,9 +564,9 @@ export default function ResetPasswordPage() {
                     </Link>
                   </div>
                 ) : (
-                  <form onSubmit={handleResetSubmit} className="space-y-5">
+                  <form onSubmit={handleResetSubmit} className="space-y-4">
                     <div
-                      className={`rounded-3xl border border-[#8c9cdc]/25 bg-[#8c9cdc]/10 p-4 ${
+                      className={`rounded-[16px] border border-slate-200/90 bg-slate-100/80 p-3 ${
                         isArabic ? "text-right" : "text-left"
                       }`}
                     >
@@ -567,13 +578,13 @@ export default function ResetPasswordPage() {
                         <ShieldCheck className="h-4 w-4 text-primary" />
                         <span>{content.secureSession}</span>
                       </div>
-                      <p className="text-sm leading-7 text-muted-foreground">
+                      <p className="text-[11.5px] leading-5 text-muted-foreground">
                         {content.sideDescription}
                       </p>
                     </div>
 
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">
+                    <div className="space-y-1.5">
+                      <label className="text-[12px] font-medium text-foreground/85">
                         {content.identifierLabel}
                       </label>
 
@@ -594,15 +605,15 @@ export default function ResetPasswordPage() {
                             setIdentifier(e.target.value);
                             clearFormErrors();
                           }}
-                          className={`h-12 rounded-2xl border-border/70 bg-muted/30 shadow-sm ${
+                          className={`h-11 rounded-[13px] border-slate-200/90 bg-slate-100/90 text-[13px] shadow-none dark:border-slate-700 dark:bg-slate-800/70 transition-all duration-200 placeholder:text-muted-foreground/55 hover:border-slate-300 hover:bg-slate-200/70 dark:hover:border-slate-600 dark:hover:bg-slate-800 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/35 ${
                             isArabic ? "pr-11 text-right" : "pl-11 text-left"
                           }`}
                         />
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">
+                    <div className="space-y-1.5">
+                      <label className="text-[12px] font-medium text-foreground/85">
                         {content.newPasswordLabel}
                       </label>
 
@@ -624,7 +635,7 @@ export default function ResetPasswordPage() {
                             setNewPassword(e.target.value);
                             clearFormErrors();
                           }}
-                          className={`h-12 rounded-2xl border-border/70 bg-muted/30 shadow-sm ${
+                          className={`h-11 rounded-[13px] border-slate-200/90 bg-slate-100/90 text-[13px] shadow-none dark:border-slate-700 dark:bg-slate-800/70 transition-all duration-200 placeholder:text-muted-foreground/55 hover:border-slate-300 hover:bg-slate-200/70 dark:hover:border-slate-600 dark:hover:bg-slate-800 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/35 ${
                             isArabic
                               ? "pr-11 pl-12 text-right"
                               : "pl-11 pr-12 text-left"
@@ -652,8 +663,8 @@ export default function ResetPasswordPage() {
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">
+                    <div className="space-y-1.5">
+                      <label className="text-[12px] font-medium text-foreground/85">
                         {content.confirmPasswordLabel}
                       </label>
 
@@ -675,7 +686,7 @@ export default function ResetPasswordPage() {
                             setConfirmPassword(e.target.value);
                             clearFormErrors();
                           }}
-                          className={`h-12 rounded-2xl border-border/70 bg-muted/30 shadow-sm ${
+                          className={`h-11 rounded-[13px] border-slate-200/90 bg-slate-100/90 text-[13px] shadow-none dark:border-slate-700 dark:bg-slate-800/70 transition-all duration-200 placeholder:text-muted-foreground/55 hover:border-slate-300 hover:bg-slate-200/70 dark:hover:border-slate-600 dark:hover:bg-slate-800 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/35 ${
                             isArabic
                               ? "pr-11 pl-12 text-right"
                               : "pl-11 pr-12 text-left"
@@ -718,7 +729,7 @@ export default function ResetPasswordPage() {
                     <Button
                       type="submit"
                       disabled={loading}
-                      className="h-12 w-full rounded-2xl text-base font-semibold shadow-lg"
+                      className="h-11 w-full rounded-[13px] bg-[#151b2b] text-[13px] font-semibold text-white shadow-[0_10px_24px_-12px_rgba(15,23,42,0.75)] transition hover:bg-[#20283c]"
                     >
                       {loading ? (
                         <span
@@ -736,7 +747,7 @@ export default function ResetPasswordPage() {
 
                     <Link
                       href="/login"
-                      className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-border/60 px-4 py-3 text-sm font-medium text-muted-foreground transition hover:bg-muted/50 hover:text-foreground ${
+                      className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-[13px] border border-slate-200/90 bg-white/70 px-4 text-[12px] font-medium text-muted-foreground transition hover:border-slate-300 hover:bg-slate-100 hover:text-foreground ${
                         isArabic ? "flex-row-reverse" : ""
                       }`}
                     >

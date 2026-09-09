@@ -194,14 +194,6 @@ export default function Page() {
         ? "جلسة دخول آمنة ومحمية"
         : "Secure protected session",
       portalBadge: isArabic ? "بوابة الدخول الموحدة" : "Unified access portal",
-      formTitle: isArabic ? "دخول واحد لكل الحسابات" : "One sign-in for every account",
-      formSubtitle: isArabic
-        ? "بعد التحقق من الحساب يوجهك النظام تلقائيًا إلى إدارة المنصة أو مساحة الشركة حسب الصلاحيات والعضوية."
-        : "After verification, the system automatically routes you to the platform or company workspace based on permissions and membership.",
-      routingTitle: isArabic ? "توجيه تلقائي موثوق" : "Authoritative automatic routing",
-      routingText: isArabic
-        ? "لا تحتاج لاختيار نوع البوابة. الباكند هو مصدر الحقيقة لمساحة العمل والصلاحيات."
-        : "You do not choose a portal type. The backend is the source of truth for workspace and permissions.",
       requiredFields: isArabic
         ? "يرجى إدخال بيانات الحساب وكلمة المرور."
         : "Enter your account identifier and password.",
@@ -396,41 +388,48 @@ export default function Page() {
   return (
     <main
       dir={isArabic ? "rtl" : "ltr"}
-      className="relative min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_8%_10%,rgba(67,42,88,0.09),transparent_27%),radial-gradient(circle_at_92%_88%,rgba(140,156,220,0.14),transparent_30%),linear-gradient(135deg,#f8f8fb_0%,#f4f5f8_45%,#f8f9fc_100%)] dark:bg-[radial-gradient(circle_at_8%_10%,rgba(67,42,88,0.22),transparent_27%),radial-gradient(circle_at_92%_88%,rgba(140,156,220,0.12),transparent_30%),linear-gradient(135deg,#11131a_0%,#151821_45%,#11131a_100%)]"
+      className="relative min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_16%_14%,rgba(255,255,255,0.96),transparent_28%),radial-gradient(circle_at_84%_18%,rgba(226,232,240,0.72),transparent_30%),radial-gradient(circle_at_52%_100%,rgba(203,213,225,0.48),transparent_42%),linear-gradient(135deg,#f8fafc_0%,#f1f5f9_42%,#e9edf3_72%,#f8fafc_100%)]"
     >
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -left-28 -top-28 h-80 w-80 rounded-full bg-[#432a58]/10 blur-[110px]" />
-        <div className="absolute -bottom-32 -right-24 h-96 w-96 rounded-full bg-[#8c9cdc]/20 blur-[120px]" />
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+        <div className="absolute -left-20 top-[35%] h-52 w-52 rotate-45 rounded-[38%] bg-slate-300/25" />
+        <div className="absolute -right-16 top-[8%] h-72 w-72 rotate-45 rounded-[42%] bg-slate-300/22" />
+        <div className="absolute right-[8%] bottom-[7%] h-36 w-36 rotate-45 rounded-[40%] bg-slate-300/20" />
+        <div className="absolute left-[6%] top-[10%] h-12 w-12 rotate-45 bg-slate-400/16" />
+        <div className="absolute right-[11%] top-[45%] h-12 w-12 rotate-45 bg-slate-400/18" />
+        <div className="absolute left-[8%] bottom-[12%] h-10 w-10 rotate-45 bg-slate-300/20" />
+        <div className="absolute left-[13%] top-[48%] h-3 w-3 rotate-45 bg-slate-200/95 shadow-[0_0_22px_8px_rgba(148,163,184,0.28)]" />
+        <div className="absolute right-[9%] top-[38%] h-3 w-3 rotate-45 bg-slate-200/95 shadow-[0_0_24px_9px_rgba(148,163,184,0.30)]" />
+        <div className="absolute right-[4%] bottom-[20%] h-2.5 w-2.5 rotate-45 bg-slate-200/90 shadow-[0_0_20px_7px_rgba(148,163,184,0.24)]" />
       </div>
 
       <div className="relative mx-auto flex min-h-screen w-full items-center justify-center px-3 py-5 sm:px-5 sm:py-7 lg:px-8 lg:py-8">
         <div className="grid w-full max-w-[1180px] overflow-hidden rounded-[26px] border border-white/70 bg-white/80 shadow-[0_32px_90px_-34px_rgba(15,23,42,0.32)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/70 lg:grid-cols-[1.08fr_0.92fr] lg:rounded-[32px]">
 
-          <section className="relative hidden min-h-[660px] overflow-hidden bg-[linear-gradient(145deg,#2a2039_0%,#20243a_50%,#6076b5_100%)] text-white lg:flex">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.10),transparent_30%),radial-gradient(circle_at_88%_85%,rgba(140,156,220,0.30),transparent_38%)]" />
+          <section className="relative hidden min-h-[660px] overflow-hidden bg-[radial-gradient(circle_at_82%_12%,rgba(71,103,165,0.30),transparent_34%),radial-gradient(circle_at_18%_88%,rgba(59,84,132,0.22),transparent_38%),linear-gradient(145deg,#0b1728_0%,#10233c_48%,#17365d_100%)] text-white lg:flex">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_16%_14%,rgba(255,255,255,0.92),transparent_32%),radial-gradient(circle_at_88%_82%,rgba(148,163,184,0.24),transparent_38%),radial-gradient(circle_at_58%_38%,rgba(99,102,241,0.08),transparent_30%)]" />
 
             <div className="relative z-10 flex min-h-full w-full flex-col px-9 py-9 xl:px-11 xl:py-10">
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-white/15 bg-white/10">
+                <div className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-white/15 bg-white/[0.075]">
                   <ShieldCheck className="h-5 w-5" />
                 </div>
                 <div className={isArabic ? "text-right" : "text-left"}>
                   <p className="whitespace-nowrap text-[11px] font-medium text-white/60">
                     {isArabic ? "نظام محاسبي متكامل" : "Integrated accounting system"}
                   </p>
-                  <h1 className="whitespace-nowrap text-[21px] font-bold">Mhamcloud</h1>
+                  <h1 className="whitespace-nowrap bg-gradient-to-l from-[#2563eb] via-[#4f46e5] to-[#7c3aed] bg-clip-text text-[21px] font-bold text-transparent">Mhamcloud</h1>
                 </div>
               </div>
 
               <div className={`mt-11 ${isArabic ? "text-right" : "text-left"}`}>
-                <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.08] px-3.5 py-2 text-xs text-white/90">
+                <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.075] px-3.5 py-2 text-xs text-white/85">
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   <span className="whitespace-nowrap">
                     {isArabic ? "منصة أعمال متكاملة" : "Integrated business platform"}
                   </span>
                 </div>
 
-                <h2 className="whitespace-nowrap text-[30px] font-extrabold tracking-[-0.025em] xl:text-[36px]">
+                <h2 className="whitespace-nowrap bg-gradient-to-l from-[#2563eb] via-[#7c3aed] to-[#0ea5e9] bg-clip-text text-[30px] font-extrabold tracking-[-0.025em] text-transparent xl:text-[36px]">
                   {isArabic
                     ? "حلول محاسبية متكاملة لنمو أعمالك"
                     : "Integrated accounting solutions for growth"}
@@ -470,17 +469,17 @@ export default function Page() {
                   return (
                     <div
                       key={feature.title}
-                      className="flex min-h-[92px] flex-col justify-center rounded-[20px] border border-white/12 bg-white/[0.075] p-4 backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/[0.11]"
+                      className="flex min-h-[92px] flex-col justify-center rounded-[20px] border border-white/15 bg-white/[0.09] p-4 shadow-[0_18px_45px_-28px_rgba(0,0,0,0.55)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/[0.11]"
                     >
                       <div className="mb-3 flex items-center gap-2.5">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] border border-white/10 bg-white/10">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] border border-white/10 bg-white/[0.075]">
                           <Icon className="h-4 w-4" />
                         </div>
                         <h3 className="whitespace-nowrap text-[12.5px] font-semibold">
                           {feature.title}
                         </h3>
                       </div>
-                      <p className="whitespace-nowrap text-[10.5px] text-white/65 xl:text-[11px]">
+                      <p className="whitespace-nowrap text-[10.5px] text-white/70 xl:text-[11px]">
                         {feature.text}
                       </p>
                     </div>
@@ -489,7 +488,7 @@ export default function Page() {
               </div>
 
               <div className="mt-4 grid grid-cols-2 gap-3.5">
-                <div className="flex min-h-[92px] flex-col justify-center rounded-[20px] border border-white/12 bg-white/[0.075] p-4 backdrop-blur-xl">
+                <div className="flex min-h-[92px] flex-col justify-center rounded-[20px] border border-white/15 bg-white/[0.09] p-4 shadow-[0_18px_45px_-28px_rgba(0,0,0,0.55)] backdrop-blur-xl">
                   <div className="mb-3 flex items-center gap-2.5">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] bg-white/90">
                       <Image
@@ -501,40 +500,40 @@ export default function Page() {
                       />
                     </div>
                     <h3 className="whitespace-nowrap text-[12.5px] font-semibold">
-                      {isArabic ? "جاهز للسعودية" : "Saudi-ready"}
+                      {isArabic ? "الفاتورة الإلكترونية" : "E-Invoicing"}
                     </h3>
                   </div>
-                  <p className="whitespace-nowrap text-[10.5px] text-white/65 xl:text-[11px]">
-                    {isArabic ? "الريال السعودي وضريبة القيمة المضافة" : "SAR and VAT-ready operations"}
+                  <p className="whitespace-nowrap text-[10.5px] text-white/70 xl:text-[11px]">
+                    {isArabic ? "متوافق مع متطلبات هيئة الزكاة والضريبة والجمارك" : "Compliant with ZATCA requirements"}
                   </p>
                 </div>
 
-                <div className="flex min-h-[92px] flex-col justify-center rounded-[20px] border border-white/12 bg-white/[0.075] p-4 backdrop-blur-xl">
+                <div className="flex min-h-[92px] flex-col justify-center rounded-[20px] border border-white/15 bg-white/[0.09] p-4 shadow-[0_18px_45px_-28px_rgba(0,0,0,0.55)] backdrop-blur-xl">
                   <div className="mb-3 flex items-center gap-2.5">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] border border-white/10 bg-white/10">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] border border-white/10 bg-white/[0.075]">
                       <LockKeyhole className="h-4 w-4" />
                     </div>
                     <h3 className="whitespace-nowrap text-[12.5px] font-semibold">
                       {isArabic ? "تحكم وصلاحيات" : "Access control"}
                     </h3>
                   </div>
-                  <p className="whitespace-nowrap text-[10.5px] text-white/65 xl:text-[11px]">
+                  <p className="whitespace-nowrap text-[10.5px] text-white/70 xl:text-[11px]">
                     {isArabic ? "أدوار وصلاحيات تناسب فريقك" : "Roles and permissions built for teams"}
                   </p>
                 </div>
               </div>
 
               <div className="mt-auto pt-5">
-                <div className="flex items-center justify-between gap-4 rounded-[18px] border border-white/15 bg-white/[0.10] px-4 py-4 shadow-[0_14px_40px_-28px_rgba(0,0,0,0.75)] backdrop-blur-xl">
+                <div className="flex items-center justify-between gap-4 rounded-[18px] border border-white/15 bg-white/[0.09] px-4 py-4 shadow-[0_14px_40px_-28px_rgba(0,0,0,0.75)] backdrop-blur-xl">
                   <div className={isArabic ? "text-right" : "text-left"}>
-                    <p className="whitespace-nowrap text-[12px] font-semibold text-white/95">
+                    <p className="whitespace-nowrap text-[12px] font-semibold text-white">
                       {isArabic ? "نظام واحد لإدارة أعمالك بثقة" : "One system to run your business with confidence"}
                     </p>
-                    <p className="mt-1 whitespace-nowrap text-[10.5px] text-white/55">
+                    <p className="mt-1 whitespace-nowrap text-[10.5px] text-white/60">
                       {isArabic ? "محاسبة • مبيعات • مشتريات • مخزون • تقارير" : "Accounting • Sales • Purchases • Inventory • Reports"}
                     </p>
                   </div>
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-white/10">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-white/[0.075]">
                     <ShieldCheck className="h-4 w-4" />
                   </div>
                 </div>
@@ -583,7 +582,7 @@ export default function Page() {
                   </div>
                 </div>
 
-                <h2 className="text-center text-[25px] font-extrabold tracking-[-0.02em] text-foreground sm:text-[28px]">
+                <h2 className="text-center text-[25px] font-extrabold tracking-[-0.02em] text-slate-950 dark:text-white sm:text-[28px]">
                   {content.title}
                 </h2>
 
@@ -593,22 +592,6 @@ export default function Page() {
               </div>
 
               <div className="mt-5 rounded-[24px] border border-border/60 bg-white/80 p-4 shadow-[0_18px_50px_-30px_rgba(15,23,42,0.3)] backdrop-blur-xl dark:bg-slate-900/60 sm:p-5">
-                <div
-                  className={`mb-4 rounded-[18px] border border-[#8c9cdc]/20 bg-[linear-gradient(135deg,rgba(140,156,220,0.10),rgba(67,42,88,0.035))] px-4 py-3 ${
-                    isArabic ? "text-right" : "text-left"
-                  }`}
-                >
-                  <div className="mb-1.5 flex items-center gap-2 font-semibold text-foreground">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-[9px] bg-white/80 shadow-sm dark:bg-slate-900/70">
-                      <Route className="h-3.5 w-3.5 text-[#6578b4]" />
-                    </div>
-                    <span className="text-[12.5px]">{content.formTitle}</span>
-                  </div>
-                  <p className="text-[11px] leading-[1.75] text-muted-foreground">
-                    {content.formSubtitle}
-                  </p>
-                </div>
-
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
                   <div className="space-y-1.5">
                     <label htmlFor="login-identifier" className="block text-[12px] font-medium text-foreground/85">
@@ -632,7 +615,7 @@ export default function Page() {
                           setIdentifier(event.target.value);
                           setError(null);
                         }}
-                        className={`h-11 rounded-[13px] border-border/65 bg-muted/20 text-[13px] shadow-none transition-all duration-200 placeholder:text-muted-foreground/55 hover:border-[#8c9cdc]/40 focus-visible:border-[#6578b4]/60 focus-visible:ring-2 focus-visible:ring-[#8c9cdc]/15 ${
+                        className={`h-11 rounded-[13px] border-slate-200/90 bg-slate-100/90 text-[13px] shadow-none dark:border-slate-700 dark:bg-slate-800/70 transition-all duration-200 placeholder:text-muted-foreground/55 hover:border-slate-300 hover:bg-slate-200/70 dark:hover:border-slate-600 dark:hover:bg-slate-800 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/35 ${
                           isArabic ? "pr-10 text-right" : "pl-10 text-left"
                         }`}
                       />
@@ -662,7 +645,7 @@ export default function Page() {
                           setPassword(event.target.value);
                           setError(null);
                         }}
-                        className={`h-11 rounded-[13px] border-border/65 bg-muted/20 text-[13px] shadow-none transition-all duration-200 placeholder:text-muted-foreground/55 hover:border-[#8c9cdc]/40 focus-visible:border-[#6578b4]/60 focus-visible:ring-2 focus-visible:ring-[#8c9cdc]/15 ${
+                        className={`h-11 rounded-[13px] border-slate-200/90 bg-slate-100/90 text-[13px] shadow-none dark:border-slate-700 dark:bg-slate-800/70 transition-all duration-200 placeholder:text-muted-foreground/55 hover:border-slate-300 hover:bg-slate-200/70 dark:hover:border-slate-600 dark:hover:bg-slate-800 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/35 ${
                           isArabic ? "pr-10 pl-11 text-right" : "pl-10 pr-11 text-left"
                         }`}
                       />
