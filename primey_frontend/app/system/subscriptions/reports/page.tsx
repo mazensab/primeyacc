@@ -29,21 +29,18 @@ import {
   ArrowUpDown,
   BarChart3,
   Building2,
-  CalendarDays,
+  ExternalLink,
   CheckCircle2,
-  CircleAlert,
   FileSpreadsheet,
-  FileText,
   LayoutDashboard,
   ListChecks,
   Loader2,
   MapPin,
+  MoreVertical,
   PieChart,
-  Plus,
   Printer,
   RefreshCw,
   RotateCcw,
-  Search,
   ShieldCheck,
   Sparkles,
   TableProperties,
@@ -53,15 +50,31 @@ import {
 import { toast } from "sonner";
 import { SystemKpiCard } from "@/components/ui/system-kpi-card";
 import {
+  DataRegisterDatePicker,
+  DataRegisterEmptyState,
+  DataRegisterSearch,
+  DataRegisterToolbar,
   registerBrandButtonClass,
   registerOutlineButtonClass,
 } from "@/components/ui/data-register";
+import {
+  DataRegisterResultCount,
+  DataRegisterTableFrame,
+} from "@/components/ui/data-register-table";
 import { downloadExcelReport, type ExcelReportSection } from "@/lib/excel-report";
-import { openPrintReport } from "@/lib/print-report";
+import {
+  openPrintTableReport,
+  type PrintReportTableSection,
+} from "@/lib/print-report";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Card,
   CardContent,
@@ -69,12 +82,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -110,6 +117,8 @@ type SortKey = "newest" | "oldest" | "name" | "code" | "status" | "activity" | "
 
 type CompanyRecord = {
   id: string;
+  sort_id: number;
+  company_key: string;
   name: string;
   code: string;
   status: string;
@@ -118,9 +127,8 @@ type CompanyRecord = {
   subscription: string;
   amount: string;
   currency: string;
-  email: string;
-  phone: string;
-  city: string;
+  starts_at: string | null;
+  ends_at: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -152,8 +160,8 @@ const translations = {
   ar: {
     title: "تقارير الاشتراكات",
     subtitle:
-      "تحليلات اشتراكات شركات Mhamcloud حسب الحالة والخطة ودورة الفوترة والقيمة والتواريخ مبنية على بيانات API الحقيقية.",
-    badge: "إدارة الاشتراكات",
+      "تحليلات أحدث اشتراك لكل شركة في Mhamcloud حسب الحالة والخطة ودورة الفوترة والقيمة والتواريخ.",
+    badge: "إدارة المنصة",
     refresh: "تحديث",
     exportExcel: "تصدير Excel",
     print: "طباعة",
@@ -183,8 +191,8 @@ const translations = {
 
     totalCompanies: "إجمالي الاشتراكات",
     activeCompanies: "الاشتراكات النشطة",
-    inactiveCompanies: "غير النشطة",
-    subscribedCompanies: "اشتراكات بقيمة",
+    inactiveCompanies: "الاشتراكات المنتهية",
+    subscribedCompanies: "شركات لديها اشتراك",
     uniqueActivities: "دورات فوترة مختلفة",
     uniqueCities: "خطط مختلفة",
     filteredRows: "نتائج التقرير",
@@ -198,14 +206,15 @@ const translations = {
     cityDistributionDesc: "توزيع الخطط ضمن الاشتراكات بعد تطبيق الفلاتر الحالية.",
     reportTable: "جدول التقرير التحليلي",
     reportTableDesc:
-      "بيانات الاشتراكات بعد تطبيق الفلاتر الحالية وهي نفس البيانات المستخدمة في التصدير والطباعة.",
+      "أحدث اشتراك لكل شركة بعد تطبيق الفلاتر الحالية وهي نفس البيانات المستخدمة في Excel والطباعة.",
 
     company: "الشركة",
     code: "كود الاشتراك",
     owner: "الخطة",
     activity: "دورة الفوترة",
     subscription: "القيمة",
-    city: "تاريخ الانتهاء",
+    startsAt: "تاريخ البداية",
+    endsAt: "تاريخ الانتهاء",
     status: "الحالة",
     createdAt: "تاريخ الإنشاء",
     updatedAt: "آخر تحديث",
@@ -243,8 +252,8 @@ const translations = {
   en: {
     title: "Subscriptions reports",
     subtitle:
-      "Mhamcloud company subscription analytics by status, plan, billing cycle, value, and dates, based on real API data.",
-    badge: "Subscription management",
+      "Analytics for each companys latest Mhamcloud subscription by status, plan, billing cycle, value, and dates.",
+    badge: "Platform management",
     refresh: "Refresh",
     exportExcel: "Export Excel",
     print: "Print",
@@ -274,8 +283,8 @@ const translations = {
 
     totalCompanies: "Total subscriptions",
     activeCompanies: "Active subscriptions",
-    inactiveCompanies: "Inactive",
-    subscribedCompanies: "With value",
+    inactiveCompanies: "Expired subscriptions",
+    subscribedCompanies: "With subscription",
     uniqueActivities: "Unique billing cycles",
     uniqueCities: "Unique plans",
     filteredRows: "Report results",
@@ -289,14 +298,15 @@ const translations = {
     cityDistributionDesc: "Plan distribution across the current filtered subscriptions.",
     reportTable: "Analytical report table",
     reportTableDesc:
-      "Subscription data after current filters, used by export and print actions.",
+      "Each companys latest subscription after current filters, used by Excel export and print.",
 
     company: "Company",
     code: "Subscription code",
     owner: "Plan",
     activity: "Billing cycle",
     subscription: "Value",
-    city: "End date",
+    startsAt: "Start date",
+    endsAt: "End date",
     status: "Status",
     createdAt: "Created at",
     updatedAt: "Updated at",
@@ -408,20 +418,6 @@ function MoneyValue({
   );
 }
 
-function isoToDate(value: string) {
-  if (!value) return undefined;
-  const parsed = new Date(`${value}T00:00:00`);
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
-}
-
-function dateToIso(value: Date | undefined) {
-  if (!value) return "";
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function formatDate(value: string | null | undefined) {
   if (!value) return "—";
   const parsed = new Date(value);
@@ -435,13 +431,47 @@ function rowDateValue(value: string | null | undefined) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function escapeHtml(value: unknown) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+function compareSubscriptionRecency(
+  a: CompanyRecord,
+  b: CompanyRecord,
+  direction: "newest" | "oldest",
+) {
+  const multiplier =
+    direction === "newest"
+      ? -1
+      : 1;
+
+  const createdDifference =
+    rowDateValue(a.created_at) -
+    rowDateValue(b.created_at);
+
+  if (createdDifference !== 0) {
+    return createdDifference * multiplier;
+  }
+
+  return (
+    (a.sort_id - b.sort_id) *
+    multiplier
+  );
+}
+
+function formatDateTime(
+  value: string | null | undefined,
+) {
+  if (!value) return "—";
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value)
+      .replace("T", " ")
+      .slice(0, 16);
+  }
+
+  return parsed
+    .toISOString()
+    .replace("T", " ")
+    .slice(0, 16);
 }
 
 function getInitialLocale(): Locale {
@@ -555,6 +585,65 @@ function extractCount(payload: unknown) {
   );
 }
 
+
+async function fetchAllSubscriptionRows(
+  endpoint: string,
+): Promise<{
+  rows: CompanyRecord[];
+  total: number;
+}> {
+  const pageSize = 500;
+  const maxPages = 100;
+
+  const accumulated: CompanyRecord[] = [];
+  let expectedTotal = 0;
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    const params = new URLSearchParams({
+      page: String(page),
+      page_size: String(pageSize),
+      ordering: "-created_at",
+    });
+
+    const payload = await fetchJson<unknown>(
+      makeApiUrl(endpoint, params),
+    );
+
+    const rawRows = extractArray(payload);
+
+    if (page === 1) {
+      expectedTotal = extractCount(payload);
+    }
+
+    if (!rawRows.length) {
+      break;
+    }
+
+    accumulated.push(
+      ...rawRows.map(normalizeCompany),
+    );
+
+    if (
+      expectedTotal > 0 &&
+      accumulated.length >= expectedTotal
+    ) {
+      break;
+    }
+
+    if (rawRows.length < pageSize) {
+      break;
+    }
+  }
+
+  return {
+    rows: accumulated,
+    total:
+      expectedTotal > 0
+        ? expectedTotal
+        : accumulated.length,
+  };
+}
+
 function normalizeNestedName(value: unknown, keys: string[] = ["name", "title", "full_name"]) {
   if (typeof value === "string") return value;
   const record = asRecord(value);
@@ -585,8 +674,20 @@ function normalizeStatus(value: unknown) {
 
 function normalizeCompany(value: unknown): CompanyRecord {
   const record = asRecord(value);
-  const company = record.company || record.company_ref || record.tenant || record.account_company;
-  const plan = record.plan || record.subscription_plan || record.package || record.product;
+  const company =
+    record.company ||
+    record.company_ref ||
+    record.tenant ||
+    record.account_company;
+
+  const companyRecord =
+    asRecord(company);
+
+  const plan =
+    record.plan ||
+    record.subscription_plan ||
+    record.package ||
+    record.product;
   const planRecord = asRecord(plan);
   const pricing = asRecord(record.pricing);
   const totals = asRecord(record.totals);
@@ -620,8 +721,24 @@ function normalizeCompany(value: unknown): CompanyRecord {
   const planName =
     normalizeNestedName(plan, ["name", "plan_name", "title", "display_name"]) ||
     normalizeText(record.plan_name || record.package_name, "—");
+  const rawId =
+    record.id ??
+    record.pk ??
+    record.subscription_id;
+
   return {
     id: normalizeText(record.id || record.uuid || record.pk || record.slug || record.code),
+    sort_id: toNumber(rawId, 0),
+    company_key: normalizeText(
+      companyRecord.id ||
+        companyRecord.pk ||
+        companyRecord.company_id ||
+        companyRecord.companyId ||
+        record.company_id ||
+        record.companyId ||
+        record.tenant_id ||
+        record.account_company_id,
+    ),
     name:
       normalizeNestedName(company, ["name", "company_name", "title", "display_name"]) ||
       normalizeText(record.company_name || record.company_title, "—"),
@@ -640,10 +757,26 @@ function normalizeCompany(value: unknown): CompanyRecord {
     subscription: `${amount} ${currency}`,
     amount,
     currency,
-    email: currency,
-    phone: normalizeText(record.starts_at || record.start_date || record.started_at || record.valid_from),
-    city: normalizeText(record.ends_at || record.end_date || record.expires_at || record.valid_to, "—"),
-    created_at: normalizeText(record.created_at || record.created || record.inserted_at) || null,
+    starts_at:
+      normalizeText(
+        record.starts_at ||
+          record.start_date ||
+          record.started_at ||
+          record.valid_from,
+      ) || null,
+    ends_at:
+      normalizeText(
+        record.ends_at ||
+          record.end_date ||
+          record.expires_at ||
+          record.valid_to,
+      ) || null,
+    created_at:
+      normalizeText(
+        record.created_at ||
+          record.created ||
+          record.inserted_at,
+      ) || null,
     updated_at: normalizeText(record.updated_at || record.modified_at || record.updated || record.last_modified) || null,
   };
 }function getStatusLabel(value: string, locale: Locale) {
@@ -703,7 +836,7 @@ function getStatusClass(value: string) {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
 
-  if (["pending", "trial", "draft", "processing"].includes(normalized)) {
+  if (["pending", "trial", "draft", "processing", "past_due"].includes(normalized)) {
     return "border-amber-200 bg-amber-50 text-amber-700";
   }
 
@@ -722,6 +855,52 @@ function StatusBadge({ value, locale }: { value: string; locale: Locale }) {
     >
       {getStatusLabel(value, locale)}
     </Badge>
+  );
+}
+
+
+function RegisterActionMenu({
+  href,
+  label,
+  locale,
+}: {
+  href: string;
+  label: string;
+  locale: Locale;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-9 w-9 rounded-lg bg-background"
+          aria-label={label}
+        >
+          <MoreVertical className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent
+        align={
+          locale === "ar"
+            ? "start"
+            : "end"
+        }
+        className="w-44"
+      >
+        <DropdownMenuItem asChild>
+          <Link
+            href={href}
+            className="flex items-center gap-2"
+          >
+            <ExternalLink className="h-4 w-4 text-[#a57b3d]" />
+            {label}
+          </Link>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -836,38 +1015,6 @@ function DistributionCard({
   );
 }
 
-function EmptyState({
-  title,
-  description,
-  showReset,
-  resetLabel,
-  onReset,
-}: {
-  title: string;
-  description: string;
-  showReset?: boolean;
-  resetLabel: string;
-  onReset: () => void;
-}) {
-  return (
-    <div className="flex min-h-64 flex-col items-center justify-center gap-3 px-6 py-10 text-center">
-      <div className="rounded-full bg-muted p-4 text-muted-foreground">
-        <Search className="h-6 w-6" />
-      </div>
-      <div>
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-      </div>
-      {showReset ? (
-        <Button variant="outline" size="sm" onClick={onReset} className="rounded-lg">
-          <RotateCcw className="h-4 w-4" />
-          {resetLabel}
-        </Button>
-      ) : null}
-    </div>
-  );
-}
-
 export default function SystemSubscriptionsReportsPage() {
   const [locale, setLocale] = React.useState<Locale>("ar");
   const [companies, setCompanies] = React.useState<CompanyRecord[]>([]);
@@ -914,17 +1061,13 @@ export default function SystemSubscriptionsReportsPage() {
         setRefreshing(true);
         setError("");
 
-        const params = new URLSearchParams({
-          page: "1",
-          page_size: "500",
-          ordering: "-created_at",
-        });
+        const result =
+          await fetchAllSubscriptionRows(
+            API_ENDPOINT,
+          );
 
-        const payload = await fetchJson<unknown>(makeApiUrl(API_ENDPOINT, params));
-        const rows = extractArray(payload).map(normalizeCompany);
-
-        setCompanies(rows);
-        setApiTotal(extractCount(payload));
+        setCompanies(result.rows);
+        setApiTotal(result.total);
 
         if (silent) toast.success(t.refreshed);
       } catch (caughtError) {
@@ -943,70 +1086,279 @@ export default function SystemSubscriptionsReportsPage() {
     void loadCompanies();
   }, [loadCompanies]);
 
-  const activityOptions = React.useMemo(() => {
-    return [...new Set(companies.map((company) => company.activity).filter((value) => value && value !== "—"))].sort();
-  }, [companies]);
 
-  const cityOptions = React.useMemo(() => {
-    return [...new Set(companies.map((company) => company.owner).filter((value) => value && value !== "—"))].sort();
-  }, [companies]);
+  const latestCompanies = React.useMemo<CompanyRecord[]>(() => {
+    const ordered = [...companies].sort((a, b) =>
+      compareSubscriptionRecency(
+        a,
+        b,
+        "newest",
+      ),
+    );
 
-  const filteredCompanies = React.useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    const fromTime = fromDate ? new Date(`${fromDate}T00:00:00`).getTime() : 0;
-    const toTime = toDate ? new Date(`${toDate}T23:59:59`).getTime() : 0;
+    const seenCompanies = new Set<string>();
 
-    const rows = companies.filter((company) => {
-      const haystack = [
-        company.name,
-        company.code,
-        company.owner,
-        company.activity,
-        company.subscription,
-        company.city,
-        company.status,
-        company.email,
-        company.phone,
-      ]
-        .join(" ")
-        .toLowerCase();
+    return ordered.filter((company) => {
+      const key = company.company_key.trim();
 
-      const createdTime = rowDateValue(company.created_at);
+      if (!key) {
+        return true;
+      }
 
-      if (needle && !haystack.includes(needle)) return false;
-      if (status !== "all" && company.status !== status) return false;
-      if (activity !== "all" && company.activity !== activity) return false;
-      if (city !== "all" && company.owner !== city) return false;
-      if (fromTime && createdTime && createdTime < fromTime) return false;
-      if (toTime && createdTime && createdTime > toTime) return false;
+      if (seenCompanies.has(key)) {
+        return false;
+      }
+
+      seenCompanies.add(key);
 
       return true;
     });
+  }, [companies]);
 
-    return [...rows].sort((a, b) => {
-      if (sort === "oldest") return rowDateValue(a.created_at) - rowDateValue(b.created_at);
-      if (sort === "name") return a.name.localeCompare(b.name);
-      if (sort === "code") return a.code.localeCompare(b.code);
-      if (sort === "status") return a.status.localeCompare(b.status);
-      if (sort === "activity") return a.activity.localeCompare(b.activity);
-      if (sort === "city") return a.owner.localeCompare(b.owner);
-      return rowDateValue(b.created_at) - rowDateValue(a.created_at);
-    });
-  }, [activity, city, companies, fromDate, search, sort, status, toDate]);
+  const activityOptions = React.useMemo(
+    () =>
+      [
+        ...new Set(
+          latestCompanies
+            .map(
+              (company) =>
+                company.activity,
+            )
+            .filter(
+              (value) =>
+                value &&
+                value !== "—",
+            ),
+        ),
+      ].sort(),
+    [latestCompanies],
+  );
+
+  const cityOptions = React.useMemo(
+    () =>
+      [
+        ...new Set(
+          latestCompanies
+            .map(
+              (company) =>
+                company.owner,
+            )
+            .filter(
+              (value) =>
+                value &&
+                value !== "—",
+            ),
+        ),
+      ].sort(),
+    [latestCompanies],
+  );
+
+  const filteredCompanies = React.useMemo(() => {
+    const needle =
+      search.trim().toLowerCase();
+
+    const fromTime = fromDate
+      ? new Date(
+          `${fromDate}T00:00:00`,
+        ).getTime()
+      : 0;
+
+    const toTime = toDate
+      ? new Date(
+          `${toDate}T23:59:59`,
+        ).getTime()
+      : 0;
+
+    const rows =
+      latestCompanies.filter(
+        (company) => {
+          const haystack = [
+            company.name,
+            company.code,
+            company.owner,
+            company.activity,
+            company.subscription,
+            company.starts_at,
+            company.ends_at,
+            company.created_at,
+            company.status,
+          ]
+            .join(" ")
+            .toLowerCase();
+
+          const businessTime =
+            rowDateValue(
+              company.starts_at,
+            ) ||
+            rowDateValue(
+              company.created_at,
+            );
+
+          if (
+            needle &&
+            !haystack.includes(needle)
+          ) {
+            return false;
+          }
+
+          if (
+            status !== "all" &&
+            company.status !== status
+          ) {
+            return false;
+          }
+
+          if (
+            activity !== "all" &&
+            company.activity !== activity
+          ) {
+            return false;
+          }
+
+          if (
+            city !== "all" &&
+            company.owner !== city
+          ) {
+            return false;
+          }
+
+          if (
+            fromTime &&
+            businessTime &&
+            businessTime < fromTime
+          ) {
+            return false;
+          }
+
+          if (
+            toTime &&
+            businessTime &&
+            businessTime > toTime
+          ) {
+            return false;
+          }
+
+          return true;
+        },
+      );
+
+    return [...rows].sort(
+      (a, b) => {
+        if (sort === "oldest") {
+          return compareSubscriptionRecency(
+            a,
+            b,
+            "oldest",
+          );
+        }
+
+        if (sort === "name") {
+          return (
+            a.name.localeCompare(
+              b.name,
+            ) ||
+            b.sort_id -
+              a.sort_id
+          );
+        }
+
+        if (sort === "code") {
+          return (
+            a.code.localeCompare(
+              b.code,
+            ) ||
+            b.sort_id -
+              a.sort_id
+          );
+        }
+
+        if (sort === "status") {
+          return (
+            a.status.localeCompare(
+              b.status,
+            ) ||
+            b.sort_id -
+              a.sort_id
+          );
+        }
+
+        if (sort === "activity") {
+          return (
+            a.activity.localeCompare(
+              b.activity,
+            ) ||
+            b.sort_id -
+              a.sort_id
+          );
+        }
+
+        if (sort === "city") {
+          return (
+            a.owner.localeCompare(
+              b.owner,
+            ) ||
+            b.sort_id -
+              a.sort_id
+          );
+        }
+
+        return compareSubscriptionRecency(
+          a,
+          b,
+          "newest",
+        );
+      },
+    );
+  }, [
+    activity,
+    city,
+    fromDate,
+    latestCompanies,
+    search,
+    sort,
+    status,
+    toDate,
+  ]);
 
   const stats = React.useMemo(() => {
     return {
-      total: apiTotal || companies.length,
-      active: companies.filter((company) => company.status === "active").length,
-      inactive: companies.filter((company) =>
-        ["inactive", "suspended", "cancelled"].includes(company.status),
-      ).length,
-      subscribed: companies.filter((company) => company.subscription && company.subscription !== "—").length,
-      activities: activityOptions.length,
-      cities: cityOptions.length,
-      filtered: filteredCompanies.length,
+      total:
+        latestCompanies.length,
+
+      active:
+        latestCompanies.filter(
+          (company) =>
+            company.status === "active",
+        ).length,
+
+      inactive:
+        latestCompanies.filter(
+          (company) =>
+            company.status === "expired",
+        ).length,
+
+      subscribed:
+        latestCompanies.filter(
+          (company) =>
+            company.subscription &&
+            company.subscription !== "—",
+        ).length,
+
+      activities:
+        activityOptions.length,
+
+      cities:
+        cityOptions.length,
+
+      filtered:
+        filteredCompanies.length,
     };
-  }, [activityOptions.length, apiTotal, cityOptions.length, companies, filteredCompanies.length]);
+  }, [
+    activityOptions.length,
+    cityOptions.length,
+    filteredCompanies.length,
+    latestCompanies,
+  ]);
 
   const statusDistribution = React.useMemo(
     () => makeDistribution(filteredCompanies, (row) => row.status, locale, { status: true, limit: 8 }),
@@ -1038,46 +1390,85 @@ export default function SystemSubscriptionsReportsPage() {
   }
 
   function buildExportRows() {
-    return filteredCompanies.map((company) => [
-      company.name,
-      company.code,
-      company.owner,
-      getBillingCycleLabel(company.activity, locale),
-      company.subscription,
-      company.city,
-      getStatusLabel(company.status, locale),
-      formatDate(company.created_at),
-      formatDate(company.updated_at),
-    ]);
+    return filteredCompanies.map(
+      (company) => [
+        company.name,
+        company.code,
+        company.owner,
+        getBillingCycleLabel(
+          company.activity,
+          locale,
+        ),
+        company.subscription,
+        formatDate(
+          company.starts_at,
+        ),
+        formatDate(
+          company.ends_at,
+        ),
+        getStatusLabel(
+          company.status,
+          locale,
+        ),
+        formatDateTime(
+          company.created_at,
+        ),
+      ],
+    );
   }
 
-  function buildTableHtml() {
-    const headers = [
-      t.company,
-      t.code,
-      t.owner,
-      t.activity,
-      t.subscription,
-      t.city,
-      t.status,
-      t.createdAt,
-      t.updatedAt,
-    ];
-
-    const rows = buildExportRows();
-
-    return `
-      <table border="1" cellspacing="0" cellpadding="6">
-        <thead>
-          <tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>
-        </thead>
-        <tbody>
-          ${rows
-            .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
-            .join("")}
-        </tbody>
-      </table>
-    `;
+  function buildPrintSection(): PrintReportTableSection {
+    return {
+      title: t.reportTable,
+      columns: [
+        {
+          label: t.company,
+          width: 220,
+          type: "text",
+        },
+        {
+          label: t.code,
+          width: 120,
+          type: "text",
+        },
+        {
+          label: t.owner,
+          width: 165,
+          type: "text",
+        },
+        {
+          label: t.activity,
+          width: 105,
+          type: "text",
+        },
+        {
+          label: t.subscription,
+          width: 115,
+          type: "text",
+        },
+        {
+          label: t.startsAt,
+          width: 115,
+          type: "text",
+        },
+        {
+          label: t.endsAt,
+          width: 115,
+          type: "text",
+        },
+        {
+          label: t.status,
+          width: 105,
+          type: "text",
+        },
+        {
+          label: t.createdAt,
+          width: 145,
+          type: "text",
+        },
+      ],
+      rows: buildExportRows(),
+    };
   }
 
   function exportExcel() {
@@ -1087,8 +1478,15 @@ export default function SystemSubscriptionsReportsPage() {
       return;
     }
     const headers = [
-      t.company, t.code, t.owner, t.activity, t.subscription,
-      t.city, t.status, t.createdAt, t.updatedAt
+      t.company,
+      t.code,
+      t.owner,
+      t.activity,
+      t.subscription,
+      t.startsAt,
+      t.endsAt,
+      t.status,
+      t.createdAt,
     ];
     const section: ExcelReportSection = {
       title: t.reportTitle,
@@ -1107,17 +1505,16 @@ export default function SystemSubscriptionsReportsPage() {
     toast.success(locale === "ar" ? "تم تجهيز ملف Excel بنجاح." : "Excel file prepared successfully.");
   }
 
-  function openPrintWindow(mode: "print" | "pdf") {
+  function openPrintWindow() {
     const rows = buildExportRows();
     if (!rows.length) {
       toast.error(t.printEmpty);
       return;
     }
-    if (mode === "pdf") toast.info(t.pdfHint);
-    const opened = openPrintReport({
+    const opened = openPrintTableReport({
       locale,
       title: t.reportTitle,
-      tableHtml: buildTableHtml(),
+      sections: [buildPrintSection()],
       recordsCount: rows.length,
       recordsLabel: t.rows,
       generatedAtLabel: t.generatedAt,
@@ -1155,382 +1552,758 @@ export default function SystemSubscriptionsReportsPage() {
   }
 
   return (
-    <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main
+      dir={dir}
+      className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8"
+    >
       <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-lg border bg-card shadow-none">
-          <div className="relative p-6 sm:p-8">
 
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-              <div className="max-w-4xl">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  {t.badge}
-                </div>
-                <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{t.title}</h1>
-                <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">{t.subtitle}</p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="outline"
-                  className={registerOutlineButtonClass}
-                  onClick={() => void loadCompanies({ silent: true })}
-                  disabled={refreshing}
-                >
-                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  {t.refresh}
-                </Button>
-                <Button variant="outline" className={registerOutlineButtonClass} onClick={exportExcel}>
-                  <FileSpreadsheet className="h-4 w-4" />
-                  {t.exportExcel}
-                </Button>
-                <Button variant="outline" className={registerOutlineButtonClass} onClick={() => openPrintWindow("print")}>
-                  <Printer className="h-4 w-4" />
-                  {t.print}
-                </Button>
-                <Button variant="outline" className={registerOutlineButtonClass} onClick={() => openPrintWindow("pdf")}>
-                  <FileText className="h-4 w-4" />
-                  {t.pdf}
-                </Button>
-                <Button asChild className="rounded-xl">
-                  <Link href="/system/subscriptions">
-                    <Plus className="h-4 w-4" />
-                    {t.addCompany}
-                  </Link>
-                </Button>
-              </div>
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-4xl">
+            <div className="mb-2 inline-flex items-center gap-2 text-sm font-medium text-[#9a7139]">
+              <Sparkles className="h-4 w-4 text-[#a57b3d]" />
+              {t.badge}
             </div>
+
+            <h1 className="text-3xl font-bold tracking-tight">
+              {t.title}
+            </h1>
+
+            <p className="mt-2 max-w-3xl text-sm leading-7 text-muted-foreground">
+              {t.subtitle}
+            </p>
           </div>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+
+            <Button
+              type="button"
+              variant="outline"
+              className={registerOutlineButtonClass}
+              onClick={() =>
+                void loadCompanies({
+                  silent: true,
+                })
+              }
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {t.refresh}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className={registerOutlineButtonClass}
+              onClick={exportExcel}
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              {t.exportExcel}
+            </Button>
+
+            <Button
+              type="button"
+              variant="brand"
+              className={registerBrandButtonClass}
+              onClick={openPrintWindow}
+            >
+              <Printer className="h-4 w-4" />
+              {t.print}
+            </Button>
+
+            <Button
+              asChild
+              variant="brand"
+              className={registerBrandButtonClass}
+            >
+              <Link href="/system/subscriptions/list">
+                <ListChecks className="h-4 w-4" />
+                {t.companiesList}
+              </Link>
+            </Button>
+
+          </div>
+        </header>
+
+
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+
+          <SystemKpiCard
+            title={t.totalCompanies}
+            value={stats.total}
+            description={t.fromLiveApi}
+            href="/system/subscriptions/list"
+            icon={Building2}
+          />
+
+          <SystemKpiCard
+            title={t.activeCompanies}
+            value={stats.active}
+            description={t.fromLiveApi}
+            href="/system/subscriptions/list"
+            icon={CheckCircle2}
+          />
+
+          <SystemKpiCard
+            title={t.inactiveCompanies}
+            value={stats.inactive}
+            description={t.fromLiveApi}
+            href="/system/subscriptions/list"
+            icon={ShieldCheck}
+          />
+
+          <SystemKpiCard
+            title={t.subscribedCompanies}
+            value={stats.subscribed}
+            description={t.fromLiveApi}
+            href="/system/subscriptions/list"
+            icon={Activity}
+          />
+
         </section>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <SystemKpiCard title={t.totalCompanies} value={stats.total}
-            description={t.fromLiveApi} icon={Building2} />
-          <SystemKpiCard title={t.activeCompanies} value={stats.active}
-            description={t.fromLiveApi} icon={CheckCircle2} />
-          <SystemKpiCard title={t.inactiveCompanies} value={stats.inactive}
-            description={t.fromLiveApi} icon={ShieldCheck} />
-          <SystemKpiCard title={t.subscribedCompanies} value={stats.subscribed}
-            description={t.fromLiveApi} icon={Activity} />
-        </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <SystemKpiCard title={t.uniqueActivities} value={stats.activities}
-            description={t.fromLiveApi} icon={PieChart} />
-          <SystemKpiCard title={t.uniqueCities} value={stats.cities}
-            description={t.fromLiveApi} icon={MapPin} />
-          <SystemKpiCard title={t.filteredRows} value={stats.filtered}
-            description={t.fromLiveApi} icon={TableProperties} />
-        </div>
+        <section className="grid gap-4 md:grid-cols-3">
 
-        <Card className="rounded-lg border bg-card shadow-none">
-          <CardContent className="pt-6">
-            <div className="grid gap-3 xl:grid-cols-[minmax(260px,1fr)_160px_160px_160px_150px_150px_170px_auto]">
-              <div className="relative">
-                <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder={t.searchPlaceholder}
-                  className="h-9 rounded-lg ps-9"
-                />
-              </div>
+          <SystemKpiCard
+            title={t.uniqueActivities}
+            value={stats.activities}
+            description={t.fromLiveApi}
+            icon={PieChart}
+          />
 
-              <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
-                <SelectTrigger className={registerOutlineButtonClass}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {statusFilters.map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {item === "all" ? t.all : getStatusLabel(item, locale)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <SystemKpiCard
+            title={t.uniqueCities}
+            value={stats.cities}
+            description={t.fromLiveApi}
+            icon={MapPin}
+          />
 
-              <Select value={activity} onValueChange={setActivity}>
-                <SelectTrigger className={registerOutlineButtonClass}>
-                  <SelectValue placeholder={t.activityFilter} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t.all}</SelectItem>
-                  {activityOptions.map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {item}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <SystemKpiCard
+            title={t.filteredRows}
+            value={stats.filtered}
+            description={t.fromLiveApi}
+            icon={TableProperties}
+          />
 
-              <Select value={city} onValueChange={setCity}>
-                <SelectTrigger className={registerOutlineButtonClass}>
-                  <SelectValue placeholder={t.cityFilter} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t.all}</SelectItem>
-                  {cityOptions.map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {item}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        </section>
 
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-10 justify-start rounded-lg bg-background text-xs font-normal"
+
+        <DataRegisterToolbar className="grid gap-3 xl:grid-cols-[minmax(260px,1fr)_150px_170px_170px_160px_160px_170px_auto]">
+
+          <DataRegisterSearch
+            value={search}
+            onChange={setSearch}
+            placeholder={t.searchPlaceholder}
+          />
+
+          <Select
+            value={status}
+            onValueChange={(value) =>
+              setStatus(
+                value as StatusFilter,
+              )
+            }
+          >
+            <SelectTrigger className="h-9 bg-background shadow-none">
+              <SelectValue />
+            </SelectTrigger>
+
+            <SelectContent>
+              {statusFilters.map(
+                (item) => (
+                  <SelectItem
+                    key={item}
+                    value={item}
                   >
-                    <CalendarDays className="h-4 w-4" />
-                    {fromDate || t.fromDate}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={isoToDate(fromDate)}
-                    onSelect={(date) => setFromDate(dateToIso(date))}
-                  />
-                </PopoverContent>
-              </Popover>
+                    {item === "all"
+                      ? t.all
+                      : getStatusLabel(
+                          item,
+                          locale,
+                        )}
+                  </SelectItem>
+                ),
+              )}
+            </SelectContent>
+          </Select>
 
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-10 justify-start rounded-lg bg-background text-xs font-normal"
+
+          <Select
+            value={activity}
+            onValueChange={setActivity}
+          >
+            <SelectTrigger className="h-9 bg-background shadow-none">
+              <SelectValue
+                placeholder={
+                  t.activityFilter
+                }
+              />
+            </SelectTrigger>
+
+            <SelectContent>
+              <SelectItem value="all">
+                {t.all}
+              </SelectItem>
+
+              {activityOptions.map(
+                (item) => (
+                  <SelectItem
+                    key={item}
+                    value={item}
                   >
-                    <CalendarDays className="h-4 w-4" />
-                    {toDate || t.toDate}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={isoToDate(toDate)}
-                    onSelect={(date) => setToDate(dateToIso(date))}
-                  />
-                </PopoverContent>
-              </Popover>
+                    {getBillingCycleLabel(
+                      item,
+                      locale,
+                    )}
+                  </SelectItem>
+                ),
+              )}
+            </SelectContent>
+          </Select>
 
-              <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
-                <SelectTrigger className={registerOutlineButtonClass}>
-                  <ArrowUpDown className="h-4 w-4" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="newest">{t.newest}</SelectItem>
-                  <SelectItem value="oldest">{t.oldest}</SelectItem>
-                  <SelectItem value="name">{t.nameSort}</SelectItem>
-                  <SelectItem value="code">{t.codeSort}</SelectItem>
-                  <SelectItem value="status">{t.statusSort}</SelectItem>
-                  <SelectItem value="activity">{t.activitySort}</SelectItem>
-                  <SelectItem value="city">{t.citySort}</SelectItem>
-                </SelectContent>
-              </Select>
 
-              <Button variant="outline" className={registerOutlineButtonClass} onClick={resetFilters}>
-                <RotateCcw className="h-4 w-4" />
-                {t.reset}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+          <Select
+            value={city}
+            onValueChange={setCity}
+          >
+            <SelectTrigger className="h-9 bg-background shadow-none">
+              <SelectValue
+                placeholder={t.cityFilter}
+              />
+            </SelectTrigger>
+
+            <SelectContent>
+              <SelectItem value="all">
+                {t.all}
+              </SelectItem>
+
+              {cityOptions.map(
+                (item) => (
+                  <SelectItem
+                    key={item}
+                    value={item}
+                  >
+                    {item}
+                  </SelectItem>
+                ),
+              )}
+            </SelectContent>
+          </Select>
+
+
+          <DataRegisterDatePicker
+            label={t.fromDate}
+            value={fromDate}
+            onChange={setFromDate}
+            locale={locale}
+          />
+
+          <DataRegisterDatePicker
+            label={t.toDate}
+            value={toDate}
+            onChange={setToDate}
+            locale={locale}
+          />
+
+
+          <Select
+            value={sort}
+            onValueChange={(value) =>
+              setSort(
+                value as SortKey,
+              )
+            }
+          >
+            <SelectTrigger className="h-9 bg-background shadow-none">
+              <ArrowUpDown className="h-4 w-4" />
+              <SelectValue />
+            </SelectTrigger>
+
+            <SelectContent>
+              <SelectItem value="newest">
+                {t.newest}
+              </SelectItem>
+              <SelectItem value="oldest">
+                {t.oldest}
+              </SelectItem>
+              <SelectItem value="name">
+                {t.nameSort}
+              </SelectItem>
+              <SelectItem value="code">
+                {t.codeSort}
+              </SelectItem>
+              <SelectItem value="status">
+                {t.statusSort}
+              </SelectItem>
+              <SelectItem value="activity">
+                {t.activitySort}
+              </SelectItem>
+              <SelectItem value="city">
+                {t.citySort}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
+
+          <Button
+            type="button"
+            variant="outline"
+            className="h-9 bg-background shadow-none"
+            onClick={resetFilters}
+          >
+            <RotateCcw className="h-4 w-4" />
+            {t.reset}
+          </Button>
+
+        </DataRegisterToolbar>
+
 
         <div className="grid gap-4 xl:grid-cols-3">
+
           <DistributionCard
             title={t.statusDistribution}
-            description={t.statusDistributionDesc}
+            description={
+              t.statusDistributionDesc
+            }
             rows={statusDistribution}
             locale={locale}
           />
+
           <DistributionCard
             title={t.activityDistribution}
-            description={t.activityDistributionDesc}
+            description={
+              t.activityDistributionDesc
+            }
             rows={activityDistribution}
             locale={locale}
           />
+
           <DistributionCard
             title={t.cityDistribution}
-            description={t.cityDistributionDesc}
+            description={
+              t.cityDistributionDesc
+            }
             rows={cityDistribution}
             locale={locale}
           />
+
         </div>
 
-        <Card className="w-full rounded-lg border bg-card shadow-none">
-          <CardHeader className="gap-3">
+
+        <Card className="w-full overflow-hidden rounded-lg border bg-card shadow-none">
+
+          <CardHeader className="px-5 pt-5 sm:px-6">
+
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <CardTitle>{t.reportTable}</CardTitle>
-                <CardDescription className="mt-2">{t.reportTableDesc}</CardDescription>
+
+              <div className="min-w-0">
+
+                <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight">
+
+                  <TableProperties className="h-4 w-4 text-[#a57b3d]" />
+
+                  {t.reportTable}
+
+                </CardTitle>
+
+                <CardDescription className="mt-1 leading-6">
+
+                  {t.reportTableDesc}
+
+                </CardDescription>
+
               </div>
-              <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
-                <UsersRound className="h-3.5 w-3.5" />
-                {t.showing} {formatInteger(filteredCompanies.length)} {t.of} {formatInteger(apiTotal || companies.length)} {t.rows}
-              </Badge>
+
+
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={registerOutlineButtonClass}
+                  onClick={exportExcel}
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  {t.exportExcel}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="brand"
+                  className={registerBrandButtonClass}
+                  onClick={openPrintWindow}
+                >
+                  <Printer className="h-4 w-4" />
+                  {t.print}
+                </Button>
+
+              </div>
             </div>
           </CardHeader>
 
-          <CardContent className="space-y-4">
-            <div className="overflow-hidden rounded-lg border bg-background">
+
+          <CardContent className="space-y-4 px-5 pb-5 sm:px-6 sm:pb-6">
+
+            <DataRegisterTableFrame>
+
               <div className="w-full overflow-x-auto">
-                <Table variant="register" layout="fixed" minWidth={1120}>
+
+                <Table
+                  variant="register"
+                  layout="fixed"
+                  minWidth={1180}
+                >
+
                   <TableHeader>
+
                     <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
-                      <TableHead className={cn("w-[220px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+
+                      <TableHead className={cn(
+                        "h-11 w-[220px] px-4 text-xs font-semibold text-muted-foreground",
+                        alignClass,
+                      )}>
                         {t.company}
                       </TableHead>
-                      <TableHead className={cn("w-[130px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+
+                      <TableHead className={cn(
+                        "h-11 w-[120px] px-4 text-xs font-semibold text-muted-foreground",
+                        alignClass,
+                      )}>
                         {t.code}
                       </TableHead>
-                      <TableHead className={cn("w-[130px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+
+                      <TableHead className={cn(
+                        "h-11 w-[165px] px-4 text-xs font-semibold text-muted-foreground",
+                        alignClass,
+                      )}>
                         {t.owner}
                       </TableHead>
-                      <TableHead className={cn("w-[130px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+
+                      <TableHead className={cn(
+                        "h-11 w-[105px] px-4 text-xs font-semibold text-muted-foreground",
+                        alignClass,
+                      )}>
                         {t.activity}
                       </TableHead>
-                      <TableHead className={cn("w-[130px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+
+                      <TableHead className={cn(
+                        "h-11 w-[115px] px-4 text-xs font-semibold text-muted-foreground",
+                        alignClass,
+                      )}>
                         {t.subscription}
                       </TableHead>
-                      <TableHead className={cn("w-[120px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
-                        {t.city}
+
+                      <TableHead className={cn(
+                        "h-11 w-[115px] px-4 text-xs font-semibold text-muted-foreground",
+                        alignClass,
+                      )}>
+                        {t.startsAt}
                       </TableHead>
-                      <TableHead className={cn("w-[110px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+
+                      <TableHead className={cn(
+                        "h-11 w-[115px] px-4 text-xs font-semibold text-muted-foreground",
+                        alignClass,
+                      )}>
+                        {t.endsAt}
+                      </TableHead>
+
+                      <TableHead className={cn(
+                        "h-11 w-[105px] px-4 text-xs font-semibold text-muted-foreground",
+                        alignClass,
+                      )}>
                         {t.status}
                       </TableHead>
-                      <TableHead className={cn("w-[115px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+
+                      <TableHead className={cn(
+                        "h-11 w-[145px] px-4 text-xs font-semibold text-muted-foreground",
+                        alignClass,
+                      )}>
                         {t.createdAt}
                       </TableHead>
-                      <TableHead className="sticky left-0 z-10 w-[76px] bg-muted/40 px-3 text-center text-xs font-semibold text-muted-foreground">
+
+                      <TableHead className="sticky end-0 z-10 h-11 w-[76px] bg-muted/40 px-3 text-center text-xs font-semibold text-muted-foreground">
                         {t.open}
                       </TableHead>
+
                     </TableRow>
                   </TableHeader>
 
+
                   <TableBody>
+
                     {filteredCompanies.length ? (
-                      filteredCompanies.map((company) => (
-                        <TableRow key={company.id || company.code || company.name} className="h-[64px]">
-                          <TableCell className={cn("overflow-hidden px-4 align-middle", alignClass)}>
-                            <div className="min-w-0">
-                              <span className="block truncate text-sm font-semibold text-foreground">
-                                {company.name || t.notAvailable}
+
+                      filteredCompanies.map(
+                        (company) => (
+
+                          <TableRow
+                            key={
+                              company.id ||
+                              company.code ||
+                              company.name
+                            }
+                            className="h-[62px]"
+                          >
+
+                            <TableCell className={cn(
+                              "h-[62px] overflow-hidden px-4 align-middle",
+                              alignClass,
+                            )}>
+                              <div className="min-w-0">
+
+                                <span className="block truncate text-sm font-semibold text-foreground">
+                                  {company.name ||
+                                    t.notAvailable}
+                                </span>
+
+                                <span className="block truncate text-xs text-muted-foreground">
+                                  #
+                                  {company.id ||
+                                    company.code ||
+                                    "—"}
+                                </span>
+
+                              </div>
+                            </TableCell>
+
+
+                            <TableCell className={cn(
+                              "h-[62px] overflow-hidden px-4 align-middle",
+                              alignClass,
+                            )}>
+                              <span
+                                dir="ltr"
+                                className="block truncate text-sm tabular-nums text-muted-foreground"
+                              >
+                                {company.code ||
+                                  "—"}
                               </span>
-                              <span className="block truncate text-xs text-muted-foreground">
-                                #{company.id || company.code || "—"}
+                            </TableCell>
+
+
+                            <TableCell className={cn(
+                              "h-[62px] overflow-hidden px-4 align-middle",
+                              alignClass,
+                            )}>
+                              <span className="block truncate text-sm text-muted-foreground">
+                                {company.owner ||
+                                  "—"}
                               </span>
-                            </div>
-                          </TableCell>
-                          <TableCell className={cn("overflow-hidden px-4 align-middle", alignClass)}>
-                            <span className="block truncate text-sm tabular-nums text-muted-foreground">
-                              {company.code || "—"}
-                            </span>
-                          </TableCell>
-                          <TableCell className={cn("overflow-hidden px-4 align-middle", alignClass)}>
-                            <span className="block truncate text-sm text-muted-foreground">
-                              {company.owner || "—"}
-                            </span>
-                          </TableCell>
-                          <TableCell className={cn("overflow-hidden px-4 align-middle", alignClass)}>
-                            <span className="block truncate text-sm text-muted-foreground">
-                              {getBillingCycleLabel(company.activity, locale)}
-                            </span>
-                          </TableCell>
-                          <TableCell className={cn("overflow-hidden px-4 align-middle", alignClass)}>
-                            <span className="block truncate text-sm text-muted-foreground">
-                              <MoneyValue amount={company.amount} currency={company.currency} />
-                            </span>
-                          </TableCell>
-                          <TableCell className={cn("overflow-hidden px-4 align-middle", alignClass)}>
-                            <span className="block truncate text-sm text-muted-foreground">
-                              {company.city || "—"}
-                            </span>
-                          </TableCell>
-                          <TableCell className={cn("px-4 align-middle", alignClass)}>
-                            <StatusBadge value={company.status} locale={locale} />
-                          </TableCell>
-                          <TableCell className={cn("px-4 align-middle", alignClass)}>
-                            <span className="text-sm tabular-nums text-muted-foreground">
-                              {formatDate(company.created_at)}
-                            </span>
-                          </TableCell>
-                          <TableCell className="sticky left-0 z-10 bg-background px-3 text-center align-middle">
-                            <Button asChild variant="outline" size="sm" className="h-8 rounded-lg bg-background px-3">
-                              <Link href={company.id ? `/system/subscriptions/${company.id}` : "/system/subscriptions/list"}>
-                                {t.open}
-                              </Link>
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
+                            </TableCell>
+
+
+                            <TableCell className={cn(
+                              "h-[62px] overflow-hidden px-4 align-middle",
+                              alignClass,
+                            )}>
+                              <span className="block truncate text-sm text-muted-foreground">
+                                {getBillingCycleLabel(
+                                  company.activity,
+                                  locale,
+                                )}
+                              </span>
+                            </TableCell>
+
+
+                            <TableCell className={cn(
+                              "h-[62px] overflow-hidden px-4 align-middle",
+                              alignClass,
+                            )}>
+                              <MoneyValue
+                                amount={
+                                  company.amount
+                                }
+                                currency={
+                                  company.currency
+                                }
+                              />
+                            </TableCell>
+
+
+                            <TableCell className={cn(
+                              "h-[62px] overflow-hidden px-4 align-middle",
+                              alignClass,
+                            )}>
+                              <span
+                                dir="ltr"
+                                lang="en"
+                                className="block text-sm tabular-nums text-muted-foreground"
+                              >
+                                {formatDate(
+                                  company.starts_at,
+                                )}
+                              </span>
+                            </TableCell>
+
+
+                            <TableCell className={cn(
+                              "h-[62px] overflow-hidden px-4 align-middle",
+                              alignClass,
+                            )}>
+                              <span
+                                dir="ltr"
+                                lang="en"
+                                className="block text-sm tabular-nums text-muted-foreground"
+                              >
+                                {formatDate(
+                                  company.ends_at,
+                                )}
+                              </span>
+                            </TableCell>
+
+
+                            <TableCell className={cn(
+                              "h-[62px] px-4 align-middle",
+                              alignClass,
+                            )}>
+                              <StatusBadge
+                                value={
+                                  company.status
+                                }
+                                locale={locale}
+                              />
+                            </TableCell>
+
+
+                            <TableCell className={cn(
+                              "h-[62px] px-4 align-middle",
+                              alignClass,
+                            )}>
+                              <span
+                                dir="ltr"
+                                lang="en"
+                                className="whitespace-nowrap text-sm tabular-nums text-muted-foreground"
+                              >
+                                {formatDateTime(
+                                  company.created_at,
+                                )}
+                              </span>
+                            </TableCell>
+
+
+                            <TableCell className="sticky end-0 z-10 h-[62px] bg-background px-3 text-center align-middle">
+
+                              <RegisterActionMenu
+                                href={
+                                  company.id
+                                    ? `/system/subscriptions/${company.id}`
+                                    : "/system/subscriptions/list"
+                                }
+                                label={t.open}
+                                locale={locale}
+                              />
+
+                            </TableCell>
+
+                          </TableRow>
+                        ),
+                      )
+
                     ) : (
+
                       <TableRow>
-                        <TableCell colSpan={9}>
-                          <EmptyState
-                            title={hasFilters ? t.noResultsTitle : t.noDataTitle}
-                            description={hasFilters ? t.noResultsDesc : t.noDataDesc}
-                            showReset={hasFilters}
-                            resetLabel={t.reset}
-                            onReset={resetFilters}
+
+                        <TableCell
+                          colSpan={10}
+                          className="p-0"
+                        >
+
+                          <DataRegisterEmptyState
+                            title={
+                              hasFilters
+                                ? t.noResultsTitle
+                                : t.noDataTitle
+                            }
+                            description={
+                              hasFilters
+                                ? t.noResultsDesc
+                                : t.noDataDesc
+                            }
+                            showReset={
+                              hasFilters
+                            }
+                            resetLabel={
+                              t.reset
+                            }
+                            onReset={
+                              resetFilters
+                            }
                           />
+
                         </TableCell>
                       </TableRow>
+
                     )}
+
                   </TableBody>
                 </Table>
+
               </div>
+            </DataRegisterTableFrame>
+
+
+            <DataRegisterResultCount
+              showingLabel={t.showing}
+              showingCount={formatInteger(
+                filteredCompanies.length,
+              )}
+              ofLabel={t.of}
+              totalCount={formatInteger(
+                latestCompanies.length,
+              )}
+              rowsLabel={t.rows}
+            />
+
+
+            <div className="flex flex-wrap gap-2 border-t pt-3">
+
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="h-9"
+              >
+                <Link href="/system/subscriptions">
+                  <BarChart3 className="h-4 w-4 text-[#a57b3d]" />
+                  {t.companiesCenter}
+                </Link>
+              </Button>
+
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="h-9"
+              >
+                <Link href="/system/subscriptions/list">
+                  <ListChecks className="h-4 w-4 text-[#a57b3d]" />
+                  {t.companiesList}
+                </Link>
+              </Button>
+
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="h-9"
+              >
+                <Link href="/system">
+                  <LayoutDashboard className="h-4 w-4 text-[#a57b3d]" />
+                  {t.systemDashboard}
+                </Link>
+              </Button>
+
             </div>
 
-            <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-              <p>
-                {t.showing}{" "}
-                <span className="font-medium text-foreground tabular-nums">
-                  {formatInteger(filteredCompanies.length)}
-                </span>{" "}
-                {t.of}{" "}
-                <span className="font-medium text-foreground tabular-nums">
-                  {formatInteger(apiTotal || companies.length)}
-                </span>{" "}
-                {t.rows}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button asChild variant="outline" className={registerOutlineButtonClass}>
-                  <Link href="/system/subscriptions">
-                    <BarChart3 className="h-4 w-4" />
-                    {t.companiesCenter}
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className={registerOutlineButtonClass}>
-                  <Link href="/system/subscriptions/list">
-                    <ListChecks className="h-4 w-4" />
-                    {t.companiesList}
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className={registerOutlineButtonClass}>
-                  <Link href="/system">
-                    <LayoutDashboard className="h-4 w-4" />
-                    {t.systemDashboard}
-                  </Link>
-                </Button>
-              </div>
-            </div>
           </CardContent>
         </Card>
+
       </div>
     </main>
   );
 }
-
-
-
-
-
-
-
-
-

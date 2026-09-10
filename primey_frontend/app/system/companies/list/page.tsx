@@ -50,12 +50,20 @@ import {
   registerBrandButtonClass,
   registerOutlineButtonClass,
 } from "@/components/ui/data-register";
+import {
+  DataRegisterPreviewLink,
+  DataRegisterResultCount,
+  DataRegisterTableFrame,
+} from "@/components/ui/data-register-table";
 import { SystemKpiCard } from "@/components/ui/system-kpi-card";
 import {
   downloadExcelReport,
   type ExcelReportSection,
 } from "@/lib/excel-report";
-import { openPrintReport } from "@/lib/print-report";
+import {
+  openPrintTableReport,
+  type PrintReportTableSection,
+} from "@/lib/print-report";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -321,15 +329,6 @@ function formatDateTime(value: string | null | undefined) {
     return String(value).replace("T", " ").slice(0, 16);
   }
   return parsed.toISOString().replace("T", " ").slice(0, 16);
-}
-
-function escapeHtml(value: unknown) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 }
 
 function getInitialLocale(): Locale {
@@ -781,34 +780,23 @@ export default function SystemCompaniesListPage() {
     ]);
   }
 
-  function buildTableHtml() {
-    const headers = [
-      t.company,
-      t.code,
-      t.owner,
-      t.activity,
-      t.subscription,
-      t.contact,
-      t.contact,
-      t.city,
-      t.status,
-      t.createdAt,
-    ];
-
-    const rows = buildExportRows();
-
-    return `
-      <table border="1" cellspacing="0" cellpadding="6">
-        <thead>
-          <tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>
-        </thead>
-        <tbody>
-          ${rows
-            .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
-            .join("")}
-        </tbody>
-      </table>
-    `;
+  function buildPrintSection(): PrintReportTableSection {
+    return {
+      title: t.tableTitle,
+      columns: [
+        { label: t.company, width: 230, type: "text" },
+        { label: t.code, width: 140, type: "text" },
+        { label: t.owner, width: 160, type: "text" },
+        { label: t.activity, width: 160, type: "text" },
+        { label: t.subscription, width: 170, type: "text" },
+        { label: t.contact, width: 200, type: "text" },
+        { label: t.contact, width: 150, type: "text" },
+        { label: t.city, width: 130, type: "text" },
+        { label: t.status, width: 130, type: "text" },
+        { label: t.createdAt, width: 170, type: "text" },
+      ],
+      rows: buildExportRows(),
+    };
   }
 
   function buildExcelSection(): ExcelReportSection {
@@ -861,11 +849,11 @@ export default function SystemCompaniesListPage() {
       toast.info(t.pdfHint);
     }
 
-    const opened = openPrintReport({
+    const opened = openPrintTableReport({
       locale,
       title: t.reportTitle,
       subtitle: t.subtitle,
-      tableHtml: buildTableHtml(),
+      sections: [buildPrintSection()],
       recordsCount: rows.length,
       recordsLabel: t.rows,
       generatedAtLabel: t.generatedAt,
@@ -1063,7 +1051,7 @@ export default function SystemCompaniesListPage() {
               </div>
             </DataRegisterToolbar>
 
-            <div className="overflow-hidden rounded-2xl border bg-background">
+            <DataRegisterTableFrame>
               <div className="w-full overflow-x-auto">
                 <Table variant="register" layout="fixed" minWidth="1080px">
                   <TableHeader>
@@ -1175,19 +1163,15 @@ export default function SystemCompaniesListPage() {
                   </TableBody>
                 </Table>
               </div>
-            </div>
+            </DataRegisterTableFrame>
 
-            <div className="text-sm text-muted-foreground">
-              {t.showing}{" "}
-              <span className="font-medium text-foreground tabular-nums">
-                {formatInteger(filteredCompanies.length)}
-              </span>{" "}
-              {t.of}{" "}
-              <span className="font-medium text-foreground tabular-nums">
-                {formatInteger(apiTotal || companies.length)}
-              </span>{" "}
-              {t.rows}
-            </div>
+            <DataRegisterResultCount
+              showingLabel={t.showing}
+              showingCount={formatInteger(filteredCompanies.length)}
+              ofLabel={t.of}
+              totalCount={formatInteger(apiTotal || companies.length)}
+              rowsLabel={t.rows}
+            />
           </CardContent>
         </Card>
       </div>

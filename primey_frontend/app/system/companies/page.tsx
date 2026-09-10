@@ -42,7 +42,6 @@ import {
   ShieldCheck,
   Sparkles,
   TriangleAlert,
-  UsersRound,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -54,12 +53,20 @@ import {
   registerBrandButtonClass,
   registerOutlineButtonClass,
 } from "@/components/ui/data-register";
+import {
+  DataRegisterPreviewLink,
+  DataRegisterResultCount,
+  DataRegisterTableFrame,
+} from "@/components/ui/data-register-table";
 import { SystemKpiCard } from "@/components/ui/system-kpi-card";
 import {
   downloadExcelReport,
   type ExcelReportSection,
 } from "@/lib/excel-report";
-import { openPrintReport } from "@/lib/print-report";
+import {
+  openPrintTableReport,
+  type PrintReportTableSection,
+} from "@/lib/print-report";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -154,6 +161,8 @@ const translations = {
     list: "قائمة الشركات",
     reports: "تقارير الشركات",
     reset: "إعادة ضبط",
+    from: "من",
+    to: "إلى",
     searchPlaceholder: "ابحث باسم الشركة أو الكود أو المالك أو النشاط أو المدينة...",
     all: "الكل",
     sort: "الترتيب",
@@ -232,6 +241,8 @@ const translations = {
     list: "Companies list",
     reports: "Companies reports",
     reset: "Reset",
+    from: "From",
+    to: "To",
     searchPlaceholder: "Search by company, code, owner, activity, or city...",
     all: "All",
     sort: "Sort",
@@ -336,15 +347,6 @@ function formatDate(value: string | null | undefined) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return String(value).slice(0, 10);
   return parsed.toISOString().slice(0, 10);
-}
-
-function escapeHtml(value: unknown) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 }
 
 function getInitialLocale(): Locale {
@@ -615,14 +617,22 @@ function QuickActionCard({ action }: { action: QuickAction }) {
   const Icon = action.icon;
 
   return (
-    <Card className="group rounded-lg border-border/70 bg-card shadow-none transition hover:-translate-y-0.5 hover:shadow-md">
-      <Link href={action.href} className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+    <Card className="group h-full rounded-xl border-border/60 bg-background/70 shadow-none transition-colors hover:border-[#a57b3d]/25 hover:bg-muted/20">
+      <Link
+        href={action.href}
+        className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <CardHeader className="flex h-full flex-row items-start justify-between gap-4 space-y-0 p-5">
           <div className="min-w-0">
-            <CardTitle className="text-base">{action.title}</CardTitle>
-            <CardDescription className="mt-2 line-clamp-2">{action.description}</CardDescription>
+            <CardTitle className="text-sm font-bold tracking-tight text-foreground">
+              {action.title}
+            </CardTitle>
+            <CardDescription className="mt-2 line-clamp-2 text-xs leading-6">
+              {action.description}
+            </CardDescription>
           </div>
-          <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+
+          <span className="shrink-0 rounded-xl border border-[#a57b3d]/15 bg-[#a57b3d]/[0.07] p-2.5 text-[#a57b3d] transition-colors group-hover:bg-[#a57b3d]/[0.11]">
             <Icon className="h-5 w-5" />
           </span>
         </CardHeader>
@@ -678,6 +688,8 @@ export default function SystemCompaniesPage() {
   const [search, setSearch] = React.useState("");
   const [status, setStatus] = React.useState<StatusFilter>("all");
   const [sort, setSort] = React.useState<SortKey>("newest");
+  const [dateFrom, setDateFrom] = React.useState("");
+  const [dateTo, setDateTo] = React.useState("");
 
   const t = translations[locale];
   const dir = locale === "ar" ? "rtl" : "ltr";
@@ -742,6 +754,8 @@ export default function SystemCompaniesPage() {
     setSearch("");
     setStatus("all");
     setSort("newest");
+    setDateFrom("");
+    setDateTo("");
   }, []);
 
   const filteredCompanies = React.useMemo(() => {
@@ -763,6 +777,10 @@ export default function SystemCompaniesPage() {
       if (needle && !haystack.includes(needle)) return false;
       if (status !== "all" && company.status !== status) return false;
 
+      const created = company.created_at ? formatDate(company.created_at) : "";
+      if (dateFrom && (!created || created < dateFrom)) return false;
+      if (dateTo && (!created || created > dateTo)) return false;
+
       return true;
     });
 
@@ -772,7 +790,7 @@ export default function SystemCompaniesPage() {
       if (sort === "code") return a.code.localeCompare(b.code);
       return rowDateValue(b.created_at) - rowDateValue(a.created_at);
     });
-  }, [companies, search, sort, status]);
+  }, [companies, dateFrom, dateTo, search, sort, status]);
 
   const stats = React.useMemo(() => {
     return {
@@ -815,11 +833,17 @@ export default function SystemCompaniesPage() {
     [t.createDesc, t.createTitle, t.dashboardDesc, t.dashboardTitle, t.openListDesc, t.openListTitle, t.reportsDesc, t.reportsTitle],
   );
 
-  const hasFilters = Boolean(search || status !== "all" || sort !== "newest");
+  const hasFilters = Boolean(
+    search ||
+      status !== "all" ||
+      sort !== "newest" ||
+      dateFrom ||
+      dateTo,
+  );
   const previewRows = filteredCompanies.slice(0, 8);
 
   function buildExportRows() {
-    return filteredCompanies.map((company) => [
+    return previewRows.map((company) => [
       company.name,
       company.code,
       company.owner,
@@ -831,32 +855,21 @@ export default function SystemCompaniesPage() {
     ]);
   }
 
-  function buildTableHtml() {
-    const headers = [
-      t.company,
-      t.code,
-      t.owner,
-      t.activity,
-      t.subscription,
-      t.city,
-      t.status,
-      t.createdAt,
-    ];
-
-    const rows = buildExportRows();
-
-    return `
-      <table border="1" cellspacing="0" cellpadding="6">
-        <thead>
-          <tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>
-        </thead>
-        <tbody>
-          ${rows
-            .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
-            .join("")}
-        </tbody>
-      </table>
-    `;
+  function buildPrintSection(): PrintReportTableSection {
+    return {
+      title: t.tableTitle,
+      columns: [
+        { label: t.company, width: 240, type: "text" },
+        { label: t.code, width: 140, type: "text" },
+        { label: t.owner, width: 170, type: "text" },
+        { label: t.activity, width: 170, type: "text" },
+        { label: t.subscription, width: 170, type: "text" },
+        { label: t.city, width: 130, type: "text" },
+        { label: t.status, width: 130, type: "text" },
+        { label: t.createdAt, width: 160, type: "text" },
+      ],
+      rows: buildExportRows(),
+    };
   }
 
   function buildExcelSection(): ExcelReportSection {
@@ -909,11 +922,10 @@ export default function SystemCompaniesPage() {
       toast.info(t.pdfHint);
     }
 
-    const opened = openPrintReport({
+    const opened = openPrintTableReport({
       locale,
-      title: t.reportTitle,
-      subtitle: t.subtitle,
-      tableHtml: buildTableHtml(),
+      title: t.tableTitle,
+      sections: [buildPrintSection()],
       recordsCount: rows.length,
       recordsLabel: t.rows,
       generatedAtLabel: t.generatedAt,
@@ -1028,13 +1040,17 @@ export default function SystemCompaniesPage() {
           <SystemKpiCard title={t.subscribedCompanies} value={stats.subscribed} description={t.fromLiveApi} href="/system/companies/list" icon={Activity} />
         </div>
 
-        <Card className="rounded-lg border bg-card shadow-none">
-          <CardHeader>
-            <CardTitle>{t.actionsTitle}</CardTitle>
-            <CardDescription>{t.actionsDesc}</CardDescription>
+        <Card className="overflow-hidden rounded-lg border bg-card shadow-none">
+          <CardHeader className="px-5 pt-5 sm:px-6">
+            <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight">
+              <ListChecks className="h-4 w-4 text-[#a57b3d]" />
+              {t.actionsTitle}
+            </CardTitle>
+            <CardDescription className="mt-1">{t.actionsDesc}</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+
+          <CardContent className="px-5 pb-5 sm:px-6 sm:pb-6">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {quickActions.map((action) => (
                 <QuickActionCard key={action.href} action={action} />
               ))}
@@ -1042,18 +1058,18 @@ export default function SystemCompaniesPage() {
           </CardContent>
         </Card>
 
-        <Card className="w-full rounded-lg border bg-card shadow-none">
-          <CardHeader className="gap-3">
+        <Card className="w-full overflow-hidden rounded-lg border bg-card shadow-none">
+          <CardHeader className="px-5 pt-5 sm:px-6">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <CardTitle>{t.tableTitle}</CardTitle>
-                <CardDescription className="mt-2">{t.tableDesc}</CardDescription>
+              <div className="min-w-0">
+                <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight">
+                  <Building2 className="h-4 w-4 text-[#a57b3d]" />
+                  {t.tableTitle}
+                </CardTitle>
+                <CardDescription className="mt-1">{t.tableDesc}</CardDescription>
               </div>
+
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
-                <UsersRound className="h-3.5 w-3.5" />
-                {t.showing} {formatInteger(previewRows.length)} {t.of} {formatInteger(apiTotal || companies.length)} {t.rows}
-              </Badge>
                 <Button
                   type="button"
                   variant="outline"
@@ -1076,7 +1092,7 @@ export default function SystemCompaniesPage() {
             </div>
           </CardHeader>
 
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 px-5 pb-5 sm:px-6 sm:pb-6">
             <DataRegisterToolbar className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row md:items-center">
                 <DataRegisterSearch
@@ -1098,6 +1114,22 @@ export default function SystemCompaniesPage() {
                     ))}
                   </SelectContent>
                 </Select>
+
+                <DataRegisterDatePicker
+                  value={dateFrom}
+                  onChange={setDateFrom}
+                  label={t.from}
+                  locale={locale}
+                  className="md:w-[150px]"
+                />
+
+                <DataRegisterDatePicker
+                  value={dateTo}
+                  onChange={setDateTo}
+                  label={t.to}
+                  locale={locale}
+                  className="md:w-[150px]"
+                />
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -1121,7 +1153,7 @@ export default function SystemCompaniesPage() {
               </div>
             </DataRegisterToolbar>
 
-            <div className="overflow-hidden rounded-2xl border bg-background">
+            <DataRegisterTableFrame>
               <div className="w-full overflow-x-auto">
                 <Table variant="register" layout="fixed" minWidth="980px">
                   <TableHeader>
@@ -1159,8 +1191,8 @@ export default function SystemCompaniesPage() {
                   <TableBody>
                     {previewRows.length ? (
                       previewRows.map((company) => (
-                        <TableRow key={company.id || company.code || company.name} className="h-[64px]">
-                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
+                        <TableRow key={company.id || company.code || company.name} className="h-[62px]">
+                          <TableCell className={cn("h-[62px] overflow-hidden px-4 align-middle", alignClass)}>
                             <div className="min-w-0">
                               <span className="block truncate text-sm font-semibold text-foreground">
                                 {company.name || t.unknown}
@@ -1170,40 +1202,40 @@ export default function SystemCompaniesPage() {
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[62px] overflow-hidden px-4 align-middle", alignClass)}>
                             <span className="block truncate text-sm tabular-nums text-muted-foreground">
                               {company.code || "—"}
                             </span>
                           </TableCell>
-                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[62px] overflow-hidden px-4 align-middle", alignClass)}>
                             <span className="block truncate text-sm text-muted-foreground">
                               {company.owner || "—"}
                             </span>
                           </TableCell>
-                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[62px] overflow-hidden px-4 align-middle", alignClass)}>
                             <span className="block truncate text-sm text-muted-foreground">
                               {company.activity || "—"}
                             </span>
                           </TableCell>
-                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[62px] overflow-hidden px-4 align-middle", alignClass)}>
                             <span className="block truncate text-sm text-muted-foreground">
                               {company.subscription || "—"}
                             </span>
                           </TableCell>
-                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[62px] overflow-hidden px-4 align-middle", alignClass)}>
                             <span className="block truncate text-sm text-muted-foreground">
                               {company.city || "—"}
                             </span>
                           </TableCell>
-                          <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[62px] px-4 align-middle", alignClass)}>
                             <StatusBadge value={company.status} locale={locale} />
                           </TableCell>
-                          <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[62px] px-4 align-middle", alignClass)}>
                             <span className="text-sm tabular-nums text-muted-foreground">
                               {formatDate(company.created_at)}
                             </span>
                           </TableCell>
-                          <TableCell className="sticky end-0 z-10 h-[64px] bg-background px-3 text-center align-middle">
+                          <TableCell className="sticky end-0 z-10 h-[62px] bg-background px-3 text-center align-middle">
                             <RegisterActionMenu href={company.id ? `/system/companies/${company.id}` : "/system/companies/list"} label={t.open} locale={locale} />
                           </TableCell>
                         </TableRow>
@@ -1224,26 +1256,22 @@ export default function SystemCompaniesPage() {
                   </TableBody>
                 </Table>
               </div>
-            </div>
+            </DataRegisterTableFrame>
 
-            <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-              <p>
-                {t.showing}{" "}
-                <span className="font-medium text-foreground tabular-nums">
-                  {formatInteger(previewRows.length)}
-                </span>{" "}
-                {t.of}{" "}
-                <span className="font-medium text-foreground tabular-nums">
-                  {formatInteger(apiTotal || companies.length)}
-                </span>{" "}
-                {t.rows}
-              </p>
-              <Button asChild variant="outline" className="w-fit rounded-xl bg-background">
-                <Link href="/system/companies/list">
-                  <ListChecks className="h-4 w-4" />
-                  {t.list}
-                </Link>
-              </Button>
+            <div className="space-y-3">
+              <DataRegisterResultCount
+                showingLabel={t.showing}
+                showingCount={formatInteger(previewRows.length)}
+                ofLabel={t.of}
+                totalCount={formatInteger(apiTotal || companies.length)}
+                rowsLabel={t.rows}
+              />
+
+              <DataRegisterPreviewLink
+                href="/system/companies/list"
+                label={t.list}
+                icon={Building2}
+              />
             </div>
           </CardContent>
         </Card>

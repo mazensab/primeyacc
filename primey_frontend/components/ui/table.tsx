@@ -36,22 +36,29 @@ function Table({
           "w-full caption-bottom text-sm",
           layout === "fixed" && "table-fixed",
           variant === "register" && [
-            "[&_thead_tr]:h-11",
-            "[&_thead_tr]:bg-muted/40",
-            "[&_thead_tr]:hover:bg-muted/40",
-            "[&_thead_th]:h-11",
-            "[&_thead_th]:whitespace-nowrap",
-            "[&_thead_th]:px-4",
-            "[&_thead_th]:text-start",
-            "[&_thead_th]:text-xs",
-            "[&_thead_th]:font-semibold",
-            "[&_thead_th]:text-muted-foreground",
-            "[&_tbody_tr]:h-[62px]",
-            "[&_tbody_tr]:hover:bg-muted/35",
-            "[&_tbody_td]:h-[62px]",
-            "[&_tbody_td]:px-4",
-            "[&_tbody_td]:text-start",
-            "[&_tbody_td]:align-middle",
+            "border-separate border-spacing-0",
+            "[&_thead_tr]:!h-11",
+            "[&_thead_tr]:!border-b",
+            "[&_thead_tr]:!border-border/80",
+            "[&_thead_tr]:!bg-muted/40",
+            "[&_thead_tr]:hover:!bg-muted/40",
+            "[&_thead_th]:!h-11",
+            "[&_thead_th]:!whitespace-nowrap",
+            "[&_thead_th]:!px-4",
+            "[&_thead_th]:!text-start",
+            "[&_thead_th]:!text-xs",
+            "[&_thead_th]:!font-semibold",
+            "[&_thead_th]:!text-muted-foreground",
+            "[&_tbody_tr]:!h-[62px]",
+            "[&_tbody_tr]:!border-b",
+            "[&_tbody_tr]:!border-border/60",
+            "[&_tbody_tr]:transition-colors",
+            "[&_tbody_tr]:hover:!bg-muted/35",
+            "[&_tbody_tr:last-child]:!border-b-0",
+            "[&_tbody_td]:!h-[62px]",
+            "[&_tbody_td]:!px-4",
+            "[&_tbody_td]:!text-start",
+            "[&_tbody_td]:!align-middle",
           ],
           className,
         )}
@@ -148,11 +155,11 @@ function stickyHeadClass(
   sticky: TableSticky,
 ) {
   if (sticky === "start") {
-    return "sticky start-0 z-20 bg-muted/40";
+    return "sticky start-0 z-20 bg-muted/40 shadow-[1px_0_0_0_hsl(var(--border))] rtl:shadow-[-1px_0_0_0_hsl(var(--border))]";
   }
 
   if (sticky === "end") {
-    return "sticky end-0 z-20 bg-muted/40";
+    return "sticky end-0 z-20 bg-muted/40 shadow-[-1px_0_0_0_hsl(var(--border))] rtl:shadow-[1px_0_0_0_hsl(var(--border))]";
   }
 
   return undefined;
@@ -162,11 +169,11 @@ function stickyCellClass(
   sticky: TableSticky,
 ) {
   if (sticky === "start") {
-    return "sticky start-0 z-10 bg-background group-hover:bg-muted/35";
+    return "sticky start-0 z-10 bg-background shadow-[1px_0_0_0_hsl(var(--border))] group-hover:bg-muted/35 rtl:shadow-[-1px_0_0_0_hsl(var(--border))]";
   }
 
   if (sticky === "end") {
-    return "sticky end-0 z-10 bg-background group-hover:bg-muted/35";
+    return "sticky end-0 z-10 bg-background shadow-[-1px_0_0_0_hsl(var(--border))] group-hover:bg-muted/35 rtl:shadow-[1px_0_0_0_hsl(var(--border))]";
   }
 
   return undefined;

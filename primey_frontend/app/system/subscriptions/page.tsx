@@ -29,30 +29,40 @@ import {
   ArrowUpDown,
   Building2,
   CheckCircle2,
+  ExternalLink,
   FileBarChart2,
   FileSpreadsheet,
-  FileText,
   LayoutDashboard,
   ListChecks,
   Loader2,
+  MoreVertical,
   Plus,
   Printer,
   RefreshCw,
   RotateCcw,
-  Search,
   ShieldCheck,
   Sparkles,
   TriangleAlert,
-  UsersRound,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  DataRegisterPreviewLink,
+  DataRegisterResultCount,
+  DataRegisterTableFrame,
+} from "@/components/ui/data-register-table";
 import { SystemKpiCard } from "@/components/ui/system-kpi-card";
 import {
+  DataRegisterEmptyState,
+  DataRegisterSearch,
+  DataRegisterToolbar,
   registerBrandButtonClass,
   registerOutlineButtonClass,
 } from "@/components/ui/data-register";
 import { downloadExcelReport, type ExcelReportSection } from "@/lib/excel-report";
-import { openPrintReport } from "@/lib/print-report";
+import {
+  openPrintTableReport,
+  type PrintReportTableSection,
+} from "@/lib/print-report";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -63,7 +73,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -92,10 +107,14 @@ type StatusFilter =
   | "trial"
   | "pending"
   | "draft"
-  | "cancelled";
+  | "cancelled"
+  | "expired"
+  | "past_due";
 
 type CompanyRecord = {
   id: string;
+  sort_id: number;
+  company_key: string;
   name: string;
   code: string;
   status: string;
@@ -107,6 +126,7 @@ type CompanyRecord = {
   email: string;
   phone: string;
   city: string;
+  starts_at: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -129,6 +149,8 @@ const statusFilters: StatusFilter[] = [
   "pending",
   "draft",
   "cancelled",
+  "expired",
+  "past_due",
 ];
 
 const translations = {
@@ -156,7 +178,7 @@ const translations = {
 
     totalCompanies: "إجمالي الاشتراكات",
     activeCompanies: "الاشتراكات النشطة",
-    inactiveCompanies: "غير النشطة",
+    inactiveCompanies: "الاشتراكات المنتهية",
     subscribedCompanies: "شركات لديها اشتراك",
     fromLiveApi: "من واجهات النظام الحقيقية",
 
@@ -236,7 +258,7 @@ const translations = {
 
     totalCompanies: "Total subscriptions",
     activeCompanies: "Active subscriptions",
-    inactiveCompanies: "Inactive",
+    inactiveCompanies: "Expired subscriptions",
     subscribedCompanies: "With subscription",
     fromLiveApi: "From real system APIs",
 
@@ -369,15 +391,6 @@ function formatDate(value: string | null | undefined) {
   return parsed.toISOString().slice(0, 10);
 }
 
-function escapeHtml(value: unknown) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
 function getInitialLocale(): Locale {
   if (typeof window === "undefined") return "ar";
   return window.localStorage.getItem("primey-locale") === "en" ? "en" : "ar";
@@ -478,6 +491,65 @@ function extractCount(payload: unknown) {
   );
 }
 
+
+async function fetchAllSubscriptionRows(
+  endpoint: string,
+): Promise<{
+  rows: CompanyRecord[];
+  total: number;
+}> {
+  const pageSize = 500;
+  const maxPages = 100;
+
+  const accumulated: CompanyRecord[] = [];
+  let expectedTotal = 0;
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    const params = new URLSearchParams({
+      page: String(page),
+      page_size: String(pageSize),
+      ordering: "-created_at",
+    });
+
+    const payload = await fetchJson<unknown>(
+      makeApiUrl(endpoint, params),
+    );
+
+    const rawRows = extractArray(payload);
+
+    if (page === 1) {
+      expectedTotal = extractCount(payload);
+    }
+
+    if (!rawRows.length) {
+      break;
+    }
+
+    accumulated.push(
+      ...rawRows.map(normalizeCompany),
+    );
+
+    if (
+      expectedTotal > 0 &&
+      accumulated.length >= expectedTotal
+    ) {
+      break;
+    }
+
+    if (rawRows.length < pageSize) {
+      break;
+    }
+  }
+
+  return {
+    rows: accumulated,
+    total:
+      expectedTotal > 0
+        ? expectedTotal
+        : accumulated.length,
+  };
+}
+
 function normalizeNestedName(value: unknown, keys: string[] = ["name", "title", "full_name"]) {
   if (typeof value === "string") return value;
   const record = asRecord(value);
@@ -542,8 +614,24 @@ function normalizeCompany(value: unknown): CompanyRecord {
   const planName =
     normalizeNestedName(plan, ["name", "plan_name", "title", "display_name"]) ||
     normalizeText(record.plan_name || record.package_name, "—");
+  const rawId =
+    record.id ??
+    record.pk ??
+    record.subscription_id;
+
   return {
     id: normalizeText(record.id || record.uuid || record.pk || record.slug || record.code),
+    sort_id: toNumber(rawId, 0),
+    company_key: normalizeText(
+      companyRecord.id ||
+        companyRecord.pk ||
+        companyRecord.company_id ||
+        companyRecord.companyId ||
+        record.company_id ||
+        record.companyId ||
+        record.tenant_id ||
+        record.account_company_id,
+    ),
     name:
       normalizeNestedName(company, ["name", "company_name", "title", "display_name"]) ||
       normalizeText(record.company_name || record.company_title, "—"),
@@ -565,6 +653,13 @@ function normalizeCompany(value: unknown): CompanyRecord {
     email: currency,
     phone: normalizeText(record.starts_at || record.start_date || record.started_at || record.valid_from),
     city: normalizeText(record.ends_at || record.end_date || record.expires_at || record.valid_to, "—"),
+    starts_at:
+      normalizeText(
+        record.starts_at ||
+          record.start_date ||
+          record.started_at ||
+          record.valid_from,
+      ) || null,
     created_at: normalizeText(record.created_at || record.created || record.inserted_at) || null,
     updated_at: normalizeText(record.updated_at || record.modified_at || record.updated || record.last_modified) || null,
   };
@@ -617,6 +712,30 @@ function rowDateValue(value: string | null | undefined) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function compareSubscriptionRecency(
+  a: CompanyRecord,
+  b: CompanyRecord,
+  direction: "newest" | "oldest",
+) {
+  const multiplier =
+    direction === "newest"
+      ? -1
+      : 1;
+
+  const createdDifference =
+    rowDateValue(a.created_at) -
+    rowDateValue(b.created_at);
+
+  if (createdDifference !== 0) {
+    return createdDifference * multiplier;
+  }
+
+  return (
+    (a.sort_id - b.sort_id) *
+    multiplier
+  );
+}
+
 function StatusBadge({ value, locale }: { value: string; locale: Locale }) {
   return (
     <Badge
@@ -628,23 +747,77 @@ function StatusBadge({ value, locale }: { value: string; locale: Locale }) {
   );
 }
 
-function QuickActionCard({ action }: { action: QuickAction }) {
+function QuickActionCard({
+  action,
+}: {
+  action: QuickAction;
+}) {
   const Icon = action.icon;
 
   return (
-    <Card className="group rounded-2xl border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <Link href={action.href} className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+    <Card className="group h-full rounded-xl border-border/60 bg-background/70 shadow-none transition-colors hover:border-[#a57b3d]/25 hover:bg-muted/20">
+      <Link
+        href={action.href}
+        className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <CardHeader className="flex h-full flex-row items-start justify-between gap-4 space-y-0 p-5">
           <div className="min-w-0">
-            <CardTitle className="text-base">{action.title}</CardTitle>
-            <CardDescription className="mt-2 line-clamp-2">{action.description}</CardDescription>
+            <CardTitle className="text-sm font-bold tracking-tight text-foreground">
+              {action.title}
+            </CardTitle>
+
+            <CardDescription className="mt-2 line-clamp-2 text-xs leading-6">
+              {action.description}
+            </CardDescription>
           </div>
-          <span className="rounded-2xl bg-primary/10 p-2.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+
+          <span className="shrink-0 rounded-xl border border-[#a57b3d]/15 bg-[#a57b3d]/[0.07] p-2.5 text-[#a57b3d] transition-colors group-hover:bg-[#a57b3d]/[0.11]">
             <Icon className="h-5 w-5" />
           </span>
         </CardHeader>
       </Link>
     </Card>
+  );
+}
+
+function RegisterActionMenu({
+  href,
+  label,
+  locale,
+}: {
+  href: string;
+  label: string;
+  locale: Locale;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-9 w-9 rounded-lg bg-background"
+          aria-label={label}
+        >
+          <MoreVertical className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent
+        align={locale === "ar" ? "start" : "end"}
+        className="w-44"
+      >
+        <DropdownMenuItem asChild>
+          <Link
+            href={href}
+            className="flex items-center gap-2"
+          >
+            <ExternalLink className="h-4 w-4 text-[#a57b3d]" />
+            {label}
+          </Link>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -684,37 +857,6 @@ function CompaniesOverviewSkeleton() {
   );
 }
 
-function EmptyState({
-  title,
-  description,
-  showReset,
-  resetLabel,
-  onReset,
-}: {
-  title: string;
-  description: string;
-  showReset?: boolean;
-  resetLabel: string;
-  onReset: () => void;
-}) {
-  return (
-    <div className="flex min-h-64 flex-col items-center justify-center gap-3 px-6 py-10 text-center">
-      <div className="rounded-full bg-muted p-4 text-muted-foreground">
-        <Search className="h-6 w-6" />
-      </div>
-      <div>
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-      </div>
-      {showReset ? (
-        <Button variant="outline" size="sm" onClick={onReset} className="rounded-lg">
-          <RotateCcw className="h-4 w-4" />
-          {resetLabel}
-        </Button>
-      ) : null}
-    </div>
-  );
-}
 
 export default function SystemSubscriptionsPage() {
   const [locale, setLocale] = React.useState<Locale>("ar");
@@ -758,17 +900,13 @@ export default function SystemSubscriptionsPage() {
         setRefreshing(true);
         setError("");
 
-        const params = new URLSearchParams({
-          page: "1",
-          page_size: "100",
-          ordering: "-created_at",
-        });
+        const result =
+          await fetchAllSubscriptionRows(
+            API_ENDPOINT,
+          );
 
-        const payload = await fetchJson<unknown>(makeApiUrl(API_ENDPOINT, params));
-        const rows = extractArray(payload).map(normalizeCompany);
-
-        setCompanies(rows);
-        setApiTotal(extractCount(payload));
+        setCompanies(result.rows);
+        setApiTotal(result.total);
 
         if (silent) toast.success(t.refreshed);
       } catch (caughtError) {
@@ -793,10 +931,39 @@ export default function SystemSubscriptionsPage() {
     setSort("newest");
   }, []);
 
+
+  const latestCompanies = React.useMemo<CompanyRecord[]>(() => {
+    const ordered = [...companies].sort((a, b) =>
+      compareSubscriptionRecency(
+        a,
+        b,
+        "newest",
+      ),
+    );
+
+    const seenCompanies = new Set<string>();
+
+    return ordered.filter((company) => {
+      const key = company.company_key.trim();
+
+      if (!key) {
+        return true;
+      }
+
+      if (seenCompanies.has(key)) {
+        return false;
+      }
+
+      seenCompanies.add(key);
+
+      return true;
+    });
+  }, [companies]);
+
   const filteredCompanies = React.useMemo(() => {
     const needle = search.trim().toLowerCase();
 
-    const rows = companies.filter((company) => {
+    const rows = latestCompanies.filter((company) => {
       const haystack = [
         company.name,
         company.code,
@@ -816,23 +983,54 @@ export default function SystemSubscriptionsPage() {
     });
 
     return [...rows].sort((a, b) => {
-      if (sort === "oldest") return rowDateValue(a.created_at) - rowDateValue(b.created_at);
-      if (sort === "name") return a.name.localeCompare(b.name);
-      if (sort === "code") return a.code.localeCompare(b.code);
-      return rowDateValue(b.created_at) - rowDateValue(a.created_at);
+      if (sort === "oldest") {
+        return compareSubscriptionRecency(
+          a,
+          b,
+          "oldest",
+        );
+      }
+
+      if (sort === "name") {
+        return (
+          a.name.localeCompare(b.name) ||
+          b.sort_id - a.sort_id
+        );
+      }
+
+      if (sort === "code") {
+        return (
+          a.code.localeCompare(b.code) ||
+          b.sort_id - a.sort_id
+        );
+      }
+
+      return compareSubscriptionRecency(
+        a,
+        b,
+        "newest",
+      );
     });
-  }, [companies, search, sort, status]);
+  }, [latestCompanies, search, sort, status]);
 
   const stats = React.useMemo(() => {
     return {
-      total: apiTotal || companies.length,
-      active: companies.filter((company) => company.status === "active").length,
-      inactive: companies.filter((company) =>
-        ["inactive", "suspended", "cancelled"].includes(company.status),
+      total: latestCompanies.length,
+      active: latestCompanies.filter(
+        (company) =>
+          company.status === "active",
       ).length,
-      subscribed: companies.filter((company) => company.subscription && company.subscription !== "—").length,
+      inactive: latestCompanies.filter(
+        (company) =>
+          company.status === "expired",
+      ).length,
+      subscribed: latestCompanies.filter(
+        (company) =>
+          company.subscription &&
+          company.subscription !== "—",
+      ).length,
     };
-  }, [apiTotal, companies]);
+  }, [latestCompanies]);
 
   const quickActions = React.useMemo<QuickAction[]>(
     () => [
@@ -868,7 +1066,7 @@ export default function SystemSubscriptionsPage() {
   const previewRows = filteredCompanies.slice(0, 8);
 
   function buildExportRows() {
-    return filteredCompanies.map((company) => [
+    return previewRows.map((company) => [
       company.name,
       company.code,
       company.owner,
@@ -880,32 +1078,21 @@ export default function SystemSubscriptionsPage() {
     ]);
   }
 
-  function buildTableHtml() {
-    const headers = [
-      t.company,
-      t.code,
-      t.owner,
-      t.activity,
-      t.subscription,
-      t.city,
-      t.status,
-      t.createdAt,
-    ];
-
-    const rows = buildExportRows();
-
-    return `
-      <table border="1" cellspacing="0" cellpadding="6">
-        <thead>
-          <tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>
-        </thead>
-        <tbody>
-          ${rows
-            .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
-            .join("")}
-        </tbody>
-      </table>
-    `;
+  function buildPrintSection(): PrintReportTableSection {
+    return {
+      title: t.tableTitle,
+      columns: [
+        { label: t.company, width: 220, type: "text" },
+        { label: t.code, width: 135, type: "text" },
+        { label: t.owner, width: 130, type: "text" },
+        { label: t.activity, width: 130, type: "text" },
+        { label: t.subscription, width: 130, type: "text" },
+        { label: t.city, width: 115, type: "text" },
+        { label: t.status, width: 110, type: "text" },
+        { label: t.createdAt, width: 115, type: "text" },
+      ],
+      rows: buildExportRows(),
+    };
   }
 
   function exportExcel() {
@@ -942,10 +1129,10 @@ export default function SystemSubscriptionsPage() {
       return;
     }
     if (mode === "pdf") toast.info(t.pdfHint);
-    const opened = openPrintReport({
+    const opened = openPrintTableReport({
       locale,
       title: t.reportTitle,
-      tableHtml: buildTableHtml(),
+      sections: [buildPrintSection()],
       recordsCount: rows.length,
       recordsLabel: t.rows,
       generatedAtLabel: t.generatedAt,
@@ -983,280 +1170,599 @@ export default function SystemSubscriptionsPage() {
   }
 
   return (
-    <main dir={dir} className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main
+      dir={dir}
+      className="min-h-screen bg-transparent px-4 py-6 text-foreground sm:px-6 lg:px-8"
+    >
       <div className="w-full space-y-6">
-        <section className="overflow-hidden rounded-lg border bg-card shadow-none">
-          <div className="relative p-6 sm:p-8">
 
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-              <div className="max-w-4xl">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  {t.badge}
-                </div>
-                <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{t.title}</h1>
-                <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">{t.subtitle}</p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="outline"
-                  className={registerOutlineButtonClass}
-                  onClick={() => void loadCompanies({ silent: true })}
-                  disabled={refreshing}
-                >
-                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  {t.refresh}
-                </Button>
-                <Button variant="outline" className={registerOutlineButtonClass} onClick={exportExcel}>
-                  <FileSpreadsheet className="h-4 w-4" />
-                  {t.exportExcel}
-                </Button>
-                <Button variant="outline" className={registerOutlineButtonClass} onClick={() => openPrintWindow("print")}>
-                  <Printer className="h-4 w-4" />
-                  {t.print}
-                </Button>
-                <Button variant="outline" className={registerOutlineButtonClass} onClick={() => openPrintWindow("pdf")}>
-                  <FileText className="h-4 w-4" />
-                  {t.pdf}
-                </Button>
-                <Button asChild className="rounded-xl">
-                  <Link href="/system/subscriptions/list">
-                    <Plus className="h-4 w-4" />
-                    {t.addCompany}
-                  </Link>
-                </Button>
-              </div>
+        {/* ==================================================
+            PAGE HEADER
+        ================================================== */}
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-4xl">
+            <div className="mb-2 inline-flex items-center gap-2 text-sm font-medium text-[#9a7139]">
+              <Sparkles className="h-4 w-4 text-[#a57b3d]" />
+              {t.badge}
             </div>
-          </div>
-        </section>
 
+            <h1 className="text-3xl font-bold tracking-tight">
+              {t.title}
+            </h1>
+
+            <p className="mt-2 max-w-3xl text-sm leading-7 text-muted-foreground">
+              {t.subtitle}
+            </p>
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className={registerOutlineButtonClass}
+              onClick={() =>
+                void loadCompanies({ silent: true })
+              }
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+
+              {t.refresh}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className={registerOutlineButtonClass}
+              onClick={exportExcel}
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              {t.exportExcel}
+            </Button>
+
+            <Button
+              type="button"
+              variant="brand"
+              className={registerBrandButtonClass}
+              onClick={() =>
+                openPrintWindow("print")
+              }
+            >
+              <Printer className="h-4 w-4" />
+              {t.print}
+            </Button>
+
+            <Button
+              asChild
+              variant="brand"
+              className={registerBrandButtonClass}
+            >
+              <Link href="/system/subscriptions/list">
+                <ListChecks className="h-4 w-4" />
+                {t.addCompany}
+              </Link>
+            </Button>
+          </div>
+        </header>
+
+
+        {/* ==================================================
+            KPI CARDS
+        ================================================== */}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <SystemKpiCard title={t.totalCompanies} value={stats.total}
-            description={t.fromLiveApi} icon={Building2} />
-          <SystemKpiCard title={t.activeCompanies} value={stats.active}
-            description={t.fromLiveApi} icon={CheckCircle2} />
-          <SystemKpiCard title={t.inactiveCompanies} value={stats.inactive}
-            description={t.fromLiveApi} icon={ShieldCheck} />
-          <SystemKpiCard title={t.subscribedCompanies} value={stats.subscribed}
-            description={t.fromLiveApi} icon={Activity} />
+          <SystemKpiCard
+            title={t.totalCompanies}
+            value={stats.total}
+            description={t.fromLiveApi}
+            href="/system/subscriptions/list"
+            icon={Building2}
+          />
+
+          <SystemKpiCard
+            title={t.activeCompanies}
+            value={stats.active}
+            description={t.fromLiveApi}
+            href="/system/subscriptions/list"
+            icon={CheckCircle2}
+          />
+
+          <SystemKpiCard
+            title={t.inactiveCompanies}
+            value={stats.inactive}
+            description={t.fromLiveApi}
+            href="/system/subscriptions/list"
+            icon={ShieldCheck}
+          />
+
+          <SystemKpiCard
+            title={t.subscribedCompanies}
+            value={stats.subscribed}
+            description={t.fromLiveApi}
+            href="/system/subscriptions/list"
+            icon={Activity}
+          />
         </div>
 
-        <Card className="rounded-lg border bg-card shadow-none">
-          <CardHeader>
-            <CardTitle>{t.actionsTitle}</CardTitle>
-            <CardDescription>{t.actionsDesc}</CardDescription>
+
+        {/* ==================================================
+            MODULE SHORTCUTS
+        ================================================== */}
+        <Card className="overflow-hidden rounded-lg border bg-card shadow-none">
+          <CardHeader className="px-5 pt-5 sm:px-6">
+            <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight">
+              <ListChecks className="h-4 w-4 text-[#a57b3d]" />
+              {t.actionsTitle}
+            </CardTitle>
+
+            <CardDescription className="mt-1">
+              {t.actionsDesc}
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+
+          <CardContent className="px-5 pb-5 sm:px-6 sm:pb-6">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {quickActions.map((action) => (
-                <QuickActionCard key={action.href} action={action} />
+                <QuickActionCard
+                  key={`${action.href}-${action.title}`}
+                  action={action}
+                />
               ))}
             </div>
           </CardContent>
         </Card>
 
-        <Card className="w-full rounded-lg border bg-card shadow-none">
-          <CardHeader className="gap-3">
+
+        {/* ==================================================
+            LATEST SUBSCRIPTIONS
+        ================================================== */}
+        <Card className="w-full overflow-hidden rounded-lg border bg-card shadow-none">
+          <CardHeader className="px-5 pt-5 sm:px-6">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <CardTitle>{t.tableTitle}</CardTitle>
-                <CardDescription className="mt-2">{t.tableDesc}</CardDescription>
+
+              <div className="min-w-0">
+                <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight">
+                  <ShieldCheck className="h-4 w-4 text-[#a57b3d]" />
+                  {t.tableTitle}
+                </CardTitle>
+
+                <CardDescription className="mt-1">
+                  {t.tableDesc}
+                </CardDescription>
               </div>
-              <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
-                <UsersRound className="h-3.5 w-3.5" />
-                {t.showing} {formatInteger(previewRows.length)} {t.of} {formatInteger(apiTotal || companies.length)} {t.rows}
-              </Badge>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={registerOutlineButtonClass}
+                  onClick={exportExcel}
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  {t.exportExcel}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="brand"
+                  className={registerBrandButtonClass}
+                  onClick={() =>
+                    openPrintWindow("print")
+                  }
+                >
+                  <Printer className="h-4 w-4" />
+                  {t.print}
+                </Button>
+              </div>
             </div>
           </CardHeader>
 
-          <CardContent className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row md:items-center">
-                <div className="relative min-w-0 flex-1">
-                  <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder={t.searchPlaceholder}
-                    className="h-9 rounded-lg ps-9"
-                  />
-                </div>
 
-                <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
-                  <SelectTrigger className="h-9 rounded-lg bg-background md:w-[170px]">
+          <CardContent className="space-y-4 px-5 pb-5 sm:px-6 sm:pb-6">
+
+            {/* ================================================
+                TOOLBAR
+            ================================================ */}
+            <DataRegisterToolbar className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+
+              <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row md:items-center">
+
+                <DataRegisterSearch
+                  value={search}
+                  onChange={setSearch}
+                  placeholder={t.searchPlaceholder}
+                  className="min-w-0 flex-1"
+                />
+
+                <Select
+                  value={status}
+                  onValueChange={(value) =>
+                    setStatus(value as StatusFilter)
+                  }
+                >
+                  <SelectTrigger className="h-9 bg-background shadow-none md:w-[170px]">
                     <SelectValue />
                   </SelectTrigger>
+
                   <SelectContent>
                     {statusFilters.map((item) => (
-                      <SelectItem key={item} value={item}>
-                        {item === "all" ? t.all : getStatusLabel(item, locale)}
+                      <SelectItem
+                        key={item}
+                        value={item}
+                      >
+                        {item === "all"
+                          ? t.all
+                          : getStatusLabel(
+                              item,
+                              locale,
+                            )}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
+
               <div className="flex flex-wrap items-center gap-2">
-                <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
-                  <SelectTrigger className="h-9 rounded-lg bg-background sm:w-[160px]">
+
+                <Select
+                  value={sort}
+                  onValueChange={(value) =>
+                    setSort(value as SortKey)
+                  }
+                >
+                  <SelectTrigger className="h-9 bg-background shadow-none sm:w-[160px]">
                     <ArrowUpDown className="h-4 w-4" />
                     <SelectValue />
                   </SelectTrigger>
+
                   <SelectContent>
-                    <SelectItem value="newest">{t.newest}</SelectItem>
-                    <SelectItem value="oldest">{t.oldest}</SelectItem>
-                    <SelectItem value="name">{t.nameSort}</SelectItem>
-                    <SelectItem value="code">{t.codeSort}</SelectItem>
+                    <SelectItem value="newest">
+                      {t.newest}
+                    </SelectItem>
+
+                    <SelectItem value="oldest">
+                      {t.oldest}
+                    </SelectItem>
+
+                    <SelectItem value="name">
+                      {t.nameSort}
+                    </SelectItem>
+
+                    <SelectItem value="code">
+                      {t.codeSort}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
 
-                <Button variant="outline" className={registerOutlineButtonClass} onClick={resetFilters}>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 bg-background shadow-none"
+                  onClick={resetFilters}
+                >
                   <RotateCcw className="h-4 w-4" />
                   {t.reset}
                 </Button>
               </div>
-            </div>
+            </DataRegisterToolbar>
 
-            <div className="overflow-hidden rounded-lg border bg-background">
+
+            {/* ================================================
+                CENTRAL REGISTER TABLE
+            ================================================ */}
+            <DataRegisterTableFrame>
               <div className="w-full overflow-x-auto">
-                <Table variant="register" layout="fixed" minWidth={980}>
+
+                <Table
+                  variant="register"
+                  layout="fixed"
+                  minWidth="980px"
+                >
+
                   <TableHeader>
                     <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
-                      <TableHead className={cn("h-11 w-[220px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+
+                      <TableHead
+                        className={cn(
+                          "h-11 w-[220px] px-4 text-xs font-semibold text-muted-foreground",
+                          alignClass,
+                        )}
+                      >
                         {t.company}
                       </TableHead>
-                      <TableHead className={cn("h-11 w-[135px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+
+                      <TableHead
+                        className={cn(
+                          "h-11 w-[135px] px-4 text-xs font-semibold text-muted-foreground",
+                          alignClass,
+                        )}
+                      >
                         {t.code}
                       </TableHead>
-                      <TableHead className={cn("h-11 w-[130px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+
+                      <TableHead
+                        className={cn(
+                          "h-11 w-[130px] px-4 text-xs font-semibold text-muted-foreground",
+                          alignClass,
+                        )}
+                      >
                         {t.owner}
                       </TableHead>
-                      <TableHead className={cn("h-11 w-[130px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+
+                      <TableHead
+                        className={cn(
+                          "h-11 w-[130px] px-4 text-xs font-semibold text-muted-foreground",
+                          alignClass,
+                        )}
+                      >
                         {t.activity}
                       </TableHead>
-                      <TableHead className={cn("h-11 w-[130px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+
+                      <TableHead
+                        className={cn(
+                          "h-11 w-[130px] px-4 text-xs font-semibold text-muted-foreground",
+                          alignClass,
+                        )}
+                      >
                         {t.subscription}
                       </TableHead>
-                      <TableHead className={cn("h-11 w-[115px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+
+                      <TableHead
+                        className={cn(
+                          "h-11 w-[115px] px-4 text-xs font-semibold text-muted-foreground",
+                          alignClass,
+                        )}
+                      >
                         {t.city}
                       </TableHead>
-                      <TableHead className={cn("h-11 w-[110px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+
+                      <TableHead
+                        className={cn(
+                          "h-11 w-[110px] px-4 text-xs font-semibold text-muted-foreground",
+                          alignClass,
+                        )}
+                      >
                         {t.status}
                       </TableHead>
-                      <TableHead className={cn("h-11 w-[115px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+
+                      <TableHead
+                        className={cn(
+                          "h-11 w-[115px] px-4 text-xs font-semibold text-muted-foreground",
+                          alignClass,
+                        )}
+                      >
                         {t.createdAt}
                       </TableHead>
-                      <TableHead className="sticky left-0 z-10 h-11 w-[76px] bg-muted/40 px-3 text-center text-xs font-semibold text-muted-foreground">
+
+                      <TableHead className="sticky end-0 z-10 h-11 w-[76px] bg-muted/40 px-3 text-center text-xs font-semibold text-muted-foreground">
                         {t.open}
                       </TableHead>
+
                     </TableRow>
                   </TableHeader>
 
+
                   <TableBody>
+
                     {previewRows.length ? (
+
                       previewRows.map((company) => (
-                        <TableRow key={company.id || company.code || company.name} className="h-[64px]">
-                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
+
+                        <TableRow
+                          key={
+                            company.id ||
+                            company.code ||
+                            company.name
+                          }
+                          className="h-[62px]"
+                        >
+
+                          <TableCell
+                            className={cn(
+                              "h-[62px] overflow-hidden px-4 align-middle",
+                              alignClass,
+                            )}
+                          >
                             <div className="min-w-0">
+
                               <span className="block truncate text-sm font-semibold text-foreground">
-                                {company.name || t.unknown}
+                                {company.name ||
+                                  t.unknown}
                               </span>
+
                               <span className="block truncate text-xs text-muted-foreground">
-                                #{company.id || company.code || "—"}
+                                #
+                                {company.id ||
+                                  company.code ||
+                                  "—"}
                               </span>
+
                             </div>
                           </TableCell>
-                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
+
+
+                          <TableCell
+                            className={cn(
+                              "h-[62px] overflow-hidden px-4 align-middle",
+                              alignClass,
+                            )}
+                          >
                             <span className="block truncate text-sm tabular-nums text-muted-foreground">
                               {company.code || "—"}
                             </span>
                           </TableCell>
-                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
+
+
+                          <TableCell
+                            className={cn(
+                              "h-[62px] overflow-hidden px-4 align-middle",
+                              alignClass,
+                            )}
+                          >
                             <span className="block truncate text-sm text-muted-foreground">
                               {company.owner || "—"}
                             </span>
                           </TableCell>
-                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
+
+
+                          <TableCell
+                            className={cn(
+                              "h-[62px] overflow-hidden px-4 align-middle",
+                              alignClass,
+                            )}
+                          >
                             <span className="block truncate text-sm text-muted-foreground">
-                              {getBillingCycleLabel(company.activity, locale)}
+                              {getBillingCycleLabel(
+                                company.activity,
+                                locale,
+                              )}
                             </span>
                           </TableCell>
-                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
-                            <span className="block truncate text-sm text-muted-foreground">
-                              <MoneyValue amount={company.amount} currency={company.currency} />
-                            </span>
+
+
+                          <TableCell
+                            className={cn(
+                              "h-[62px] overflow-hidden px-4 align-middle",
+                              alignClass,
+                            )}
+                          >
+                            <MoneyValue
+                              amount={company.amount}
+                              currency={company.currency}
+                            />
                           </TableCell>
-                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
-                            <span className="block truncate text-sm text-muted-foreground">
+
+
+                          <TableCell
+                            className={cn(
+                              "h-[62px] overflow-hidden px-4 align-middle",
+                              alignClass,
+                            )}
+                          >
+                            <span
+                              dir="ltr"
+                              lang="en"
+                              className="block truncate text-sm tabular-nums text-muted-foreground"
+                            >
                               {company.city || "—"}
                             </span>
                           </TableCell>
-                          <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
-                            <StatusBadge value={company.status} locale={locale} />
+
+
+                          <TableCell
+                            className={cn(
+                              "h-[62px] px-4 align-middle",
+                              alignClass,
+                            )}
+                          >
+                            <StatusBadge
+                              value={company.status}
+                              locale={locale}
+                            />
                           </TableCell>
-                          <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
-                            <span className="text-sm tabular-nums text-muted-foreground">
-                              {formatDate(company.created_at)}
+
+
+                          <TableCell
+                            className={cn(
+                              "h-[62px] px-4 align-middle",
+                              alignClass,
+                            )}
+                          >
+                            <span
+                              dir="ltr"
+                              lang="en"
+                              className="text-sm tabular-nums text-muted-foreground"
+                            >
+                              {formatDate(
+                                company.created_at,
+                              )}
                             </span>
                           </TableCell>
-                          <TableCell className="sticky left-0 z-10 h-[64px] bg-background px-3 text-center align-middle">
-                            <Button asChild variant="outline" size="sm" className="h-8 rounded-lg bg-background px-3">
-                              <Link href={company.id ? `/system/subscriptions/${company.id}` : "/system/subscriptions/list"}>
-                                {t.open}
-                              </Link>
-                            </Button>
+
+
+                          <TableCell className="sticky end-0 z-10 h-[62px] bg-background px-3 text-center align-middle">
+
+                            <RegisterActionMenu
+                              href={
+                                company.id
+                                  ? `/system/subscriptions/${company.id}`
+                                  : "/system/subscriptions/list"
+                              }
+                              label={t.open}
+                              locale={locale}
+                            />
+
                           </TableCell>
+
                         </TableRow>
                       ))
+
                     ) : (
+
                       <TableRow>
                         <TableCell colSpan={9}>
-                          <EmptyState
-                            title={hasFilters ? t.noResultsTitle : t.noDataTitle}
-                            description={hasFilters ? t.noResultsDesc : t.noDataDesc}
+
+                          <DataRegisterEmptyState
+                            title={
+                              hasFilters
+                                ? t.noResultsTitle
+                                : t.noDataTitle
+                            }
+                            description={
+                              hasFilters
+                                ? t.noResultsDesc
+                                : t.noDataDesc
+                            }
                             showReset={hasFilters}
                             resetLabel={t.reset}
                             onReset={resetFilters}
                           />
+
                         </TableCell>
                       </TableRow>
+
                     )}
+
                   </TableBody>
                 </Table>
               </div>
+            </DataRegisterTableFrame>
+
+
+            {/* ================================================
+                RESULT COUNT + PREVIEW LINK
+            ================================================ */}
+            <div className="space-y-3">
+
+              <DataRegisterResultCount
+                showingLabel={t.showing}
+                showingCount={formatInteger(
+                  previewRows.length,
+                )}
+                ofLabel={t.of}
+                totalCount={formatInteger(
+                  latestCompanies.length,
+                )}
+                rowsLabel={t.rows}
+              />
+
+              <DataRegisterPreviewLink
+                href="/system/subscriptions/list"
+                label={t.list}
+                icon={ShieldCheck}
+              />
+
             </div>
 
-            <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-              <p>
-                {t.showing}{" "}
-                <span className="font-medium text-foreground tabular-nums">
-                  {formatInteger(previewRows.length)}
-                </span>{" "}
-                {t.of}{" "}
-                <span className="font-medium text-foreground tabular-nums">
-                  {formatInteger(apiTotal || companies.length)}
-                </span>{" "}
-                {t.rows}
-              </p>
-              <Button asChild variant="outline" className="w-fit rounded-lg bg-background">
-                <Link href="/system/subscriptions/list">
-                  <ListChecks className="h-4 w-4" />
-                  {t.list}
-                </Link>
-              </Button>
-            </div>
           </CardContent>
         </Card>
+
       </div>
     </main>
   );
 }
-
-
-
-
-
-
-
-

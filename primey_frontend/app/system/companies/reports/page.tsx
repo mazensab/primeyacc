@@ -64,7 +64,10 @@ import {
   downloadExcelReport,
   type ExcelReportSection,
 } from "@/lib/excel-report";
-import { openPrintReport } from "@/lib/print-report";
+import {
+  openPrintTableReport,
+  type PrintReportTableSection,
+} from "@/lib/print-report";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -379,15 +382,6 @@ function rowDateValue(value: string | null | undefined) {
   if (!value) return 0;
   const parsed = new Date(value).getTime();
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function escapeHtml(value: unknown) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 }
 
 function getInitialLocale(): Locale {
@@ -991,33 +985,22 @@ export default function SystemCompaniesReportsPage() {
     ]);
   }
 
-  function buildTableHtml() {
-    const headers = [
-      t.company,
-      t.code,
-      t.owner,
-      t.activity,
-      t.subscription,
-      t.city,
-      t.status,
-      t.createdAt,
-      t.updatedAt,
-    ];
-
-    const rows = buildExportRows();
-
-    return `
-      <table border="1" cellspacing="0" cellpadding="6">
-        <thead>
-          <tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>
-        </thead>
-        <tbody>
-          ${rows
-            .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
-            .join("")}
-        </tbody>
-      </table>
-    `;
+  function buildPrintSection(): PrintReportTableSection {
+    return {
+      title: t.reportTable,
+      columns: [
+        { label: t.company, width: 230, type: "text" },
+        { label: t.code, width: 140, type: "text" },
+        { label: t.owner, width: 160, type: "text" },
+        { label: t.activity, width: 160, type: "text" },
+        { label: t.subscription, width: 170, type: "text" },
+        { label: t.city, width: 130, type: "text" },
+        { label: t.status, width: 130, type: "text" },
+        { label: t.createdAt, width: 160, type: "text" },
+        { label: t.updatedAt, width: 160, type: "text" },
+      ],
+      rows: buildExportRows(),
+    };
   }
 
   function buildExcelSection(): ExcelReportSection {
@@ -1070,11 +1053,11 @@ export default function SystemCompaniesReportsPage() {
       toast.info(t.pdfHint);
     }
 
-    const opened = openPrintReport({
+    const opened = openPrintTableReport({
       locale,
       title: t.reportTitle,
       subtitle: t.subtitle,
-      tableHtml: buildTableHtml(),
+      sections: [buildPrintSection()],
       recordsCount: rows.length,
       recordsLabel: t.rows,
       generatedAtLabel: t.generatedAt,

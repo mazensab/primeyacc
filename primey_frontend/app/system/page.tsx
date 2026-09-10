@@ -64,6 +64,11 @@ import {
   registerOutlineButtonClass,
 } from "@/components/ui/data-register";
 import {
+  DataRegisterPreviewLink,
+  DataRegisterResultCount,
+  DataRegisterTableFrame,
+} from "@/components/ui/data-register-table";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -91,7 +96,10 @@ import {
   downloadExcelReport,
   type ExcelReportSection,
 } from "@/lib/excel-report";
-import { openPrintReport } from "@/lib/print-report";
+import {
+  openPrintTableReport,
+  type PrintReportTableSection,
+} from "@/lib/print-report";
 
 type Locale = "ar" | "en";
 type ApiRecord = Record<string, unknown>;
@@ -179,6 +187,8 @@ const API_ENDPOINTS = {
   platformPayments: "/api/system/subscription-payments/",
   releaseReadiness: "/api/system/release-readiness/",
 };
+
+const DASHBOARD_PREVIEW_LIMIT = 8;
 
 const translations = {
   ar: {
@@ -597,15 +607,6 @@ function formatDateTime(value: string | null | undefined) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return String(value).replace("T", " ").slice(0, 16);
   return parsed.toISOString().replace("T", " ").slice(0, 16);
-}
-
-function escapeHtml(value: unknown) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 }
 
 function getInitialLocale(): Locale {
@@ -1037,7 +1038,7 @@ function DataTable<T extends { id: string }>({
 }) {
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-lg border bg-background">
+      <DataRegisterTableFrame>
         <div className="overflow-x-auto">
           <Table variant="register" layout="fixed" minWidth="1080px">
             <TableHeader>
@@ -1085,11 +1086,15 @@ function DataTable<T extends { id: string }>({
             </TableBody>
           </Table>
         </div>
-      </div>
-      <div className="text-sm text-muted-foreground">
-        {showingLabel} <span className="font-medium text-foreground tabular-nums">{formatInteger(rows.length)}</span> {ofLabel}{" "}
-        <span className="font-medium text-foreground tabular-nums">{formatInteger(allRowsCount)}</span> {rowsLabel}
-      </div>
+      </DataRegisterTableFrame>
+
+      <DataRegisterResultCount
+        showingLabel={showingLabel}
+        showingCount={formatInteger(rows.length)}
+        ofLabel={ofLabel}
+        totalCount={formatInteger(allRowsCount)}
+        rowsLabel={rowsLabel}
+      />
     </div>
   );
 }
@@ -1164,7 +1169,11 @@ export default function SystemDashboardPage() {
         setError("");
         setWarnings([]);
 
-        const rowsParams = new URLSearchParams({ page: "1", page_size: "12", ordering: "-created_at" });
+        const rowsParams = new URLSearchParams({
+          page: "1",
+          page_size: String(DASHBOARD_PREVIEW_LIMIT),
+          ordering: "-created_at",
+        });
 
         const results = await Promise.allSettled([
           fetchJson<ApiResponse>(
@@ -1345,6 +1354,21 @@ export default function SystemDashboardPage() {
     return sortRows(rows, paymentSort, (row) => row.paid_at || row.created_at, (row) => row.amount, (row) => row.company_name);
   }, [paymentDateFrom, paymentDateTo, paymentSearch, paymentSort, paymentStatus, payments]);
 
+  const visibleCompanies = React.useMemo(
+    () => filteredCompanies.slice(0, DASHBOARD_PREVIEW_LIMIT),
+    [filteredCompanies],
+  );
+
+  const visibleSubscriptions = React.useMemo(
+    () => filteredSubscriptions.slice(0, DASHBOARD_PREVIEW_LIMIT),
+    [filteredSubscriptions],
+  );
+
+  const visiblePayments = React.useMemo(
+    () => filteredPayments.slice(0, DASHBOARD_PREVIEW_LIMIT),
+    [filteredPayments],
+  );
+
   const hasCompanyFilters = Boolean(companySearch || companyStatus !== "all" || companyDateFrom || companyDateTo || companySort !== "newest");
   const hasSubscriptionFilters = Boolean(
     subscriptionSearch || subscriptionStatus !== "all" || subscriptionDateFrom || subscriptionDateTo || subscriptionSort !== "newest",
@@ -1478,7 +1502,7 @@ export default function SystemDashboardPage() {
         title: t.latestCompanies,
         headers: [t.company, t.code, t.owner, t.activity, t.subscription, t.status, t.createdAt],
         widths: [240, 150, 180, 170, 170, 130, 170],
-        rows: filteredCompanies.map((company) => [
+        rows: visibleCompanies.map((company) => [
           company.name,
           company.code,
           company.owner,
@@ -1493,7 +1517,7 @@ export default function SystemDashboardPage() {
         headers: [t.company, t.plan, t.status, t.billingCycle, `${t.amount} (${t.sar})`, t.startsAt, t.endsAt],
         widths: [230, 170, 130, 145, 150, 135, 135],
         moneyColumns: [4],
-        rows: filteredSubscriptions.map((subscription) => [
+        rows: visibleSubscriptions.map((subscription) => [
           subscription.company_name,
           getBusinessLabel(subscription.plan_name, locale, "plan"),
           getStatusLabel(subscription.status, locale),
@@ -1508,7 +1532,7 @@ export default function SystemDashboardPage() {
         headers: [t.reference, t.company, t.gateway, t.method, t.status, `${t.amount} (${t.sar})`, t.paidAt],
         widths: [170, 220, 150, 140, 125, 150, 170],
         moneyColumns: [5],
-        rows: filteredPayments.map((payment) => [
+        rows: visiblePayments.map((payment) => [
           payment.reference,
           payment.company_name,
           getBusinessLabel(payment.gateway, locale, "gateway"),
@@ -1521,38 +1545,18 @@ export default function SystemDashboardPage() {
     ];
   }
 
-  function tableHtmlForSections(sections: DashboardExportSection[]) {
-    return sections
-      .filter((section) => section.rows.length)
-      .map(
-        (section) => `
-          <section class="report-section">
-            <h2>${escapeHtml(section.title)}</h2>
-            <table class="data">
-              <colgroup>
-                ${section.widths.map((width) => `<col style="width:${width}px" />`).join("")}
-              </colgroup>
-              <thead>
-                <tr>${section.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>
-              </thead>
-              <tbody>
-                ${section.rows
-                  .map(
-                    (row) => `<tr>${row
-                      .map((cell, index) => {
-                        const isMoney = section.moneyColumns?.includes(index);
-                        return `<td class="${isMoney ? "number" : "text"}">${escapeHtml(
-                          isMoney ? formatMoney(cell) : cell,
-                        )}</td>`;
-                      })
-                      .join("")}</tr>`,
-                  )
-                  .join("")}
-              </tbody>
-            </table>
-          </section>`,
-      )
-      .join("");
+  function toPrintSections(
+    sections: DashboardExportSection[],
+  ): PrintReportTableSection[] {
+    return sections.map((section) => ({
+      title: section.title,
+      columns: section.headers.map((label, index) => ({
+        label,
+        width: section.widths[index],
+        type: section.moneyColumns?.includes(index) ? "money" : "text",
+      })),
+      rows: section.rows,
+    }));
   }
 
   function toExcelSections(sections: DashboardExportSection[]): ExcelReportSection[] {
@@ -1611,11 +1615,11 @@ export default function SystemDashboardPage() {
       return;
     }
 
-    const opened = openPrintReport({
+    const opened = openPrintTableReport({
       locale,
       title,
       subtitle,
-      tableHtml: tableHtmlForSections(populated),
+      sections: toPrintSections(populated),
       recordsCount: totalRows,
       recordsLabel: t.rows,
       generatedAtLabel: t.generatedAt,
@@ -1839,7 +1843,7 @@ export default function SystemDashboardPage() {
               locale={locale}
             />
             <DataTable
-              rows={filteredCompanies}
+              rows={visibleCompanies}
               allRowsCount={companies.length}
               columns={companyColumns}
               rowKey={(row) => row.id || row.code || row.name}
@@ -1853,6 +1857,11 @@ export default function SystemDashboardPage() {
               showingLabel={t.showing}
               ofLabel={t.of}
               rowsLabel={t.rows}
+            />
+            <DataRegisterPreviewLink
+              href="/system/companies/list"
+              label={locale === "ar" ? "قائمة الشركات" : "Companies list"}
+              icon={Building2}
             />
           </CardContent>
         </Card>
@@ -1897,7 +1906,7 @@ export default function SystemDashboardPage() {
               locale={locale}
             />
             <DataTable
-              rows={filteredSubscriptions}
+              rows={visibleSubscriptions}
               allRowsCount={subscriptions.length}
               columns={subscriptionColumns}
               rowKey={(row) => row.id || `${row.company_name}-${row.plan_name}`}
@@ -1911,6 +1920,11 @@ export default function SystemDashboardPage() {
               showingLabel={t.showing}
               ofLabel={t.of}
               rowsLabel={t.rows}
+            />
+            <DataRegisterPreviewLink
+              href="/system/subscriptions/list"
+              label={locale === "ar" ? "قائمة الاشتراكات" : "Subscriptions list"}
+              icon={ShieldCheck}
             />
           </CardContent>
         </Card>
@@ -1955,7 +1969,7 @@ export default function SystemDashboardPage() {
               locale={locale}
             />
             <DataTable
-              rows={filteredPayments}
+              rows={visiblePayments}
               allRowsCount={payments.length}
               columns={paymentColumns}
               rowKey={(row) => row.id || row.reference}
@@ -1969,6 +1983,11 @@ export default function SystemDashboardPage() {
               showingLabel={t.showing}
               ofLabel={t.of}
               rowsLabel={t.rows}
+            />
+            <DataRegisterPreviewLink
+              href="/system/platform-payments/list"
+              label={locale === "ar" ? "قائمة المدفوعات" : "Payments list"}
+              icon={CreditCard}
             />
           </CardContent>
         </Card>
