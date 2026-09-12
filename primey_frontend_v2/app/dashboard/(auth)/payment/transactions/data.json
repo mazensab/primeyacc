@@ -1,0 +1,98 @@
+[
+  {
+    "id": 1,
+    "date": "2026-08-19",
+    "description": "Payment from Stripe",
+    "status": "completed",
+    "amount": 2345.75,
+    "type": "payment"
+  },
+  {
+    "id": 2,
+    "date": "2026-08-16",
+    "description": "Withdrawal to JP Morgan Chase (0440)",
+    "status": "completed",
+    "amount": -1275.79,
+    "type": "withdrawal"
+  },
+  {
+    "id": 3,
+    "date": "2026-08-14",
+    "description": "Payment from Paddle",
+    "status": "completed",
+    "amount": 5651.56,
+    "type": "payment"
+  },
+  {
+    "id": 4,
+    "date": "2026-08-12",
+    "description": "Withdrawal to Bank of America (3311)",
+    "status": "pending",
+    "amount": -1272.3,
+    "type": "withdrawal"
+  },
+  {
+    "id": 5,
+    "date": "2026-08-09",
+    "description": "Payment from Shopify Payouts",
+    "status": "completed",
+    "amount": 1820.4,
+    "type": "payment"
+  },
+  {
+    "id": 6,
+    "date": "2026-08-07",
+    "description": "Withdrawal to HSBC (5522)",
+    "status": "completed",
+    "amount": -1679.35,
+    "type": "withdrawal"
+  },
+  {
+    "id": 7,
+    "date": "2026-08-05",
+    "description": "Withdrawal to Citibank (2290)",
+    "status": "failed",
+    "amount": -202.99,
+    "type": "withdrawal"
+  },
+  {
+    "id": 8,
+    "date": "2026-08-03",
+    "description": "Payment from PayPal",
+    "status": "completed",
+    "amount": 980.25,
+    "type": "payment"
+  },
+  {
+    "id": 9,
+    "date": "2026-07-31",
+    "description": "Withdrawal to JP Morgan Chase (1133)",
+    "status": "completed",
+    "amount": -3420,
+    "type": "withdrawal"
+  },
+  {
+    "id": 10,
+    "date": "2026-07-29",
+    "description": "Payment from Lemon Squeezy",
+    "status": "pending",
+    "amount": 1145.9,
+    "type": "payment"
+  },
+  {
+    "id": 11,
+    "date": "2026-07-27",
+    "description": "Withdrawal to Wells Fargo (7810)",
+    "status": "completed",
+    "amount": -540,
+    "type": "withdrawal"
+  },
+  {
+    "id": 12,
+    "date": "2026-07-25",
+    "description": "Payment from Gumroad",
+    "status": "completed",
+    "amount": 312.6,
+    "type": "payment"
+  }
+]

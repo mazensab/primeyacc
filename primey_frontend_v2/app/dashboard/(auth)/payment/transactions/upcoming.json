@@ -1,0 +1,26 @@
+[
+  {
+    "id": 101,
+    "date": "2026-08-24",
+    "description": "Scheduled withdrawal to JP Morgan Chase (0440)",
+    "status": "pending",
+    "amount": -2150,
+    "type": "withdrawal"
+  },
+  {
+    "id": 102,
+    "date": "2026-08-28",
+    "description": "Expected payout from Paddle",
+    "status": "pending",
+    "amount": 4980.1,
+    "type": "payment"
+  },
+  {
+    "id": 103,
+    "date": "2026-09-01",
+    "description": "Scheduled withdrawal to HSBC (5522)",
+    "status": "pending",
+    "amount": -900,
+    "type": "withdrawal"
+  }
+]

@@ -89,6 +89,10 @@ urlpatterns = [
     path("permissions/", include("api.system.permissions.urls")),
     path("roles/", include("api.system.roles.urls")),
     path(
+        "dashboard/",
+        include("api.system.dashboard.urls"),
+    ),
+    path(
         "users/",
         include("api.system.users.urls"),
     ),

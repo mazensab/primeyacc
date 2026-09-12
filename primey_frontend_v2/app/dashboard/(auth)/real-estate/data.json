@@ -1,0 +1,1092 @@
+{
+  "dashboard": {
+    "stats": [
+      {
+        "title": "Active Leads",
+        "value": "120",
+        "change": 12,
+        "icon": "users"
+      },
+      {
+        "title": "Total Revenue",
+        "value": "$96,7M",
+        "change": 12,
+        "icon": "dollar-sign"
+      },
+      {
+        "title": "Active Listing",
+        "value": "23",
+        "change": -12,
+        "icon": "building-2"
+      },
+      {
+        "title": "Total Closed",
+        "value": "42",
+        "change": 12,
+        "icon": "check-circle"
+      }
+    ],
+    "deals": {
+      "closed": 42,
+      "inProgress": 132
+    },
+    "reminders": [
+      {
+        "title": "Follow up with client",
+        "description": "Follow up with Mr. Aditya about payment status.",
+        "month": "Oct",
+        "day": "08",
+        "avatars": [
+          "https://i.pravatar.cc/100?img=39",
+          "https://i.pravatar.cc/100?img=40"
+        ]
+      },
+      {
+        "title": "Upload new photos",
+        "description": "Upload new listing photos for the new villa launch.",
+        "month": "Oct",
+        "day": "12",
+        "avatars": [
+          "https://i.pravatar.cc/100?img=41"
+        ]
+      },
+      {
+        "title": "Review sales contract",
+        "description": "Review and sign contract draft for The Somerset sale.",
+        "month": "Oct",
+        "day": "17",
+        "avatars": [
+          "https://i.pravatar.cc/100?img=42",
+          "https://i.pravatar.cc/100?img=43"
+        ]
+      }
+    ],
+    "leads": [
+      {
+        "id": 1,
+        "name": "Jessica Chen",
+        "location": "New York, Albany",
+        "avatar": "https://i.pravatar.cc/100?img=20"
+      },
+      {
+        "id": 2,
+        "name": "John Doe",
+        "location": "California, LA",
+        "avatar": "https://i.pravatar.cc/100?img=21"
+      },
+      {
+        "id": 3,
+        "name": "Hailee S.",
+        "location": "New York, Troy",
+        "avatar": "https://i.pravatar.cc/100?img=22"
+      },
+      {
+        "id": 4,
+        "name": "Evan Chris",
+        "location": "Ohio, Columbus",
+        "avatar": "https://i.pravatar.cc/100?img=23"
+      }
+    ]
+  },
+  "properties": [
+    {
+      "id": 1,
+      "listingCode": "ID4567",
+      "name": "The Somerset",
+      "title": "The Somerset",
+      "thumbnailImage": "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=100&h=100&fit=crop",
+      "image": "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&h=500&fit=crop",
+      "address": "Jl. Klan Aldebaran Ou, Jakarta",
+      "location": "jakarta",
+      "status": "On rent",
+      "priceMin": 610000,
+      "priceMax": 630000,
+      "sqft": 50000,
+      "complain": 70,
+      "rooms": 8,
+      "beds": 4,
+      "baths": 3,
+      "price": 19999,
+      "priceType": "year",
+      "rating": 4.6,
+      "isFavorite": false,
+      "propertyType": "house",
+      "amenities": [
+        "Garden",
+        "Swimming Pool",
+        "Garage"
+      ],
+      "isActive": false,
+      "type": "House",
+      "units": 48,
+      "cost": "$ 622K",
+      "leads": {
+        "count": 18,
+        "avatars": [
+          "https://i.pravatar.cc/100?img=13",
+          "https://i.pravatar.cc/100?img=14"
+        ]
+      },
+      "views": 312,
+      "listingStatus": "Available",
+      "isFeatured": true,
+      "featuredSold": 175,
+      "featuredRented": 125,
+      "featuredViews": "2K+",
+      "featuredLeads": 14
+    },
+    {
+      "id": 2,
+      "listingCode": "ID3321",
+      "name": "Happy Lagoon Farm",
+      "title": "Old Trafford Homies",
+      "thumbnailImage": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=100&h=100&fit=crop",
+      "image": "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop&q=60",
+      "address": "Jl. The Central Of Edelweis",
+      "location": "jakarta",
+      "status": "On sell",
+      "priceMin": 880000,
+      "priceMax": 930000,
+      "sqft": 45000,
+      "complain": 44,
+      "rooms": 4,
+      "beds": 3,
+      "baths": 2,
+      "price": 22396,
+      "priceType": "year",
+      "rating": 5,
+      "isFavorite": false,
+      "propertyType": "house",
+      "amenities": [
+        "Garden",
+        "Backyard",
+        "Fireplace"
+      ],
+      "isActive": false,
+      "type": "House",
+      "units": 36,
+      "cost": "$ 905K",
+      "leads": {
+        "count": 26,
+        "avatars": [
+          "https://i.pravatar.cc/100?img=15",
+          "https://i.pravatar.cc/100?img=16"
+        ]
+      },
+      "views": 445,
+      "listingStatus": "Occupied",
+      "isFeatured": false
+    },
+    {
+      "id": 3,
+      "listingCode": "ID2345",
+      "name": "Green Hangout Place",
+      "title": "Maple Ridge Residence",
+      "thumbnailImage": "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=100&h=100&fit=crop",
+      "image": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&auto=format&fit=crop&q=60",
+      "address": "Jl. Pegangsaan Timur, Jakarta",
+      "location": "jakarta",
+      "status": "Renovation",
+      "priceMin": 650000,
+      "priceMax": 690000,
+      "sqft": 95000,
+      "complain": 53,
+      "rooms": 6,
+      "beds": 4,
+      "baths": 2,
+      "price": 15000,
+      "priceType": "year",
+      "rating": 4.9,
+      "isFavorite": true,
+      "propertyType": "house",
+      "amenities": [
+        "Garden",
+        "Gym",
+        "Laundry"
+      ],
+      "isActive": false,
+      "type": "House",
+      "units": 14,
+      "cost": "$ 672K",
+      "leads": {
+        "count": 41,
+        "avatars": [
+          "https://i.pravatar.cc/100?img=17",
+          "https://i.pravatar.cc/100?img=18"
+        ]
+      },
+      "views": 156,
+      "listingStatus": "Sold Out",
+      "isFeatured": false
+    },
+    {
+      "id": 4,
+      "listingCode": "ID9980",
+      "name": "Summer House",
+      "title": "Bougenville House",
+      "thumbnailImage": "https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=100&h=100&fit=crop",
+      "image": "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800&auto=format&fit=crop&q=60",
+      "address": "Jl. Mencari Cinta Sejati, Jakarta",
+      "location": "jakarta",
+      "status": "On Construction",
+      "priceMin": 640000,
+      "priceMax": 670000,
+      "sqft": 100000,
+      "complain": 10,
+      "rooms": 9,
+      "beds": 5,
+      "baths": 3,
+      "price": 18989,
+      "originalPrice": 20000,
+      "priceType": "year",
+      "rating": 4.8,
+      "isFavorite": false,
+      "propertyType": "house",
+      "amenities": [
+        "Swimming Pool",
+        "Surveillance Cameras",
+        "Garage"
+      ],
+      "isActive": true,
+      "type": "House",
+      "units": 52,
+      "cost": "$ 655K",
+      "leads": {
+        "count": 9,
+        "avatars": [
+          "https://i.pravatar.cc/100?img=19",
+          "https://i.pravatar.cc/100?img=20"
+        ]
+      },
+      "views": 267,
+      "listingStatus": "Available",
+      "isFeatured": false
+    },
+    {
+      "id": 5,
+      "listingCode": "ID1144",
+      "name": "Cheery Castle",
+      "title": "Sunset Villa Bali",
+      "thumbnailImage": "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=100&h=100&fit=crop",
+      "image": "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800&auto=format&fit=crop&q=60",
+      "address": "Jl. Pantai Kuta, Bali",
+      "location": "bali",
+      "status": "On rent",
+      "priceMin": 580000,
+      "priceMax": 620000,
+      "sqft": 80000,
+      "complain": 90,
+      "rooms": 5,
+      "beds": 3,
+      "baths": 2,
+      "price": 25000,
+      "priceType": "year",
+      "rating": 4.7,
+      "isFavorite": false,
+      "propertyType": "house",
+      "amenities": [
+        "Swimming Pool",
+        "Garden",
+        "Backyard"
+      ],
+      "isActive": true,
+      "type": "House",
+      "units": 28,
+      "cost": "$ 602K",
+      "leads": {
+        "count": 52,
+        "avatars": [
+          "https://i.pravatar.cc/100?img=21",
+          "https://i.pravatar.cc/100?img=22"
+        ]
+      },
+      "views": 891,
+      "listingStatus": "Occupied",
+      "isFeatured": false
+    },
+    {
+      "id": 6,
+      "listingCode": "ID0987",
+      "name": "Lazy Shore Palace",
+      "title": "Medical Center Plaza",
+      "thumbnailImage": "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=100&h=100&fit=crop",
+      "image": "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800&auto=format&fit=crop&q=60",
+      "address": "Jl. Sudirman, Jakarta",
+      "location": "jakarta",
+      "status": "On sell",
+      "priceMin": 820000,
+      "priceMax": 860000,
+      "sqft": 170000,
+      "complain": 0,
+      "rooms": 12,
+      "beds": 0,
+      "baths": 4,
+      "price": 45000,
+      "priceType": "year",
+      "rating": 4.5,
+      "isFavorite": false,
+      "propertyType": "medical",
+      "amenities": [
+        "Surveillance Cameras",
+        "Laundry"
+      ],
+      "isActive": true,
+      "type": "Medical",
+      "units": 140,
+      "cost": "$ 842K",
+      "leads": {
+        "count": 6,
+        "avatars": [
+          "https://i.pravatar.cc/100?img=23",
+          "https://i.pravatar.cc/100?img=24"
+        ]
+      },
+      "views": 124,
+      "listingStatus": "Available",
+      "isFeatured": false
+    },
+    {
+      "id": 7,
+      "listingCode": "ID5467",
+      "name": "Green Hangout Place",
+      "title": "Modern Office Tower",
+      "thumbnailImage": "https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=100&h=100&fit=crop",
+      "image": "https://images.unsplash.com/photo-1497366216548-37526070297c?w=800&auto=format&fit=crop&q=60",
+      "address": "Jl. Gatot Subroto, Jakarta",
+      "location": "jakarta",
+      "status": "On rent",
+      "priceMin": 729000,
+      "priceMax": 765000,
+      "sqft": 115000,
+      "complain": 44,
+      "rooms": 20,
+      "beds": 0,
+      "baths": 6,
+      "price": 55000,
+      "priceType": "year",
+      "rating": 4.3,
+      "isFavorite": false,
+      "propertyType": "office",
+      "amenities": [
+        "Gym",
+        "Surveillance Cameras"
+      ],
+      "isActive": true,
+      "type": "Office",
+      "units": 64,
+      "cost": "$ 748K",
+      "leads": {
+        "count": 33,
+        "avatars": [
+          "https://i.pravatar.cc/100?img=25",
+          "https://i.pravatar.cc/100?img=26"
+        ]
+      },
+      "views": 502,
+      "listingStatus": "Available",
+      "isFeatured": false
+    },
+    {
+      "id": 8,
+      "listingCode": "ID2953",
+      "name": "Bright Forest Camp",
+      "title": "Cozy Apartment Surabaya",
+      "thumbnailImage": "https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?w=100&h=100&fit=crop",
+      "image": "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&auto=format&fit=crop&q=60",
+      "address": "Jl. Darmo, Surabaya",
+      "location": "surabaya",
+      "status": "On sell",
+      "priceMin": 630000,
+      "priceMax": 690000,
+      "sqft": 55000,
+      "complain": 10,
+      "rooms": 3,
+      "beds": 2,
+      "baths": 1,
+      "price": 8500,
+      "priceType": "year",
+      "rating": 4.4,
+      "isFavorite": false,
+      "propertyType": "apartment",
+      "amenities": [
+        "Laundry",
+        "Gym"
+      ],
+      "isActive": false,
+      "type": "Apartment",
+      "units": 120,
+      "cost": "$ 662K",
+      "leads": {
+        "count": 29,
+        "avatars": [
+          "https://i.pravatar.cc/100?img=27",
+          "https://i.pravatar.cc/100?img=28"
+        ]
+      },
+      "views": 338,
+      "listingStatus": "Occupied",
+      "isFeatured": false
+    },
+    {
+      "id": 9,
+      "listingCode": "ID8989",
+      "name": "Mountain Fabric",
+      "title": "Shophouse Heritage",
+      "thumbnailImage": "https://images.unsplash.com/photo-1600573472550-8090b5e0745e?w=100&h=100&fit=crop",
+      "image": "https://images.unsplash.com/photo-1555636222-cae831e670b3?w=800&auto=format&fit=crop&q=60",
+      "address": "Jl. Malioboro, Jakarta",
+      "location": "jakarta",
+      "status": "On rent",
+      "priceMin": 910000,
+      "priceMax": 960000,
+      "sqft": 200000,
+      "complain": 53,
+      "rooms": 4,
+      "beds": 2,
+      "baths": 2,
+      "price": 12000,
+      "priceType": "year",
+      "rating": 4.2,
+      "isFavorite": false,
+      "propertyType": "shophouse",
+      "amenities": [
+        "Backyard",
+        "Garage"
+      ],
+      "isActive": false,
+      "type": "Shophouse",
+      "units": 18,
+      "cost": "$ 936K",
+      "leads": {
+        "count": 37,
+        "avatars": [
+          "https://i.pravatar.cc/100?img=29",
+          "https://i.pravatar.cc/100?img=30"
+        ]
+      },
+      "views": 673,
+      "listingStatus": "Sold Out",
+      "isFeatured": false
+    },
+    {
+      "id": 10,
+      "listingCode": "ID4554",
+      "name": "Restful House",
+      "title": "Luxury Penthouse Bali",
+      "thumbnailImage": "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=100&h=100&fit=crop",
+      "image": "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=800&auto=format&fit=crop&q=60",
+      "address": "Jl. Seminyak Beach, Bali",
+      "location": "bali",
+      "status": "Renovation",
+      "priceMin": 860000,
+      "priceMax": 940000,
+      "sqft": 110000,
+      "complain": 44,
+      "rooms": 7,
+      "beds": 4,
+      "baths": 3,
+      "price": 35000,
+      "priceType": "year",
+      "rating": 4.9,
+      "isFavorite": true,
+      "propertyType": "apartment",
+      "amenities": [
+        "Swimming Pool",
+        "Garden",
+        "Gym",
+        "Fireplace"
+      ],
+      "isActive": false,
+      "type": "Apartment",
+      "units": 44,
+      "cost": "$ 902K",
+      "leads": {
+        "count": 14,
+        "avatars": [
+          "https://i.pravatar.cc/100?img=31",
+          "https://i.pravatar.cc/100?img=32"
+        ]
+      },
+      "views": 221,
+      "listingStatus": "Available",
+      "isFeatured": false
+    },
+    {
+      "id": 11,
+      "listingCode": "ID2132",
+      "name": "Hillside House",
+      "title": "Green Valley Estate",
+      "thumbnailImage": "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=100&h=100&fit=crop",
+      "image": "https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?w=800&auto=format&fit=crop&q=60",
+      "address": "Jl. Raya Ubud, Bali",
+      "location": "bali",
+      "status": "On rent",
+      "priceMin": 700000,
+      "priceMax": 745000,
+      "sqft": 75000,
+      "complain": 10,
+      "rooms": 6,
+      "beds": 3,
+      "baths": 2,
+      "price": 28000,
+      "priceType": "year",
+      "rating": 4.8,
+      "isFavorite": false,
+      "propertyType": "house",
+      "amenities": [
+        "Garden",
+        "Backyard",
+        "Swimming Pool"
+      ],
+      "isActive": false,
+      "type": "House",
+      "units": 32,
+      "cost": "$ 724K",
+      "leads": {
+        "count": 48,
+        "avatars": [
+          "https://i.pravatar.cc/100?img=33",
+          "https://i.pravatar.cc/100?img=34"
+        ]
+      },
+      "views": 418,
+      "listingStatus": "Available",
+      "isFeatured": false
+    },
+    {
+      "id": 12,
+      "listingCode": "ID0988",
+      "name": "Relaxed House",
+      "title": "City Center Apartment",
+      "thumbnailImage": "https://images.unsplash.com/photo-1600607687644-c7171b42498f?w=100&h=100&fit=crop",
+      "image": "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&auto=format&fit=crop&q=60",
+      "address": "Jl. Tunjungan, Surabaya",
+      "location": "surabaya",
+      "status": "On Construction",
+      "priceMin": 950000,
+      "priceMax": 990000,
+      "sqft": 125000,
+      "complain": 70,
+      "rooms": 2,
+      "beds": 1,
+      "baths": 1,
+      "price": 6500,
+      "priceType": "year",
+      "rating": 4.1,
+      "isFavorite": false,
+      "propertyType": "apartment",
+      "amenities": [
+        "Laundry",
+        "Surveillance Cameras"
+      ],
+      "isActive": true,
+      "type": "Apartment",
+      "units": 86,
+      "cost": "$ 972K",
+      "leads": {
+        "count": 22,
+        "avatars": [
+          "https://i.pravatar.cc/100?img=35",
+          "https://i.pravatar.cc/100?img=36"
+        ]
+      },
+      "views": 155,
+      "listingStatus": "Occupied",
+      "isFeatured": false
+    },
+    {
+      "id": 13,
+      "listingCode": "DSH-001",
+      "name": "Maison Sterling",
+      "title": "Maison Sterling",
+      "thumbnailImage": "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=100&h=100&fit=crop",
+      "image": "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop&q=60",
+      "address": "New York, Albany",
+      "location": "new-york",
+      "status": "On sell",
+      "priceMin": 1450000,
+      "priceMax": 1550000,
+      "sqft": 4200,
+      "complain": 55,
+      "rooms": 10,
+      "beds": 5,
+      "baths": 4,
+      "price": 125000,
+      "priceType": "year",
+      "rating": 4.8,
+      "isFavorite": false,
+      "propertyType": "house",
+      "amenities": [
+        "Garden",
+        "Garage",
+        "Fireplace"
+      ],
+      "isActive": true,
+      "type": "House",
+      "units": 12,
+      "cost": "$ 1.5M",
+      "leads": {
+        "count": 32,
+        "avatars": [
+          "https://i.pravatar.cc/100?img=5",
+          "https://i.pravatar.cc/100?img=6"
+        ]
+      },
+      "views": 125,
+      "listingStatus": "Occupied",
+      "isFeatured": false
+    },
+    {
+      "id": 14,
+      "listingCode": "DSH-002",
+      "name": "The Orchid",
+      "title": "The Orchid",
+      "thumbnailImage": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=100&h=100&fit=crop",
+      "image": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&auto=format&fit=crop&q=60",
+      "address": "Ohio, Columbus",
+      "location": "ohio",
+      "status": "On sell",
+      "priceMin": 500000,
+      "priceMax": 540000,
+      "sqft": 6800,
+      "complain": 30,
+      "rooms": 14,
+      "beds": 6,
+      "baths": 5,
+      "price": 95000,
+      "priceType": "year",
+      "rating": 4.9,
+      "isFavorite": true,
+      "propertyType": "house",
+      "amenities": [
+        "Swimming Pool",
+        "Garden",
+        "Garage"
+      ],
+      "isActive": true,
+      "type": "Villa",
+      "units": 9300,
+      "cost": "$ 520K",
+      "leads": {
+        "count": 15,
+        "avatars": [
+          "https://i.pravatar.cc/100?img=7",
+          "https://i.pravatar.cc/100?img=8"
+        ]
+      },
+      "views": 930,
+      "listingStatus": "Available",
+      "isFeatured": false
+    },
+    {
+      "id": 15,
+      "listingCode": "DSH-003",
+      "name": "Echelon West",
+      "title": "Echelon West",
+      "thumbnailImage": "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=100&h=100&fit=crop",
+      "image": "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800&auto=format&fit=crop&q=60",
+      "address": "Ohio, Columbus",
+      "location": "ohio",
+      "status": "On sell",
+      "priceMin": 670000,
+      "priceMax": 730000,
+      "sqft": 5100,
+      "complain": 42,
+      "rooms": 8,
+      "beds": 4,
+      "baths": 3,
+      "price": 78000,
+      "priceType": "year",
+      "rating": 4.7,
+      "isFavorite": false,
+      "propertyType": "house",
+      "amenities": [
+        "Garden",
+        "Gym"
+      ],
+      "isActive": false,
+      "type": "House",
+      "units": 25,
+      "cost": "$ 700K",
+      "leads": {
+        "count": 40,
+        "avatars": [
+          "https://i.pravatar.cc/100?img=9",
+          "https://i.pravatar.cc/100?img=10"
+        ]
+      },
+      "views": 355,
+      "listingStatus": "Available",
+      "isFeatured": false
+    },
+    {
+      "id": 16,
+      "listingCode": "DSH-004",
+      "name": "La Residence",
+      "title": "La Residence",
+      "thumbnailImage": "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=100&h=100&fit=crop",
+      "image": "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=800&auto=format&fit=crop&q=60",
+      "address": "Ohio, Columbus",
+      "location": "ohio",
+      "status": "On sell",
+      "priceMin": 680000,
+      "priceMax": 720000,
+      "sqft": 3800,
+      "complain": 88,
+      "rooms": 6,
+      "beds": 3,
+      "baths": 2,
+      "price": 62000,
+      "priceType": "year",
+      "rating": 4.5,
+      "isFavorite": false,
+      "propertyType": "apartment",
+      "amenities": [
+        "Laundry",
+        "Gym",
+        "Surveillance Cameras"
+      ],
+      "isActive": false,
+      "type": "Apartment",
+      "units": 17,
+      "cost": "$ 700K",
+      "leads": {
+        "count": 11,
+        "avatars": [
+          "https://i.pravatar.cc/100?img=11",
+          "https://i.pravatar.cc/100?img=12"
+        ]
+      },
+      "views": 425,
+      "listingStatus": "Sold Out",
+      "isFeatured": false
+    }
+  ],
+  "detail": {
+    "listing": {
+      "status": "House for sale",
+      "price": "$659,000",
+      "address": "4430 Brighton Ct, Harrisburg, PA 17112",
+      "beds": 4,
+      "baths": 4,
+      "sqft": "3,824",
+      "estimate": "$4,370/mo",
+      "propertyType": "Single Family Residence",
+      "pricePerSqft": "$172",
+      "floorplan": "Parker",
+      "builder": "Keystone Custom Homes",
+      "garage": "2 Cars",
+      "area": "0.36 Acres lot"
+    },
+    "agent": {
+      "name": "Carolina Vassalo Coimbra",
+      "phone": "(305) 851-2820",
+      "email": "carolina45@gmail.com",
+      "message": "Hi Carolina, I would like to know more about this listing."
+    },
+    "breadcrumbs": [
+      "For Sale",
+      "PA",
+      "Harrisburg",
+      "7190 Audubon Dr"
+    ],
+    "gallery": [
+      {
+        "url": "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=1400&h=980&fit=crop",
+        "alt": "Main interior living room view"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=900&h=640&fit=crop",
+        "alt": "Living room with fireplace"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=900&h=640&fit=crop",
+        "alt": "Bedroom with natural light"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=900&h=640&fit=crop",
+        "alt": "Kitchen with island"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1507089947368-19c1da9775ae?w=900&h=640&fit=crop",
+        "alt": "Backyard pool and exterior"
+      }
+    ],
+    "specials": [
+      "Fish pond",
+      "Mature gardens",
+      "Open concept",
+      "Finished basement",
+      "Custom large built-in",
+      "Large family room",
+      "Large walk-in pantry"
+    ],
+    "description": "This gorgeous custom Yingst built home is located in the sought-after Fairway Estates neighborhood. Situated on a cul-de-sac overlooking the Colonial Club Golf Course, the views from this home do not disappoint. The first floor has hardwood flooring and tile throughout. The kitchen boasts custom solid birch cabinets, granite countertops, a six burner Viking stove, a second wall oven and built-in microwave. A large walk-in pantry provides generous space for your family. This gorgeous custom Yingst built home is located in the sought-after Fairway Estates neighborhood. Situated on a cul-de-sac overlooking the Colonial Club Golf Course, the views from this home do not disappoint. The first floor has hardwood flooring and tile throughout. The kitchen boasts custom solid birch cabinets, granite countertops, a six burner Viking stove, a second wall oven and built-in microwave. A large walk-in pantry provides generous space for your family. A butler's pantry adds even more flexibility and storage. The open concept flows through the kitchen to the eat in area and large family room with beautiful windows overlooking the golf course. The dining room with skylights is open to the formal living room with a vaulted ceiling and brick gas fireplace.",
+    "marketValue": {
+      "title": "Estimated market value",
+      "description": [
+        "The estimated market value refers to the current worth of a property, product, or asset based on market trends, demand, and comparable data.",
+        "This value is influenced by factors such as location, condition, and prevailing market conditions, making it a crucial metric in evaluating the true economic standing of an asset in competitive markets."
+      ],
+      "stats": {
+        "zestimate": "$639,600",
+        "salesRange": "$608k-672k",
+        "rent": "$3,246/mo"
+      },
+      "history": [
+        {
+          "year": "2023",
+          "month": "Jan",
+          "sales": 48,
+          "rent": 24,
+          "buy": 12
+        },
+        {
+          "year": "2023",
+          "month": "Feb",
+          "sales": 54,
+          "rent": 32,
+          "buy": 18
+        },
+        {
+          "year": "2023",
+          "month": "Mar",
+          "sales": 62,
+          "rent": 40,
+          "buy": 24
+        },
+        {
+          "year": "2023",
+          "month": "Apr",
+          "sales": 68,
+          "rent": 46,
+          "buy": 28
+        },
+        {
+          "year": "2023",
+          "month": "May",
+          "sales": 74,
+          "rent": 52,
+          "buy": 34
+        },
+        {
+          "year": "2023",
+          "month": "Jun",
+          "sales": 78,
+          "rent": 58,
+          "buy": 40
+        },
+        {
+          "year": "2023",
+          "month": "Jul",
+          "sales": 72,
+          "rent": 50,
+          "buy": 30
+        },
+        {
+          "year": "2023",
+          "month": "Aug",
+          "sales": 80,
+          "rent": 56,
+          "buy": 38
+        },
+        {
+          "year": "2023",
+          "month": "Sep",
+          "sales": 66,
+          "rent": 42,
+          "buy": 26
+        },
+        {
+          "year": "2023",
+          "month": "Oct",
+          "sales": 70,
+          "rent": 44,
+          "buy": 22
+        },
+        {
+          "year": "2023",
+          "month": "Nov",
+          "sales": 76,
+          "rent": 48,
+          "buy": 28
+        },
+        {
+          "year": "2023",
+          "month": "Dec",
+          "sales": 84,
+          "rent": 54,
+          "buy": 36
+        },
+        {
+          "year": "2024",
+          "month": "Jan",
+          "sales": 52,
+          "rent": 30,
+          "buy": 14
+        },
+        {
+          "year": "2024",
+          "month": "Feb",
+          "sales": 90,
+          "rent": 60,
+          "buy": 10
+        },
+        {
+          "year": "2024",
+          "month": "Mar",
+          "sales": 108,
+          "rent": 78,
+          "buy": 24
+        },
+        {
+          "year": "2024",
+          "month": "Apr",
+          "sales": 120,
+          "rent": 88,
+          "buy": 30
+        },
+        {
+          "year": "2024",
+          "month": "May",
+          "sales": 112,
+          "rent": 98,
+          "buy": 42
+        },
+        {
+          "year": "2024",
+          "month": "Jun",
+          "sales": 108,
+          "rent": 92,
+          "buy": 48
+        },
+        {
+          "year": "2024",
+          "month": "Jul",
+          "sales": 104,
+          "rent": 70,
+          "buy": 20
+        },
+        {
+          "year": "2024",
+          "month": "Aug",
+          "sales": 136,
+          "rent": 80,
+          "buy": 26
+        },
+        {
+          "year": "2024",
+          "month": "Sep",
+          "sales": 70,
+          "rent": 44,
+          "buy": 32
+        },
+        {
+          "year": "2024",
+          "month": "Oct",
+          "sales": 102,
+          "rent": 50,
+          "buy": 8
+        },
+        {
+          "year": "2024",
+          "month": "Nov",
+          "sales": 74,
+          "rent": 38,
+          "buy": 18
+        },
+        {
+          "year": "2024",
+          "month": "Dec",
+          "sales": 82,
+          "rent": 56,
+          "buy": 48
+        },
+        {
+          "year": "2025",
+          "month": "Jan",
+          "sales": 88,
+          "rent": 54,
+          "buy": 22
+        },
+        {
+          "year": "2025",
+          "month": "Feb",
+          "sales": 94,
+          "rent": 58,
+          "buy": 28
+        },
+        {
+          "year": "2025",
+          "month": "Mar",
+          "sales": 102,
+          "rent": 66,
+          "buy": 36
+        },
+        {
+          "year": "2025",
+          "month": "Apr",
+          "sales": 110,
+          "rent": 74,
+          "buy": 42
+        },
+        {
+          "year": "2025",
+          "month": "May",
+          "sales": 118,
+          "rent": 84,
+          "buy": 48
+        },
+        {
+          "year": "2025",
+          "month": "Jun",
+          "sales": 124,
+          "rent": 90,
+          "buy": 56
+        },
+        {
+          "year": "2025",
+          "month": "Jul",
+          "sales": 116,
+          "rent": 82,
+          "buy": 44
+        },
+        {
+          "year": "2025",
+          "month": "Aug",
+          "sales": 130,
+          "rent": 88,
+          "buy": 52
+        },
+        {
+          "year": "2025",
+          "month": "Sep",
+          "sales": 108,
+          "rent": 70,
+          "buy": 40
+        },
+        {
+          "year": "2025",
+          "month": "Oct",
+          "sales": 114,
+          "rent": 72,
+          "buy": 34
+        },
+        {
+          "year": "2025",
+          "month": "Nov",
+          "sales": 120,
+          "rent": 78,
+          "buy": 38
+        },
+        {
+          "year": "2025",
+          "month": "Dec",
+          "sales": 128,
+          "rent": 86,
+          "buy": 46
+        }
+      ]
+    }
+  }
+}

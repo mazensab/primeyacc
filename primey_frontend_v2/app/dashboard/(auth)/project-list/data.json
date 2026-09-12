@@ -1,0 +1,287 @@
+[
+  {
+    "id": 1,
+    "title": "Mobile App",
+    "subtitle": "Prototyping",
+    "progress": 78,
+    "timeLeft": "1 week left",
+    "date": "May 01, 2021",
+    "color": "bg-orange-500",
+    "progressColor": "bg-orange-500",
+    "badgeColor": "bg-orange-500",
+    "team": [
+      {
+        "id": 1,
+        "avatar": "https://i.pravatar.cc/150?img=1"
+      },
+      {
+        "id": 2,
+        "avatar": "https://i.pravatar.cc/150?img=2"
+      },
+      {
+        "id": 3,
+        "avatar": "https://i.pravatar.cc/150?img=3"
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "title": "Design Learn Management System",
+    "subtitle": "UI/UX Design",
+    "progress": 32,
+    "timeLeft": "2 week left",
+    "date": "June 04, 2021",
+    "color": "bg-blue-200",
+    "progressColor": "bg-blue-500",
+    "badgeColor": "bg-blue-500",
+    "team": [
+      {
+        "id": 1,
+        "avatar": "https://i.pravatar.cc/150?img=3"
+      },
+      {
+        "id": 2,
+        "avatar": "https://i.pravatar.cc/150?img=4"
+      }
+    ]
+  },
+  {
+    "id": 3,
+    "title": "Chat Mobile App",
+    "subtitle": "Prototyping",
+    "progress": 64,
+    "timeLeft": "6 week left",
+    "date": "Oct 27, 2021",
+    "color": "bg-pink-200",
+    "progressColor": "bg-pink-500",
+    "badgeColor": "bg-pink-500",
+    "team": [
+      {
+        "id": 1,
+        "avatar": "https://i.pravatar.cc/150?img=5"
+      },
+      {
+        "id": 2,
+        "avatar": "https://i.pravatar.cc/150?img=6"
+      },
+      {
+        "id": 3,
+        "avatar": "https://i.pravatar.cc/150?img=7"
+      },
+      {
+        "id": 3,
+        "avatar": "https://i.pravatar.cc/150?img=8"
+      }
+    ]
+  },
+  {
+    "id": 4,
+    "title": "Store Dashboard",
+    "subtitle": "UI/UX Design",
+    "progress": 45,
+    "timeLeft": "3 week left",
+    "date": "Sep 16, 2021",
+    "color": "bg-green-200",
+    "progressColor": "bg-green-500",
+    "badgeColor": "bg-green-500",
+    "team": [
+      {
+        "id": 1,
+        "avatar": "https://i.pravatar.cc/150?img=1"
+      },
+      {
+        "id": 2,
+        "avatar": "https://i.pravatar.cc/150?img=2"
+      },
+      {
+        "id": 3,
+        "avatar": "https://i.pravatar.cc/150?img=3"
+      }
+    ]
+  },
+  {
+    "id": 5,
+    "title": "NFT Marketplace App",
+    "subtitle": "Prototyping",
+    "progress": 69,
+    "timeLeft": "4 week left",
+    "date": "Jan 03, 2021",
+    "color": "bg-purple-200",
+    "progressColor": "bg-red-500",
+    "badgeColor": "bg-red-500",
+    "icon": "🎨",
+    "team": [
+      {
+        "id": 1,
+        "avatar": "https://i.pravatar.cc/150?img=10"
+      }
+    ]
+  },
+  {
+    "id": 6,
+    "title": "Mobile App",
+    "subtitle": "Prototyping",
+    "progress": 56,
+    "timeLeft": "2 week left",
+    "date": "May 09, 2021",
+    "color": "bg-blue-200",
+    "progressColor": "bg-blue-500",
+    "badgeColor": "bg-blue-500",
+    "team": [
+      {
+        "id": 1,
+        "avatar": "https://i.pravatar.cc/150?img=1"
+      },
+      {
+        "id": 2,
+        "avatar": "https://i.pravatar.cc/150?img=2"
+      },
+      {
+        "id": 3,
+        "avatar": "https://i.pravatar.cc/150?img=3"
+      }
+    ]
+  },
+  {
+    "id": 7,
+    "title": "LMS App Design",
+    "subtitle": "UI/UX Design",
+    "progress": 78,
+    "timeLeft": "2 week left",
+    "date": "Jan 03, 2021",
+    "color": "bg-yellow-200",
+    "progressColor": "bg-orange-500",
+    "badgeColor": "bg-orange-500",
+    "team": [
+      {
+        "id": 1,
+        "avatar": "https://i.pravatar.cc/150?img=3"
+      },
+      {
+        "id": 2,
+        "avatar": "https://i.pravatar.cc/150?img=6"
+      }
+    ]
+  },
+  {
+    "id": 8,
+    "title": "Design Learn Management System",
+    "subtitle": "UI/UX Design",
+    "progress": 25,
+    "timeLeft": "1 week left",
+    "date": "June 04, 2021",
+    "color": "bg-blue-200",
+    "progressColor": "bg-blue-500",
+    "badgeColor": "bg-blue-500",
+    "team": [
+      {
+        "id": 1,
+        "avatar": "https://i.pravatar.cc/150?img=1"
+      },
+      {
+        "id": 2,
+        "avatar": "https://i.pravatar.cc/150?img=2"
+      },
+      {
+        "id": 3,
+        "avatar": "https://i.pravatar.cc/150?img=3"
+      }
+    ]
+  },
+  {
+    "id": 9,
+    "title": "Fitness Tracker App",
+    "subtitle": "Mobile Development",
+    "progress": 82,
+    "timeLeft": "5 week left",
+    "date": "Mar 12, 2021",
+    "color": "bg-green-200",
+    "progressColor": "bg-green-500",
+    "badgeColor": "bg-green-500",
+    "team": [
+      {
+        "id": 1,
+        "avatar": "https://i.pravatar.cc/150?img=11"
+      },
+      {
+        "id": 2,
+        "avatar": "https://i.pravatar.cc/150?img=12"
+      },
+      {
+        "id": 3,
+        "avatar": "https://i.pravatar.cc/150?img=13"
+      }
+    ]
+  },
+  {
+    "id": 10,
+    "title": "Banking Web Portal",
+    "subtitle": "Web Development",
+    "progress": 48,
+    "timeLeft": "3 week left",
+    "date": "Aug 22, 2021",
+    "color": "bg-blue-200",
+    "progressColor": "bg-blue-500",
+    "badgeColor": "bg-blue-500",
+    "team": [
+      {
+        "id": 1,
+        "avatar": "https://i.pravatar.cc/150?img=14"
+      },
+      {
+        "id": 2,
+        "avatar": "https://i.pravatar.cc/150?img=15"
+      }
+    ]
+  },
+  {
+    "id": 11,
+    "title": "Travel Booking Platform",
+    "subtitle": "UI/UX Design",
+    "progress": 91,
+    "timeLeft": "1 week left",
+    "date": "Jul 15, 2021",
+    "color": "bg-pink-200",
+    "progressColor": "bg-pink-500",
+    "badgeColor": "bg-pink-500",
+    "team": [
+      {
+        "id": 1,
+        "avatar": "https://i.pravatar.cc/150?img=16"
+      },
+      {
+        "id": 2,
+        "avatar": "https://i.pravatar.cc/150?img=17"
+      },
+      {
+        "id": 3,
+        "avatar": "https://i.pravatar.cc/150?img=18"
+      },
+      {
+        "id": 4,
+        "avatar": "https://i.pravatar.cc/150?img=19"
+      }
+    ]
+  },
+  {
+    "id": 12,
+    "title": "Podcast Streaming App",
+    "subtitle": "Prototyping",
+    "progress": 37,
+    "timeLeft": "8 week left",
+    "date": "Nov 30, 2021",
+    "color": "bg-red-200",
+    "progressColor": "bg-red-500",
+    "badgeColor": "bg-red-500",
+    "team": [
+      {
+        "id": 1,
+        "avatar": "https://i.pravatar.cc/150?img=20"
+      },
+      {
+        "id": 2,
+        "avatar": "https://i.pravatar.cc/150?img=21"
+      }
+    ]
+  }
+]
