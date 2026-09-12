@@ -170,15 +170,9 @@ const systemNavItems: NavGroup[] = [
               en: "Plans & Pricing",
             },
             href: "/system/plans",
-            aliases: [
-              "/system/plans/create",
-              "/system/plans/reports",
-            ],
+            aliases: ["/system/plans/create"],
             icon: Gift,
-            anyPermissions: [
-              PERMISSIONS.SYSTEM_VIEW,
-              PERMISSIONS.SYSTEM_SETTINGS,
-            ],
+            permission: PERMISSIONS.SYSTEM_PLANS_VIEW,
             workspaces: ["system"],
           },
           {
