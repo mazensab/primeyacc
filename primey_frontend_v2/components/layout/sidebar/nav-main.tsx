@@ -155,15 +155,8 @@ const systemNavItems: NavGroup[] = [
             workspaces: ["system"],
           },
           {
-            title: {
-              ar: "اشتراكات الشركات",
-              en: "Company Subscriptions",
-            },
+            title: { ar: "الاشتراكات", en: "Subscriptions" },
             href: "/system/subscriptions",
-            aliases: [
-              "/system/subscriptions/list",
-              "/system/subscriptions/reports",
-            ],
             icon: Gift,
             anyPermissions: [
               PERMISSIONS.SYSTEM_VIEW,

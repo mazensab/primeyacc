@@ -409,7 +409,7 @@ export function SubscriptionStatusTable({ locale, events, rows, labels }: Props)
             <TableBody>
               {table.getRowModel().rows.length ? (
                 table.getRowModel().rows.map((row) => (
-                  <TableRow key={row.id}>
+                  <TableRow key={row.id} href={row.original.id ? `/system/subscriptions/${row.original.id}` : undefined}>
                     {row.getVisibleCells().map((cell) => (
                       <TableCell key={cell.id}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}

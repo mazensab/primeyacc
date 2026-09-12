@@ -235,6 +235,21 @@ export const API_PATHS = {
     test: "/api/company/notifications/test/",
   },
 
+  systemSubscriptions: {
+    list: "/api/system/subscriptions/",
+    create: "/api/system/subscriptions/create/",
+    detail: (id: ApiPathId) => `/api/system/subscriptions/${id}/`,
+    renew: (id: ApiPathId) => `/api/system/subscriptions/${id}/renew/`,
+    cancel: (id: ApiPathId) => `/api/system/subscriptions/${id}/cancel/`,
+    suspend: (id: ApiPathId) => `/api/system/subscriptions/${id}/suspend/`,
+    reactivate: (id: ApiPathId) => `/api/system/subscriptions/${id}/reactivate/`,
+    changePlan: (id: ApiPathId) => `/api/system/subscriptions/${id}/change-plan/`,
+    confirmPayment: (id: ApiPathId) => `/api/system/subscriptions/${id}/confirm-payment/`,
+    refund: (id: ApiPathId) => `/api/system/subscriptions/${id}/refund/`,
+    createInvoice: (id: ApiPathId) => `/api/system/billing-documents/subscriptions/${id}/invoice/`,
+    createReceipt: (id: ApiPathId) => `/api/system/billing-documents/subscriptions/${id}/receipt/`,
+  },
+
   systemPlans: {
     list: "/api/system/plans/",
     create: "/api/system/plans/create/",

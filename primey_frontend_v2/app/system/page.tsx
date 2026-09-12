@@ -405,8 +405,8 @@ export default function SystemDashboardPage() {
             ].map(([label,value]) => <div key={String(label)} className="hover:bg-muted flex items-center justify-between rounded-md border px-4 py-3"><span className="text-sm">{label}</span><span className="font-display text-lg tabular-nums">{integer(value)}</span></div>)}
           </CardContent>
         </Card>
-        <SystemRecentCard locale={locale} title={t.expiredLatest} description={t.latestDesc} rows={latest.expired_subscriptions || []} kind="subscriptions" href="/system/subscriptions/list" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}} icon={CalendarDays}/>
-        <SystemRecentCard locale={locale} title={t.expiringLatest} description={t.latestDesc} rows={latest.expiring_subscriptions || []} kind="subscriptions" href="/system/subscriptions/list" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}} icon={Activity}/>
+        <SystemRecentCard locale={locale} title={t.expiredLatest} description={t.latestDesc} rows={latest.expired_subscriptions || []} kind="subscriptions" href="/system/subscriptions" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}} icon={CalendarDays}/>
+        <SystemRecentCard locale={locale} title={t.expiringLatest} description={t.latestDesc} rows={latest.expiring_subscriptions || []} kind="subscriptions" href="/system/subscriptions" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}} icon={Activity}/>
         <SystemRecentCard locale={locale} title={t.latestPayments} description={t.latestDesc} rows={latest.payments || []} kind="payments" href="/system/platform-payments/list" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}} icon={CreditCard}/>
       </div>
     </div>
