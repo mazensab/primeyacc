@@ -238,15 +238,8 @@ const systemNavItems: NavGroup[] = [
               en: "Invoices & Receipts",
             },
             href: "/system/invoices",
-            aliases: [
-              "/system/invoices/list",
-              "/system/invoices/receipts",
-            ],
             icon: ReceiptText,
-            anyPermissions: [
-              PERMISSIONS.SYSTEM_VIEW,
-              PERMISSIONS.INVOICES_VIEW,
-            ],
+            permission: PERMISSIONS.SYSTEM_BILLING_DOCUMENTS_VIEW,
             workspaces: ["system"],
           },
         ],

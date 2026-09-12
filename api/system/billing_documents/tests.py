@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # ًں“‚ api/system/billing_documents/tests.py
 # ًں§  Mhamcloud | System Billing Documents API Tests V1.0
 # ------------------------------------------------------------
@@ -687,3 +687,54 @@ class SystemBillingDocumentsAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, 404)
+    def test_regular_user_cannot_access_print_or_pdf_renderers(
+        self,
+    ) -> None:
+        create_response = self.create_invoice()
+        document_id = (
+            create_response.json()["data"]["document"]["id"]
+        )
+
+        self.client.force_login(self.regular_user)
+
+        for suffix in ("print", "pdf"):
+            with self.subTest(suffix=suffix):
+                response = self.client.get(
+                    "/api/system/billing-documents/"
+                    f"{document_id}/{suffix}/"
+                )
+
+                self.assertEqual(response.status_code, 403)
+                payload = response.json()
+                self.assertFalse(payload["ok"])
+                self.assertEqual(
+                    payload["code"],
+                    (
+                        "SYSTEM_BILLING_DOCUMENTS_"
+                        "VIEW_PERMISSION_REQUIRED"
+                    ),
+                )
+
+    def test_support_user_can_access_print_renderer(
+        self,
+    ) -> None:
+        create_response = self.create_invoice()
+        document_id = (
+            create_response.json()["data"]["document"]["id"]
+        )
+
+        self.client.force_login(self.support_user)
+
+        response = self.client.get(
+            "/api/system/billing-documents/"
+            f"{document_id}/print/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            response["Content-Type"].startswith("text/html")
+        )
+        self.assertIn(
+            b"Mhamcloud Accounting System",
+            response.content,
+        )

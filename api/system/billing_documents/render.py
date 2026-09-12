@@ -399,9 +399,40 @@ def _build_printable_html(document):
   </main>
 </body>
 </html>"""
+def _billing_document_view_permission_denied(
+    request: HttpRequest,
+) -> JsonResponse | None:
+    # Keep print/PDF authorization identical to list/detail authorization.
+    if user_has_system_permission(
+        request.user,
+        "system.billing_documents.view",
+    ):
+        return None
+
+    return JsonResponse(
+        {
+            "ok": False,
+            "message": (
+                "غير مصرح لك بعرض مستندات فوترة المنصة."
+            ),
+            "code": (
+                "SYSTEM_BILLING_DOCUMENTS_"
+                "VIEW_PERMISSION_REQUIRED"
+            ),
+        },
+        status=403,
+    )
+
+
 @login_required
 @require_GET
 def system_billing_document_print(request, document_id):
+    permission_denied = _billing_document_view_permission_denied(
+        request
+    )
+    if permission_denied is not None:
+        return permission_denied
+
     document = get_object_or_404(
         PlatformBillingDocument.objects.select_related(
             "company",
@@ -417,6 +448,12 @@ def system_billing_document_print(request, document_id):
 @login_required
 @require_GET
 def system_billing_document_pdf(request, document_id):
+    permission_denied = _billing_document_view_permission_denied(
+        request
+    )
+    if permission_denied is not None:
+        return permission_denied
+
     document = get_object_or_404(
         PlatformBillingDocument.objects.select_related(
             "company",

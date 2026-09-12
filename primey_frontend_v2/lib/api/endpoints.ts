@@ -250,6 +250,17 @@ export const API_PATHS = {
     createReceipt: (id: ApiPathId) => `/api/system/billing-documents/subscriptions/${id}/receipt/`,
   },
 
+  systemBillingDocuments: {
+    list: "/api/system/billing-documents/",
+    detail: (id: ApiPathId) => `/api/system/billing-documents/${id}/`,
+    print: (id: ApiPathId) => `/api/system/billing-documents/${id}/print/`,
+    pdf: (id: ApiPathId) => `/api/system/billing-documents/${id}/pdf/`,
+    createInvoice: (subscriptionId: ApiPathId) =>
+      `/api/system/billing-documents/subscriptions/${subscriptionId}/invoice/`,
+    createReceipt: (subscriptionId: ApiPathId) =>
+      `/api/system/billing-documents/subscriptions/${subscriptionId}/receipt/`,
+  },
+
   systemSubscriptionPayments: {
     list: "/api/system/subscription-payments/",
     create: "/api/system/subscription-payments/create/",

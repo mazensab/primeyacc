@@ -204,6 +204,13 @@ export const PERMISSIONS = {
   SYSTEM_SUBSCRIPTIONS_UPDATE: "system.subscriptions.update",
   SYSTEM_REPORTS_VIEW: "system.reports.view",
 
+  // System Platform Billing Documents
+  SYSTEM_BILLING_DOCUMENTS_VIEW: "system.billing_documents.view",
+  SYSTEM_BILLING_DOCUMENTS_CREATE_INVOICE:
+    "system.billing_documents.create_invoice",
+  SYSTEM_BILLING_DOCUMENTS_CREATE_RECEIPT:
+    "system.billing_documents.create_receipt",
+
   // System Plans
   SYSTEM_PLANS_VIEW: "system.plans.view",
   SYSTEM_PLANS_CREATE: "system.plans.create",
@@ -755,13 +762,8 @@ export const PATH_ACCESS_RULES: PathAccessRule[] = [
   // Invoices / Payments
   // ----------------------------
   {
-    prefix: "/system/invoices/create",
-    permissions: [PERMISSIONS.INVOICES_CREATE],
-    workspaces: ["system"],
-  },
-  {
     prefix: "/system/invoices",
-    permissions: [PERMISSIONS.INVOICES_VIEW],
+    permissions: [PERMISSIONS.SYSTEM_BILLING_DOCUMENTS_VIEW],
     workspaces: ["system"],
   },
   {

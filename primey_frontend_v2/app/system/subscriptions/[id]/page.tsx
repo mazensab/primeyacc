@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useAuth } from "@/components/providers/AuthProvider";
 import { useParams, useRouter } from "next/navigation";
 import {
   Activity,
@@ -67,6 +68,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { API_PATHS } from "@/lib/api/endpoints";
+import { hasPermission, PERMISSIONS } from "@/lib/permissions";
+import {
+  createSystemBillingInvoice,
+  createSystemBillingReceipt,
+} from "@/lib/system-billing-document-actions";
 import { openPrintReport } from "@/lib/print-report";
 import {
   actionLabel,
@@ -87,6 +93,7 @@ import {
 
 type BillingCycle = "MONTHLY" | "YEARLY";
 type ConfirmationAction = "suspend" | "reactivate" | "cancel";
+type BillingConfirmationAction = "invoice" | "receipt";
 type BusyAction =
   | "invoice"
   | "receipt"
@@ -221,6 +228,17 @@ const translations = {
     choosePlan: "اختر الباقة",
     createInvoice: "إنشاء فاتورة",
     createReceipt: "إنشاء إيصال دفع",
+    paymentReferenceOptional: "اختياري — لا ينشئ النظام مرجعًا وهميًا",
+    confirmInvoiceTitle: "تأكيد إنشاء الفاتورة",
+    confirmInvoiceDesc:
+      "سيطلب النظام إنشاء فاتورة اشتراك المنصة. إذا كانت موجودة مسبقًا فسيعيد نفس الفاتورة دون تكرار.",
+    confirmReceiptTitle: "تأكيد إنشاء إيصال الدفع",
+    confirmReceiptDesc:
+      "إنشاء إيصال الدفع إجراء مالي فعلي، وقد يحول الفاتورة المرتبطة إلى مدفوعة. لن ينشئ النظام مرجع عملية وهميًا.",
+    invoiceCreated: "تم إنشاء فاتورة الاشتراك.",
+    invoiceExists: "فاتورة الاشتراك موجودة مسبقًا.",
+    receiptCreated: "تم إنشاء إيصال الدفع.",
+    receiptExists: "إيصال الدفع موجود مسبقًا.",
     confirmPayment: "تأكيد الدفع والتفعيل",
     paymentMethod: "طريقة الدفع",
     paymentReference: "مرجع الدفع",
@@ -306,6 +324,17 @@ const translations = {
     choosePlan: "Choose plan",
     createInvoice: "Create invoice",
     createReceipt: "Create payment receipt",
+    paymentReferenceOptional: "Optional — no synthetic reference is generated",
+    confirmInvoiceTitle: "Confirm invoice creation",
+    confirmInvoiceDesc:
+      "The system will request the platform subscription invoice. If it already exists, the same invoice is returned without duplication.",
+    confirmReceiptTitle: "Confirm payment receipt creation",
+    confirmReceiptDesc:
+      "Creating a payment receipt is a real financial action and may mark the related invoice as paid. No synthetic transaction reference will be generated.",
+    invoiceCreated: "Subscription invoice created.",
+    invoiceExists: "Subscription invoice already exists.",
+    receiptCreated: "Payment receipt created.",
+    receiptExists: "Payment receipt already exists.",
     confirmPayment: "Confirm payment & activate",
     paymentMethod: "Payment method",
     paymentReference: "Payment reference",
@@ -560,11 +589,22 @@ export default function SystemSubscriptionDetailPage() {
   const [busy, setBusy] = React.useState<BusyAction>(null);
   const [confirmation, setConfirmation] =
     React.useState<ConfirmationAction | null>(null);
+  const [billingConfirmation, setBillingConfirmation] =
+    React.useState<BillingConfirmationAction | null>(null);
   const [error, setError] = React.useState("");
 
   const t = translations[locale];
   const dir = locale === "ar" ? "rtl" : "ltr";
   const BackIcon = locale === "ar" ? ArrowRight : ArrowLeft;
+  const session = useAuth();
+  const canCreateInvoice = hasPermission(
+    session,
+    PERMISSIONS.SYSTEM_BILLING_DOCUMENTS_CREATE_INVOICE,
+  );
+  const canCreateReceipt = hasPermission(
+    session,
+    PERMISSIONS.SYSTEM_BILLING_DOCUMENTS_CREATE_RECEIPT,
+  );
 
   React.useEffect(() => {
     const sync = () => {
@@ -657,24 +697,45 @@ export default function SystemSubscriptionDetailPage() {
 
     setBusy(action);
     try {
+      if (action === "invoice") {
+        const result = await createSystemBillingInvoice(detail.id);
+        toast.success(
+          result.created ? t.invoiceCreated : t.invoiceExists,
+        );
+        setBillingConfirmation(null);
+
+        if (result.documentId) {
+          router.push(`/system/invoices/${result.documentId}`);
+          return;
+        }
+
+        await load(true);
+        return;
+      }
+
+      if (action === "receipt") {
+        const result = await createSystemBillingReceipt(detail.id, {
+          paymentMethod,
+          transactionReference: paymentReference.trim(),
+          billingReference: detail.billingReference,
+        });
+        toast.success(
+          result.created ? t.receiptCreated : t.receiptExists,
+        );
+        setBillingConfirmation(null);
+
+        if (result.documentId) {
+          router.push(`/system/invoices/${result.documentId}`);
+          return;
+        }
+
+        await load(true);
+        return;
+      }
+
       let payload: ApiRecord = {};
 
-      if (action === "invoice") {
-        payload = await postJson(
-          API_PATHS.systemSubscriptions.createInvoice(detail.id),
-        );
-      } else if (action === "receipt") {
-        payload = await postJson(
-          API_PATHS.systemSubscriptions.createReceipt(detail.id),
-          {
-            payment_method: paymentMethod,
-            transaction_reference:
-              paymentReference.trim() || `SUB-${detail.id}-${Date.now()}`,
-            billing_reference: detail.billingReference || detail.id,
-            issue_date: new Date().toISOString().slice(0, 10),
-          },
-        );
-      } else if (action === "confirm") {
+      if (action === "confirm") {
         payload = await postJson(
           API_PATHS.systemSubscriptions.confirmPayment(detail.id),
           {
@@ -1192,28 +1253,33 @@ export default function SystemSubscriptionDetailPage() {
                   onChange={(event) =>
                     setPaymentReference(event.target.value)
                   }
+                  placeholder={t.paymentReferenceOptional}
                   className="bg-background"
                 />
               </label>
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                disabled={Boolean(busy)}
-                onClick={() => void execute("invoice")}
-              >
-                <FileText />
-                {t.createInvoice}
-              </Button>
-              <Button
-                variant="outline"
-                disabled={Boolean(busy)}
-                onClick={() => void execute("receipt")}
-              >
-                <ReceiptText />
-                {t.createReceipt}
-              </Button>
+              {canCreateInvoice ? (
+                <Button
+                  className={registerBrandButtonClass}
+                  disabled={Boolean(busy)}
+                  onClick={() => setBillingConfirmation("invoice")}
+                >
+                  <FileText />
+                  {t.createInvoice}
+                </Button>
+              ) : null}
+              {canCreateReceipt ? (
+                <Button
+                  className={registerBrandButtonClass}
+                  disabled={Boolean(busy)}
+                  onClick={() => setBillingConfirmation("receipt")}
+                >
+                  <ReceiptText />
+                  {t.createReceipt}
+                </Button>
+              ) : null}
               <Button
                 disabled={Boolean(busy)}
                 onClick={() => void execute("confirm")}
@@ -1308,6 +1374,42 @@ export default function SystemSubscriptionDetailPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <AlertDialog
+        open={Boolean(billingConfirmation)}
+        onOpenChange={(open) => {
+          if (!open && !busy) setBillingConfirmation(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {billingConfirmation === "invoice"
+                ? t.confirmInvoiceTitle
+                : t.confirmReceiptTitle}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {billingConfirmation === "invoice"
+                ? t.confirmInvoiceDesc
+                : t.confirmReceiptDesc}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(busy)}>
+              {t.backAction}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={Boolean(busy)}
+              onClick={() => {
+                const action = billingConfirmation;
+                if (action) void execute(action);
+              }}
+            >
+              {busy ? t.processing : t.confirmAction}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={Boolean(confirmation)}
