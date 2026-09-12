@@ -199,6 +199,11 @@ export const PERMISSIONS = {
   SYSTEM_VIEW: "system.view",
   SYSTEM_SETTINGS: "system.settings",
 
+  // System Subscriptions / Platform Payments
+  SYSTEM_SUBSCRIPTIONS_VIEW: "system.subscriptions.view",
+  SYSTEM_SUBSCRIPTIONS_UPDATE: "system.subscriptions.update",
+  SYSTEM_REPORTS_VIEW: "system.reports.view",
+
   // System Plans
   SYSTEM_PLANS_VIEW: "system.plans.view",
   SYSTEM_PLANS_CREATE: "system.plans.create",
@@ -761,7 +766,7 @@ export const PATH_ACCESS_RULES: PathAccessRule[] = [
   },
   {
     prefix: "/system/platform-payments",
-    permissions: [PERMISSIONS.PAYMENTS_VIEW],
+    permissions: [PERMISSIONS.SYSTEM_SUBSCRIPTIONS_VIEW],
     workspaces: ["system"],
   },
 

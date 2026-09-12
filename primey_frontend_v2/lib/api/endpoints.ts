@@ -250,6 +250,33 @@ export const API_PATHS = {
     createReceipt: (id: ApiPathId) => `/api/system/billing-documents/subscriptions/${id}/receipt/`,
   },
 
+  systemSubscriptionPayments: {
+    list: "/api/system/subscription-payments/",
+    create: "/api/system/subscription-payments/create/",
+    detail: (id: ApiPathId) => `/api/system/subscription-payments/${id}/`,
+    events: (id: ApiPathId) => `/api/system/subscription-payments/${id}/events/`,
+    reconcile: (id: ApiPathId) => `/api/system/subscription-payments/${id}/reconcile/`,
+    reconciliations: (id: ApiPathId) =>
+      `/api/system/subscription-payments/${id}/reconciliations/`,
+    checkout: (id: ApiPathId) => `/api/system/subscription-payments/${id}/checkout/`,
+    verify: (id: ApiPathId) => `/api/system/subscription-payments/${id}/verify/`,
+    confirm: (id: ApiPathId) => `/api/system/subscription-payments/${id}/confirm/`,
+    fail: (id: ApiPathId) => `/api/system/subscription-payments/${id}/fail/`,
+    cancel: (id: ApiPathId) => `/api/system/subscription-payments/${id}/cancel/`,
+    void: (id: ApiPathId) => `/api/system/subscription-payments/${id}/void/`,
+    moyasarAttach: (id: ApiPathId) =>
+      `/api/system/subscription-payments/${id}/moyasar/attach/`,
+    adjustmentCreate: (id: ApiPathId) =>
+      `/api/system/subscription-payments/${id}/adjustments/`,
+    adjustmentReverse: (paymentId: ApiPathId, adjustmentId: ApiPathId) =>
+      `/api/system/subscription-payments/${paymentId}/adjustments/${adjustmentId}/reverse/`,
+  },
+
+  systemPlatformReports: {
+    overview: "/api/system/platform-reports/",
+    export: "/api/system/platform-reports/export/",
+  },
+
   systemPlans: {
     list: "/api/system/plans/",
     create: "/api/system/plans/create/",

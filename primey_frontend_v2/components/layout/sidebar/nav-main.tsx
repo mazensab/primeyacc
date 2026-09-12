@@ -228,15 +228,8 @@ const systemNavItems: NavGroup[] = [
               en: "Platform Payments",
             },
             href: "/system/platform-payments",
-            aliases: [
-              "/system/platform-payments/list",
-              "/system/platform-payments/reports",
-            ],
             icon: CreditCard,
-            anyPermissions: [
-              PERMISSIONS.SYSTEM_VIEW,
-              PERMISSIONS.PAYMENTS_VIEW,
-            ],
+            permission: PERMISSIONS.SYSTEM_SUBSCRIPTIONS_VIEW,
             workspaces: ["system"],
           },
           {
