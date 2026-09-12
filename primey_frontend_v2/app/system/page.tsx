@@ -3,7 +3,19 @@
 import * as React from "react";
 import { endOfDay, format, startOfDay, subDays } from "date-fns";
 import type { DateRange } from "react-day-picker";
-import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  Building2,
+  CalendarDays,
+  CreditCard,
+  FileText,
+  Loader2,
+  ReceiptText,
+  RefreshCw,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import CalendarDateRangePicker from "@/components/custom-date-range-picker";
@@ -346,10 +358,10 @@ export default function SystemDashboardPage() {
         </div>
         <div className="md:col-span-4">
           <div className="grid h-full auto-rows-fr grid-cols-1 gap-4 md:grid-cols-2 lg:gap-6">
-            <SystemFinancialCard title={t.netCollected} value={financial.net_collected.current} changePercent={financial.net_collected.change_percent} direction={financial.net_collected.direction} comparisonLabel={t.compare} noBaselineLabel={t.noBaseline} sarLabel={t.sar}/>
-            <SystemFinancialCard title={t.grossPaid} value={financial.gross_paid.current} changePercent={financial.gross_paid.change_percent} direction={financial.gross_paid.direction} comparisonLabel={t.compare} noBaselineLabel={t.noBaseline} sarLabel={t.sar}/>
-            <SystemFinancialCard title={t.refunds} value={financial.successful_refunds.current} changePercent={financial.successful_refunds.change_percent} direction={financial.successful_refunds.direction} comparisonLabel={t.compare} noBaselineLabel={t.noBaseline} sarLabel={t.sar} invertSentiment/>
-            <SystemFinancialCard title={t.subscriptionTax} value={financial.subscription_tax.current} changePercent={financial.subscription_tax.change_percent} direction={financial.subscription_tax.direction} comparisonLabel={t.compare} noBaselineLabel={t.noBaseline} sarLabel={t.sar}/>
+            <SystemFinancialCard title={t.netCollected} value={financial.net_collected.current} changePercent={financial.net_collected.change_percent} direction={financial.net_collected.direction} comparisonLabel={t.compare} noBaselineLabel={t.noBaseline} sarLabel={t.sar} icon={CreditCard}/>
+            <SystemFinancialCard title={t.grossPaid} value={financial.gross_paid.current} changePercent={financial.gross_paid.change_percent} direction={financial.gross_paid.direction} comparisonLabel={t.compare} noBaselineLabel={t.noBaseline} sarLabel={t.sar} icon={ReceiptText}/>
+            <SystemFinancialCard title={t.refunds} value={financial.successful_refunds.current} changePercent={financial.successful_refunds.change_percent} direction={financial.successful_refunds.direction} comparisonLabel={t.compare} noBaselineLabel={t.noBaseline} sarLabel={t.sar} invertSentiment icon={RefreshCw}/>
+            <SystemFinancialCard title={t.subscriptionTax} value={financial.subscription_tax.current} changePercent={financial.subscription_tax.change_percent} direction={financial.subscription_tax.direction} comparisonLabel={t.compare} noBaselineLabel={t.noBaseline} sarLabel={t.sar} icon={FileText}/>
           </div>
         </div>
       </div>
@@ -377,10 +389,10 @@ export default function SystemDashboardPage() {
       </div>
 
       <div className="grid items-start gap-4 lg:gap-6 xl:grid-cols-3">
-        <SystemRecentCard locale={locale} title={t.latestCompanies} description={t.latestDesc} rows={latest.companies || []} kind="companies" href="/system/companies/list" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}} badgeValue={integer(summary.companies?.total)}/>
-        <SystemRecentCard locale={locale} title={t.latestUsers} description={t.latestDesc} rows={latest.users || []} kind="users" href="/system/users/list" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}} badgeValue={integer(summary.users?.total)}/>
+        <SystemRecentCard locale={locale} title={t.latestCompanies} description={t.latestDesc} rows={latest.companies || []} kind="companies" href="/system/companies/list" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}} badgeValue={integer(summary.companies?.total)} icon={Building2}/>
+        <SystemRecentCard locale={locale} title={t.latestUsers} description={t.latestDesc} rows={latest.users || []} kind="users" href="/system/users/list" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}} badgeValue={integer(summary.users?.total)} icon={Users}/>
         <Card>
-          <CardHeader><CardTitle>{t.operational}</CardTitle></CardHeader>
+          <CardHeader><CardTitle icon={ShieldCheck} iconPosition="opposite">{t.operational}</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {[
               [t.exp7, alerts.subscriptions_expiring_7_days],
@@ -393,9 +405,9 @@ export default function SystemDashboardPage() {
             ].map(([label,value]) => <div key={String(label)} className="hover:bg-muted flex items-center justify-between rounded-md border px-4 py-3"><span className="text-sm">{label}</span><span className="font-display text-lg tabular-nums">{integer(value)}</span></div>)}
           </CardContent>
         </Card>
-        <SystemRecentCard locale={locale} title={t.expiredLatest} description={t.latestDesc} rows={latest.expired_subscriptions || []} kind="subscriptions" href="/system/subscriptions/list" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}}/>
-        <SystemRecentCard locale={locale} title={t.expiringLatest} description={t.latestDesc} rows={latest.expiring_subscriptions || []} kind="subscriptions" href="/system/subscriptions/list" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}}/>
-        <SystemRecentCard locale={locale} title={t.latestPayments} description={t.latestDesc} rows={latest.payments || []} kind="payments" href="/system/platform-payments/list" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}}/>
+        <SystemRecentCard locale={locale} title={t.expiredLatest} description={t.latestDesc} rows={latest.expired_subscriptions || []} kind="subscriptions" href="/system/subscriptions/list" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}} icon={CalendarDays}/>
+        <SystemRecentCard locale={locale} title={t.expiringLatest} description={t.latestDesc} rows={latest.expiring_subscriptions || []} kind="subscriptions" href="/system/subscriptions/list" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}} icon={Activity}/>
+        <SystemRecentCard locale={locale} title={t.latestPayments} description={t.latestDesc} rows={latest.payments || []} kind="payments" href="/system/platform-payments/list" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}} icon={CreditCard}/>
       </div>
     </div>
   );

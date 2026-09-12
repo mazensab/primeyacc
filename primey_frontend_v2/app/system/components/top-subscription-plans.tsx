@@ -44,7 +44,7 @@ export function TopSubscriptionPlans({ rows, labels }: Props) {
   return (
     <Card className="h-full">
       <CardHeader>
-        <CardTitle>{labels.title}</CardTitle>
+        <CardTitle icon={Layers3} iconPosition="opposite">{labels.title}</CardTitle>
         <CardDescription>{labels.description}</CardDescription>
         <CardAction>
           <Tooltip>

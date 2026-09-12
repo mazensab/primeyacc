@@ -79,7 +79,7 @@ export function SystemKpiCard({
   return (
     <Card
       className={cn(
-        "group h-full gap-0 overflow-hidden rounded-lg border bg-card bg-none py-0 shadow-none backdrop-blur-none transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-sm before:hidden after:hidden",
+        "group h-full gap-0 overflow-hidden rounded-lg border bg-card bg-none py-0 backdrop-blur-none transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-sm before:hidden after:hidden",
         className,
       )}
     >

@@ -1,0 +1,1183 @@
+"use client";
+
+/* ============================================================
+   📂 primey_frontend/app/system/companies/list/page.tsx
+   🏢 Mhamcloud — System Companies List
+   ------------------------------------------------------------
+   ✅ Approved PrimeyCare premium table pattern adapted for Mhamcloud
+   ✅ Full-width table layout
+   ✅ Real API only: GET /api/system/companies/
+   ✅ Search, status filter, date range, sorting, reset
+   ✅ KPI cards from live/loaded data
+   ✅ Excel .xls export for filtered rows
+   ✅ Web print + PDF via browser print dialog
+   ✅ Skeleton loading
+   ✅ Error / Empty / No results states
+   ✅ sonner toast
+   ✅ Arabic/English via Mhamcloud-locale
+   ✅ No localhost hardcoding
+   ✅ No fake demo data
+============================================================ */
+
+import * as React from "react";
+import Link from "next/link";
+import {
+  Activity,
+  BadgeCheck,
+  ArrowUpDown,
+  Building2,
+  ExternalLink,
+  MoreVertical,
+  CheckCircle2,
+  FileSpreadsheet,
+  FileText,
+  Gauge,
+  Loader2,
+  Plus,
+  Printer,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  ShieldOff,
+  TableProperties,
+  TriangleAlert,
+} from "lucide-react";
+import { toast } from "sonner";
+
+import {
+  DataRegisterDatePicker,
+  DataRegisterEmptyState,
+  DataRegisterSearch,
+  DataRegisterToolbar,
+  registerBrandButtonClass,
+  registerOutlineButtonClass,
+} from "@/components/ui/data-register";
+import {
+  DataRegisterPreviewLink,
+  DataRegisterResultCount,
+  DataRegisterTableFrame,
+} from "@/components/ui/data-register-table";
+import { SystemMetricCard } from "@/components/ui/system-metric-card";
+import {
+  downloadExcelReport,
+  type ExcelReportSection,
+} from "@/lib/excel-report";
+import {
+  openPrintTableReport,
+  type PrintReportTableSection,
+} from "@/lib/print-report";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+type Locale = "ar" | "en";
+type ApiRecord = Record<string, unknown>;
+type SortKey = "newest" | "oldest" | "name" | "code";
+type StatusFilter =
+  | "all"
+  | "active"
+  | "inactive"
+  | "suspended"
+  | "trial"
+  | "pending"
+  | "draft"
+  | "cancelled";
+
+type CompanyRecord = {
+  id: string;
+  name: string;
+  code: string;
+  status: string;
+  owner: string;
+  activity: string;
+  subscription: string;
+  email: string;
+  phone: string;
+  city: string;
+  created_at: string | null;
+};
+
+type CompanyStats = {
+  total: number;
+  active: number;
+  inactive: number;
+  subscribed: number;
+};
+
+const API_ENDPOINT = "/api/system/companies/";
+
+const statusFilters: StatusFilter[] = [
+  "all",
+  "active",
+  "inactive",
+  "suspended",
+  "trial",
+  "pending",
+  "draft",
+  "cancelled",
+];
+
+const translations = {
+  ar: {
+    title: "الشركات",
+    subtitle:
+      "إدارة ومراجعة الشركات المسجلة في منصة Mhamcloud مع البحث الفلاتر التصدير الطباعة وملف PDF.",
+    refresh: "تحديث",
+    exportExcel: "تصدير Excel",
+    print: "طباعة",
+    pdf: "PDF",
+    addCompany: "إضافة شركة",
+    reset: "إعادة ضبط",
+    searchPlaceholder: "ابحث باسم الشركة أو الكود أو المالك أو النشاط أو المدينة...",
+    status: "الحالة",
+    all: "الكل",
+    from: "من",
+    to: "إلى",
+    sort: "الترتيب",
+    newest: "الأحدث",
+    oldest: "الأقدم",
+    nameSort: "الاسم",
+    codeSort: "الكود",
+    open: "فتح",
+
+    totalCompanies: "إجمالي الشركات",
+    activeCompanies: "الشركات النشطة",
+    inactiveCompanies: "غير النشطة",
+    subscribedCompanies: "شركات لديها اشتراك",
+    filteredRows: "النتائج المعروضة",
+    fromLiveApi: "من واجهات النظام الحقيقية",
+
+    tableTitle: "قائمة الشركات",
+    tableDesc:
+      "جدول موحد كامل العرض يعرض الشركات مع الحالة النشاط الاشتراك بيانات التواصل وتاريخ الإنشاء.",
+    company: "الشركة",
+    code: "الكود",
+    owner: "المالك",
+    activity: "النشاط",
+    subscription: "الاشتراك",
+    contact: "التواصل",
+    city: "المدينة",
+    createdAt: "تاريخ الإنشاء",
+
+    active: "نشط",
+    inactive: "غير نشط",
+    suspended: "موقوف",
+    trial: "تجريبي",
+    pending: "معلق",
+    draft: "مسودة",
+    cancelled: "ملغي",
+    unknown: "غير محدد",
+
+    noDataTitle: "لا توجد شركات",
+    noDataDesc: "ستظهر الشركات هنا عند توفرها من API.",
+    noResultsTitle: "لا توجد نتائج مطابقة",
+    noResultsDesc: "غير البحث أو الفلاتر لعرض نتائج أخرى.",
+    errorTitle: "تعذر تحميل الشركات",
+    errorDesc:
+      "تأكد من تسجيل الدخول بصلاحية نظام ومن تشغيل الباكند ثم أعد المحاولة.",
+    tryAgain: "إعادة المحاولة",
+    exportEmpty: "لا توجد بيانات للتصدير.",
+    printEmpty: "لا توجد بيانات للطباعة.",
+    pdfHint: "اختر حفظ كـ PDF من نافذة الطباعة.",
+    reportTitle: "تقرير شركات Mhamcloud",
+    generatedAt: "تاريخ الإنشاء",
+    showing: "عرض",
+    of: "من",
+    rows: "صفوف",
+    refreshed: "تم تحديث قائمة الشركات.",
+  },
+  en: {
+    title: "Companies",
+    subtitle:
+      "Manage and review companies registered in Mhamcloud with search, filters, export, print, and PDF output.",
+    refresh: "Refresh",
+    exportExcel: "Export Excel",
+    print: "Print",
+    pdf: "PDF",
+    addCompany: "Add company",
+    reset: "Reset",
+    searchPlaceholder: "Search by company, code, owner, activity, or city...",
+    status: "Status",
+    all: "All",
+    from: "From",
+    to: "To",
+    sort: "Sort",
+    newest: "Newest",
+    oldest: "Oldest",
+    nameSort: "Name",
+    codeSort: "Code",
+    open: "Open",
+
+    totalCompanies: "Total companies",
+    activeCompanies: "Active companies",
+    inactiveCompanies: "Inactive",
+    subscribedCompanies: "With subscription",
+    filteredRows: "Filtered rows",
+    fromLiveApi: "From real system APIs",
+
+    tableTitle: "Companies list",
+    tableDesc:
+      "A unified full-width table showing companies with status, activity, subscription, contact details, and creation date.",
+    company: "Company",
+    code: "Code",
+    owner: "Owner",
+    activity: "Activity",
+    subscription: "Subscription",
+    contact: "Contact",
+    city: "City",
+    createdAt: "Created at",
+
+    active: "Active",
+    inactive: "Inactive",
+    suspended: "Suspended",
+    trial: "Trial",
+    pending: "Pending",
+    draft: "Draft",
+    cancelled: "Cancelled",
+    unknown: "Unknown",
+
+    noDataTitle: "No companies",
+    noDataDesc: "Companies will appear here when returned by the API.",
+    noResultsTitle: "No matching results",
+    noResultsDesc: "Change the search or filters to show other results.",
+    errorTitle: "Could not load companies",
+    errorDesc:
+      "Make sure you are signed in as a system user and the backend is running, then try again.",
+    tryAgain: "Try again",
+    exportEmpty: "There is no data to export.",
+    printEmpty: "There is no data to print.",
+    pdfHint: "Choose Save as PDF from the print dialog.",
+    reportTitle: "Mhamcloud Companies Report",
+    generatedAt: "Generated at",
+    showing: "Showing",
+    of: "of",
+    rows: "rows",
+    refreshed: "Companies list refreshed.",
+  },
+} as const;
+
+function cn(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
+function isRecord(value: unknown): value is ApiRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function asRecord(value: unknown): ApiRecord {
+  return isRecord(value) ? value : {};
+}
+
+function normalizeText(value: unknown, fallback = "") {
+  if (value === null || value === undefined) return fallback;
+  return String(value).trim() || fallback;
+}
+
+function toNumber(value: unknown, fallback = 0) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/,/g, ""));
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+}
+
+function formatInteger(value: unknown) {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(
+    Math.round(toNumber(value)),
+  );
+}
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value).slice(0, 10);
+  return parsed.toISOString().slice(0, 10);
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value).replace("T", " ").slice(0, 16);
+  }
+  return parsed.toISOString().replace("T", " ").slice(0, 16);
+}
+
+function getInitialLocale(): Locale {
+  if (typeof window === "undefined") return "ar";
+  return window.localStorage.getItem("Mhamcloud-locale") === "en" ? "en" : "ar";
+}
+
+function getApiBaseUrl() {
+  const envBase =
+    typeof process !== "undefined"
+      ? (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "").replace(
+          /\/+$/,
+          "",
+        )
+      : "";
+
+  if (envBase.endsWith("/api")) return envBase.slice(0, -4);
+  return envBase;
+}
+
+function makeApiUrl(path: string, params?: URLSearchParams) {
+  const query = params?.toString();
+  return `${getApiBaseUrl()}${path}${query ? `?${query}` : ""}`;
+}
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const response = await fetch(url, {
+    method: "GET",
+    credentials: "include",
+    cache: "no-store",
+    redirect: "follow",
+    headers: {
+      Accept: "application/json",
+      "X-Requested-With": "XMLHttpRequest",
+    },
+  });
+
+  const contentType = response.headers.get("content-type") || "";
+  const rawText = await response.text();
+  let payload: unknown = null;
+
+  if (rawText && contentType.includes("application/json")) {
+    try {
+      payload = JSON.parse(rawText) as unknown;
+    } catch {
+      payload = null;
+    }
+  }
+
+  if (!response.ok) {
+    const record = asRecord(payload);
+    const message =
+      normalizeText(record.message) ||
+      normalizeText(record.detail) ||
+      normalizeText(record.error) ||
+      `Request failed with status ${response.status}`;
+
+    throw new Error(message);
+  }
+
+  return (payload || {}) as T;
+}
+
+function extractArray(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) return payload;
+
+  const record = asRecord(payload);
+  const dataRecord = asRecord(record.data);
+  const metaRecord = asRecord(record.meta);
+
+  if (Array.isArray(record.results)) return record.results;
+  if (Array.isArray(record.items)) return record.items;
+  if (Array.isArray(record.records)) return record.records;
+  if (Array.isArray(record.data)) return record.data;
+  if (Array.isArray(dataRecord.results)) return dataRecord.results;
+  if (Array.isArray(dataRecord.items)) return dataRecord.items;
+  if (Array.isArray(dataRecord.records)) return dataRecord.records;
+  if (Array.isArray(metaRecord.results)) return metaRecord.results;
+
+  return [];
+}
+
+function extractCount(payload: unknown) {
+  const record = asRecord(payload);
+  const dataRecord = asRecord(record.data);
+  const metaRecord = asRecord(record.meta);
+  const arrayCount = extractArray(payload).length;
+
+  return toNumber(
+    record.count ??
+      record.total ??
+      record.total_count ??
+      dataRecord.count ??
+      dataRecord.total ??
+      dataRecord.total_count ??
+      metaRecord.count ??
+      metaRecord.total ??
+      metaRecord.total_count,
+    arrayCount,
+  );
+}
+
+function normalizeNestedName(value: unknown, keys: string[] = ["name", "title", "full_name"]) {
+  if (typeof value === "string") return value;
+  const record = asRecord(value);
+
+  for (const key of keys) {
+    const text = normalizeText(record[key]);
+    if (text) return text;
+  }
+
+  return "";
+}
+
+function normalizeActivityName(value: unknown, fallbackValues: unknown[] = []) {
+  if (typeof value === "string") return normalizeText(value);
+
+  const record = asRecord(value);
+  const keys = ["display_name", "name_ar", "name_en", "name", "title", "code"];
+
+  for (const key of keys) {
+    const text = normalizeText(record[key]);
+    if (text) return text;
+  }
+
+  for (const fallbackValue of fallbackValues) {
+    const text = normalizeText(fallbackValue);
+    if (text) return text;
+  }
+
+  return "";
+}
+function normalizeStatus(value: unknown) {
+  if (typeof value === "boolean") return value ? "active" : "inactive";
+
+  const text = normalizeText(value, "active").toLowerCase();
+
+  if (text === "true") return "active";
+  if (text === "false") return "inactive";
+  if (text === "enabled") return "active";
+  if (text === "disabled") return "inactive";
+
+  return text;
+}
+
+function normalizeCompany(value: unknown): CompanyRecord {
+  const record = asRecord(value);
+  const owner = record.owner || record.user || record.account_owner || record.created_by;
+  const activity = record.activity_profile_ref || record.activity_profile || record.activity;
+  const subscription =
+    record.subscription ||
+    record.current_subscription ||
+    record.active_subscription ||
+    record.plan;
+  const contact = asRecord(record.contact);
+  const address = asRecord(record.address);
+
+  return {
+    id: normalizeText(record.id || record.uuid || record.pk || record.slug || record.code),
+    name: normalizeText(record.name || record.company_name || record.title, "—"),
+    code: normalizeText(
+      record.code ||
+        record.company_code ||
+        record.slug ||
+        record.registration_number ||
+        record.commercial_registration,
+      "—",
+    ),
+    status: normalizeStatus(record.status ?? record.state ?? record.is_active),
+    owner: normalizeNestedName(owner, ["name", "full_name", "email", "username"]) || "—",
+    activity:
+      normalizeActivityName(activity, [
+        record.activity_profile_display,
+        record.activity_profile_name,
+        record.activity_profile_code,
+      ]) || "—",
+    subscription:
+      normalizeText(record.subscription_status) ||
+      normalizeNestedName(subscription, ["plan_name", "name", "title", "status"]) ||
+      "—",
+    email: normalizeText(record.email || record.company_email || contact.email),
+    phone: normalizeText(record.phone || record.mobile || record.company_phone || contact.phone),
+    city: normalizeText(record.city || record.address_city || record.national_address_city || address.city, "—"),
+    created_at: normalizeText(record.created_at || record.created || record.inserted_at) || null,
+  };
+}
+
+function getStatusLabel(value: string, locale: Locale) {
+  const normalized = value.toLowerCase().replace(/[^a-z_]/g, "") as keyof (typeof translations)["ar"];
+  const fallback = normalizeText(value, translations[locale].unknown);
+  return normalizeText(translations[locale][normalized], fallback);
+}
+
+function getStatusClass(value: string) {
+  const normalized = value.toLowerCase();
+
+  if (["active", "paid", "confirmed", "ready", "success"].includes(normalized)) {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (["pending", "trial", "draft", "processing"].includes(normalized)) {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+
+  if (["inactive", "failed", "cancelled", "expired", "suspended", "blocked"].includes(normalized)) {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+
+  return "border-slate-200 bg-slate-50 text-slate-700";
+}
+
+function rowDateValue(value: string | null | undefined) {
+  if (!value) return 0;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isWithinDate(dateValue: string | null, from: string, to: string) {
+  const normalized = formatDate(dateValue);
+  if (normalized === "—") return !from && !to;
+  if (from && normalized < from) return false;
+  if (to && normalized > to) return false;
+  return true;
+}
+
+function StatusBadge({ value, locale }: { value: string; locale: Locale }) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn("whitespace-nowrap rounded-full px-2.5 py-1 text-xs", getStatusClass(value))}
+    >
+      {getStatusLabel(value, locale)}
+    </Badge>
+  );
+}
+
+function RegisterActionMenu({
+  href,
+  label,
+  locale,
+}: {
+  href: string;
+  label: string;
+  locale: Locale;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-9 w-9 rounded-lg bg-background"
+          aria-label={label}
+        >
+          <MoreVertical className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align={locale === "ar" ? "start" : "end"}
+        className="w-44"
+      >
+        <DropdownMenuItem asChild>
+          <Link href={href} className="flex items-center gap-2">
+            <ExternalLink className="h-4 w-4 text-[#a57b3d]" />
+            {label}
+          </Link>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+
+function CompaniesSkeleton() {
+  return (
+    <main className="w-full text-foreground">
+      <div className="w-full space-y-6">
+        <div className="rounded-3xl border bg-card p-6 shadow-sm">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="mt-3 h-8 w-72" />
+          <Skeleton className="mt-3 h-4 w-full max-w-3xl" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Card key={index} className="rounded-2xl">
+              <CardHeader>
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-8 w-20" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-4 w-full" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Card className="rounded-2xl">
+          <CardHeader>
+            <Skeleton className="h-6 w-52" />
+            <Skeleton className="h-4 w-96 max-w-full" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-[520px] w-full" />
+          </CardContent>
+        </Card>
+      </div>
+    </main>
+  );
+}
+
+export default function SystemCompaniesListPage() {
+  const [locale, setLocale] = React.useState<Locale>("ar");
+  const [companies, setCompanies] = React.useState<CompanyRecord[]>([]);
+  const [apiTotal, setApiTotal] = React.useState(0);
+  const [loading, setLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [error, setError] = React.useState("");
+
+  const [search, setSearch] = React.useState("");
+  const [status, setStatus] = React.useState<StatusFilter>("all");
+  const [sort, setSort] = React.useState<SortKey>("newest");
+  const [dateFrom, setDateFrom] = React.useState("");
+  const [dateTo, setDateTo] = React.useState("");
+
+  const t = translations[locale];
+  const dir = locale === "ar" ? "rtl" : "ltr";
+  const alignClass = "text-start";
+
+  React.useEffect(() => {
+    const applyLocale = () => {
+      const nextLocale = getInitialLocale();
+      setLocale(nextLocale);
+      document.documentElement.lang = nextLocale;
+      document.documentElement.dir = nextLocale === "ar" ? "rtl" : "ltr";
+      document.body.dir = nextLocale === "ar" ? "rtl" : "ltr";
+    };
+
+    applyLocale();
+    window.addEventListener("storage", applyLocale);
+    window.addEventListener("Mhamcloud-locale-changed", applyLocale);
+
+    return () => {
+      window.removeEventListener("storage", applyLocale);
+      window.removeEventListener("Mhamcloud-locale-changed", applyLocale);
+    };
+  }, []);
+
+  const loadCompanies = React.useCallback(
+    async ({ silent = false }: { silent?: boolean } = {}) => {
+      try {
+        if (!silent) setLoading(true);
+        setRefreshing(true);
+        setError("");
+
+        const params = new URLSearchParams({
+          page: "1",
+          page_size: "250",
+          ordering: "-created_at",
+        });
+
+        const payload = await fetchJson<unknown>(makeApiUrl(API_ENDPOINT, params));
+        const rows = extractArray(payload).map(normalizeCompany);
+
+        setCompanies(rows);
+        setApiTotal(extractCount(payload));
+
+        if (silent) toast.success(t.refreshed);
+      } catch (caughtError) {
+        const message = caughtError instanceof Error ? caughtError.message : t.errorDesc;
+        setError(message);
+        if (silent) toast.error(message);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [t.errorDesc, t.refreshed],
+  );
+
+  React.useEffect(() => {
+    void loadCompanies();
+  }, [loadCompanies]);
+
+  const resetFilters = React.useCallback(() => {
+    setSearch("");
+    setStatus("all");
+    setSort("newest");
+    setDateFrom("");
+    setDateTo("");
+  }, []);
+
+  const filteredCompanies = React.useMemo(() => {
+    const needle = search.trim().toLowerCase();
+
+    const rows = companies.filter((company) => {
+      const haystack = [
+        company.name,
+        company.code,
+        company.owner,
+        company.activity,
+        company.subscription,
+        company.email,
+        company.phone,
+        company.city,
+        company.status,
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      if (needle && !haystack.includes(needle)) return false;
+      if (status !== "all" && company.status !== status) return false;
+
+      return isWithinDate(company.created_at, dateFrom, dateTo);
+    });
+
+    return [...rows].sort((a, b) => {
+      if (sort === "oldest") return rowDateValue(a.created_at) - rowDateValue(b.created_at);
+      if (sort === "name") return a.name.localeCompare(b.name);
+      if (sort === "code") return a.code.localeCompare(b.code);
+      return rowDateValue(b.created_at) - rowDateValue(a.created_at);
+    });
+  }, [companies, dateFrom, dateTo, search, sort, status]);
+
+  const stats = React.useMemo<CompanyStats>(() => {
+    return {
+      total: apiTotal || companies.length,
+      active: companies.filter((company) => company.status === "active").length,
+      inactive: companies.filter((company) =>
+        ["inactive", "suspended", "cancelled"].includes(company.status),
+      ).length,
+      subscribed: companies.filter((company) => company.subscription && company.subscription !== "—").length,
+    };
+  }, [apiTotal, companies]);
+
+  const hasFilters = Boolean(search || status !== "all" || sort !== "newest" || dateFrom || dateTo);
+
+  function buildExportRows() {
+    return filteredCompanies.map((company) => [
+      company.name,
+      company.code,
+      company.owner,
+      company.activity,
+      company.subscription,
+      company.email || "—",
+      company.phone || "—",
+      company.city,
+      getStatusLabel(company.status, locale),
+      formatDateTime(company.created_at),
+    ]);
+  }
+
+  function buildPrintSection(): PrintReportTableSection {
+    return {
+      title: t.tableTitle,
+      columns: [
+        { label: t.company, width: 230, type: "text" },
+        { label: t.code, width: 140, type: "text" },
+        { label: t.owner, width: 160, type: "text" },
+        { label: t.activity, width: 160, type: "text" },
+        { label: t.subscription, width: 170, type: "text" },
+        { label: t.contact, width: 200, type: "text" },
+        { label: t.contact, width: 150, type: "text" },
+        { label: t.city, width: 130, type: "text" },
+        { label: t.status, width: 130, type: "text" },
+        { label: t.createdAt, width: 170, type: "text" },
+      ],
+      rows: buildExportRows(),
+    };
+  }
+
+  function buildExcelSection(): ExcelReportSection {
+    return {
+      title: t.tableTitle,
+      headers: [t.company, t.code, t.owner, t.activity, t.subscription, t.contact, t.contact, t.city, t.status, t.createdAt],
+      widths: [230, 140, 160, 160, 170, 200, 150, 130, 130, 170],
+      rows: buildExportRows().map((row) =>
+        row.map((value) => ({
+          value,
+          type: "text" as const,
+        })),
+      ),
+    };
+  }
+
+  function exportExcel() {
+    const rows = buildExportRows();
+
+    if (!rows.length) {
+      toast.error(t.exportEmpty);
+      return;
+    }
+
+    downloadExcelReport({
+      locale,
+      title: t.reportTitle,
+      subtitle: t.subtitle,
+      filename: `Mhamcloud-system-companies-${new Date().toISOString().slice(0, 10)}.xls`,
+      generatedAtLabel: t.generatedAt,
+      sections: [buildExcelSection()],
+    });
+
+    toast.success(
+      locale === "ar"
+        ? "تم تجهيز ملف Excel بنجاح."
+        : "Excel file prepared successfully.",
+    );
+  }
+
+  function openPrintWindow(mode: "print" | "pdf") {
+    const rows = buildExportRows();
+
+    if (!rows.length) {
+      toast.error(t.printEmpty);
+      return;
+    }
+
+    if (mode === "pdf") {
+      toast.info(t.pdfHint);
+    }
+
+    const opened = openPrintTableReport({
+      locale,
+      title: t.reportTitle,
+      subtitle: t.subtitle,
+      sections: [buildPrintSection()],
+      recordsCount: rows.length,
+      recordsLabel: t.rows,
+      generatedAtLabel: t.generatedAt,
+    });
+
+    if (!opened) {
+      toast.error(
+        locale === "ar"
+          ? "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة."
+          : "Could not open the print window. Allow pop-ups and try again.",
+      );
+      return;
+    }
+
+    toast.success(
+      locale === "ar"
+        ? "تم تجهيز صفحة الطباعة."
+        : "Print page prepared.",
+    );
+  }
+
+  if (loading) return <CompaniesSkeleton />;
+
+  if (error) {
+    return (
+      <main dir={dir} className="w-full text-foreground">
+        <Card className="mx-auto max-w-3xl rounded-lg border-destructive/30 bg-card ">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-2 rounded-full bg-destructive/10 p-4 text-destructive">
+              <TriangleAlert className="h-8 w-8" />
+            </div>
+            <CardTitle>{t.errorTitle}</CardTitle>
+            <CardDescription>{t.errorDesc}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 text-center">
+            <p className="rounded-2xl bg-muted px-4 py-3 text-sm text-muted-foreground">{error}</p>
+            <Button onClick={() => void loadCompanies({ silent: true })} className="rounded-xl">
+              <RefreshCw className="h-4 w-4" />
+              {t.tryAgain}
+            </Button>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
+
+  return (
+    <main dir={dir} className="w-full text-foreground">
+      <div className="w-full space-y-6">
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight lg:text-2xl">{t.title}</h1>
+            <p className="text-muted-foreground mt-1 hidden text-sm lg:block">
+              {t.subtitle}
+            </p>
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className={registerOutlineButtonClass}
+              onClick={() => void loadCompanies({ silent: true })}
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {t.refresh}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className={registerOutlineButtonClass}
+              onClick={exportExcel}
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              {t.exportExcel}
+            </Button>
+            <Button
+              type="button"
+              variant="default"
+              className={registerBrandButtonClass}
+              onClick={() => openPrintWindow("print")}
+            >
+              <Printer className="h-4 w-4" />
+              {t.print}
+            </Button>
+            <Button
+              asChild
+              variant="default"
+              className={registerBrandButtonClass}
+            >
+              <Link href="/system/companies/create">
+                <Plus className="h-4 w-4" />
+                {t.addCompany}
+              </Link>
+            </Button>
+          </div>
+        </header>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <SystemMetricCard title={t.totalCompanies} value={stats.total} description={t.fromLiveApi} href="/system/companies/list" icon={Building2} />
+          <SystemMetricCard title={t.activeCompanies} value={stats.active} description={t.fromLiveApi} href="/system/companies/list" icon={CheckCircle2} />
+          <SystemMetricCard title={t.inactiveCompanies} value={stats.inactive} description={t.fromLiveApi} href="/system/companies/list" icon={ShieldOff} />
+          <SystemMetricCard title={t.subscribedCompanies} value={stats.subscribed} description={t.fromLiveApi} href="/system/companies/list" icon={BadgeCheck} />
+        </div>
+
+        <Card className="w-full rounded-lg border bg-card ">
+          <CardHeader className="gap-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <CardTitle icon={TableProperties}>{t.tableTitle}</CardTitle>
+                <CardDescription className="mt-2">{t.tableDesc}</CardDescription>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
+                <Gauge className="h-3.5 w-3.5" />
+                {t.showing} {formatInteger(filteredCompanies.length)} {t.of} {formatInteger(apiTotal || companies.length)} {t.rows}
+              </Badge>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={registerOutlineButtonClass}
+                  onClick={exportExcel}
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  {t.exportExcel}
+                </Button>
+                <Button
+                  type="button"
+                  variant="default"
+                  className={registerBrandButtonClass}
+                  onClick={() => openPrintWindow("print")}
+                >
+                  <Printer className="h-4 w-4" />
+                  {t.print}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            <DataRegisterToolbar className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row md:items-center">
+                <DataRegisterSearch
+                  value={search}
+                  onChange={setSearch}
+                  placeholder={t.searchPlaceholder}
+                  className="min-w-0 flex-1"
+                />
+
+                <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
+                  <SelectTrigger className="h-9 bg-background shadow-none md:w-[170px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statusFilters.map((item) => (
+                      <SelectItem key={item} value={item}>
+                        {item === "all" ? t.all : getStatusLabel(item, locale)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <DataRegisterDatePicker label={t.from} value={dateFrom} onChange={setDateFrom} locale={locale} />
+
+                <DataRegisterDatePicker label={t.to} value={dateTo} onChange={setDateTo} locale={locale} />
+
+                <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
+                  <SelectTrigger className="h-9 bg-background shadow-none sm:w-[160px]">
+                    <ArrowUpDown className="h-4 w-4" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="newest">{t.newest}</SelectItem>
+                    <SelectItem value="oldest">{t.oldest}</SelectItem>
+                    <SelectItem value="name">{t.nameSort}</SelectItem>
+                    <SelectItem value="code">{t.codeSort}</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Button variant="outline" className="h-9 bg-background shadow-none" onClick={resetFilters}>
+                  <RotateCcw className="h-4 w-4" />
+                  {t.reset}
+                </Button>
+              </div>
+            </DataRegisterToolbar>
+
+            <DataRegisterTableFrame>
+              <div className="w-full overflow-x-auto">
+                <Table className="min-w-[1080px] table-fixed">
+                  <TableHeader>
+                    <TableRow className="h-11 bg-muted/40 hover:bg-muted/40">
+                      <TableHead className={cn("h-11 w-[215px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                        {t.company}
+                      </TableHead>
+                      <TableHead className={cn("h-11 w-[135px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                        {t.code}
+                      </TableHead>
+                      <TableHead className={cn("h-11 w-[115px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                        {t.owner}
+                      </TableHead>
+                      <TableHead className={cn("h-11 w-[115px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                        {t.activity}
+                      </TableHead>
+                      <TableHead className={cn("h-11 w-[115px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                        {t.subscription}
+                      </TableHead>
+                      <TableHead className={cn("h-11 w-[145px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                        {t.contact}
+                      </TableHead>
+                      <TableHead className={cn("h-11 w-[105px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                        {t.city}
+                      </TableHead>
+                      <TableHead className={cn("h-11 w-[105px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                        {t.status}
+                      </TableHead>
+                      <TableHead className={cn("h-11 w-[115px] px-4 text-xs font-semibold text-muted-foreground", alignClass)}>
+                        {t.createdAt}
+                      </TableHead>
+                      <TableHead className="sticky end-0 z-10 h-11 w-[76px] bg-muted/40 px-3 text-center text-xs font-semibold text-muted-foreground">
+                        {t.open}
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+
+                  <TableBody>
+                    {filteredCompanies.length ? (
+                      filteredCompanies.map((company) => (
+                        <TableRow
+                          key={company.id || company.code || company.name}
+                          href={company.id ? `/system/companies/${company.id}` : undefined}
+                          aria-label={`${t.open}: ${company.name}`}
+                          className="h-[68px]"
+                        >
+                          <TableCell className={cn("h-[68px] overflow-hidden px-4 align-middle", alignClass)}>
+                            <div className="min-w-0">
+                              <span className="block truncate text-sm font-semibold text-foreground">
+                                {company.name || t.unknown}
+                              </span>
+                              <span className="block truncate text-xs text-muted-foreground">
+                                #{company.id || company.code || "—"}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className={cn("h-[68px] overflow-hidden px-4 align-middle", alignClass)}>
+                            <span className="block truncate text-sm tabular-nums text-muted-foreground">
+                              {company.code || "—"}
+                            </span>
+                          </TableCell>
+                          <TableCell className={cn("h-[68px] overflow-hidden px-4 align-middle", alignClass)}>
+                            <span className="block truncate text-sm text-muted-foreground">
+                              {company.owner || "—"}
+                            </span>
+                          </TableCell>
+                          <TableCell className={cn("h-[68px] overflow-hidden px-4 align-middle", alignClass)}>
+                            <span className="block truncate text-sm text-muted-foreground">
+                              {company.activity || "—"}
+                            </span>
+                          </TableCell>
+                          <TableCell className={cn("h-[68px] overflow-hidden px-4 align-middle", alignClass)}>
+                            <span className="block truncate text-sm text-muted-foreground">
+                              {company.subscription || "—"}
+                            </span>
+                          </TableCell>
+                          <TableCell className={cn("h-[68px] overflow-hidden px-4 align-middle", alignClass)}>
+                            <div className="min-w-0 text-sm text-muted-foreground">
+                              <span className="block truncate">{company.email || "—"}</span>
+                              <span className="block truncate text-xs">{company.phone || "—"}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className={cn("h-[68px] overflow-hidden px-4 align-middle", alignClass)}>
+                            <span className="block truncate text-sm text-muted-foreground">
+                              {company.city || "—"}
+                            </span>
+                          </TableCell>
+                          <TableCell className={cn("h-[68px] px-4 align-middle", alignClass)}>
+                            <StatusBadge value={company.status} locale={locale} />
+                          </TableCell>
+                          <TableCell className={cn("h-[68px] px-4 align-middle", alignClass)}>
+                            <span className="text-sm tabular-nums text-muted-foreground">
+                              {formatDate(company.created_at)}
+                            </span>
+                          </TableCell>
+                          <TableCell className="sticky end-0 z-10 h-[68px] bg-background px-3 text-center align-middle">
+                            <RegisterActionMenu href={company.id ? `/system/companies/${company.id}` : "/system/companies"} label={t.open} locale={locale} />
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={10}>
+                          <DataRegisterEmptyState
+                            title={hasFilters ? t.noResultsTitle : t.noDataTitle}
+                            description={hasFilters ? t.noResultsDesc : t.noDataDesc}
+                            showReset={hasFilters}
+                            resetLabel={t.reset}
+                            onReset={resetFilters}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </DataRegisterTableFrame>
+
+            <DataRegisterResultCount
+              showingLabel={t.showing}
+              showingCount={formatInteger(filteredCompanies.length)}
+              ofLabel={t.of}
+              totalCount={formatInteger(apiTotal || companies.length)}
+              rowsLabel={t.rows}
+            />
+          </CardContent>
+        </Card>
+      </div>
+    </main>
+  );
+}

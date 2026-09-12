@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { ArrowDownIcon, ArrowUpIcon, MinusIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpIcon, MinusIcon, type LucideIcon } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -14,6 +14,7 @@ type Props = {
   noBaselineLabel: string;
   sarLabel: string;
   invertSentiment?: boolean;
+  icon: LucideIcon;
 };
 
 function amount(value: string | number) {
@@ -33,6 +34,7 @@ export function SystemFinancialCard({
   noBaselineLabel,
   sarLabel,
   invertSentiment = false,
+  icon: TitleIcon,
 }: Props) {
   const effectivePositive =
     direction === "stable"
@@ -56,7 +58,7 @@ export function SystemFinancialCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
+        <CardTitle icon={TitleIcon} iconPosition="opposite">{title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
         <div className="font-display flex items-center gap-2 text-2xl lg:text-3xl">

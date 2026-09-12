@@ -3,6 +3,7 @@
 import * as React from "react";
 import Image from "next/image";
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
+import { BarChart3 } from "lucide-react";
 
 import {
   Card,
@@ -83,7 +84,7 @@ export function SystemRevenueChart({ data, totals, defaultSeries, labels }: Prop
   return (
     <Card className="h-full">
       <CardHeader className="@max-md/card:grid!">
-        <CardTitle>{labels.title}</CardTitle>
+        <CardTitle icon={BarChart3} iconPosition="opposite">{labels.title}</CardTitle>
         <CardDescription>{labels.description}</CardDescription>
         <CardAction className="flex gap-1">
           {(["subscription_value", "net_collected"] as SeriesKey[]).map((key) => (

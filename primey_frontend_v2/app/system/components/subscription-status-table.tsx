@@ -16,6 +16,7 @@ import type {
   ColumnVisibilityState as VisibilityState,
 } from "@tanstack/table-core";
 import {
+  Activity,
   ArrowDownIcon,
   ArrowUpIcon,
   ChevronDown,
@@ -318,7 +319,7 @@ export function SubscriptionStatusTable({ locale, events, rows, labels }: Props)
   return (
     <Card className="h-full">
       <CardHeader>
-        <CardTitle>{labels.title}</CardTitle>
+        <CardTitle icon={Activity}>{labels.title}</CardTitle>
         <CardDescription>{labels.description}</CardDescription>
         <CardAction>
           <DropdownMenu>

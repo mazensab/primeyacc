@@ -33,16 +33,51 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+type CardTitleIcon = React.ComponentType<{ className?: string }>
+
+type CardTitleProps = React.ComponentProps<"div"> & {
+  icon?: CardTitleIcon
+  iconPosition?: "start" | "opposite"
+}
+
+function CardTitle({
+  className,
+  icon: Icon,
+  iconPosition = "start",
+  children,
+  ...props
+}: CardTitleProps) {
+  const iconNode = Icon ? (
+    <span
+      data-slot="card-title-icon"
+      className="flex size-7 shrink-0 items-center justify-center rounded-md border border-[#a57b3d]/15 bg-[#a57b3d]/[0.07] text-[#a57b3d]"
+    >
+      <Icon className="size-4" />
+    </span>
+  ) : null
+
   return (
     <div
       data-slot="card-title"
+      data-icon-position={Icon ? iconPosition : undefined}
       className={cn(
         "font-heading text-sm leading-snug font-semibold",
+        Icon &&
+          (iconPosition === "opposite"
+            ? "flex w-full items-center justify-between gap-3"
+            : "flex items-center gap-2"),
         className
       )}
       {...props}
-    />
+    >
+      {Icon && iconPosition === "start" ? iconNode : null}
+      {Icon && iconPosition === "opposite" ? (
+        <span className="min-w-0">{children}</span>
+      ) : (
+        children
+      )}
+      {Icon && iconPosition === "opposite" ? iconNode : null}
+    </div>
   )
 }
 
@@ -64,7 +99,7 @@ function CardAction({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-action"
       className={cn(
-        "col-start-2 row-start-1 self-center justify-self-end group-has-data-[slot=card-description]/card-header:row-end-3 @max-md/card:ms-auto",
+        "col-start-2 row-start-1 self-center justify-self-end ms-3 group-has-data-[slot=card-description]/card-header:row-end-3 @max-md/card:ms-auto",
         className
       )}
       {...props}

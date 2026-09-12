@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import type { LucideIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ type Props = {
   href: string;
   labels: { viewAll: string; noData: string; sar: string };
   badgeValue?: string | number;
+  icon?: LucideIcon;
 };
 
 function text(value: unknown) {
@@ -91,13 +93,15 @@ function statusVariant(value: unknown) {
   return "outline";
 }
 
-export function SystemRecentCard({ locale = "en", title, description, rows, kind, href, labels, badgeValue }: Props) {
+export function SystemRecentCard({ locale = "en", title, description, rows, kind, href, labels, badgeValue, icon: TitleIcon }: Props) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          {title}
-          {badgeValue !== undefined ? <Badge variant="outline">{badgeValue}</Badge> : null}
+        <CardTitle icon={TitleIcon} iconPosition="opposite">
+          <span className="inline-flex items-center gap-2">
+            {title}
+            {badgeValue !== undefined ? <Badge variant="outline">{badgeValue}</Badge> : null}
+          </span>
         </CardTitle>
         {description ? <CardDescription>{description}</CardDescription> : null}
         <CardAction>

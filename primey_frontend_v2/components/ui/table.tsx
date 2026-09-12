@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 
 import { cn } from "@/lib/utils"
 
@@ -52,14 +53,104 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
   )
 }
 
-function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
+const TABLE_ROW_INTERACTIVE_SELECTOR = [
+  "a",
+  "button",
+  "input",
+  "select",
+  "textarea",
+  "summary",
+  "[role=button]",
+  "[role=link]",
+  "[role=menuitem]",
+  "[role=checkbox]",
+  "[role=switch]",
+  "[contenteditable=true]",
+  "[data-row-navigation-ignore=true]",
+].join(",")
+
+function shouldIgnoreTableRowNavigation(
+  target: EventTarget | null,
+  currentTarget: HTMLTableRowElement,
+) {
+  if (!(target instanceof Element)) return false
+
+  const interactiveTarget = target.closest(TABLE_ROW_INTERACTIVE_SELECTOR)
+  return Boolean(interactiveTarget && interactiveTarget !== currentTarget)
+}
+
+function hasActiveTextSelection() {
+  if (typeof window === "undefined") return false
+  return Boolean(window.getSelection()?.toString().trim())
+}
+
+type TableRowProps = React.ComponentProps<"tr"> & {
+  href?: string
+}
+
+function TableRow({
+  className,
+  href,
+  role,
+  tabIndex,
+  onClick,
+  onKeyDown,
+  ...props
+}: TableRowProps) {
+  const router = useRouter()
+  const interactive = Boolean(href)
+
+  function navigate(event: React.MouseEvent<HTMLTableRowElement>) {
+    onClick?.(event)
+
+    if (
+      event.defaultPrevented ||
+      !href ||
+      event.button !== 0 ||
+      shouldIgnoreTableRowNavigation(event.target, event.currentTarget) ||
+      hasActiveTextSelection()
+    ) {
+      return
+    }
+
+    if (event.metaKey || event.ctrlKey || event.shiftKey) {
+      window.open(href, "_blank", "noopener,noreferrer")
+      return
+    }
+
+    router.push(href)
+  }
+
+  function navigateByKeyboard(event: React.KeyboardEvent<HTMLTableRowElement>) {
+    onKeyDown?.(event)
+
+    if (
+      event.defaultPrevented ||
+      !href ||
+      event.key !== "Enter" ||
+      shouldIgnoreTableRowNavigation(event.target, event.currentTarget)
+    ) {
+      return
+    }
+
+    event.preventDefault()
+    router.push(href)
+  }
+
   return (
     <tr
       data-slot="table-row"
+      data-row-link={interactive ? "true" : undefined}
+      role={interactive ? "link" : role}
+      tabIndex={interactive ? 0 : tabIndex}
       className={cn(
         "border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
+        interactive &&
+          "cursor-pointer outline-none hover:[&>td]:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:[&>td]:bg-muted/50",
         className
       )}
+      onClick={interactive ? navigate : onClick}
+      onKeyDown={interactive ? navigateByKeyboard : onKeyDown}
       {...props}
     />
   )
