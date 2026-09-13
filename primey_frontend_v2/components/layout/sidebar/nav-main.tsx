@@ -181,15 +181,8 @@ const systemNavItems: NavGroup[] = [
               en: "System Users",
             },
             href: "/system/users",
-            aliases: [
-              "/system/users/list",
-              "/system/users/reports",
-            ],
             icon: UserCog,
-            anyPermissions: [
-              PERMISSIONS.USERS_VIEW,
-              PERMISSIONS.SYSTEM_SETTINGS,
-            ],
+            permission: PERMISSIONS.SYSTEM_USERS_VIEW,
             workspaces: ["system"],
           },
           {

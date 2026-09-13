@@ -199,6 +199,11 @@ export const PERMISSIONS = {
   SYSTEM_VIEW: "system.view",
   SYSTEM_SETTINGS: "system.settings",
 
+  // System Users
+  SYSTEM_USERS_VIEW: "system.users.view",
+  SYSTEM_USERS_CREATE: "system.users.create",
+  SYSTEM_USERS_UPDATE: "system.users.update",
+
   // System Subscriptions / Platform Payments
   SYSTEM_SUBSCRIPTIONS_VIEW: "system.subscriptions.view",
   SYSTEM_SUBSCRIPTIONS_UPDATE: "system.subscriptions.update",
@@ -729,12 +734,12 @@ export const PATH_ACCESS_RULES: PathAccessRule[] = [
   // ----------------------------
   {
     prefix: "/system/users/create",
-    permissions: [PERMISSIONS.USERS_CREATE],
+    permissions: [PERMISSIONS.SYSTEM_USERS_CREATE],
     workspaces: ["system"],
   },
   {
     prefix: "/system/users",
-    permissions: [PERMISSIONS.USERS_VIEW],
+    permissions: [PERMISSIONS.SYSTEM_USERS_VIEW],
     workspaces: ["system"],
   },
   {

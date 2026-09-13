@@ -27,6 +27,7 @@ export const API_PATHS = {
     list: "/api/system/users/",
     create: "/api/system/users/create/",
     detail: (id: ApiPathId) => `/api/system/users/${id}/`,
+    status: (id: ApiPathId) => `/api/system/users/${id}/status/`,
   },
 
   systemCompanies: {

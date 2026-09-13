@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # File: api/system/users/urls.py
 # Module: Mhamcloud System Users API URLs
 # Routes:
@@ -14,9 +14,11 @@ from django.urls import path
 from .collection import system_users_collection
 from .create import system_user_create
 from .detail import system_user_detail
+from .status import system_user_status
 app_name = "system_users"
 urlpatterns = [
     path("", system_users_collection, name="list"),
     path("create/", system_user_create, name="create"),
     path("<int:user_id>/", system_user_detail, name="detail"),
+    path("<int:user_id>/status/", system_user_status, name="status"),
 ]

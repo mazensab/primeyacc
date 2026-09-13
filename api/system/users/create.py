@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # File: api/system/users/create.py
 # Module: Mhamcloud System Users Create API
 # Endpoint:
@@ -31,6 +31,7 @@ from django.views.decorators.http import require_POST
 from accounts.models import SystemRole, UserProfile, UserProfileStatus
 from api.permissions import user_has_system_permission
 from .list import _profile_payload
+from .security import requester_is_super_admin
 
 SYSTEM_USERS_CREATE_PERMISSION = "system.users.create"
 
@@ -186,6 +187,21 @@ def system_user_create(request: HttpRequest) -> JsonResponse:
                 ],
             },
             status=400,
+        )
+
+    if (
+        system_role == SystemRole.SUPER_ADMIN
+        and not requester_is_super_admin(request.user)
+    ):
+        return JsonResponse(
+            {
+                "detail": (
+                    "Only an existing super admin may create another "
+                    "SUPER_ADMIN account."
+                ),
+                "code": "system_users_super_admin_create_forbidden",
+            },
+            status=403,
         )
 
     if UserModel.objects.filter(username__iexact=username).exists():

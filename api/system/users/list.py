@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # File: api/system/users/list.py
 # Module: Mhamcloud System Users List API
 # Endpoint: GET /api/system/users/ and /api/users/
@@ -92,10 +92,17 @@ def _profile_payload(profile: UserProfile) -> dict[str, Any]:
             or default_membership.get("company_name")
             or ""
         )
-    access_type = "system" if profile.can_access_system else "company"
+    is_system_account = bool(
+        getattr(user, "is_superuser", False)
+        or (
+            profile.is_system_user
+            and profile.system_role != SystemRole.NONE
+        )
+    )
+    access_type = "system" if is_system_account else "company"
     display_role = profile.system_role
     api_system_role = profile.system_role
-    if not profile.can_access_system and company_role:
+    if not is_system_account and company_role:
         display_role = company_role
         api_system_role = ""
     return {
