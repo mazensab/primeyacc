@@ -19,7 +19,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useAuth } from "@/components/providers/AuthProvider";
+import { useAuthContext } from "@/components/providers/AuthProvider";
 
 type Workspace = "system" | "company" | "agent" | "customer";
 type UnknownRecord = Record<string, unknown>;
@@ -153,10 +153,11 @@ export function WorkspaceRouteGuard({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const auth = useAuth() as AuthSnapshot;
+  const { session, authReady } = useAuthContext();
+  const auth = session as AuthSnapshot;
 
   const state = useMemo(() => {
-    const loading = isSessionLoading(auth);
+    const loading = !authReady || isSessionLoading(auth);
     const authenticated = isAuthenticated(auth);
     const actualWorkspace = resolveWorkspace(auth);
     const allowed = authenticated && actualWorkspace === workspace;

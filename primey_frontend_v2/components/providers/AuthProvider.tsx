@@ -185,6 +185,7 @@ type AuthContextValue = {
   setSession: React.Dispatch<React.SetStateAction<AuthSession>>;
   refreshSession: () => Promise<AuthSession>;
   logoutLocal: () => void;
+  authReady: boolean;
 };
 
 // ======================================================
@@ -736,6 +737,9 @@ export function AuthProvider({
   const [session, setSession] = useState<AuthSession>(
     normalizeSession(initialUser),
   );
+  const [authReady, setAuthReady] = useState<boolean>(
+    Boolean(initialUser),
+  );
 
   const logoutLocal = React.useCallback(() => {
     try {
@@ -790,6 +794,7 @@ export function AuthProvider({
         const normalized = await refreshSession();
 
         if (!active) return;
+        setAuthReady(true);
 
         if (!normalized.authenticated) {
           logoutLocal();
@@ -873,10 +878,14 @@ export function AuthProvider({
         if (!active) return;
 
         console.error("AuthProvider session validation failed:", error);
-        logoutLocal();
+        setAuthReady(true);
 
-        if (!isPublicPath(pathname)) {
-          router.replace("/login");
+        // Do not destroy a previously authenticated client session or change
+        // the current route because of a transient whoami/network failure.
+        // WorkspaceRouteGuard handles a confirmed unauthenticated response.
+        if (!session.authenticated && !isPublicPath(pathname)) {
+          logoutLocal();
+          router.replace(`/login?next=${encodeURIComponent(pathname)}`);
         }
       }
     }
@@ -915,8 +924,9 @@ export function AuthProvider({
       setSession,
       refreshSession,
       logoutLocal,
+      authReady,
     }),
-    [logoutLocal, refreshSession, session],
+    [authReady, logoutLocal, refreshSession, session],
   );
 
   return (

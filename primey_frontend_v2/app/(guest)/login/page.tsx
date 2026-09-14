@@ -118,6 +118,26 @@ function applyDocumentLocale(locale: AppLocale): void {
   document.body.dir = direction;
 }
 
+function requestedNextPath(dashboardPath: string): string | null {
+  if (typeof window === "undefined") return null;
+
+  const raw = new URLSearchParams(window.location.search).get("next") || "";
+  if (!raw.startsWith("/") || raw.startsWith("//")) return null;
+
+  const dashboardIsSystem =
+    dashboardPath === "/system" || dashboardPath.startsWith("/system/");
+  const dashboardIsCompany =
+    dashboardPath === "/company" || dashboardPath.startsWith("/company/");
+  const nextIsSystem = raw === "/system" || raw.startsWith("/system/");
+  const nextIsCompany = raw === "/company" || raw.startsWith("/company/");
+
+  if ((dashboardIsSystem && nextIsSystem) || (dashboardIsCompany && nextIsCompany)) {
+    return raw;
+  }
+
+  return null;
+}
+
 function authoritativeDashboardPath(
   payload: AuthPayload,
   noWorkspaceMessage: string,
@@ -362,10 +382,11 @@ export default function Page() {
         throw new Error(content.sessionFailed);
       }
 
-      const redirectPath = authoritativeDashboardPath(
+      const dashboardPath = authoritativeDashboardPath(
         whoamiPayload,
         content.noWorkspace,
       );
+      const redirectPath = requestedNextPath(dashboardPath) || dashboardPath;
 
       toast.success(content.loginSuccess);
       router.replace(redirectPath);
