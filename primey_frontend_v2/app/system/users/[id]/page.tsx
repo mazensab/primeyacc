@@ -698,17 +698,37 @@ export default function SystemUserDetailPage({ userId, profileMode = false }: { 
       <Card className="overflow-hidden border-border/70">
         <div className="relative h-36 overflow-hidden border-b bg-gradient-to-br from-muted/90 via-background to-[#a57b3d]/15 sm:h-44">
           <div className="absolute -end-16 -top-20 size-56 rounded-full border border-[#a57b3d]/20 bg-[#a57b3d]/5" />
-          <div className="absolute bottom-5 start-6 text-xs font-medium tracking-[0.18em] text-muted-foreground">MHAMCLOUD · PRIMEY</div>
+          <div className="absolute bottom-5 start-6 text-xs font-medium tracking-[0.18em] text-muted-foreground">
+            MHAMCLOUD PRIMEY
+          </div>
         </div>
-        <CardContent className="relative px-5 pb-5 pt-0 sm:px-7">
-          <div className="-mt-12 flex flex-col gap-4 sm:-mt-14 sm:flex-row sm:items-end sm:justify-between">
-            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end">
-              <Avatar className="size-24 border-4 border-background bg-background shadow-sm sm:size-28"><AvatarFallback className="bg-foreground text-2xl font-semibold text-background">{(user.displayName || user.username || "U").split(/\s+/).filter(Boolean).slice(0,2).map(p=>p[0]).join("").toUpperCase()}</AvatarFallback></Avatar>
-              <div className="min-w-0 pb-1"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-xl font-bold sm:text-2xl">{user.displayName || user.username}</h2><SystemUserStatusBadge value={user.status} locale={locale} /></div>
-              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground"><span dir="ltr">@{user.username}</span>{user.email && user.email !== "—" ? <span dir="ltr" className="inline-flex items-center gap-1.5"><Mail className="size-3.5 text-[#a57b3d]" />{user.email}</span> : null}{user.phone ? <span dir="ltr" className="inline-flex items-center gap-1.5"><Phone className="size-3.5 text-[#a57b3d]" />{user.phone}</span> : null}</div>
-              <div className="mt-2 flex flex-wrap items-center gap-2"><SystemUserRoleBadge value={user.role} locale={locale} /><span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs text-muted-foreground"><CalendarDays className="size-3.5 text-[#a57b3d]" />{t.memberSince}: <LtrValue value={formatDateTime(user.createdAt)} /></span></div></div>
+        <CardContent className="relative px-5 pb-6 pt-0 sm:px-7">
+          <div className="relative -mt-12 flex flex-col items-center sm:-mt-14">
+            <Avatar className="size-24 border-4 border-background bg-background shadow-md sm:size-28">
+              <AvatarFallback className="bg-foreground text-2xl font-semibold text-background">
+                {(user.displayName || user.username || "U").split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div className="mt-3 min-w-0 max-w-3xl text-center">
+              <h2 className="truncate text-xl font-bold sm:text-2xl">{user.displayName || user.username}</h2>
+              <div className="mt-1 text-sm text-muted-foreground"><span dir="ltr">@{user.username}</span></div>
+              <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+                <SystemUserRoleBadge value={user.role} locale={locale} />
+                <SystemUserStatusBadge value={user.status} locale={locale} />
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+                {user.email && user.email !== "—" ? <span dir="ltr" className="inline-flex items-center gap-1.5"><Mail className="size-3.5 text-[#a57b3d]" />{user.email}</span> : null}
+                {user.phone ? <span dir="ltr" className="inline-flex items-center gap-1.5"><Phone className="size-3.5 text-[#a57b3d]" />{user.phone}</span> : null}
+                <span className="inline-flex items-center gap-1.5"><CalendarDays className="size-3.5 text-[#a57b3d]" />{t.memberSince}: <LtrValue value={formatDateTime(user.createdAt)} /></span>
+              </div>
             </div>
-            {canMutateTarget ? <Button className={registerBrandButtonClass} onClick={beginEdit} disabled={Boolean(busyMutation)}><Pencil />{t.edit}</Button> : null}
+            {canMutateTarget ? (
+              <div className="mt-4 sm:absolute sm:end-0 sm:top-16 sm:mt-0">
+                <Button className={registerBrandButtonClass} onClick={beginEdit} disabled={Boolean(busyMutation)}>
+                  <Pencil />{t.edit}
+                </Button>
+              </div>
+            ) : null}
           </div>
         </CardContent>
       </Card>
