@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
   Activity,
@@ -98,6 +99,9 @@ import {
 const translations = {
   ar: {
     title: "تفاصيل مستخدم النظام",
+    profileTitle: "الملف التعريفي",
+    profileSubtitle: "بيانات حسابك ووصولك وعضوياتك في منصة Mhamcloud.",
+    memberSince: "عضو منذ",
     subtitle:
       "ملف المستخدم وبيانات الوصول والعضويات والصلاحيات المسجلة في منصة Mhamcloud.",
     back: "العودة لمستخدمي النظام",
@@ -187,6 +191,9 @@ const translations = {
   },
   en: {
     title: "System User Details",
+    profileTitle: "Profile",
+    profileSubtitle: "Your account, access, and memberships on Mhamcloud.",
+    memberSince: "Member since",
     subtitle:
       "User profile, access, memberships, and permissions recorded on the Mhamcloud platform.",
     back: "Back to system users",
@@ -317,9 +324,9 @@ function LtrValue({ value }: { value: React.ReactNode }) {
   );
 }
 
-export default function SystemUserDetailPage() {
+export default function SystemUserDetailPage({ userId, profileMode = false }: { userId?: string; profileMode?: boolean } = {}) {
   const params = useParams<{ id: string }>();
-  const id = String(params?.id || "");
+  const id = String(userId || params?.id || "");
   const session = useAuth();
 
   const [locale, setLocale] = React.useState<SystemLocale>("ar");
@@ -654,24 +661,9 @@ export default function SystemUserDetailPage() {
     <div dir={dir} className="space-y-4 lg:space-y-6">
       <header className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <Button
-            asChild
-            variant="ghost"
-            size="sm"
-            className="-ms-2 mb-2 h-8 px-2 text-muted-foreground"
-          >
-            <Link href="/system/users">
-              <BackIcon />
-              {t.back}
-            </Link>
-          </Button>
-
-          <h1 className="text-xl font-bold tracking-tight lg:text-2xl">
-            {t.title}
-          </h1>
-          <p className="mt-1 hidden text-sm text-muted-foreground lg:block">
-            {t.subtitle}
-          </p>
+          {!profileMode ? <Button asChild variant="ghost" size="sm" className="-ms-2 mb-2 h-8 px-2 text-muted-foreground"><Link href="/system/users"><BackIcon />{t.back}</Link></Button> : null}
+          <h1 className="text-xl font-bold tracking-tight lg:text-2xl">{profileMode ? t.profileTitle : t.title}</h1>
+          <p className="mt-1 hidden text-sm text-muted-foreground lg:block">{profileMode ? t.profileSubtitle : t.subtitle}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -702,6 +694,24 @@ export default function SystemUserDetailPage() {
           </Button>
         </div>
       </header>
+
+      <Card className="overflow-hidden border-border/70">
+        <div className="relative h-36 overflow-hidden border-b bg-gradient-to-br from-muted/90 via-background to-[#a57b3d]/15 sm:h-44">
+          <div className="absolute -end-16 -top-20 size-56 rounded-full border border-[#a57b3d]/20 bg-[#a57b3d]/5" />
+          <div className="absolute bottom-5 start-6 text-xs font-medium tracking-[0.18em] text-muted-foreground">MHAMCLOUD · PRIMEY</div>
+        </div>
+        <CardContent className="relative px-5 pb-5 pt-0 sm:px-7">
+          <div className="-mt-12 flex flex-col gap-4 sm:-mt-14 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end">
+              <Avatar className="size-24 border-4 border-background bg-background shadow-sm sm:size-28"><AvatarFallback className="bg-foreground text-2xl font-semibold text-background">{(user.displayName || user.username || "U").split(/\s+/).filter(Boolean).slice(0,2).map(p=>p[0]).join("").toUpperCase()}</AvatarFallback></Avatar>
+              <div className="min-w-0 pb-1"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-xl font-bold sm:text-2xl">{user.displayName || user.username}</h2><SystemUserStatusBadge value={user.status} locale={locale} /></div>
+              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground"><span dir="ltr">@{user.username}</span>{user.email && user.email !== "—" ? <span dir="ltr" className="inline-flex items-center gap-1.5"><Mail className="size-3.5 text-[#a57b3d]" />{user.email}</span> : null}{user.phone ? <span dir="ltr" className="inline-flex items-center gap-1.5"><Phone className="size-3.5 text-[#a57b3d]" />{user.phone}</span> : null}</div>
+              <div className="mt-2 flex flex-wrap items-center gap-2"><SystemUserRoleBadge value={user.role} locale={locale} /><span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs text-muted-foreground"><CalendarDays className="size-3.5 text-[#a57b3d]" />{t.memberSince}: <LtrValue value={formatDateTime(user.createdAt)} /></span></div></div>
+            </div>
+            {canMutateTarget ? <Button className={registerBrandButtonClass} onClick={beginEdit} disabled={Boolean(busyMutation)}><Pencil />{t.edit}</Button> : null}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 lg:gap-6">
         <SystemMetricCard

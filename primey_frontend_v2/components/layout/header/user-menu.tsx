@@ -1,197 +1,77 @@
-"use client";
+﻿"use client";
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import {
-  BookOpenIcon,
-  CircleHelpIcon,
-  LayoutGridIcon,
-  LogOutIcon,
-  MoonIcon,
-  PlusIcon,
-  UserRoundIcon
-} from "lucide-react";
-
-import { cn } from "@/lib/utils";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+import { LayoutGridIcon, LogOutIcon, MoonIcon, UserRoundIcon } from "lucide-react";
+import { toast } from "sonner";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuthContext } from "@/components/providers/AuthProvider";
 
-type MenuLocale = "ar" | "en";
-const LOCALE_KEY = "Mhamcloud-locale";
-const LOCALE_EVENT = "Mhamcloud-locale-changed";
-
-const accounts = [
-  {
-    id: "personal",
-    name: "Toby Belhome",
-    handle: "@tobybelhome",
-    avatar: "https://i.pravatar.cc/150?img=1",
-    fallback: "TB"
-  },
-  {
-    id: "studio",
-    name: "Acme Studio",
-    handle: "@acmestudio",
-    avatar: "https://i.pravatar.cc/150?img=12",
-    fallback: "AS"
-  }
-];
-
-function readLocale(): MenuLocale {
-  if (typeof window === "undefined") return "ar";
-  return window.localStorage.getItem(LOCALE_KEY) === "en" ? "en" : "ar";
+const KEY = "Mhamcloud-locale";
+function apiUrl(path: string) {
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") || process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "") || "";
+  return base ? `${base}${path}` : path;
 }
-
+function cookie(name: string) {
+  const prefix = `${encodeURIComponent(name)}=`;
+  const value = document.cookie.split(";").map(v => v.trim()).find(v => v.startsWith(prefix));
+  return value ? decodeURIComponent(value.slice(prefix.length)) : "";
+}
+function initials(name: string) {
+  return (name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map(v => v[0]).join("") || "U").toUpperCase();
+}
 export default function UserMenu() {
-  const isMobile = useIsMobile();
+  const router = useRouter();
   const { theme, setTheme } = useTheme();
+  const { session, logoutLocal } = useAuthContext();
   const [mounted, setMounted] = React.useState(false);
-  const [locale, setLocale] = React.useState<MenuLocale>("ar");
-  const [activeAccountId, setActiveAccountId] = React.useState(accounts[0].id);
-
+  const [ar, setAr] = React.useState(true);
+  const [busy, setBusy] = React.useState(false);
   React.useEffect(() => {
-    const sync = () => setLocale(readLocale());
-    sync();
-    setMounted(true);
-    window.addEventListener(LOCALE_EVENT, sync);
+    const sync = () => setAr(window.localStorage.getItem(KEY) !== "en");
+    sync(); setMounted(true);
+    window.addEventListener("Mhamcloud-locale-changed", sync);
     window.addEventListener("storage", sync);
-    return () => {
-      window.removeEventListener(LOCALE_EVENT, sync);
-      window.removeEventListener("storage", sync);
-    };
+    return () => { window.removeEventListener("Mhamcloud-locale-changed", sync); window.removeEventListener("storage", sync); };
   }, []);
-
-  const isArabic = locale === "ar";
-  const activeAccount = accounts.find((account) => account.id === activeAccountId) ?? accounts[0];
-
-  const accountItems = (
-    <>
-      {accounts.map((account) => (
-        <DropdownMenuItem key={account.id} onClick={() => setActiveAccountId(account.id)}>
-          <Avatar className="size-7">
-            <AvatarImage src={account.avatar} alt={account.name} />
-            <AvatarFallback className="text-[10px]">{account.fallback}</AvatarFallback>
-          </Avatar>
-          <div className="grid flex-1 leading-tight">
-            <span className="truncate font-medium">{account.name}</span>
-            <span className="text-muted-foreground truncate text-xs">{account.handle}</span>
-          </div>
-          <span className={cn(
-            "flex size-4.5 shrink-0 items-center justify-center rounded-full border",
-            account.id === activeAccountId ? "bg-primary border-primary text-primary-foreground" : "border-border"
-          )}>
-            {account.id === activeAccountId && (
-              <svg viewBox="0 0 24 24" fill="none" stroke="var(--primary-foreground)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" className="size-3" aria-hidden="true">
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
-            )}
-          </span>
-        </DropdownMenuItem>
-      ))}
+  const u = session.user;
+  const name = String(session.profile?.display_name || "").trim() || [u?.first_name, u?.last_name].filter(Boolean).join(" ").trim() || String(u?.username || (ar ? "مستخدم النظام" : "System user"));
+  const email = String(u?.email || u?.username || "");
+  async function logout() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await fetch(apiUrl("/api/auth/csrf/"), { credentials: "include", cache: "no-store" });
+      const response = await fetch(apiUrl("/api/auth/logout/"), {
+        method: "POST", credentials: "include",
+        headers: { Accept: "application/json", ...(cookie("csrftoken") ? { "X-CSRFToken": cookie("csrftoken") } : {}) },
+      });
+      if (!response.ok) throw new Error(ar ? "تعذر تسجيل الخروج." : "Could not log out.");
+      logoutLocal(); router.replace("/login"); router.refresh();
+    } catch (e) { toast.error(e instanceof Error ? e.message : (ar ? "تعذر تسجيل الخروج." : "Could not log out.")); }
+    finally { setBusy(false); }
+  }
+  return <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <Avatar className="cursor-pointer border"><AvatarFallback className="bg-foreground text-xs font-semibold text-background">{initials(name)}</AvatarFallback></Avatar>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent className="w-72" align={ar ? "start" : "end"} sideOffset={8}>
+      <DropdownMenuLabel><div className="flex items-center gap-3 py-1">
+        <Avatar className="size-10 border"><AvatarFallback className="bg-foreground text-xs font-semibold text-background">{initials(name)}</AvatarFallback></Avatar>
+        <div className="min-w-0 flex-1"><div className="truncate font-semibold">{name}</div><div dir="ltr" className="truncate text-xs text-muted-foreground">{email}</div></div>
+      </div></DropdownMenuLabel>
       <DropdownMenuSeparator />
-      <DropdownMenuItem>
-        <span className="border-border flex size-7 shrink-0 items-center justify-center rounded-full border border-dashed">
-          <PlusIcon className="size-4" />
-        </span>
-        {isArabic ? "إضافة حساب" : "Add account"}
-      </DropdownMenuItem>
-    </>
-  );
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Avatar className="cursor-pointer">
-          <AvatarImage src={activeAccount.avatar} alt={activeAccount.name} />
-          <AvatarFallback className="rounded-lg">{activeAccount.fallback}</AvatarFallback>
-        </Avatar>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        className="w-64"
-        align={isArabic ? "start" : "end"}
-        sideOffset={8}>
-        <DropdownMenuLabel className="p-0">
-          <div className={cn("flex items-center gap-3 px-1.5 py-2 text-sm", isArabic ? "text-right" : "text-left")}>
-            <Avatar className="size-9">
-              <AvatarImage src={activeAccount.avatar} alt={activeAccount.name} />
-              <AvatarFallback className="rounded-lg">{activeAccount.fallback}</AvatarFallback>
-            </Avatar>
-            <div className={cn("grid flex-1 text-sm leading-tight", isArabic ? "text-right" : "text-left")}>
-              <span className="truncate font-semibold">{activeAccount.name}</span>
-              <span className="text-muted-foreground truncate text-xs">{activeAccount.handle}</span>
-            </div>
-            <Badge>Pro</Badge>
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          {isMobile ? (
-            <>
-              <DropdownMenuLabel className="text-muted-foreground flex items-center gap-2 text-xs">
-                <UserRoundIcon className="size-4" />
-                {isArabic ? "الحساب" : "Account"}
-              </DropdownMenuLabel>
-              {accountItems}
-              <DropdownMenuSeparator />
-            </>
-          ) : (
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <UserRoundIcon className="text-muted-foreground" />
-                {isArabic ? "الحساب" : "Account"}
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="w-60">{accountItems}</DropdownMenuSubContent>
-            </DropdownMenuSub>
-          )}
-          <DropdownMenuItem asChild>
-            <Link href="/system">
-              <LayoutGridIcon className="text-muted-foreground" />
-              {isArabic ? "لوحة النظام" : "Dashboard"}
-            </Link>
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem>
-            <CircleHelpIcon className="text-muted-foreground" />
-            {isArabic ? "مركز المساعدة" : "Help center"}
-          </DropdownMenuItem>
-          <DropdownMenuItem>
-            <BookOpenIcon className="text-muted-foreground" />
-            {isArabic ? "الأدلة" : "Guides"}
-          </DropdownMenuItem>
-          {mounted && (
-            <DropdownMenuItem onSelect={(event) => {
-              event.preventDefault();
-              setTheme(theme === "dark" ? "light" : "dark");
-            }}>
-              <MoonIcon className="text-muted-foreground" />
-              {isArabic ? "الوضع الداكن" : "Dark mode"}
-              <Switch checked={theme === "dark"} className="ms-auto" />
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem>
-          <LogOutIcon className="text-muted-foreground" />
-          {isArabic ? "تسجيل الخروج" : "Log out"}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
+      <DropdownMenuGroup>
+        <DropdownMenuItem asChild><Link href="/system/profile"><UserRoundIcon className="text-[#a57b3d]" />{ar ? "الملف التعريفي" : "Profile"}</Link></DropdownMenuItem>
+        <DropdownMenuItem asChild><Link href="/system"><LayoutGridIcon className="text-muted-foreground" />{ar ? "لوحة النظام" : "Dashboard"}</Link></DropdownMenuItem>
+        {mounted ? <DropdownMenuItem onSelect={e => { e.preventDefault(); setTheme(theme === "dark" ? "light" : "dark"); }}><MoonIcon className="text-muted-foreground" />{ar ? "الوضع الداكن" : "Dark mode"}<Switch checked={theme === "dark"} className="ms-auto" /></DropdownMenuItem> : null}
+      </DropdownMenuGroup>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem disabled={busy} onSelect={e => { e.preventDefault(); void logout(); }}><LogOutIcon className="text-muted-foreground" />{busy ? (ar ? "جارٍ تسجيل الخروج..." : "Logging out...") : (ar ? "تسجيل الخروج" : "Log out")}</DropdownMenuItem>
+    </DropdownMenuContent>
+  </DropdownMenu>;
 }
