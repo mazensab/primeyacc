@@ -100,7 +100,9 @@ const translations = {
   ar: {
     title: "تفاصيل مستخدم النظام",
     profileTitle: "الملف التعريفي",
-    profileSubtitle: "بيانات حسابك ووصولك وعضوياتك في منصة Mhamcloud.",
+    profileSubtitle: "بياناتك الشخصية ووسائل التواصل وعضوياتك في منصة Mhamcloud.",
+    profileEditTitle: "تعديل بياناتي",
+    profileEditDesc: "حدّث اسمك وبيانات التواصل. إعدادات الدور والصلاحيات تبقى ضمن إدارة النظام.",
     memberSince: "عضو منذ",
     subtitle:
       "ملف المستخدم وبيانات الوصول والعضويات والصلاحيات المسجلة في منصة Mhamcloud.",
@@ -192,7 +194,9 @@ const translations = {
   en: {
     title: "System User Details",
     profileTitle: "Profile",
-    profileSubtitle: "Your account, access, and memberships on Mhamcloud.",
+    profileSubtitle: "Your personal details, contact information, and Mhamcloud memberships.",
+    profileEditTitle: "Edit my profile",
+    profileEditDesc: "Update your name and contact details. Role and permission settings remain under system administration.",
     memberSince: "Member since",
     subtitle:
       "User profile, access, memberships, and permissions recorded on the Mhamcloud platform.",
@@ -667,14 +671,11 @@ export default function SystemUserDetailPage({ userId, profileMode = false }: { 
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            className={registerOutlineButtonClass}
-            onClick={() => void copyId()}
-          >
-            <Copy />
-            {t.copyId}
-          </Button>
+          {!profileMode ? (
+            <Button variant="outline" className={registerOutlineButtonClass} onClick={() => void copyId()}>
+              <Copy />{t.copyId}
+            </Button>
+          ) : null}
 
           <Button
             className={registerBrandButtonClass}
@@ -774,7 +775,7 @@ export default function SystemUserDetailPage({ userId, profileMode = false }: { 
         />
       </div>
 
-      {canMutateTarget ? (
+      {canMutateTarget && !profileMode ? (
         <Card>
           <CardHeader>
             <CardTitle icon={ShieldCheck}>
@@ -843,8 +844,8 @@ export default function SystemUserDetailPage({ userId, profileMode = false }: { 
       {editing && canMutateTarget ? (
         <Card>
           <CardHeader>
-            <CardTitle icon={Pencil}>{t.editTitle}</CardTitle>
-            <CardDescription>{t.editDesc}</CardDescription>
+            <CardTitle icon={Pencil}>{profileMode ? t.profileEditTitle : t.editTitle}</CardTitle>
+            <CardDescription>{profileMode ? t.profileEditDesc : t.editDesc}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -902,6 +903,7 @@ export default function SystemUserDetailPage({ userId, profileMode = false }: { 
                 />
               </label>
 
+              {!profileMode ? (
               <label className="space-y-2">
                 <span className="text-sm font-medium">{t.systemRole}</span>
                 <Select
@@ -925,6 +927,7 @@ export default function SystemUserDetailPage({ userId, profileMode = false }: { 
                   </SelectContent>
                 </Select>
               </label>
+              ) : null}
             </div>
 
             <div className="flex flex-wrap justify-end gap-2">
@@ -985,13 +988,13 @@ export default function SystemUserDetailPage({ userId, profileMode = false }: { 
               label={t.whatsapp}
               value={<span dir="ltr">{user.whatsappNumber || "—"}</span>}
             />
-            <InfoRow
-              label={t.profileId}
-              value={<LtrValue value={user.profileId || "—"} />}
-            />
+            {!profileMode ? (
+              <InfoRow label={t.profileId} value={<LtrValue value={user.profileId || "—"} />} />
+            ) : null}
           </CardContent>
         </Card>
 
+        {!profileMode ? (
         <Card>
           <CardHeader>
             <CardTitle icon={ShieldCheck}>{t.accessTitle}</CardTitle>
@@ -1071,6 +1074,8 @@ export default function SystemUserDetailPage({ userId, profileMode = false }: { 
           </CardContent>
         </Card>
 
+        ) : null}
+
         <Card>
           <CardHeader>
             <CardTitle icon={CalendarDays}>{t.lifecycleTitle}</CardTitle>
@@ -1089,14 +1094,12 @@ export default function SystemUserDetailPage({ userId, profileMode = false }: { 
               label={t.lastSeenAt}
               value={<LtrValue value={formatDateTime(user.lastSeenAt)} />}
             />
-            <InfoRow
-              label={t.suspendedAt}
-              value={<LtrValue value={formatDateTime(user.suspendedAt)} />}
-            />
-            <InfoRow
-              label={t.suspendedReason}
-              value={user.suspendedReason || "—"}
-            />
+            {!profileMode ? (
+              <>
+                <InfoRow label={t.suspendedAt} value={<LtrValue value={formatDateTime(user.suspendedAt)} />} />
+                <InfoRow label={t.suspendedReason} value={user.suspendedReason || "—"} />
+              </>
+            ) : null}
           </CardContent>
         </Card>
 
