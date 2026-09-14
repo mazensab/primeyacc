@@ -22,6 +22,7 @@ const makeWASocket = baileys.default || baileys.makeWASocket;
 const {
   Browsers,
   DisconnectReason,
+  downloadMediaMessage,
   fetchLatestBaileysVersion,
   useMultiFileAuthState,
 } = baileys;
@@ -93,6 +94,40 @@ function normalizeWhatsAppSendResult(result) {
     timestamp: result?.messageTimestamp || "",
   };
 }
+
+function primeyBoolean(value) {
+  const normalized = safeText(value, "").toLowerCase();
+  return ["1", "true", "yes", "on"].includes(normalized);
+}
+
+function buildPrimeyQuotedMessage({
+  recipientJid,
+  externalMessageId,
+  fromMe = false,
+  body = "",
+  messageType = "TEXT",
+}) {
+  const id = safeText(externalMessageId, "");
+  if (!id) return null;
+
+  const type = safeText(messageType, "TEXT").toUpperCase();
+  const preview = safeText(
+    body,
+    type === "TEXT" ? "Quoted message" : `[${type}]`,
+  );
+
+  return {
+    key: {
+      remoteJid: recipientJid,
+      id,
+      fromMe: Boolean(fromMe),
+    },
+    message: {
+      conversation: preview,
+    },
+  };
+}
+
 async function resolveRecipientJid(sock, toPhone) {
   const cleanPhone = normalizePhone(toPhone);
   const fallbackJid = jidFromPhone(cleanPhone);
@@ -229,6 +264,77 @@ function extractIncomingText(message) {
     ""
   );
 }
+const MAX_INCOMING_MEDIA_BYTES = Number(
+  process.env.WHATSAPP_INCOMING_MEDIA_MAX_BYTES || 16 * 1024 * 1024
+);
+
+function incomingMediaNode(message, messageType) {
+  const content = unwrapIncomingContent(message);
+  if (messageType === "IMAGE") return content.imageMessage || null;
+  if (messageType === "AUDIO") return content.audioMessage || null;
+  if (messageType === "VIDEO") return content.videoMessage || null;
+  if (messageType === "DOCUMENT") return content.documentMessage || null;
+  if (messageType === "STICKER") return content.stickerMessage || null;
+  return null;
+}
+
+function mediaDefaultFilename(messageType, mimeType) {
+  const normalized = safeText(mimeType, "").split(";")[0].toLowerCase();
+  const extension =
+    normalized.includes("webp") ? ".webp" :
+    normalized.includes("jpeg") || normalized.includes("jpg") ? ".jpg" :
+    normalized.includes("png") ? ".png" :
+    normalized.includes("gif") ? ".gif" :
+    normalized.includes("ogg") || normalized.includes("opus") ? ".ogg" :
+    normalized.includes("mpeg") && messageType === "AUDIO" ? ".mp3" :
+    normalized.includes("mp4") ? ".mp4" :
+    normalized.includes("pdf") ? ".pdf" :
+    ".bin";
+  return `whatsapp-${messageType.toLowerCase()}${extension}`;
+}
+
+async function downloadIncomingMedia(state, message, messageType) {
+  const node = incomingMediaNode(message, messageType);
+  if (!node) return null;
+
+  const declaredSize = Number(node.fileLength || 0);
+  if (declaredSize > MAX_INCOMING_MEDIA_BYTES) {
+    throw new Error(`Incoming WhatsApp media exceeds ${MAX_INCOMING_MEDIA_BYTES} bytes.`);
+  }
+
+  const buffer = await downloadMediaMessage(
+    message,
+    "buffer",
+    {},
+    {
+      logger,
+      reuploadRequest: state.sock?.updateMediaMessage,
+    },
+  );
+
+  if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+    throw new Error("Incoming WhatsApp media download returned an empty buffer.");
+  }
+  if (buffer.length > MAX_INCOMING_MEDIA_BYTES) {
+    throw new Error(`Incoming WhatsApp media exceeds ${MAX_INCOMING_MEDIA_BYTES} bytes.`);
+  }
+
+  const mimeType = safeText(
+    node.mimetype,
+    messageType === "STICKER" ? "image/webp" : "application/octet-stream",
+  ).split(";")[0];
+
+  return {
+    buffer,
+    mime_type: mimeType,
+    filename: safeText(node.fileName, mediaDefaultFilename(messageType, mimeType)),
+    size: buffer.length,
+    width: Number(node.width || 0) || "",
+    height: Number(node.height || 0) || "",
+    duration_ms: Number(node.seconds || 0) ? Number(node.seconds) * 1000 : "",
+  };
+}
+
 async function forwardIncomingMessageToDjango(state, message) {
   if (!INCOMING_WEBHOOK_URL) {
     return {
@@ -272,17 +378,56 @@ async function forwardIncomingMessageToDjango(state, message) {
       upsert_type: safeText(message?.messageStubType || "", ""),
     },
   };
-  const headers = {
-    "Content-Type": "application/json",
-  };
-  if (INCOMING_WEBHOOK_TOKEN) {
-    headers["X-Mhamcloud-Webhook-Token"] = INCOMING_WEBHOOK_TOKEN;
+  const media = await downloadIncomingMedia(
+    state,
+    message,
+    messageType,
+  );
+
+  let response;
+  if (media) {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(payload)) {
+      if (key === "metadata") {
+        form.append(key, JSON.stringify(value || {}));
+      } else {
+        form.append(key, String(value ?? ""));
+      }
+    }
+    form.append("media_mime_type", media.mime_type);
+    form.append("media_filename", media.filename);
+    form.append("media_size", String(media.size));
+    form.append("media_width", String(media.width || ""));
+    form.append("media_height", String(media.height || ""));
+    form.append("media_duration_ms", String(media.duration_ms || ""));
+    form.append(
+      "media",
+      new Blob([media.buffer], { type: media.mime_type }),
+      media.filename,
+    );
+
+    const headers = {};
+    if (INCOMING_WEBHOOK_TOKEN) {
+      headers["X-Mhamcloud-Webhook-Token"] = INCOMING_WEBHOOK_TOKEN;
+    }
+    response = await fetch(INCOMING_WEBHOOK_URL, {
+      method: "POST",
+      headers,
+      body: form,
+    });
+  } else {
+    const headers = {
+      "Content-Type": "application/json",
+    };
+    if (INCOMING_WEBHOOK_TOKEN) {
+      headers["X-Mhamcloud-Webhook-Token"] = INCOMING_WEBHOOK_TOKEN;
+    }
+    response = await fetch(INCOMING_WEBHOOK_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
   }
-  const response = await fetch(INCOMING_WEBHOOK_URL, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(payload),
-  });
   const responseBody = await response.text();
   if (!response.ok) {
     logger.warn(
@@ -390,6 +535,20 @@ async function startSocket(state, options = {}) {
     const incomingMessages = Array.isArray(event?.messages) ? event.messages : [];
     for (const incomingMessage of incomingMessages) {
       try {
+        const diagnosticType = extractIncomingMessageType(incomingMessage);
+        const diagnosticContent = unwrapIncomingContent(incomingMessage);
+        logger.info(
+          {
+            event_type: safeText(event?.type || "", ""),
+            message_id: incomingMessage?.key?.id || "",
+            remote_jid: incomingMessage?.key?.remoteJid || "",
+            from_me: Boolean(incomingMessage?.key?.fromMe),
+            has_message: Boolean(incomingMessage?.message),
+            detected_type: diagnosticType,
+            content_keys: Object.keys(diagnosticContent || {}),
+          },
+          "WhatsApp messages.upsert received"
+        );
         await forwardIncomingMessageToDjango(state, incomingMessage);
       } catch (error) {
         logger.error(
@@ -564,11 +723,353 @@ app.post("/session/disconnect", async (req, res) => {
   }
   res.json(publicState(state, { message: "Session disconnected and saved auth files removed." }));
 });
+function parsePrimeyMultipart(req, maxBytes = MAX_INCOMING_MEDIA_BYTES + 1048576) {
+  return new Promise((resolve, reject) => {
+    const contentType = safeText(req.headers["content-type"], "");
+    const token = "boundary=";
+    const tokenIndex = contentType.toLowerCase().indexOf(token);
+
+    if (tokenIndex < 0) {
+      reject(new Error("Multipart boundary is required."));
+      return;
+    }
+
+    let boundary = contentType
+      .slice(tokenIndex + token.length)
+      .split(";")[0]
+      .trim();
+
+    if (boundary.startsWith('"') && boundary.endsWith('"')) {
+      boundary = boundary.slice(1, -1);
+    }
+
+    const chunks = [];
+    let total = 0;
+    let rejected = false;
+
+    req.on("data", (chunk) => {
+      if (rejected) return;
+
+      total += chunk.length;
+      if (total > maxBytes) {
+        rejected = true;
+        reject(new Error("Outbound WhatsApp media exceeds the 16 MB limit."));
+        req.destroy();
+        return;
+      }
+
+      chunks.push(chunk);
+    });
+
+    req.on("error", reject);
+
+    req.on("end", () => {
+      if (rejected) return;
+
+      try {
+        const raw = Buffer.concat(chunks);
+        const marker = Buffer.from("--" + boundary);
+        const separator = Buffer.from("\r\n\r\n");
+        const result = {
+          fields: {},
+          file: null,
+        };
+
+        let cursor = 0;
+
+        while (cursor < raw.length) {
+          const begin = raw.indexOf(marker, cursor);
+          if (begin < 0) break;
+
+          const headerStart = begin + marker.length + 2;
+          const headerEnd = raw.indexOf(separator, headerStart);
+          if (headerEnd < 0) break;
+
+          const next = raw.indexOf(marker, headerEnd + separator.length);
+          if (next < 0) break;
+
+          const headers = raw.slice(headerStart, headerEnd).toString("utf8");
+          let body = raw.slice(headerEnd + separator.length, next);
+
+          if (
+            body.length >= 2 &&
+            body.slice(-2).toString("utf8") === "\r\n"
+          ) {
+            body = body.slice(0, -2);
+          }
+
+          const nameMatch = headers.match(/name="([^"]+)"/i);
+          const filenameMatch = headers.match(/filename="([^"]*)"/i);
+          const typeMatch = headers.match(/Content-Type:\s*([^\r\n]+)/i);
+
+          if (nameMatch) {
+            const fieldName = nameMatch[1];
+
+            if (filenameMatch) {
+              result.file = {
+                field: fieldName,
+                filename: path.basename(
+                  filenameMatch[1] || "whatsapp-media",
+                ),
+                mime_type: safeText(
+                  typeMatch?.[1],
+                  "application/octet-stream",
+                ).split(";")[0],
+                buffer: body,
+                size: body.length,
+              };
+            } else {
+              result.fields[fieldName] = body.toString("utf8");
+            }
+          }
+
+          cursor = next;
+        }
+
+        resolve(result);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
+}
+
+app.post("/messages/send-media", async (req, res) => {
+  try {
+    const parsed = await parsePrimeyMultipart(req);
+    const fields = parsed.fields || {};
+    const media = parsed.file;
+
+    const state = getSession(fields.session_name);
+
+    const toJid = safeText(
+      fields.to_jid ||
+        fields.recipient_jid ||
+        fields.jid,
+      "",
+    );
+
+    const toPhone = normalizePhone(
+      fields.to_phone ||
+        fields.phone_number ||
+        fields.to,
+    );
+
+    const messageType = safeText(
+      fields.message_type,
+      "",
+    ).toUpperCase();
+
+    const caption = safeText(
+      fields.body ||
+        fields.caption,
+      "",
+    );
+
+    const quotedExternalMessageId = safeText(
+      fields.quoted_external_message_id,
+      "",
+    );
+    const quotedFromMe = primeyBoolean(fields.quoted_from_me);
+    const quotedBody = safeText(fields.quoted_body, "");
+    const quotedMessageType = safeText(
+      fields.quoted_message_type,
+      "TEXT",
+    ).toUpperCase();
+
+    if (!media || !Buffer.isBuffer(media.buffer) || media.buffer.length === 0) {
+      res.status(400).json(
+        publicState(state, {
+          success: false,
+          message: "Media file is required.",
+          error_message: "Media file is required.",
+        }),
+      );
+      return;
+    }
+
+    if (media.size > MAX_INCOMING_MEDIA_BYTES) {
+      res.status(413).json(
+        publicState(state, {
+          success: false,
+          message: "Outbound WhatsApp media exceeds the 16 MB limit.",
+          error_message: "Outbound WhatsApp media exceeds the 16 MB limit.",
+        }),
+      );
+      return;
+    }
+
+    if (!["IMAGE", "AUDIO", "VIDEO", "DOCUMENT"].includes(messageType)) {
+      res.status(400).json(
+        publicState(state, {
+          success: false,
+          message: "Unsupported outbound WhatsApp media type.",
+          error_message: "Unsupported outbound WhatsApp media type.",
+        }),
+      );
+      return;
+    }
+
+    if (!toPhone && !toJid) {
+      res.status(400).json(
+        publicState(state, {
+          success: false,
+          message: "Recipient phone or JID is required.",
+          error_message: "Recipient phone or JID is required.",
+        }),
+      );
+      return;
+    }
+
+    if (!state.sock && hasSavedAuth(state.session_name)) {
+      await ensureSocket(state.session_name);
+      await waitForState(
+        state,
+        (item) => item.connected || item.error_message,
+        12000,
+      );
+    }
+
+    if (!state.connected || !state.sock) {
+      res.status(503).json(
+        publicState(state, {
+          success: false,
+          message: "WhatsApp session is not connected.",
+          error_message: "WhatsApp session is not connected.",
+        }),
+      );
+      return;
+    }
+
+    const recipient = toJid
+      ? {
+          exists: true,
+          jid: toJid,
+          phone: toPhone || incomingJidToPhone(toJid),
+          unchecked: true,
+          lookup_failed: false,
+          reason: "Direct recipient JID provided.",
+        }
+      : await resolveRecipientJid(state.sock, toPhone);
+
+    if (!recipient.exists || !recipient.jid) {
+      res.status(400).json(
+        publicState(state, {
+          success: false,
+          provider_status: "recipient_not_on_whatsapp",
+          message:
+            recipient.reason ||
+            "Recipient phone is not available on WhatsApp.",
+          error_message:
+            recipient.reason ||
+            "Recipient phone is not available on WhatsApp.",
+          to_phone: recipient.phone || toPhone,
+          recipient_jid: recipient.jid || "",
+        }),
+      );
+      return;
+    }
+
+    const mimeType = safeText(
+      media.mime_type,
+      "application/octet-stream",
+    );
+
+    let content;
+
+    if (messageType === "IMAGE") {
+      content = {
+        image: media.buffer,
+        mimetype: mimeType,
+        ...(caption ? { caption } : {}),
+      };
+    } else if (messageType === "VIDEO") {
+      content = {
+        video: media.buffer,
+        mimetype: mimeType,
+        ...(caption ? { caption } : {}),
+      };
+    } else if (messageType === "AUDIO") {
+      content = {
+        audio: media.buffer,
+        mimetype: mimeType,
+        ptt: false,
+      };
+    } else {
+      content = {
+        document: media.buffer,
+        mimetype: mimeType,
+        fileName: media.filename || "document",
+        ...(caption ? { caption } : {}),
+      };
+    }
+
+    const quoted = buildPrimeyQuotedMessage({
+      recipientJid: recipient.jid,
+      externalMessageId: quotedExternalMessageId,
+      fromMe: quotedFromMe,
+      body: quotedBody,
+      messageType: quotedMessageType,
+    });
+
+    const result = await state.sock.sendMessage(
+      recipient.jid,
+      content,
+      quoted ? { quoted } : undefined,
+    );
+
+    const normalizedResult = normalizeWhatsAppSendResult(result);
+    const unverifiedRecipient = Boolean(
+      recipient.unchecked ||
+        recipient.lookup_failed,
+    );
+
+    res.json(
+      publicState(state, {
+        success: true,
+        provider_status: unverifiedRecipient
+          ? "sent_to_whatsapp_server_unverified_recipient"
+          : "sent_to_whatsapp_server",
+        message: "Media accepted by WhatsApp server.",
+        recipient_lookup_warning: unverifiedRecipient
+          ? recipient.reason
+          : "",
+        message_type: messageType,
+        media_mime_type: mimeType,
+        media_filename: media.filename,
+        media_size: media.size,
+        ...normalizedResult,
+        to_phone: recipient.phone,
+        recipient_jid: recipient.jid,
+      }),
+    );
+  } catch (error) {
+    logger.error(
+      {
+        error: String(error?.message || error),
+      },
+      "Outbound WhatsApp media send failed",
+    );
+
+    res.status(400).json({
+      success: false,
+      message: String(error?.message || error),
+      error_message: String(error?.message || error),
+      provider_status: "media_send_failed",
+      gateway_configured: true,
+    });
+  }
+});
+
 app.post("/messages/send-text", async (req, res) => {
   const state = getSession(req.body?.session_name);
   const toJid = safeText(req.body?.to_jid || req.body?.recipient_jid || req.body?.jid, "");
   const toPhone = normalizePhone(req.body?.to_phone || req.body?.phone_number || req.body?.to);
   const body = safeText(req.body?.body || req.body?.message || req.body?.text, "Mhamcloud system WhatsApp test message.");
+  const quotedExternalMessageId = safeText(req.body?.quoted_external_message_id, "");
+  const quotedFromMe = primeyBoolean(req.body?.quoted_from_me);
+  const quotedBody = safeText(req.body?.quoted_body, "");
+  const quotedMessageType = safeText(req.body?.quoted_message_type, "TEXT").toUpperCase();
   if (!toPhone && !toJid) {
     res.json(publicState(state, {
       success: false,
@@ -610,7 +1111,18 @@ app.post("/messages/send-text", async (req, res) => {
     }));
     return;
   }
-  const result = await state.sock.sendMessage(recipient.jid, { text: body });
+  const quoted = buildPrimeyQuotedMessage({
+    recipientJid: recipient.jid,
+    externalMessageId: quotedExternalMessageId,
+    fromMe: quotedFromMe,
+    body: quotedBody,
+    messageType: quotedMessageType,
+  });
+  const result = await state.sock.sendMessage(
+    recipient.jid,
+    { text: body },
+    quoted ? { quoted } : undefined,
+  );
   const normalizedResult = normalizeWhatsAppSendResult(result);
   const unverifiedRecipient = Boolean(recipient.unchecked || recipient.lookup_failed);
   res.json(publicState(state, {

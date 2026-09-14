@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📂 api/system/whatsapp/views.py
 # 🧠 Mhamcloud | System WhatsApp API Views V1.0
 # ------------------------------------------------------------
@@ -12,6 +12,7 @@
 from __future__ import annotations
 from typing import Any
 from django.db.models import Count, Q, QuerySet
+from django.utils.dateparse import parse_datetime
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from whatsapp.models import (
@@ -63,6 +64,14 @@ def _safe_has_system_permission(user, permission_code: str) -> bool:
         return False
     if getattr(user, "is_superuser", False):
         return True
+    profile = getattr(user, "Mhamcloud_profile", None)
+    if profile and bool(getattr(profile, "can_access_system", False)):
+        try:
+            profile_permissions = set(getattr(profile, "system_permissions", []) or [])
+        except Exception:
+            profile_permissions = set()
+        if "*" in profile_permissions or permission_code in profile_permissions:
+            return True
     checker = getattr(user, "has_system_permission", None)
     if callable(checker):
         attempts = [
@@ -319,6 +328,210 @@ def _message_stats(queryset: QuerySet[WhatsAppMessageLog]) -> dict[str, Any]:
         "providers": _count_by(queryset, "provider"),
         "source_types": _count_by(queryset, "source_type"),
     }
+
+
+def _system_inbox_history_queryset():
+    from whatsapp.models import WhatsAppConversationMessage
+    return (
+        WhatsAppConversationMessage.objects
+        .select_related("contact", "conversation", "sent_by", "company")
+        .prefetch_related("attachments")
+        .filter(scope="SYSTEM", company__isnull=True)
+        .order_by("-created_at", "-id")
+    )
+
+
+def _serialize_system_inbox_history_message(message) -> dict[str, Any]:
+    contact = message.contact
+    conversation = message.conversation
+    attachments = list(message.attachments.all())
+    message_type = str(message.message_type or "TEXT").upper()
+    body = str(message.body or "").strip()
+
+    if not body:
+        body = f"[{message_type}]"
+    elif body == f"[{message_type}]" and attachments:
+        names = [
+            str(item.original_filename or "").strip()
+            for item in attachments
+            if str(item.original_filename or "").strip()
+        ]
+        if names:
+            body = f"[{message_type}] {', '.join(names[:3])}"
+
+    recipient_name = (
+        str(getattr(contact, "display_name", "") or "").strip()
+        or str(getattr(contact, "push_name", "") or "").strip()
+        or str(getattr(contact, "normalized_phone", "") or "").strip()
+        or str(getattr(contact, "whatsapp_jid", "") or "").strip()
+    )
+    recipient_phone = (
+        str(getattr(contact, "normalized_phone", "") or "").strip()
+        or str(getattr(contact, "phone_number", "") or "").strip()
+    )
+
+    return {
+        "id": f"inbox-{message.id}",
+        "source_record_type": "INBOX_MESSAGE",
+        "source_record_id": message.id,
+        "conversation_id": message.conversation_id,
+        "company_id": None,
+        "company": None,
+        "template_id": None,
+        "template": None,
+        "direction": message.direction,
+        "status": message.status,
+        "source_type": "INBOX",
+        "source_id": str(message.conversation_id),
+        "recipient_name": recipient_name,
+        "recipient_phone": recipient_phone,
+        "message_body": body,
+        "message_type": message_type,
+        "attachment_count": len(attachments),
+        "attachments": [
+            {
+                "id": item.id,
+                "attachment_type": item.attachment_type,
+                "original_filename": item.original_filename,
+                "mime_type": item.mime_type,
+                "file_size": item.file_size,
+            }
+            for item in attachments
+        ],
+        "rendered_variables": {},
+        "provider": message.provider,
+        "provider_message_id": message.external_message_id,
+        "provider_response": message.provider_response or {},
+        "error_message": (
+            str((message.provider_response or {}).get("error_message") or "")
+            if message.status == "FAILED"
+            else ""
+        ),
+        "queued_at": None,
+        "sent_at": message.sent_at.isoformat() if message.sent_at else None,
+        "delivered_at": None,
+        "read_at": None,
+        "failed_at": (
+            message.updated_at.isoformat()
+            if message.status == "FAILED" and message.updated_at
+            else None
+        ),
+        "created_by_id": message.sent_by_id,
+        "created_by": _user_payload(message.sent_by) if message.sent_by_id else None,
+        "created_at": message.created_at.isoformat() if message.created_at else None,
+        "updated_at": message.updated_at.isoformat() if message.updated_at else None,
+        "contact": {
+            "id": contact.id,
+            "display_name": contact.display_name,
+            "push_name": contact.push_name,
+            "normalized_phone": contact.normalized_phone,
+            "whatsapp_jid": contact.whatsapp_jid,
+        },
+        "conversation": {
+            "id": conversation.id,
+            "status": conversation.status,
+            "session_name": conversation.session_name,
+        },
+    }
+
+
+def _serialize_legacy_history_message(message: WhatsAppMessageLog) -> dict[str, Any]:
+    payload = _serialize_message(message)
+    payload["id"] = f"log-{message.id}"
+    payload["source_record_type"] = "MESSAGE_LOG"
+    payload["source_record_id"] = message.id
+    payload["message_type"] = "TEXT"
+    payload["attachment_count"] = 0
+    payload["attachments"] = []
+    return payload
+
+
+def _unified_history_items(request) -> list[dict[str, Any]]:
+    status = _query(request, "status").upper()
+    direction = _query(request, "direction").upper()
+    provider = _query(request, "provider").upper()
+    source_type = _query(request, "source_type").upper()
+    company_id = _query(request, "company_id")
+    search = _query(request, "q") or _query(request, "search")
+
+    inbox_queryset = _system_inbox_history_queryset()
+    if status:
+        inbox_queryset = inbox_queryset.filter(status=status)
+    if direction:
+        inbox_queryset = inbox_queryset.filter(direction=direction)
+    if provider:
+        inbox_queryset = inbox_queryset.filter(provider__iexact=provider)
+    if source_type and source_type not in {"INBOX", "SYSTEM"}:
+        inbox_queryset = inbox_queryset.none()
+    if company_id:
+        inbox_queryset = inbox_queryset.none()
+    if search:
+        inbox_queryset = inbox_queryset.filter(
+            Q(contact__display_name__icontains=search)
+            | Q(contact__push_name__icontains=search)
+            | Q(contact__normalized_phone__icontains=search)
+            | Q(contact__whatsapp_jid__icontains=search)
+            | Q(body__icontains=search)
+            | Q(external_message_id__icontains=search)
+            | Q(message_type__icontains=search)
+        )
+
+    inbox_items = [
+        _serialize_system_inbox_history_message(item)
+        for item in inbox_queryset
+    ]
+
+    inbox_external_ids = {
+        str(item.get("provider_message_id") or "").strip()
+        for item in inbox_items
+        if str(item.get("provider_message_id") or "").strip()
+    }
+
+    legacy_queryset = _apply_message_filters(_base_messages_queryset(), request)
+    legacy_items = []
+    for item in legacy_queryset:
+        provider_id = str(item.provider_message_id or "").strip()
+        if provider_id and provider_id in inbox_external_ids:
+            continue
+        legacy_items.append(_serialize_legacy_history_message(item))
+
+    combined = inbox_items + legacy_items
+
+    def created_key(item):
+        raw = str(item.get("created_at") or "")
+        parsed = parse_datetime(raw)
+        return parsed.timestamp() if parsed is not None else 0.0
+
+    combined.sort(
+        key=lambda item: (created_key(item), int(item.get("source_record_id") or 0)),
+        reverse=True,
+    )
+    return combined
+
+
+def _unified_message_stats(items: list[dict[str, Any]]) -> dict[str, Any]:
+    statuses: dict[str, int] = {}
+    directions: dict[str, int] = {}
+    providers: dict[str, int] = {}
+    source_types: dict[str, int] = {}
+
+    for item in items:
+        for target, key in (
+            (statuses, "status"),
+            (directions, "direction"),
+            (providers, "provider"),
+            (source_types, "source_type"),
+        ):
+            value = str(item.get(key) or "")
+            target[value] = target.get(value, 0) + 1
+
+    return {
+        "total": len(items),
+        "statuses": statuses,
+        "directions": directions,
+        "providers": providers,
+        "source_types": source_types,
+    }
 @api_view(["GET"])
 def system_whatsapp_overview(request):
     permission_error = _permission_response(request)
@@ -455,19 +668,22 @@ def system_whatsapp_messages_list(request):
     permission_error = _permission_response(request)
     if permission_error:
         return permission_error
-    queryset = _apply_message_filters(_base_messages_queryset(), request)
-    total = queryset.count()
+
+    items = _unified_history_items(request)
+    total = len(items)
     limit, offset = _limit_offset(request)
-    results = queryset[offset : offset + limit]
+    results = items[offset : offset + limit]
+
     return Response(
         {
             "success": True,
             "count": total,
             "limit": limit,
             "offset": offset,
-            "stats": _message_stats(queryset),
-            "results": [_serialize_message(item) for item in results],
+            "stats": _unified_message_stats(items),
+            "results": results,
             "choices": _choices_payload(),
+            "history_source": "UNIFIED",
         }
     )
 @api_view(["GET"])
@@ -475,20 +691,34 @@ def system_whatsapp_message_detail(request, message_id: int):
     permission_error = _permission_response(request)
     if permission_error:
         return permission_error
+
+    inbox_message = _system_inbox_history_queryset().filter(id=message_id).first()
+    if inbox_message is not None:
+        return Response(
+            {
+                "success": True,
+                "message_log": _serialize_system_inbox_history_message(inbox_message),
+                "choices": _choices_payload(),
+                "history_source": "INBOX_MESSAGE",
+            }
+        )
+
     message = _base_messages_queryset().filter(id=message_id).first()
     if not message:
         return Response(
             {
                 "success": False,
-                "message": "WhatsApp message log was not found.",
+                "message": "WhatsApp message was not found.",
             },
             status=404,
         )
+
     return Response(
         {
             "success": True,
-            "message_log": _serialize_message(message),
+            "message_log": _serialize_legacy_history_message(message),
             "choices": _choices_payload(),
+            "history_source": "MESSAGE_LOG",
         }
     )
 
@@ -635,9 +865,28 @@ def system_whatsapp_inbox_webhook(request):
             },
             status=drf_status.HTTP_403_FORBIDDEN,
         )
-    data = request.data if isinstance(request.data, dict) else {}
+    if hasattr(request.data, "dict"):
+        data = request.data.dict()
+    elif isinstance(request.data, dict):
+        data = dict(request.data)
+    else:
+        data = {}
+    media_file = request.FILES.get("media")
+    data.pop("media", None)
+
+    metadata_value = data.get("metadata")
+    if isinstance(metadata_value, str) and metadata_value.strip():
+        try:
+            import json
+            data["metadata"] = json.loads(metadata_value)
+        except (TypeError, ValueError):
+            data["metadata"] = {"raw": metadata_value}
+
     try:
-        payload = record_whatsapp_incoming_message(data)
+        payload = record_whatsapp_incoming_message(
+            data,
+            media_file=media_file,
+        )
     except (ValueError, TypeError) as exc:
         return DRFResponse(
             {
@@ -668,21 +917,16 @@ def system_whatsapp_inbox_webhook(request):
 # ============================================================
 from rest_framework.permissions import IsAuthenticated as _WhatsAppInboxIsAuthenticated
 def _system_whatsapp_inbox_can_view(user) -> bool:
+    # Keep Inbox reads aligned with the canonical System WhatsApp read contract.
     return bool(
         getattr(user, "is_authenticated", False)
-        and (
-            getattr(user, "is_superuser", False)
-            or _safe_has_system_permission(user, "system.whatsapp.view")
-            or _safe_has_system_permission(user, "system.whatsapp.manage")
-        )
+        and _can_view(user)
     )
 def _system_whatsapp_inbox_can_manage(user) -> bool:
+    # Keep Inbox mutations aligned with the canonical management contract.
     return bool(
         getattr(user, "is_authenticated", False)
-        and (
-            getattr(user, "is_superuser", False)
-            or _safe_has_system_permission(user, "system.whatsapp.manage")
-        )
+        and _can_manage(user)
     )
 def _system_whatsapp_inbox_forbidden(message="You do not have permission to access system WhatsApp inbox."):
     from rest_framework import status as drf_status
@@ -728,11 +972,11 @@ def system_whatsapp_inbox_list(request):
     search = str(request.GET.get("search") or "").strip()
     if search:
         queryset = queryset.filter(
-            models.Q(contact__display_name__icontains=search)
-            | models.Q(contact__push_name__icontains=search)
-            | models.Q(contact__normalized_phone__icontains=search)
-            | models.Q(contact__whatsapp_jid__icontains=search)
-            | models.Q(last_message_preview__icontains=search)
+            Q(contact__display_name__icontains=search)
+            | Q(contact__push_name__icontains=search)
+            | Q(contact__normalized_phone__icontains=search)
+            | Q(contact__whatsapp_jid__icontains=search)
+            | Q(last_message_preview__icontains=search)
         )
     unread = str(request.GET.get("unread") or "").lower().strip()
     if unread in {"1", "true", "yes"}:
@@ -806,6 +1050,7 @@ def system_whatsapp_inbox_messages(request, conversation_id: int):
     messages = (
         conversation.messages
         .select_related("contact", "sent_by")
+        .prefetch_related("attachments")
         .order_by("created_at", "id")
     )
     conversation.unread_count = 0
@@ -821,38 +1066,122 @@ def system_whatsapp_inbox_messages(request, conversation_id: int):
             ],
         }
     )
+@_whatsapp_inbox_api_view(["GET"])
+@_whatsapp_inbox_permission_classes([_WhatsAppInboxIsAuthenticated])
+def system_whatsapp_inbox_attachment_media(request, attachment_id: int):
+    from django.http import FileResponse
+    from rest_framework.response import Response as DRFResponse
+    from whatsapp.models import WhatsAppMessageAttachment
+
+    if not _system_whatsapp_inbox_can_view(request.user):
+        return _system_whatsapp_inbox_forbidden()
+
+    attachment = (
+        WhatsAppMessageAttachment.objects
+        .select_related("message")
+        .filter(
+            id=attachment_id,
+            message__scope="SYSTEM",
+            message__company__isnull=True,
+        )
+        .first()
+    )
+    if attachment is None or not attachment.file:
+        return DRFResponse(
+            {"success": False, "message": "WhatsApp media was not found."},
+            status=404,
+        )
+
+    response = FileResponse(
+        attachment.file.open("rb"),
+        content_type=attachment.mime_type or "application/octet-stream",
+        as_attachment=False,
+        filename=attachment.original_filename or "whatsapp-media",
+    )
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
 @_whatsapp_inbox_api_view(["POST"])
 @_whatsapp_inbox_permission_classes([_WhatsAppInboxIsAuthenticated])
 def system_whatsapp_inbox_reply(request, conversation_id: int):
     from rest_framework import status as drf_status
     from rest_framework.response import Response as DRFResponse
     from whatsapp.services import send_system_whatsapp_inbox_reply
+
     if not _system_whatsapp_inbox_can_manage(request.user):
-        return _system_whatsapp_inbox_forbidden("You do not have permission to reply to system WhatsApp inbox conversations.")
+        return _system_whatsapp_inbox_forbidden(
+            "You do not have permission to reply to system WhatsApp inbox conversations."
+        )
+
     conversation = _system_whatsapp_inbox_queryset().filter(id=conversation_id).first()
     if conversation is None:
         return DRFResponse(
-            {
-                "success": False,
-                "message": "WhatsApp inbox conversation was not found.",
-            },
+            {"success": False, "message": "WhatsApp inbox conversation was not found."},
             status=drf_status.HTTP_404_NOT_FOUND,
         )
-    body = str(request.data.get("body") or request.data.get("message") or request.data.get("text") or "").strip()
-    if not body:
+
+    body = str(
+        request.data.get("body")
+        or request.data.get("message")
+        or request.data.get("text")
+        or ""
+    ).strip()
+    media_file = request.FILES.get("media")
+    message_type = str(request.data.get("message_type") or "").strip().upper()
+
+    reply_to_message_id = request.data.get("reply_to_message_id")
+    reply_to_message = None
+    if reply_to_message_id not in (None, ""):
+        try:
+            reply_to_message_id = int(reply_to_message_id)
+        except (TypeError, ValueError):
+            return DRFResponse(
+                {
+                    "success": False,
+                    "message": "Invalid reply_to_message_id.",
+                    "errors": {"reply_to_message_id": "Invalid message ID."},
+                },
+                status=drf_status.HTTP_400_BAD_REQUEST,
+            )
+
+        reply_to_message = (
+            conversation.messages
+            .select_related("contact", "sent_by")
+            .prefetch_related("attachments")
+            .filter(id=reply_to_message_id)
+            .first()
+        )
+        if reply_to_message is None:
+            return DRFResponse(
+                {
+                    "success": False,
+                    "message": "Quoted WhatsApp message was not found in this conversation.",
+                    "errors": {
+                        "reply_to_message_id": "Quoted message was not found in this conversation."
+                    },
+                },
+                status=drf_status.HTTP_400_BAD_REQUEST,
+            )
+
+    if media_file is None and not body:
         return DRFResponse(
             {
                 "success": False,
-                "message": "Reply body is required.",
-                "errors": {"body": "Reply body is required."},
+                "message": "Reply body or media is required.",
+                "errors": {"body": "Reply body or media is required."},
             },
             status=drf_status.HTTP_400_BAD_REQUEST,
         )
+
     try:
         payload = send_system_whatsapp_inbox_reply(
             conversation=conversation,
             body=body,
             user=request.user,
+            media_file=media_file,
+            message_type=message_type,
+            reply_to_message=reply_to_message,
         )
     except ValueError as exc:
         return DRFResponse(
@@ -863,5 +1192,10 @@ def system_whatsapp_inbox_reply(request, conversation_id: int):
             },
             status=drf_status.HTTP_400_BAD_REQUEST,
         )
-    http_status = drf_status.HTTP_200_OK if payload.get("success") else drf_status.HTTP_502_BAD_GATEWAY
+
+    http_status = (
+        drf_status.HTTP_200_OK
+        if payload.get("success")
+        else drf_status.HTTP_502_BAD_GATEWAY
+    )
     return DRFResponse(payload, status=http_status)

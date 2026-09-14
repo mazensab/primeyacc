@@ -1081,6 +1081,14 @@ class WhatsAppConversationMessage(models.Model):
         db_index=True,
         verbose_name="External message ID",
     )
+    reply_to = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="replies",
+        verbose_name="Reply to message",
+    )
     provider = models.CharField(
         max_length=80,
         default="WHATSAPP_GATEWAY",
@@ -1134,6 +1142,38 @@ class WhatsAppConversationMessage(models.Model):
         ]
     def __str__(self) -> str:
         return f"{self.direction} {self.status} — {self.body[:60]}"
+class WhatsAppMessageAttachment(models.Model):
+    # Binary media attached to one WhatsApp inbox message.
+    message = models.ForeignKey(
+        WhatsAppConversationMessage,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+        verbose_name="Message",
+    )
+    attachment_type = models.CharField(max_length=30, db_index=True)
+    file = models.FileField(upload_to="whatsapp/inbox/%Y/%m/%d/")
+    original_filename = models.CharField(max_length=255, blank=True)
+    mime_type = models.CharField(max_length=150, blank=True, db_index=True)
+    file_size = models.PositiveBigIntegerField(default=0)
+    width = models.PositiveIntegerField(null=True, blank=True)
+    height = models.PositiveIntegerField(null=True, blank=True)
+    duration_ms = models.PositiveBigIntegerField(null=True, blank=True)
+    provider_media_id = models.CharField(max_length=255, blank=True, db_index=True)
+    sha256 = models.CharField(max_length=64, blank=True, db_index=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["id"]
+        indexes = [
+            models.Index(fields=["message", "attachment_type"]),
+            models.Index(fields=["sha256"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.original_filename or f"{self.attachment_type} attachment #{self.pk}"
+
+
 class WhatsAppWebhookEvent(models.Model):
     """
     Raw incoming gateway webhook event for idempotency and audit.

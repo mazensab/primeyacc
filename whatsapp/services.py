@@ -18,8 +18,13 @@
 
 from __future__ import annotations
 
+import hashlib
+import mimetypes
 import re
+from pathlib import Path
 from typing import Any
+
+from django.core.files.base import ContentFile
 
 from django.db import transaction
 from django.db.models import QuerySet
@@ -1249,6 +1254,168 @@ def serialize_whatsapp_inbox_contact(contact) -> dict:
         "created_at": contact.created_at.isoformat() if contact.created_at else None,
         "updated_at": contact.updated_at.isoformat() if contact.updated_at else None,
     }
+WHATSAPP_INBOX_MEDIA_MAX_BYTES = 16 * 1024 * 1024
+
+WHATSAPP_INBOX_MEDIA_ALLOWED_MIME_PREFIXES = {
+    "IMAGE": ("image/",),
+    "AUDIO": ("audio/", "application/ogg"),
+    "VIDEO": ("video/",),
+    "DOCUMENT": (
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument",
+        "application/vnd.ms-excel",
+        "application/vnd.ms-powerpoint",
+        "text/",
+        "application/zip",
+        "application/octet-stream",
+    ),
+    "STICKER": ("image/webp", "image/"),
+}
+
+
+def _whatsapp_media_positive_int(value):
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number >= 0 else None
+
+
+def _safe_whatsapp_media_filename(value: str, *, message_type: str, mime_type: str) -> str:
+    raw_name = Path(str(value or "")).name
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", raw_name).strip("._")
+    if safe_name:
+        return safe_name[:180]
+    extension = mimetypes.guess_extension(mime_type or "") or {
+        "IMAGE": ".jpg",
+        "AUDIO": ".ogg",
+        "VIDEO": ".mp4",
+        "DOCUMENT": ".bin",
+        "STICKER": ".webp",
+    }.get(message_type, ".bin")
+    return f"whatsapp-{message_type.lower()}{extension}"
+
+
+def _sanitize_whatsapp_gateway_payload(payload: dict) -> dict:
+    clean = {}
+    for key, value in dict(payload or {}).items():
+        if key == "media":
+            continue
+        if hasattr(value, "read"):
+            continue
+        clean[key] = value
+    return clean
+
+
+def _persist_whatsapp_inbox_attachment(*, message, payload: dict, media_file=None):
+    if media_file is None:
+        return None
+    from whatsapp.models import WhatsAppMessageAttachment
+
+    message_type = str(payload.get("message_type") or message.message_type or "").upper()
+    allowed_prefixes = WHATSAPP_INBOX_MEDIA_ALLOWED_MIME_PREFIXES.get(message_type)
+    if not allowed_prefixes:
+        raise ValueError("Unsupported WhatsApp media type.")
+
+    mime_type = str(
+        payload.get("media_mime_type")
+        or getattr(media_file, "content_type", "")
+        or "application/octet-stream"
+    ).split(";", 1)[0].strip().lower()
+
+    if not any(mime_type == prefix or mime_type.startswith(prefix) for prefix in allowed_prefixes):
+        raise ValueError(f"Unsupported MIME type for {message_type}: {mime_type}")
+
+    declared_size = _whatsapp_media_positive_int(
+        payload.get("media_size") or getattr(media_file, "size", None)
+    )
+    if declared_size is not None and declared_size > WHATSAPP_INBOX_MEDIA_MAX_BYTES:
+        raise ValueError("WhatsApp media exceeds the 16 MB inbox limit.")
+
+    raw = media_file.read()
+    if not raw:
+        raise ValueError("WhatsApp media payload is empty.")
+    if len(raw) > WHATSAPP_INBOX_MEDIA_MAX_BYTES:
+        raise ValueError("WhatsApp media exceeds the 16 MB inbox limit.")
+
+    digest = hashlib.sha256(raw).hexdigest()
+    filename = _safe_whatsapp_media_filename(
+        str(payload.get("media_filename") or getattr(media_file, "name", "") or ""),
+        message_type=message_type,
+        mime_type=mime_type,
+    )
+
+    attachment = WhatsAppMessageAttachment(
+        message=message,
+        attachment_type=message_type,
+        original_filename=filename,
+        mime_type=mime_type,
+        file_size=len(raw),
+        width=_whatsapp_media_positive_int(payload.get("media_width")),
+        height=_whatsapp_media_positive_int(payload.get("media_height")),
+        duration_ms=_whatsapp_media_positive_int(payload.get("media_duration_ms")),
+        provider_media_id=str(payload.get("media_id") or payload.get("external_message_id") or "")[:255],
+        sha256=digest,
+        metadata={
+            "source": "whatsapp_session_gateway",
+            "caption": str(payload.get("body") or ""),
+        },
+    )
+    attachment.file.save(filename, ContentFile(raw), save=False)
+    attachment.save()
+    return attachment
+
+
+def serialize_whatsapp_inbox_attachment(attachment) -> dict:
+    if attachment.message.scope == "SYSTEM":
+        download_url = f"/api/system/whatsapp/inbox/attachments/{attachment.id}/media/"
+    else:
+        download_url = f"/api/company/whatsapp/attachments/{attachment.id}/media/"
+
+    return {
+        "id": attachment.id,
+        "message_id": attachment.message_id,
+        "attachment_type": attachment.attachment_type,
+        "original_filename": attachment.original_filename,
+        "mime_type": attachment.mime_type,
+        "file_size": attachment.file_size,
+        "width": attachment.width,
+        "height": attachment.height,
+        "duration_ms": attachment.duration_ms,
+        "provider_media_id": attachment.provider_media_id,
+        "sha256": attachment.sha256,
+        "download_url": download_url,
+        "metadata": attachment.metadata or {},
+        "created_at": attachment.created_at.isoformat() if attachment.created_at else None,
+    }
+
+
+def _serialize_whatsapp_inbox_reply_reference(message) -> dict | None:
+    reply_to = getattr(message, "reply_to", None)
+    if reply_to is None:
+        return None
+
+    attachment = reply_to.attachments.first()
+    return {
+        "id": reply_to.id,
+        "direction": reply_to.direction,
+        "message_type": reply_to.message_type,
+        "body": reply_to.body,
+        "external_message_id": reply_to.external_message_id,
+        "attachment": (
+            {
+                "id": attachment.id,
+                "attachment_type": attachment.attachment_type,
+                "original_filename": attachment.original_filename,
+                "mime_type": attachment.mime_type,
+            }
+            if attachment is not None
+            else None
+        ),
+    }
+
+
 def serialize_whatsapp_inbox_message(message) -> dict:
     return {
         "id": message.id,
@@ -1262,12 +1429,18 @@ def serialize_whatsapp_inbox_message(message) -> dict:
         "message_type": message.message_type,
         "body": message.body,
         "external_message_id": message.external_message_id,
+        "reply_to_message_id": message.reply_to_id,
+        "reply_to": _serialize_whatsapp_inbox_reply_reference(message),
         "provider": message.provider,
         "provider_response": message.provider_response or {},
         "sent_by_id": message.sent_by_id,
         "received_at": message.received_at.isoformat() if message.received_at else None,
         "sent_at": message.sent_at.isoformat() if message.sent_at else None,
         "metadata": message.metadata or {},
+        "attachments": [
+            serialize_whatsapp_inbox_attachment(item)
+            for item in message.attachments.all()
+        ],
         "created_at": message.created_at.isoformat() if message.created_at else None,
         "updated_at": message.updated_at.isoformat() if message.updated_at else None,
     }
@@ -1348,7 +1521,7 @@ def _resolve_company_whatsapp_setting_by_session_name(session_name: str):
         .filter(company_id=int(match.group(1)))
         .first()
     )
-def record_company_whatsapp_incoming_message(payload: dict, *, setting=None) -> dict:
+def record_company_whatsapp_incoming_message(payload: dict, *, setting=None, media_file=None) -> dict:
     """
     Record inbound WhatsApp Gateway message into the matching company inbox.
     Idempotent by company + session_name + message_id.
@@ -1404,6 +1577,8 @@ def record_company_whatsapp_incoming_message(payload: dict, *, setting=None) -> 
         or payload.get("message_body")
         or ""
     )
+    message_type = str(payload.get("message_type") or "TEXT").upper()[:30] or "TEXT"
+    sanitized_payload = _sanitize_whatsapp_gateway_payload(payload)
     push_name = str(payload.get("push_name") or payload.get("pushName") or "").strip()
     display_name = str(
         payload.get("display_name")
@@ -1425,7 +1600,7 @@ def record_company_whatsapp_incoming_message(payload: dict, *, setting=None) -> 
                 "event_type": str(payload.get("event_type") or "message.incoming"),
                 "status": "RECEIVED",
                 "external_message_id": message_id,
-                "payload": payload,
+                "payload": sanitized_payload,
             },
         )
         existing_message = None
@@ -1536,11 +1711,11 @@ def record_company_whatsapp_incoming_message(payload: dict, *, setting=None) -> 
             session_name=session_name,
             direction="INBOUND",
             status="RECEIVED",
-            message_type="TEXT",
+            message_type=message_type,
             body=body,
             external_message_id=message_id,
             provider="WHATSAPP_GATEWAY",
-            provider_response=payload,
+            provider_response=sanitized_payload,
             received_at=message_at,
             metadata={
                 "source": "company_incoming_webhook",
@@ -1548,6 +1723,11 @@ def record_company_whatsapp_incoming_message(payload: dict, *, setting=None) -> 
                 "from_jid": from_jid,
                 "normalized_phone": normalized_phone,
             },
+        )
+        _persist_whatsapp_inbox_attachment(
+            message=message,
+            payload=payload,
+            media_file=media_file,
         )
         conversation.last_message_preview = body[:500]
         conversation.last_message_at = message_at
@@ -1576,7 +1756,7 @@ def record_company_whatsapp_incoming_message(payload: dict, *, setting=None) -> 
         "message_record": serialize_whatsapp_inbox_message(message),
         "webhook_event_id": webhook_event.id,
     }
-def record_whatsapp_incoming_message(payload: dict) -> dict:
+def record_whatsapp_incoming_message(payload: dict, *, media_file=None) -> dict:
     """
     Dispatch inbound Gateway webhook to company inbox when session_name belongs
     to a company session, otherwise keep existing system inbox behavior.
@@ -1586,10 +1766,17 @@ def record_whatsapp_incoming_message(payload: dict) -> dict:
     session_name = str(payload.get("session_name") or "").strip()
     setting = _resolve_company_whatsapp_setting_by_session_name(session_name)
     if setting is not None:
-        return record_company_whatsapp_incoming_message(payload, setting=setting)
-    return record_system_whatsapp_incoming_message(payload)
+        return record_company_whatsapp_incoming_message(
+            payload,
+            setting=setting,
+            media_file=media_file,
+        )
+    return record_system_whatsapp_incoming_message(
+        payload,
+        media_file=media_file,
+    )
 
-def record_system_whatsapp_incoming_message(payload: dict) -> dict:
+def record_system_whatsapp_incoming_message(payload: dict, *, media_file=None) -> dict:
     """
     Record an inbound WhatsApp Gateway message into the system inbox.
     This function is idempotent by session_name + message_id/event_uid.
@@ -1630,6 +1817,7 @@ def record_system_whatsapp_incoming_message(payload: dict) -> dict:
         or payload.get("message_body")
         or ""
     )
+    sanitized_payload = _sanitize_whatsapp_gateway_payload(payload)
     push_name = str(payload.get("push_name") or payload.get("pushName") or "").strip()
     display_name = str(payload.get("display_name") or payload.get("name") or push_name or normalized_phone).strip()
     event_uid = str(payload.get("event_uid") or _whatsapp_inbox_event_uid(payload)).strip()
@@ -1646,7 +1834,7 @@ def record_system_whatsapp_incoming_message(payload: dict) -> dict:
                 "event_type": str(payload.get("event_type") or "message.incoming"),
                 "status": "RECEIVED",
                 "external_message_id": message_id,
-                "payload": payload,
+                "payload": sanitized_payload,
             },
         )
         existing_message = None
@@ -1744,13 +1932,18 @@ def record_system_whatsapp_incoming_message(payload: dict) -> dict:
             body=body,
             external_message_id=message_id,
             provider="WHATSAPP_GATEWAY",
-            provider_response=payload,
+            provider_response=sanitized_payload,
             received_at=message_at,
             metadata={
                 "source": "gateway",
                 "event_uid": event_uid,
                 "raw_from_jid": from_jid,
             },
+        )
+        _persist_whatsapp_inbox_attachment(
+            message=message,
+            payload=payload,
+            media_file=media_file,
         )
         conversation.last_message_preview = body[:500]
         conversation.last_message_at = message_at
@@ -1787,12 +1980,23 @@ def record_system_whatsapp_incoming_message(payload: dict) -> dict:
 # ============================================================
 # WhatsApp Inbox Reply Services
 # ============================================================
-def _post_system_whatsapp_gateway_text(*, session_name: str, body: str, to_phone: str = "", to_jid: str = "") -> dict:
+def _post_system_whatsapp_gateway_text(
+    *,
+    session_name: str,
+    body: str,
+    to_phone: str = "",
+    to_jid: str = "",
+    quoted_external_message_id: str = "",
+    quoted_from_me: bool = False,
+    quoted_body: str = "",
+    quoted_message_type: str = "TEXT",
+) -> dict:
     import json
     import os
     import urllib.error
     import urllib.request
     from django.conf import settings
+
     gateway_url = str(
         getattr(settings, "WHATSAPP_SESSION_GATEWAY_URL", "")
         or os.environ.get("WHATSAPP_SESSION_GATEWAY_URL", "")
@@ -1813,6 +2017,10 @@ def _post_system_whatsapp_gateway_text(*, session_name: str, body: str, to_phone
         "to_phone": to_phone or "",
         "to_jid": to_jid or "",
         "body": body,
+        "quoted_external_message_id": quoted_external_message_id or "",
+        "quoted_from_me": bool(quoted_from_me),
+        "quoted_body": quoted_body or "",
+        "quoted_message_type": str(quoted_message_type or "TEXT").upper(),
     }
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(
@@ -1852,6 +2060,162 @@ def _post_system_whatsapp_gateway_text(*, session_name: str, body: str, to_phone
             "message": str(exc),
             "error_message": str(exc),
         }
+
+def _post_system_whatsapp_gateway_media(
+    *,
+    session_name: str,
+    media_file,
+    message_type: str,
+    body: str = "",
+    to_phone: str = "",
+    to_jid: str = "",
+    quoted_external_message_id: str = "",
+    quoted_from_me: bool = False,
+    quoted_body: str = "",
+    quoted_message_type: str = "TEXT",
+) -> dict:
+    import json
+    import os
+    import urllib.error
+    import urllib.request
+    import uuid
+    from django.conf import settings
+
+    if media_file is None:
+        raise ValueError("WhatsApp media file is required.")
+
+    message_type = str(message_type or "").strip().upper()
+    allowed_types = {"IMAGE", "AUDIO", "VIDEO", "DOCUMENT"}
+    if message_type not in allowed_types:
+        raise ValueError("Unsupported outbound WhatsApp media type.")
+
+    mime_type = str(
+        getattr(media_file, "content_type", "")
+        or "application/octet-stream"
+    ).split(";", 1)[0].strip().lower()
+
+    allowed_prefixes = WHATSAPP_INBOX_MEDIA_ALLOWED_MIME_PREFIXES.get(message_type) or ()
+    if not any(
+        mime_type == prefix or mime_type.startswith(prefix)
+        for prefix in allowed_prefixes
+    ):
+        raise ValueError(f"Unsupported MIME type for {message_type}: {mime_type}")
+
+    declared_size = _whatsapp_media_positive_int(getattr(media_file, "size", None))
+    if declared_size is not None and declared_size > WHATSAPP_INBOX_MEDIA_MAX_BYTES:
+        raise ValueError("WhatsApp media exceeds the 16 MB inbox limit.")
+
+    raw = media_file.read()
+    try:
+        media_file.seek(0)
+    except Exception:
+        pass
+
+    if not raw:
+        raise ValueError("WhatsApp media payload is empty.")
+    if len(raw) > WHATSAPP_INBOX_MEDIA_MAX_BYTES:
+        raise ValueError("WhatsApp media exceeds the 16 MB inbox limit.")
+
+    filename = _safe_whatsapp_media_filename(
+        str(getattr(media_file, "name", "") or ""),
+        message_type=message_type,
+        mime_type=mime_type,
+    )
+
+    gateway_url = str(
+        getattr(settings, "WHATSAPP_SESSION_GATEWAY_URL", "")
+        or os.environ.get("WHATSAPP_SESSION_GATEWAY_URL", "")
+        or "http://127.0.0.1:3100"
+    ).rstrip("/")
+    timeout = int(
+        getattr(settings, "WHATSAPP_SESSION_GATEWAY_TIMEOUT", None)
+        or os.environ.get("WHATSAPP_SESSION_GATEWAY_TIMEOUT", "")
+        or 35
+    )
+    token = str(
+        getattr(settings, "WHATSAPP_SESSION_GATEWAY_TOKEN", "")
+        or os.environ.get("WHATSAPP_SESSION_GATEWAY_TOKEN", "")
+        or ""
+    ).strip()
+
+    boundary = f"----PrimeyWhatsApp{uuid.uuid4().hex}"
+    chunks: list[bytes] = []
+
+    def add_field(name: str, value) -> None:
+        chunks.extend(
+            [
+                f"--{boundary}\r\n".encode("utf-8"),
+                (f'Content-Disposition: form-data; name="{name}"' "\r\n\r\n").encode("utf-8"),
+                str(value or "").encode("utf-8"),
+                b"\r\n",
+            ]
+        )
+
+    add_field("session_name", session_name or "Mhamcloud-system-session")
+    add_field("to_phone", to_phone or "")
+    add_field("to_jid", to_jid or "")
+    add_field("body", body or "")
+    add_field("message_type", message_type)
+    add_field("quoted_external_message_id", quoted_external_message_id or "")
+    add_field("quoted_from_me", "true" if quoted_from_me else "false")
+    add_field("quoted_body", quoted_body or "")
+    add_field("quoted_message_type", str(quoted_message_type or "TEXT").upper())
+
+    chunks.extend(
+        [
+            f"--{boundary}\r\n".encode("utf-8"),
+            (
+                f'Content-Disposition: form-data; name="media"; '
+                f'filename="{filename}"\r\n'
+            ).encode("utf-8"),
+            f"Content-Type: {mime_type}\r\n\r\n".encode("utf-8"),
+            raw,
+            b"\r\n",
+            f"--{boundary}--\r\n".encode("utf-8"),
+        ]
+    )
+
+    data = b"".join(chunks)
+    request = urllib.request.Request(
+        f"{gateway_url}/messages/send-media",
+        data=data,
+        method="POST",
+        headers={
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "Content-Length": str(len(data)),
+            **({"Authorization": f"Bearer {token}"} if token else {}),
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            raw_response = response.read().decode("utf-8") or "{}"
+            parsed = json.loads(raw_response)
+            if isinstance(parsed, dict):
+                return parsed
+            return {"success": False, "message": "Unexpected gateway response.", "raw": parsed}
+    except urllib.error.HTTPError as exc:
+        raw_response = exc.read().decode("utf-8", errors="replace")
+        try:
+            parsed = json.loads(raw_response or "{}")
+        except json.JSONDecodeError:
+            parsed = {"raw": raw_response}
+        return {
+            "success": False,
+            "provider_status": "gateway_http_error",
+            "message": str(exc),
+            "error_message": str(exc),
+            "status_code": exc.code,
+            "response": parsed,
+        }
+    except Exception as exc:
+        return {
+            "success": False,
+            "provider_status": "gateway_error",
+            "message": str(exc),
+            "error_message": str(exc),
+        }
+
 def _conversation_reply_target(conversation) -> dict:
     contact = conversation.contact
     target_jid = (
@@ -1879,22 +2243,94 @@ def _conversation_reply_target(conversation) -> dict:
         "to_jid": str(target_jid or "").strip(),
         "to_phone": str(target_phone or "").strip(),
     }
-def send_system_whatsapp_inbox_reply(*, conversation, body: str, user=None) -> dict:
+def send_system_whatsapp_inbox_reply(
+    *,
+    conversation,
+    body: str = "",
+    user=None,
+    media_file=None,
+    message_type: str = "",
+    reply_to_message=None,
+) -> dict:
     from django.utils import timezone
+
     body = str(body or "").strip()
-    if not body:
-        raise ValueError("Reply body is required.")
     target = _conversation_reply_target(conversation)
+
     if not target["to_jid"] and not target["to_phone"]:
         raise ValueError("Conversation has no WhatsApp reply target.")
-    gateway_payload = _post_system_whatsapp_gateway_text(
-        session_name=conversation.session_name,
-        body=body,
-        to_phone=target["to_phone"],
-        to_jid=target["to_jid"],
-    )
+
+    resolved_type = str(message_type or "").strip().upper()
+
+    if reply_to_message is not None:
+        if getattr(reply_to_message, "conversation_id", None) != conversation.id:
+            raise ValueError("Quoted message must belong to the same conversation.")
+        quoted_external_message_id = str(
+            getattr(reply_to_message, "external_message_id", "") or ""
+        ).strip()
+        if not quoted_external_message_id:
+            raise ValueError("Quoted message has no WhatsApp external message ID.")
+        quoted_from_me = (
+            str(getattr(reply_to_message, "direction", "") or "").upper() == "OUTBOUND"
+        )
+        quoted_body = str(getattr(reply_to_message, "body", "") or "")
+        quoted_message_type = str(
+            getattr(reply_to_message, "message_type", "") or "TEXT"
+        ).upper()
+    else:
+        quoted_external_message_id = ""
+        quoted_from_me = False
+        quoted_body = ""
+        quoted_message_type = "TEXT"
+
+    if media_file is not None:
+        mime_type = str(
+            getattr(media_file, "content_type", "")
+            or "application/octet-stream"
+        ).split(";", 1)[0].strip().lower()
+
+        if not resolved_type:
+            if mime_type.startswith("image/"):
+                resolved_type = "IMAGE"
+            elif mime_type.startswith("audio/") or mime_type == "application/ogg":
+                resolved_type = "AUDIO"
+            elif mime_type.startswith("video/"):
+                resolved_type = "VIDEO"
+            else:
+                resolved_type = "DOCUMENT"
+
+        gateway_payload = _post_system_whatsapp_gateway_media(
+            session_name=conversation.session_name,
+            media_file=media_file,
+            message_type=resolved_type,
+            body=body,
+            to_phone=target["to_phone"],
+            to_jid=target["to_jid"],
+            quoted_external_message_id=quoted_external_message_id,
+            quoted_from_me=quoted_from_me,
+            quoted_body=quoted_body,
+            quoted_message_type=quoted_message_type,
+        )
+    else:
+        if not body:
+            raise ValueError("Reply body is required.")
+
+        resolved_type = "TEXT"
+        gateway_payload = _post_system_whatsapp_gateway_text(
+            session_name=conversation.session_name,
+            body=body,
+            to_phone=target["to_phone"],
+            to_jid=target["to_jid"],
+            quoted_external_message_id=quoted_external_message_id,
+            quoted_from_me=quoted_from_me,
+            quoted_body=quoted_body,
+            quoted_message_type=quoted_message_type,
+        )
+
     success = bool(gateway_payload.get("success"))
     now = timezone.now()
+    display_body = body or (f"[{resolved_type}]" if media_file is not None else "")
+
     message = conversation.messages.create(
         contact=conversation.contact,
         company=conversation.company,
@@ -1902,28 +2338,48 @@ def send_system_whatsapp_inbox_reply(*, conversation, body: str, user=None) -> d
         session_name=conversation.session_name,
         direction="OUTBOUND",
         status="SENT" if success else "FAILED",
-        message_type="TEXT",
-        body=body,
+        message_type=resolved_type,
+        body=display_body,
+        reply_to=reply_to_message,
         external_message_id=str(
             gateway_payload.get("message_id")
+            or gateway_payload.get("external_message_id")
             or gateway_payload.get("provider_message_id")
             or gateway_payload.get("id")
             or ""
         ),
         provider="WHATSAPP_GATEWAY",
-        provider_response={
-            **gateway_payload,
-            "reply_target": target,
-        },
+        provider_response={**gateway_payload, "reply_target": target},
         sent_by=user if getattr(user, "is_authenticated", False) else None,
         sent_at=now if success else None,
         metadata={
             "source": "system_inbox_reply",
             "target_jid": target["to_jid"],
             "target_phone": target["to_phone"],
+            "reply_to_message_id": getattr(reply_to_message, "id", None),
+            "quoted_external_message_id": quoted_external_message_id,
         },
     )
-    conversation.last_message_preview = body[:500]
+
+    if media_file is not None:
+        try:
+            media_file.seek(0)
+        except Exception:
+            pass
+        _persist_whatsapp_inbox_attachment(
+            message=message,
+            payload={
+                "message_type": resolved_type,
+                "body": body,
+                "media_mime_type": getattr(media_file, "content_type", ""),
+                "media_filename": getattr(media_file, "name", ""),
+                "media_size": getattr(media_file, "size", None),
+                "media_id": message.external_message_id,
+            },
+            media_file=media_file,
+        )
+
+    conversation.last_message_preview = display_body[:500]
     conversation.last_message_at = now
     conversation.unread_count = 0
     conversation.status = "OPEN"
@@ -1938,6 +2394,7 @@ def send_system_whatsapp_inbox_reply(*, conversation, body: str, user=None) -> d
             "updated_at",
         ]
     )
+
     return {
         "success": success,
         "message": (
@@ -1951,12 +2408,6 @@ def send_system_whatsapp_inbox_reply(*, conversation, body: str, user=None) -> d
         "reply": serialize_whatsapp_inbox_message(message),
     }
 
-# ============================================================
-# Company WhatsApp Connection Services V1.0
-# ============================================================
-# ============================================================
-# Company WhatsApp Connection Services V1.0
-# ============================================================
 def _company_safe_text(value, fallback: str = "") -> str:
     if value is None:
         return fallback

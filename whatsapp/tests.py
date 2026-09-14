@@ -1585,3 +1585,429 @@ class CompanyWhatsAppIncomingWebhookRoutingTests(TestCase):
         message = WhatsAppConversationMessage.objects.get()
         self.assertEqual(message.scope, "SYSTEM")
         self.assertIsNone(message.company_id)
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
+import tempfile
+
+
+class WhatsAppMediaFoundationSerializationTests(TestCase):
+    def test_gateway_payload_sanitizer_drops_uploaded_file_objects(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from whatsapp.services import _sanitize_whatsapp_gateway_payload
+
+        media = SimpleUploadedFile(
+            "photo.jpg",
+            b"fake-jpeg-bytes",
+            content_type="image/jpeg",
+        )
+        payload = {
+            "message_type": "IMAGE",
+            "media": media,
+            "metadata": {"source": "gateway"},
+        }
+
+        clean = _sanitize_whatsapp_gateway_payload(payload)
+
+        self.assertEqual(clean["message_type"], "IMAGE")
+        self.assertEqual(clean["metadata"], {"source": "gateway"})
+        self.assertNotIn("media", clean)
+
+
+class WhatsAppMediaFoundationTests(TestCase):
+    def test_system_image_creates_attachment_and_serializer_contract(self):
+        from whatsapp.models import WhatsAppMessageAttachment
+        from whatsapp.services import record_system_whatsapp_incoming_message
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                media = SimpleUploadedFile(
+                    "photo.jpg",
+                    b"fake-jpeg-bytes",
+                    content_type="image/jpeg",
+                )
+                result = record_system_whatsapp_incoming_message(
+                    {
+                        "session_name": "Mhamcloud-system-session",
+                        "from_jid": "966501111111@s.whatsapp.net",
+                        "message_id": "MEDIA-SYSTEM-IMAGE-001",
+                        "body": "صورة اختبار",
+                        "message_type": "IMAGE",
+                        "media_mime_type": "image/jpeg",
+                        "media_filename": "photo.jpg",
+                        "media_size": len(b"fake-jpeg-bytes"),
+                    },
+                    media_file=media,
+                )
+                self.assertTrue(result["success"])
+                attachment = WhatsAppMessageAttachment.objects.get()
+                self.assertEqual(attachment.attachment_type, "IMAGE")
+                self.assertEqual(attachment.mime_type, "image/jpeg")
+                self.assertEqual(attachment.file_size, len(b"fake-jpeg-bytes"))
+                self.assertEqual(len(result["message"]["attachments"]), 1)
+
+    def test_company_incoming_preserves_media_message_type(self):
+        from whatsapp.models import WhatsAppConversationMessage
+        from whatsapp.services import get_or_create_company_whatsapp_connection, record_whatsapp_incoming_message
+
+        company = Company.objects.create(
+            name="Media Company",
+            company_code="WA-MEDIA-001",
+            is_active=True,
+        )
+        get_or_create_company_whatsapp_connection(company=company)
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                media = SimpleUploadedFile(
+                    "sticker.webp",
+                    b"fake-webp-bytes",
+                    content_type="image/webp",
+                )
+                result = record_whatsapp_incoming_message(
+                    {
+                        "session_name": f"company-{company.id}-whatsapp",
+                        "from_jid": "966502222222@s.whatsapp.net",
+                        "message_id": "MEDIA-COMPANY-STICKER-001",
+                        "body": "[STICKER]",
+                        "message_type": "STICKER",
+                        "media_mime_type": "image/webp",
+                        "media_filename": "sticker.webp",
+                        "media_size": len(b"fake-webp-bytes"),
+                    },
+                    media_file=media,
+                )
+                self.assertTrue(result["success"])
+                message = WhatsAppConversationMessage.objects.get()
+                self.assertEqual(message.message_type, "STICKER")
+                self.assertEqual(message.attachments.count(), 1)
+
+    def test_media_rejects_mismatched_mime_type(self):
+        from whatsapp.services import record_system_whatsapp_incoming_message
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                media = SimpleUploadedFile(
+                    "payload.exe",
+                    b"unsafe",
+                    content_type="application/octet-stream",
+                )
+                with self.assertRaises(ValueError):
+                    record_system_whatsapp_incoming_message(
+                        {
+                            "session_name": "Mhamcloud-system-session",
+                            "from_jid": "966503333333@s.whatsapp.net",
+                            "message_id": "MEDIA-BAD-MIME-001",
+                            "body": "[IMAGE]",
+                            "message_type": "IMAGE",
+                            "media_mime_type": "application/octet-stream",
+                        },
+                        media_file=media,
+                    )
+
+
+# V2-12D9 regression: Inbox reads and mutations must use the canonical
+# System WhatsApp view/manage permission contracts.
+class SystemWhatsAppInboxPermissionContractTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from rest_framework.test import APIClient
+
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username="system_whatsapp_inbox_permission_user",
+            email="system_whatsapp_inbox_permission_user@example.com",
+            password="StrongPass123!",
+            is_staff=True,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def test_inbox_permission_helpers_delegate_to_canonical_contract(self):
+        from unittest.mock import patch
+        from api.system.whatsapp.views import (
+            _system_whatsapp_inbox_can_manage,
+            _system_whatsapp_inbox_can_view,
+        )
+
+        with patch("api.system.whatsapp.views._can_view", return_value=True) as can_view:
+            self.assertTrue(_system_whatsapp_inbox_can_view(self.user))
+            can_view.assert_called_once_with(self.user)
+
+        with patch("api.system.whatsapp.views._can_manage", return_value=False) as can_manage:
+            self.assertFalse(_system_whatsapp_inbox_can_manage(self.user))
+            can_manage.assert_called_once_with(self.user)
+
+    def test_view_only_contract_can_read_inbox_but_cannot_reply(self):
+        from unittest.mock import patch
+
+        with patch(
+            "api.system.whatsapp.views._can_view",
+            return_value=True,
+        ), patch(
+            "api.system.whatsapp.views._can_manage",
+            return_value=False,
+        ):
+            list_response = self.client.get("/api/system/whatsapp/inbox/")
+            self.assertEqual(list_response.status_code, 200)
+            self.assertTrue(list_response.data["success"])
+
+            reply_response = self.client.post(
+                "/api/system/whatsapp/inbox/999999/reply/",
+                {"body": "This must remain management-protected."},
+                format="json",
+            )
+            self.assertEqual(reply_response.status_code, 403)
+            self.assertFalse(reply_response.data["success"])
+            self.assertIn("permission", reply_response.data["errors"])
+
+    def test_primey_super_admin_profile_can_manage_without_django_superuser(self):
+        from accounts.models import SystemRole, UserProfile, UserProfileStatus, WorkspaceType
+        from api.system.whatsapp.views import _can_manage
+
+        self.user.is_staff = False
+        self.user.is_superuser = False
+        self.user.save(update_fields=["is_staff", "is_superuser"])
+        UserProfile.objects.create(
+            user=self.user,
+            display_name="Primey Super Admin",
+            status=UserProfileStatus.ACTIVE,
+            default_workspace=WorkspaceType.SYSTEM,
+            system_role=SystemRole.SUPER_ADMIN,
+            is_system_user=True,
+        )
+        self.assertFalse(self.user.is_superuser)
+        self.assertFalse(self.user.is_staff)
+        self.assertTrue(_can_manage(self.user))
+
+    def test_user_without_view_contract_cannot_read_inbox(self):
+        from unittest.mock import patch
+
+        with patch("api.system.whatsapp.views._can_view", return_value=False):
+            response = self.client.get("/api/system/whatsapp/inbox/")
+            self.assertEqual(response.status_code, 403)
+            self.assertFalse(response.data["success"])
+            self.assertIn("permission", response.data["errors"])
+
+
+
+class SystemWhatsAppUnifiedHistoryTests(TestCase):
+    def setUp(self):
+        from rest_framework.test import APIClient
+        self.user = User.objects.create_superuser(
+            username="system_whatsapp_history_admin",
+            email="system_whatsapp_history_admin@example.com",
+            password="StrongPass123!",
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def test_messages_list_includes_real_system_inbox_chat_messages(self):
+        from whatsapp.services import record_system_whatsapp_incoming_message
+
+        created = record_system_whatsapp_incoming_message(
+            {
+                "session_name": "Mhamcloud-system-session",
+                "from_jid": "966501111222@s.whatsapp.net",
+                "from_phone": "0501111222",
+                "push_name": "History Contact",
+                "message_id": "HISTORY-INBOUND-001",
+                "body": "رسالة محادثة حقيقية يجب أن تظهر في سجل الرسائل.",
+            }
+        )
+        self.assertTrue(created["success"])
+
+        response = self.client.get("/api/system/whatsapp/messages/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["history_source"], "UNIFIED")
+
+        target = next(
+            item
+            for item in response.data["results"]
+            if item.get("provider_message_id") == "HISTORY-INBOUND-001"
+        )
+        self.assertEqual(target["source_record_type"], "INBOX_MESSAGE")
+        self.assertEqual(target["direction"], "INBOUND")
+        self.assertEqual(target["status"], "RECEIVED")
+        self.assertEqual(target["message_type"], "TEXT")
+        self.assertIn("رسالة محادثة حقيقية", target["message_body"])
+        self.assertEqual(target["recipient_name"], "History Contact")
+
+    def test_messages_list_keeps_legacy_logs_and_avoids_duplicate_external_id(self):
+        from whatsapp.services import create_message_log, record_system_whatsapp_incoming_message
+
+        company = Company.objects.create(
+            name="Unified History Legacy Company",
+            company_code="WA-HISTORY-LEGACY",
+            is_active=True,
+        )
+
+        record_system_whatsapp_incoming_message(
+            {
+                "session_name": "Mhamcloud-system-session",
+                "from_jid": "966503333444@s.whatsapp.net",
+                "from_phone": "0503333444",
+                "push_name": "Duplicate Contact",
+                "message_id": "HISTORY-DUP-001",
+                "body": "Unified duplicate candidate.",
+            }
+        )
+
+        duplicate_log = create_message_log(
+            company=company,
+            recipient_phone="0503333444",
+            recipient_name="Duplicate Contact",
+            message_body="Legacy copy of unified duplicate.",
+            created_by=self.user,
+        )
+        duplicate_log.provider_message_id = "HISTORY-DUP-001"
+        duplicate_log.status = "SENT"
+        duplicate_log.save(update_fields=["provider_message_id", "status", "updated_at"])
+
+        legacy_only = create_message_log(
+            company=company,
+            recipient_phone="0505555666",
+            recipient_name="Legacy Only",
+            message_body="Legacy-only audit row.",
+            created_by=self.user,
+        )
+
+        response = self.client.get("/api/system/whatsapp/messages/")
+        self.assertEqual(response.status_code, 200)
+        rows = response.data["results"]
+
+        matching_external = [
+            item for item in rows
+            if item.get("provider_message_id") == "HISTORY-DUP-001"
+        ]
+        self.assertEqual(len(matching_external), 1)
+        self.assertEqual(matching_external[0]["source_record_type"], "INBOX_MESSAGE")
+
+        legacy_ids = {
+            item.get("source_record_id")
+            for item in rows
+            if item.get("source_record_type") == "MESSAGE_LOG"
+        }
+        self.assertIn(legacy_only.id, legacy_ids)
+        self.assertNotIn(duplicate_log.id, legacy_ids)
+
+    def test_messages_list_filters_real_inbox_by_direction_and_status(self):
+        from whatsapp.services import record_system_whatsapp_incoming_message
+
+        record_system_whatsapp_incoming_message(
+            {
+                "session_name": "Mhamcloud-system-session",
+                "from_jid": "966507777888@s.whatsapp.net",
+                "message_id": "HISTORY-FILTER-001",
+                "body": "Inbound history filter row.",
+            }
+        )
+
+        response = self.client.get(
+            "/api/system/whatsapp/messages/?direction=INBOUND&status=RECEIVED"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertGreaterEqual(response.data["count"], 1)
+        self.assertTrue(
+            all(item["direction"] == "INBOUND" for item in response.data["results"])
+        )
+        self.assertTrue(
+            all(item["status"] == "RECEIVED" for item in response.data["results"])
+        )
+
+
+class SystemWhatsAppReplyQuoteContractTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from rest_framework.test import APIClient
+
+        User = get_user_model()
+        self.user = User.objects.create_superuser(
+            username="system_whatsapp_reply_quote_admin",
+            email="system_whatsapp_reply_quote_admin@example.com",
+            password="StrongPass123!",
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def _conversation_with_inbound(self, suffix="001"):
+        from whatsapp.models import WhatsAppConversation
+        from whatsapp.services import record_system_whatsapp_incoming_message
+
+        payload = record_system_whatsapp_incoming_message(
+            {
+                "session_name": "Mhamcloud-system-session",
+                "from_jid": f"96650123{suffix}@s.whatsapp.net",
+                "from_phone": f"96650123{suffix}",
+                "push_name": f"Quote Contact {suffix}",
+                "message_id": f"QUOTE-INBOUND-{suffix}",
+                "body": f"رسالة أصلية للاقتباس {suffix}",
+            }
+        )
+        conversation = WhatsAppConversation.objects.get(
+            id=payload["conversation"]["id"]
+        )
+        original = conversation.messages.get(
+            external_message_id=f"QUOTE-INBOUND-{suffix}"
+        )
+        return conversation, original
+
+    @patch("whatsapp.services._post_system_whatsapp_gateway_text")
+    def test_service_persists_reply_to_and_forwards_quote_contract(self, gateway):
+        from whatsapp.services import send_system_whatsapp_inbox_reply
+
+        conversation, original = self._conversation_with_inbound("001")
+        gateway.return_value = {
+            "success": True,
+            "message": "Message accepted by WhatsApp server.",
+            "message_id": "QUOTE-OUTBOUND-001",
+            "provider_status": "sent_to_whatsapp_server",
+        }
+
+        result = send_system_whatsapp_inbox_reply(
+            conversation=conversation,
+            body="هذا رد مقتبس.",
+            user=self.user,
+            reply_to_message=original,
+        )
+
+        self.assertTrue(result["success"])
+        reply = conversation.messages.get(
+            external_message_id="QUOTE-OUTBOUND-001"
+        )
+        self.assertEqual(reply.reply_to_id, original.id)
+        self.assertEqual(result["reply"]["reply_to_message_id"], original.id)
+        self.assertEqual(
+            result["reply"]["reply_to"]["external_message_id"],
+            "QUOTE-INBOUND-001",
+        )
+
+        kwargs = gateway.call_args.kwargs
+        self.assertEqual(
+            kwargs["quoted_external_message_id"],
+            "QUOTE-INBOUND-001",
+        )
+        self.assertFalse(kwargs["quoted_from_me"])
+        self.assertEqual(kwargs["quoted_body"], original.body)
+        self.assertEqual(kwargs["quoted_message_type"], "TEXT")
+
+    @patch("whatsapp.services._post_system_whatsapp_gateway_text")
+    def test_api_rejects_quote_from_another_conversation(self, gateway):
+        conversation_a, _original_a = self._conversation_with_inbound("002")
+        _conversation_b, original_b = self._conversation_with_inbound("003")
+
+        response = self.client.post(
+            f"/api/system/whatsapp/inbox/{conversation_a.id}/reply/",
+            {
+                "body": "يجب رفض هذا الاقتباس.",
+                "reply_to_message_id": original_b.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.data["success"])
+        self.assertIn("reply_to_message_id", response.data["errors"])
+        gateway.assert_not_called()
