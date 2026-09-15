@@ -150,7 +150,7 @@ def companies_list(request):
 def company_detail(request, business_id):
     if not allowed(request.user, READ_PERMISSIONS):
         return forbidden()
-    row = next((x for x in companies_payload() if x["business_id"] == str(business_id)), None)
+    row = next((x for x in companies_payload(include_domains=True) if x["business_id"] == str(business_id)), None)
     if row is None:
         return JsonResponse({"ok": False, "message": "MhamCloud company was not found."}, status=404)
     return JsonResponse({"ok": True, "data": row})

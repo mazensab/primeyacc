@@ -299,7 +299,7 @@ def domain_summary(business_id: str, status: str) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda x: x["domain"])
 
 
-def companies_payload() -> list[dict[str, Any]]:
+def companies_payload(*, include_domains: bool = False) -> list[dict[str, Any]]:
     mapping = company_map()
     states = state_by_business()
     state_root = current_state()
@@ -314,8 +314,8 @@ def companies_payload() -> list[dict[str, Any]]:
             status = "BASELINE_SYNCED"
         company = mapping.get(bid)
         err = safe_error(state.get("error"))
-        domains = domain_summary(bid, status)
-        if status == "FAILED" and not domains:
+        domains = domain_summary(bid, status) if include_domains else []
+        if include_domains and status == "FAILED" and not domains:
             domains = [{"domain": "GENERAL", "status": "FAILED", "source_count": None, "error": err}]
         rows.append(
             {
@@ -324,8 +324,8 @@ def companies_payload() -> list[dict[str, Any]]:
                 "company_name": base["company_name"] or getattr(company, "display_name", "") or "",
                 "company_code": getattr(company, "company_code", "") if company else "",
                 "status": status,
-                "domain_count": len(domains),
-                "successful_domain_count": sum(x.get("status") == "SUCCESS" for x in domains),
+                "domain_count": len(domains) if include_domains else 0,
+                "successful_domain_count": sum(x.get("status") == "SUCCESS" for x in domains) if include_domains else 0,
                 "domain_statuses": domains,
                 "safe_error_code": err.split(":", 1)[0][:120] if err else "",
                 "safe_error_message": err,
