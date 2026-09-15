@@ -175,6 +175,7 @@ def company_whatsapp_conversation_messages(request, conversation_id: int):
     messages = (
         conversation.messages
         .select_related("contact", "sent_by")
+        .prefetch_related("attachments")
         .order_by("created_at", "id")
     )
     if conversation.unread_count:
@@ -195,6 +196,48 @@ company_whatsapp_conversation_messages.required_company_permissions = [
     "company.whatsapp.messages.view",
     "company.whatsapp.messages.manage",
 ]
+@api_view(["GET"])
+@permission_classes([HasAnyCompanyPermission])
+def company_whatsapp_attachment_media(request, attachment_id: int):
+    from django.http import FileResponse
+    from whatsapp.models import WhatsAppMessageAttachment
+
+    company, error = _company_or_403(request)
+    if error:
+        return error
+
+    attachment = (
+        WhatsAppMessageAttachment.objects
+        .select_related("message")
+        .filter(
+            id=attachment_id,
+            message__scope=WhatsAppInboxScope.COMPANY,
+            message__company=company,
+        )
+        .first()
+    )
+    if attachment is None or not attachment.file:
+        return Response(
+            {"success": False, "message": "WhatsApp media was not found."},
+            status=404,
+        )
+
+    response = FileResponse(
+        attachment.file.open("rb"),
+        content_type=attachment.mime_type or "application/octet-stream",
+        as_attachment=False,
+        filename=attachment.original_filename or "whatsapp-media",
+    )
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+company_whatsapp_attachment_media.required_company_permissions = [
+    "company.whatsapp.messages.view",
+    "company.whatsapp.messages.manage",
+]
+
+
 @api_view(["POST"])
 @permission_classes([HasAnyCompanyPermission])
 def company_whatsapp_conversation_reply(request, conversation_id: int):

@@ -17,6 +17,7 @@ from .views import (
     system_whatsapp_inbox_detail,
     system_whatsapp_inbox_list,
     system_whatsapp_inbox_messages,
+    system_whatsapp_inbox_attachment_media,
     system_whatsapp_inbox_reply,
     system_whatsapp_message_detail,
     system_whatsapp_messages_list,
@@ -44,6 +45,7 @@ urlpatterns = [
     path("inbox/", system_whatsapp_inbox_list, name="inbox-list"),
     path("inbox/<int:conversation_id>/", system_whatsapp_inbox_detail, name="inbox-detail"),
     path("inbox/<int:conversation_id>/messages/", system_whatsapp_inbox_messages, name="inbox-messages"),
+    path("inbox/attachments/<int:attachment_id>/media/", system_whatsapp_inbox_attachment_media, name="inbox-attachment-media"),
     path("inbox/<int:conversation_id>/reply/", system_whatsapp_inbox_reply, name="inbox-reply"),
     path("inbox/webhook/", system_whatsapp_inbox_webhook, name="inbox-webhook"),
 ]

@@ -19,6 +19,7 @@ from .connection import (
 )
 
 from .inbox import (
+    company_whatsapp_attachment_media,
     company_whatsapp_conversation_detail,
     company_whatsapp_conversation_messages,
     company_whatsapp_conversation_reply,
@@ -59,6 +60,7 @@ urlpatterns = [
     path("conversations/", company_whatsapp_conversations_list, name="conversations-list"),
     path("conversations/<int:conversation_id>/", company_whatsapp_conversation_detail, name="conversations-detail"),
     path("conversations/<int:conversation_id>/messages/", company_whatsapp_conversation_messages, name="conversations-messages"),
+    path("attachments/<int:attachment_id>/media/", company_whatsapp_attachment_media, name="attachment-media"),
     path("conversations/<int:conversation_id>/reply/", company_whatsapp_conversation_reply, name="conversations-reply"),
     # Backward-compatible aliases for older inbox bundle while the browser refreshes.
     path("messages/<int:conversation_id>/messages/", company_whatsapp_conversation_messages, name="messages-conversation-messages"),
