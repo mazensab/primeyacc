@@ -390,7 +390,7 @@ export default function SystemDashboardPage() {
 
       <div className="grid items-start gap-4 lg:gap-6 xl:grid-cols-3">
         <SystemRecentCard locale={locale} title={t.latestCompanies} description={t.latestDesc} rows={latest.companies || []} kind="companies" href="/system/companies/list" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}} badgeValue={integer(summary.companies?.total)} icon={Building2}/>
-        <SystemRecentCard locale={locale} title={t.latestUsers} description={t.latestDesc} rows={latest.users || []} kind="users" href="/system/users/list" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}} badgeValue={integer(summary.users?.total)} icon={Users}/>
+        <SystemRecentCard locale={locale} title={t.latestUsers} description={t.latestDesc} rows={latest.users || []} kind="users" href="/system/users" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}} badgeValue={integer(summary.users?.total)} icon={Users}/>
         <Card>
           <CardHeader><CardTitle icon={ShieldCheck} iconPosition="opposite">{t.operational}</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -407,7 +407,7 @@ export default function SystemDashboardPage() {
         </Card>
         <SystemRecentCard locale={locale} title={t.expiredLatest} description={t.latestDesc} rows={latest.expired_subscriptions || []} kind="subscriptions" href="/system/subscriptions" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}} icon={CalendarDays}/>
         <SystemRecentCard locale={locale} title={t.expiringLatest} description={t.latestDesc} rows={latest.expiring_subscriptions || []} kind="subscriptions" href="/system/subscriptions" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}} icon={Activity}/>
-        <SystemRecentCard locale={locale} title={t.latestPayments} description={t.latestDesc} rows={latest.payments || []} kind="payments" href="/system/platform-payments/list" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}} icon={CreditCard}/>
+        <SystemRecentCard locale={locale} title={t.latestPayments} description={t.latestDesc} rows={latest.payments || []} kind="payments" href="/system/platform-payments" labels={{viewAll:t.viewAll,noData:t.noData,sar:t.sar}} icon={CreditCard}/>
       </div>
     </div>
   );

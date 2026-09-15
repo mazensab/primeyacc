@@ -198,11 +198,17 @@ export const PERMISSIONS = {
   // System
   SYSTEM_VIEW: "system.view",
   SYSTEM_SETTINGS: "system.settings",
+  SYSTEM_SETTINGS_MANAGE: "system.settings.manage",
+  SYSTEM_WHATSAPP_VIEW: "system.whatsapp.view",
+  SYSTEM_WHATSAPP_MANAGE: "system.whatsapp.manage",
 
   // System Users
   SYSTEM_USERS_VIEW: "system.users.view",
   SYSTEM_USERS_CREATE: "system.users.create",
   SYSTEM_USERS_UPDATE: "system.users.update",
+
+  // System Activity Profiles
+  SYSTEM_ACTIVITY_PROFILES_VIEW: "system.activity_profiles.view",
 
   // System Subscriptions / Platform Payments
   SYSTEM_SUBSCRIPTIONS_VIEW: "system.subscriptions.view",
@@ -726,6 +732,15 @@ export const PATH_ACCESS_RULES: PathAccessRule[] = [
   {
     prefix: "/system/plans",
     permissions: [PERMISSIONS.SYSTEM_PLANS_VIEW],
+    workspaces: ["system"],
+  },
+
+  // ----------------------------
+  // System Activity Profiles
+  // ----------------------------
+  {
+    prefix: "/system/activity-profiles",
+    permissions: [PERMISSIONS.SYSTEM_ACTIVITY_PROFILES_VIEW],
     workspaces: ["system"],
   },
 
@@ -1580,6 +1595,15 @@ export function canPrint(
   session: PermissionSession | null | undefined,
 ): boolean {
   return hasPermission(session, PERMISSIONS.REPORTS_PRINT);
+}
+
+export function canManageSystemWhatsApp(
+  session: PermissionSession | null | undefined,
+): boolean {
+  if (!isAuthenticated(session)) return false;
+  if (isSystemAdmin(session)) return true;
+  const raw = getRawSessionPermissions(session);
+  return raw.includes("*") || raw.includes(PERMISSIONS.SYSTEM_WHATSAPP_MANAGE) || raw.includes(PERMISSIONS.SYSTEM_SETTINGS_MANAGE);
 }
 
 // ======================================================

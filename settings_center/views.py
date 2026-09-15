@@ -17,6 +17,8 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from api.permissions import user_has_system_permission
+
 from .models import SystemSetting
 from .serializers import (
     SystemSettingBulkUpdateItemSerializer,
@@ -30,45 +32,12 @@ from .services import (
 )
 
 
-SYSTEM_SETTINGS_READ_ROLES = {
-    "SUPER_ADMIN",
-    "SYSTEM_ADMIN",
-    "SUPPORT",
-    "BILLING_MANAGER",
-}
-
-SYSTEM_SETTINGS_WRITE_ROLES = {
-    "SUPER_ADMIN",
-    "SYSTEM_ADMIN",
-}
-
-
-def _collect_user_role_values(user) -> set[str]:
-    role_values: set[str] = set()
-
-    for attr in ("role", "system_role", "user_type", "account_type"):
-        value = getattr(user, attr, None)
-        if value:
-            role_values.add(str(value).upper())
-
-    for rel_name in ("system_memberships", "memberships", "company_memberships", "companymembership_set"):
-        rel = getattr(user, rel_name, None)
-        if rel is None:
-            continue
-        try:
-            for item in rel.all():
-                for attr in ("role", "system_role", "user_type"):
-                    value = getattr(item, attr, None)
-                    if value:
-                        role_values.add(str(value).upper())
-        except Exception:
-            continue
-
-    return role_values
+SYSTEM_SETTINGS_READ_PERMISSION = "system.settings"
+SYSTEM_SETTINGS_WRITE_PERMISSION = "system.settings.manage"
 
 
 class IsSystemSettingsUser(permissions.BasePermission):
-    """Allow only authenticated platform system users to access system settings."""
+    """Authorize Settings Center through the canonical system permission contract."""
 
     message = "You do not have permission to access system settings."
 
@@ -77,15 +46,13 @@ class IsSystemSettingsUser(permissions.BasePermission):
         if not user or not user.is_authenticated:
             return False
 
-        if getattr(user, "is_superuser", False):
-            return True
+        required_permission = (
+            SYSTEM_SETTINGS_READ_PERMISSION
+            if request.method in permissions.SAFE_METHODS
+            else SYSTEM_SETTINGS_WRITE_PERMISSION
+        )
 
-        role_values = _collect_user_role_values(user)
-
-        if request.method in permissions.SAFE_METHODS:
-            return bool(role_values & SYSTEM_SETTINGS_READ_ROLES)
-
-        return bool(role_values & SYSTEM_SETTINGS_WRITE_ROLES)
+        return user_has_system_permission(user, required_permission)
 
 
 class SystemSettingQuerysetMixin:

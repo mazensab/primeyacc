@@ -30,6 +30,14 @@ export const API_PATHS = {
     status: (id: ApiPathId) => `/api/system/users/${id}/status/`,
   },
 
+  systemActivityProfiles: {
+    overview: "/api/system/activity-profiles/",
+    list: "/api/system/activity-profiles/list/",
+    detail: (id: ApiPathId) => `/api/system/activity-profiles/${id}/`,
+    companies: (id: ApiPathId) =>
+      `/api/system/activity-profiles/${id}/companies/`,
+  },
+
   systemCompanies: {
     list: "/api/system/companies/",
     options: "/api/system/companies/options/",
@@ -374,6 +382,26 @@ export const API_PATHS = {
 
     tamaraCreateCheckout: "/api/company/payments/gateways/tamara/create-checkout/",
     tamaraWebhook: "/api/company/payments/gateways/tamara/webhook/",
+  },
+
+  systemWhatsApp: {
+    overview: "/api/system/whatsapp/",
+    connection: "/api/system/whatsapp/connection/",
+    connectionStatus: "/api/system/whatsapp/connection/status/",
+    connectionQr: "/api/system/whatsapp/connection/qr/",
+    connectionPairing: "/api/system/whatsapp/connection/pairing/",
+    connectionDisconnect: "/api/system/whatsapp/connection/disconnect/",
+    connectionTest: "/api/system/whatsapp/connection/test/",
+    settings: "/api/system/whatsapp/settings/",
+    templates: "/api/system/whatsapp/templates/",
+    templateDetail: (id: ApiPathId) => `/api/system/whatsapp/templates/${id}/`,
+    templateStatus: (id: ApiPathId) => `/api/system/whatsapp/templates/${id}/status/`,
+    messages: "/api/system/whatsapp/messages/",
+    messageDetail: (id: ApiPathId) => `/api/system/whatsapp/messages/${id}/`,
+    inbox: "/api/system/whatsapp/inbox/",
+    inboxDetail: (id: ApiPathId) => `/api/system/whatsapp/inbox/${id}/`,
+    inboxMessages: (id: ApiPathId) => `/api/system/whatsapp/inbox/${id}/messages/`,
+    inboxReply: (id: ApiPathId) => `/api/system/whatsapp/inbox/${id}/reply/`,
   },
 
   whatsapp: {

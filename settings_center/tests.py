@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # 📂 settings_center/tests.py
 # Mhamcloud | System Settings Center Tests
 # ------------------------------------------------------------
@@ -8,6 +8,7 @@
 # ✅ No frontend dependency
 # ============================================================
 from __future__ import annotations
+from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -22,6 +23,7 @@ from .services import (
 SETTINGS_LIST_URL = "/api/system/settings/"
 SETTINGS_SUMMARY_URL = "/api/system/settings/summary/"
 SETTINGS_BULK_URL = "/api/system/settings/bulk/"
+SETTINGS_SEED_URL = "/api/system/settings/seed-defaults/"
 def setting_reset_url(setting_id: int) -> str:
     return f"/api/system/settings/{setting_id}/reset/"
 def make_test_user(*, is_superuser: bool = False, role: str | None = None):
@@ -103,3 +105,50 @@ class SystemSettingAPITests(APITestCase):
         self.client.force_authenticate(user=None)
         response = self.client.get(SETTINGS_LIST_URL)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+class SystemSettingsCanonicalPermissionTests(APITestCase):
+    def test_non_django_superuser_with_read_permission_can_read(self):
+        user = make_test_user(is_superuser=False)
+        self.client.force_authenticate(user=user)
+
+        with patch(
+            "settings_center.views.user_has_system_permission",
+            side_effect=lambda checked_user, permission: (
+                checked_user.pk == user.pk and permission == "system.settings"
+            ),
+        ) as permission_check:
+            response = self.client.get(SETTINGS_LIST_URL)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        permission_check.assert_called_with(user, "system.settings")
+
+    def test_read_permission_does_not_grant_write(self):
+        user = make_test_user(is_superuser=False)
+        self.client.force_authenticate(user=user)
+
+        with patch(
+            "settings_center.views.user_has_system_permission",
+            side_effect=lambda checked_user, permission: (
+                checked_user.pk == user.pk and permission == "system.settings"
+            ),
+        ) as permission_check:
+            response = self.client.post(SETTINGS_SEED_URL, {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        permission_check.assert_called_with(user, "system.settings.manage")
+
+    def test_manage_permission_allows_write(self):
+        user = make_test_user(is_superuser=False)
+        self.client.force_authenticate(user=user)
+
+        with patch(
+            "settings_center.views.user_has_system_permission",
+            side_effect=lambda checked_user, permission: (
+                checked_user.pk == user.pk
+                and permission in {"system.settings", "system.settings.manage"}
+            ),
+        ) as permission_check:
+            response = self.client.post(SETTINGS_SEED_URL, {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        permission_check.assert_called_with(user, "system.settings.manage")
