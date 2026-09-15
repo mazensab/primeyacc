@@ -18,12 +18,7 @@ try:
     from api.permissions import user_has_system_permission
 except Exception:  # pragma: no cover
     user_has_system_permission = None
-SYSTEM_VIEW_PERMISSIONS = (
-    "system.activity_profiles.view",
-    "system.companies.view",
-    "system.release_readiness.view",
-    "system.view",
-)
+SYSTEM_ACTIVITY_PROFILES_VIEW_PERMISSION = "system.activity_profiles.view"
 def _json_safe(value: Any) -> Any:
     if isinstance(value, dict):
         return {str(key): _json_safe(item) for key, item in value.items()}
@@ -65,25 +60,10 @@ def _safe_has_system_permission(user, permission_code: str) -> bool:
         return bool(user_has_system_permission(user, permission_code))
     except Exception:
         return False
-def _user_is_system_member(user) -> bool:
-    if not user or not getattr(user, "is_authenticated", False):
-        return False
-    if getattr(user, "is_superuser", False) or getattr(user, "is_staff", False):
-        return True
-    profile = getattr(user, "Mhamcloud_profile", None)
-    if profile:
-        role = _text(getattr(profile, "system_role", "")).upper()
-        if role in {"SUPER_ADMIN", "SYSTEM_ADMIN", "SUPPORT", "BILLING_MANAGER"}:
-            return True
-        if bool(getattr(profile, "is_system_user", False)):
-            return True
-        if bool(getattr(profile, "can_access_system", False)):
-            return True
-    return False
 def _can_view(user) -> bool:
-    return _user_is_system_member(user) or any(
-        _safe_has_system_permission(user, permission)
-        for permission in SYSTEM_VIEW_PERMISSIONS
+    return _safe_has_system_permission(
+        user,
+        SYSTEM_ACTIVITY_PROFILES_VIEW_PERMISSION,
     )
 def _permission_response(request):
     user = getattr(request, "user", None)
@@ -155,10 +135,17 @@ def _field_is_text(model, field_name: str) -> bool:
         "URLField",
     }
 def _get(obj, *field_names: str, default: Any = None) -> Any:
-    fields = _field_names(obj.__class__)
+    model = obj.__class__
+    fields = _field_names(model)
+    field_attnames = {
+        getattr(field, "attname", field.name)
+        for field in model._meta.fields
+    }
+
     for field_name in field_names:
-        if field_name in fields:
+        if field_name in fields or field_name in field_attnames:
             return getattr(obj, field_name, default)
+
     return default
 def _choice_label(obj, field_name: str, fallback: Any = "") -> str:
     method = getattr(obj, f"get_{field_name}_display", None)
@@ -259,6 +246,33 @@ def _company_payload(company) -> dict[str, Any]:
 def _profile_payload(profile, *, include_companies: bool = False) -> dict[str, Any]:
     status = _profile_status(profile)
     type_value = _profile_type(profile)
+    company_id = _get(profile, "company_id")
+    is_system = bool(
+        _get(
+            profile,
+            "is_system",
+            default=company_id is None,
+        )
+    )
+    scope = "SYSTEM" if is_system and company_id is None else "COMPANY"
+    default_settings = _get(
+        profile,
+        "default_settings",
+        "settings",
+        "configuration",
+        default={},
+    )
+    extra_data = _get(
+        profile,
+        "extra_data",
+        "metadata",
+        default={},
+    )
+    owner_company = (
+        getattr(profile, "company", None)
+        if "company" in _field_names(profile.__class__)
+        else None
+    )
     payload = {
         "id": profile.pk,
         "code": _profile_code(profile),
@@ -276,13 +290,23 @@ def _profile_payload(profile, *, include_companies: bool = False) -> dict[str, A
         "status_label": _choice_label(profile, "status", status),
         "is_active": status == "ACTIVE" and _get(profile, "is_active", default=True) is not False,
         "is_enabled": _get(profile, "is_enabled", "enabled", default=True),
+        "is_system": is_system,
+        "scope": scope,
+        "company_id": company_id,
+        "company": (
+            _company_payload(owner_company)
+            if owner_company is not None
+            else None
+        ),
         "icon": _text(_get(profile, "icon")),
         "color": _text(_get(profile, "color")),
         "sort_order": _get(profile, "sort_order", default=0),
         "modules": _get(profile, "modules", "enabled_modules", default=[]),
         "features": _get(profile, "features", "enabled_features", default=[]),
-        "settings": _get(profile, "settings", "configuration", default={}),
-        "metadata": _get(profile, "metadata", default={}),
+        "default_settings": default_settings,
+        "extra_data": extra_data,
+        "settings": default_settings,
+        "metadata": extra_data,
         "companies_count": _profile_companies_count(profile),
         "created_at": _get(profile, "created_at"),
         "updated_at": _get(profile, "updated_at"),
@@ -301,6 +325,8 @@ def _base_profiles_queryset():
         return None
     queryset = model.objects.all()
     fields = _field_names(model)
+    if "company" in fields:
+        queryset = queryset.select_related("company")
     ordering: list[str] = []
     for field_name in ("sort_order", "name_ar", "name_en", "name", "code", "id"):
         if field_name in fields:
@@ -315,6 +341,7 @@ def _apply_filters(queryset, request):
     status = _query(request, "status").upper()
     activity_type = _query(request, "activity_type") or _query(request, "type")
     active = _query(request, "active").lower()
+    scope = _query(request, "scope").upper()
     if search:
         search_query = Q()
         for field_name in (
@@ -350,13 +377,49 @@ def _apply_filters(queryset, request):
         queryset = queryset.filter(is_active=True)
     if active in {"0", "false", "no", "inactive"} and "is_active" in fields:
         queryset = queryset.filter(is_active=False)
+    if scope == "SYSTEM":
+        if "is_system" in fields:
+            queryset = queryset.filter(is_system=True)
+        if "company" in fields:
+            queryset = queryset.filter(company__isnull=True)
+    elif scope in {"COMPANY", "CUSTOM"}:
+        if "company" in fields:
+            queryset = queryset.filter(company__isnull=False)
+        elif "is_system" in fields:
+            queryset = queryset.filter(is_system=False)
     return queryset
+
+
+def _apply_ordering(queryset, request):
+    model = queryset.model
+    fields = _field_names(model)
+    ordering = _query(request, "ordering").lower()
+
+    candidates = {
+        "name": ("name",),
+        "code": ("code",),
+        "newest": ("-created_at",),
+        "oldest": ("created_at",),
+    }
+    selected = candidates.get(ordering)
+
+    if selected and all(
+        field.lstrip("-") in fields
+        for field in selected
+    ):
+        return queryset.order_by(*selected)
+
+    return queryset
+
+
 def _summary_payload(queryset) -> dict[str, Any]:
     if queryset is None:
         return {
             "total": 0,
             "active": 0,
             "inactive": 0,
+            "system": 0,
+            "custom": 0,
             "companies_count": 0,
             "types_count": 0,
         }
@@ -380,19 +443,47 @@ def _summary_payload(queryset) -> dict[str, Any]:
                 for value in queryset.values_list(field_name, flat=True).distinct()
                 if _text(value)
             )
+    if "company" in fields:
+        system_count = queryset.filter(
+            company__isnull=True,
+        ).count()
+        custom_count = queryset.filter(
+            company__isnull=False,
+        ).count()
+    elif "is_system" in fields:
+        system_count = queryset.filter(
+            is_system=True,
+        ).count()
+        custom_count = queryset.filter(
+            is_system=False,
+        ).count()
+    else:
+        system_count = total
+        custom_count = 0
+
     companies_count = 0
     for profile in queryset[:200]:
         companies_count += _profile_companies_count(profile)
+
     return {
         "total": total,
         "active": active,
         "inactive": inactive,
+        "system": system_count,
+        "custom": custom_count,
         "companies_count": companies_count,
         "types_count": len(types),
     }
 def _choices_payload(queryset) -> dict[str, Any]:
     if queryset is None:
-        return {"statuses": [], "activity_types": []}
+        return {
+            "statuses": [],
+            "activity_types": [],
+            "scopes": [
+                {"value": "SYSTEM", "label": "System"},
+                {"value": "COMPANY", "label": "Company"},
+            ],
+        }
     model = queryset.model
     fields = _field_names(model)
     statuses = []
@@ -418,6 +509,10 @@ def _choices_payload(queryset) -> dict[str, Any]:
     return {
         "statuses": statuses,
         "activity_types": activity_types,
+        "scopes": [
+            {"value": "SYSTEM", "label": "System"},
+            {"value": "COMPANY", "label": "Company"},
+        ],
     }
 def _list_response(request, *, overview: bool = False):
     queryset = _base_profiles_queryset()
@@ -441,6 +536,7 @@ def _list_response(request, *, overview: bool = False):
             status=200,
         )
     filtered = _apply_filters(queryset, request)
+    filtered = _apply_ordering(filtered, request)
     total = filtered.count()
     limit, offset = _limit_offset(request)
     page_items = list(filtered[offset : offset + limit])

@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📂 accounts/models.py
 # 🧠 Mhamcloud | Accounts Models V3.2
 # ------------------------------------------------------------
@@ -123,6 +123,7 @@ SYSTEM_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "system.companies.create",
         "system.companies.update",
         "system.companies.status",
+        "system.activity_profiles.view",
         "system.plans.view",
         "system.plans.create",
         "system.plans.update",
@@ -142,6 +143,7 @@ SYSTEM_ROLE_PERMISSIONS: dict[str, list[str]] = {
     SystemRole.SUPPORT: [
         "system.dashboard.view",
         "system.companies.view",
+        "system.activity_profiles.view",
         "system.subscriptions.view",
         "system.billing_documents.view",
         "system.users.view",
@@ -149,6 +151,7 @@ SYSTEM_ROLE_PERMISSIONS: dict[str, list[str]] = {
     SystemRole.BILLING_MANAGER: [
         "system.dashboard.view",
         "system.companies.view",
+        "system.activity_profiles.view",
         "system.plans.view",
         "system.subscriptions.view",
         "system.subscriptions.create",
