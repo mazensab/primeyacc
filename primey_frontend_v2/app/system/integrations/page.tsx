@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 // phase47D_batch1_remaining_system_dashboard_contract=true
 
@@ -23,6 +23,7 @@
 import * as React from "react";
 import Link from "next/link";
 import {
+  Activity,
   AlertTriangle,
   CheckCircle2,
   CircleSlash2,
@@ -30,12 +31,11 @@ import {
   KeyRound,
   Loader2,
   MessageCircle,
+  Database,
   PlugZap,
   RefreshCw,
   RotateCcw,
-  Search,
   ShieldCheck,
-  Sparkles,
   TriangleAlert,
   Webhook,
   Workflow,
@@ -43,7 +43,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { SystemKpiCard } from "@/components/ui/system-kpi-card";
+import { SystemMetricCard } from "@/components/ui/system-metric-card";
+import { DataRegisterEmptyState, DataRegisterSearch, DataRegisterToolbar, registerOutlineButtonClass } from "@/components/ui/data-register";
+import { DataRegisterResultCount, DataRegisterTableFrame } from "@/components/ui/data-register-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -53,7 +55,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -136,6 +137,7 @@ const translations = {
     apiContracts: "عقود API",
     whatsapp: "واتساب",
     payments: "مدفوعات المنصة",
+    mhamcloud: "تكامل MhamCloud",
     gatewaysTitle: "بوابات الدفع",
     gatewaysDesc:
       "حالة الإعداد الفعلية للبوابات الثلاث من عقد Gateway Readiness المجمد.",
@@ -206,6 +208,7 @@ const translations = {
     apiContracts: "API Contracts",
     whatsapp: "WhatsApp",
     payments: "Platform Payments",
+    mhamcloud: "MhamCloud Integration",
     gatewaysTitle: "Payment Gateways",
     gatewaysDesc:
       "Actual configuration readiness for the three providers from the frozen Gateway Readiness contract.",
@@ -930,19 +933,11 @@ export default function SystemIntegrationsPage() {
       <div className="w-full space-y-6">
         <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-4xl">
-            <Badge
-              variant="outline"
-              className="mb-3 rounded-full bg-background"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              {t.badge}
-            </Badge>
-
-            <h1 className="text-3xl font-bold tracking-tight">
+            <h1 className="text-xl font-bold tracking-tight lg:text-2xl">
               {t.title}
             </h1>
 
-            <p className="mt-3 text-sm leading-7 text-muted-foreground">
+            <p className="text-muted-foreground mt-1 hidden text-sm lg:block">
               {t.subtitle}
             </p>
 
@@ -969,6 +964,17 @@ export default function SystemIntegrationsPage() {
               )}
 
               {t.refresh}
+            </Button>
+
+            <Button
+              asChild
+              variant="outline"
+              className="h-9"
+            >
+              <Link href="/system/integrations/mhamcloud">
+                <Database className="h-4 w-4 text-[#a57b3d]" />
+                {t.mhamcloud}
+              </Link>
             </Button>
 
             <Button
@@ -1054,25 +1060,25 @@ export default function SystemIntegrationsPage() {
         ) : null}
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <SystemKpiCard
+          <SystemMetricCard
             title={t.gatewaysTitle}
             value={gateways.filter((item) => item.ready).length}
             description={`${gateways.length} ${t.operational}`}
             icon={PlugZap}
           />
-          <SystemKpiCard
+          <SystemMetricCard
             title={t.totalWebhook}
             value={summary.webhookTotal}
             description={t.webhookDesc}
             icon={Webhook}
           />
-          <SystemKpiCard
+          <SystemMetricCard
             title={t.failedWebhook}
             value={summary.webhookFailed}
             description={t.webhookDesc}
             icon={XCircle}
           />
-          <SystemKpiCard
+          <SystemMetricCard
             title={t.mismatches}
             value={summary.reconciliationMismatch}
             description={t.reconciliationDesc}
@@ -1194,7 +1200,7 @@ export default function SystemIntegrationsPage() {
 
         <Card className="rounded-xl shadow-none">
           <CardHeader className="border-b">
-            <CardTitle>
+            <CardTitle icon={Activity}>
               {t.operational}
             </CardTitle>
 
@@ -1204,19 +1210,8 @@ export default function SystemIntegrationsPage() {
           </CardHeader>
 
           <CardContent className="space-y-3 p-4">
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto]">
-              <div className="relative">
-                <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-
-                <Input
-                  value={search}
-                  onChange={(event) =>
-                    setSearch(event.target.value)
-                  }
-                  placeholder={t.search}
-                  className="h-10 ps-9"
-                />
-              </div>
+            <DataRegisterToolbar className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto]">
+              <DataRegisterSearch value={search} onChange={setSearch} placeholder={t.search} />
 
               <Select
                 value={gatewayFilter}
@@ -1249,24 +1244,16 @@ export default function SystemIntegrationsPage() {
                 </SelectContent>
               </Select>
 
-              <Button
-                type="button"
-                variant="outline"
-                className="h-10"
-                onClick={resetFilters}
-              >
+              <Button type="button" variant="outline" className={registerOutlineButtonClass} onClick={resetFilters}>
                 <RotateCcw className="h-4 w-4" />
                 {t.all}
               </Button>
-            </div>
+            </DataRegisterToolbar>
 
             <div className="grid gap-6 xl:grid-cols-2">
               <Card className="rounded-xl border shadow-none">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Webhook className="h-4 w-4 text-[#a57b3d]" />
-                    {t.webhookTitle}
-                  </CardTitle>
+                  <CardTitle icon={Webhook}>{t.webhookTitle}</CardTitle>
 
                   <CardDescription>
                     {t.webhookDesc}
@@ -1274,7 +1261,7 @@ export default function SystemIntegrationsPage() {
                 </CardHeader>
 
                 <CardContent>
-                  <div className="overflow-hidden rounded-lg border">
+                  <DataRegisterTableFrame>
                     <div className="overflow-x-auto">
                       <Table className="min-w-[760px] table-fixed">
                         <TableHeader>
@@ -1301,7 +1288,7 @@ export default function SystemIntegrationsPage() {
                           {filteredWebhooks.length ? (
                             filteredWebhooks.map(
                               (row) => (
-                                <TableRow key={row.id}>
+                                <TableRow key={row.id} className="h-[68px]">
                                   <TableCell className="font-medium">
                                     {row.gateway}
                                   </TableCell>
@@ -1336,27 +1323,22 @@ export default function SystemIntegrationsPage() {
                             )
                           ) : (
                             <TableRow>
-                              <TableCell
-                                colSpan={5}
-                                className="h-36 text-center text-muted-foreground"
-                              >
-                                {t.noWebhook}
+                              <TableCell colSpan={5} className="p-0">
+                                <DataRegisterEmptyState title={t.noWebhook} description={t.webhookDesc} icon={Webhook} />
                               </TableCell>
                             </TableRow>
                           )}
                         </TableBody>
                       </Table>
                     </div>
-                  </div>
+                  </DataRegisterTableFrame>
+                  <DataRegisterResultCount showingLabel={locale==="ar"?"عرض":"Showing"} showingCount={filteredWebhooks.length} ofLabel={locale==="ar"?"من":"of"} totalCount={webhooks.length} rowsLabel={locale==="ar"?"حدث":"events"} />
                 </CardContent>
               </Card>
 
               <Card className="rounded-xl border shadow-none">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Workflow className="h-4 w-4 text-[#a57b3d]" />
-                    {t.reconciliationTitle}
-                  </CardTitle>
+                  <CardTitle icon={Workflow}>{t.reconciliationTitle}</CardTitle>
 
                   <CardDescription>
                     {t.reconciliationDesc}
@@ -1364,7 +1346,7 @@ export default function SystemIntegrationsPage() {
                 </CardHeader>
 
                 <CardContent>
-                  <div className="overflow-hidden rounded-lg border">
+                  <DataRegisterTableFrame>
                     <div className="overflow-x-auto">
                       <Table className="min-w-[720px] table-fixed">
                         <TableHeader>
@@ -1391,7 +1373,7 @@ export default function SystemIntegrationsPage() {
                           {filteredReconciliations.length ? (
                             filteredReconciliations.map(
                               (row) => (
-                                <TableRow key={row.id}>
+                                <TableRow key={row.id} className="h-[68px]">
                                   <TableCell className="font-medium">
                                     {row.gateway}
                                   </TableCell>
@@ -1426,18 +1408,16 @@ export default function SystemIntegrationsPage() {
                             )
                           ) : (
                             <TableRow>
-                              <TableCell
-                                colSpan={5}
-                                className="h-36 text-center text-muted-foreground"
-                              >
-                                {t.noReconciliation}
+                              <TableCell colSpan={5} className="p-0">
+                                <DataRegisterEmptyState title={t.noReconciliation} description={t.reconciliationDesc} icon={Workflow} />
                               </TableCell>
                             </TableRow>
                           )}
                         </TableBody>
                       </Table>
                     </div>
-                  </div>
+                  </DataRegisterTableFrame>
+                  <DataRegisterResultCount showingLabel={locale==="ar"?"عرض":"Showing"} showingCount={filteredReconciliations.length} ofLabel={locale==="ar"?"من":"of"} totalCount={reconciliations.length} rowsLabel={locale==="ar"?"سجل":"records"} />
                 </CardContent>
               </Card>
             </div>

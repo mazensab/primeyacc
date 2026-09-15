@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 // phase47D_batch2_system_dashboard_design_contract=true
 /* ============================================================
@@ -34,20 +34,20 @@ import {
   Printer,
   RefreshCw,
   RotateCcw,
-  Search,
   ShieldCheck,
-  Sparkles,
   TableProperties,
   TriangleAlert,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
-import { SystemKpiCard } from "@/components/ui/system-kpi-card";
+import { SystemMetricCard } from "@/components/ui/system-metric-card";
 import {
+  DataRegisterSearch,
   DataRegisterToolbar,
   registerBrandButtonClass,
   registerOutlineButtonClass,
 } from "@/components/ui/data-register";
+import { DataRegisterResultCount, DataRegisterTableFrame } from "@/components/ui/data-register-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -666,12 +666,8 @@ export default function SystemApiContractsPage() {
       <div className="w-full space-y-6">
         <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-4xl">
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-              <Sparkles className="h-3.5 w-3.5 text-[#a57b3d]" />
-              {t.badge}
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight">{t.title}</h1>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">{t.subtitle}</p>
+            <h1 className="text-xl font-bold tracking-tight lg:text-2xl">{t.title}</h1>
+            <p className="text-muted-foreground mt-1 hidden text-sm lg:block">{t.subtitle}</p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="rounded-full bg-background">
                 {t.phase}: {phase}
@@ -702,36 +698,20 @@ export default function SystemApiContractsPage() {
           </div>
         </header>
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <SystemKpiCard title={t.totalContracts} value={summary.contractsCount || contracts.length} description={t.fromLiveApi} icon={Layers3} />
-          <SystemKpiCard title={t.systemContracts} value={summary.systemScopedContracts} description={t.fromLiveApi} icon={ShieldCheck} />
-          <SystemKpiCard title={t.companyContracts} value={summary.companyScopedContracts} description={t.fromLiveApi} icon={Building2} />
-          <SystemKpiCard title={t.criticalContracts} value={criticalCount} description={t.fromLiveApi} icon={CheckCircle2} />
+          <SystemMetricCard title={t.totalContracts} value={summary.contractsCount || contracts.length} description={t.fromLiveApi} icon={Layers3} />
+          <SystemMetricCard title={t.systemContracts} value={summary.systemScopedContracts} description={t.fromLiveApi} icon={ShieldCheck} />
+          <SystemMetricCard title={t.companyContracts} value={summary.companyScopedContracts} description={t.fromLiveApi} icon={Building2} />
+          <SystemMetricCard title={t.criticalContracts} value={criticalCount} description={t.fromLiveApi} icon={CheckCircle2} />
         </section>
         <Card className="w-full rounded-lg border bg-card shadow-none">
-          <CardHeader className="gap-3">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <CardTitle>{t.tableTitle}</CardTitle>
-                <CardDescription className="mt-2">{t.tableDesc}</CardDescription>
-              </div>
-              <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
-                <Inbox className="h-3.5 w-3.5" />
-                {t.showing} {formatInteger(filteredContracts.length)} {t.of} {formatInteger(contracts.length)} {t.rows}
-              </Badge>
-            </div>
+          <CardHeader>
+            <CardTitle icon={TableProperties}>{t.tableTitle}</CardTitle>
+            <CardDescription>{t.tableDesc}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 xl:flex-row xl:items-center xl:justify-between">
+            <DataRegisterToolbar className="flex flex-col gap-3 xl:flex-row xl:items-center">
               <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row md:items-center">
-                <div className="relative min-w-0 flex-1">
-                  <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder={t.searchPlaceholder}
-                    className="h-9 rounded-lg ps-9"
-                  />
-                </div>
+                <DataRegisterSearch value={search} onChange={setSearch} placeholder={t.searchPlaceholder} className="min-w-0 flex-1" />
                 <Select value={scopeFilter} onValueChange={(value) => setScopeFilter(value as ScopeFilter)}>
                   <SelectTrigger className="h-9 rounded-lg bg-background md:w-[150px]">
                     <SelectValue />
@@ -793,8 +773,8 @@ export default function SystemApiContractsPage() {
                   {t.dashboard}
                 </Link>
               </div>
-            </div>
-            <div className="overflow-hidden rounded-lg border bg-background">
+            </DataRegisterToolbar>
+            <DataRegisterTableFrame>
               <div className="w-full overflow-x-auto">
                 <Table className="min-w-[1280px] table-fixed">
                   <TableHeader>
@@ -817,7 +797,7 @@ export default function SystemApiContractsPage() {
                   <TableBody>
                     {filteredContracts.length ? (
                       filteredContracts.map((item) => (
-                        <TableRow key={item.key} className="h-[76px]">
+                        <TableRow key={item.key} className="h-[68px]">
                           <TableCell className={cn("px-4 align-middle", alignClass)}>
                             <span className="block truncate text-sm font-semibold">{item.key}</span>
                             <span className="block truncate text-xs text-muted-foreground">{item.title}</span>
@@ -888,7 +868,8 @@ export default function SystemApiContractsPage() {
                   </TableBody>
                 </Table>
               </div>
-            </div>
+            </DataRegisterTableFrame>
+            <DataRegisterResultCount showingLabel={t.showing} showingCount={formatInteger(filteredContracts.length)} ofLabel={t.of} totalCount={formatInteger(contracts.length)} rowsLabel={t.rows} />
           </CardContent>
         </Card>
       </div>

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 // phase47D_batch1_remaining_system_dashboard_contract=true
 /* ============================================================
@@ -37,7 +37,6 @@ import {
   RotateCcw,
   Search,
   ShieldCheck,
-  Sparkles,
   TriangleAlert,
   X,
   XCircle,
@@ -49,7 +48,9 @@ import {
 } from "@/lib/excel-report";
 import { openPrintReport } from "@/lib/print-report";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { SystemKpiCard } from "@/components/ui/system-kpi-card";
+import { SystemMetricCard } from "@/components/ui/system-metric-card";
+import { DataRegisterSearch, DataRegisterToolbar, registerOutlineButtonClass } from "@/components/ui/data-register";
+import { DataRegisterResultCount, DataRegisterTableFrame } from "@/components/ui/data-register-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -1009,12 +1010,8 @@ export default function SystemIntegrationApiKeysPage() {
       <div className="w-full space-y-6">
         <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-4xl">
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-              <Sparkles className="h-3.5 w-3.5 text-[#a57b3d]" />
-              {t.badge}
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight">{t.title}</h1>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">{t.subtitle}</p>
+            <h1 className="text-xl font-bold tracking-tight lg:text-2xl">{t.title}</h1>
+            <p className="text-muted-foreground mt-1 hidden text-sm lg:block">{t.subtitle}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
                 <Button
@@ -1074,36 +1071,20 @@ export default function SystemIntegrationApiKeysPage() {
           </Card>
         ) : null}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <SystemKpiCard title={t.totalKeys} value={stats.total} description={t.fromLiveApi} icon={KeyRound} />
-          <SystemKpiCard title={t.activeKeys} value={stats.active} description={t.fromLiveApi} icon={ShieldCheck} />
-          <SystemKpiCard title={t.liveKeys} value={stats.live} description={t.fromLiveApi} icon={PlugZap} />
-          <SystemKpiCard title={t.revokedKeys} value={stats.revoked} description={t.fromLiveApi} icon={XCircle} />
+          <SystemMetricCard title={t.totalKeys} value={stats.total} description={t.fromLiveApi} icon={KeyRound} />
+          <SystemMetricCard title={t.activeKeys} value={stats.active} description={t.fromLiveApi} icon={ShieldCheck} />
+          <SystemMetricCard title={t.liveKeys} value={stats.live} description={t.fromLiveApi} icon={PlugZap} />
+          <SystemMetricCard title={t.revokedKeys} value={stats.revoked} description={t.fromLiveApi} icon={XCircle} />
         </div>
         <Card className="w-full rounded-lg border bg-card shadow-none">
-          <CardHeader className="gap-3">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <CardTitle>{t.tableTitle}</CardTitle>
-                <CardDescription className="mt-2">{t.tableDesc}</CardDescription>
-              </div>
-              <Badge variant="outline" className="w-fit rounded-full px-3 py-1">
-                <KeyRound className="h-3.5 w-3.5" />
-                {t.showing} {formatInteger(filteredKeys.length)} {t.of} {formatInteger(apiTotal || keys.length)} {t.rows}
-              </Badge>
-            </div>
+          <CardHeader>
+            <CardTitle icon={KeyRound}>{t.tableTitle}</CardTitle>
+            <CardDescription>{t.tableDesc}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
+            <DataRegisterToolbar className="flex flex-col gap-3 lg:flex-row lg:items-center">
               <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row md:items-center">
-                <div className="relative min-w-0 flex-1">
-                  <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder={t.searchPlaceholder}
-                    className="h-9 rounded-lg ps-9"
-                  />
-                </div>
+                <DataRegisterSearch value={search} onChange={setSearch} placeholder={t.searchPlaceholder} className="min-w-0 flex-1" />
                 <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
                   <SelectTrigger className="h-9 rounded-lg bg-background md:w-[170px]">
                     <SelectValue />
@@ -1142,13 +1123,13 @@ export default function SystemIntegrationApiKeysPage() {
                     <SelectItem value="environment">{t.environmentSort}</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button variant="outline" className="h-9 rounded-lg bg-background" onClick={resetFilters}>
+                <Button variant="outline" className={registerOutlineButtonClass} onClick={resetFilters}>
                   <RotateCcw className="h-4 w-4" />
                   {t.reset}
                 </Button>
               </div>
-            </div>
-            <div className="overflow-hidden rounded-lg border bg-background">
+            </DataRegisterToolbar>
+            <DataRegisterTableFrame>
               <div className="w-full overflow-x-auto">
                 <Table className="min-w-[980px] table-fixed">
                   <TableHeader>
@@ -1182,8 +1163,8 @@ export default function SystemIntegrationApiKeysPage() {
                   <TableBody>
                     {filteredKeys.length ? (
                       filteredKeys.map((key) => (
-                        <TableRow key={key.id || key.keyPrefix || key.name} className="h-[64px]">
-                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
+                        <TableRow key={key.id || key.keyPrefix || key.name} className="h-[68px]">
+                          <TableCell className={cn("h-[68px] overflow-hidden px-4 align-middle", alignClass)}>
                             <div className="min-w-0">
                               <span className="block truncate text-sm font-semibold text-foreground">
                                 {key.name || t.unknown}
@@ -1193,33 +1174,33 @@ export default function SystemIntegrationApiKeysPage() {
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[68px] overflow-hidden px-4 align-middle", alignClass)}>
                             <span className="block truncate text-sm tabular-nums text-muted-foreground">
                               {key.keyPrefix || "—"}
                             </span>
                           </TableCell>
-                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[68px] overflow-hidden px-4 align-middle", alignClass)}>
                             <span className="block truncate text-sm text-muted-foreground">
                               {key.company || "—"}
                             </span>
                           </TableCell>
-                          <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[68px] px-4 align-middle", alignClass)}>
                             <PillBadge value={key.environment} locale={locale} type="environment" />
                           </TableCell>
-                          <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[68px] px-4 align-middle", alignClass)}>
                             <PillBadge value={key.status} locale={locale} type="status" />
                           </TableCell>
-                          <TableCell className={cn("h-[64px] overflow-hidden px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[68px] overflow-hidden px-4 align-middle", alignClass)}>
                             <span className="block truncate text-sm text-muted-foreground">
                               {key.scopes.length ? key.scopes.join(", ") : "—"}
                             </span>
                           </TableCell>
-                          <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[68px] px-4 align-middle", alignClass)}>
                             <span className="text-sm tabular-nums text-muted-foreground">
                               {formatDate(key.lastUsedAt)}
                             </span>
                           </TableCell>
-                          <TableCell className={cn("h-[64px] px-4 align-middle", alignClass)}>
+                          <TableCell className={cn("h-[68px] px-4 align-middle", alignClass)}>
                             <span className="text-sm tabular-nums text-muted-foreground">
                               {formatDate(key.createdAt)}
                             </span>
@@ -1242,19 +1223,9 @@ export default function SystemIntegrationApiKeysPage() {
                   </TableBody>
                 </Table>
               </div>
-            </div>
+            </DataRegisterTableFrame>
             <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-              <p>
-                {t.showing}{" "}
-                <span className="font-medium text-foreground tabular-nums">
-                  {formatInteger(filteredKeys.length)}
-                </span>{" "}
-                {t.of}{" "}
-                <span className="font-medium text-foreground tabular-nums">
-                  {formatInteger(apiTotal || keys.length)}
-                </span>{" "}
-                {t.rows}
-              </p>
+              <DataRegisterResultCount showingLabel={t.showing} showingCount={formatInteger(filteredKeys.length)} ofLabel={t.of} totalCount={formatInteger(apiTotal || keys.length)} rowsLabel={t.rows} />
               <Button asChild variant="outline" className="w-fit rounded-lg bg-background shadow-none">
                 <Link href="/system/integrations">
                   <KeyRound className="h-4 w-4" />
