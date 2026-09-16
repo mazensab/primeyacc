@@ -2011,3 +2011,26 @@ class SystemWhatsAppReplyQuoteContractTests(TestCase):
         self.assertFalse(response.data["success"])
         self.assertIn("reply_to_message_id", response.data["errors"])
         gateway.assert_not_called()
+
+
+class V224ASystemTemplateTests(TestCase):
+    def test_catalog_contract(self):
+        from whatsapp.services import SYSTEM_WHATSAPP_READY_TEMPLATES, extract_template_variables
+        codes=[x["code"] for x in SYSTEM_WHATSAPP_READY_TEMPLATES]
+        self.assertEqual(len(codes),len(set(codes)))
+        for x in SYSTEM_WHATSAPP_READY_TEMPLATES:
+            self.assertEqual(sorted(x["variables"]),extract_template_variables(x["body_ar"]))
+            self.assertEqual(sorted(x["variables"]),extract_template_variables(x["body_en"]))
+            self.assertEqual(x["metadata"]["scope"],"SYSTEM")
+            self.assertEqual(x["metadata"]["i18n"]["ar"]["name"],x["name_ar"])
+            self.assertEqual(x["metadata"]["i18n"]["en"]["name"],x["name_en"])
+    def test_seed_command_idempotent(self):
+        from io import StringIO
+        from django.core.management import call_command
+        from whatsapp.services import SYSTEM_WHATSAPP_READY_TEMPLATES
+        a=StringIO(); call_command("primey_seed_system_templates",stdout=a)
+        b=StringIO(); call_command("primey_seed_system_templates",stdout=b)
+        c=StringIO(); call_command("primey_seed_system_templates","--check",stdout=c)
+        self.assertIn(f"TOTAL={len(SYSTEM_WHATSAPP_READY_TEMPLATES)}",a.getvalue())
+        self.assertIn("CREATED=0",b.getvalue())
+        self.assertIn("SYSTEM_TEMPLATE_CHECK=PASS",c.getvalue())
