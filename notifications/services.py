@@ -498,6 +498,31 @@ def create_or_get_notification_delivery(
     return delivery, created
 
 
+def resolve_notification_event_template_content(*, event: NotificationEvent, recipient=None) -> dict[str, Any]:
+    from whatsapp.models import WhatsAppTemplate, WhatsAppTemplateStatus
+    from whatsapp.services import SYSTEM_WHATSAPP_READY_TEMPLATES, SYSTEM_WHATSAPP_TEMPLATE_COMPANY_CODE, render_template_body
+    event_type=_notification_clean_text(event.event_type).lower()
+    item=next((x for x in SYSTEM_WHATSAPP_READY_TEMPLATES if _notification_clean_text((x.get("metadata") or {}).get("event")).lower()==event_type),None)
+    fallback={"title":event.title or event.event_type,"message":event.message or event.event_type,"template_code":"","template_id":None,"template_rendered":False,"template_fallback":True,"missing_variables":[],"variables":{}}
+    if item is None: return fallback
+    code=_notification_clean_text(item.get("code")).upper()
+    template=WhatsAppTemplate.objects.filter(company__company_code=SYSTEM_WHATSAPP_TEMPLATE_COMPANY_CODE,code=code,status=WhatsAppTemplateStatus.ACTIVE).first()
+    if template is None: return {**fallback,"template_code":code}
+    payload=dict(event.payload or {})
+    variables={k:v for k,v in payload.items() if v is not None and not isinstance(v,(dict,list,tuple,set))}
+    company_name=_notification_clean_text(getattr(event.company,"display_name","") or getattr(event.company,"name",""))
+    recipient_name=_notification_recipient_name(recipient)
+    for key,value in {"company_name":company_name,"owner_name":recipient_name,"user_name":recipient_name}.items():
+        if key not in variables and _notification_clean_text(value): variables[key]=value
+    missing=[key for key in list(template.variables or []) if not _notification_clean_text(variables.get(key))]
+    if missing: return {**fallback,"template_code":template.code,"template_id":template.id,"missing_variables":missing,"variables":variables}
+    rendered=render_template_body(template=template,variables=variables)
+    if not _notification_clean_text(rendered): return {**fallback,"template_code":template.code,"template_id":template.id,"variables":variables}
+    return {"title":template.name or event.title or event.event_type,"message":rendered,"template_code":template.code,"template_id":template.id,"template_rendered":True,"template_fallback":False,"missing_variables":[],"variables":variables}
+
+def _notification_template_delivery_metadata(content: dict[str, Any]) -> dict[str, Any]:
+    return {"template_code":content.get("template_code") or "","template_id":content.get("template_id"),"template_rendered":bool(content.get("template_rendered")),"template_fallback":bool(content.get("template_fallback")),"template_missing_variables":list(content.get("missing_variables") or [])}
+
 @transaction.atomic
 def deliver_notification_in_app(
     *,
@@ -553,12 +578,14 @@ def deliver_notification_in_app(
 
     delivery.mark_processing()
 
+    content = resolve_notification_event_template_content(event=event, recipient=recipient)
+
     try:
         notification = create_notification(
             company=event.company,
             recipient=recipient,
-            title=event.title or event.event_type,
-            message=event.message or event.event_type,
+            title=content["title"],
+            message=content["message"],
             notification_type=notification_type,
             channel=NotificationChannel.IN_APP,
             priority=priority,
@@ -574,6 +601,7 @@ def deliver_notification_in_app(
                 "notification_event_type": (
                     event.event_type
                 ),
+                **_notification_template_delivery_metadata(content),
             },
             created_by=event.created_by,
             validate_recipient_membership=(
@@ -586,6 +614,7 @@ def deliver_notification_in_app(
             "company_notification_id": (
                 notification.id
             ),
+            **_notification_template_delivery_metadata(content),
         }
 
         delivery.mark_sent(
@@ -764,10 +793,12 @@ def deliver_notification_email(
 
     delivery.mark_processing()
 
+    content = resolve_notification_event_template_content(event=event, recipient=recipient)
+
     try:
         message = EmailMessage(
-            subject=event.title or event.event_type,
-            body=event.message or event.event_type,
+            subject=content["title"],
+            body=content["message"],
             from_email=getattr(
                 settings,
                 "DEFAULT_FROM_EMAIL",
@@ -792,6 +823,7 @@ def deliver_notification_email(
                 **(delivery.metadata or {}),
                 "email": email,
                 "sent_count": sent_count,
+                **_notification_template_delivery_metadata(content),
             },
         )
 
@@ -856,6 +888,8 @@ def deliver_notification_whatsapp(
 
     delivery.mark_processing()
 
+    content = resolve_notification_event_template_content(event=event, recipient=recipient)
+
     try:
         result = send_company_whatsapp_message(
             company=event.company,
@@ -865,11 +899,7 @@ def deliver_notification_whatsapp(
                     recipient
                 )
             ),
-            message_body=(
-                event.message
-                or event.title
-                or event.event_type
-            ),
+            message_body=content["message"],
             source_type="SYSTEM",
             source_id=event.event_key,
             user=event.created_by,
@@ -926,6 +956,7 @@ def deliver_notification_whatsapp(
                 "whatsapp_message_log_id": (
                     message_log.get("id")
                 ),
+                **_notification_template_delivery_metadata(content),
             },
         )
 
