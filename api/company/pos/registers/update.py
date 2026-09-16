@@ -110,24 +110,8 @@ def _first_sent_value(data: dict[str, Any], *names: str):
 
 
 def _get_branch_for_company(company, branch_id: Any):
-    """
-    Resolve branch safely for current company only.
-    """
-    parsed_id = _clean_id(branch_id, "branch_id")
-
-    if not parsed_id:
-        raise ValidationError({"branch_id": "Branch is required."})
-
-    branch = Branch.objects.filter(
-        company=company,
-        id=parsed_id,
-    ).first()
-
-    if not branch:
-        raise ValidationError({"branch_id": "Branch was not found."})
-
-    return branch
-
+    """Resolve the required active branch for a POS register assignment."""
+    return Branch.resolve_assignable_for_company(company=company, branch_id=branch_id, required=True, field_name="branch_id")
 
 def _get_warehouse_for_company(company, warehouse_id: Any):
     """

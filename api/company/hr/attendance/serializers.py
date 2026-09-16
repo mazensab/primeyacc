@@ -144,23 +144,8 @@ def resolve_company_employee(*, company, employee_id) -> Employee:
 
 
 def resolve_company_branch(*, company, branch_id) -> Branch | None:
-    """
-    Resolve branch by ID inside current company only.
-    """
-
-    if branch_id in [None, "", 0, "0"]:
-        return None
-
-    try:
-        return Branch.objects.get(
-            id=branch_id,
-            company=company,
-        )
-    except Branch.DoesNotExist:
-        raise ValidationError(
-            {"branch_id": "Branch was not found in the current company."}
-        )
-
+    """Resolve an optional active branch for a new attendance assignment."""
+    return Branch.resolve_assignable_for_company(company=company, branch_id=branch_id, required=False, field_name="branch_id")
 
 def parse_request_datetime(value, field_name: str):
     """

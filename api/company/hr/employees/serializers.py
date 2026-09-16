@@ -103,33 +103,9 @@ def serialize_employee_choices() -> dict[str, Any]:
     }
 
 
-def resolve_company_branch(
-    *,
-    company: Company,
-    branch_id: Any,
-) -> Branch | None:
-    """
-    Resolve branch_id safely inside the current company.
-    """
-
-    if branch_id in [None, "", 0, "0"]:
-        return None
-
-    try:
-        branch_id_int = int(branch_id)
-    except (TypeError, ValueError):
-        raise ValidationError({"branch_id": "Invalid branch_id."})
-
-    try:
-        return Branch.objects.get(
-            id=branch_id_int,
-            company=company,
-        )
-    except Branch.DoesNotExist:
-        raise ValidationError(
-            {"branch_id": "Branch was not found inside the current company."}
-        )
-
+def resolve_company_branch(*, company: Company, branch_id: Any) -> Branch | None:
+    """Resolve an optional active branch for a new employee assignment."""
+    return Branch.resolve_assignable_for_company(company=company, branch_id=branch_id, required=False, field_name="branch_id")
 
 def build_employee_data_from_request(
     *,

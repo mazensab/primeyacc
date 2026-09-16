@@ -112,27 +112,8 @@ def _to_bool(value: Any) -> bool | None:
 
 
 def _get_branch_for_company(company, branch_id: Any):
-    """
-    Resolve branch safely for current company only.
-    """
-    if branch_id in [None, ""]:
-        return None
-
-    try:
-        branch_id = int(branch_id)
-    except (TypeError, ValueError):
-        raise ValidationError({"branch_id": "Invalid branch id."})
-
-    branch = Branch.objects.filter(
-        company=company,
-        id=branch_id,
-    ).first()
-
-    if not branch:
-        raise ValidationError({"branch_id": "Branch was not found."})
-
-    return branch
-
+    """Resolve an optional active branch for a terminal assignment."""
+    return Branch.resolve_assignable_for_company(company=company, branch_id=branch_id, required=False, field_name="branch_id")
 
 def _get_gateway_for_company(company, gateway_id: Any):
     """

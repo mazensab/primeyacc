@@ -1196,6 +1196,26 @@ class Branch(models.Model):
             ).exclude(pk=self.pk).update(is_default=False)
 
     @classmethod
+    def resolve_assignable_for_company(
+        cls, *, company, branch_id, required: bool = False, field_name: str = "branch_id",
+    ):
+        """Resolve an active same-company branch for a new operational assignment."""
+        if branch_id in [None, "", 0, "0"]:
+            if required:
+                raise ValidationError({field_name: "Branch is required."})
+            return None
+        try:
+            branch_id = int(branch_id)
+        except (TypeError, ValueError) as exc:
+            raise ValidationError({field_name: "Invalid branch id."}) from exc
+        branch = cls.objects.filter(company=company, id=branch_id).order_by("id").first()
+        if branch is None:
+            raise ValidationError({field_name: "Branch was not found in the current company."})
+        if not branch.is_active:
+            raise ValidationError({field_name: "Selected branch is not active."})
+        return branch
+
+    @classmethod
     def get_operational_for_company(cls, company):
         """Return active default, then first active branch, else None."""
         if not company:

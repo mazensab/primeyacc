@@ -911,17 +911,12 @@ def get_company_stock_movements(company: Company) -> QuerySet[StockMovement]:
     )
 
 
-def validate_branch_for_company(
-    *,
-    company: Company,
-    branch: Branch | None,
-) -> None:
-    """
-    Ensure branch belongs to company.
-    """
+def validate_branch_for_company(*, company: Company, branch: Branch | None, require_active: bool = False) -> None:
+    """Validate company ownership and optionally active assignment eligibility."""
     if branch and branch.company_id != company.id:
         raise ValidationError("Selected branch does not belong to this company.")
-
+    if require_active and branch and not branch.is_active:
+        raise ValidationError("Selected branch is not active.")
 
 def validate_warehouse_for_company(
     *,
@@ -1084,12 +1079,10 @@ def create_warehouse(
     branch_id = data.get("branch_id") or data.get("branch")
 
     if branch_id:
-        branch = Branch.objects.filter(
-            id=branch_id,
-            company=company,
-        ).first()
-        if not branch:
-            raise ValidationError("Selected branch was not found for this company.")
+        branch = Branch.resolve_assignable_for_company(
+            company=company, branch_id=branch_id, required=False, field_name="branch_id"
+        )
+        validate_branch_for_company(company=company, branch=branch, require_active=True)
 
     code = normalize_code(data.get("code"))
     name = normalize_text(data.get("name"))
@@ -1152,12 +1145,17 @@ def update_warehouse(
         branch = None
 
         if branch_id:
-            branch = Branch.objects.filter(
-                id=branch_id,
+            branch = Branch.resolve_assignable_for_company(
                 company=company,
-            ).first()
-            if not branch:
-                raise ValidationError("Selected branch was not found for this company.")
+                branch_id=branch_id,
+                required=False,
+                field_name="branch_id",
+            )
+            validate_branch_for_company(
+                company=company,
+                branch=branch,
+                require_active=True,
+            )
 
         warehouse.branch = branch
 
