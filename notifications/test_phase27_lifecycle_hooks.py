@@ -535,7 +535,10 @@ class Phase27DOnboardingHookTests(
     Phase27DLifecycleFixtureMixin,
     TransactionTestCase,
 ):
-    reset_sequences = True
+    # System-template auto-bootstrap creates a canonical company during
+    # post_migrate on the test database. Resetting sequences to 1 would
+    # collide with that preserved bootstrap row.
+    reset_sequences = False
 
     def setUp(self):
         self.build_fixture(

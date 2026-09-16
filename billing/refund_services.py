@@ -609,14 +609,30 @@ def execute_platform_refund(
             actor=actor,
             from_status=old_status,
             to_status=locked.status,
-            message=(
-                locked.failure_message
-            ),
-            payload={
-                "provider_status": (
-                    result.status.value
-                )
+            message=(locked.failure_message),
+            payload={"provider_status": result.status.value},
+        )
+
+        from notifications.lifecycle import schedule_lifecycle_notification
+
+        schedule_lifecycle_notification(
+            company_id=locked.company_id,
+            event_type="refund.failed",
+            event_key=f"platform-refund:{locked.id}:failed",
+            title="تعذر استرداد الدفعة",
+            message="تعذر إتمام استرداد دفعة الاشتراك.",
+            metadata={
+                "refund_id": locked.id,
+                "payment_id": locked.payment_id,
+                "subscription_id": locked.subscription_id,
+                "refund_status": locked.status,
+                "amount": f"{money(locked.amount):.2f}",
+                "currency_code": locked.currency_code,
+                "gateway": locked.gateway,
+                "failure_code": locked.failure_code,
+                "provider_status": result.status.value,
             },
+            created_by_id=getattr(actor, "id", None),
         )
         return locked
     old_status = locked.status
@@ -642,13 +658,31 @@ def execute_platform_refund(
             "confirmed by provider."
         ),
         payload={
-            "provider_status": (
-                result.status.value
-            ),
-            "provider_refund_id": (
-                locked.provider_refund_id
-            ),
+            "provider_status": result.status.value,
+            "provider_refund_id": locked.provider_refund_id,
         },
+    )
+
+    from notifications.lifecycle import schedule_lifecycle_notification
+
+    schedule_lifecycle_notification(
+        company_id=locked.company_id,
+        event_type="refund.succeeded",
+        event_key=f"platform-refund:{locked.id}:succeeded",
+        title="تم استرداد الدفعة",
+        message="تم استرداد دفعة الاشتراك بنجاح.",
+        metadata={
+            "refund_id": locked.id,
+            "payment_id": locked.payment_id,
+            "subscription_id": locked.subscription_id,
+            "refund_status": locked.status,
+            "amount": f"{money(locked.amount):.2f}",
+            "currency_code": locked.currency_code,
+            "gateway": locked.gateway,
+            "provider_refund_id": locked.provider_refund_id,
+            "provider_status": result.status.value,
+        },
+        created_by_id=getattr(actor, "id", None),
     )
     return locked
 @transaction.atomic

@@ -27,13 +27,12 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
 from api.permissions import user_has_system_permission
 from subscriptions.models import CompanySubscription
-from subscriptions.services import money
+from subscriptions.services import cancel_subscription, money
 
 
 def _json_body(request: HttpRequest) -> dict[str, Any]:
@@ -345,8 +344,6 @@ def system_subscription_cancel(
         )
 
     cancel_note = _clean_text(_get_value(request, payload, "notes", ""))
-    now = timezone.now()
-
     with transaction.atomic():
         subscription = CompanySubscription.objects.select_for_update().select_related(
             "company",
@@ -358,22 +355,13 @@ def system_subscription_cancel(
 
         old_status = subscription.status
 
-        subscription.status = CompanySubscription.Status.CANCELLED
-        subscription.auto_renew = False
-        subscription.cancelled_at = now
-        subscription.notes = _append_cancel_note(
+        subscription = cancel_subscription(
             subscription=subscription,
-            cancel_note=cancel_note,
-        )
-
-        subscription.save(
-            update_fields=[
-                "status",
-                "auto_renew",
-                "cancelled_at",
-                "notes",
-                "updated_at",
-            ]
+            actor=request.user,
+            note=_append_cancel_note(
+                subscription=subscription,
+                cancel_note=cancel_note,
+            ),
         )
 
     if old_status == CompanySubscription.Status.PENDING_PAYMENT:

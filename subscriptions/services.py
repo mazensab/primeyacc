@@ -617,6 +617,8 @@ def cancel_subscription(
     *,
     subscription: CompanySubscription,
     reason: str = "",
+    actor=None,
+    note: str = "",
 ) -> CompanySubscription:
     """
     Cancel a subscription and disable auto-renew.
@@ -627,12 +629,37 @@ def cancel_subscription(
 
     subscription = CompanySubscription.objects.select_for_update().get(pk=subscription.pk)
 
-    if reason:
+    if note:
+        subscription.notes = note
+        subscription.save(update_fields=["notes", "updated_at"])
+    elif reason:
         current_notes = subscription.notes or ""
         subscription.notes = f"{current_notes}\nCancellation reason: {reason}".strip()
         subscription.save(update_fields=["notes", "updated_at"])
 
     subscription.cancel(save=True)
+
+    from notifications.lifecycle import schedule_lifecycle_notification
+
+    schedule_lifecycle_notification(
+        company_id=subscription.company_id,
+        event_type="subscription.cancelled",
+        event_key=f"subscription:{subscription.id}:cancelled",
+        title="تم إلغاء الاشتراك",
+        message="تم إلغاء اشتراك Mhamcloud.",
+        metadata={
+            "subscription_id": subscription.id,
+            "plan_id": subscription.plan_id,
+            "status": subscription.status,
+            "action": subscription.action,
+            "billing_cycle": subscription.billing_cycle,
+            "cancelled_at": (
+                subscription.cancelled_at.isoformat()
+                if subscription.cancelled_at else None
+            ),
+        },
+        created_by_id=getattr(actor, "id", None),
+    )
 
     return subscription
 
@@ -642,6 +669,7 @@ def suspend_subscription(
     *,
     subscription: CompanySubscription,
     reason: str = "",
+    actor=None,
 ) -> CompanySubscription:
     """
     Suspend a subscription.
@@ -658,6 +686,28 @@ def suspend_subscription(
         subscription.save(update_fields=["notes", "updated_at"])
 
     subscription.suspend(save=True)
+
+    from notifications.lifecycle import schedule_lifecycle_notification
+
+    schedule_lifecycle_notification(
+        company_id=subscription.company_id,
+        event_type="subscription.suspended",
+        event_key=f"subscription:{subscription.id}:suspended",
+        title="تم تعليق الاشتراك",
+        message="تم تعليق اشتراك Mhamcloud.",
+        metadata={
+            "subscription_id": subscription.id,
+            "plan_id": subscription.plan_id,
+            "status": subscription.status,
+            "action": subscription.action,
+            "billing_cycle": subscription.billing_cycle,
+            "suspended_at": (
+                subscription.suspended_at.isoformat()
+                if subscription.suspended_at else None
+            ),
+        },
+        created_by_id=getattr(actor, "id", None),
+    )
 
     return subscription
 

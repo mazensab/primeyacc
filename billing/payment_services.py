@@ -897,4 +897,26 @@ def cancel_subscription_payment_attempt(
         ),
     )
 
+    from notifications.lifecycle import schedule_lifecycle_notification
+
+    schedule_lifecycle_notification(
+        company_id=locked.company_id,
+        event_type="payment.cancelled",
+        event_key=f"platform-payment:{locked.id}:cancelled",
+        title="تم إلغاء محاولة الدفع",
+        message=(
+            locked.cancellation_reason
+            or "تم إلغاء محاولة دفع اشتراك Mhamcloud."
+        ),
+        metadata={
+            "payment_id": locked.id,
+            "subscription_id": locked.subscription_id,
+            "invoice_id": locked.invoice_id,
+            "payment_status": locked.status,
+            "gateway": locked.gateway,
+            "cancellation_reason": locked.cancellation_reason,
+        },
+        created_by_id=getattr(actor, "id", None),
+    )
+
     return locked

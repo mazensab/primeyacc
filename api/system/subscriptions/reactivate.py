@@ -166,6 +166,12 @@ def system_subscription_reactivate(
             ]
         )
 
+    reactivation_marker = (
+        subscription.suspended_at.isoformat()
+        if subscription.suspended_at
+        else "unknown"
+    )
+
     try:
         subscription.activate(
             paid_at=subscription.paid_at or timezone.now(),
@@ -180,6 +186,28 @@ def system_subscription_reactivate(
             },
             status=400,
         )
+
+    from notifications.lifecycle import schedule_lifecycle_notification
+
+    schedule_lifecycle_notification(
+        company_id=subscription.company_id,
+        event_type="subscription.reactivated",
+        event_key=(
+            f"subscription:{subscription.id}:reactivated:"
+            f"{reactivation_marker}"
+        ),
+        title="تمت إعادة تفعيل الاشتراك",
+        message="تمت إعادة تفعيل اشتراك Mhamcloud بنجاح.",
+        metadata={
+            "subscription_id": subscription.id,
+            "plan_id": subscription.plan_id,
+            "status": subscription.status,
+            "action": subscription.action,
+            "billing_cycle": subscription.billing_cycle,
+            "previous_suspended_at": reactivation_marker,
+        },
+        created_by_id=getattr(request.user, "id", None),
+    )
 
     return JsonResponse(
         {

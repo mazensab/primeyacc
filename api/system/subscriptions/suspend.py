@@ -12,6 +12,7 @@ from django.views.decorators.http import require_POST
 
 from api.permissions import user_has_system_permission
 from subscriptions.models import CompanySubscription
+from subscriptions.services import suspend_subscription
 
 
 def _json_body(request: HttpRequest) -> dict[str, Any]:
@@ -154,7 +155,10 @@ def system_subscription_suspend(
         )
 
     try:
-        subscription.suspend(save=True)
+        subscription = suspend_subscription(
+            subscription=subscription,
+            actor=request.user,
+        )
     except ValidationError as exc:
         errors = (
             exc.message_dict
