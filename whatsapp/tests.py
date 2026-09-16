@@ -901,7 +901,8 @@ class SystemWhatsAppMessageLogTests(TestCase):
         self.assertTrue(payload["success"])
         self.assertIn("message_log", payload)
         log = WhatsAppMessageLog.objects.get(message_body="System WhatsApp logged message.")
-        self.assertEqual(log.company, self.company)
+        self.assertIsNotNone(log.company)
+        self.assertEqual(log.company.company_code, "SYSTEM-WHATSAPP-TEMPLATES")
         self.assertEqual(log.status, WhatsAppMessageStatus.SENT)
         self.assertEqual(log.source_type, "SYSTEM")
         self.assertEqual(log.recipient_phone, "+966551559556")
@@ -1011,6 +1012,7 @@ class SystemWhatsAppReadyTemplateSeedTests(TestCase):
             SYSTEM_WHATSAPP_READY_TEMPLATES,
             seed_system_whatsapp_ready_templates,
         )
+        WhatsAppTemplate.objects.filter(metadata__scope="SYSTEM").delete()
         first = seed_system_whatsapp_ready_templates(user=self.user)
         second = seed_system_whatsapp_ready_templates(user=self.user)
         self.assertTrue(first["success"])
@@ -2034,3 +2036,45 @@ class V224ASystemTemplateTests(TestCase):
         self.assertIn(f"TOTAL={len(SYSTEM_WHATSAPP_READY_TEMPLATES)}",a.getvalue())
         self.assertIn("CREATED=0",b.getvalue())
         self.assertIn("SYSTEM_TEMPLATE_CHECK=PASS",c.getvalue())
+
+# ============================================================
+# V2-24A2 — automatic system-template bootstrap
+# ============================================================
+
+class SystemTemplateAutoBootstrapTests(TestCase):
+    def test_bootstrap_reconciles_system_templates_idempotently(self):
+        from whatsapp.bootstrap import seed_system_templates_after_migrate
+        from whatsapp.services import (
+            SYSTEM_WHATSAPP_READY_TEMPLATES,
+            SYSTEM_WHATSAPP_TEMPLATE_COMPANY_CODE,
+        )
+        from companies.models import Company
+        from whatsapp.models import WhatsAppTemplate
+
+        company = Company.objects.filter(
+            company_code=SYSTEM_WHATSAPP_TEMPLATE_COMPANY_CODE
+        ).first()
+        if company is not None:
+            WhatsAppTemplate.objects.filter(company=company).delete()
+
+        seed_system_templates_after_migrate()
+        seed_system_templates_after_migrate()
+
+        company = Company.objects.get(
+            company_code=SYSTEM_WHATSAPP_TEMPLATE_COMPANY_CODE
+        )
+        self.assertEqual(
+            WhatsAppTemplate.objects.filter(company=company).count(),
+            len(SYSTEM_WHATSAPP_READY_TEMPLATES),
+        )
+
+    def test_bootstrap_skips_reverse_migration_plan(self):
+        from unittest.mock import patch
+        from whatsapp.bootstrap import seed_system_templates_after_migrate
+
+        with patch(
+            "whatsapp.services.seed_system_whatsapp_ready_templates"
+        ) as seed:
+            seed_system_templates_after_migrate(plan=[(object(), True)])
+
+        seed.assert_not_called()
