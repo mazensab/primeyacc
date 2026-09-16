@@ -37,6 +37,7 @@ from accounting.services import (
 )
 from api.permissions import user_has_system_permission
 from companies.models import ActivityProfile, Company, CompanyStatus
+from notifications.lifecycle import schedule_lifecycle_notification
 
 
 def _json_body(request: HttpRequest) -> dict[str, Any]:
@@ -293,6 +294,8 @@ def system_company_status(request: HttpRequest, company_id: int) -> JsonResponse
     valid_statuses = {choice[0] for choice in CompanyStatus.choices}
     update_fields: set[str] = set()
     message = "تم تحديث حالة الشركة بنجاح."
+    previous_status = getattr(company, "status", "")
+    previous_is_active = bool(getattr(company, "is_active", True))
 
     try:
         with transaction.atomic():
@@ -411,6 +414,36 @@ def system_company_status(request: HttpRequest, company_id: int) -> JsonResponse
                     company,
                     user=request.user,
                     overwrite=False,
+                )
+
+            current_status = getattr(company, "status", "")
+            current_is_active = bool(getattr(company, "is_active", True))
+            event_type = ""
+            event_key_suffix = ""
+            if current_status == CompanyStatus.SUSPENDED and previous_status != CompanyStatus.SUSPENDED:
+                event_type, event_key_suffix = "company.suspended", "suspended"
+            elif previous_status == CompanyStatus.SUSPENDED and current_status == CompanyStatus.ACTIVE:
+                event_type, event_key_suffix = "company.reactivated", "reactivated"
+            elif current_is_active and not previous_is_active:
+                event_type, event_key_suffix = "company.activated", "activated"
+            elif previous_is_active and not current_is_active:
+                event_type, event_key_suffix = "company.deactivated", "deactivated"
+
+            if event_type:
+                schedule_lifecycle_notification(
+                    company_id=company.id,
+                    event_type=event_type,
+                    event_key=f"company:{company.id}:{event_key_suffix}:{company.updated_at.isoformat()}",
+                    title=event_type.replace(".", " ").title(),
+                    message=message,
+                    metadata={
+                        "company_id": company.id,
+                        "company_name": company.display_name or company.name,
+                        "reason": reason or getattr(company, "suspended_reason", ""),
+                        "previous_status": previous_status,
+                        "current_status": current_status,
+                    },
+                    created_by_id=getattr(request.user, "id", None),
                 )
 
     except AccountingConfigurationError as exc:

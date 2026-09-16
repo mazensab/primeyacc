@@ -29,6 +29,7 @@ from accounts.models import (
 )
 from api.permissions import user_has_system_permission
 from companies.models import Company
+from notifications.lifecycle import schedule_lifecycle_notification
 User = get_user_model()
 def _json_body(request: HttpRequest) -> dict[str, Any]:
     if not request.body:
@@ -293,7 +294,7 @@ def _ensure_company_user_profile(
     return profile
 def _default_company_role(company: Company) -> str:
     has_memberships = CompanyMembership.objects.filter(
-        company=company,
+        company_id=company.id,
     ).exists()
     if has_memberships:
         return CompanyRole.ADMIN
@@ -414,7 +415,7 @@ def system_company_user_create(
                 CompanyMembership.objects
                 .filter(
                     user=user,
-                    company=company,
+                    company_id=company.id,
                 )
                 .first()
             )
@@ -449,7 +450,7 @@ def system_company_user_create(
             )
             membership = CompanyMembership(
                 user=user,
-                company=company,
+                company_id=company.id,
                 role=role,
                 status=status,
                 is_primary=_clean_bool(
@@ -492,6 +493,21 @@ def system_company_user_create(
                 membership.joined_at = timezone.now()
             membership.full_clean()
             membership.save()
+
+            schedule_lifecycle_notification(
+                company_id=company.id,
+                event_type="user.created",
+                event_key=f"company:{company.id}:membership:{membership.id}:created",
+                title="User created",
+                message=f"User {user.get_full_name() or user.get_username()} was added to {company.display_name or company.name}.",
+                metadata={
+                    "user_id": user.id,
+                    "membership_id": membership.id,
+                    "company_id": company.id,
+                    "role_name": role,
+                },
+                created_by_id=getattr(request.user, "id", None),
+            )
     except ValidationError as exc:
         return JsonResponse(
             {

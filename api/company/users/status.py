@@ -37,6 +37,7 @@ from django.views.decorators.http import require_POST
 
 from accounts.models import CompanyMembership, CompanyRole, MembershipStatus
 from api.permissions import attach_company_context, request_has_company_permission
+from notifications.lifecycle import schedule_lifecycle_notification
 
 
 def _json_body(request: HttpRequest) -> dict[str, Any]:
@@ -224,7 +225,7 @@ def _get_membership_or_404(company, membership_id: int) -> CompanyMembership | N
         )
         .filter(
             id=membership_id,
-            company=company,
+            company_id=company.id,
         )
         .first()
     )
@@ -364,6 +365,7 @@ def company_user_status(
         )
 
     payload = _json_body(request)
+    previous_status = target_membership.status
 
     try:
         with transaction.atomic():
@@ -374,6 +376,34 @@ def company_user_status(
                 request=request,
                 payload=payload,
             )
+
+            event_type = ""
+            if action == "activate" and previous_status == MembershipStatus.SUSPENDED:
+                event_type = "user.reactivated"
+            elif action == "activate" and previous_status != MembershipStatus.ACTIVE:
+                event_type = "user.activated"
+            elif action == "suspend" and previous_status != MembershipStatus.SUSPENDED:
+                event_type = "user.suspended"
+            elif action == "deactivate" and previous_status != MembershipStatus.INACTIVE:
+                event_type = "user.deactivated"
+
+            if event_type:
+                schedule_lifecycle_notification(
+                    company_id=company.id,
+                    event_type=event_type,
+                    event_key=f"company:{company.id}:membership:{target_membership.id}:{event_type}:{target_membership.updated_at.isoformat()}",
+                    title=event_type.replace(".", " ").title(),
+                    message=f"User {target_membership.user.get_full_name() or target_membership.user.get_username()} status changed to {target_membership.status}.",
+                    metadata={
+                        "user_id": target_membership.user_id,
+                        "membership_id": target_membership.id,
+                        "company_id": company.id,
+                        "previous_status": previous_status,
+                        "current_status": target_membership.status,
+                        "reason": target_membership.suspended_reason or "",
+                    },
+                    created_by_id=getattr(request.user, "id", None),
+                )
 
     except ValidationError as exc:
         return JsonResponse(

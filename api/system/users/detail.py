@@ -23,6 +23,7 @@ from django.views.decorators.http import require_http_methods
 
 from accounts.models import CompanyMembership, SystemRole
 from api.permissions import user_has_system_permission
+from notifications.lifecycle import schedule_lifecycle_notification
 
 from .list import _datetime_to_string, _profile_payload
 from .security import (
@@ -320,6 +321,7 @@ def system_user_detail(
 
     user_update_fields: list[str] = []
     profile_update_fields: list[str] = []
+    previous_role = profile.system_role
 
     with transaction.atomic():
         for field in ("first_name", "last_name", "email"):
@@ -351,6 +353,33 @@ def system_user_detail(
                     "updated_at",
                 ]
             )
+
+        if "system_role" in payload and desired_role != previous_role:
+            notification_membership = (
+                CompanyMembership.objects
+                .filter(user=user)
+                .select_related("company")
+                .order_by("-is_primary", "id")
+                .first()
+            )
+            # NotificationEvent is intentionally tenant-scoped: its company
+            # foreign key is required. A system user with no CompanyMembership
+            # has no valid notification tenant, so no synthetic company is used.
+            if notification_membership is not None:
+                schedule_lifecycle_notification(
+                    company_id=notification_membership.company_id,
+                    event_type="user.role_changed",
+                    event_key=f"system-user:{user.id}:role:{previous_role}:{desired_role}:{profile.updated_at.isoformat()}",
+                    title="User role changed",
+                    message=f"User {user.get_full_name() or user.get_username()} role changed from {previous_role} to {desired_role}.",
+                    metadata={
+                        "user_id": user.id,
+                        "company_id": notification_membership.company_id,
+                        "old_role_name": previous_role,
+                        "new_role_name": desired_role,
+                    },
+                    created_by_id=getattr(request.user, "id", None),
+                )
 
     response_payload = _detail_payload(user, profile)
     response_payload["detail"] = "System user updated successfully."

@@ -11,7 +11,8 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
-from accounts.models import UserProfileStatus
+from accounts.models import CompanyMembership, UserProfileStatus
+from notifications.lifecycle import schedule_lifecycle_notification
 from api.permissions import user_has_system_permission
 
 from .list import _profile_payload
@@ -162,6 +163,8 @@ def system_user_status(
             status=400,
         )
 
+    previous_status = profile.status
+
     with transaction.atomic():
         if action == "activate":
             user.is_active = True
@@ -188,6 +191,41 @@ def system_user_status(
                 "updated_at",
             ]
         )
+
+        notification_membership = (
+            CompanyMembership.objects
+            .filter(user=user)
+            .select_related("company")
+            .order_by("-is_primary", "id")
+            .first()
+        )
+        if notification_membership is not None:
+            event_type = ""
+            if action == "activate" and previous_status == UserProfileStatus.SUSPENDED:
+                event_type = "user.reactivated"
+            elif action == "activate" and previous_status != UserProfileStatus.ACTIVE:
+                event_type = "user.activated"
+            elif action == "suspend" and previous_status != UserProfileStatus.SUSPENDED:
+                event_type = "user.suspended"
+            elif action == "deactivate" and previous_status != UserProfileStatus.INACTIVE:
+                event_type = "user.deactivated"
+
+            if event_type:
+                schedule_lifecycle_notification(
+                    company_id=notification_membership.company_id,
+                    event_type=event_type,
+                    event_key=f"system-user:{user.id}:{event_type}:{profile.updated_at.isoformat()}",
+                    title=event_type.replace(".", " ").title(),
+                    message=f"System user {user.get_full_name() or user.get_username()} status changed to {profile.status}.",
+                    metadata={
+                        "user_id": user.id,
+                        "company_id": notification_membership.company_id,
+                        "previous_status": previous_status,
+                        "current_status": profile.status,
+                        "reason": reason,
+                    },
+                    created_by_id=getattr(request.user, "id", None),
+                )
 
     response_payload = _profile_payload(profile)
     response_payload["detail"] = "System user status updated successfully."

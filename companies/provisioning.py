@@ -31,6 +31,7 @@ from companies.models import (
 )
 from subscriptions.models import CompanySubscription, SubscriptionPlan
 from subscriptions.services import create_commercial_pending_subscription
+from notifications.lifecycle import schedule_lifecycle_notification
 
 
 User = get_user_model()
@@ -121,7 +122,7 @@ def ensure_owner_access(
 
     membership, created = CompanyMembership.objects.get_or_create(
         user=owner,
-        company=company,
+        company_id=company.id,
         defaults={
             "role": CompanyRole.OWNER,
             "status": MembershipStatus.ACTIVE,
@@ -278,7 +279,7 @@ def provision_company_tenant(
     company.save()
 
     settings, _ = CompanySettings.objects.get_or_create(
-        company=company,
+        company_id=company.id,
         defaults={
             "default_vat_percentage": vat_percentage,
             "created_by": acting_user,
@@ -302,7 +303,7 @@ def provision_company_tenant(
 
     if initial_plan is not None:
         CompanyOnboarding.objects.create(
-            company=company,
+            company_id=company.id,
             status=CompanyOnboardingStatus.REQUIRED,
             current_step="payment",
         )
@@ -316,6 +317,20 @@ def provision_company_tenant(
             created_by=acting_user,
             notes=subscription_notes,
         )
+
+    schedule_lifecycle_notification(
+        company_id=company.id,
+        event_type="company.created",
+        event_key=f"company:{company.id}:created",
+        title="Company created",
+        message=f"Company {company.display_name or company.name} was created successfully.",
+        metadata={
+            "company_id": company.id,
+            "company_name": company.display_name or company.name,
+            "owner_id": getattr(owner, "id", None),
+        },
+        created_by_id=getattr(acting_user, "id", None),
+    )
 
     return TenantProvisioningResult(
         company=company,
