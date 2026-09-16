@@ -153,18 +153,8 @@ def normalize_invoice_date(
 
 
 def get_default_branch(company: Company) -> Branch | None:
-    """
-    Return the default active branch for a company when available.
-    """
-    return (
-        Branch.objects.filter(
-            company=company,
-            is_default=True,
-            is_active=True,
-        )
-        .order_by("id")
-        .first()
-    )
+    """Return the legacy-compatible operational branch for a company."""
+    return Branch.get_operational_for_company(company)
 
 
 def resolve_company_branch(

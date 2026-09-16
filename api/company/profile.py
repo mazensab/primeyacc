@@ -360,31 +360,8 @@ def _get_or_create_company_settings(company: Company, request: HttpRequest) -> C
 
 
 def _get_default_branch(company: Company) -> Branch | None:
-    """
-    يجلب الفرع الافتراضي للشركة الحالية فقط.
-    """
-
-    branch = (
-        Branch.objects.filter(
-            company=company,
-            is_default=True,
-            is_active=True,
-        )
-        .order_by("id")
-        .first()
-    )
-
-    if branch:
-        return branch
-
-    return (
-        Branch.objects.filter(
-            company=company,
-            is_active=True,
-        )
-        .order_by("id")
-        .first()
-    )
+    """يجلب الفرع التشغيلي وفق العقد المركزي المتوافق تاريخيًا."""
+    return Branch.get_operational_for_company(company)
 
 
 def _can_update_profile(request: HttpRequest) -> bool:

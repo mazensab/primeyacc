@@ -1103,6 +1103,20 @@ class CompanyWorkspacePhase3Tests(TestCase):
         self.assertTrue(second_branch.is_default)
         self.assertTrue(second_branch.is_active)
 
+    def test_operational_branch_prefers_active_default(self) -> None:
+        second = Branch.objects.create(company=self.company, name='Operational Secondary', branch_code='OP-SECOND', is_default=False, is_active=True)
+        self.assertEqual(Branch.get_operational_for_company(self.company), self.default_branch)
+        self.assertNotEqual(Branch.get_operational_for_company(self.company), second)
+
+    def test_operational_branch_falls_back_to_first_active_when_default_inactive(self) -> None:
+        self.default_branch.deactivate(user=self.user)
+        fallback = Branch.objects.create(company=self.company, name='Operational Fallback', branch_code='OP-FALLBACK', is_default=False, is_active=True)
+        self.assertEqual(Branch.get_operational_for_company(self.company), fallback)
+
+    def test_operational_branch_returns_none_without_active_branch(self) -> None:
+        self.default_branch.deactivate(user=self.user)
+        self.assertIsNone(Branch.get_operational_for_company(self.company))
+
     def test_deactivate_default_branch_clears_default_in_domain(self) -> None:
         """
         Domain lifecycle must not leave an inactive branch marked as default.

@@ -1195,6 +1195,16 @@ class Branch(models.Model):
                 is_default=True,
             ).exclude(pk=self.pk).update(is_default=False)
 
+    @classmethod
+    def get_operational_for_company(cls, company):
+        """Return active default, then first active branch, else None."""
+        if not company:
+            return None
+        branch = (cls.objects.filter(company=company, is_default=True, is_active=True).order_by('id').first())
+        if branch:
+            return branch
+        return cls.objects.filter(company=company, is_active=True).order_by('id').first()
+
     def activate(self, user=None) -> None:
         self.status = BranchStatus.ACTIVE
         self.is_active = True
