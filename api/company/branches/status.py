@@ -203,31 +203,24 @@ def _apply_action(branch: Branch, action: str, request: HttpRequest) -> None:
     action = _clean_text(action).lower()
 
     if action == "activate":
-        branch.status = BranchStatus.ACTIVE
-        branch.is_active = True
+        branch.activate(user=request.user)
+        return
 
     elif action == "deactivate":
-        branch.status = BranchStatus.INACTIVE
-        branch.is_active = False
-        if branch.is_default:
-            branch.is_default = False
+        branch.deactivate(user=request.user)
+        return
 
     elif action == "close":
-        branch.status = BranchStatus.CLOSED
-        branch.is_active = False
-        if branch.is_default:
-            branch.is_default = False
+        branch.close(user=request.user)
+        return
 
     elif action == "maintenance":
-        branch.status = BranchStatus.MAINTENANCE
-        branch.is_active = True
+        branch.mark_maintenance(user=request.user)
+        return
 
     elif action == "set_default":
-        if branch.status == BranchStatus.CLOSED:
-            raise ValidationError({"status": "لا يمكن جعل فرع مغلق فرعًا افتراضيًا."})
-        branch.status = BranchStatus.ACTIVE
-        branch.is_active = True
-        branch.is_default = True
+        branch.set_default(user=request.user)
+        return
 
     else:
         raise ValidationError(
@@ -236,9 +229,6 @@ def _apply_action(branch: Branch, action: str, request: HttpRequest) -> None:
             }
         )
 
-    branch.updated_by = request.user
-    branch.full_clean()
-    branch.save()
 
 
 @csrf_protect

@@ -1212,12 +1212,65 @@ class Branch(models.Model):
     def deactivate(self, user=None) -> None:
         self.status = BranchStatus.INACTIVE
         self.is_active = False
+        self.is_default = False
         if user:
             self.updated_by = user
         self.save(
             update_fields=[
                 "status",
                 "is_active",
+                "is_default",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+    def close(self, user=None) -> None:
+        self.status = BranchStatus.CLOSED
+        self.is_active = False
+        self.is_default = False
+        if user:
+            self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "is_active",
+                "is_default",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+    def mark_maintenance(self, user=None) -> None:
+        self.status = BranchStatus.MAINTENANCE
+        self.is_active = True
+        if user:
+            self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "is_active",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+    def set_default(self, user=None) -> None:
+        if self.status == BranchStatus.CLOSED:
+            raise ValidationError(
+                {"status": "A closed branch cannot be set as the default branch."}
+            )
+
+        self.status = BranchStatus.ACTIVE
+        self.is_active = True
+        self.is_default = True
+        if user:
+            self.updated_by = user
+        self.save(
+            update_fields=[
+                "status",
+                "is_active",
+                "is_default",
                 "updated_by",
                 "updated_at",
             ]

@@ -36,6 +36,7 @@ from __future__ import annotations
 import json
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.test import Client, TestCase
 
 from accounts.models import CompanyMembership, CompanyRole, MembershipStatus, UserProfile
@@ -1101,6 +1102,58 @@ class CompanyWorkspacePhase3Tests(TestCase):
         self.assertFalse(self.default_branch.is_default)
         self.assertTrue(second_branch.is_default)
         self.assertTrue(second_branch.is_active)
+
+    def test_deactivate_default_branch_clears_default_in_domain(self) -> None:
+        """
+        Domain lifecycle must not leave an inactive branch marked as default.
+        """
+
+        self.default_branch.deactivate(user=self.user)
+        self.default_branch.refresh_from_db()
+
+        self.assertEqual(self.default_branch.status, "INACTIVE")
+        self.assertFalse(self.default_branch.is_active)
+        self.assertFalse(self.default_branch.is_default)
+        self.assertEqual(self.default_branch.updated_by_id, self.user.id)
+
+    def test_close_default_branch_clears_default_in_domain(self) -> None:
+        """
+        Closing a branch must make it inactive and remove default status.
+        """
+
+        self.default_branch.close(user=self.user)
+        self.default_branch.refresh_from_db()
+
+        self.assertEqual(self.default_branch.status, "CLOSED")
+        self.assertFalse(self.default_branch.is_active)
+        self.assertFalse(self.default_branch.is_default)
+
+    def test_maintenance_branch_remains_active(self) -> None:
+        """
+        Maintenance preserves the existing API contract: branch remains active.
+        """
+
+        self.default_branch.mark_maintenance(user=self.user)
+        self.default_branch.refresh_from_db()
+
+        self.assertEqual(self.default_branch.status, "MAINTENANCE")
+        self.assertTrue(self.default_branch.is_active)
+        self.assertTrue(self.default_branch.is_default)
+
+    def test_closed_branch_cannot_be_set_default(self) -> None:
+        """
+        Closed branches cannot become the operational default.
+        """
+
+        self.default_branch.close(user=self.user)
+
+        with self.assertRaises(ValidationError):
+            self.default_branch.set_default(user=self.user)
+
+        self.default_branch.refresh_from_db()
+        self.assertEqual(self.default_branch.status, "CLOSED")
+        self.assertFalse(self.default_branch.is_active)
+        self.assertFalse(self.default_branch.is_default)
 # ==== SYSTEM COMPANY MANAGEMENT API TESTS START ====
 
 from django.utils import timezone
