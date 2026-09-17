@@ -32,6 +32,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 
 from .detail import POSOrderDetailAPIError, get_pos_order_for_company
 from .list import serialize_pos_order
@@ -373,6 +374,8 @@ def pos_order_receipt(request: Request, order_id: int) -> Response:
     try:
         company = _get_request_company(request)
         order = get_pos_order_for_company(company, order_id)
+
+        require_object_branch(request, order, branch_attr="branch_id")
 
         receipt = build_pos_order_receipt(order)
 

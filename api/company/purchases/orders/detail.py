@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from api.company.branch_enforcement import require_object_branch
+
 from rest_framework.decorators import (
     api_view,
     permission_classes,
@@ -47,6 +49,8 @@ def company_purchase_order_detail(
                 },
                 status=404,
             )
+
+        require_object_branch(request, order, branch_attr="branch_id")
 
         data = serialize_purchase_order(
             order,

@@ -5,6 +5,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.models import Employee, PerformanceCycle
 from hr.services import create_employee_goal
 
@@ -30,6 +31,8 @@ def employee_goal_create(request):
             {"ok": False, "success": False, "message": "Employee not found."},
             status=404,
         )
+
+    require_object_branch(request, employee, branch_attr="branch_id")
 
     data = dict(request.data)
     data.pop("employee", None)

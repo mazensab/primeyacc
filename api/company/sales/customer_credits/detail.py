@@ -1,9 +1,11 @@
-﻿# ============================================================
+# ============================================================
 # api/company/sales/customer_credits/detail.py
 # Mhamcloud | Customer Credit Allocation Detail API
 # ============================================================
 
 from __future__ import annotations
+
+from api.company.branch_enforcement import require_object_branch
 
 from rest_framework.decorators import (
     api_view,
@@ -60,6 +62,8 @@ def company_customer_credit_allocation_detail(
                 },
                 status=404,
             )
+
+        require_object_branch(request, allocation, branch_attr="credit_note.branch_id")
 
         data = serialize_customer_credit_allocation(
             allocation

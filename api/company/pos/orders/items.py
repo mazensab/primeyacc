@@ -35,6 +35,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from pos.models import POSOrderStatus
 from pos.services import add_pos_order_item
 
@@ -219,6 +220,8 @@ def pos_order_items_list(request: Request, order_id: int) -> Response:
     try:
         company = _get_request_company(request)
         order = get_pos_order_for_company(company, order_id)
+
+        require_object_branch(request, order, branch_attr="branch_id")
 
         items_manager = _get_order_items_manager(order)
         items = [

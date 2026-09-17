@@ -1,9 +1,11 @@
-﻿# ============================================================
+# ============================================================
 # ?? api/company/purchases/requests/reject.py
 # ?? Mhamcloud | Purchase Request Reject API
 # ============================================================
 
 from __future__ import annotations
+
+from api.company.branch_enforcement import require_object_branch
 
 from django.core.exceptions import ValidationError
 from rest_framework.decorators import (
@@ -60,6 +62,8 @@ def company_purchase_request_reject(
                 },
                 status=404,
             )
+
+        require_object_branch(request, purchase_request, branch_attr="branch_id")
 
         reason = str(
             payload.get("reason")

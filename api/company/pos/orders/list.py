@@ -33,6 +33,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from pos.models import POSOrder, POSOrderStatus, POSPaymentStatus
 
 
@@ -545,6 +546,12 @@ def pos_orders_list(request: Request) -> Response:
                 "customer",
                 "created_by",
             )
+        )
+
+        queryset = scope_operational_queryset(
+            queryset,
+            request,
+            branch_lookup="branch_id",
         )
 
         queryset = _apply_pos_order_filters(queryset, request)

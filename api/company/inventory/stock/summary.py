@@ -39,6 +39,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from inventory.models import StockItem
 
 
@@ -216,6 +217,12 @@ def stock_summary(request: Request) -> Response:
                 "location",
             )
         )
+        queryset = scope_operational_queryset(
+            queryset,
+            request,
+            branch_lookup="warehouse__branch_id",
+        )
+
         queryset = _apply_summary_filters(
             queryset,
             request,

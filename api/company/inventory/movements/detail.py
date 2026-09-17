@@ -23,6 +23,7 @@ from rest_framework.response import Response
 
 from api.company.inventory.movements.serializers import serialize_stock_movement
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from inventory.models import StockMovement
 
 
@@ -80,6 +81,8 @@ def stock_movement_detail(request: Request, movement_id) -> Response:
                 },
                 status=404,
             )
+
+        require_object_branch(request, movement, branch_attr="warehouse.branch_id")
 
         return Response(
             {

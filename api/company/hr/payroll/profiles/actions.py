@@ -10,6 +10,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.models import EmployeeSalaryProfile
 from hr.services import (
     activate_employee_salary_profile,
@@ -57,6 +58,8 @@ def salary_profile_activate(request, profile_id: int):
     if error_response:
         return error_response
 
+    require_object_branch(request, profile, branch_attr="employee.branch_id")
+
     try:
         profile = activate_employee_salary_profile(
             profile=profile,
@@ -94,6 +97,8 @@ def salary_profile_deactivate(request, profile_id: int):
     profile, error_response = _get_company_profile(request, profile_id)
     if error_response:
         return error_response
+
+    require_object_branch(request, profile, branch_attr="employee.branch_id")
 
     try:
         profile = deactivate_employee_salary_profile(

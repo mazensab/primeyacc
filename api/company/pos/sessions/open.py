@@ -29,6 +29,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from api.company.pos.registers.detail import get_pos_register_for_company
 from pos.services import open_pos_session
 
@@ -155,6 +156,8 @@ def pos_session_open(request: Request) -> Response:
         data = request.data or {}
 
         register = _resolve_register(company, data)
+        require_object_branch(request, register, branch_attr="branch_id")
+
         opening_cash_amount = _clean_decimal(
             data.get("opening_cash_amount")
             or data.get("opening_cash")

@@ -27,6 +27,10 @@
 
 from __future__ import annotations
 
+from accounts.models import BranchAccessMode
+
+from accounts.branch_access import configure_branch_access
+
 from datetime import timedelta
 
 from decimal import Decimal
@@ -169,6 +173,17 @@ def ensure_test_workspace_subscription(company):
 
 
 
+def _v225d_branch_fixture(membership, branch=None):
+    default_branch_id = None
+    if branch is not None and branch.company_id == membership.company_id:
+        default_branch_id = branch.id
+    return configure_branch_access(
+        membership,
+        mode=BranchAccessMode.ALL,
+        default_branch_id=default_branch_id,
+    )
+
+
 class PurchasesTestCase(TestCase):
     """
     Shared setup for purchases tests.
@@ -277,6 +292,10 @@ class PurchasesTestCase(TestCase):
             status="ACTIVE",
             created_by=self.other_user,
         )
+
+        _v225d_branch_fixture(self.membership, self.branch)
+        _v225d_branch_fixture(self.viewer_membership, self.branch)
+        _v225d_branch_fixture(self.other_membership, self.other_branch)
 
         self.supplier = BusinessParty.objects.create(
             company=self.company,

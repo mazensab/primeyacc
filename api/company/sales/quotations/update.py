@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from api.company.branch_enforcement import require_operational_branch
+
+from api.company.branch_enforcement import require_object_branch
+
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import JsonResponse
@@ -49,6 +53,8 @@ def sales_quotation_update(
             status=404,
         )
 
+    require_object_branch(request, quotation, branch_attr="branch_id")
+
     if quotation.status != SalesQuotationStatus.DRAFT:
         return api_error(
             "Only draft quotations can be updated.",
@@ -59,9 +65,9 @@ def sales_quotation_update(
         payload = parse_json_body(request)
 
         if "branch_id" in payload:
-            quotation.branch = resolve_company_branch(
-                membership.company,
-                payload.get("branch_id"),
+            quotation.branch = require_operational_branch(
+                request,
+                branch_id=payload.get("branch_id"),
             )
 
         if "customer_id" in payload:

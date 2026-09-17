@@ -11,6 +11,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.models import LeaveRequest
 from hr.services import (
     approve_leave_request,
@@ -79,6 +80,8 @@ def company_hr_leave_request_submit(request: Request, leave_request_id: int) -> 
     if error_response:
         return error_response
 
+    require_object_branch(request, leave_request, branch_attr="employee.branch_id")
+
     try:
         updated = submit_leave_request(
             leave_request=leave_request,
@@ -123,6 +126,8 @@ def company_hr_leave_request_approve(request: Request, leave_request_id: int) ->
     )
     if error_response:
         return error_response
+
+    require_object_branch(request, leave_request, branch_attr="employee.branch_id")
 
     try:
         updated = approve_leave_request(
@@ -170,6 +175,8 @@ def company_hr_leave_request_reject(request: Request, leave_request_id: int) -> 
     if error_response:
         return error_response
 
+    require_object_branch(request, leave_request, branch_attr="employee.branch_id")
+
     try:
         updated = reject_leave_request(
             leave_request=leave_request,
@@ -215,6 +222,8 @@ def company_hr_leave_request_cancel(request: Request, leave_request_id: int) -> 
     )
     if error_response:
         return error_response
+
+    require_object_branch(request, leave_request, branch_attr="employee.branch_id")
 
     try:
         updated = cancel_leave_request(

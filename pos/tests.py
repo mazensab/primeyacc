@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # ًں“‚ pos/tests.py
 # ًں§  Mhamcloud | POS Tests V1.5
 # ------------------------------------------------------------
@@ -33,6 +33,12 @@
 # ============================================================
 
 from __future__ import annotations
+
+from accounts.models import CompanyMembership
+
+from accounts.models import BranchAccessMode
+
+from accounts.branch_access import configure_branch_access
 
 from decimal import Decimal
 from unittest.mock import patch
@@ -102,6 +108,17 @@ from pos.services import (
 
 
 
+def _v225d_branch_fixture(membership, branch=None):
+    default_branch_id = None
+    if branch is not None and branch.company_id == membership.company_id:
+        default_branch_id = branch.id
+    return configure_branch_access(
+        membership,
+        mode=BranchAccessMode.ALL,
+        default_branch_id=default_branch_id,
+    )
+
+
 class POSBaseTestMixin:
     """
     Shared setup/helpers for POS tests.
@@ -141,6 +158,12 @@ class POSBaseTestMixin:
             branch_code="BR-002",
             created_by=self.user,
         )
+
+        self.membership, _ = CompanyMembership.objects.get_or_create(
+            user=self.user,
+            company=self.company,
+        )
+        _v225d_branch_fixture(self.membership, self.branch)
 
         self.treasury_account = TreasuryAccount.objects.create(
             company=self.company,
@@ -639,6 +662,7 @@ class POSRegistersAPITests(POSBaseTestMixin, TestCase):
             raise AssertionError(f"Unsupported method: {method}")
 
         request.company = self.company
+        request.company_membership = self.membership
         force_authenticate(request, user=self.user)
 
         return request
@@ -951,6 +975,7 @@ class POSSessionsAPITests(POSBaseTestMixin, TestCase):
             raise AssertionError(f"Unsupported method: {method}")
 
         request.company = self.company
+        request.company_membership = self.membership
         force_authenticate(request, user=self.user)
 
         return request
@@ -1321,6 +1346,7 @@ class POSOrdersAPITests(POSBaseTestMixin, TestCase):
             raise AssertionError(f"Unsupported method: {method}")
 
         request.company = self.company
+        request.company_membership = self.membership
         force_authenticate(request, user=self.user)
 
         return request
@@ -2392,6 +2418,7 @@ class POSReturnsAPITests(POSBaseTestMixin, TestCase):
             raise AssertionError(f"Unsupported method: {method}")
 
         request.company = self.company
+        request.company_membership = self.membership
         force_authenticate(request, user=self.user)
 
         return request

@@ -1,4 +1,6 @@
-﻿from __future__ import annotations
+from __future__ import annotations
+
+from api.company.branch_enforcement import require_object_branch
 
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
@@ -39,6 +41,8 @@ def sales_order_invoices(
             "Sales order was not found.",
             status=404,
         )
+
+    require_object_branch(request, order, branch_attr="branch_id")
 
     try:
         summary = serialize_order_invoice_summary(

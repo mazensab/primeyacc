@@ -24,6 +24,7 @@ from rest_framework.response import Response
 
 from api.company.inventory.stock.serializers import serialize_stock_item
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from inventory.models import StockItem
 
 
@@ -79,6 +80,8 @@ def stock_item_detail(request: Request, stock_item_id) -> Response:
                 },
                 status=404,
             )
+
+        require_object_branch(request, stock_item, branch_attr="warehouse.branch_id")
 
         return Response(
             {

@@ -33,6 +33,8 @@ from api.company.payments.terminals.list import (
     serialize_payment_terminal_full,
 )
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_operational_branch
+from api.company.branch_enforcement import require_object_branch
 from payments.models import CompanyPaymentTerminal
 from payments.services import update_payment_terminal
 
@@ -161,6 +163,8 @@ def payment_terminal_detail(request: Request, terminal_id: int) -> Response:
         company = _get_request_company(request)
         terminal = get_payment_terminal_or_raise(company, terminal_id)
 
+        require_object_branch(request, terminal, branch_attr="branch_id")
+
         if request.method == "GET":
             return Response(
                 {
@@ -174,6 +178,13 @@ def payment_terminal_detail(request: Request, terminal_id: int) -> Response:
             )
 
         update_payload = _build_update_payload(company, request.data or {})
+        if "branch" in update_payload:
+            if update_payload.get("branch") is None:
+                raise ValidationError({"branch_id": "A concrete active accessible branch is required."})
+            update_payload["branch"] = require_operational_branch(
+                request,
+                branch_id=update_payload["branch"].id,
+            )
 
         terminal = update_payment_terminal(
             terminal=terminal,

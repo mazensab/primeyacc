@@ -27,6 +27,7 @@ from rest_framework.response import Response
 from api.company.payments.terminals.detail import get_payment_terminal_or_raise
 from api.company.payments.terminals.list import serialize_payment_terminal_full
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from payments.models import CompanyPaymentTerminal
 from payments.services import set_payment_terminal_status
 
@@ -98,6 +99,8 @@ def payment_terminal_status(request: Request, terminal_id: int) -> Response:
     try:
         company = _get_request_company(request)
         terminal = get_payment_terminal_or_raise(company, terminal_id)
+
+        require_object_branch(request, terminal, branch_attr="branch_id")
 
         data = request.data or {}
 

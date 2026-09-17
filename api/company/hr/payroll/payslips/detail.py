@@ -9,6 +9,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.models import Payslip
 
 from .serializers import serialize_payslip
@@ -21,14 +22,13 @@ def payslip_detail(request, payslip_id: int):
 
     if not company:
         return Response(
-            {
-                "ok": False,
-                "success": False,
-                "message": "Active company context is required.",
-            },
-            status=401,
-        )
-
+                {
+                    "ok": False,
+                    "success": False,
+                    "message": "Active company context is required.",
+                },
+                status=401,
+            )
     payslip = Payslip.objects.select_related(
         "payroll_run",
         "period",
@@ -50,6 +50,12 @@ def payslip_detail(request, payslip_id: int):
             },
             status=404,
         )
+
+    require_object_branch(
+        request,
+        payslip,
+        branch_attr="employee.branch_id",
+    )
 
     return Response(
         {

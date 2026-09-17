@@ -20,6 +20,10 @@
 
 from __future__ import annotations
 
+from api.company.branch_enforcement import require_operational_branch
+
+from api.company.branch_enforcement import require_object_branch
+
 from django.core.exceptions import ValidationError
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.request import Request
@@ -86,6 +90,16 @@ def purchase_bill_update(request: Request, bill_id) -> Response:
                 },
                 status=404,
             )
+
+        require_object_branch(request, bill, branch_attr="branch_id")
+
+        if payload.get("branch_id") not in (None, ""):
+            branch = require_operational_branch(
+                request,
+                branch_id=payload.get("branch_id"),
+            )
+            payload = dict(payload)
+            payload["branch_id"] = branch.id
 
         bill = update_purchase_bill(
             bill=bill,

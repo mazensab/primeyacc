@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # ?? api/company/inventory/reservations/allocate.py
 # ?? Mhamcloud | Stock Reservation Allocation API V1.0
 # ------------------------------------------------------------
@@ -16,6 +16,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from inventory.models import (
     InventoryBatchBalance,
     InventorySerialNumber,
@@ -63,6 +64,8 @@ def stock_reservation_allocate(
                 },
                 status=404,
             )
+
+        require_object_branch(request, reservation, branch_attr="sales_order.branch_id")
 
         order_item_id = (
             payload.get("sales_order_item_id")

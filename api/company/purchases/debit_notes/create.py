@@ -1,4 +1,6 @@
-﻿from __future__ import annotations
+from __future__ import annotations
+
+from api.company.branch_enforcement import require_object_branch
 
 from django.core.exceptions import ValidationError
 from rest_framework.decorators import (
@@ -9,6 +11,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from purchases.models import PurchaseReturn
 from purchases.services import (
     create_supplier_debit_note,
     serialize_supplier_debit_note,
@@ -35,6 +38,12 @@ def company_supplier_debit_note_create(
         company = get_request_company(request)
         user = get_request_user(request)
         payload = request.data or {}
+
+        try:
+            purchase_return = PurchaseReturn.objects.get(id=payload.get("purchase_return_id") or payload.get("return_id"), company=company)
+        except PurchaseReturn.DoesNotExist:
+            raise ValidationError({"purchase_return": "Source document was not found."})
+        require_object_branch(request, purchase_return, branch_attr="branch_id")
 
         debit_note = create_supplier_debit_note(
             company=company,

@@ -11,6 +11,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.models import EmployeeSalaryProfile
 from hr.services import update_employee_salary_profile
 
@@ -50,6 +51,8 @@ def salary_profile_update(request, profile_id: int):
             },
             status=404,
         )
+
+    require_object_branch(request, profile, branch_attr="employee.branch_id")
 
     try:
         data = build_salary_profile_data_from_request(request, partial=True)

@@ -1,4 +1,6 @@
-﻿from __future__ import annotations
+from __future__ import annotations
+
+from api.company.branch_enforcement import require_object_branch
 
 from django.core.exceptions import ValidationError
 from rest_framework.decorators import (
@@ -53,6 +55,8 @@ def company_sales_return_confirm(
                 "Sales return was not found.",
                 status=404,
             )
+
+        require_object_branch(request, sales_return, branch_attr="branch_id")
 
         sales_return = confirm_sales_return(
             company=company,

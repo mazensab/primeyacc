@@ -1,9 +1,11 @@
-﻿# ============================================================
+# ============================================================
 # api/company/sales/customer_credits/reverse.py
 # Mhamcloud | Customer Credit Allocation Reverse API
 # ============================================================
 
 from __future__ import annotations
+
+from api.company.branch_enforcement import require_object_branch
 
 from django.core.exceptions import ValidationError
 from rest_framework.decorators import (
@@ -64,6 +66,8 @@ def company_customer_credit_allocation_reverse(
                 },
                 status=404,
             )
+
+        require_object_branch(request, allocation, branch_attr="credit_note.branch_id")
 
         reason = str(
             (request.data or {}).get(

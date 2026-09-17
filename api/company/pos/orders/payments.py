@@ -37,6 +37,7 @@ from rest_framework.response import Response
 from treasury.models import TreasuryAccount
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from pos.models import (
     POSOrderStatus,
     POSPaymentLineStatus,
@@ -471,6 +472,8 @@ def pos_order_payments_list(request: Request, order_id: int) -> Response:
     try:
         company = _get_request_company(request)
         order = get_pos_order_for_company(company, order_id)
+
+        require_object_branch(request, order, branch_attr="branch_id")
 
         payments_manager = _get_order_payments_manager(order)
         payment_lines = [

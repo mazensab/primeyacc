@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from api.company.branch_enforcement import require_object_branch
+
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
@@ -41,6 +43,8 @@ def sales_quotation_reject(
             "Sales quotation was not found.",
             status=404,
         )
+
+    require_object_branch(request, quotation, branch_attr="branch_id")
 
     try:
         payload = parse_json_body(request)

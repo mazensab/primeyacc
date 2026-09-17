@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # ?? api/company/inventory/reservations/create.py
 # ?? Mhamcloud | Stock Reservation Create API V1.0
 # ------------------------------------------------------------
@@ -16,6 +16,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from sales.models import SalesOrder
 from inventory.services import (
     create_sales_order_stock_reservation,
@@ -70,6 +71,8 @@ def stock_reservation_create(request):
                 },
                 status=404,
             )
+
+        require_object_branch(request, sales_order, branch_attr="branch_id")
 
         expires_at = payload.get("expires_at")
 

@@ -11,6 +11,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.services import create_employee_salary_profile
 
 from .serializers import (
@@ -40,6 +41,8 @@ def salary_profile_create(request):
             company,
             request.data.get("employee_id"),
         )
+        require_object_branch(request, employee, branch_attr="branch_id")
+
         data = build_salary_profile_data_from_request(request)
         profile = create_employee_salary_profile(
             company=company,

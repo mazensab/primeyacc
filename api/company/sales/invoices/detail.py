@@ -19,6 +19,8 @@
 
 from __future__ import annotations
 
+from api.company.branch_enforcement import require_object_branch
+
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -99,6 +101,8 @@ def company_sales_invoice_detail(request: Request, invoice_id: int) -> Response:
                 },
                 status=404,
             )
+
+        require_object_branch(request, invoice, branch_attr="branch_id")
 
         data = serialize_sales_invoice(invoice, include_items=True)
 

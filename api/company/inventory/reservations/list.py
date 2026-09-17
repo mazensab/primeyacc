@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # ?? api/company/inventory/reservations/list.py
 # ?? Mhamcloud | Stock Reservations List API V1.0
 # ------------------------------------------------------------
@@ -16,6 +16,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from inventory.models import (
     StockReservation,
     StockReservationSource,
@@ -77,6 +78,12 @@ def stock_reservations_list(request):
                 "allocated_by",
                 "cancelled_by",
             )
+        )
+
+        queryset = scope_operational_queryset(
+            queryset,
+            request,
+            branch_lookup="sales_order__branch_id",
         )
 
         if search:

@@ -4,6 +4,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.models import PerformanceReviewScore
 from hr.services import delete_performance_review_score
 
@@ -25,6 +26,8 @@ def performance_score_delete(request, score_id: int):
             {"ok": False, "success": False, "message": "Performance score not found."},
             status=404,
         )
+
+    require_object_branch(request, score, branch_attr="review.employee.branch_id")
 
     review = delete_performance_review_score(score=score)
 

@@ -27,6 +27,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from pos.models import POSSession
 
 from .list import serialize_pos_session
@@ -107,6 +108,8 @@ def pos_session_detail(request: Request, session_id: int) -> Response:
     try:
         company = _get_request_company(request)
         session = get_pos_session_for_company(company, session_id)
+        require_object_branch(request, session, branch_attr="branch_id")
+
         serialized_session = serialize_pos_session(session)
 
         return Response(

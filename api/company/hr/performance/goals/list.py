@@ -5,6 +5,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from hr.models import EmployeeGoal
 
 from .serializers import serialize_employee_goal
@@ -24,6 +25,12 @@ def employee_goals_list(request):
         EmployeeGoal.objects.filter(company=company)
         .select_related("employee", "cycle")
         .order_by("-created_at", "-id")
+    )
+
+    qs = scope_operational_queryset(
+        qs,
+        request,
+        branch_lookup="employee__branch_id",
     )
 
     employee_id = request.query_params.get("employee_id")

@@ -10,6 +10,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.models import LeaveRequest
 
 from .serializers import serialize_leave_request, serialize_leave_request_choices
@@ -50,6 +51,8 @@ def company_hr_leave_request_detail(request: Request, leave_request_id: int) -> 
             },
             status=404,
         )
+
+    require_object_branch(request, leave_request, branch_attr="employee.branch_id")
 
     serialized = serialize_leave_request(leave_request)
 

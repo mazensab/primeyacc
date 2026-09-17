@@ -29,6 +29,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_operational_branch
 from companies.models import Branch
 from inventory.models import Warehouse
 from payments.models import CompanyPaymentMethod, CompanyPaymentTerminal
@@ -188,9 +189,9 @@ def pos_register_create(request: Request) -> Response:
         company = _get_request_company(request)
         data = request.data or {}
 
-        branch = _get_branch_for_company(
-            company,
-            data.get("branch_id") or data.get("branch"),
+        branch = require_operational_branch(
+            request,
+            branch_id=data.get("branch_id") or data.get("branch"),
         )
         warehouse = _get_warehouse_for_company(
             company,

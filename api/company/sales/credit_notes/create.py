@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from api.company.branch_enforcement import require_object_branch
+
 from django.core.exceptions import ValidationError
 from rest_framework.decorators import (
     api_view,
@@ -14,6 +16,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from sales.models import SalesReturn
 from sales.services import (
     create_sales_credit_note_from_return,
     serialize_sales_credit_note,
@@ -45,6 +48,12 @@ def company_sales_credit_note_create(
             payload.get("sales_return_id")
             or payload.get("return_id")
         )
+
+        try:
+            sales_return = SalesReturn.objects.get(id=sales_return_id, company=company)
+        except SalesReturn.DoesNotExist:
+            raise ValidationError({"sales_return": "Source document was not found."})
+        require_object_branch(request, sales_return, branch_attr="branch_id")
 
         credit_note = (
             create_sales_credit_note_from_return(

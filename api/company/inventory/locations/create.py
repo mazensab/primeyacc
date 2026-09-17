@@ -31,6 +31,7 @@ from api.company.inventory.locations.serializers import (
     serialize_inventory_location,
 )
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from inventory.models import Warehouse
 from inventory.services import create_inventory_location
 
@@ -139,6 +140,8 @@ def inventory_location_create(request: Request) -> Response:
                 },
                 status=404,
             )
+
+        require_object_branch(request, warehouse, branch_attr="branch_id")
 
         location = create_inventory_location(
             company=company,

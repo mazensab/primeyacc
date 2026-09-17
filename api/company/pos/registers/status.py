@@ -29,6 +29,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from pos.models import POSRegisterStatus, POSSession, POSSessionStatus
 
 from .detail import get_pos_register_for_company
@@ -139,6 +140,8 @@ def pos_register_status(request: Request, register_id: int) -> Response:
     try:
         company = _get_request_company(request)
         register = get_pos_register_for_company(company, register_id)
+        require_object_branch(request, register, branch_attr="branch_id")
+
         data = request.data or {}
 
         action = (

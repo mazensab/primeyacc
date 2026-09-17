@@ -23,6 +23,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.services import create_employee
 
 from .serializers import (
@@ -74,6 +75,9 @@ def company_hr_employee_create(request: Request) -> Response:
             company=company,
             payload=request.data,
         )
+
+        if data.get("branch") is not None:
+            require_object_branch(request, data["branch"], branch_attr="id")
 
         employee = create_employee(
             company=company,

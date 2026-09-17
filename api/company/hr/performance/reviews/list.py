@@ -4,6 +4,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from hr.models import EmployeePerformanceReview
 
 from .serializers import serialize_employee_performance_review
@@ -23,6 +24,12 @@ def performance_reviews_list(request):
         EmployeePerformanceReview.objects.filter(company=company)
         .select_related("cycle", "employee", "reviewer")
         .order_by("-created_at", "-id")
+    )
+
+    qs = scope_operational_queryset(
+        qs,
+        request,
+        branch_lookup="employee__branch_id",
     )
 
     cycle_id = request.query_params.get("cycle_id")

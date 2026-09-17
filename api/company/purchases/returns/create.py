@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from api.company.branch_enforcement import require_operational_branch
+
 from django.core.exceptions import ValidationError
 from rest_framework.decorators import (
     api_view,
@@ -32,6 +34,9 @@ def company_purchase_return_create(
         company = get_request_company(request)
         user = get_request_user(request)
         payload = request.data or {}
+        branch = require_operational_branch(request, branch_id=payload.get("branch_id"))
+        payload = dict(payload)
+        payload["branch_id"] = branch.id
 
         purchase_return = create_purchase_return(
             company=company,

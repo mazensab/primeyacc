@@ -6,6 +6,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from inventory.models import GoodsIssueStatus
 from inventory.services import (
     get_company_goods_issues,
@@ -28,6 +29,12 @@ def company_goods_issues_list(
         company = get_request_company(request)
 
         queryset = get_company_goods_issues(company)
+
+        queryset = scope_operational_queryset(
+            queryset,
+            request,
+            branch_lookup="warehouse__branch_id",
+        )
 
         search = str(
             request.query_params.get("q")

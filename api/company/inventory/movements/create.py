@@ -25,6 +25,7 @@ from rest_framework.response import Response
 
 from api.company.inventory.movements.serializers import serialize_stock_movement
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from catalog.models import CatalogItem
 from inventory.models import Warehouse
 from inventory.services import create_stock_movement
@@ -94,6 +95,8 @@ def stock_movement_create(request: Request) -> Response:
                 },
                 status=404,
             )
+
+        require_object_branch(request, warehouse, branch_attr="branch_id")
 
         try:
             item = CatalogItem.objects.get(

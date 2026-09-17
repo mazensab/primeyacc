@@ -5,6 +5,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 
 from ._shared import (
     PhysicalInventoryCountAPIError,
@@ -41,6 +42,8 @@ def company_physical_inventory_count_detail(
                 },
                 status=404,
             )
+
+        require_object_branch(request, count, branch_attr="warehouse.branch_id")
 
         data = serialize_physical_inventory_count(
             count,

@@ -6,6 +6,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from inventory.services import (
     post_goods_issue,
     serialize_goods_issue,
@@ -47,6 +48,8 @@ def company_goods_issue_post(
                 },
                 status=404,
             )
+
+        require_object_branch(request, issue, branch_attr="warehouse.branch_id")
 
         issue = post_goods_issue(
             issue=issue,

@@ -31,6 +31,8 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_operational_branch
+from api.company.branch_enforcement import scope_operational_queryset
 from companies.models import Branch
 from payments.models import (
     CompanyPaymentGateway,
@@ -355,7 +357,7 @@ def _create_terminal_from_request(request: Request, company):
     """
     data = request.data or {}
 
-    branch = _get_branch_for_company(company, data.get("branch_id") or data.get("branch"))
+    branch = require_operational_branch(request, branch_id=data.get("branch_id") or data.get("branch"))
     gateway = _get_gateway_for_company(company, data.get("gateway_id") or data.get("gateway"))
     payment_method = _get_method_for_company(
         company,
@@ -436,6 +438,12 @@ def payment_terminals_list(request: Request) -> Response:
             "branch",
             "gateway",
             "payment_method",
+        )
+
+        queryset = scope_operational_queryset(
+            queryset,
+            request,
+            branch_lookup="branch_id",
         )
 
         queryset = _apply_terminal_filters(queryset, request)

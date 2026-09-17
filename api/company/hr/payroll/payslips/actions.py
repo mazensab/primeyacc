@@ -10,6 +10,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.models import Payslip
 
 from .serializers import serialize_payslip
@@ -102,6 +103,8 @@ def payslip_approve(request, payslip_id: int):
     if error_response:
         return error_response
 
+    require_object_branch(request, payslip, branch_attr="employee.branch_id")
+
     try:
         _call_workflow_method(payslip, "approve", request.user)
     except ValidationError as exc:
@@ -139,6 +142,8 @@ def payslip_pay(request, payslip_id: int):
     if error_response:
         return error_response
 
+    require_object_branch(request, payslip, branch_attr="employee.branch_id")
+
     try:
         _call_workflow_method(payslip, "mark_paid", request.user)
     except ValidationError as exc:
@@ -175,6 +180,8 @@ def payslip_cancel(request, payslip_id: int):
     payslip, error_response = _get_company_payslip(request, payslip_id)
     if error_response:
         return error_response
+
+    require_object_branch(request, payslip, branch_attr="employee.branch_id")
 
     note = str(request.data.get("note", "")).strip()
 

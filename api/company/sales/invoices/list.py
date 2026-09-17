@@ -29,6 +29,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from sales.models import (
     SalesInvoice,
     SalesInvoicePaymentStatus,
@@ -255,6 +256,14 @@ def company_sales_invoices_list(request: Request) -> Response:
             .filter(company=company)
         )
 
+
+        queryset = scope_operational_queryset(
+
+            queryset,
+
+            request,
+
+        )
         queryset = _apply_invoice_filters(queryset, request)
         queryset = _apply_invoice_ordering(queryset, ordering)
 

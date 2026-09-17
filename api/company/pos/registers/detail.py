@@ -26,6 +26,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from pos.models import POSRegister
 
 from .list import serialize_pos_register
@@ -105,6 +106,8 @@ def pos_register_detail(request: Request, register_id: int) -> Response:
     try:
         company = _get_request_company(request)
         register = get_pos_register_for_company(company, register_id)
+        require_object_branch(request, register, branch_attr="branch_id")
+
         serialized_register = serialize_pos_register(register)
 
         return Response(

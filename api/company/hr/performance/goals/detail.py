@@ -4,6 +4,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.models import EmployeeGoal
 
 from .serializers import serialize_employee_goal
@@ -15,10 +16,9 @@ def employee_goal_detail(request, goal_id: int):
     company = getattr(request, "company", None)
     if not company:
         return Response(
-            {"ok": False, "success": False, "message": "Active company context is required."},
-            status=401,
-        )
-
+                {"ok": False, "success": False, "message": "Active company context is required."},
+                status=401,
+            )
     try:
         goal = EmployeeGoal.objects.select_related("employee", "cycle").get(id=goal_id, company=company)
     except EmployeeGoal.DoesNotExist:
@@ -26,6 +26,12 @@ def employee_goal_detail(request, goal_id: int):
             {"ok": False, "success": False, "message": "Employee goal not found."},
             status=404,
         )
+
+    require_object_branch(
+        request,
+        goal,
+        branch_attr="employee.branch_id",
+    )
 
     return Response(
         {

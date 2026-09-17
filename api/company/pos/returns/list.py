@@ -15,6 +15,8 @@
 
 from __future__ import annotations
 
+from api.company.branch_enforcement import scope_operational_queryset
+
 from decimal import Decimal
 
 from django.db.models import Q
@@ -194,6 +196,12 @@ def pos_returns_list(request):
             "cancelled_by",
         )
         .order_by("-created_at", "-id")
+    )
+
+    queryset = scope_operational_queryset(
+        queryset,
+        request,
+        branch_lookup="branch_id",
     )
 
     if search:

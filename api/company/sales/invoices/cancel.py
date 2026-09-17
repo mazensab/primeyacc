@@ -20,6 +20,8 @@
 
 from __future__ import annotations
 
+from api.company.branch_enforcement import require_object_branch
+
 from typing import Any
 
 from django.core.exceptions import ValidationError
@@ -165,6 +167,8 @@ def company_sales_invoice_cancel(request: Request, invoice_id: int) -> Response:
                 },
                 status=404,
             )
+
+        require_object_branch(request, invoice, branch_attr="branch_id")
 
         reason = _normalize_text(
             payload.get("reason")

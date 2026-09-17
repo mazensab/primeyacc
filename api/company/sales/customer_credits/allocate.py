@@ -1,9 +1,11 @@
-﻿# ============================================================
+# ============================================================
 # api/company/sales/customer_credits/allocate.py
 # Mhamcloud | Customer Credit Allocation Create API
 # ============================================================
 
 from __future__ import annotations
+
+from api.company.branch_enforcement import require_object_branch
 
 from django.core.exceptions import ValidationError
 from rest_framework.decorators import (
@@ -74,6 +76,8 @@ def company_customer_credit_allocate(
                 },
                 status=404,
             )
+
+        require_object_branch(request, credit_note, branch_attr="branch_id")
 
         invoice = get_company_invoice(
             company=company,

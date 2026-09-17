@@ -24,6 +24,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from hr.models import AttendanceRecord
 
 from .serializers import serialize_attendance_choices, serialize_attendance_record
@@ -95,6 +96,12 @@ def company_hr_attendance_list(request: Request) -> Response:
         )
         .filter(company=company)
         .order_by("-work_date", "-check_in_at", "-id")
+    )
+
+    qs = scope_operational_queryset(
+        qs,
+        request,
+        branch_lookup="branch_id",
     )
 
     search = (query_params.get("search") or query_params.get("q") or "").strip()

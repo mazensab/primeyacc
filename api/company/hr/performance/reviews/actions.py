@@ -5,6 +5,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.models import EmployeePerformanceReview
 from hr.services import (
     approve_employee_performance_review,
@@ -38,6 +39,8 @@ def performance_review_submit(request, review_id: int):
     review, error_response = _get_review_or_response(company=company, review_id=review_id)
     if error_response:
         return error_response
+
+    require_object_branch(request, review, branch_attr="employee.branch_id")
 
     try:
         review = submit_employee_performance_review(
@@ -79,6 +82,8 @@ def performance_review_approve(request, review_id: int):
     if error_response:
         return error_response
 
+    require_object_branch(request, review, branch_attr="employee.branch_id")
+
     try:
         review = approve_employee_performance_review(
             review=review,
@@ -119,6 +124,8 @@ def performance_review_cancel(request, review_id: int):
     review, error_response = _get_review_or_response(company=company, review_id=review_id)
     if error_response:
         return error_response
+
+    require_object_branch(request, review, branch_attr="employee.branch_id")
 
     try:
         review = cancel_employee_performance_review(

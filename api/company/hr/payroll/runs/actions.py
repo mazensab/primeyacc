@@ -10,6 +10,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from hr.models import PayrollRun
 from hr.services import (
     approve_payroll_run,
@@ -20,6 +21,12 @@ from hr.services import (
 
 from .serializers import serialize_payroll_run
 
+
+
+def _accessible_employee_queryset(request, company):
+    from hr.models import Employee
+    queryset = Employee.objects.filter(company=company, is_active=True)
+    return scope_operational_queryset(queryset, request, branch_lookup="branch_id")
 
 def _get_company_payroll_run(request, run_id: int):
     company = getattr(request, "company", None)
@@ -65,6 +72,7 @@ def payroll_run_calculate(request, run_id: int):
         payroll_run = calculate_payroll_run(
             payroll_run=payroll_run,
             calculated_by=request.user,
+            employees=_accessible_employee_queryset(request, payroll_run.company),
         )
     except ValidationError as exc:
         return Response(

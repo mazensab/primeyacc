@@ -33,6 +33,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from pos.models import POSOrderStatus
 
 try:
@@ -227,6 +228,8 @@ def pos_order_cancel(request: Request, order_id: int) -> Response:
         data = request.data or {}
 
         order = get_pos_order_for_company(company, order_id)
+        require_object_branch(request, order, branch_attr="branch_id")
+
         _validate_order_allows_cancellation(order)
 
         cancellation_reason = _clean_text(

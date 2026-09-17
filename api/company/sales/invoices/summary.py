@@ -31,6 +31,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from sales.models import (
     SalesInvoice,
     SalesInvoicePaymentStatus,
@@ -89,6 +90,10 @@ def _base_queryset(company, request: Request):
     """
     queryset = SalesInvoice.objects.filter(company=company)
 
+    queryset = scope_operational_queryset(
+        queryset,
+        request,
+    )
     date_from = _clean_text(request.query_params.get("date_from") or "")
     date_to = _clean_text(request.query_params.get("date_to") or "")
     branch_id = _clean_text(request.query_params.get("branch_id") or "")

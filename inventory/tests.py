@@ -52,6 +52,10 @@
 
 from __future__ import annotations
 
+from accounts.models import BranchAccessMode
+
+from accounts.branch_access import configure_branch_access
+
 from datetime import timedelta
 from decimal import Decimal
 
@@ -216,6 +220,17 @@ from subscriptions.testing import ensure_test_workspace_access
 
 
 User = get_user_model()
+
+
+def _v225d_branch_fixture(membership, branch=None):
+    default_branch_id = None
+    if branch is not None and branch.company_id == membership.company_id:
+        default_branch_id = branch.id
+    return configure_branch_access(
+        membership,
+        mode=BranchAccessMode.ALL,
+        default_branch_id=default_branch_id,
+    )
 
 
 class InventoryTestBase(TestCase):
@@ -1334,6 +1349,8 @@ class InventoryLocationAPITests(InventoryTestBase):
 
         if membership_changed:
             self.membership.save()
+
+        _v225d_branch_fixture(self.membership, self.branch)
 
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
@@ -2565,6 +2582,8 @@ class LocationAwareStockReadCompatibilityTests(
 
         if membership_changed:
             self.membership.save()
+
+        _v225d_branch_fixture(self.membership, self.branch)
 
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
@@ -8262,6 +8281,8 @@ class StockReservationAPITests(InventoryTestBase):
         self.membership.is_primary = True
         self.membership.save()
 
+        _v225d_branch_fixture(self.membership, self.branch)
+
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 
@@ -9237,6 +9258,8 @@ class PhysicalInventoryCountAPITests(InventoryTestBase):
         self.membership.is_primary = True
         self.membership.save()
 
+        _v225d_branch_fixture(self.membership, self.branch)
+
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 
@@ -9744,6 +9767,8 @@ class InventoryValuationAPITests(InventoryTestBase):
         self.membership.status = MembershipStatus.ACTIVE
         self.membership.is_primary = True
         self.membership.save()
+
+        _v225d_branch_fixture(self.membership, self.branch)
 
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)

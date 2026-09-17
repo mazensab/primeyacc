@@ -28,6 +28,7 @@ from rest_framework.response import Response
 
 from api.company.inventory.movements.serializers import serialize_stock_movement
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from inventory.models import (
     StockMovement,
     StockMovementDirection,
@@ -244,6 +245,12 @@ def stock_movements_list(request: Request) -> Response:
                 "cancelled_by",
             )
             .filter(company=company)
+        )
+
+        queryset = scope_operational_queryset(
+            queryset,
+            request,
+            branch_lookup="warehouse__branch_id",
         )
 
         queryset = _apply_stock_movement_filters(queryset, request)

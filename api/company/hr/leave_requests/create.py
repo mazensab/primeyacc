@@ -11,6 +11,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.services import create_leave_request
 
 from .serializers import (
@@ -49,6 +50,8 @@ def company_hr_leave_request_create(request: Request) -> Response:
             company=company,
             payload=request.data,
         )
+        require_object_branch(request, employee, branch_attr="branch_id")
+
         validate_leave_request_required_fields(data)
 
         leave_request = create_leave_request(

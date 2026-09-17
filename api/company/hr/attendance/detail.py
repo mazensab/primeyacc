@@ -21,6 +21,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.models import AttendanceRecord
 
 from .serializers import serialize_attendance_choices, serialize_attendance_record
@@ -38,14 +39,13 @@ def company_hr_attendance_detail(request: Request, attendance_id: int) -> Respon
     company = getattr(request, "company", None)
     if not company:
         return Response(
-            {
-                "ok": False,
-                "success": False,
-                "message": "Active company context is required.",
-            },
-            status=401,
-        )
-
+                {
+                    "ok": False,
+                    "success": False,
+                    "message": "Active company context is required.",
+                },
+                status=401,
+            )
     try:
         record = (
             AttendanceRecord.objects.select_related(
@@ -67,6 +67,12 @@ def company_hr_attendance_detail(request: Request, attendance_id: int) -> Respon
             },
             status=404,
         )
+
+    require_object_branch(
+        request,
+        record,
+        branch_attr="branch_id",
+    )
 
     return Response(
         {

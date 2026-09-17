@@ -12,6 +12,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from hr.models import LeaveRequest
 
 from .serializers import serialize_leave_request, serialize_leave_request_choices
@@ -59,6 +60,12 @@ def company_hr_leave_requests_list(request: Request) -> Response:
         )
         .filter(company=company)
         .order_by("-start_date", "-id")
+    )
+
+    qs = scope_operational_queryset(
+        qs,
+        request,
+        branch_lookup="employee__branch_id",
     )
 
     search = (query_params.get("search") or query_params.get("q") or "").strip()

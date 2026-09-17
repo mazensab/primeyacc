@@ -24,6 +24,10 @@
 
 from __future__ import annotations
 
+from accounts.models import BranchAccessMode
+
+from accounts.branch_access import configure_branch_access
+
 from datetime import timedelta
 
 
@@ -99,6 +103,11 @@ def ensure_test_workspace_subscription(company):
 # Foundation tests
 # ============================================================
 
+
+
+def _v225d_branch_fixture(membership, branch=None):
+    default_branch_id = branch.id if branch is not None and branch.company_id == membership.company_id else None
+    return configure_branch_access(membership, mode=BranchAccessMode.ALL, default_branch_id=default_branch_id)
 
 class CompanyPaymentsModelFoundationTests(SimpleTestCase):
     def test_payment_gateway_has_required_foundation_fields(self):
@@ -462,6 +471,8 @@ class CompanyPaymentsAPITests(CompanyPaymentsAPITestFactoryMixin, TestCase):
         )
 
     def setUp(self) -> None:
+        membership = CompanyMembership.objects.get(user=self.user, company=self.company)
+        _v225d_branch_fixture(membership, self.branch)
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 
@@ -1044,6 +1055,8 @@ class CompanyPaymentsPhase23FoundationTests(CompanyPaymentsAPITestFactoryMixin, 
         )
 
     def setUp(self) -> None:
+        membership = CompanyMembership.objects.get(user=self.user, company=self.company)
+        _v225d_branch_fixture(membership, None)
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 

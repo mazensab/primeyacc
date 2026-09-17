@@ -25,6 +25,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.services import create_attendance_record
 
 from .serializers import (
@@ -76,6 +77,10 @@ def company_hr_attendance_create(request: Request) -> Response:
             company=company,
             payload=request.data,
         )
+
+        require_object_branch(request, employee, branch_attr="branch_id")
+        if data.get("branch") is not None:
+            require_object_branch(request, data["branch"], branch_attr="id")
 
         record = create_attendance_record(
             company=company,

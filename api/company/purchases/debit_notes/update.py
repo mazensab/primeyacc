@@ -1,4 +1,6 @@
-﻿from __future__ import annotations
+from __future__ import annotations
+
+from api.company.branch_enforcement import require_object_branch
 
 from django.core.exceptions import ValidationError
 from rest_framework.decorators import (
@@ -58,6 +60,8 @@ def company_supplier_debit_note_update(
                 },
                 status=404,
             )
+
+        require_object_branch(request, debit_note, branch_attr="branch_id")
 
         debit_note = update_supplier_debit_note(
             debit_note=debit_note,

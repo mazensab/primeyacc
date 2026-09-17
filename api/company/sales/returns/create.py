@@ -1,4 +1,6 @@
-﻿from __future__ import annotations
+from __future__ import annotations
+
+from api.company.branch_enforcement import require_object_branch
 
 from django.core.exceptions import ValidationError
 from rest_framework.decorators import (
@@ -9,6 +11,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from sales.models import SalesInvoice
 from sales.services import (
     create_sales_return,
     serialize_sales_return,
@@ -55,6 +58,12 @@ def company_sales_return_create(
             if "items" in payload
             else None
         )
+
+        try:
+            invoice = SalesInvoice.objects.get(id=invoice_id, company=company)
+        except SalesInvoice.DoesNotExist:
+            raise ValidationError({"invoice": "Source document was not found."})
+        require_object_branch(request, invoice, branch_attr="branch_id")
 
         sales_return = create_sales_return(
             company=company,

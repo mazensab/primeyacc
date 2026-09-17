@@ -29,6 +29,7 @@ from api.company.inventory.locations.serializers import (
     serialize_inventory_location,
 )
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from inventory.models import (
     InventoryLocation,
     InventoryLocationStatus,
@@ -119,6 +120,8 @@ def inventory_location_status(
                 },
                 status=404,
             )
+
+        require_object_branch(request, location, branch_attr="warehouse.branch_id")
 
         requested_status = str(
             request.data.get("status")

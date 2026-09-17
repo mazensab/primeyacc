@@ -19,6 +19,8 @@
 
 from __future__ import annotations
 
+from api.company.branch_enforcement import require_object_branch
+
 from django.core.exceptions import ValidationError
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.request import Request
@@ -134,6 +136,8 @@ def company_sales_invoice_issue(request: Request, invoice_id: int) -> Response:
                 },
                 status=404,
             )
+
+        require_object_branch(request, invoice, branch_attr="branch_id")
 
         invoice = issue_sales_invoice(
             company=company,

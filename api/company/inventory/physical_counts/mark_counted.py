@@ -6,6 +6,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from inventory.services import mark_physical_inventory_count_counted
 
 from ._shared import (
@@ -45,6 +46,8 @@ def company_physical_inventory_count_mark_counted(
                 },
                 status=404,
             )
+
+        require_object_branch(request, count, branch_attr="warehouse.branch_id")
 
         count = mark_physical_inventory_count_counted(
             company=company,

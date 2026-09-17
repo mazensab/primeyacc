@@ -9,6 +9,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from purchases.models import (
     PurchaseReturn,
     PurchaseReturnReason,
@@ -48,6 +49,14 @@ def company_purchase_returns_list(
             )
         )
 
+
+        queryset = scope_operational_queryset(
+
+            queryset,
+
+            request,
+
+        )
         search = str(
             request.query_params.get("q")
             or request.query_params.get("search")

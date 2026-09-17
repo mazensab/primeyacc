@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from api.company.branch_enforcement import require_operational_branch
+
 from django.core.exceptions import ValidationError
 from django.views.decorators.http import require_POST
 
@@ -29,6 +31,9 @@ def sales_quotation_create(request):
 
     try:
         payload = parse_json_body(request)
+        branch = require_operational_branch(request, branch_id=payload.get("branch_id"))
+        payload = dict(payload)
+        payload["branch_id"] = branch.id
 
         quotation = create_sales_quotation(
             company=membership.company,

@@ -30,6 +30,8 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_operational_branch
+from api.company.branch_enforcement import require_object_branch
 from companies.models import Branch
 from inventory.models import Warehouse
 from payments.models import CompanyPaymentMethod, CompanyPaymentTerminal
@@ -206,12 +208,14 @@ def pos_register_update(request: Request, register_id: int) -> Response:
     try:
         company = _get_request_company(request)
         register: POSRegister = get_pos_register_for_company(company, register_id)
+        require_object_branch(request, register, branch_attr="branch_id")
+
         data = request.data or {}
 
         if _field_was_sent(data, "branch_id", "branch"):
-            register.branch = _get_branch_for_company(
-                company,
-                _first_sent_value(data, "branch_id", "branch"),
+            register.branch = require_operational_branch(
+                request,
+                branch_id=_first_sent_value(data, "branch_id", "branch"),
             )
 
         if _field_was_sent(data, "warehouse_id", "warehouse"):

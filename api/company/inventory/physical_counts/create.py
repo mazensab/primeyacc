@@ -6,6 +6,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from inventory.models import InventoryLocation, Warehouse
 from inventory.services import create_physical_inventory_count
 
@@ -48,6 +49,8 @@ def company_physical_inventory_count_create(
                 },
                 status=404,
             )
+
+        require_object_branch(request, warehouse, branch_attr="branch_id")
 
         location = None
         location_id = payload.get("location_id") or payload.get("location")

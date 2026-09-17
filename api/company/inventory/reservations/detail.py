@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # ?? api/company/inventory/reservations/detail.py
 # ?? Mhamcloud | Stock Reservation Detail API V1.0
 # ------------------------------------------------------------
@@ -13,6 +13,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 
 from .common import (
     StockReservationAPIError,
@@ -42,20 +43,22 @@ def stock_reservation_detail(
                 {
                     "ok": False,
                     "success": False,
-                    "message": (
-                        "Stock reservation was not found."
-                    ),
+                    "message": "Stock reservation was not found.",
                 },
                 status=404,
             )
+
+        require_object_branch(
+            request,
+            reservation,
+            branch_attr="sales_order.branch_id",
+        )
 
         return Response(
             {
                 "ok": True,
                 "success": True,
-                "message": (
-                    "Stock reservation loaded successfully."
-                ),
+                "message": "Stock reservation loaded successfully.",
                 "reservation": serialize_stock_reservation(
                     reservation,
                     include_allocations=True,

@@ -26,6 +26,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.models import AttendanceRecord
 from hr.services import (
     cancel_attendance_record,
@@ -126,6 +127,8 @@ def company_hr_attendance_check_in(request: Request) -> Response:
             payload=request.data,
         )
 
+        require_object_branch(request, employee, branch_attr="branch_id")
+
         record = check_in_employee(
             company=company,
             employee=employee,
@@ -177,6 +180,8 @@ def company_hr_attendance_check_out(request: Request, attendance_id: int) -> Res
     )
     if error_response:
         return error_response
+
+    require_object_branch(request, record, branch_attr="branch_id")
 
     try:
         data = build_check_out_data_from_request(request.data)
@@ -232,6 +237,8 @@ def company_hr_attendance_missing_check_out(request: Request, attendance_id: int
     if error_response:
         return error_response
 
+    require_object_branch(request, record, branch_attr="branch_id")
+
     try:
         updated = mark_attendance_missing_check_out(
             attendance_record=record,
@@ -282,6 +289,8 @@ def company_hr_attendance_cancel(request: Request, attendance_id: int) -> Respon
     )
     if error_response:
         return error_response
+
+    require_object_branch(request, record, branch_attr="branch_id")
 
     try:
         updated = cancel_attendance_record(

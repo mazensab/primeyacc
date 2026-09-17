@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from api.company.branch_enforcement import require_object_branch
+
 from django.core.exceptions import ValidationError
 from rest_framework.decorators import (
     api_view,
@@ -64,6 +66,8 @@ def company_sales_credit_note_cancel(
                 },
                 status=404,
             )
+
+        require_object_branch(request, credit_note, branch_attr="branch_id")
 
         reason = str(
             (request.data or {}).get(

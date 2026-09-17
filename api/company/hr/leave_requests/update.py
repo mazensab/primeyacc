@@ -11,6 +11,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.models import LeaveRequest
 from hr.services import update_leave_request
 
@@ -62,6 +63,8 @@ def company_hr_leave_request_update(request: Request, leave_request_id: int) -> 
             },
             status=404,
         )
+
+    require_object_branch(request, leave_request, branch_attr="employee.branch_id")
 
     try:
         data = build_leave_request_update_data_from_request(

@@ -11,6 +11,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.services import create_or_update_leave_balance
 
 from .serializers import (
@@ -48,6 +49,8 @@ def company_hr_leave_balance_update(request: Request) -> Response:
             company=company,
             payload=request.data,
         )
+
+        require_object_branch(request, employee, branch_attr="branch_id")
 
         balance = create_or_update_leave_balance(
             company=company,

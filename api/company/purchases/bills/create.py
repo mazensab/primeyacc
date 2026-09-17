@@ -19,6 +19,8 @@
 
 from __future__ import annotations
 
+from api.company.branch_enforcement import require_operational_branch
+
 from django.core.exceptions import ValidationError
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.request import Request
@@ -69,6 +71,9 @@ def purchase_bill_create(request: Request) -> Response:
     try:
         company = _get_request_company(request)
         payload = request.data if isinstance(request.data, dict) else {}
+        branch = require_operational_branch(request, branch_id=payload.get("branch_id"))
+        payload = dict(payload)
+        payload["branch_id"] = branch.id
 
         bill = create_purchase_bill(
             company=company,

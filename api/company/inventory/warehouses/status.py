@@ -27,6 +27,7 @@ from rest_framework.response import Response
 
 from api.company.inventory.warehouses.serializers import serialize_warehouse
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from inventory.models import Warehouse
 from inventory.services import set_warehouse_status
 
@@ -87,6 +88,8 @@ def warehouse_status(request: Request, warehouse_id) -> Response:
                 },
                 status=404,
             )
+
+        require_object_branch(request, warehouse, branch_attr="branch_id")
 
         warehouse = set_warehouse_status(
             company=company,

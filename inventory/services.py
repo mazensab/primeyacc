@@ -9942,6 +9942,7 @@ def build_inventory_valuation_summary(
     item_id: Any = None,
     category_id: Any = None,
     branch_id: Any = None,
+    branch_ids: Any = None,
     search: str = "",
     include_zero_quantity: bool = True,
     include_rows: bool = False,
@@ -9954,6 +9955,8 @@ def build_inventory_valuation_summary(
     from the request/company context.
     """
     queryset = get_company_inventory_valuation_stock_items(company)
+    if branch_ids is not None:
+        queryset = queryset.filter(warehouse__branch_id__in=branch_ids)
     queryset = _apply_inventory_valuation_filters(
         queryset,
         warehouse_id=warehouse_id,

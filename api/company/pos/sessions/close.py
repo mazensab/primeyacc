@@ -29,6 +29,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from pos.services import close_pos_session
 
 from .detail import get_pos_session_for_company
@@ -125,6 +126,8 @@ def pos_session_close(request: Request, session_id: int) -> Response:
         data = request.data or {}
 
         session = get_pos_session_for_company(company, session_id)
+
+        require_object_branch(request, session, branch_attr="branch_id")
 
         closing_cash_amount = _clean_decimal(
             data.get("closing_cash_amount")

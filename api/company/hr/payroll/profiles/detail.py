@@ -9,6 +9,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.models import EmployeeSalaryProfile
 
 from .serializers import serialize_employee_salary_profile
@@ -21,14 +22,13 @@ def salary_profile_detail(request, profile_id: int):
 
     if not company:
         return Response(
-            {
-                "ok": False,
-                "success": False,
-                "message": "Active company context is required.",
-            },
-            status=401,
-        )
-
+                {
+                    "ok": False,
+                    "success": False,
+                    "message": "Active company context is required.",
+                },
+                status=401,
+            )
     profile = EmployeeSalaryProfile.objects.select_related(
         "employee",
     ).filter(
@@ -45,6 +45,12 @@ def salary_profile_detail(request, profile_id: int):
             },
             status=404,
         )
+
+    require_object_branch(
+        request,
+        profile,
+        branch_attr="employee.branch_id",
+    )
 
     return Response(
         {

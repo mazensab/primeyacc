@@ -1,4 +1,6 @@
-﻿from __future__ import annotations
+from __future__ import annotations
+
+from api.company.branch_enforcement import require_object_branch
 
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
@@ -35,6 +37,8 @@ def sales_order_detail(
             "Sales order was not found.",
             status=404,
         )
+
+    require_object_branch(request, order, branch_attr="branch_id")
 
     return JsonResponse(
         {

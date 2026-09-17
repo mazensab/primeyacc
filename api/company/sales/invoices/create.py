@@ -20,6 +20,8 @@
 
 from __future__ import annotations
 
+from api.company.branch_enforcement import require_operational_branch
+
 import json
 from typing import Any
 
@@ -205,6 +207,9 @@ def company_sales_invoice_create(request: Request) -> Response:
         company = _get_request_company(request)
         user = _get_request_user(request)
         payload = _get_payload(request)
+        branch = require_operational_branch(request, branch_id=payload.get("branch_id"))
+        payload = dict(payload)
+        payload["branch_id"] = branch.id
 
         source = _normalize_text(payload.get("source") or SalesInvoiceSource.MANUAL).upper()
         if source not in SalesInvoiceSource.values:

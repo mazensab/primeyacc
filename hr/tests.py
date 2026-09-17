@@ -15,6 +15,10 @@
 # ============================================================
 
 from __future__ import annotations
+
+from accounts.models import BranchAccessMode
+
+from accounts.branch_access import configure_branch_access
 from decimal import Decimal
 
 from datetime import timedelta
@@ -95,6 +99,11 @@ from subscriptions.testing import ensure_test_workspace_access
 
 User = get_user_model()
 
+
+
+def _v225d_branch_fixture(membership, branch=None):
+    default_branch_id = branch.id if branch is not None and branch.company_id == membership.company_id else None
+    return configure_branch_access(membership, mode=BranchAccessMode.ALL, default_branch_id=default_branch_id)
 
 class EmployeeModelTests(TestCase):
     def setUp(self):
@@ -809,6 +818,10 @@ class EmployeeAPITests(TestCase):
             created_by=self.other_owner,
             updated_by=self.other_owner,
         )
+        _v225d_branch_fixture(self.owner_membership, self.branch)
+        _v225d_branch_fixture(self.viewer_membership, self.branch)
+        _v225d_branch_fixture(self.other_owner_membership, self.other_branch)
+
         # Phase 41 test-only workspace contract fixture.
         ensure_test_workspace_access()
 
@@ -818,6 +831,9 @@ class EmployeeAPITests(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_owner_can_list_company_employees_only(self):
+        membership = CompanyMembership.objects.get(user=self.owner, company=self.company)
+        _v225d_branch_fixture(membership, self.branch)
+
         self.client.force_login(self.owner)
 
         response = self.client.get("/api/company/hr/employees/")
@@ -1122,6 +1138,10 @@ class AttendanceAPITests(TestCase):
             created_by=self.other_owner,
             updated_by=self.other_owner,
         )
+        _v225d_branch_fixture(CompanyMembership.objects.get(user=self.owner, company=self.company), self.branch)
+        _v225d_branch_fixture(CompanyMembership.objects.get(user=self.viewer, company=self.company), self.branch)
+        _v225d_branch_fixture(CompanyMembership.objects.get(user=self.other_owner, company=self.other_company), self.other_branch)
+
         # Phase 41 test-only workspace contract fixture.
         ensure_test_workspace_access()
 
@@ -1131,6 +1151,9 @@ class AttendanceAPITests(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_owner_can_list_company_attendance_only(self):
+        membership = CompanyMembership.objects.get(user=self.owner, company=self.company)
+        _v225d_branch_fixture(membership, self.branch)
+
         self.client.force_login(self.owner)
 
         response = self.client.get("/api/company/hr/attendance/")
@@ -1972,6 +1995,10 @@ class LeaveManagementAPITests(TestCase):
             created_by=self.other_owner,
             updated_by=self.other_owner,
         )
+        _v225d_branch_fixture(CompanyMembership.objects.get(user=self.owner, company=self.company), self.branch)
+        _v225d_branch_fixture(CompanyMembership.objects.get(user=self.viewer, company=self.company), self.branch)
+        _v225d_branch_fixture(CompanyMembership.objects.get(user=self.other_owner, company=self.other_company), self.other_branch)
+
         # Phase 41 test-only workspace contract fixture.
         ensure_test_workspace_access()
 
@@ -1981,6 +2008,9 @@ class LeaveManagementAPITests(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_owner_can_create_and_list_leave_types_inside_current_company(self):
+        membership = CompanyMembership.objects.get(user=self.owner, company=self.company)
+        _v225d_branch_fixture(membership, self.branch)
+
         self.client.force_login(self.owner)
 
         create_response = self.client.post(
@@ -3192,6 +3222,9 @@ class PayrollSalaryProfilesAPITests(TestCase):
             created_by=self.user,
             updated_by=self.user,
         )
+        membership = CompanyMembership.objects.get(user=self.user, company=self.company)
+        _v225d_branch_fixture(membership, self.branch)
+
         self.client = Client()
         self.client.force_login(self.user)
         # Phase 41 test-only workspace contract fixture.
@@ -3663,6 +3696,9 @@ class PayrollRunsAPITests(TestCase):
                 "end_date": "2026-06-30",
             },
         )
+        membership = CompanyMembership.objects.get(user=self.user, company=self.company)
+        _v225d_branch_fixture(membership, self.branch)
+
         self.client = Client()
         self.client.force_login(self.user)
         # Phase 41 test-only workspace contract fixture.
@@ -3940,6 +3976,9 @@ class PayrollPayslipsAPITests(TestCase):
             payroll_run=self.payroll_run,
             employee=self.employee,
         )
+        membership = CompanyMembership.objects.get(user=self.user, company=self.company)
+        _v225d_branch_fixture(membership, self.branch)
+
         self.client = Client()
         self.client.force_login(self.user)
         # Phase 41 test-only workspace contract fixture.
@@ -4180,6 +4219,9 @@ class PayrollPayslipItemsAPITests(TestCase):
             company=self.company,
             payslip=self.payslip,
         ).first()
+        membership = CompanyMembership.objects.get(user=self.user, company=self.company)
+        _v225d_branch_fixture(membership, self.branch)
+
         self.client = Client()
         self.client.force_login(self.user)
         # Phase 41 test-only workspace contract fixture.
@@ -4781,8 +4823,22 @@ class PerformanceReviewsAPITests(TestCase):
             is_primary=True,
         )
 
+        self.branch = Branch.objects.create(
+            company=self.company,
+            name="PERF-REV Branch",
+            branch_code="PERF-REV-MAIN",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.other_branch = Branch.objects.create(
+            company=self.other_company,
+            name="Other PERF-REV Branch",
+            branch_code="PERF-REV-OTHER",
+        )
+
         self.employee = Employee.objects.create(
             company=self.company,
+            branch=self.branch,
             employee_number="EMP-REV-001",
             first_name="Review",
             last_name="Employee",
@@ -4793,6 +4849,7 @@ class PerformanceReviewsAPITests(TestCase):
         )
         self.other_employee = Employee.objects.create(
             company=self.other_company,
+            branch=self.other_branch,
             employee_number="EMP-REV-OTHER",
             first_name="Other",
             last_name="Employee",
@@ -4814,6 +4871,9 @@ class PerformanceReviewsAPITests(TestCase):
             start_date="2026-01-01",
             end_date="2026-12-31",
         )
+
+        _v225d_branch_fixture(CompanyMembership.objects.get(user=self.user, company=self.company), self.branch)
+        _v225d_branch_fixture(CompanyMembership.objects.get(user=self.viewer, company=self.company), self.branch)
 
         self.client.force_login(self.user)
         # Phase 41 test-only workspace contract fixture.
@@ -5036,8 +5096,22 @@ class PerformanceScoresAPITests(TestCase):
             is_primary=True,
         )
 
+        self.branch = Branch.objects.create(
+            company=self.company,
+            name="PERF-SCORE Branch",
+            branch_code="PERF-SCORE-MAIN",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.other_branch = Branch.objects.create(
+            company=self.other_company,
+            name="Other PERF-SCORE Branch",
+            branch_code="PERF-SCORE-OTHER",
+        )
+
         self.employee = Employee.objects.create(
             company=self.company,
+            branch=self.branch,
             employee_number="EMP-SCORE-001",
             first_name="Score",
             last_name="Employee",
@@ -5046,6 +5120,7 @@ class PerformanceScoresAPITests(TestCase):
         )
         self.other_employee = Employee.objects.create(
             company=self.other_company,
+            branch=self.other_branch,
             employee_number="EMP-SCORE-OTHER",
             first_name="Other",
             last_name="Employee",
@@ -5100,6 +5175,9 @@ class PerformanceScoresAPITests(TestCase):
             max_score="5.00",
             weight="50.0000",
         )
+
+        _v225d_branch_fixture(CompanyMembership.objects.get(user=self.user, company=self.company), self.branch)
+        _v225d_branch_fixture(CompanyMembership.objects.get(user=self.viewer, company=self.company), self.branch)
 
         self.client.force_login(self.user)
         # Phase 41 test-only workspace contract fixture.
@@ -5293,8 +5371,22 @@ class EmployeeGoalsAPITests(TestCase):
             is_primary=True,
         )
 
+        self.branch = Branch.objects.create(
+            company=self.company,
+            name="PERF-GOAL Branch",
+            branch_code="PERF-GOAL-MAIN",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.other_branch = Branch.objects.create(
+            company=self.other_company,
+            name="Other PERF-GOAL Branch",
+            branch_code="PERF-GOAL-OTHER",
+        )
+
         self.employee = Employee.objects.create(
             company=self.company,
+            branch=self.branch,
             employee_number="EMP-GOAL-001",
             first_name="Goal",
             last_name="Employee",
@@ -5303,6 +5395,7 @@ class EmployeeGoalsAPITests(TestCase):
         )
         self.other_employee = Employee.objects.create(
             company=self.other_company,
+            branch=self.other_branch,
             employee_number="EMP-GOAL-OTHER",
             first_name="Other",
             last_name="Employee",
@@ -5324,6 +5417,9 @@ class EmployeeGoalsAPITests(TestCase):
             start_date="2026-01-01",
             end_date="2026-12-31",
         )
+
+        _v225d_branch_fixture(CompanyMembership.objects.get(user=self.user, company=self.company), self.branch)
+        _v225d_branch_fixture(CompanyMembership.objects.get(user=self.viewer, company=self.company), self.branch)
 
         self.client.force_login(self.user)
         # Phase 41 test-only workspace contract fixture.

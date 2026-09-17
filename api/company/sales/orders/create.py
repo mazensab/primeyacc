@@ -1,4 +1,6 @@
-﻿from __future__ import annotations
+from __future__ import annotations
+
+from api.company.branch_enforcement import require_operational_branch
 
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
@@ -29,6 +31,9 @@ def sales_order_create(request):
 
     try:
         payload = parse_json_body(request)
+        branch = require_operational_branch(request, branch_id=payload.get("branch_id"))
+        payload = dict(payload)
+        payload["branch_id"] = branch.id
 
         order = create_sales_order(
             company=membership.company,

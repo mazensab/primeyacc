@@ -21,6 +21,10 @@
 
 from __future__ import annotations
 
+from api.company.branch_enforcement import require_operational_branch
+
+from api.company.branch_enforcement import require_object_branch
+
 import json
 from typing import Any
 
@@ -191,9 +195,9 @@ def _update_invoice_from_payload(
         raise SalesInvoiceUpdateAPIError("Only draft sales invoices can be updated.")
 
     if "branch_id" in payload:
-        invoice.branch = resolve_company_branch(
-            company,
-            payload.get("branch_id"),
+        invoice.branch = require_operational_branch(
+            request,
+            branch_id=payload.get("branch_id"),
         )
 
     if "customer_id" in payload:
@@ -285,6 +289,8 @@ def company_sales_invoice_update(request: Request, invoice_id: int) -> Response:
                 },
                 status=404,
             )
+
+        require_object_branch(request, invoice, branch_attr="branch_id")
 
         invoice = _update_invoice_from_payload(
             invoice=invoice,

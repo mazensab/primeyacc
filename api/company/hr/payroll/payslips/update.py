@@ -10,6 +10,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.models import Payslip
 
 from .serializers import (
@@ -52,6 +53,8 @@ def payslip_update(request, payslip_id: int):
             },
             status=404,
         )
+
+    require_object_branch(request, payslip, branch_attr="employee.branch_id")
 
     try:
         data = build_payslip_update_data_from_request(request)

@@ -21,6 +21,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.models import Employee
 
 from .serializers import serialize_employee, serialize_employee_choices
@@ -38,14 +39,13 @@ def company_hr_employee_detail(request: Request, employee_id: int) -> Response:
     company = getattr(request, "company", None)
     if not company:
         return Response(
-            {
-                "ok": False,
-                "success": False,
-                "message": "Active company context is required.",
-            },
-            status=401,
-        )
-
+                {
+                    "ok": False,
+                    "success": False,
+                    "message": "Active company context is required.",
+                },
+                status=401,
+            )
     try:
         employee = (
             Employee.objects.select_related("company", "branch", "user")
@@ -63,6 +63,12 @@ def company_hr_employee_detail(request: Request, employee_id: int) -> Response:
             },
             status=404,
         )
+
+    require_object_branch(
+        request,
+        employee,
+        branch_attr="branch_id",
+    )
 
     return Response(
         {

@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # ?? api/company/inventory/reservations/expire.py
 # ?? Mhamcloud | Stock Reservation Expire API V1.0
 # ------------------------------------------------------------
@@ -15,6 +15,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from inventory.services import expire_stock_reservation
 
 from .common import (
@@ -60,6 +61,8 @@ def stock_reservation_expire(
                 },
                 status=404,
             )
+
+        require_object_branch(request, reservation, branch_attr="sales_order.branch_id")
 
         expire_stock_reservation(
             company=company,

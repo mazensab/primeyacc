@@ -24,6 +24,10 @@
 
 from __future__ import annotations
 
+from accounts.models import BranchAccessMode
+
+from accounts.branch_access import configure_branch_access
+
 from datetime import timedelta
 from decimal import Decimal
 
@@ -322,6 +326,17 @@ def _create_company_membership(
         permission_overrides=permissions,
         company_permissions=permissions,
         created_by=user,
+    )
+
+
+def _v225d_branch_fixture(membership, branch=None):
+    default_branch_id = None
+    if branch is not None and branch.company_id == membership.company_id:
+        default_branch_id = branch.id
+    return configure_branch_access(
+        membership,
+        mode=BranchAccessMode.ALL,
+        default_branch_id=default_branch_id,
     )
 
 
@@ -633,6 +648,10 @@ class SalesTestCase(TestCase):
             created_by=self.other_user,
             updated_by=self.other_user,
         )
+
+        _v225d_branch_fixture(self.membership, self.branch)
+        _v225d_branch_fixture(self.viewer_membership, self.branch)
+        _v225d_branch_fixture(self.other_membership, self.other_branch)
 
         self.client.force_login(self.user)
 

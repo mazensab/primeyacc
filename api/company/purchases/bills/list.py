@@ -28,6 +28,7 @@ from rest_framework.response import Response
 
 from api.company.purchases.bills.serializers import serialize_purchase_bill
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from purchases.models import PurchaseBill, PurchaseBillStatus
 
 
@@ -223,6 +224,14 @@ def purchase_bills_list(request: Request) -> Response:
             .filter(company=company)
         )
 
+
+        queryset = scope_operational_queryset(
+
+            queryset,
+
+            request,
+
+        )
         queryset = _apply_purchase_bill_filters(queryset, request)
         queryset = _apply_purchase_bill_ordering(queryset, ordering)
 

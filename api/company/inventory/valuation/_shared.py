@@ -10,6 +10,10 @@
 
 from __future__ import annotations
 
+from api.company.branch_enforcement import get_request_membership, require_operational_branch
+
+from accounts.branch_access import accessible_branches
+
 from typing import Any
 
 from rest_framework.request import Request
@@ -82,6 +86,16 @@ def valuation_filters_from_request(request: Request) -> dict:
     """
     Extract supported valuation filters from query params.
     """
+    membership = get_request_membership(request)
+    requested_branch_id = clean_text(request.query_params.get("branch_id"))
+    if requested_branch_id:
+        branch = require_operational_branch(request, branch_id=requested_branch_id)
+        branch_id = branch.id
+        branch_ids = [branch.id]
+    else:
+        branch_id = None
+        branch_ids = list(accessible_branches(membership).values_list("id", flat=True))
+
     return {
         "warehouse_id": clean_text(
             request.query_params.get("warehouse_id")
@@ -95,9 +109,8 @@ def valuation_filters_from_request(request: Request) -> dict:
         "category_id": clean_text(
             request.query_params.get("category_id")
         ),
-        "branch_id": clean_text(
-            request.query_params.get("branch_id")
-        ),
+        "branch_id": branch_id,
+        "branch_ids": branch_ids,
         "search": clean_text(
             request.query_params.get("search")
             or request.query_params.get("q")

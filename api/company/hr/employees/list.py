@@ -27,6 +27,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from hr.models import Employee
 
 from .serializers import serialize_employee, serialize_employee_choices
@@ -196,6 +197,12 @@ def company_hr_employees_list(request: Request) -> Response:
     base_queryset = (
         Employee.objects.select_related("company", "branch", "user")
         .filter(company=company)
+    )
+
+    base_queryset = scope_operational_queryset(
+        base_queryset,
+        request,
+        branch_lookup="branch_id",
     )
 
     queryset = _apply_filters(base_queryset, request)

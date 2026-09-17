@@ -28,6 +28,7 @@ from rest_framework.response import Response
 
 from api.company.inventory.warehouses.serializers import serialize_warehouse
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from inventory.models import Warehouse, WarehouseStatus, WarehouseType
 
 
@@ -235,6 +236,12 @@ def warehouses_list(request: Request) -> Response:
                 "updated_by",
             )
             .filter(company=company)
+        )
+
+        queryset = scope_operational_queryset(
+            queryset,
+            request,
+            branch_lookup="branch_id",
         )
 
         queryset = _apply_warehouse_filters(queryset, request)

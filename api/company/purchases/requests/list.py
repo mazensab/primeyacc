@@ -14,6 +14,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from purchases.models import PurchaseRequest
 from purchases.services import serialize_purchase_request
 
@@ -40,6 +41,14 @@ def company_purchase_requests_list(
             .filter(company=company)
         )
 
+
+        queryset = scope_operational_queryset(
+
+            queryset,
+
+            request,
+
+        )
         status_value = (
             request.query_params.get("status")
             or ""

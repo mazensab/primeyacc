@@ -37,6 +37,7 @@ from api.company.pos.sessions.detail import (
     get_pos_session_for_company,
 )
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from pos.services import create_pos_order
 
 from .list import serialize_pos_order
@@ -188,6 +189,8 @@ def pos_order_create(request: Request) -> Response:
         data = request.data or {}
 
         session = _resolve_session(company, data)
+
+        require_object_branch(request, session, branch_attr="branch_id")
 
         order = _call_create_pos_order_service(
             company=company,

@@ -1,9 +1,11 @@
-﻿# ============================================================
+# ============================================================
 # ?? api/company/purchases/requests/update.py
 # ?? Mhamcloud | Purchase Request Update API
 # ============================================================
 
 from __future__ import annotations
+
+from api.company.branch_enforcement import require_object_branch
 
 from django.core.exceptions import ValidationError
 from rest_framework.decorators import (
@@ -60,6 +62,8 @@ def company_purchase_request_update(
                 },
                 status=404,
             )
+
+        require_object_branch(request, purchase_request, branch_attr="branch_id")
 
         purchase_request = update_purchase_request(
             purchase_request=purchase_request,

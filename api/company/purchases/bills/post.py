@@ -19,6 +19,8 @@
 
 from __future__ import annotations
 
+from api.company.branch_enforcement import require_object_branch
+
 from django.core.exceptions import ValidationError
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.request import Request
@@ -84,6 +86,8 @@ def purchase_bill_post(request: Request, bill_id) -> Response:
                 },
                 status=404,
             )
+
+        require_object_branch(request, bill, branch_attr="branch_id")
 
         bill = post_purchase_bill(
             bill=bill,

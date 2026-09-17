@@ -6,6 +6,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from inventory.models import PhysicalInventoryCountItem
 from inventory.services import set_physical_inventory_count_item_quantity
 
@@ -49,6 +50,8 @@ def company_physical_inventory_count_item_update(
                 },
                 status=404,
             )
+
+        require_object_branch(request, count, branch_attr="warehouse.branch_id")
 
         count_item = PhysicalInventoryCountItem.objects.filter(
             id=item_id,

@@ -4,6 +4,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from hr.models import PerformanceReviewScore
 
 from .serializers import serialize_performance_review_score
@@ -23,6 +24,12 @@ def performance_scores_list(request):
         PerformanceReviewScore.objects.filter(company=company)
         .select_related("review", "criterion")
         .order_by("review_id", "criterion__sort_order", "id")
+    )
+
+    qs = scope_operational_queryset(
+        qs,
+        request,
+        branch_lookup="review__employee__branch_id",
     )
 
     review_id = request.query_params.get("review_id")

@@ -22,6 +22,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.models import Employee
 from hr.services import activate_employee, deactivate_employee
 
@@ -94,6 +95,8 @@ def company_hr_employee_activate(request: Request, employee_id: int) -> Response
     if error_response:
         return error_response
 
+    require_object_branch(request, employee, branch_attr="branch_id")
+
     try:
         updated = activate_employee(
             employee=employee,
@@ -141,6 +144,8 @@ def company_hr_employee_deactivate(request: Request, employee_id: int) -> Respon
     )
     if error_response:
         return error_response
+
+    require_object_branch(request, employee, branch_attr="branch_id")
 
     try:
         updated = deactivate_employee(

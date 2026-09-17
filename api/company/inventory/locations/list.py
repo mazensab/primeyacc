@@ -33,6 +33,7 @@ from api.company.inventory.locations.serializers import (
     serialize_inventory_location,
 )
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from inventory.models import (
     InventoryLocation,
     InventoryLocationStatus,
@@ -331,6 +332,12 @@ def inventory_locations_list(request: Request) -> Response:
                     distinct=True,
                 )
             )
+        )
+
+        queryset = scope_operational_queryset(
+            queryset,
+            request,
+            branch_lookup="warehouse__branch_id",
         )
 
         queryset = _apply_inventory_location_filters(

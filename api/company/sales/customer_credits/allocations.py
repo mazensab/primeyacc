@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # api/company/sales/customer_credits/allocations.py
 # Mhamcloud | Customer Credit Allocations List API
 # ============================================================
@@ -14,6 +14,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from sales.models import (
     CustomerCreditAllocation,
     CustomerCreditAllocationStatus,
@@ -57,6 +58,12 @@ def company_customer_credit_allocations(
             )
         )
 
+
+        queryset = scope_operational_queryset(
+            queryset,
+            request,
+            branch_lookup="invoice__branch_id",
+        )
         search = str(
             request.query_params.get("q", "")
             or ""

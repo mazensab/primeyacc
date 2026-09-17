@@ -23,6 +23,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.models import Employee
 from hr.services import update_employee
 
@@ -85,11 +86,16 @@ def company_hr_employee_update(request: Request, employee_id: int) -> Response:
             status=404,
         )
 
+    require_object_branch(request, employee, branch_attr="branch_id")
+
     try:
         data = build_employee_data_from_request(
             company=company,
             payload=request.data,
         )
+
+        if data.get("branch") is not None:
+            require_object_branch(request, data["branch"], branch_attr="id")
 
         updated = update_employee(
             employee=employee,

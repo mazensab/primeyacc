@@ -30,6 +30,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from pos.models import POSRegister, POSRegisterStatus
 
 
@@ -401,6 +402,12 @@ def pos_registers_list(request: Request) -> Response:
                 "created_by",
                 "updated_by",
             )
+        )
+
+        queryset = scope_operational_queryset(
+            queryset,
+            request,
+            branch_lookup="branch_id",
         )
 
         queryset = _apply_pos_register_filters(queryset, request)

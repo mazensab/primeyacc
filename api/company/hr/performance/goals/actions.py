@@ -5,6 +5,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 from hr.models import EmployeeGoal
 from hr.services import (
     activate_employee_goal,
@@ -38,6 +39,8 @@ def employee_goal_activate(request, goal_id: int):
     goal, error_response = _get_goal_or_response(company=company, goal_id=goal_id)
     if error_response:
         return error_response
+
+    require_object_branch(request, goal, branch_attr="employee.branch_id")
 
     try:
         goal = activate_employee_goal(goal=goal, updated_by=request.user)
@@ -75,6 +78,8 @@ def employee_goal_complete(request, goal_id: int):
     goal, error_response = _get_goal_or_response(company=company, goal_id=goal_id)
     if error_response:
         return error_response
+
+    require_object_branch(request, goal, branch_attr="employee.branch_id")
 
     try:
         goal = complete_employee_goal(
@@ -116,6 +121,8 @@ def employee_goal_cancel(request, goal_id: int):
     goal, error_response = _get_goal_or_response(company=company, goal_id=goal_id)
     if error_response:
         return error_response
+
+    require_object_branch(request, goal, branch_attr="employee.branch_id")
 
     try:
         goal = cancel_employee_goal(

@@ -1,4 +1,6 @@
-﻿from __future__ import annotations
+from __future__ import annotations
+
+from api.company.branch_enforcement import scope_operational_queryset
 
 from django.db.models import Q
 from django.http import JsonResponse
@@ -33,6 +35,12 @@ def sales_orders_list(request):
         .filter(
             company=membership.company,
         )
+    )
+
+    queryset = scope_operational_queryset(
+        queryset,
+        request,
+        branch_lookup="branch_id",
     )
 
     status_value = request.GET.get(

@@ -30,6 +30,7 @@ from rest_framework.response import Response
 
 from api.company.inventory.stock.serializers import serialize_stock_item
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from inventory.models import StockItem
 
 
@@ -250,6 +251,12 @@ def stock_items_list(request: Request) -> Response:
                 "item__category",
             )
             .filter(company=company)
+        )
+
+        queryset = scope_operational_queryset(
+            queryset,
+            request,
+            branch_lookup="warehouse__branch_id",
         )
 
         queryset = _apply_stock_item_filters(queryset, request)

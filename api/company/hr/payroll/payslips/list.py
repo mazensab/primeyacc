@@ -10,6 +10,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 from hr.models import Payslip
 
 from .serializers import (
@@ -39,6 +40,12 @@ def payslips_list(request):
         "employee",
         "salary_profile",
     ).filter(company=company)
+
+    query = scope_operational_queryset(
+        query,
+        request,
+        branch_lookup="employee__branch_id",
+    )
 
     search = str(request.query_params.get("search", "")).strip()
     if search:
