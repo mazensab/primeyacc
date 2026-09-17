@@ -1619,3 +1619,71 @@ class CompanyMembership(models.Model):
                 "updated_at",
             ]
         )
+
+# ===== V2-25C MULTI-BRANCH USER ACCESS FOUNDATION =====
+class BranchAccessMode(models.TextChoices):
+    LEGACY_UNRESOLVED = "LEGACY_UNRESOLVED", "Legacy unresolved"
+    ALL = "ALL", "All branches"
+    RESTRICTED = "RESTRICTED", "Restricted branches"
+
+class CompanyMembershipBranchPolicy(models.Model):
+    membership = models.OneToOneField(CompanyMembership, on_delete=models.CASCADE, related_name="branch_policy")
+    mode = models.CharField(max_length=30, choices=BranchAccessMode.choices, default=BranchAccessMode.LEGACY_UNRESOLVED, db_index=True)
+    default_branch = models.ForeignKey("companies.Branch", on_delete=models.SET_NULL, null=True, blank=True, related_name="default_for_membership_policies")
+    last_active_branch = models.ForeignKey("companies.Branch", on_delete=models.SET_NULL, null=True, blank=True, related_name="last_active_for_membership_policies")
+    extra_data = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["mode"]), models.Index(fields=["membership", "mode"])]
+
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        for field_name in ("default_branch", "last_active_branch"):
+            branch = getattr(self, field_name, None)
+            if branch is not None and branch.company_id != self.membership.company_id:
+                raise ValidationError({field_name: "Branch must belong to the membership company."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def branch_is_explicitly_allowed(self, branch):
+        if not self.membership.is_active_membership: return False
+        if branch is None or branch.company_id != self.membership.company_id: return False
+        if self.mode == BranchAccessMode.ALL: return bool(branch.is_active)
+        if self.mode == BranchAccessMode.RESTRICTED:
+            return bool(branch.is_active and self.branch_grants.filter(branch_id=branch.id).exists())
+        return False
+
+class CompanyMembershipBranchGrant(models.Model):
+    policy = models.ForeignKey(CompanyMembershipBranchPolicy, on_delete=models.CASCADE, related_name="branch_grants")
+    branch = models.ForeignKey("companies.Branch", on_delete=models.CASCADE, related_name="membership_access_grants")
+    permissions = models.JSONField(default=list, blank=True)
+    extra_data = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["policy", "branch"], name="unique_membership_branch_grant")]
+        indexes = [models.Index(fields=["branch"]), models.Index(fields=["policy", "branch"])]
+
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        if self.policy_id and self.branch_id and self.branch.company_id != self.policy.membership.company_id:
+            raise ValidationError({"branch": "Branch must belong to the membership company."})
+        if not isinstance(self.permissions, list):
+            raise ValidationError({"permissions": "Branch permissions must be a JSON list."})
+        normalized = []
+        for permission in self.permissions:
+            value = str(permission or "").strip()
+            if value and value not in normalized: normalized.append(value)
+        self.permissions = normalized
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+# ===== END V2-25C MULTI-BRANCH USER ACCESS FOUNDATION =====

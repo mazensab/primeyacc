@@ -42,6 +42,7 @@ from accounts.models import (
 )
 from companies.onboarding import get_company_onboarding_access
 from companies.models import CompanyStatus
+from accounts.branch_access import BranchAccessDenied, has_branch_permission, resolve_branch
 from subscriptions.access_policy import (
     SubscriptionWorkspaceAccess,
     evaluate_subscription_access,
@@ -868,3 +869,32 @@ def require_company_permission(request: Request, permission: str) -> bool:
     Simple helper for function-based company views.
     """
     return request_has_company_permission(request, permission)
+
+
+# ===== V2-25C REQUEST BRANCH CONTEXT =====
+def get_requested_branch_id(request: Request) -> int | None:
+    headers=getattr(request,"headers",{}) or {}
+    raw=headers.get("X-Branch-ID") or _get_request_query_value(request,"branch_id")
+    method=getattr(request,"method","GET")
+    if raw in [None,""] and method not in ["GET","HEAD","OPTIONS"]: raw=_get_request_data_value(request,"branch_id")
+    if raw in [None,""]: return None
+    try: return int(raw)
+    except (TypeError,ValueError): return None
+
+def attach_branch_context(request: Request, *, required: bool=False):
+    membership=getattr(request,"company_membership",None) or get_current_company_membership(request)
+    branch=resolve_branch(membership,get_requested_branch_id(request),required=required)
+    setattr(request,"branch",branch); setattr(request,"branch_id",branch.id if branch else None)
+    return branch
+
+def request_has_branch_access(request: Request, branch_id=None) -> bool:
+    membership=getattr(request,"company_membership",None) or get_current_company_membership(request)
+    selector=branch_id if branch_id not in [None,""] else get_requested_branch_id(request)
+    try: return resolve_branch(membership,selector,required=True) is not None
+    except BranchAccessDenied: return False
+
+def request_has_branch_permission(request: Request, permission: str, *, branch_id=None) -> bool:
+    membership=getattr(request,"company_membership",None) or get_current_company_membership(request)
+    selector=branch_id if branch_id not in [None,""] else get_requested_branch_id(request)
+    return has_branch_permission(membership,permission,branch_id=selector)
+# ===== END V2-25C REQUEST BRANCH CONTEXT =====
