@@ -1403,6 +1403,7 @@ def create_customer_payment(
     counterparty_account: Any = None,
     counterparty_account_id: Any = None,
     sales_invoice=None,
+    branch=None,
     currency: str | None = None,
     payment_number: str = "",
     reference: str = "",
@@ -1412,6 +1413,12 @@ def create_customer_payment(
 ) -> CustomerPayment:
     ensure_same_company(company, treasury_account, field_name="treasury_account")
     ensure_same_company(company, sales_invoice, field_name="sales_invoice")
+    ensure_same_company(company, branch, field_name="branch")
+    if sales_invoice is not None:
+        invoice_branch = getattr(sales_invoice, "branch", None)
+        if branch is not None and invoice_branch is not None and branch.id != invoice_branch.id:
+            raise ValidationError({"branch": "Payment branch must match sales invoice branch."})
+        branch = invoice_branch or branch
 
     amount_decimal = normalize_decimal(amount)
 
@@ -1445,6 +1452,7 @@ def create_customer_payment(
             account_id=counterparty_account_id,
         ),
             sales_invoice=sales_invoice,
+            branch=branch,
             treasury_account=treasury_account,
             amount=amount_decimal,
             currency=normalize_currency(currency or treasury_account.currency),
@@ -1747,6 +1755,7 @@ def create_supplier_payment(
     counterparty_account: Any = None,
     counterparty_account_id: Any = None,
     purchase_bill=None,
+    branch=None,
     currency: str | None = None,
     payment_number: str = "",
     reference: str = "",
@@ -1756,6 +1765,12 @@ def create_supplier_payment(
 ) -> SupplierPayment:
     ensure_same_company(company, treasury_account, field_name="treasury_account")
     ensure_same_company(company, purchase_bill, field_name="purchase_bill")
+    ensure_same_company(company, branch, field_name="branch")
+    if purchase_bill is not None:
+        bill_branch = getattr(purchase_bill, "branch", None)
+        if branch is not None and bill_branch is not None and branch.id != bill_branch.id:
+            raise ValidationError({"branch": "Payment branch must match purchase bill branch."})
+        branch = bill_branch or branch
 
     amount_decimal = normalize_decimal(amount)
 
@@ -1789,6 +1804,7 @@ def create_supplier_payment(
             account_id=counterparty_account_id,
         ),
             purchase_bill=purchase_bill,
+            branch=branch,
             treasury_account=treasury_account,
             amount=amount_decimal,
             currency=normalize_currency(currency or treasury_account.currency),

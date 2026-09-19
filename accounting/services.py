@@ -897,8 +897,16 @@ def _update_entry_totals(entry: JournalEntry) -> JournalEntry:
     return entry
 
 
-def _validate_line_payload(company, line: EntryLinePayload) -> EntryLinePayload:
+def _validate_line_payload(company, line: EntryLinePayload, *, branch=None) -> EntryLinePayload:
     line.account = _validate_postable_account(line.account, company)
+
+    if line.cost_center is not None:
+        if line.cost_center.company_id != company.pk:
+            raise AccountingPostingError("مركز التكلفة يجب أن يكون من نفس الشركة.")
+        if not line.cost_center.can_post:
+            raise AccountingPostingError("مركز التكلفة غير نشط أو تجميعي.")
+        if line.cost_center.branch_id and (branch is None or line.cost_center.branch_id != getattr(branch, "pk", None)):
+            raise AccountingPostingError("مركز التكلفة مرتبط بفرع مختلف عن فرع القيد.")
     line.debit_amount = _money(line.debit_amount)
     line.credit_amount = _money(line.credit_amount)
     line.tax_amount = _money(line.tax_amount)
@@ -924,6 +932,7 @@ def create_journal_entry_header(
     *,
     company,
     entry_date: date,
+    branch=None,
     entry_number: str = "",
     posting_source: str = PostingSource.MANUAL,
     reference: str = "",
@@ -939,12 +948,16 @@ def create_journal_entry_header(
 ) -> JournalEntry:
     _validate_company(company)
 
+    if branch is not None and getattr(branch, "company_id", None) != getattr(company, "pk", None):
+        raise AccountingPostingError("فرع القيد يجب أن يكون من نفس الشركة.")
+
     entry_date = entry_date or timezone.localdate()
     entry_number = _clean_code(entry_number) or generate_journal_entry_number(company)
     period = resolve_accounting_period(company, entry_date)
 
     entry = JournalEntry(
         company=company,
+        branch=branch,
         entry_number=entry_number,
         entry_date=entry_date,
         period=period,
@@ -983,7 +996,7 @@ def replace_journal_entry_lines(
     if entry.status != JournalEntryStatus.DRAFT:
         raise AccountingPostingError("لا يمكن تعديل أسطر قيد غير مسودة.")
 
-    line_payloads = [_validate_line_payload(entry.company, line) for line in lines]
+    line_payloads = [_validate_line_payload(entry.company, line, branch=entry.branch) for line in lines]
 
     if not line_payloads:
         raise AccountingPostingError("لا يمكن إنشاء قيد بدون أسطر.")
@@ -1005,6 +1018,7 @@ def replace_journal_entry_lines(
         JournalEntryLine.objects.create(
             company=entry.company,
             journal_entry=entry,
+            branch=entry.branch,
             account=line.account,
             description=line.description or "",
             debit_amount=line.debit_amount,
@@ -1043,6 +1057,7 @@ def create_manual_journal_entry(
     company,
     entry_date: date,
     lines: list[EntryLinePayload],
+    branch=None,
     entry_number: str = "",
     reference: str = "",
     external_reference: str = "",
@@ -1055,6 +1070,7 @@ def create_manual_journal_entry(
     entry = create_journal_entry_header(
         company=company,
         entry_date=entry_date,
+        branch=branch,
         entry_number=entry_number,
         posting_source=PostingSource.MANUAL,
         reference=reference,
@@ -1285,8 +1301,13 @@ def post_sales_invoice_to_accounting(
     entry_date = getattr(invoice, "invoice_date", None) or timezone.localdate()
     customer_id = _clean_text(getattr(invoice, "customer_id", "") or "")
 
+    accounting_branch = getattr(invoice, "branch", None)
+    if accounting_branch is None:
+        raise AccountingPostingError("لا يمكن إنشاء قيد محاسبي بدون فرع محدد وموثوق لـفاتورة المبيعات.")
+
     entry = create_journal_entry_header(
         company=company,
+        branch=accounting_branch,
         entry_date=entry_date,
         entry_number=generate_journal_entry_number(company, prefix="SINV"),
         posting_source=PostingSource.SALES_INVOICE,
@@ -1629,8 +1650,13 @@ def post_sales_credit_note_to_accounting(
         None,
     )
 
+    accounting_branch = getattr(credit_note, "branch", None)
+    if accounting_branch is None:
+        raise AccountingPostingError("لا يمكن إنشاء قيد محاسبي بدون فرع محدد وموثوق لـالإشعار الدائن.")
+
     entry = create_journal_entry_header(
         company=company,
+        branch=accounting_branch,
         entry_date=entry_date,
         entry_number=generate_journal_entry_number(
             company,
@@ -2143,8 +2169,13 @@ def post_supplier_debit_note_to_accounting(
         or ""
     )
 
+    accounting_branch = getattr(debit_note, "branch", None)
+    if accounting_branch is None:
+        raise AccountingPostingError("لا يمكن إنشاء قيد محاسبي بدون فرع محدد وموثوق لـالإشعار المدين للمورد.")
+
     entry = create_journal_entry_header(
         company=company,
+        branch=accounting_branch,
         entry_date=entry_date,
         entry_number=generate_journal_entry_number(
             company,
@@ -2460,6 +2491,7 @@ def reverse_journal_entry(
     reversal = create_journal_entry_header(
         company=entry.company,
         entry_date=reversal_date,
+        branch=entry.branch,
         entry_number=generate_journal_entry_number(entry.company, prefix="REV"),
         posting_source=PostingSource.OTHER,
         reference=entry.reference,
@@ -2773,8 +2805,13 @@ def post_customer_payment_to_accounting(
     )
 
 
+    accounting_branch = getattr(payment, "branch", None) or getattr(getattr(payment, "sales_invoice", None), "branch", None)
+    if accounting_branch is None:
+        raise AccountingPostingError("لا يمكن إنشاء قيد محاسبي بدون فرع محدد وموثوق لـدفعة العميل المرتبطة بفاتورة.")
+
     entry = create_journal_entry_header(
         company=company,
+        branch=accounting_branch,
         entry_date=entry_date,
         entry_number=generate_journal_entry_number(company, prefix="CPAY"),
         posting_source=POSTING_SOURCE_TREASURY,
@@ -2984,8 +3021,13 @@ def post_supplier_payment_to_accounting(
     )
 
 
+    accounting_branch = getattr(payment, "branch", None) or getattr(getattr(payment, "purchase_bill", None), "branch", None)
+    if accounting_branch is None:
+        raise AccountingPostingError("لا يمكن إنشاء قيد محاسبي بدون فرع محدد وموثوق لـدفعة المورد المرتبطة بفاتورة.")
+
     entry = create_journal_entry_header(
         company=company,
+        branch=accounting_branch,
         entry_date=entry_date,
         entry_number=generate_journal_entry_number(company, prefix="SPAY"),
         posting_source=POSTING_SOURCE_TREASURY,

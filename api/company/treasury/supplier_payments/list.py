@@ -34,6 +34,7 @@ from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
 from treasury.models import PaymentMethod, PaymentStatus, SupplierPayment
+from companies.models import Branch
 from treasury.services import (
     create_supplier_payment,
     get_purchase_bill_or_raise,
@@ -508,6 +509,13 @@ def supplier_payments_list(request: Request) -> Response:
 
         payment_date = parse_date(str(payload.get("payment_date") or "")) or None
 
+        branch = None
+        branch_id = payload.get("branch_id")
+        if branch_id not in (None, ""):
+            branch = Branch.objects.filter(id=int(branch_id), company=company, is_active=True).first()
+            if branch is None:
+                raise ValidationError({"branch_id": "Active branch does not belong to the current company."})
+
         payment = create_supplier_payment(
             company=company,
             treasury_account=treasury_account,
@@ -532,6 +540,7 @@ def supplier_payments_list(request: Request) -> Response:
             counterparty_phone=_payload_text(payload, "counterparty_phone", "party_phone", "supplier_phone"),
             counterparty_account_id=payload.get("counterparty_account_id") or payload.get("counterparty_account"),
             purchase_bill=purchase_bill,
+            branch=branch,
             currency=payload.get("currency"),
             payment_number=payload.get("payment_number", ""),
             reference=payload.get("reference", ""),

@@ -703,8 +703,13 @@ def post_purchase_bill_to_accounting(
     entry_date = getattr(bill, "bill_date", None) or timezone.localdate()
     supplier_id = normalize_text(getattr(bill, "supplier_id", "") or "")
 
+    accounting_branch = getattr(bill, "branch", None)
+    if accounting_branch is None:
+        raise AccountingPostingError("لا يمكن إنشاء قيد محاسبي بدون فرع محدد وموثوق لـفاتورة المورد.")
+
     entry = create_journal_entry_header(
         company=company,
+        branch=accounting_branch,
         entry_date=entry_date,
         entry_number=generate_journal_entry_number(company, prefix="PBILL"),
         posting_source=POSTING_SOURCE_PURCHASE_BILL,

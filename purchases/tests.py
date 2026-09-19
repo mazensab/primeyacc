@@ -771,6 +771,7 @@ class PurchaseServicesTests(PurchasesTestCase):
             user=self.user,
             payload={
                 "supplier_id": self.supplier.id,
+                "branch_id": self.branch.id,
                 "items": [
                     {
                         "item_id": self.item.id,
@@ -800,6 +801,7 @@ class PurchaseServicesTests(PurchasesTestCase):
             user=self.user,
             payload={
                 "supplier_id": self.supplier.id,
+                "branch_id": self.branch.id,
                 "items": [
                     {
                         "item_id": self.item.id,
@@ -826,6 +828,7 @@ class PurchaseServicesTests(PurchasesTestCase):
             user=self.user,
             payload={
                 "supplier_id": self.supplier.id,
+                "branch_id": self.branch.id,
                 "items": [
                     {
                         "item_id": self.item.id,
@@ -890,6 +893,7 @@ class PurchaseServicesTests(PurchasesTestCase):
             user=self.user,
             payload={
                 "supplier_id": self.supplier.id,
+                "branch_id": self.branch.id,
                 "items": [
                     {
                         "item_id": self.item.id,
@@ -3016,6 +3020,7 @@ class SupplierDebitNotesAPITests(PurchasesTestCase):
             user=self.user,
             payload={
                 "supplier_id": self.supplier.id,
+                "branch_id": self.branch.id,
                 "items": [
                     {
                         "item_id": self.item.id,

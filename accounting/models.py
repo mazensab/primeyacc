@@ -528,6 +528,15 @@ class CostCenter(models.Model):
         verbose_name="الشركة",
     )
 
+    branch = models.ForeignKey(
+        "companies.Branch",
+        on_delete=models.PROTECT,
+        related_name="cost_centers",
+        null=True,
+        blank=True,
+        verbose_name="الفرع",
+    )
+
     name = models.CharField(max_length=255, verbose_name="اسم مركز التكلفة")
     name_en = models.CharField(max_length=255, blank=True, verbose_name="اسم مركز التكلفة بالإنجليزية")
     code = models.CharField(max_length=50, verbose_name="كود مركز التكلفة")
@@ -562,6 +571,7 @@ class CostCenter(models.Model):
         ordering = ["company_id", "code"]
         indexes = [
             models.Index(fields=["company", "code"]),
+            models.Index(fields=["company", "branch"]),
             models.Index(fields=["company", "parent"]),
             models.Index(fields=["company", "level"]),
             models.Index(fields=["company", "is_group"]),
@@ -590,6 +600,9 @@ class CostCenter(models.Model):
 
         if not self.company_id:
             raise ValidationError({"company": "الشركة مطلوبة."})
+
+        if self.branch_id and self.branch.company_id != self.company_id:
+            raise ValidationError({"branch": "فرع مركز التكلفة يجب أن يكون من نفس الشركة."})
 
         if not self.code:
             raise ValidationError({"code": "كود مركز التكلفة مطلوب."})
@@ -952,6 +965,15 @@ class JournalEntry(models.Model):
         verbose_name="الشركة",
     )
 
+    branch = models.ForeignKey(
+        "companies.Branch",
+        on_delete=models.PROTECT,
+        related_name="journal_entries",
+        null=True,
+        blank=True,
+        verbose_name="الفرع",
+    )
+
     entry_number = models.CharField(max_length=100, verbose_name="رقم القيد")
     entry_date = models.DateField(verbose_name="تاريخ القيد")
 
@@ -1059,6 +1081,8 @@ class JournalEntry(models.Model):
         ordering = ["company_id", "-entry_date", "-id"]
         indexes = [
             models.Index(fields=["company", "entry_number"]),
+            models.Index(fields=["company", "branch"]),
+            models.Index(fields=["company", "branch", "entry_date"]),
             models.Index(fields=["company", "entry_date"]),
             models.Index(fields=["company", "period"]),
             models.Index(fields=["company", "status"]),
@@ -1115,6 +1139,9 @@ class JournalEntry(models.Model):
 
         if not self.company_id:
             raise ValidationError({"company": "الشركة مطلوبة."})
+
+        if self.branch_id and self.branch.company_id != self.company_id:
+            raise ValidationError({"branch": "فرع القيد يجب أن يكون من نفس الشركة."})
 
         if not self.entry_number:
             raise ValidationError({"entry_number": "رقم القيد مطلوب."})
@@ -1246,6 +1273,14 @@ class JournalEntryLine(models.Model):
         related_name="lines",
         verbose_name="القيد",
     )
+    branch = models.ForeignKey(
+        "companies.Branch",
+        on_delete=models.PROTECT,
+        related_name="journal_entry_lines",
+        null=True,
+        blank=True,
+        verbose_name="الفرع",
+    )
     account = models.ForeignKey(
         Account,
         on_delete=models.PROTECT,
@@ -1293,6 +1328,8 @@ class JournalEntryLine(models.Model):
         ordering = ["company_id", "journal_entry", "sort_order", "id"]
         indexes = [
             models.Index(fields=["company", "journal_entry"]),
+            models.Index(fields=["company", "branch"]),
+            models.Index(fields=["company", "branch", "account"]),
             models.Index(fields=["company", "account"]),
             models.Index(fields=["company", "cost_center"]),
             models.Index(fields=["company", "tax_rate"]),
@@ -1325,6 +1362,12 @@ class JournalEntryLine(models.Model):
         if self.journal_entry_id and self.journal_entry.company_id != self.company_id:
             raise ValidationError({"journal_entry": "القيد يجب أن يكون من نفس الشركة."})
 
+        if self.branch_id and self.branch.company_id != self.company_id:
+            raise ValidationError({"branch": "فرع سطر القيد يجب أن يكون من نفس الشركة."})
+
+        if self.journal_entry_id and self.branch_id != self.journal_entry.branch_id:
+            raise ValidationError({"branch": "فرع سطر القيد يجب أن يطابق فرع القيد."})
+
         if self.journal_entry_id and self.journal_entry.status != JournalEntryStatus.DRAFT:
             raise ValidationError("لا يمكن تعديل أسطر قيد غير مسودة.")
 
@@ -1351,6 +1394,9 @@ class JournalEntryLine(models.Model):
             if self.cost_center.company_id != self.company_id:
                 raise ValidationError({"cost_center": "مركز التكلفة يجب أن يكون من نفس الشركة."})
 
+            if self.cost_center.branch_id and self.cost_center.branch_id != self.branch_id:
+                raise ValidationError({"cost_center": "مركز التكلفة مرتبط بفرع مختلف عن فرع القيد."})
+
             if not self.cost_center.can_post:
                 raise ValidationError({"cost_center": "مركز التكلفة غير نشط أو تجميعي."})
 
@@ -1360,6 +1406,8 @@ class JournalEntryLine(models.Model):
     def save(self, *args, **kwargs):
         if not self.company_id and self.journal_entry_id:
             self.company_id = self.journal_entry.company_id
+        if not self.branch_id and self.journal_entry_id:
+            self.branch_id = self.journal_entry.branch_id
 
         self.full_clean()
         super().save(*args, **kwargs)

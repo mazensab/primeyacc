@@ -535,6 +535,14 @@ class CustomerPayment(models.Model):
 
     payment_number = models.CharField(max_length=80, blank=True)
 
+    branch = models.ForeignKey(
+        "companies.Branch",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="customer_payments",
+    )
+
     customer_id = models.PositiveBigIntegerField(
         null=True,
         blank=True,
@@ -775,6 +783,14 @@ class SupplierPayment(models.Model):
     )
 
     payment_number = models.CharField(max_length=80, blank=True)
+
+    branch = models.ForeignKey(
+        "companies.Branch",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="supplier_payments",
+    )
 
     supplier_id = models.PositiveBigIntegerField(
         null=True,

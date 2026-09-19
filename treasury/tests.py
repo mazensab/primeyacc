@@ -38,6 +38,8 @@ from rest_framework.test import APIClient
 
 from accounts.models import CompanyMembership, CompanyRole, UserProfile
 from accounting.models import Account, AccountingAccountPurpose, JournalEntryStatus, PostingSource
+from companies.models import Branch
+
 from .models import (
     CustomerPayment,
     PaymentMethod,
@@ -879,6 +881,8 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
             code="PAY-B",
             email="payment-b@example.com",
         )
+        cls.branch_a = Branch.objects.create(company=cls.company_a, name="Payment Branch A", branch_code="PAY-BR-A", is_active=True, is_default=True)
+        cls.branch_b = Branch.objects.create(company=cls.company_b, name="Payment Branch B", branch_code="PAY-BR-B", is_active=True, is_default=True)
 
     def test_create_customer_payment_draft_does_not_change_balance(self) -> None:
         account = create_treasury_account(
@@ -891,6 +895,7 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
 
         payment = create_customer_payment(
             company=self.company_a,
+            branch=self.branch_a,
             treasury_account=account,
             user=self.user,
             amount="75.00",
@@ -921,6 +926,7 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
 
         payment = create_customer_payment(
             company=self.company_a,
+            branch=self.branch_a,
             treasury_account=account,
             user=self.user,
             amount="150.00",
@@ -976,6 +982,7 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
         )
         payment = create_customer_payment(
             company=self.company_a,
+            branch=self.branch_a,
             treasury_account=account,
             user=self.user,
             amount="90.00",
@@ -1027,6 +1034,7 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
         )
         payment = create_supplier_payment(
             company=self.company_a,
+            branch=self.branch_a,
             treasury_account=account,
             user=self.user,
             amount="75.00",
@@ -1078,6 +1086,7 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
         self.assertIsNone(account.accounting_account_id)
         payment = create_customer_payment(
             company=self.company_a,
+            branch=self.branch_a,
             treasury_account=account,
             user=self.user,
             amount="45.00",
@@ -1107,6 +1116,7 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
         )
         payment = create_customer_payment(
             company=self.company_a,
+            branch=self.branch_a,
             treasury_account=account,
             user=self.user,
             amount="80.00",
@@ -1142,6 +1152,7 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
         )
         payment = create_supplier_payment(
             company=self.company_a,
+            branch=self.branch_a,
             treasury_account=account,
             user=self.user,
             amount="70.00",
@@ -1178,6 +1189,7 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
 
         payment = create_customer_payment(
             company=self.company_a,
+            branch=self.branch_a,
             treasury_account=account,
             user=self.user,
             amount="40.00",
@@ -1224,6 +1236,7 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
 
         payment = create_customer_payment(
             company=self.company_a,
+            branch=self.branch_a,
             treasury_account=account,
             user=self.user,
             amount="60.00",
@@ -1277,6 +1290,7 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
         with self.assertRaises(ValidationError):
             create_customer_payment(
                 company=self.company_a,
+            branch=self.branch_a,
                 treasury_account=foreign_account,
                 user=self.user,
                 amount="10.00",
@@ -1295,6 +1309,7 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
         )
         payment = create_customer_payment(
             company=self.company_a,
+            branch=self.branch_a,
             treasury_account=account,
             user=self.user,
             amount="25.00",
@@ -1317,6 +1332,7 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
         )
         payment = create_supplier_payment(
             company=self.company_a,
+            branch=self.branch_a,
             treasury_account=account,
             user=self.user,
             amount="35.00",
@@ -1344,6 +1360,7 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
         )
         payment = create_customer_payment(
             company=self.company_a,
+            branch=self.branch_a,
             treasury_account=treasury_account,
             user=self.user,
             amount="45.00",
@@ -1392,6 +1409,7 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
         )
         payment = create_supplier_payment(
             company=self.company_a,
+            branch=self.branch_a,
             treasury_account=treasury_account,
             user=self.user,
             amount="55.00",
@@ -1437,6 +1455,7 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
 
         payment = create_supplier_payment(
             company=self.company_a,
+            branch=self.branch_a,
             treasury_account=account,
             user=self.user,
             amount="75.00",
@@ -1467,6 +1486,7 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
 
         payment = create_supplier_payment(
             company=self.company_a,
+            branch=self.branch_a,
             treasury_account=account,
             user=self.user,
             amount="125.00",
@@ -1517,6 +1537,7 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
 
         payment = create_supplier_payment(
             company=self.company_a,
+            branch=self.branch_a,
             treasury_account=account,
             user=self.user,
             amount="40.00",
@@ -1563,6 +1584,7 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
 
         payment = create_supplier_payment(
             company=self.company_a,
+            branch=self.branch_a,
             treasury_account=account,
             user=self.user,
             amount="80.00",
@@ -1615,6 +1637,7 @@ class TreasuryPaymentServiceTests(MhamcloudTestFactoryMixin, TestCase):
 
         payment = create_supplier_payment(
             company=self.company_a,
+            branch=self.branch_a,
             treasury_account=account,
             user=self.user,
             amount="100.00",
@@ -1694,6 +1717,8 @@ class TreasuryPaymentAllocationServiceTests(MhamcloudTestFactoryMixin, TestCase)
             code="ALLOC-B",
             email="allocation-b@example.com",
         )
+        cls.branch_a = Branch.objects.create(company=cls.company_a, name="Allocation Branch A", branch_code="ALLOC-BR-A", is_active=True, is_default=True)
+        cls.branch_b = Branch.objects.create(company=cls.company_b, name="Allocation Branch B", branch_code="ALLOC-BR-B", is_active=True, is_default=True)
 
     @classmethod
     def create_business_party(
@@ -1773,6 +1798,7 @@ class TreasuryPaymentAllocationServiceTests(MhamcloudTestFactoryMixin, TestCase)
         cls,
         *,
         company,
+        branch,
         total: str = "100.00",
         paid: str = "0.00",
         invoice_number: str = "ALLOC-SI-001",
@@ -1788,6 +1814,7 @@ class TreasuryPaymentAllocationServiceTests(MhamcloudTestFactoryMixin, TestCase)
 
         invoice = SalesInvoice.objects.create(
             company=company,
+            branch=branch,
             invoice_number=invoice_number,
             status="ISSUED",
             payment_status="UNPAID" if paid_amount == Decimal("0.00") else "PARTIAL",
@@ -1810,6 +1837,7 @@ class TreasuryPaymentAllocationServiceTests(MhamcloudTestFactoryMixin, TestCase)
         cls,
         *,
         company,
+        branch,
         supplier,
         total: str = "100.00",
         paid: str = "0.00",
@@ -1826,6 +1854,7 @@ class TreasuryPaymentAllocationServiceTests(MhamcloudTestFactoryMixin, TestCase)
 
         bill = PurchaseBill.objects.create(
             company=company,
+            branch=branch,
             supplier=supplier,
             bill_number=bill_number,
             status="POSTED",
@@ -1855,6 +1884,7 @@ class TreasuryPaymentAllocationServiceTests(MhamcloudTestFactoryMixin, TestCase)
 
         invoice = self.create_sales_invoice(
             company=self.company_a,
+            branch=self.branch_a,
             total="100.00",
             invoice_number="ALLOC-SI-CONFIRM",
         )
@@ -1898,6 +1928,7 @@ class TreasuryPaymentAllocationServiceTests(MhamcloudTestFactoryMixin, TestCase)
 
         invoice = self.create_sales_invoice(
             company=self.company_a,
+            branch=self.branch_a,
             total="100.00",
             invoice_number="ALLOC-SI-CANCEL",
         )
@@ -1962,6 +1993,7 @@ class TreasuryPaymentAllocationServiceTests(MhamcloudTestFactoryMixin, TestCase)
 
         invoice = self.create_sales_invoice(
             company=self.company_a,
+            branch=self.branch_a,
             total="100.00",
             invoice_number="ALLOC-SI-OVER",
         )
@@ -2012,6 +2044,7 @@ class TreasuryPaymentAllocationServiceTests(MhamcloudTestFactoryMixin, TestCase)
 
         bill = self.create_purchase_bill(
             company=self.company_a,
+            branch=self.branch_a,
             supplier=supplier,
             total="100.00",
             bill_number="ALLOC-PB-CONFIRM",
@@ -2063,6 +2096,7 @@ class TreasuryPaymentAllocationServiceTests(MhamcloudTestFactoryMixin, TestCase)
 
         bill = self.create_purchase_bill(
             company=self.company_a,
+            branch=self.branch_a,
             supplier=supplier,
             total="100.00",
             bill_number="ALLOC-PB-CANCEL",
@@ -2135,6 +2169,7 @@ class TreasuryPaymentAllocationServiceTests(MhamcloudTestFactoryMixin, TestCase)
 
         bill = self.create_purchase_bill(
             company=self.company_a,
+            branch=self.branch_a,
             supplier=supplier,
             total="100.00",
             bill_number="ALLOC-PB-OVER",

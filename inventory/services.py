@@ -1844,8 +1844,13 @@ def post_stock_movement_to_accounting(
 
     description = f"قيد تلقائي لحركة مخزون {movement_number}"
 
+    accounting_branch = getattr(getattr(movement, "warehouse", None), "branch", None)
+    if accounting_branch is None:
+        raise AccountingPostingError("لا يمكن إنشاء قيد محاسبي بدون فرع محدد وموثوق لـحركة المخزون/المستودع.")
+
     entry = create_journal_entry_header(
         company=company,
+        branch=accounting_branch,
         entry_date=entry_date,
         entry_number=generate_journal_entry_number(company, prefix="STK"),
         posting_source=posting_source,
