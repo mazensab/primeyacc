@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📂 api/company/documents/print_jobs.py
 # 🧠 Mhamcloud | Company Print Jobs Foundation API V1.0
 # ------------------------------------------------------------
@@ -15,6 +15,7 @@ from rest_framework.response import Response
 
 from api.permissions import HasAnyCompanyPermission
 from documents.rendering import supported_document_rendering_options
+from documents.models import PrintProfile
 
 from ._shared import CompanyDocumentsAPIError, error_response, get_request_company
 
@@ -41,6 +42,7 @@ def company_document_print_jobs(request: Request) -> Response:
                     or getattr(company, "name", ""),
                 },
                 "options": supported_document_rendering_options(),
+                "print_profiles": [{"id": x.id, "name": x.name, "document_type": x.document_type, "output_format": x.output_format, "paper_size": x.paper_size, "thermal_width": x.thermal_width, "language": x.language, "copies": x.copies, "branch_id": x.branch_id, "register_id": x.register_id, "is_default": x.is_default} for x in PrintProfile.objects.filter(company=company, is_active=True).order_by("document_type", "name")],
                 "results": [],
             },
             status=200,

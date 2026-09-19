@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # ًں“‚ documents/services.py
 # ًں§  Mhamcloud | Documents Templates Services V1.0
 # ------------------------------------------------------------
@@ -20,10 +20,11 @@ from typing import Any
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.utils import timezone
 
 from companies.models import Company
 
-from .models import DocumentTemplate, DocumentType
+from .models import DocumentSequence, DocumentSequenceScope, DocumentTemplate, DocumentType, PrintProfile
 
 
 DOCUMENT_TEMPLATE_MUTABLE_FIELDS = {
@@ -290,3 +291,110 @@ def activate_document_template(
 
     return template
 
+
+# V2-25F operational configuration / numbering / print-profile services.
+SEQUENCE_DEFAULTS = {
+    "POS_REGISTER": ("POS-R-", DocumentSequenceScope.COMPANY),
+    "POS_SESSION": ("POS-S-", DocumentSequenceScope.COMPANY),
+    "POS_ORDER": ("POS-O-", DocumentSequenceScope.COMPANY),
+    "POS_RETURN": ("POS-RET-", DocumentSequenceScope.COMPANY),
+}
+
+def get_branch_operations_config(branch):
+    # Configuration only; never an authorization bypass.
+    raw = branch.settings_data if branch is not None and isinstance(branch.settings_data, dict) else {}
+    value = raw.get("operations")
+    return value if isinstance(value, dict) else {}
+
+def get_pos_register_operations_config(register):
+    raw = register.settings_data if register is not None and isinstance(register.settings_data, dict) else {}
+    value = raw.get("operations")
+    return value if isinstance(value, dict) else {}
+
+@transaction.atomic
+def next_document_number(*, company, key, prefix=None, scope=None, branch=None, register=None, padding=6):
+    if company is None:
+        raise ValidationError({"company": "Company is required."})
+    key = str(key or "").strip().upper()
+    if not key:
+        raise ValidationError({"key": "Sequence key is required."})
+
+    default_prefix, default_scope = SEQUENCE_DEFAULTS.get(
+        key, (f"{key}-", DocumentSequenceScope.COMPANY)
+    )
+    scope = str(scope or default_scope).strip().upper()
+
+    if scope == DocumentSequenceScope.COMPANY:
+        branch = None
+        register = None
+        scope_key = "COMPANY"
+    elif scope == DocumentSequenceScope.BRANCH:
+        if branch is None or branch.company_id != company.id:
+            raise ValidationError({"branch": "Valid company branch is required."})
+        register = None
+        scope_key = f"BRANCH:{branch.id}"
+    elif scope == DocumentSequenceScope.REGISTER:
+        if register is None or register.company_id != company.id:
+            raise ValidationError({"register": "Valid company POS register is required."})
+        branch = register.branch
+        scope_key = f"REGISTER:{register.id}"
+    else:
+        raise ValidationError({"scope": "Invalid sequence scope."})
+
+    sequence = (
+        DocumentSequence.objects.select_for_update()
+        .filter(company=company, key=key, scope_key=scope_key)
+        .first()
+    )
+    if sequence is None:
+        sequence = DocumentSequence.objects.create(
+            company=company,
+            branch=branch,
+            register=register,
+            key=key,
+            scope=scope,
+            scope_key=scope_key,
+            prefix=str(prefix if prefix is not None else default_prefix).strip().upper(),
+            padding=padding,
+        )
+
+    if not sequence.is_active:
+        raise ValidationError({"sequence": "Document sequence is inactive."})
+
+    value = sequence.next_value
+    sequence.next_value = value + 1
+    sequence.save(update_fields=["next_value", "updated_at"])
+    return f"{sequence.prefix}{str(value).zfill(sequence.padding)}{sequence.suffix}"
+
+def resolve_print_profile(*, company, document_type, branch=None, register=None, branch_id=None, register_id=None, profile_id=None):
+    qs = PrintProfile.objects.filter(
+        company=company, document_type=document_type, is_active=True,
+    ).select_related("template")
+    if branch is not None: branch_id = branch.id
+    if register is not None: register_id = register.id
+
+    if profile_id:
+        profile = qs.filter(id=profile_id).first()
+        if profile is None:
+            raise ValidationError({"profile_id": "Print profile was not found."})
+        return profile
+
+    if register_id is not None:
+        profile = qs.filter(register_id=register_id, is_default=True).first()
+        if profile is not None:
+            return profile
+
+    if branch_id is not None:
+        profile = qs.filter(
+            register__isnull=True,
+            branch_id=branch_id,
+            is_default=True,
+        ).first()
+        if profile is not None:
+            return profile
+
+    return qs.filter(
+        register__isnull=True,
+        branch__isnull=True,
+        is_default=True,
+    ).first()

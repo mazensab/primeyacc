@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📂 api/company/documents/urls.py
 # 🧠 Mhamcloud | Company Documents URLs V1.1
 # ------------------------------------------------------------
@@ -22,6 +22,8 @@ from django.urls import include, path
 
 from .pdf import company_document_pdf
 from .print_jobs import company_document_print_jobs
+from .print_profiles import company_print_profiles
+from .sequences import company_document_sequences
 from .render import company_document_render
 from .thermal import company_document_thermal
 from .web_print import company_document_web_print
@@ -32,6 +34,8 @@ app_name = "company_documents"
 
 urlpatterns = [
     path("templates/", include("api.company.documents.templates.urls")),
+    path("print-profiles/", company_print_profiles, name="print_profiles"),
+    path("sequences/", company_document_sequences, name="sequences"),
     path("render/", company_document_render, name="render"),
     path("web-print/", company_document_web_print, name="web_print"),
     path("thermal/", company_document_thermal, name="thermal"),

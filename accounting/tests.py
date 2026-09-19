@@ -27,6 +27,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import (
+    BranchAccessMode,
     CompanyMembership,
     CompanyRole,
     MembershipStatus,
@@ -654,6 +655,25 @@ class AccountingCompanyApiTests(TestCase):
             role=CompanyRole.OWNER,
             is_primary=True,
         )
+
+        from accounts.branch_access import configure_branch_access
+        from companies.models import Branch
+
+        membership_one = CompanyMembership.objects.get(user=cls.user_one, company=cls.company_one)
+        membership_two = CompanyMembership.objects.get(user=cls.user_two, company=cls.company_two)
+
+        branch_one = Branch.objects.filter(company=cls.company_one, is_active=True).order_by("-is_default", "id").first()
+        branch_two = Branch.objects.filter(company=cls.company_two, is_active=True).order_by("-is_default", "id").first()
+
+        if branch_one is None:
+            branch_one = Branch.objects.create(company=cls.company_one, name="Accounting API Main 101", branch_code="ACC-API-101", is_active=True, is_default=True)
+        if branch_two is None:
+            branch_two = Branch.objects.create(company=cls.company_two, name="Accounting API Main 102", branch_code="ACC-API-102", is_active=True, is_default=True)
+
+        configure_branch_access(membership_one, mode=BranchAccessMode.ALL, default_branch_id=branch_one.id)
+        configure_branch_access(membership_two, mode=BranchAccessMode.ALL, default_branch_id=branch_two.id)
+        cls.branch_one = branch_one
+        cls.branch_two = branch_two
 
         seed_company_chart_of_accounts(cls.company_one)
         seed_company_chart_of_accounts(cls.company_two)

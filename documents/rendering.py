@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📂 documents/rendering.py
 # 🧠 Mhamcloud | Document Rendering Services V1.0
 # ------------------------------------------------------------
@@ -32,7 +32,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from .models import DocumentTemplate, DocumentTemplateLayout, DocumentType
-from .services import get_default_document_template
+from .services import get_default_document_template, resolve_print_profile
 
 
 SUPPORTED_OUTPUT_FORMATS = {
@@ -67,6 +67,7 @@ class DocumentRenderRequest:
     source_id: int | None = None
     output_format: str = "PAYLOAD"
     template_id: int | None = None
+    profile_id: int | None = None
     paper_size: str = "A4"
     thermal_width: str = "80MM"
     source_payload: dict[str, Any] | None = None
@@ -196,6 +197,7 @@ def normalize_document_render_request(data: dict[str, Any] | None) -> DocumentRe
         raise ValidationError({"output_format": "Invalid output format."})
 
     template_id = _clean_positive_int(payload.get("template_id"), "template_id")
+    profile_id = _clean_positive_int(payload.get("profile_id"), "profile_id")
     source_id = _clean_positive_int(payload.get("source_id"), "source_id")
 
     if source_type != "preview" and not source_id:
@@ -215,6 +217,7 @@ def normalize_document_render_request(data: dict[str, Any] | None) -> DocumentRe
         source_id=source_id,
         output_format=output_format,
         template_id=template_id,
+        profile_id=profile_id,
         paper_size=_clean_upper(payload.get("paper_size") or "A4", "A4"),
         thermal_width=thermal_width,
         source_payload=source_payload,
@@ -468,14 +471,20 @@ def build_document_render_payload(
     """
     Build normalized rendering payload.
     """
-    template = resolve_document_template(
-        company=company,
-        document_type=request_data.document_type,
-        template_id=request_data.template_id,
-    )
     source_payload = resolve_document_source_payload(
         company=company,
         request_data=request_data,
+    )
+    branch_block = source_payload.get("branch") or {}
+    register_block = source_payload.get("register") or {}
+    profile = resolve_print_profile(
+        company=company, document_type=request_data.document_type,
+        branch_id=branch_block.get("id"), register_id=register_block.get("id"),
+        profile_id=request_data.profile_id,
+    )
+    template_id = request_data.template_id or (profile.template_id if profile else None)
+    template = resolve_document_template(
+        company=company, document_type=request_data.document_type, template_id=template_id,
     )
 
     totals = _totals_payload(source_payload)
@@ -514,6 +523,11 @@ def build_document_render_payload(
         },
         "company": _serialize_company(company),
         "template": template_payload,
+        "print_profile": ({
+            "id": profile.id, "name": profile.name, "output_format": profile.output_format,
+            "paper_size": profile.paper_size, "thermal_width": profile.thermal_width,
+            "language": profile.language, "copies": profile.copies, "settings_data": profile.settings_data,
+        } if profile else None),
         "party": party,
         "lines": lines,
         "totals": {

@@ -37,10 +37,11 @@ from typing import Any
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Max, Sum
+from django.db.models import Sum
 from django.utils import timezone
 
 from catalog.models import CatalogItemStatus
+from documents.services import next_document_number
 from .models import (
     POSOrder,
     POSOrderItem,
@@ -113,74 +114,20 @@ def _validate_same_company(obj, company, field_name: str) -> None:
         raise ValidationError({field_name: f"{field_name} must belong to the same company."})
 
 
-def _next_sequence_number(model, company, field_name: str, prefix: str) -> str:
-    """
-    Generate a simple company-scoped sequence number.
-
-    This is a foundation generator. It avoids relying on frontend numbers.
-    More advanced numbering can later move to company settings if needed.
-    """
-
-    current_max = (
-        model.objects.filter(company=company, **{f"{field_name}__startswith": prefix})
-        .aggregate(max_id=Max("id"))
-        .get("max_id")
-        or 0
-    )
-    next_number = int(current_max) + 1
-    return f"{prefix}{next_number:06d}"
-
-
 def generate_pos_register_code(company) -> str:
-    """
-    Generate POS register code for one company.
-    """
-
-    return _next_sequence_number(
-        model=POSRegister,
-        company=company,
-        field_name="code",
-        prefix="POS-R-",
-    )
+    return next_document_number(company=company, key="POS_REGISTER")
 
 
 def generate_pos_session_number(company) -> str:
-    """
-    Generate POS session number for one company.
-    """
-
-    return _next_sequence_number(
-        model=POSSession,
-        company=company,
-        field_name="session_number",
-        prefix="POS-S-",
-    )
+    return next_document_number(company=company, key="POS_SESSION")
 
 
 def generate_pos_order_number(company) -> str:
-    """
-    Generate POS order number for one company.
-    """
-
-    return _next_sequence_number(
-        model=POSOrder,
-        company=company,
-        field_name="order_number",
-        prefix="POS-O-",
-    )
+    return next_document_number(company=company, key="POS_ORDER")
 
 
 def generate_pos_return_number(company) -> str:
-    """
-    Generate POS return number for one company.
-    """
-
-    return _next_sequence_number(
-        model=POSReturn,
-        company=company,
-        field_name="return_number",
-        prefix="POS-RET-",
-    )
+    return next_document_number(company=company, key="POS_RETURN")
 
 
 @transaction.atomic
