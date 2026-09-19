@@ -12,6 +12,7 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from accounting.models import CostCenter, CostCenterStatus
+from api.company.branch_enforcement import scope_operational_queryset
 from .common import (
     cost_center_summary,
     json_error,
@@ -33,7 +34,7 @@ def accounting_cost_centers_list(request):
     if request.method == "POST":
         try:
             payload = read_json_payload(request)
-            cost_center = save_cost_center_from_payload(company=company, payload=payload)
+            cost_center = save_cost_center_from_payload(company=company, payload=payload, request=request)
         except ValidationError as error:
             return json_error(
                 "تعذر إنشاء مركز التكلفة.",
@@ -46,11 +47,13 @@ def accounting_cost_centers_list(request):
                 "success": True,
                 "message": "تم إنشاء مركز التكلفة بنجاح.",
                 "cost_center": serialize_cost_center(cost_center),
-                "summary": cost_center_summary(company),
+                "summary": cost_center_summary(company, request=request),
             },
             status=201,
         )
-    base_queryset = CostCenter.objects.filter(company=company).select_related("parent")
+    global_qs = CostCenter.objects.filter(company=company, branch__isnull=True)
+    scoped_qs = scope_operational_queryset(CostCenter.objects.filter(company=company, branch__isnull=False), request, branch_lookup="branch_id")
+    base_queryset = (global_qs | scoped_qs).select_related("parent", "branch").distinct()
     queryset = base_queryset
     status = (request.GET.get("status") or "all").strip().lower()
     postable = (request.GET.get("postable") or "").strip().lower()
@@ -83,7 +86,7 @@ def accounting_cost_centers_list(request):
             "results": results,
             "items": results,
             "cost_centers": results,
-            "summary": cost_center_summary(company),
+            "summary": cost_center_summary(company, request=request),
         }
     )
 accounting_cost_centers_list.required_company_permissions = [

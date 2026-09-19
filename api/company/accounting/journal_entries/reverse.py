@@ -25,6 +25,7 @@ from accounting.services import (
     reverse_journal_entry,
 )
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_object_branch
 
 
 # ============================================================
@@ -107,6 +108,7 @@ def _serialize_entry(entry: JournalEntry) -> dict[str, Any]:
     return {
         "id": entry.id,
         "company_id": entry.company_id,
+        "branch_id": entry.branch_id,
         "entry_number": entry.entry_number,
         "entry_date": entry.entry_date.isoformat() if entry.entry_date else None,
         "status": entry.status,
@@ -223,6 +225,12 @@ def accounting_journal_entry_reverse(request, entry_id: int):
             },
             status=404,
         )
+
+    if entry.branch_id:
+        try:
+            require_object_branch(request, entry, branch_attr="branch_id")
+        except Exception:
+            return Response({"success": False, "message": "القيد غير متاح في الفرع الحالي."}, status=404)
 
     try:
         reversal = reverse_journal_entry(

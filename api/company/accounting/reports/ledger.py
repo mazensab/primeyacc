@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📂 api/company/accounting/reports/ledger.py
 # 🧠 Mhamcloud | Company Accounting Ledger API
 # ------------------------------------------------------------
@@ -18,6 +18,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from accounting.models import Account, JournalEntryLine, JournalEntryStatus
 from api.permissions import HasAnyCompanyPermission
+from api.company.accounting.reports.dimension_scope import scope_accounting_lines
 MONEY_ZERO = Decimal("0.00")
 MONEY_QUANT = Decimal("0.01")
 def _money(value: Any) -> Decimal:
@@ -242,6 +243,7 @@ def accounting_ledger_report(request):
             journal_entry__status=JournalEntryStatus.POSTED,
         )
     )
+    base_lines = scope_accounting_lines(base_lines, request)
     if account_code and selected_account:
         selected_leaf_ids = _collect_leaf_ids(selected_account, children_by_parent)
         if not selected_leaf_ids and not selected_account.is_group:
@@ -271,6 +273,7 @@ def accounting_ledger_report(request):
             journal_entry__status=JournalEntryStatus.POSTED,
         )
     )
+    opening_lines = scope_accounting_lines(opening_lines, request)
     if date_from:
         opening_lines = opening_lines.filter(journal_entry__entry_date__lt=date_from)
     else:

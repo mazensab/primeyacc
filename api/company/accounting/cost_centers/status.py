@@ -10,6 +10,7 @@ from __future__ import annotations
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from accounting.models import CostCenter, CostCenterStatus
+from api.company.branch_enforcement import require_object_branch
 from .common import cost_center_summary, json_error, resolve_company, serialize_cost_center
 def _change_status(request, cost_center_id: int, status: str):
     company = resolve_company(request)
@@ -18,6 +19,11 @@ def _change_status(request, cost_center_id: int, status: str):
     cost_center = CostCenter.objects.filter(company=company, pk=cost_center_id).first()
     if not cost_center:
         return json_error("مركز التكلفة غير موجود.", status=404)
+    if cost_center.branch_id:
+        try:
+            require_object_branch(request, cost_center, branch_attr="branch_id")
+        except Exception:
+            return json_error("مركز التكلفة غير متاح في الفرع الحالي.", status=404)
     cost_center.status = status
     cost_center.full_clean()
     cost_center.save(update_fields=["status", "updated_at"])
@@ -27,7 +33,7 @@ def _change_status(request, cost_center_id: int, status: str):
             "success": True,
             "message": "تم تحديث حالة مركز التكلفة بنجاح.",
             "cost_center": serialize_cost_center(cost_center),
-            "summary": cost_center_summary(company),
+            "summary": cost_center_summary(company, request=request),
         }
     )
 @require_POST

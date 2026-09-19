@@ -8,7 +8,28 @@ import json
 from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
-from accounts.models import CompanyMembership
+
+class _CostCenterFixtureCompanyContextMiddleware:
+    # Test-only request context for this legacy Django Client fixture.
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        user = getattr(request, "user", None)
+        if getattr(user, "is_authenticated", False):
+            membership = (
+                CompanyMembership.objects.select_related("company")
+                .filter(user=user, status="ACTIVE")
+                .order_by("-is_primary", "-id")
+                .first()
+            )
+            if membership is not None:
+                request.company_membership = membership
+                request.company = membership.company
+        return self.get_response(request)
+
+from accounts.models import BranchAccessMode, CompanyMembership, UserProfile, UserProfileStatus
+from accounts.branch_access import configure_branch_access
 from accounting.models import CostCenter, CostCenterStatus
 def _model_fields(model) -> set[str]:
     return {field.name for field in model._meta.get_fields()}
@@ -56,7 +77,14 @@ def _create_membership(user, company):
     if "is_primary" in fields:
         payload["is_primary"] = True
     return CompanyMembership.objects.create(**payload)
-@override_settings(ALLOWED_HOSTS=["testserver", "localhost", "127.0.0.1"])
+@override_settings(
+    ALLOWED_HOSTS=["testserver", "localhost", "127.0.0.1"],
+    MIDDLEWARE=[
+        "django.contrib.sessions.middleware.SessionMiddleware",
+        "django.contrib.auth.middleware.AuthenticationMiddleware",
+        "accounting.test_company_cost_centers_api._CostCenterFixtureCompanyContextMiddleware",
+    ],
+)
 class CompanyCostCentersApiTests(TestCase):
     def setUp(self):
         User = get_user_model()
@@ -68,6 +96,14 @@ class CompanyCostCentersApiTests(TestCase):
         self.company = _create_company("Cost Center API Company")
         self.other_company = _create_company("Other Cost Center API Company")
         self.membership = _create_membership(self.user, self.company)
+        configure_branch_access(self.membership, mode=BranchAccessMode.ALL)
+        UserProfile.objects.update_or_create(
+            user=self.user,
+            defaults={
+                "status": UserProfileStatus.ACTIVE,
+                "default_company": self.company,
+            },
+        )
         self.group = CostCenter.objects.create(
             company=self.company,
             code="GEN",

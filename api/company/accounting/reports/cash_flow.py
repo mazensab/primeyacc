@@ -18,6 +18,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from accounting.models import Account, JournalEntryLine, JournalEntryStatus
 from api.permissions import HasAnyCompanyPermission
+from api.company.accounting.reports.dimension_scope import scope_accounting_lines
 MONEY_ZERO = Decimal("0.00")
 MONEY_QUANT = Decimal("0.01")
 def _money(value: Any) -> Decimal:
@@ -58,12 +59,13 @@ def _cash_account_filter() -> Q:
         | Q(purpose__icontains="cash")
         | Q(purpose__icontains="bank")
     )
-def _cash_balance(company, cash_ids: list[int], *, before=None, to_date=None) -> Decimal:
+def _cash_balance(company, cash_ids: list[int], *, request, before=None, to_date=None) -> Decimal:
     qs = JournalEntryLine.objects.filter(
         company=company,
         journal_entry__status=JournalEntryStatus.POSTED,
         account_id__in=cash_ids,
     )
+    qs = scope_accounting_lines(qs, request)
     if before:
         qs = qs.filter(journal_entry__entry_date__lt=before)
     if to_date:
@@ -246,17 +248,17 @@ def accounting_cash_flow(request):
         account_type="ASSET",
     ).filter(_cash_account_filter())
     cash_ids = list(cash_accounts.values_list("id", flat=True))
-    opening_cash = _cash_balance(company, cash_ids, before=date_from) if cash_ids else MONEY_ZERO
-    closing_cash = _cash_balance(company, cash_ids, to_date=date_to) if cash_ids else MONEY_ZERO
-    cash_lines = list(
-        JournalEntryLine.objects.filter(
-            company=company,
-            journal_entry__status=JournalEntryStatus.POSTED,
-            journal_entry__entry_date__gte=date_from,
-            journal_entry__entry_date__lte=date_to,
-            account_id__in=cash_ids,
-        ).select_related("journal_entry", "account")
-    )
+    opening_cash = _cash_balance(company, cash_ids, request=request, before=date_from) if cash_ids else MONEY_ZERO
+    closing_cash = _cash_balance(company, cash_ids, request=request, to_date=date_to) if cash_ids else MONEY_ZERO
+    cash_lines_qs = JournalEntryLine.objects.filter(
+        company=company,
+        journal_entry__status=JournalEntryStatus.POSTED,
+        journal_entry__entry_date__gte=date_from,
+        journal_entry__entry_date__lte=date_to,
+        account_id__in=cash_ids,
+    ).select_related("journal_entry", "account")
+    cash_lines_qs = scope_accounting_lines(cash_lines_qs, request)
+    cash_lines = list(cash_lines_qs)
     entry_ids = [line.journal_entry_id for line in cash_lines]
     counterpart_lines = list(
         JournalEntryLine.objects.filter(

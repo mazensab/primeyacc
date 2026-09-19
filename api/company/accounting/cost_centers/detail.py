@@ -11,6 +11,7 @@ from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from accounting.models import CostCenter
+from api.company.branch_enforcement import require_object_branch
 from .common import (
     cost_center_summary,
     json_error,
@@ -30,12 +31,17 @@ def accounting_cost_center_detail(request, cost_center_id: int):
     if company is None:
         return json_error("لا توجد شركة نشطة للمستخدم الحالي.", status=401)
     cost_center = (
-        CostCenter.objects.select_related("parent")
+        CostCenter.objects.select_related("parent", "branch")
         .filter(company=company, pk=cost_center_id)
         .first()
     )
     if not cost_center:
         return json_error("مركز التكلفة غير موجود.", status=404)
+    if cost_center.branch_id:
+        try:
+            require_object_branch(request, cost_center, branch_attr="branch_id")
+        except ValidationError as error:
+            return json_error("مركز التكلفة غير متاح في الفرع الحالي.", status=404, field_errors=validation_errors(error))
     if request.method == "GET":
         return JsonResponse(
             {
@@ -52,6 +58,7 @@ def accounting_cost_center_detail(request, cost_center_id: int):
             payload=payload,
             cost_center=cost_center,
             partial=True,
+            request=request,
         )
     except ValidationError as error:
         return json_error(
@@ -65,7 +72,7 @@ def accounting_cost_center_detail(request, cost_center_id: int):
             "success": True,
             "message": "تم تحديث مركز التكلفة بنجاح.",
             "cost_center": serialize_cost_center(cost_center),
-            "summary": cost_center_summary(company),
+            "summary": cost_center_summary(company, request=request),
         }
     )
 accounting_cost_center_detail.required_company_permissions = [

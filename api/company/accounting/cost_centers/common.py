@@ -15,6 +15,7 @@ from django.db import IntegrityError
 from django.http import JsonResponse
 from accounts.models import CompanyMembership, MembershipStatus
 from accounting.models import CostCenter, CostCenterStatus
+from api.company.branch_enforcement import require_operational_branch, scope_operational_queryset
 def resolve_company(request):
     company = getattr(request, "company", None) or getattr(request, "current_company", None)
     if company is not None:
@@ -106,6 +107,8 @@ def serialize_cost_center(cost_center: CostCenter) -> dict[str, Any]:
     return {
         "id": cost_center.id,
         "company_id": cost_center.company_id,
+        "branch_id": cost_center.branch_id,
+        "branch": ({"id": cost_center.branch_id, "name": cost_center.branch.name} if cost_center.branch_id else None),
         "code": cost_center.code,
         "name": cost_center.name,
         "name_ar": cost_center.name,
@@ -151,8 +154,15 @@ def save_cost_center_from_payload(
     payload: dict[str, Any],
     cost_center: CostCenter | None = None,
     partial: bool = False,
+    request=None,
 ) -> CostCenter:
     obj = cost_center or CostCenter(company=company)
+    if request is not None and (not partial or "branch_id" in payload or "branch" in payload):
+        raw_branch = payload.get("branch_id", payload.get("branch"))
+        if raw_branch in (None, "", 0, "0"):
+            obj.branch = None
+        else:
+            obj.branch = require_operational_branch(request, branch_id=raw_branch)
     if cost_center is None:
         requested_code = str(payload.get("code") or "").strip().upper()
         obj.code = requested_code or generate_cost_center_code(company)
@@ -187,8 +197,12 @@ def save_cost_center_from_payload(
             raise ValidationError({"code": "كود مركز التكلفة مستخدم مسبقًا داخل الشركة."}) from error
         raise
     return obj
-def cost_center_summary(company) -> dict[str, int]:
+def cost_center_summary(company, *, request=None) -> dict[str, int]:
     base = CostCenter.objects.filter(company=company)
+    if request is not None:
+        global_qs = base.filter(branch__isnull=True)
+        scoped_qs = scope_operational_queryset(base.filter(branch__isnull=False), request, branch_lookup="branch_id")
+        base = (global_qs | scoped_qs).distinct()
     return {
         "total_cost_centers": base.count(),
         "active_cost_centers": base.filter(status=CostCenterStatus.ACTIVE).count(),

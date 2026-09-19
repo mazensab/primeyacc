@@ -17,6 +17,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from accounting.models import Account, JournalEntryLine, JournalEntryStatus
 from api.permissions import HasAnyCompanyPermission
+from api.company.accounting.reports.dimension_scope import scope_accounting_lines
 MONEY_ZERO = Decimal("0.00")
 MONEY_QUANT = Decimal("0.01")
 def _money(value: Any) -> Decimal:
@@ -262,6 +263,7 @@ def accounting_income_statement(request):
         journal_entry__status=JournalEntryStatus.POSTED,
         account_id__in=list(all_leaf_ids),
     )
+    lines = scope_accounting_lines(lines, request)
     if date_from:
         lines = lines.filter(journal_entry__entry_date__gte=date_from)
     if date_to:

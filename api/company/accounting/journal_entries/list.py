@@ -21,6 +21,7 @@ from rest_framework.response import Response
 
 from accounting.models import JournalEntry
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import scope_operational_queryset
 
 
 # ============================================================
@@ -74,6 +75,7 @@ def _serialize_entry(entry: JournalEntry) -> dict[str, Any]:
     return {
         "id": entry.id,
         "company_id": entry.company_id,
+        "branch_id": entry.branch_id,
         "entry_number": entry.entry_number,
         "entry_date": entry.entry_date.isoformat() if entry.entry_date else None,
         "period": (
@@ -235,6 +237,10 @@ def accounting_journal_entries_list(request):
         .annotate(lines_count=Count("lines"))
         .order_by("-entry_date", "-id")
     )
+
+    legacy_qs = queryset.filter(branch__isnull=True)
+    scoped_qs = scope_operational_queryset(queryset.filter(branch__isnull=False), request, branch_lookup="branch_id")
+    queryset = (legacy_qs | scoped_qs).distinct()
 
     if q:
         queryset = queryset.filter(

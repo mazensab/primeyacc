@@ -17,6 +17,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from accounting.models import Account, JournalEntryLine, JournalEntryStatus
 from api.permissions import HasAnyCompanyPermission
+from api.company.accounting.reports.dimension_scope import scope_accounting_lines
 MONEY_ZERO = Decimal("0.00")
 MONEY_QUANT = Decimal("0.01")
 def _money(value: Any) -> Decimal:
@@ -246,6 +247,7 @@ def accounting_financial_position(request):
         account_id__in=list(all_leaf_ids),
         journal_entry__entry_date__lte=as_of,
     )
+    lines = scope_accounting_lines(lines, request)
     line_totals = {
         row["account_id"]: {
             "debit": _money(row.get("debit")),
@@ -306,6 +308,7 @@ def accounting_financial_position(request):
         journal_entry__entry_date__lte=as_of,
         account__account_type__in=["REVENUE", "EXPENSE"],
     )
+    income_lines = scope_accounting_lines(income_lines, request)
     income_totals = {
         row["account__account_type"]: {
             "debit": _money(row.get("debit")),

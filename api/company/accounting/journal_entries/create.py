@@ -28,6 +28,7 @@ from accounting.services import (
     create_manual_journal_entry,
 )
 from api.permissions import HasAnyCompanyPermission
+from api.company.branch_enforcement import require_operational_branch
 
 
 # ============================================================
@@ -92,7 +93,7 @@ def _get_account(company, raw_account_id: Any, raw_account_code: Any) -> Account
     return account
 
 
-def _get_cost_center(company, raw_cost_center_id: Any) -> CostCenter | None:
+def _get_cost_center(company, raw_cost_center_id: Any, *, branch=None) -> CostCenter | None:
     value = _clean_text(raw_cost_center_id)
 
     if not value:
@@ -110,6 +111,8 @@ def _get_cost_center(company, raw_cost_center_id: Any) -> CostCenter | None:
 
     if not cost_center:
         raise AccountingPostingError("مركز التكلفة غير موجود داخل الشركة الحالية.")
+    if cost_center.branch_id and (branch is None or cost_center.branch_id != branch.id):
+        raise AccountingPostingError("مركز التكلفة مرتبط بفرع مختلف عن فرع القيد.")
 
     return cost_center
 
@@ -136,7 +139,7 @@ def _get_tax_rate(company, raw_tax_rate_id: Any) -> TaxRate | None:
     return tax_rate
 
 
-def _build_line_payloads(company, raw_lines: Any) -> list[EntryLinePayload]:
+def _build_line_payloads(company, raw_lines: Any, *, branch=None) -> list[EntryLinePayload]:
     if not isinstance(raw_lines, list) or not raw_lines:
         raise AccountingPostingError("أسطر القيد مطلوبة.")
 
@@ -155,6 +158,7 @@ def _build_line_payloads(company, raw_lines: Any) -> list[EntryLinePayload]:
         cost_center = _get_cost_center(
             company,
             raw_line.get("cost_center_id"),
+            branch=branch,
         )
 
         tax_rate = _get_tax_rate(
@@ -239,6 +243,7 @@ def _serialize_entry(entry) -> dict[str, Any]:
     return {
         "id": entry.id,
         "company_id": entry.company_id,
+        "branch_id": entry.branch_id,
         "entry_number": entry.entry_number,
         "entry_date": entry.entry_date.isoformat() if entry.entry_date else None,
         "status": entry.status,
@@ -317,9 +322,11 @@ def accounting_journal_entry_create(request):
         )
 
     try:
-        lines = _build_line_payloads(company, data.get("lines"))
+        branch = require_operational_branch(request, branch_id=data.get("branch_id") or data.get("branch"))
+        lines = _build_line_payloads(company, data.get("lines"), branch=branch)
         entry = create_manual_journal_entry(
             company=company,
+            branch=branch,
             lines=lines,
             entry_date=entry_date,
             entry_number=_clean_text(data.get("entry_number")),
