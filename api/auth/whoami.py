@@ -31,6 +31,7 @@ from subscriptions.access_policy import (
     SubscriptionWorkspaceAccess,
     evaluate_subscription_access,
 )
+from subscriptions.workspace import resolve_effective_workspace
 
 
 def _safe_str(value: Any) -> str:
@@ -172,6 +173,7 @@ def _profile_payload(profile: UserProfile) -> dict[str, Any]:
 
     subscription_policy = evaluate_subscription_access(company)
     onboarding_access = get_company_onboarding_access(company)
+    effective_workspace = resolve_effective_workspace(company=company) if company is not None else None
 
     can_access_system = _effective_system_access(profile)
     can_access_company = bool(
@@ -224,6 +226,7 @@ def _profile_payload(profile: UserProfile) -> dict[str, Any]:
         "can_access_company": can_access_company,
         "can_use_company_workspace": can_use_company_workspace,
         "subscription_access": subscription_policy.as_dict(),
+        "effective_workspace": effective_workspace.as_dict() if effective_workspace is not None else None,
         "onboarding": onboarding_access.as_dict(),
         "default_company": current_company,
         "current_company": current_company,
@@ -248,6 +251,7 @@ def _anonymous_payload() -> dict[str, Any]:
         "can_access_company": False,
         "can_use_company_workspace": False,
         "subscription_access": None,
+        "effective_workspace": None,
         "onboarding": None,
         "system_permissions": [],
         "company_permissions": [],
@@ -304,6 +308,7 @@ def whoami(request: Request) -> Response:
                 "can_use_company_workspace"
             ],
             "subscription_access": profile_data["subscription_access"],
+            "effective_workspace": profile_data["effective_workspace"],
             "onboarding": profile_data["onboarding"],
             "system_permissions": profile_data["system_permissions"],
             "company_permissions": company_permissions,

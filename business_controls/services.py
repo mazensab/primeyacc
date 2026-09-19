@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📂 business_controls/services.py
 # 🧠 Mhamcloud | Business Controls Services V1.0
 # ------------------------------------------------------------
@@ -26,6 +26,7 @@ from business_controls.models import (
     BusinessIdempotencyKey,
     BusinessReferenceSequence,
 )
+from subscriptions.workspace import resolve_effective_workspace
 
 
 def _clean_text(value: Any, max_length: int = 255) -> str:
@@ -209,7 +210,10 @@ def build_business_controls_summary(*, company) -> dict:
         for item in idempotency_qs.values("status").annotate(count=Count("id"))
     }
 
+    effective_workspace = resolve_effective_workspace(company=company)
+
     return {
+        "effective_workspace": effective_workspace.as_dict(),
         "audit_events": {
             "total": events_qs.count(),
             "by_severity": events_by_severity,

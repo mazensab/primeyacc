@@ -21,9 +21,6 @@ urlpatterns = [
     path("restaurant/tables/", views.restaurant_tables_view, name="restaurant-tables"),
     path("restaurant/kitchen-orders/", views.restaurant_kitchen_orders_view, name="restaurant-kitchen-orders"),
 
-    path("clinic/patients/", views.clinic_patients_view, name="clinic-patients"),
-    path("clinic/services/", views.clinic_services_view, name="clinic-services"),
-    path("clinic/appointments/", views.clinic_appointments_view, name="clinic-appointments"),
 
     path("projects/", views.projects_view, name="projects"),
     path("projects/work-orders/", views.project_work_orders_view, name="project-work-orders"),

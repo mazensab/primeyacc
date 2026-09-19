@@ -19,12 +19,9 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
-from companies.models import Company
+from api.permissions import attach_company_context, request_has_workspace_module
 
 from activity_backends.models import (
-    ClinicAppointment,
-    ClinicPatient,
-    ClinicService,
     Project,
     ProjectCostLine,
     ProjectWorkOrder,
@@ -35,12 +32,6 @@ from activity_backends.models import (
 )
 from activity_backends.services import (
     activity_backends_summary,
-    clinic_appointment_payload,
-    clinic_patient_payload,
-    clinic_service_payload,
-    create_clinic_appointment,
-    create_clinic_patient,
-    create_clinic_service,
     create_project,
     create_project_cost_line,
     create_project_work_order,
@@ -75,30 +66,16 @@ def _request_data(request):
     return request.POST.dict()
 
 
-def _resolve_company(request):
-    company = getattr(request, "company", None)
-    if company is not None:
-        return company
-
-    company_id = request.GET.get("company_id") or request.headers.get("X-Company-ID")
-    if company_id:
-        return Company.objects.filter(id=company_id).first()
-
-    user = getattr(request, "user", None)
-    if user is not None and getattr(user, "is_authenticated", False):
-        for attr in ("company", "current_company", "company_ref"):
-            candidate = getattr(user, attr, None)
-            if candidate is not None:
-                return candidate
-
-    return None
-
-
 def _require_company(request):
-    company = _resolve_company(request)
-    if company is None:
-        return None, _json_error("Company scope is required.", status=400)
-    return company, None
+    membership=attach_company_context(request)
+    if membership is None or not membership.is_active_membership:
+        return None,_json_error("Active company membership is required.",status=403)
+    return membership.company,None
+
+def _require_activity_module(request,module):
+    if not request_has_workspace_module(request,module):
+        return _json_error("Workspace module is not entitled for the current activity and subscription.",status=403,details={"code":"WORKSPACE_MODULE_NOT_ENTITLED","module":module})
+    return None
 
 
 @require_http_methods(["GET"])
@@ -126,6 +103,9 @@ def restaurant_categories_view(request):
     company, error = _require_company(request)
     if error:
         return error
+    entitlement_error = _require_activity_module(request, "restaurant")
+    if entitlement_error:
+        return entitlement_error
     if request.method == "POST":
         try:
             obj = create_restaurant_category(company=company, data=_request_data(request))
@@ -141,6 +121,9 @@ def restaurant_menu_items_view(request):
     company, error = _require_company(request)
     if error:
         return error
+    entitlement_error = _require_activity_module(request, "restaurant")
+    if entitlement_error:
+        return entitlement_error
     if request.method == "POST":
         try:
             obj = create_restaurant_menu_item(company=company, data=_request_data(request))
@@ -156,6 +139,9 @@ def restaurant_tables_view(request):
     company, error = _require_company(request)
     if error:
         return error
+    entitlement_error = _require_activity_module(request, "restaurant")
+    if entitlement_error:
+        return entitlement_error
     if request.method == "POST":
         try:
             obj = create_restaurant_table(company=company, data=_request_data(request))
@@ -171,6 +157,9 @@ def restaurant_kitchen_orders_view(request):
     company, error = _require_company(request)
     if error:
         return error
+    entitlement_error = _require_activity_module(request, "restaurant")
+    if entitlement_error:
+        return entitlement_error
     if request.method == "POST":
         try:
             obj = create_restaurant_kitchen_order(company=company, data=_request_data(request))
@@ -182,55 +171,13 @@ def restaurant_kitchen_orders_view(request):
 
 
 @require_http_methods(["GET", "POST"])
-def clinic_patients_view(request):
-    company, error = _require_company(request)
-    if error:
-        return error
-    if request.method == "POST":
-        try:
-            obj = create_clinic_patient(company=company, data=_request_data(request))
-        except Exception as exc:
-            return _json_error("Unable to create clinic patient.", details=str(exc))
-        return JsonResponse({"ok": True, "patient": clinic_patient_payload(obj)}, status=201)
-    qs = ClinicPatient.objects.filter(company=company).order_by("full_name", "id")
-    return JsonResponse({"ok": True, "results": [clinic_patient_payload(obj) for obj in qs]})
-
-
-@require_http_methods(["GET", "POST"])
-def clinic_services_view(request):
-    company, error = _require_company(request)
-    if error:
-        return error
-    if request.method == "POST":
-        try:
-            obj = create_clinic_service(company=company, data=_request_data(request))
-        except Exception as exc:
-            return _json_error("Unable to create clinic service.", details=str(exc))
-        return JsonResponse({"ok": True, "service": clinic_service_payload(obj)}, status=201)
-    qs = ClinicService.objects.filter(company=company).order_by("department", "name", "id")
-    return JsonResponse({"ok": True, "results": [clinic_service_payload(obj) for obj in qs]})
-
-
-@require_http_methods(["GET", "POST"])
-def clinic_appointments_view(request):
-    company, error = _require_company(request)
-    if error:
-        return error
-    if request.method == "POST":
-        try:
-            obj = create_clinic_appointment(company=company, data=_request_data(request))
-        except Exception as exc:
-            return _json_error("Unable to create clinic appointment.", details=str(exc))
-        return JsonResponse({"ok": True, "appointment": clinic_appointment_payload(obj)}, status=201)
-    qs = ClinicAppointment.objects.filter(company=company).select_related("patient", "service").order_by("-appointment_at", "-id")[:200]
-    return JsonResponse({"ok": True, "results": [clinic_appointment_payload(obj) for obj in qs]})
-
-
-@require_http_methods(["GET", "POST"])
 def projects_view(request):
     company, error = _require_company(request)
     if error:
         return error
+    entitlement_error = _require_activity_module(request, "contracting")
+    if entitlement_error:
+        return entitlement_error
     if request.method == "POST":
         try:
             obj = create_project(company=company, data=_request_data(request))
@@ -246,6 +193,9 @@ def project_work_orders_view(request):
     company, error = _require_company(request)
     if error:
         return error
+    entitlement_error = _require_activity_module(request, "contracting")
+    if entitlement_error:
+        return entitlement_error
     if request.method == "POST":
         try:
             obj = create_project_work_order(company=company, data=_request_data(request))
@@ -261,6 +211,9 @@ def project_cost_lines_view(request):
     company, error = _require_company(request)
     if error:
         return error
+    entitlement_error = _require_activity_module(request, "contracting")
+    if entitlement_error:
+        return entitlement_error
     if request.method == "POST":
         try:
             obj = create_project_cost_line(company=company, data=_request_data(request))

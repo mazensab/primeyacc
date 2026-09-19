@@ -26,10 +26,6 @@ from django.utils import timezone
 
 from .models import (
     MONEY_ZERO,
-    ClinicAppointment,
-    ClinicAppointmentStatus,
-    ClinicPatient,
-    ClinicService,
     Project,
     ProjectCostLine,
     ProjectStatus,
@@ -303,124 +299,6 @@ def create_restaurant_kitchen_order(*, company, data: dict[str, Any]) -> Restaur
     return order
 
 
-def clinic_patient_payload(obj: ClinicPatient) -> dict[str, Any]:
-    return {
-        "id": obj.id,
-        "company_id": obj.company_id,
-        "patient_number": obj.patient_number,
-        "full_name": obj.full_name,
-        "mobile": obj.mobile,
-        "email": obj.email,
-        "national_id": obj.national_id,
-        "date_of_birth": obj.date_of_birth.isoformat() if obj.date_of_birth else None,
-        "gender": obj.gender,
-        "notes": obj.notes,
-        "extra_data": obj.extra_data or {},
-    }
-
-
-def clinic_service_payload(obj: ClinicService) -> dict[str, Any]:
-    return {
-        "id": obj.id,
-        "company_id": obj.company_id,
-        "catalog_item_id": obj.catalog_item_id,
-        "code": obj.code,
-        "name": obj.name,
-        "department": obj.department,
-        "duration_minutes": obj.duration_minutes,
-        "price": str(obj.price),
-        "taxable": obj.taxable,
-        "tax_rate": str(obj.tax_rate),
-        "is_active": obj.is_active,
-        "notes": obj.notes,
-        "extra_data": obj.extra_data or {},
-    }
-
-
-def clinic_appointment_payload(obj: ClinicAppointment) -> dict[str, Any]:
-    return {
-        "id": obj.id,
-        "company_id": obj.company_id,
-        "patient_id": obj.patient_id,
-        "patient_name": obj.patient.full_name,
-        "service_id": obj.service_id,
-        "service_name": obj.service.name,
-        "appointment_number": obj.appointment_number,
-        "appointment_at": obj.appointment_at.isoformat() if obj.appointment_at else None,
-        "practitioner_name": obj.practitioner_name,
-        "status": obj.status,
-        "price_snapshot": str(obj.price_snapshot),
-        "notes": obj.notes,
-        "extra_data": obj.extra_data or {},
-    }
-
-
-@transaction.atomic
-def create_clinic_patient(*, company, data: dict[str, Any]) -> ClinicPatient:
-    obj = ClinicPatient(
-        company=company,
-        patient_number=normalize_code(data.get("patient_number")) or _next_number(ClinicPatient, company, "patient_number", "PAT"),
-        full_name=normalize_text(data.get("full_name") or data.get("name")),
-        mobile=normalize_text(data.get("mobile")),
-        email=normalize_text(data.get("email")),
-        national_id=normalize_text(data.get("national_id")),
-        date_of_birth=normalize_date(data.get("date_of_birth")),
-        gender=normalize_text(data.get("gender")),
-        notes=normalize_text(data.get("notes")),
-        extra_data=data.get("extra_data") if isinstance(data.get("extra_data"), dict) else {},
-    )
-    obj.full_clean()
-    obj.save()
-    return obj
-
-
-@transaction.atomic
-def create_clinic_service(*, company, data: dict[str, Any]) -> ClinicService:
-    obj = ClinicService(
-        company=company,
-        catalog_item_id=data.get("catalog_item_id") or None,
-        code=normalize_code(data.get("code")),
-        name=normalize_text(data.get("name")),
-        department=normalize_text(data.get("department")),
-        duration_minutes=int(data.get("duration_minutes") or 30),
-        price=normalize_decimal(data.get("price"), MONEY_ZERO),
-        taxable=bool(data.get("taxable", True)),
-        tax_rate=normalize_decimal(data.get("tax_rate"), Decimal("15.00")),
-        is_active=bool(data.get("is_active", True)),
-        notes=normalize_text(data.get("notes")),
-        extra_data=data.get("extra_data") if isinstance(data.get("extra_data"), dict) else {},
-    )
-    obj.full_clean()
-    obj.save()
-    return obj
-
-
-@transaction.atomic
-def create_clinic_appointment(*, company, data: dict[str, Any]) -> ClinicAppointment:
-    patient = ClinicPatient.objects.filter(company=company, id=data.get("patient_id")).first()
-    if patient is None:
-        raise ValidationError("Patient was not found for this company.")
-    service = ClinicService.objects.filter(company=company, id=data.get("service_id")).first()
-    if service is None:
-        raise ValidationError("Service was not found for this company.")
-
-    obj = ClinicAppointment(
-        company=company,
-        patient=patient,
-        service=service,
-        appointment_number=normalize_code(data.get("appointment_number")) or _next_number(ClinicAppointment, company, "appointment_number", "APT"),
-        appointment_at=normalize_datetime(data.get("appointment_at"), default_now=True),
-        practitioner_name=normalize_text(data.get("practitioner_name")),
-        status=data.get("status") or ClinicAppointmentStatus.SCHEDULED,
-        price_snapshot=normalize_decimal(data.get("price_snapshot"), service.price),
-        notes=normalize_text(data.get("notes")),
-        extra_data=data.get("extra_data") if isinstance(data.get("extra_data"), dict) else {},
-    )
-    obj.full_clean()
-    obj.save()
-    return obj
-
-
 def project_payload(obj: Project) -> dict[str, Any]:
     return {
         "id": obj.id,
@@ -566,13 +444,6 @@ def activity_backends_summary(company) -> dict[str, Any]:
             ).count(),
             "kitchen_order_total": str(quant_money(restaurant_orders.aggregate(total=Sum("total_amount")).get("total") or MONEY_ZERO)),
         },
-        "clinic": {
-            "patients": ClinicPatient.objects.filter(company=company).count(),
-            "services": ClinicService.objects.filter(company=company).count(),
-            "active_services": ClinicService.objects.filter(company=company, is_active=True).count(),
-            "appointments": ClinicAppointment.objects.filter(company=company).count(),
-            "scheduled_appointments": ClinicAppointment.objects.filter(company=company, status=ClinicAppointmentStatus.SCHEDULED).count(),
-        },
         "projects": {
             "projects": projects.count(),
             "active_projects": projects.filter(status=ProjectStatus.ACTIVE).count(),
@@ -596,11 +467,6 @@ def seed_activity_backends_foundation(company) -> dict[str, Any]:
         code="T-001",
         defaults={"name": "Table 1", "area": "Main Hall", "capacity": 4},
     )
-    clinic_service, _ = ClinicService.objects.get_or_create(
-        company=company,
-        code="CONSULT",
-        defaults={"name": "Consultation", "department": "General", "price": Decimal("100.00")},
-    )
     project, _ = Project.objects.get_or_create(
         company=company,
         project_number="PRJ-SEED",
@@ -610,7 +476,6 @@ def seed_activity_backends_foundation(company) -> dict[str, Any]:
     return {
         "restaurant_category": restaurant_category_payload(category),
         "restaurant_table": restaurant_table_payload(table),
-        "clinic_service": clinic_service_payload(clinic_service),
         "project": project_payload(project),
         "summary": activity_backends_summary(company),
     }

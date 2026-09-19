@@ -52,6 +52,21 @@ class CompanyActivityProfile(models.TextChoices):
     JEWELRY = "JEWELRY", "Jewelry / Gold"
     PETROL_STATION = "PETROL_STATION", "Petrol Station"
 
+class BusinessActivityCode(models.TextChoices):
+    COMMERCE = "COMMERCE", "Commerce"
+    RESTAURANT = "RESTAURANT", "Restaurant"
+    SERVICES = "SERVICES", "Services"
+    MANUFACTURING = "MANUFACTURING", "Manufacturing"
+    JEWELRY = "JEWELRY", "Jewelry / Gold"
+    CONTRACTING = "CONTRACTING", "Contracting"
+
+COMMERCE_LEGACY_ACTIVITY_CODES = frozenset({"GENERAL", "RETAIL", "WHOLESALE"})
+SUPPORTED_BUSINESS_ACTIVITY_CODES = frozenset(BusinessActivityCode.values)
+
+def normalize_business_activity_code(value) -> str:
+    code = str(value or "").strip().upper()
+    return BusinessActivityCode.COMMERCE if code in COMMERCE_LEGACY_ACTIVITY_CODES else code
+
 
 class ActivityProfile(models.Model):
     """
@@ -532,6 +547,16 @@ class Company(models.Model):
         return " - ".join([part for part in parts if part])
 
     @property
+    def effective_activity_code(self) -> str:
+        ref_code = normalize_business_activity_code(getattr(self.activity_profile_ref, "code", ""))
+        if ref_code in SUPPORTED_BUSINESS_ACTIVITY_CODES:
+            return ref_code
+        legacy_code = normalize_business_activity_code(self.activity_profile)
+        if legacy_code in SUPPORTED_BUSINESS_ACTIVITY_CODES:
+            return legacy_code
+        return BusinessActivityCode.COMMERCE
+
+    @property
     def is_suspended(self) -> bool:
         return self.status == CompanyStatus.SUSPENDED
 
@@ -959,6 +984,11 @@ class Branch(models.Model):
         db_index=True,
         verbose_name="Branch type",
     )
+    activity_profile = models.ForeignKey(
+        ActivityProfile, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="branches", db_index=True, verbose_name="Branch activity profile",
+        help_text="Optional branch activity override. Null inherits company activity.",
+    )
     status = models.CharField(
         max_length=30,
         choices=BranchStatus.choices,
@@ -1143,6 +1173,7 @@ class Branch(models.Model):
         indexes = [
             models.Index(fields=["company", "status", "is_active"]),
             models.Index(fields=["company", "branch_type"]),
+            models.Index(fields=["company", "activity_profile"]),
             models.Index(fields=["company", "is_default"]),
             models.Index(fields=["company", "city"]),
             models.Index(fields=["company", "district", "city"]),
@@ -1170,10 +1201,21 @@ class Branch(models.Model):
         return " - ".join([part for part in parts if part])
 
     @property
+    def effective_activity_code(self) -> str:
+        code = normalize_business_activity_code(getattr(self.activity_profile, "code", ""))
+        return code if code in SUPPORTED_BUSINESS_ACTIVITY_CODES else self.company.effective_activity_code
+
+    @property
     def is_closed(self) -> bool:
         return self.status == BranchStatus.CLOSED
 
     def clean(self) -> None:
+        if self.activity_profile_id:
+            profile = self.activity_profile
+            if not profile.is_active:
+                raise ValidationError({"activity_profile": "Branch activity profile must be active."})
+            if profile.company_id not in (None, self.company_id):
+                raise ValidationError({"activity_profile": "Branch activity profile must be system-level or belong to the same company."})
         if self.latitude is not None and (self.latitude < Decimal("-90") or self.latitude > Decimal("90")):
             raise ValidationError({"latitude": "Latitude must be between -90 and 90."})
 

@@ -47,6 +47,7 @@ from subscriptions.access_policy import (
     SubscriptionWorkspaceAccess,
     evaluate_subscription_access,
 )
+from subscriptions.workspace import resolve_effective_workspace
 
 
 # ============================================================
@@ -499,6 +500,23 @@ class SubscriptionAccessDenied(Exception):
     """
     Internal marker for subscription workspace denial.
     """
+
+
+class WorkspaceEntitlementDenied(Exception):
+    pass
+
+def attach_effective_workspace(request: Request, *, branch=None):
+    membership=getattr(request,"company_membership",None) or get_current_company_membership(request)
+    if membership is None:
+        return None
+    contract=resolve_effective_workspace(company=membership.company,branch=branch)
+    setattr(request,"effective_workspace",contract)
+    return contract
+
+def request_has_workspace_module(request: Request, module: str, *, branch=None) -> bool:
+    module=str(module or "").strip().lower()
+    contract=attach_effective_workspace(request,branch=branch)
+    return bool(module and contract and contract.can_use_workspace and module in contract.effective_modules)
 
 
 # ============================================================

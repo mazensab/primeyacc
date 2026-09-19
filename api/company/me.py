@@ -35,6 +35,7 @@ from api.permissions import (
     attach_subscription_access,
 )
 from companies.models import Branch, Company, CompanySettings
+from subscriptions.workspace import resolve_effective_workspace
 
 
 def _datetime_to_string(value: Any) -> str | None:
@@ -122,6 +123,7 @@ def _company_payload(company: Company) -> dict[str, Any]:
         "name_en": getattr(company, "name_en", ""),
         "company_code": getattr(company, "company_code", ""),
         "activity_profile": getattr(company, "activity_profile", ""),
+        "effective_activity_code": company.effective_activity_code,
         "status": getattr(company, "status", ""),
         "is_active": getattr(company, "is_active", True),
         "commercial_registration": getattr(company, "commercial_registration", ""),
@@ -203,6 +205,8 @@ def _branch_payload(branch: Branch | None) -> dict[str, Any] | None:
         "name_en": branch.name_en,
         "branch_code": branch.branch_code,
         "branch_type": branch.branch_type,
+        "activity_profile_id": branch.activity_profile_id,
+        "effective_activity_code": branch.effective_activity_code,
         "status": branch.status,
         "is_active": branch.is_active,
         "is_default": branch.is_default,
@@ -321,6 +325,7 @@ def company_me(request: HttpRequest) -> JsonResponse:
 
     settings_obj = _get_or_create_company_settings(company, request)
     default_branch = _get_default_branch(company)
+    effective_workspace = resolve_effective_workspace(company=company, branch=default_branch)
 
     return JsonResponse(
         {
@@ -338,6 +343,7 @@ def company_me(request: HttpRequest) -> JsonResponse:
                 "role": membership.role,
                 "permissions": membership.company_permissions,
                 "subscription_access": subscription_policy.as_dict(),
+                "effective_workspace": effective_workspace.as_dict(),
             },
         },
         status=200,

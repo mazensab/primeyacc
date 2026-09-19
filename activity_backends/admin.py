@@ -12,9 +12,6 @@
 from django.contrib import admin
 
 from .models import (
-    ClinicAppointment,
-    ClinicPatient,
-    ClinicService,
     Project,
     ProjectCostLine,
     ProjectWorkOrder,
@@ -62,28 +59,6 @@ class RestaurantKitchenOrderAdmin(admin.ModelAdmin):
     autocomplete_fields = ["table"]
     readonly_fields = ["subtotal", "tax_amount", "total_amount"]
     inlines = [RestaurantKitchenOrderItemInline]
-
-
-@admin.register(ClinicPatient)
-class ClinicPatientAdmin(admin.ModelAdmin):
-    list_display = ["patient_number", "full_name", "company", "mobile", "national_id"]
-    list_filter = ["company", "gender"]
-    search_fields = ["patient_number", "full_name", "mobile", "national_id"]
-
-
-@admin.register(ClinicService)
-class ClinicServiceAdmin(admin.ModelAdmin):
-    list_display = ["code", "name", "company", "department", "price", "is_active"]
-    list_filter = ["company", "department", "is_active"]
-    search_fields = ["code", "name", "department"]
-
-
-@admin.register(ClinicAppointment)
-class ClinicAppointmentAdmin(admin.ModelAdmin):
-    list_display = ["appointment_number", "company", "patient", "service", "status", "appointment_at"]
-    list_filter = ["company", "status", "appointment_at", "practitioner_name"]
-    search_fields = ["appointment_number", "patient__full_name", "service__name"]
-    autocomplete_fields = ["patient", "service"]
 
 
 @admin.register(Project)

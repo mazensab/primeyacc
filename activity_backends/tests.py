@@ -18,9 +18,6 @@ from django.utils import timezone
 from companies.models import Company
 
 from .models import (
-    ClinicAppointment,
-    ClinicPatient,
-    ClinicService,
     Project,
     ProjectCostLine,
     ProjectWorkOrder,
@@ -29,9 +26,6 @@ from .models import (
 )
 from .services import (
     activity_backends_summary,
-    create_clinic_appointment,
-    create_clinic_patient,
-    create_clinic_service,
     create_project,
     create_project_cost_line,
     create_project_work_order,
@@ -52,7 +46,6 @@ class ActivityBackendsPhase253Tests(TestCase):
 
         self.assertEqual(result["summary"]["restaurant"]["menu_categories"], 1)
         self.assertEqual(result["summary"]["restaurant"]["tables"], 1)
-        self.assertEqual(result["summary"]["clinic"]["services"], 1)
         self.assertEqual(result["summary"]["projects"]["projects"], 1)
 
     def test_restaurant_kitchen_order_totals(self):
@@ -92,38 +85,6 @@ class ActivityBackendsPhase253Tests(TestCase):
         self.assertEqual(str(order.subtotal), "20.00")
         self.assertEqual(str(order.tax_amount), "3.00")
         self.assertEqual(str(order.total_amount), "23.00")
-
-    def test_clinic_patient_service_appointment(self):
-        patient = create_clinic_patient(
-            company=self.company,
-            data={
-                "full_name": "Patient One",
-                "mobile": "0500000000",
-            },
-        )
-        service = create_clinic_service(
-            company=self.company,
-            data={
-                "code": "DENTAL",
-                "name": "Dental Consultation",
-                "department": "Dental",
-                "price": "150.00",
-            },
-        )
-        appointment = create_clinic_appointment(
-            company=self.company,
-            data={
-                "patient_id": patient.id,
-                "service_id": service.id,
-                "appointment_at": timezone.now().isoformat(),
-                "practitioner_name": "Dr. Prime",
-            },
-        )
-
-        self.assertEqual(ClinicPatient.objects.count(), 1)
-        self.assertEqual(ClinicService.objects.count(), 1)
-        self.assertEqual(ClinicAppointment.objects.count(), 1)
-        self.assertEqual(str(appointment.price_snapshot), "150.00")
 
     def test_project_cost_rollup(self):
         project = create_project(
@@ -167,8 +128,6 @@ class ActivityBackendsPhase253Tests(TestCase):
         summary = activity_backends_summary(self.company)
 
         self.assertIn("restaurant", summary)
-        self.assertIn("clinic", summary)
         self.assertIn("projects", summary)
         self.assertEqual(summary["restaurant"]["menu_categories"], 1)
-        self.assertEqual(summary["clinic"]["services"], 1)
         self.assertEqual(summary["projects"]["projects"], 1)

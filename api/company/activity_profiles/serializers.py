@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📂 api/company/activity_profiles/serializers.py
 # 🧠 Mhamcloud | Activity Profiles Serializers
 # ------------------------------------------------------------
@@ -48,4 +48,6 @@ def serialize_company_activity(company: Company) -> dict:
         "company_id": company.id,
         "legacy_activity_profile": company.activity_profile,
         "activity_profile": serialize_activity_profile(company.activity_profile_ref),
+        "effective_activity_code": company.effective_activity_code,
+        "compatibility_mode": company.activity_profile_ref_id is None,
     }

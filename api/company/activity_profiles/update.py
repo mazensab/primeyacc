@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📂 api/company/activity_profiles/update.py
 # 🧠 Mhamcloud | Update Company Activity Profile API
 # ------------------------------------------------------------
@@ -101,14 +101,12 @@ def update_current_activity_profile(request):
         )
 
     company.activity_profile_ref = profile
+    update_fields = ["activity_profile_ref"]
+    if profile.code in {"GENERAL", "RETAIL", "WHOLESALE", "JEWELRY"}:
+        company.activity_profile = profile.code
+        update_fields.append("activity_profile")
     company.updated_by = request.user
-    company.save(
-        update_fields=[
-            "activity_profile_ref",
-            "updated_by",
-            "updated_at",
-        ]
-    )
+    company.save(update_fields=[*update_fields, "updated_by", "updated_at"])
 
     return Response(
         {
