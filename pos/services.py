@@ -114,20 +114,20 @@ def _validate_same_company(obj, company, field_name: str) -> None:
         raise ValidationError({field_name: f"{field_name} must belong to the same company."})
 
 
-def generate_pos_register_code(company) -> str:
-    return next_document_number(company=company, key="POS_REGISTER")
+def generate_pos_register_code(company, *, branch) -> str:
+    return next_document_number(company=company, key="POS_REGISTER", scope="BRANCH", branch=branch)
 
 
-def generate_pos_session_number(company) -> str:
-    return next_document_number(company=company, key="POS_SESSION")
+def generate_pos_session_number(company, *, branch) -> str:
+    return next_document_number(company=company, key="POS_SESSION", scope="BRANCH", branch=branch)
 
 
-def generate_pos_order_number(company) -> str:
-    return next_document_number(company=company, key="POS_ORDER")
+def generate_pos_order_number(company, *, branch) -> str:
+    return next_document_number(company=company, key="POS_ORDER", scope="BRANCH", branch=branch)
 
 
-def generate_pos_return_number(company) -> str:
-    return next_document_number(company=company, key="POS_RETURN")
+def generate_pos_return_number(company, *, branch) -> str:
+    return next_document_number(company=company, key="POS_RETURN", scope="BRANCH", branch=branch)
 
 
 @transaction.atomic
@@ -154,7 +154,7 @@ def create_pos_register(
         raise ValidationError({"company": "Company is required."})
 
     name = (name or "").strip()
-    code = (code or "").strip().upper() or generate_pos_register_code(company)
+    code = (code or "").strip().upper() or generate_pos_register_code(company, branch=branch)
 
     if not name:
         raise ValidationError({"name": "Register name is required."})
@@ -225,7 +225,7 @@ def open_pos_session(
             }
         )
 
-    session_number = (session_number or "").strip().upper() or generate_pos_session_number(company)
+    session_number = (session_number or "").strip().upper() or generate_pos_session_number(company, branch=register.branch)
     opening_cash = _to_money(opening_cash_amount)
 
     if opening_cash < ZERO_MONEY:
@@ -416,7 +416,7 @@ def create_pos_order(
     if not register.is_available:
         raise ValidationError({"register": "Register is not active."})
 
-    order_number = (order_number or "").strip().upper() or generate_pos_order_number(company)
+    order_number = (order_number or "").strip().upper() or generate_pos_order_number(company, branch=session.branch)
 
     order = POSOrder(
         company=company,
@@ -854,7 +854,7 @@ def create_pos_return(
             }
         )
 
-    return_number = (return_number or "").strip().upper() or generate_pos_return_number(company)
+    return_number = (return_number or "").strip().upper() or generate_pos_return_number(company, branch=original_order.branch)
 
     pos_return = POSReturn(
         company=company,
