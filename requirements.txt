@@ -12,3 +12,6 @@ psycopg==3.2.9; python_version >= "3.14"
 
 # Laravel legacy password compatibility
 bcrypt==5.0.0
+
+# Production WSGI server (Linux)
+gunicorn==23.0.0; platform_system == "Linux"
