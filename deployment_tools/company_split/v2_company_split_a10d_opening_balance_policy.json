@@ -1,0 +1,21 @@
+{
+  "balance_owner_group": null,
+  "balance_owner_provenance": "MULTIPLE_SOURCE_GROUPS_REQUIRES_MANUAL_PARTITION",
+  "canonical_source_rule": "Canonical original BusinessParty remains on 88-G01. If balance belongs to another uniquely proven group, set canonical opening_balance=0 and assign the full frozen balance only to that destination clone. All other clones receive opening_balance=0.",
+  "clone_required_groups": [
+    "88-G02"
+  ],
+  "current_business_party_id_snapshot": 928585,
+  "group_opening_balance_policy": {
+    "88-G02": "0"
+  },
+  "legacy_company_id": "88",
+  "legacy_contact_id": "122844",
+  "manifest_v2_sha256": "B12A3C2916272B6A4D5E8051D7B51533E3FF05369084632685F0BCC809BE24DE",
+  "no_duplication_rule": "SUM_OF_POST_SPLIT_OPENING_BALANCES_MUST_EQUAL_PRE_SPLIT_OPENING_BALANCE",
+  "opening_balance_snapshot": "24.00",
+  "schema": "primeyacc.company_split_business_party_opening_balance_policy.v1",
+  "usage_groups": [
+    "88-G02"
+  ]
+}

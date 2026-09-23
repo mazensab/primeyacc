@@ -7,6 +7,7 @@ import {
 } from "@/lib/managed-print-window";
 
 export type PrintReportLocale = "ar" | "en";
+export type PrintReportIdentity = { companyName?: string; tradeName?: string; branchName?: string; taxNumber?: string; commercialRegistration?: string; logoUrl?: string };
 
 export type PrintReportOptions = {
   locale: PrintReportLocale;
@@ -18,6 +19,7 @@ export type PrintReportOptions = {
   recordsLabel?: string;
   generatedAtLabel?: string;
   logoUrl?: string;
+  identity?: PrintReportIdentity;
 };
 
 export type PrintReportCellValue = string | number | null | undefined;
@@ -163,12 +165,22 @@ export function buildPrintReportDocument({
   recordsLabel,
   generatedAtLabel,
   logoUrl,
+  identity,
 }: PrintReportOptions) {
   const dir = locale === "ar" ? "rtl" : "ltr";
   const generatedLabel =
     generatedAtLabel || (locale === "ar" ? "تم الإنشاء في" : "Generated at");
   const countLabel =
     recordsLabel || (locale === "ar" ? "سجل" : "records");
+  const effectiveBranchName = identity?.branchName || branchName;
+  const effectiveLogoUrl = identity?.logoUrl || logoUrl;
+  const identityLines = [
+    identity?.companyName,
+    identity?.tradeName && identity?.tradeName !== identity?.companyName ? identity.tradeName : "",
+    effectiveBranchName,
+    identity?.taxNumber ? `${locale === "ar" ? "الرقم الضريبي" : "Tax number"}: ${identity.taxNumber}` : "",
+    identity?.commercialRegistration ? `${locale === "ar" ? "السجل التجاري" : "Commercial registration"}: ${identity.commercialRegistration}` : "",
+  ].filter((value) => String(value || "").trim());
 
   return `<!doctype html>
 <html lang="${locale}" dir="${dir}">
@@ -333,14 +345,14 @@ export function buildPrintReportDocument({
       <header class="report-header">
         <div class="report-brand">
           ${
-            logoUrl
-              ? `<img class="report-logo" src="${escapeHtml(logoUrl)}" alt="" />`
+            effectiveLogoUrl
+              ? `<img class="report-logo" src="${escapeHtml(effectiveLogoUrl)}" alt="" />`
               : ""
           }
           <div>
             <h1>${escapeHtml(title)}</h1>
             ${subtitle ? `<p class="subtitle">${escapeHtml(subtitle)}</p>` : ""}
-            ${branchName ? `<p class="subtitle">${escapeHtml(branchName)}</p>` : ""}
+            ${identityLines.map((line) => `<p class="subtitle">${escapeHtml(line)}</p>`).join("")}
           </div>
         </div>
         <div class="meta">

@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Languages, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Building2, Languages, MapPin, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 import { Separator } from "@/components/ui/separator";
 import Notifications from "@/components/layout/header/notifications";
@@ -9,6 +10,7 @@ import ThemeSwitch from "@/components/layout/header/theme-switch";
 import UserMenu from "@/components/layout/header/user-menu";
 import { Button } from "@/components/ui/button";
 import { useSidebar } from "@/components/ui/sidebar";
+import { useAuth } from "@/components/providers/AuthProvider";
 
 type HeaderLocale = "ar" | "en";
 const LOCALE_KEY = "Mhamcloud-locale";
@@ -21,6 +23,21 @@ function readHeaderLocale(): HeaderLocale {
 
 export function SiteHeader() {
   const { toggleSidebar, open } = useSidebar();
+  const pathname = usePathname();
+  const session = useAuth();
+  const isCompanyArea = pathname === "/company" || pathname.startsWith("/company/");
+  const companyRecord = session.current_company && typeof session.current_company === "object"
+    ? session.current_company as Record<string, unknown>
+    : session.company && typeof session.company === "object"
+      ? session.company as Record<string, unknown>
+      : {};
+  const membershipRecord = session.current_membership && typeof session.current_membership === "object"
+    ? session.current_membership as Record<string, unknown>
+    : {};
+  const branchCandidate = membershipRecord.last_active_branch || membershipRecord.default_branch || companyRecord.active_branch || companyRecord.default_branch;
+  const branchRecord = branchCandidate && typeof branchCandidate === "object" ? branchCandidate as Record<string, unknown> : {};
+  const companyNameRaw = companyRecord.name || companyRecord.display_name || companyRecord.trade_name;
+  const branchName = String(branchRecord.name || branchRecord.display_name || membershipRecord.branch_name || companyRecord.branch_name || "");
   const [locale, setLocale] = React.useState<HeaderLocale>("ar");
 
   React.useEffect(() => {
@@ -35,6 +52,7 @@ export function SiteHeader() {
   }, []);
 
   const isArabic = locale === "ar";
+  const companyName = String(companyNameRaw || (isArabic ? "الشركة" : "Company"));
 
   const toggleLocale = () => {
     const nextLocale: HeaderLocale = isArabic ? "en" : "ar";
@@ -71,12 +89,40 @@ export function SiteHeader() {
         {isArabic ? (
           <>
             {sidebarToggle}
+            {isCompanyArea ? (
+              <div className="hidden min-w-0 items-center gap-2 md:flex">
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border bg-muted/40">
+                  <Building2 className="size-4 text-[#a57b3d]" />
+                </div>
+                <div className={isArabic ? "text-right" : "text-left"}>
+                  <div className="max-w-[220px] truncate text-sm font-semibold">{companyName}</div>
+                  <div className="flex max-w-[220px] items-center gap-1 text-[11px] text-muted-foreground">
+                    {branchName ? <MapPin className="size-3 shrink-0 text-[#a57b3d]" /> : null}
+                    <span className="truncate">{branchName || (isArabic ? "مساحة الشركة" : "Company workspace")}</span>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <div className="flex-1" />
             {utilityControls}
           </>
         ) : (
           <>
             {sidebarToggle}
+            {isCompanyArea ? (
+              <div className="hidden min-w-0 items-center gap-2 md:flex">
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border bg-muted/40">
+                  <Building2 className="size-4 text-[#a57b3d]" />
+                </div>
+                <div className={isArabic ? "text-right" : "text-left"}>
+                  <div className="max-w-[220px] truncate text-sm font-semibold">{companyName}</div>
+                  <div className="flex max-w-[220px] items-center gap-1 text-[11px] text-muted-foreground">
+                    {branchName ? <MapPin className="size-3 shrink-0 text-[#a57b3d]" /> : null}
+                    <span className="truncate">{branchName || (isArabic ? "مساحة الشركة" : "Company workspace")}</span>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <div className="flex-1" />
             {utilityControls}
           </>

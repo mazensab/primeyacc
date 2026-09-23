@@ -34,6 +34,22 @@ function readLocale(): AppLocale {
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [locale, setLocale] = React.useState<AppLocale>("ar");
   const pathname = usePathname();
+  const navigationType =
+    pathname === "/company" || pathname.startsWith("/company/")
+      ? "company"
+      : pathname === "/customer" || pathname.startsWith("/customer/")
+        ? "customer"
+        : pathname === "/agent" || pathname.startsWith("/agent/")
+          ? "agent"
+          : "system";
+  const workspaceHome =
+    navigationType === "company"
+      ? "/company"
+      : navigationType === "customer"
+        ? "/customer"
+        : navigationType === "agent"
+          ? "/agent"
+          : "/system";
   const { setOpen, setOpenMobile, isMobile } = useSidebar();
   const { theme } = useThemeConfig();
   const isTablet = useIsTablet();
@@ -76,7 +92,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenuButton
               asChild
               className="hover:text-foreground h-20 w-full group-data-[collapsible=icon]:h-10 group-data-[collapsible=icon]:px-0!">
-              <Link href="/system" aria-label="Mhamcloud" className="flex w-full items-center justify-center overflow-hidden">
+              <Link href={workspaceHome} aria-label="Mhamcloud" className="flex w-full items-center justify-center overflow-hidden">
                 <div className="flex w-full items-center justify-center">
                   <Logo sidebarBrand />
                 </div>
@@ -88,7 +104,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <ScrollArea className="h-full [&>[data-slot=scroll-area-viewport]]:scroll-fade">
-          <NavMain type="system" />
+          <NavMain type={navigationType} />
         </ScrollArea>
       </SidebarContent>
     </Sidebar>

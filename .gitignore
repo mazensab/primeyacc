@@ -79,3 +79,7 @@ legacy-analysis/
 /phase*.ps1
 
 *.before_phase*
+
+# Local deployment audit/evidence
+deployment_tools/_local_evidence/
+

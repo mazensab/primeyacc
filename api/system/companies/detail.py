@@ -27,10 +27,15 @@ from django.http import HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_GET
 
-from accounts.models import CompanyMembership
+from accounts.models import (
+    BranchAccessMode,
+    CompanyMembership,
+    CompanyMembershipBranchPolicy,
+)
 from api.permissions import user_has_system_permission
-from companies.models import ActivityProfile, Company
+from companies.models import ActivityProfile, Branch, Company
 from subscriptions.models import CompanySubscription
+from business_controls.models import LegacyObjectMap
 
 
 def _money_to_string(value: Any) -> str:
@@ -182,6 +187,21 @@ def _subscription_payload(subscription: CompanySubscription) -> dict[str, Any]:
     }
 
 
+def _legacy_subscription_payload(subscription: CompanySubscription) -> dict[str, Any] | None:
+    mapping = LegacyObjectMap.objects.filter(
+        company=subscription.company, source_system="mhamcloud_v1",
+        source_table="subscriptions", target_object_id=str(subscription.pk),
+    ).order_by("-id").first()
+    if mapping is None:
+        return None
+    metadata = dict(mapping.metadata or {})
+    legacy = metadata.get("legacy_subscription")
+    semantics = metadata.get("legacy_payment_semantics")
+    return {"legacy_id": mapping.legacy_id, "legacy_company_id": mapping.legacy_company_id,
+            "subscription": legacy if isinstance(legacy, dict) else {},
+            "payment_semantics": semantics if isinstance(semantics, dict) else {}}
+
+
 def _membership_payload(membership: CompanyMembership) -> dict[str, Any]:
     """
     يرجع عضوية مستخدم داخل شركة.
@@ -208,6 +228,73 @@ def _membership_payload(membership: CompanyMembership) -> dict[str, Any]:
     }
 
 
+
+def _branch_payload(branch: Branch) -> dict[str, Any]:
+    return {
+        "id": branch.id,
+        "display_name": branch.display_name,
+        "branch_code": branch.branch_code,
+        "branch_type": branch.branch_type,
+        "status": branch.status,
+        "is_active": branch.is_active,
+        "is_default": branch.is_default,
+        "effective_activity_code": branch.effective_activity_code,
+        "manager_name": branch.manager_name,
+        "email": branch.email,
+        "phone": branch.phone,
+        "mobile": branch.mobile,
+        "whatsapp_number": branch.whatsapp_number,
+        "city": branch.city,
+        "district": branch.district,
+        "region": branch.region,
+        "national_address_line": branch.national_address_line,
+        "opening_time": branch.opening_time.isoformat() if branch.opening_time else None,
+        "closing_time": branch.closing_time.isoformat() if branch.closing_time else None,
+    }
+
+
+def _membership_branch_access_payload(
+    membership: CompanyMembership,
+    branches: list[Branch],
+    policy_by_membership: dict[int, CompanyMembershipBranchPolicy],
+) -> dict[str, Any]:
+    policy = policy_by_membership.get(membership.id)
+    if policy is None:
+        return {
+            "mode": BranchAccessMode.LEGACY_UNRESOLVED,
+            "default_branch_id": None,
+            "last_active_branch_id": None,
+            "branches": [],
+        }
+
+    if policy.mode == BranchAccessMode.ALL:
+        allowed = [branch for branch in branches if branch.is_active]
+    elif policy.mode == BranchAccessMode.RESTRICTED:
+        granted_ids = {grant.branch_id for grant in policy.branch_grants.all()}
+        allowed = [
+            branch
+            for branch in branches
+            if branch.is_active and branch.id in granted_ids
+        ]
+    else:
+        allowed = []
+
+    return {
+        "mode": policy.mode,
+        "default_branch_id": policy.default_branch_id,
+        "last_active_branch_id": policy.last_active_branch_id,
+        "branches": [
+            {
+                "id": branch.id,
+                "name": branch.display_name,
+                "branch_code": branch.branch_code,
+                "is_default": branch.is_default,
+            }
+            for branch in allowed
+        ],
+    }
+
+
 def _company_payload(company: Company) -> dict[str, Any]:
     """
     يحول كائن الشركة إلى JSON كامل للواجهة.
@@ -230,6 +317,7 @@ def _company_payload(company: Company) -> dict[str, Any]:
             if activity_profile_ref
             else getattr(company, "activity_profile", "")
         ),
+        "effective_activity_code": company.effective_activity_code,
         "status": getattr(company, "status", ""),
         "is_active": getattr(company, "is_active", True),
         "commercial_registration": getattr(company, "commercial_registration", ""),
@@ -316,6 +404,22 @@ def system_company_detail(request: HttpRequest, company_id: int) -> JsonResponse
         .order_by("-is_primary", "status", "role", "id")
     )
 
+    branches_list = list(
+        Branch.objects.filter(company=company)
+        .select_related("activity_profile")
+        .order_by("-is_default", "name", "id")
+    )
+    policies = (
+        CompanyMembershipBranchPolicy.objects
+        .filter(membership__company=company)
+        .select_related("default_branch", "last_active_branch")
+        .prefetch_related("branch_grants")
+    )
+    policy_by_membership = {
+        policy.membership_id: policy
+        for policy in policies
+    }
+
     memberships_list = list(memberships)
     active_memberships_count = sum(
         1 for membership in memberships_list if _membership_is_active(membership)
@@ -333,17 +437,32 @@ def system_company_detail(request: HttpRequest, company_id: int) -> JsonResponse
                     else None
                 ),
                 "subscriptions": [
-                    _subscription_payload(subscription)
+                    {**_subscription_payload(subscription), "legacy": _legacy_subscription_payload(subscription)}
                     for subscription in subscriptions
                 ],
                 "memberships": [
-                    _membership_payload(membership)
+                    {
+                        **_membership_payload(membership),
+                        "branch_access": _membership_branch_access_payload(
+                            membership,
+                            branches=branches_list,
+                            policy_by_membership=policy_by_membership,
+                        ),
+                    }
                     for membership in memberships_list
+                ],
+                "branches": [
+                    _branch_payload(branch)
+                    for branch in branches_list
                 ],
                 "stats": {
                     "subscriptions_count": subscriptions.count(),
                     "memberships_count": len(memberships_list),
                     "active_memberships_count": active_memberships_count,
+                    "branches_count": len(branches_list),
+                    "active_branches_count": sum(
+                        1 for branch in branches_list if branch.is_active
+                    ),
                 },
             },
         },

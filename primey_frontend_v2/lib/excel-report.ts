@@ -1,6 +1,7 @@
 "use client";
 
 export type ExcelReportLocale = "ar" | "en";
+export type ExcelReportIdentity = { companyName?: string; tradeName?: string; branchName?: string; taxNumber?: string; commercialRegistration?: string; logoUrl?: string };
 export type ExcelCellType = "text" | "number" | "money";
 
 export type ExcelReportCell = {
@@ -22,6 +23,7 @@ export type ExcelReportOptions = {
   filename: string;
   sections: ExcelReportSection[];
   generatedAtLabel?: string;
+  identity?: ExcelReportIdentity;
 };
 
 function escapeHtml(value: unknown) {
@@ -72,10 +74,19 @@ export function buildExcelReportDocument({
   subtitle = "",
   sections,
   generatedAtLabel,
+  identity,
 }: Omit<ExcelReportOptions, "filename">) {
   const dir = locale === "ar" ? "rtl" : "ltr";
   const generatedLabel =
     generatedAtLabel || (locale === "ar" ? "تم الإنشاء في" : "Generated at");
+  const identityRows = [
+    [locale === "ar" ? "الشركة" : "Company", identity?.companyName],
+    [locale === "ar" ? "الاسم التجاري" : "Trade name", identity?.tradeName],
+    [locale === "ar" ? "الفرع" : "Branch", identity?.branchName],
+    [locale === "ar" ? "الرقم الضريبي" : "Tax number", identity?.taxNumber],
+    [locale === "ar" ? "السجل التجاري" : "Commercial registration", identity?.commercialRegistration],
+  ].filter((row) => String(row[1] || "").trim());
+  const identityHtml = identityRows.map(([label, value]) => `<tr><td class="report-meta">${escapeHtml(label)}: ${escapeHtml(value)}</td></tr>`).join("");
   const firstSection = sections[0];
   const sheetName = (firstSection?.title || title || "Report").slice(0, 31);
 
@@ -219,6 +230,7 @@ export function buildExcelReportDocument({
           ? `<tr><td class="report-subtitle" colspan="${Math.max(firstSection?.headers.length || 1, 1)}">${escapeHtml(subtitle)}</td></tr>`
           : ""
       }
+      ${identityHtml}
       <tr><td class="report-meta" colspan="${Math.max(firstSection?.headers.length || 1, 1)}">${escapeHtml(generatedLabel)}: ${escapeHtml(formatReportDateTime())}</td></tr>
       ${sectionsHtml}
     </table>

@@ -1,0 +1,81 @@
+{
+  "additional_business_party_clone_actions": 4,
+  "base_a7_usage_master_clone_estimate": 43887,
+  "base_manifest_sha256": "42E39C884EE60EB097EE6BA30DB63628E75CCE1F084CF691EE04C3D9B79B981F",
+  "clone_semantics": "SOURCE SURVIVOR GROUP USES CANONICAL ORIGINAL BUSINESSPARTY; ONLY NON-SOURCE OUTPUT GROUPS REQUIRE CLONES",
+  "identity_contract": "LEGACY_CONTACT_IDS_AUTHORITATIVE; CURRENT_BUSINESS_PARTY_IDS_SNAPSHOT_ONLY",
+  "payment_usage_coverage_pair_count": 6,
+  "revised_usage_master_clone_estimate": 43891,
+  "rows": [
+    {
+      "additional_clone_target_groups": [
+        "174-G03",
+        "174-G04",
+        "174-G05"
+      ],
+      "code_snapshot": "CO9632",
+      "current_business_party_id_snapshot": 79766,
+      "display_name_snapshot": "HUZEFA ATERSUMBAWALA",
+      "legacy_company_id": "174",
+      "legacy_contact_id": "113339",
+      "payment_reference_counts": {
+        "174-G01": 125,
+        "174-G03": 87,
+        "174-G04": 6,
+        "174-G05": 1
+      },
+      "payment_usage_coverage_groups": [
+        "174-G01",
+        "174-G03",
+        "174-G04",
+        "174-G05"
+      ],
+      "reason": "CUSTOMER_PAYMENT_RAW_PARTY_REFERENCE_REQUIRES_DESTINATION_BUSINESSPARTY_CLONE",
+      "retained_source_group": "174-G01",
+      "source_group_coverage_no_clone": [
+        "174-G01"
+      ]
+    },
+    {
+      "additional_clone_target_groups": [],
+      "code_snapshot": "CO3440",
+      "current_business_party_id_snapshot": 889914,
+      "display_name_snapshot": "عبد الغفار",
+      "legacy_company_id": "188",
+      "legacy_contact_id": "131942",
+      "payment_reference_counts": {
+        "188-G01": 1
+      },
+      "payment_usage_coverage_groups": [
+        "188-G01"
+      ],
+      "reason": "CUSTOMER_PAYMENT_RAW_PARTY_REFERENCE_REQUIRES_DESTINATION_BUSINESSPARTY_CLONE",
+      "retained_source_group": "188-G01",
+      "source_group_coverage_no_clone": [
+        "188-G01"
+      ]
+    },
+    {
+      "additional_clone_target_groups": [
+        "195-G05"
+      ],
+      "code_snapshot": "CO6706",
+      "current_business_party_id_snapshot": 899137,
+      "display_name_snapshot": "زهراء رضا",
+      "legacy_company_id": "195",
+      "legacy_contact_id": "131615",
+      "payment_reference_counts": {
+        "195-G05": 1
+      },
+      "payment_usage_coverage_groups": [
+        "195-G05"
+      ],
+      "reason": "CUSTOMER_PAYMENT_RAW_PARTY_REFERENCE_REQUIRES_DESTINATION_BUSINESSPARTY_CLONE",
+      "retained_source_group": "195-G01",
+      "source_group_coverage_no_clone": []
+    }
+  ],
+  "schema": "primeyacc.company_split_customer_payment_party_clone_amendment.v2",
+  "source_group_coverage_no_clone_count": 2,
+  "supersedes_a10b_amendment_sha256": "F4199657C78C72A5E6D21C7FAFA82D2D000A377238DF3DADCB6F7F0FC72A6DD3"
+}

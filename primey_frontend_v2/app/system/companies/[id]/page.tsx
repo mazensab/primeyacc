@@ -43,6 +43,7 @@ import {
   Users,
   ReceiptText,
   ExternalLink,
+  MoreVertical,
   CreditCard,
   FileSpreadsheet,
   FileText,
@@ -82,6 +83,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type Locale = "ar" | "en";
 type ApiRecord = Record<string, unknown>;
@@ -97,6 +104,9 @@ type CompanyRecord = {
   email: string;
   phone: string;
   city: string;
+  commercialRegistration: string;
+  taxNumber: string;
+  nationalAddress: string;
   notes: string;
   created_at: string | null;
   updated_at: string | null;
@@ -113,7 +123,11 @@ type CompanyUserSummary = {
   isActive: boolean;
   isPrimary: boolean;
   joinedAt: string | null;
+  branchAccessMode: string;
+  branches: Array<{ id: string; name: string; code: string; isDefault: boolean }>;
 };
+
+type CompanyBranchSummary = { id:string; name:string; code:string; type:string; status:string; isActive:boolean; isDefault:boolean; activity:string; manager:string; email:string; phone:string; city:string; address:string };
 type CompanySubscriptionSummary = {
   id: string;
   planName: string;
@@ -125,6 +139,12 @@ type CompanySubscriptionSummary = {
   endDate: string | null;
   totalAmount: string;
   isCurrent: boolean;
+  legacyPaidVia: string;
+  legacyTransactionReference: string;
+  legacyStatus: string;
+  legacyPackageName: string;
+  legacyCreatedBy: string;
+  legacyCreatedAt: string | null;
 };
 type CompanyBillingDocumentSummary = {
   id: string;
@@ -420,6 +440,33 @@ function normalizeActivityName(value: unknown, fallbackValues: unknown[] = []) {
 
   return "";
 }
+function canonicalActivityCode(value: unknown) {
+  const code = normalizeText(value).toUpperCase();
+  return ["GENERAL", "RETAIL", "WHOLESALE"].includes(code) ? "COMMERCE" : code;
+}
+function activityDisplayLabel(value: unknown, locale: Locale) {
+  const code=canonicalActivityCode(value);
+  const ar:Record<string,string>={COMMERCE:"التجارة",RESTAURANT:"المطاعم",SERVICES:"الخدمات",MANUFACTURING:"التصنيع",JEWELRY:"الذهب والمجوهرات",CONTRACTING:"المقاولات"};
+  const en:Record<string,string>={COMMERCE:"Commerce",RESTAURANT:"Restaurant",SERVICES:"Services",MANUFACTURING:"Manufacturing",JEWELRY:"Jewelry / Gold",CONTRACTING:"Contracting"};
+  return (locale==="ar"?ar:en)[code]||normalizeText(value,"—");
+}
+function companyRoleDisplayLabel(value:unknown,locale:Locale){
+  const code=normalizeText(value).toUpperCase(); if(locale!=="ar")return normalizeText(value,"—");
+  return ({OWNER:"مالك",ADMIN:"مدير",MANAGER:"مدير فرع",ACCOUNTANT:"محاسب",CASHIER:"كاشير",SALES:"مبيعات",INVENTORY:"مخزون",HR:"موارد بشرية",EMPLOYEE:"موظف",VIEWER:"مشاهد"} as Record<string,string>)[code]||normalizeText(value,"—");
+}
+function branchTypeDisplayLabel(value:unknown,locale:Locale){
+  const code=normalizeText(value).toUpperCase(); if(locale!=="ar")return normalizeText(value,"—");
+  return ({HEAD_OFFICE:"مقر رئيسي",BRANCH:"فرع",WAREHOUSE:"مستودع",POS:"نقطة بيع",SERVICE_CENTER:"مركز خدمة"} as Record<string,string>)[code]||normalizeText(value,"—");
+}
+function normalizeCompanyBranchSummary(value:unknown):CompanyBranchSummary{
+  const x=asRecord(value);return {id:normalizeText(x.id),name:normalizeText(x.display_name||x.name,"—"),code:normalizeText(x.branch_code,"—"),type:normalizeText(x.branch_type,"—"),status:normalizeStatus(x.status??x.is_active),isActive:Boolean(x.is_active),isDefault:Boolean(x.is_default),activity:canonicalActivityCode(x.effective_activity_code||"COMMERCE"),manager:normalizeText(x.manager_name),email:normalizeText(x.email),phone:normalizeText(x.mobile||x.phone),city:normalizeText(x.city),address:normalizeText(x.national_address_line)};
+}
+function branchAccessDisplayLabel(item:CompanyUserSummary,locale:Locale){
+  if(item.branchAccessMode==="ALL")return locale==="ar"?"جميع الفروع":"All branches";
+  if(item.branchAccessMode==="RESTRICTED")return item.branches.map(b=>b.name).filter(Boolean).join("، ")||(locale==="ar"?"فروع محددة":"Restricted branches");
+  return locale==="ar"?"غير محسوم":"Unresolved";
+}
+
 function normalizeStatus(value: unknown) {
   if (value === null || value === undefined || value === "") return "unknown";
   if (typeof value === "boolean") return value ? "active" : "inactive";
@@ -531,6 +578,8 @@ function normalizeCompanyUserSummary(value: unknown): CompanyUserSummary {
     isActive: Boolean(record.is_active ?? record.is_active_membership ?? user.is_active),
     isPrimary: Boolean(record.is_primary),
     joinedAt: normalizeText(record.joined_at || record.created_at) || null,
+    branchAccessMode: normalizeText(asRecord(record.branch_access).mode, "LEGACY_UNRESOLVED"),
+    branches: extractCollectionItems(asRecord(record.branch_access), ["branches"]).map((v)=>{const b=asRecord(v);return {id:normalizeText(b.id),name:normalizeText(b.name,"—"),code:normalizeText(b.branch_code,"—"),isDefault:Boolean(b.is_default)};}),
   };
 }
 
@@ -548,6 +597,12 @@ function normalizeCompanySubscriptionSummary(value: unknown): CompanySubscriptio
     endDate: normalizeText(record.end_date) || null,
     totalAmount: normalizeText(record.total_amount || record.amount || record.price, "0.00"),
     isCurrent: Boolean(record.is_current),
+    legacyPaidVia: normalizeText(asRecord(asRecord(record.legacy).subscription).paid_via),
+    legacyTransactionReference: normalizeText(asRecord(asRecord(record.legacy).subscription).payment_transaction_id),
+    legacyStatus: normalizeText(asRecord(asRecord(record.legacy).subscription).status),
+    legacyPackageName: normalizeText(asRecord(asRecord(record.legacy).subscription).package_name),
+    legacyCreatedBy: normalizeText(asRecord(asRecord(record.legacy).subscription).created_by_name),
+    legacyCreatedAt: normalizeText(asRecord(asRecord(record.legacy).subscription).created_at) || null,
   };
 }
 function normalizeCompanyBillingDocumentSummary(value: unknown): CompanyBillingDocumentSummary {
@@ -705,6 +760,9 @@ function normalizeCompany(payload: unknown): CompanyRecord {
       record.city || record.address_city || record.national_address_city || address.city,
       "—",
     ),
+    commercialRegistration: normalizeText(record.commercial_registration),
+    taxNumber: normalizeText(record.tax_number),
+    nationalAddress: normalizeText(record.national_address_line || record.short_address || record.address),
     notes: normalizeText(record.notes || record.description || record.internal_notes),
     created_at: normalizeText(record.created_at || record.created || record.inserted_at || record.date_joined) || null,
     updated_at: normalizeText(record.updated_at || record.modified_at || record.updated || record.last_modified) || null,
@@ -891,6 +949,7 @@ export default function SystemCompanyDetailPage() {
   const [locale, setLocale] = React.useState<Locale>("ar");
   const [company, setCompany] = React.useState<CompanyRecord | null>(null);
   const [companyUsers, setCompanyUsers] = React.useState<CompanyUserSummary[]>([]);
+  const [companyBranches, setCompanyBranches] = React.useState<CompanyBranchSummary[]>([]);
   const [companySubscriptions, setCompanySubscriptions] = React.useState<CompanySubscriptionSummary[]>([]);
   const [companyBillingDocuments, setCompanyBillingDocuments] = React.useState<CompanyBillingDocumentSummary[]>([]);
   const [relatedLoading, setRelatedLoading] = React.useState(false);
@@ -977,6 +1036,7 @@ export default function SystemCompanyDetailPage() {
             .map(normalizeCompanyUserSummary)
             .filter((item) => item.id || item.email),
         );
+        setCompanyBranches(extractCollectionItems(companyData, ["branches"]).map(normalizeCompanyBranchSummary).filter((item)=>item.id));
         setCompanySubscriptions(
           extractCollectionItems(companyData, ["subscriptions"])
             .map(normalizeCompanySubscriptionSummary)
@@ -1091,7 +1151,7 @@ export default function SystemCompanyDetailPage() {
           { value: item.id, type: "text" as const },
           {
             value: item.planCode
-              ? `${item.planName} (${item.planCode})`
+              ? `${item.legacyPackageName || item.planName} (${item.planCode})`
               : item.planName,
             type: "text" as const,
           },
@@ -1173,6 +1233,36 @@ export default function SystemCompanyDetailPage() {
         ? "تم تجهيز ملف Excel بنجاح."
         : "Excel file prepared successfully.",
     );
+  }
+
+  function printLegacySubscriptionReceipt(item: CompanySubscriptionSummary) {
+    if (!company) return;
+    const paymentChannel = item.legacyPaidVia.toLowerCase() === "offline" ? (locale === "ar" ? "خارج البوابة / يدوي" : "Offline / manual") : (item.legacyPaidVia || t.notAvailable);
+    const sourceStatus = item.legacyStatus.toLowerCase() === "approved" ? (locale === "ar" ? "معتمدة" : "Approved") : (item.legacyStatus || t.notAvailable);
+    const rows = [
+      [locale === "ar" ? "اسم الشركة" : "Company", company.name],
+      [locale === "ar" ? "كود الشركة" : "Company code", company.code],
+      [locale === "ar" ? "المالك / المسؤول" : "Owner / administrator", company.owner],
+      [locale === "ar" ? "الجوال" : "Phone", fallback(company.phone)],
+      [locale === "ar" ? "المدينة" : "City", fallback(company.city)],
+      [locale === "ar" ? "السجل التجاري" : "Commercial registration", fallback(company.commercialRegistration)],
+      [locale === "ar" ? "الرقم الضريبي" : "Tax number", fallback(company.taxNumber)],
+      [locale === "ar" ? "الباقة" : "Package", item.legacyPackageName || item.planName],
+      [locale === "ar" ? "رقم الاشتراك" : "Subscription ID", item.id],
+      [locale === "ar" ? "بداية الاشتراك" : "Start date", formatDateTime(item.startDate)],
+      [locale === "ar" ? "نهاية الاشتراك" : "End date", formatDateTime(item.endDate)],
+      [locale === "ar" ? "دورة الفوترة" : "Billing cycle", formatBillingCycleValue(item.billingCycle, locale)],
+      [locale === "ar" ? "المبلغ" : "Amount", `${formatMoneyNumber(item.totalAmount)} SAR`],
+      [locale === "ar" ? "حالة العملية" : "Source status", sourceStatus],
+      [locale === "ar" ? "قناة الدفع" : "Payment channel", paymentChannel],
+      [locale === "ar" ? "مرجع العملية" : "Transaction reference", item.legacyTransactionReference || t.notAvailable],
+      [locale === "ar" ? "منشئ الاشتراك" : "Subscription created by", item.legacyCreatedBy || t.notAvailable],
+      [locale === "ar" ? "تاريخ العملية" : "Transaction date", formatDateTime(item.legacyCreatedAt)],
+    ];
+    const tableHtml = `<section class="report-section"><h2>${escapeHtml(locale === "ar" ? "بيانات الاشتراك والدفع" : "Subscription and payment")}</h2><table class="data"><tbody>${rows.map(([label,value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join("")}</tbody></table><p>${escapeHtml(locale === "ar" ? "مستند اشتراك تاريخي مهاجر من مهام، وليس فاتورة ضريبية أو إيصال بوابة دفع إلكترونية من Primey." : "Historical migrated subscription document; not a Primey tax invoice or electronic gateway receipt.")}</p></section>`;
+    const opened = openPrintReport({ locale, title: locale === "ar" ? "مستند اشتراك ودفع تاريخي" : "Historical subscription payment document", subtitle: `${company.name} - ${item.legacyPackageName || item.planName}`, tableHtml, recordsCount: 1, recordsLabel: locale === "ar" ? "اشتراك" : "subscription", generatedAtLabel: t.generatedAt });
+    if (!opened) { toast.error(locale === "ar" ? "تعذر فتح نافذة الطباعة." : "Could not open print window."); return; }
+    toast.success(locale === "ar" ? "تم تجهيز مستند الاشتراك للطباعة." : "Subscription document prepared.");
   }
 
   function printRelatedRegister(
@@ -1392,7 +1482,7 @@ export default function SystemCompanyDetailPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <InfoCard title={t.companyCode} value={company.code || t.notAvailable} description={t.identity} icon={Hash} />
           <InfoCard title={t.status} value={<StatusBadge value={company.status} locale={locale} />} description={t.operations} icon={ShieldCheck} />
-          <InfoCard title={t.activity} value={company.activity || t.notAvailable} description={t.operations} icon={Activity} />
+          <InfoCard title={t.activity} value={activityDisplayLabel(company.activity, locale)} description={t.operations} icon={Activity} />
           <InfoCard title={t.createdAt} value={formatDateTime(company.created_at)} description={t.identity} icon={CalendarDays} />
         </div>
 
@@ -1422,6 +1512,9 @@ export default function SystemCompanyDetailPage() {
                   icon={Hash}
                 />
                 <DetailRow label={t.updatedAt} value={formatDateTime(company.updated_at)} icon={CalendarDays} />
+                <DetailRow label={locale === "ar" ? "السجل التجاري" : "Commercial registration"} value={fallback(company.commercialRegistration)} icon={FileText} />
+                <DetailRow label={locale === "ar" ? "الرقم الضريبي" : "Tax number"} value={fallback(company.taxNumber)} icon={Hash} />
+                <DetailRow label={locale === "ar" ? "العنوان الوطني" : "National address"} value={fallback(company.nationalAddress)} icon={MapPin} />
               </CardContent>
             </Card>
 
@@ -1445,8 +1538,8 @@ export default function SystemCompanyDetailPage() {
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-3">
                 <DetailRow label={t.status} value={<StatusBadge value={company.status} locale={locale} />} icon={ShieldCheck} />
-                <DetailRow label={t.activity} value={fallback(company.activity)} icon={Activity} />
-                <DetailRow label={t.subscription} value={fallback(company.subscription)} icon={CheckCircle2} />
+                <DetailRow label={t.activity} value={activityDisplayLabel(company.activity, locale)} icon={Activity} />
+                <DetailRow label={t.subscription} value={companySubscriptions.find((item) => item.isCurrent)?.legacyPackageName || companySubscriptions.find((item) => item.isCurrent)?.planName || companySubscriptions.find((item) => ["ACTIVE", "TRIAL"].includes(item.status))?.legacyPackageName || companySubscriptions.find((item) => ["ACTIVE", "TRIAL"].includes(item.status))?.planName || fallback(company.subscription)} icon={CheckCircle2} />
               </CardContent>
             </Card>
 
@@ -1459,6 +1552,19 @@ export default function SystemCompanyDetailPage() {
                 <div className="min-h-24 rounded-lg border bg-background p-4 text-sm leading-7 text-muted-foreground">
                   {company.notes || t.notAvailable}
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div><CardTitle icon={Building2}>{locale === "ar" ? "فروع الشركة" : "Company branches"}</CardTitle><CardDescription>{locale === "ar" ? "الفروع التشغيلية التابعة للشركة وبياناتها الحقيقية." : "Operational branches and real branch data."}</CardDescription></div>
+                <Badge variant="outline" className="w-fit rounded-full">{companyBranches.length}</Badge>
+              </CardHeader>
+              <CardContent>
+                {companyBranches.length ? <DataRegisterTableFrame className="overflow-x-auto"><table className="w-full min-w-[1040px] border-collapse text-sm">
+                  <thead className="bg-muted/40 text-xs text-muted-foreground"><tr><th className="h-11 px-4 text-start">الفرع</th><th className="h-11 px-4 text-start">الكود</th><th className="h-11 px-4 text-start">النوع</th><th className="h-11 px-4 text-start">{t.activity}</th><th className="h-11 px-4 text-start">{t.city}</th><th className="h-11 px-4 text-start">مدير الفرع</th><th className="h-11 px-4 text-start">{t.phone}</th><th className="h-11 px-4 text-start">{t.status}</th></tr></thead>
+                  <tbody className="divide-y">{companyBranches.map((branch)=><tr key={branch.id} className="hover:bg-muted/20"><td className="px-4 py-3 font-medium">{branch.name}{branch.isDefault ? <Badge variant="outline" className="ms-2 rounded-full">{locale === "ar" ? "افتراضي" : "Default"}</Badge>:null}</td><td className="px-4 py-3 font-mono text-xs">{branch.code}</td><td className="px-4 py-3">{branchTypeDisplayLabel(branch.type,locale)}</td><td className="px-4 py-3">{activityDisplayLabel(branch.activity,locale)}</td><td className="px-4 py-3">{branch.city||t.notAvailable}</td><td className="px-4 py-3">{branch.manager||t.notAvailable}</td><td className="px-4 py-3" dir="ltr">{branch.phone||t.notAvailable}</td><td className="px-4 py-3"><StatusBadge value={branch.status} locale={locale}/></td></tr>)}</tbody>
+                </table></DataRegisterTableFrame> : <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">{locale === "ar" ? "لا توجد فروع مسجلة لهذه الشركة." : "No branches registered."}</p>}
               </CardContent>
             </Card>
 
@@ -1502,6 +1608,7 @@ export default function SystemCompanyDetailPage() {
                           <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.userEmail}</th>
                           <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.userRole}</th>
                           <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.membershipStatus}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{locale === "ar" ? "الفروع المسموحة" : "Branch access"}</th>
                           <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.joinedAt}</th>
                           <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.openDetails}</th>
                         </tr>
@@ -1511,8 +1618,9 @@ export default function SystemCompanyDetailPage() {
                           <tr key={item.membershipId || item.userId || item.email}>
                             <td className="px-4 py-3 align-middle font-medium">{item.name || t.notAvailable}</td>
                             <td className="px-4 py-3 align-middle text-muted-foreground">{item.email || t.notAvailable}</td>
-                            <td className="px-4 py-3 align-middle">{item.role || t.notAvailable}</td>
+                            <td className="px-4 py-3 align-middle">{companyRoleDisplayLabel(item.role, locale)}</td>
                             <td className="px-4 py-3 align-middle"><StatusBadge value={item.status} locale={locale} /></td>
+                            <td className="px-4 py-3 align-middle text-muted-foreground">{branchAccessDisplayLabel(item, locale)}</td>
                             <td className="px-4 py-3 align-middle text-muted-foreground">{formatDateTime(item.joinedAt)}</td>
                             <td className="px-4 py-3 align-middle">
                               <Button asChild size="sm" variant="outline" className={registerOutlineButtonClass}>
@@ -1574,7 +1682,7 @@ export default function SystemCompanyDetailPage() {
                           <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.actionType}</th>
                           <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.billingCycle}</th>
                           <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.amount}</th>
-                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.endDate}</th>
+                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.endDate}</th><th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{locale === "ar" ? "قناة الدفع" : "Payment channel"}</th><th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.reference}</th>
                           <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.openDetails}</th>
                         </tr>
                       </thead>
@@ -1583,21 +1691,34 @@ export default function SystemCompanyDetailPage() {
                           <tr key={item.id}>
                             <td className="px-4 py-3 font-mono text-xs">{item.id}</td>
                             <td className="px-4 py-3 align-middle font-medium">
-                              {item.planName}
+                              {item.legacyPackageName || item.planName}
                               {item.planCode ? <span className="ms-1 text-xs text-muted-foreground">({item.planCode})</span> : null}
                             </td>
                             <td className="px-4 py-3 align-middle"><StatusBadge value={item.status} locale={locale} /></td>
                             <td className="px-4 py-3 align-middle text-muted-foreground">{formatSubscriptionActionValue(item.action, locale)}</td>
                             <td className="px-4 py-3 align-middle">{formatBillingCycleValue(item.billingCycle, locale)}</td>
                             <td className="px-4 py-3 align-middle font-medium"><SarAmount amount={item.totalAmount} label="SAR" /></td>
-                            <td className="px-4 py-3 align-middle text-muted-foreground">{formatDateTime(item.endDate)}</td>
+                            <td className="px-4 py-3 align-middle text-muted-foreground">{formatDateTime(item.endDate)}</td><td className="px-4 py-3 align-middle">{item.legacyPaidVia.toLowerCase() === "offline" ? (locale === "ar" ? "خارج البوابة / يدوي" : "Offline / manual") : (item.legacyPaidVia || t.notAvailable)}</td><td className="px-4 py-3 align-middle font-mono text-xs">{item.legacyTransactionReference || t.notAvailable}</td>
                             <td className="px-4 py-3 align-middle">
-                              <Button asChild size="sm" variant="outline" className={registerOutlineButtonClass}>
-                                <Link href={`/system/subscriptions/${item.id}`}>
-                                  <ExternalLink className="h-3.5 w-3.5" />
-                                  {t.openDetails}
-                                </Link>
-                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button type="button" variant="outline" size="icon" aria-label={locale === "ar" ? "إجراءات الاشتراك" : "Subscription actions"}>
+                                    <MoreVertical />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align={locale === "ar" ? "start" : "end"}>
+                                  <DropdownMenuItem asChild>
+                                    <Link href={`/system/subscriptions/${item.id}`}>
+                                      <ExternalLink />
+                                      {locale === "ar" ? "تفاصيل الاشتراك" : "Subscription details"}
+                                    </Link>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => printLegacySubscriptionReceipt(item)}>
+                                    <Printer />
+                                    {locale === "ar" ? "طباعة مستند الاشتراك" : "Print subscription document"}
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </td>
                           </tr>
                         ))}
@@ -1609,92 +1730,9 @@ export default function SystemCompanyDetailPage() {
                 )}
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <CardTitle icon={CreditCard}>{t.companyBillingDocs}</CardTitle>
-                  <CardDescription>{t.companyBillingDocsDesc}</CardDescription>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" className="w-fit rounded-full">{companyBillingDocuments.length}</Badge>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={registerOutlineButtonClass}
-                    onClick={() => exportRelatedRegister("billing")}
-                  >
-                    <FileSpreadsheet className="h-4 w-4" />
-                    Excel
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="default"
-                    className={registerBrandButtonClass}
-                    onClick={() => printRelatedRegister("billing")}
-                  >
-                    <Printer className="h-4 w-4" />
-                    {t.print}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {relatedLoading && !companyBillingDocuments.length ? (
-                  <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">{t.loadingRelated}</p>
-                ) : companyBillingDocuments.length ? (
-                  <DataRegisterTableFrame className="overflow-x-auto">
-                    <table className="w-full min-w-[980px] border-collapse text-sm">
-                      <thead className="bg-muted/40 text-xs text-muted-foreground">
-                        <tr>
-                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.documentNumber}</th>
-                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.documentType}</th>
-                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.status}</th>
-                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.subscription}</th>
-                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.amount}</th>
-                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.paymentMethod}</th>
-                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.reference}</th>
-                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.issueDate}</th>
-                          <th className="h-11 px-4 text-start text-xs font-semibold text-muted-foreground">{t.openDetails}</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {companyBillingDocuments.map((item) => (
-                          <tr key={item.id}>
-                            <td className="px-4 py-3 font-mono text-xs">
-                              <Link
-                                href={buildBillingDocumentPdfUrl(item.id)}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 rounded-lg border bg-background px-2 py-1 text-xs font-medium hover:bg-muted"
-                              >
-                                {item.documentNumber}
-                                <ExternalLink className="h-3 w-3" />
-                              </Link>
-                            </td>
-                            <td className="px-4 py-3 align-middle">{formatDocumentType(item.documentType, locale)}</td>
-                            <td className="px-4 py-3 align-middle"><StatusBadge value={item.status} locale={locale} /></td>
-                            <td className="px-4 py-3 font-mono text-xs">{item.subscriptionId || t.notAvailable}</td>
-                            <td className="px-4 py-3 align-middle font-medium"><SarAmount amount={item.totalAmount} label={item.currencyCode || "SAR"} /></td>
-                            <td className="px-4 py-3 align-middle">{formatPaymentMethodValue(item.paymentMethod, locale)}</td>
-                            <td className="px-4 py-3 align-middle text-muted-foreground">{item.transactionReference || item.billingReference || t.notAvailable}</td>
-                            <td className="px-4 py-3 align-middle text-muted-foreground">{formatDateTime(item.issueDate)}</td>
-                            <td className="px-4 py-3 align-middle">
-                              <Button asChild size="sm" variant="outline" className={registerOutlineButtonClass}>
-                                <Link href={`/system/invoices/${item.id}`}>
-                                  <ExternalLink className="h-3.5 w-3.5" />
-                                  {t.openDetails}
-                                </Link>
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </DataRegisterTableFrame>
-                ) : (
-                  <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">{t.emptyBillingDocs}</p>
-                )}
-              </CardContent>
-            </Card>
+
+
+
           </div>
 
         </div>

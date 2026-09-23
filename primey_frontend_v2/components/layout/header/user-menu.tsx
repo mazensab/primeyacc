@@ -41,6 +41,13 @@ export default function UserMenu() {
   const u = session.user;
   const name = String(session.profile?.display_name || "").trim() || [u?.first_name, u?.last_name].filter(Boolean).join(" ").trim() || String(u?.username || (ar ? "مستخدم النظام" : "System user"));
   const email = String(u?.email || u?.username || "");
+  const currentUserId = Number(u?.id || 0);
+  const profileHref =
+    session.workspace === "company" && currentUserId > 0
+      ? `/company/users/${currentUserId}`
+      : session.workspace === "system"
+        ? "/system/profile"
+        : String(session.dashboard_path || "/");
   async function logout() {
     if (busy) return;
     setBusy(true);
@@ -66,7 +73,7 @@ export default function UserMenu() {
       </div></DropdownMenuLabel>
       <DropdownMenuSeparator />
       <DropdownMenuGroup>
-        <DropdownMenuItem asChild><Link href="/system/profile"><UserRoundIcon className="text-[#a57b3d]" />{ar ? "الملف التعريفي" : "Profile"}</Link></DropdownMenuItem>
+        <DropdownMenuItem asChild><Link href={profileHref}><UserRoundIcon className="text-[#a57b3d]" />{ar ? "الملف التعريفي" : "Profile"}</Link></DropdownMenuItem>
         <DropdownMenuItem asChild><Link href="/system"><LayoutGridIcon className="text-muted-foreground" />{ar ? "لوحة النظام" : "Dashboard"}</Link></DropdownMenuItem>
         {mounted ? <DropdownMenuItem onSelect={e => { e.preventDefault(); setTheme(theme === "dark" ? "light" : "dark"); }}><MoonIcon className="text-muted-foreground" />{ar ? "الوضع الداكن" : "Dark mode"}<Switch checked={theme === "dark"} className="ms-auto" /></DropdownMenuItem> : null}
       </DropdownMenuGroup>

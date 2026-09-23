@@ -1,0 +1,5378 @@
+{
+  "branch_contract": {
+    "default_policy": "FIRST_BRANCH_IN_EACH_OUTPUT_GROUP_IS_DEFAULT; OTHERS_FALSE",
+    "inactive_branch_policy": "PRESERVE_INACTIVE; DEFAULT_MAY_BE_INACTIVE",
+    "partial_76_default_after_purge": "92",
+    "preserve_branch_status_and_is_active": true,
+    "reparent_existing_branch_rows": true
+  },
+  "business_party_financial_policy": {
+    "balance_owner_group": "88-G01",
+    "balance_owner_provenance": "EXACT_RAW_OPENING_BALANCE_ROW_LOCATION; GENERAL CONTACT SALES/PAYMENT USAGE DOES_NOT_REALLOCATE_OPENING_BALANCE",
+    "canonical_original_policy": "KEEP canonical original BusinessParty on 88-G01 with opening_balance=24.00",
+    "clone_policy": "Clone BusinessParty to 88-G02 because of operational usage, but set clone opening_balance=0.00",
+    "group_opening_balance_policy": {
+      "88-G01": "24.00",
+      "88-G02": "0.00"
+    },
+    "legacy_company_id": "88",
+    "legacy_contact_id": "122844",
+    "legacy_opening_balance_id": "3357434",
+    "no_duplication_rule": "SUM_OF_POST_SPLIT_OPENING_BALANCES_MUST_EQUAL_PRE_SPLIT_OPENING_BALANCE",
+    "opening_balance_snapshot": "24.00",
+    "opening_balance_source_final_total": "24.00",
+    "opening_balance_source_location_id": "106",
+    "opening_balance_source_table": "opening_balances",
+    "operational_clone_required_groups": [
+      "88-G02"
+    ],
+    "post_split_sum_expected": "24.00"
+  },
+  "companies": [
+    {
+      "delete_local_company_after_dependency_ordered_purge": true,
+      "delta_policy": "SAFETY_STOP_IF_SOURCE_BRANCH_SET_CHANGES",
+      "exclude_from_future_migration": true,
+      "expected_source_branch_ids": [
+        "88",
+        "89",
+        "444"
+      ],
+      "legacy_branch_ids": [
+        "88",
+        "89",
+        "444"
+      ],
+      "legacy_company_id": "75",
+      "legacy_map_policy": "DELETE_SOURCE_COMPANY_SCOPED_LEGACY_MAPS_WITH_PURGED_DATA",
+      "mode": "EXCLUDE",
+      "user_policy": "REMOVE_MEMBERSHIPS; DELETE_GLOBAL_USER_ONLY_IF_NO_REMAINING_MEMBERSHIP_OR_SHARED_DEPENDENCY"
+    },
+    {
+      "default_branch_after_transform": "92",
+      "delta_policy": "SAFETY_STOP_IF_SOURCE_BRANCH_SET_CHANGES",
+      "exclude_legacy_branch_ids": [
+        "90",
+        "91"
+      ],
+      "expected_source_branch_ids": [
+        "90",
+        "91",
+        "92"
+      ],
+      "keep_legacy_branch_ids": [
+        "92"
+      ],
+      "keep_source_company": true,
+      "legacy_company_id": "76",
+      "membership_policy": {
+        "primary_admin": "KEEP_ADMIN_ALL_ON_SURVIVING_COMPANY",
+        "restricted_keep_if_grants_intersect_kept_branch": true,
+        "restricted_remove_if_grants_only_excluded_branches": true
+      },
+      "mode": "PARTIAL_INCLUDE",
+      "partial_master_policy": {
+        "exclude_catalog_source_ids": {
+          "products": [
+            "374553"
+          ],
+          "variations": [
+            "305466",
+            "305477",
+            "305486",
+            "305492",
+            "376285"
+          ]
+        },
+        "keep_contact_legacy_ids": [
+          "175"
+        ],
+        "shared_catalog_policy": "KEEP",
+        "unreferenced_catalog_policy": "KEEP_CONSERVATIVE"
+      }
+    },
+    {
+      "delta_policy": "SAFETY_STOP_IF_SOURCE_BRANCH_SET_CHANGES",
+      "expected_source_branch_ids": [
+        "106",
+        "107",
+        "108",
+        "735",
+        "739",
+        "751",
+        "752",
+        "753"
+      ],
+      "legacy_company_id": "88",
+      "mode": "SPLIT",
+      "new_company_identity_policy": {
+        "copy_from_source_company_fields": [
+          "activity_profile",
+          "activity_profile_ref",
+          "status",
+          "is_active",
+          "commercial_registration",
+          "tax_number",
+          "email",
+          "phone",
+          "mobile",
+          "whatsapp_number",
+          "country",
+          "building_number",
+          "street_name",
+          "district",
+          "city",
+          "region",
+          "postal_code",
+          "short_address",
+          "address",
+          "logo",
+          "currency_code",
+          "vat_percentage",
+          "trial_ends_at",
+          "suspended_at",
+          "suspended_reason",
+          "owner",
+          "settings",
+          "notes"
+        ],
+        "override_name_fields_from_anchor_branch": [
+          "name",
+          "name_ar",
+          "name_en"
+        ],
+        "provenance_field": "Company.extra_data.primey_company_split"
+      },
+      "output_groups": [
+        {
+          "anchor_branch_legacy_id": "106",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code_policy": "KEEP_EXISTING_SOURCE_COMPANY_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "106",
+          "group_id": "88-G01",
+          "legacy_branch_ids": [
+            "106",
+            "752"
+          ],
+          "source_company_survivor": true
+        },
+        {
+          "anchor_branch_legacy_id": "107",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-88-G02",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "107",
+          "group_id": "88-G02",
+          "legacy_branch_ids": [
+            "107",
+            "751"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "108",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-88-G03",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "108",
+          "group_id": "88-G03",
+          "legacy_branch_ids": [
+            "108",
+            "753"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "735",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-88-G04",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "735",
+          "group_id": "88-G04",
+          "legacy_branch_ids": [
+            "735",
+            "739"
+          ],
+          "source_company_survivor": false
+        }
+      ],
+      "retained_source_group": "88-G01"
+    },
+    {
+      "delete_local_company_after_dependency_ordered_purge": true,
+      "delta_policy": "SAFETY_STOP_IF_SOURCE_BRANCH_SET_CHANGES",
+      "exclude_from_future_migration": true,
+      "expected_source_branch_ids": [
+        "134",
+        "243",
+        "244",
+        "245",
+        "246",
+        "247",
+        "248"
+      ],
+      "legacy_branch_ids": [
+        "134",
+        "243",
+        "244",
+        "245",
+        "246",
+        "247",
+        "248"
+      ],
+      "legacy_company_id": "113",
+      "legacy_map_policy": "DELETE_SOURCE_COMPANY_SCOPED_LEGACY_MAPS_WITH_PURGED_DATA",
+      "mode": "EXCLUDE",
+      "user_policy": "REMOVE_MEMBERSHIPS; DELETE_GLOBAL_USER_ONLY_IF_NO_REMAINING_MEMBERSHIP_OR_SHARED_DEPENDENCY"
+    },
+    {
+      "delete_local_company_after_dependency_ordered_purge": true,
+      "delta_policy": "SAFETY_STOP_IF_SOURCE_BRANCH_SET_CHANGES",
+      "exclude_from_future_migration": true,
+      "expected_source_branch_ids": [
+        "140",
+        "154",
+        "155"
+      ],
+      "legacy_branch_ids": [
+        "140",
+        "154",
+        "155"
+      ],
+      "legacy_company_id": "119",
+      "legacy_map_policy": "DELETE_SOURCE_COMPANY_SCOPED_LEGACY_MAPS_WITH_PURGED_DATA",
+      "mode": "EXCLUDE",
+      "user_policy": "REMOVE_MEMBERSHIPS; DELETE_GLOBAL_USER_ONLY_IF_NO_REMAINING_MEMBERSHIP_OR_SHARED_DEPENDENCY"
+    },
+    {
+      "delta_policy": "SAFETY_STOP_IF_SOURCE_BRANCH_SET_CHANGES",
+      "expected_source_branch_ids": [
+        "197",
+        "207",
+        "208",
+        "209",
+        "210"
+      ],
+      "legacy_company_id": "174",
+      "mode": "SPLIT",
+      "new_company_identity_policy": {
+        "copy_from_source_company_fields": [
+          "activity_profile",
+          "activity_profile_ref",
+          "status",
+          "is_active",
+          "commercial_registration",
+          "tax_number",
+          "email",
+          "phone",
+          "mobile",
+          "whatsapp_number",
+          "country",
+          "building_number",
+          "street_name",
+          "district",
+          "city",
+          "region",
+          "postal_code",
+          "short_address",
+          "address",
+          "logo",
+          "currency_code",
+          "vat_percentage",
+          "trial_ends_at",
+          "suspended_at",
+          "suspended_reason",
+          "owner",
+          "settings",
+          "notes"
+        ],
+        "override_name_fields_from_anchor_branch": [
+          "name",
+          "name_ar",
+          "name_en"
+        ],
+        "provenance_field": "Company.extra_data.primey_company_split"
+      },
+      "output_groups": [
+        {
+          "anchor_branch_legacy_id": "197",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code_policy": "KEEP_EXISTING_SOURCE_COMPANY_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "197",
+          "group_id": "174-G01",
+          "legacy_branch_ids": [
+            "197"
+          ],
+          "source_company_survivor": true
+        },
+        {
+          "anchor_branch_legacy_id": "207",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-174-G02",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "207",
+          "group_id": "174-G02",
+          "legacy_branch_ids": [
+            "207"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "208",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-174-G03",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "208",
+          "group_id": "174-G03",
+          "legacy_branch_ids": [
+            "208"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "209",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-174-G04",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "209",
+          "group_id": "174-G04",
+          "legacy_branch_ids": [
+            "209"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "210",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-174-G05",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "210",
+          "group_id": "174-G05",
+          "legacy_branch_ids": [
+            "210"
+          ],
+          "source_company_survivor": false
+        }
+      ],
+      "retained_source_group": "174-G01"
+    },
+    {
+      "delta_policy": "SAFETY_STOP_IF_SOURCE_BRANCH_SET_CHANGES",
+      "expected_source_branch_ids": [
+        "215",
+        "216",
+        "217",
+        "218",
+        "219",
+        "220",
+        "770",
+        "771",
+        "772",
+        "773",
+        "774",
+        "775"
+      ],
+      "legacy_company_id": "188",
+      "mode": "SPLIT",
+      "new_company_identity_policy": {
+        "copy_from_source_company_fields": [
+          "activity_profile",
+          "activity_profile_ref",
+          "status",
+          "is_active",
+          "commercial_registration",
+          "tax_number",
+          "email",
+          "phone",
+          "mobile",
+          "whatsapp_number",
+          "country",
+          "building_number",
+          "street_name",
+          "district",
+          "city",
+          "region",
+          "postal_code",
+          "short_address",
+          "address",
+          "logo",
+          "currency_code",
+          "vat_percentage",
+          "trial_ends_at",
+          "suspended_at",
+          "suspended_reason",
+          "owner",
+          "settings",
+          "notes"
+        ],
+        "override_name_fields_from_anchor_branch": [
+          "name",
+          "name_ar",
+          "name_en"
+        ],
+        "provenance_field": "Company.extra_data.primey_company_split"
+      },
+      "output_groups": [
+        {
+          "anchor_branch_legacy_id": "215",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code_policy": "KEEP_EXISTING_SOURCE_COMPANY_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "215",
+          "group_id": "188-G01",
+          "legacy_branch_ids": [
+            "215",
+            "772"
+          ],
+          "source_company_survivor": true
+        },
+        {
+          "anchor_branch_legacy_id": "216",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-188-G02",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "216",
+          "group_id": "188-G02",
+          "legacy_branch_ids": [
+            "216",
+            "775"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "217",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-188-G03",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "217",
+          "group_id": "188-G03",
+          "legacy_branch_ids": [
+            "217",
+            "770"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "218",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-188-G04",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "218",
+          "group_id": "188-G04",
+          "legacy_branch_ids": [
+            "218",
+            "773"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "219",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-188-G05",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "219",
+          "group_id": "188-G05",
+          "legacy_branch_ids": [
+            "219",
+            "774"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "220",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-188-G06",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "220",
+          "group_id": "188-G06",
+          "legacy_branch_ids": [
+            "220",
+            "771"
+          ],
+          "source_company_survivor": false
+        }
+      ],
+      "retained_source_group": "188-G01"
+    },
+    {
+      "delta_policy": "SAFETY_STOP_IF_SOURCE_BRANCH_SET_CHANGES",
+      "expected_source_branch_ids": [
+        "227",
+        "228",
+        "229",
+        "230",
+        "231",
+        "232",
+        "416"
+      ],
+      "legacy_company_id": "195",
+      "mode": "SPLIT",
+      "new_company_identity_policy": {
+        "copy_from_source_company_fields": [
+          "activity_profile",
+          "activity_profile_ref",
+          "status",
+          "is_active",
+          "commercial_registration",
+          "tax_number",
+          "email",
+          "phone",
+          "mobile",
+          "whatsapp_number",
+          "country",
+          "building_number",
+          "street_name",
+          "district",
+          "city",
+          "region",
+          "postal_code",
+          "short_address",
+          "address",
+          "logo",
+          "currency_code",
+          "vat_percentage",
+          "trial_ends_at",
+          "suspended_at",
+          "suspended_reason",
+          "owner",
+          "settings",
+          "notes"
+        ],
+        "override_name_fields_from_anchor_branch": [
+          "name",
+          "name_ar",
+          "name_en"
+        ],
+        "provenance_field": "Company.extra_data.primey_company_split"
+      },
+      "output_groups": [
+        {
+          "anchor_branch_legacy_id": "227",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code_policy": "KEEP_EXISTING_SOURCE_COMPANY_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "227",
+          "group_id": "195-G01",
+          "legacy_branch_ids": [
+            "227"
+          ],
+          "source_company_survivor": true
+        },
+        {
+          "anchor_branch_legacy_id": "228",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-195-G02",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "228",
+          "group_id": "195-G02",
+          "legacy_branch_ids": [
+            "228"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "229",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-195-G03",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "229",
+          "group_id": "195-G03",
+          "legacy_branch_ids": [
+            "229"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "230",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-195-G04",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "230",
+          "group_id": "195-G04",
+          "legacy_branch_ids": [
+            "230"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "231",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-195-G05",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "231",
+          "group_id": "195-G05",
+          "legacy_branch_ids": [
+            "231"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "232",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-195-G06",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "232",
+          "group_id": "195-G06",
+          "legacy_branch_ids": [
+            "232"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "416",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-195-G07",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "416",
+          "group_id": "195-G07",
+          "legacy_branch_ids": [
+            "416"
+          ],
+          "source_company_survivor": false
+        }
+      ],
+      "retained_source_group": "195-G01"
+    },
+    {
+      "delta_policy": "SAFETY_STOP_IF_SOURCE_BRANCH_SET_CHANGES",
+      "expected_source_branch_ids": [
+        "353",
+        "354",
+        "355",
+        "356",
+        "357"
+      ],
+      "legacy_company_id": "290",
+      "mode": "SPLIT",
+      "new_company_identity_policy": {
+        "copy_from_source_company_fields": [
+          "activity_profile",
+          "activity_profile_ref",
+          "status",
+          "is_active",
+          "commercial_registration",
+          "tax_number",
+          "email",
+          "phone",
+          "mobile",
+          "whatsapp_number",
+          "country",
+          "building_number",
+          "street_name",
+          "district",
+          "city",
+          "region",
+          "postal_code",
+          "short_address",
+          "address",
+          "logo",
+          "currency_code",
+          "vat_percentage",
+          "trial_ends_at",
+          "suspended_at",
+          "suspended_reason",
+          "owner",
+          "settings",
+          "notes"
+        ],
+        "override_name_fields_from_anchor_branch": [
+          "name",
+          "name_ar",
+          "name_en"
+        ],
+        "provenance_field": "Company.extra_data.primey_company_split"
+      },
+      "output_groups": [
+        {
+          "anchor_branch_legacy_id": "353",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code_policy": "KEEP_EXISTING_SOURCE_COMPANY_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "353",
+          "group_id": "290-G01",
+          "legacy_branch_ids": [
+            "353"
+          ],
+          "source_company_survivor": true
+        },
+        {
+          "anchor_branch_legacy_id": "354",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-290-G02",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "354",
+          "group_id": "290-G02",
+          "legacy_branch_ids": [
+            "354"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "355",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-290-G03",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "355",
+          "group_id": "290-G03",
+          "legacy_branch_ids": [
+            "355"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "356",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-290-G04",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "356",
+          "group_id": "290-G04",
+          "legacy_branch_ids": [
+            "356"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "357",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-290-G05",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "357",
+          "group_id": "290-G05",
+          "legacy_branch_ids": [
+            "357"
+          ],
+          "source_company_survivor": false
+        }
+      ],
+      "retained_source_group": "290-G01"
+    },
+    {
+      "delta_policy": "SAFETY_STOP_IF_SOURCE_BRANCH_SET_CHANGES",
+      "expected_source_branch_ids": [
+        "367",
+        "368",
+        "369"
+      ],
+      "legacy_company_id": "299",
+      "mode": "SPLIT",
+      "new_company_identity_policy": {
+        "copy_from_source_company_fields": [
+          "activity_profile",
+          "activity_profile_ref",
+          "status",
+          "is_active",
+          "commercial_registration",
+          "tax_number",
+          "email",
+          "phone",
+          "mobile",
+          "whatsapp_number",
+          "country",
+          "building_number",
+          "street_name",
+          "district",
+          "city",
+          "region",
+          "postal_code",
+          "short_address",
+          "address",
+          "logo",
+          "currency_code",
+          "vat_percentage",
+          "trial_ends_at",
+          "suspended_at",
+          "suspended_reason",
+          "owner",
+          "settings",
+          "notes"
+        ],
+        "override_name_fields_from_anchor_branch": [
+          "name",
+          "name_ar",
+          "name_en"
+        ],
+        "provenance_field": "Company.extra_data.primey_company_split"
+      },
+      "output_groups": [
+        {
+          "anchor_branch_legacy_id": "367",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code_policy": "KEEP_EXISTING_SOURCE_COMPANY_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "367",
+          "group_id": "299-G01",
+          "legacy_branch_ids": [
+            "367"
+          ],
+          "source_company_survivor": true
+        },
+        {
+          "anchor_branch_legacy_id": "368",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-299-G02",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "368",
+          "group_id": "299-G02",
+          "legacy_branch_ids": [
+            "368"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "369",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-299-G03",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "369",
+          "group_id": "299-G03",
+          "legacy_branch_ids": [
+            "369"
+          ],
+          "source_company_survivor": false
+        }
+      ],
+      "retained_source_group": "299-G01"
+    },
+    {
+      "delete_local_company_after_dependency_ordered_purge": true,
+      "delta_policy": "SAFETY_STOP_IF_SOURCE_BRANCH_SET_CHANGES",
+      "exclude_from_future_migration": true,
+      "expected_source_branch_ids": [
+        "383",
+        "384",
+        "666",
+        "667"
+      ],
+      "legacy_branch_ids": [
+        "383",
+        "384",
+        "666",
+        "667"
+      ],
+      "legacy_company_id": "307",
+      "legacy_map_policy": "DELETE_SOURCE_COMPANY_SCOPED_LEGACY_MAPS_WITH_PURGED_DATA",
+      "mode": "EXCLUDE",
+      "user_policy": "REMOVE_MEMBERSHIPS; DELETE_GLOBAL_USER_ONLY_IF_NO_REMAINING_MEMBERSHIP_OR_SHARED_DEPENDENCY"
+    },
+    {
+      "delete_local_company_after_dependency_ordered_purge": true,
+      "delta_policy": "SAFETY_STOP_IF_SOURCE_BRANCH_SET_CHANGES",
+      "exclude_from_future_migration": true,
+      "expected_source_branch_ids": [
+        "517",
+        "596",
+        "597"
+      ],
+      "legacy_branch_ids": [
+        "517",
+        "596",
+        "597"
+      ],
+      "legacy_company_id": "429",
+      "legacy_map_policy": "DELETE_SOURCE_COMPANY_SCOPED_LEGACY_MAPS_WITH_PURGED_DATA",
+      "mode": "EXCLUDE",
+      "user_policy": "REMOVE_MEMBERSHIPS; DELETE_GLOBAL_USER_ONLY_IF_NO_REMAINING_MEMBERSHIP_OR_SHARED_DEPENDENCY"
+    },
+    {
+      "delete_local_company_after_dependency_ordered_purge": true,
+      "delta_policy": "SAFETY_STOP_IF_SOURCE_BRANCH_SET_CHANGES",
+      "exclude_from_future_migration": true,
+      "expected_source_branch_ids": [
+        "519",
+        "522",
+        "523",
+        "524",
+        "525",
+        "526"
+      ],
+      "legacy_branch_ids": [
+        "519",
+        "522",
+        "523",
+        "524",
+        "525",
+        "526"
+      ],
+      "legacy_company_id": "431",
+      "legacy_map_policy": "DELETE_SOURCE_COMPANY_SCOPED_LEGACY_MAPS_WITH_PURGED_DATA",
+      "mode": "EXCLUDE",
+      "user_policy": "REMOVE_MEMBERSHIPS; DELETE_GLOBAL_USER_ONLY_IF_NO_REMAINING_MEMBERSHIP_OR_SHARED_DEPENDENCY"
+    },
+    {
+      "delete_local_company_after_dependency_ordered_purge": true,
+      "delta_policy": "SAFETY_STOP_IF_SOURCE_BRANCH_SET_CHANGES",
+      "exclude_from_future_migration": true,
+      "expected_source_branch_ids": [
+        "569",
+        "572",
+        "573",
+        "574",
+        "587",
+        "590",
+        "591"
+      ],
+      "legacy_branch_ids": [
+        "569",
+        "572",
+        "573",
+        "574",
+        "587",
+        "590",
+        "591"
+      ],
+      "legacy_company_id": "473",
+      "legacy_map_policy": "DELETE_SOURCE_COMPANY_SCOPED_LEGACY_MAPS_WITH_PURGED_DATA",
+      "mode": "EXCLUDE",
+      "user_policy": "REMOVE_MEMBERSHIPS; DELETE_GLOBAL_USER_ONLY_IF_NO_REMAINING_MEMBERSHIP_OR_SHARED_DEPENDENCY"
+    },
+    {
+      "delta_policy": "SAFETY_STOP_IF_SOURCE_BRANCH_SET_CHANGES",
+      "expected_source_branch_ids": [
+        "578",
+        "579",
+        "580",
+        "581",
+        "582",
+        "583",
+        "584",
+        "585",
+        "717",
+        "718"
+      ],
+      "legacy_company_id": "478",
+      "mode": "SPLIT",
+      "new_company_identity_policy": {
+        "copy_from_source_company_fields": [
+          "activity_profile",
+          "activity_profile_ref",
+          "status",
+          "is_active",
+          "commercial_registration",
+          "tax_number",
+          "email",
+          "phone",
+          "mobile",
+          "whatsapp_number",
+          "country",
+          "building_number",
+          "street_name",
+          "district",
+          "city",
+          "region",
+          "postal_code",
+          "short_address",
+          "address",
+          "logo",
+          "currency_code",
+          "vat_percentage",
+          "trial_ends_at",
+          "suspended_at",
+          "suspended_reason",
+          "owner",
+          "settings",
+          "notes"
+        ],
+        "override_name_fields_from_anchor_branch": [
+          "name",
+          "name_ar",
+          "name_en"
+        ],
+        "provenance_field": "Company.extra_data.primey_company_split"
+      },
+      "output_groups": [
+        {
+          "anchor_branch_legacy_id": "578",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code_policy": "KEEP_EXISTING_SOURCE_COMPANY_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "578",
+          "group_id": "478-G01",
+          "legacy_branch_ids": [
+            "578"
+          ],
+          "source_company_survivor": true
+        },
+        {
+          "anchor_branch_legacy_id": "579",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-478-G02",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "579",
+          "group_id": "478-G02",
+          "legacy_branch_ids": [
+            "579"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "580",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-478-G03",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "580",
+          "group_id": "478-G03",
+          "legacy_branch_ids": [
+            "580"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "581",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-478-G04",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "581",
+          "group_id": "478-G04",
+          "legacy_branch_ids": [
+            "581"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "582",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-478-G05",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "582",
+          "group_id": "478-G05",
+          "legacy_branch_ids": [
+            "582"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "583",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-478-G06",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "583",
+          "group_id": "478-G06",
+          "legacy_branch_ids": [
+            "583"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "584",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-478-G07",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "584",
+          "group_id": "478-G07",
+          "legacy_branch_ids": [
+            "584"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "585",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-478-G08",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "585",
+          "group_id": "478-G08",
+          "legacy_branch_ids": [
+            "585"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "717",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-478-G09",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "717",
+          "group_id": "478-G09",
+          "legacy_branch_ids": [
+            "717"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "718",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-478-G10",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "718",
+          "group_id": "478-G10",
+          "legacy_branch_ids": [
+            "718"
+          ],
+          "source_company_survivor": false
+        }
+      ],
+      "retained_source_group": "478-G01"
+    },
+    {
+      "delta_policy": "SAFETY_STOP_IF_SOURCE_BRANCH_SET_CHANGES",
+      "expected_source_branch_ids": [
+        "676",
+        "677",
+        "678",
+        "706",
+        "778",
+        "779",
+        "781"
+      ],
+      "legacy_company_id": "556",
+      "mode": "SPLIT",
+      "new_company_identity_policy": {
+        "copy_from_source_company_fields": [
+          "activity_profile",
+          "activity_profile_ref",
+          "status",
+          "is_active",
+          "commercial_registration",
+          "tax_number",
+          "email",
+          "phone",
+          "mobile",
+          "whatsapp_number",
+          "country",
+          "building_number",
+          "street_name",
+          "district",
+          "city",
+          "region",
+          "postal_code",
+          "short_address",
+          "address",
+          "logo",
+          "currency_code",
+          "vat_percentage",
+          "trial_ends_at",
+          "suspended_at",
+          "suspended_reason",
+          "owner",
+          "settings",
+          "notes"
+        ],
+        "override_name_fields_from_anchor_branch": [
+          "name",
+          "name_ar",
+          "name_en"
+        ],
+        "provenance_field": "Company.extra_data.primey_company_split"
+      },
+      "output_groups": [
+        {
+          "anchor_branch_legacy_id": "676",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code_policy": "KEEP_EXISTING_SOURCE_COMPANY_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "676",
+          "group_id": "556-G01",
+          "legacy_branch_ids": [
+            "676"
+          ],
+          "source_company_survivor": true
+        },
+        {
+          "anchor_branch_legacy_id": "677",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-556-G02",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "677",
+          "group_id": "556-G02",
+          "legacy_branch_ids": [
+            "677"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "678",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-556-G03",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "678",
+          "group_id": "556-G03",
+          "legacy_branch_ids": [
+            "678"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "706",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-556-G04",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "706",
+          "group_id": "556-G04",
+          "legacy_branch_ids": [
+            "706"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "778",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-556-G05",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "778",
+          "group_id": "556-G05",
+          "legacy_branch_ids": [
+            "778"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "779",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-556-G06",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "779",
+          "group_id": "556-G06",
+          "legacy_branch_ids": [
+            "779"
+          ],
+          "source_company_survivor": false
+        },
+        {
+          "anchor_branch_legacy_id": "781",
+          "branch_default_policy": "FIRST_BRANCH_IN_GROUP_DEFAULT_TRUE_OTHERS_FALSE",
+          "branch_status_policy": "PRESERVE",
+          "company_code": "MHM-SPLIT-556-G07",
+          "company_code_policy": "DETERMINISTIC_MANIFEST_CODE",
+          "company_name_policy": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+          "default_branch_legacy_id": "781",
+          "group_id": "556-G07",
+          "legacy_branch_ids": [
+            "781"
+          ],
+          "source_company_survivor": false
+        }
+      ],
+      "retained_source_group": "556-G01"
+    }
+  ],
+  "company_creation_contract": {
+    "identity_copy": "COPY_SOURCE_COMPANY_COMPLIANCE_CONTACT_ACTIVITY_FIELDS_THEN_OVERRIDE_NAME_FIELDS",
+    "new_company_code_pattern": "MHM-SPLIT-{legacy_company_id}-G{group_sequence}",
+    "new_company_name": "FRESH_ANCHOR_BRANCH_NAME_AT_EXECUTION",
+    "provenance": "WRITE_TO_Company.extra_data.primey_company_split",
+    "survivor": "KEEP_SOURCE_COMPANY_FOR_GROUP_CONTAINING_SOURCE_DEFAULT_BRANCH"
+  },
+  "customer_payment_contract": {
+    "business_party_coverage_contract": {
+      "additional_clone_action_count": 4,
+      "current_primey_ids": "NOT_STORED_IN_AUTHORITATIVE_MANIFEST",
+      "identity_contract": "LEGACY_CONTACT_IDS_AUTHORITATIVE",
+      "non_source_group_semantics": "Clone canonical BusinessParty once per required non-source output group and remap CustomerPayment raw party IDs.",
+      "rows": [
+        {
+          "additional_clone_target_groups": [
+            "174-G03",
+            "174-G04",
+            "174-G05"
+          ],
+          "legacy_company_id": "174",
+          "legacy_contact_id": "113339",
+          "payment_reference_counts": {
+            "174-G01": 125,
+            "174-G03": 87,
+            "174-G04": 6,
+            "174-G05": 1
+          },
+          "payment_usage_coverage_groups": [
+            "174-G01",
+            "174-G03",
+            "174-G04",
+            "174-G05"
+          ],
+          "reason": "CUSTOMER_PAYMENT_RAW_PARTY_REFERENCE_REQUIRES_DESTINATION_BUSINESSPARTY_COVERAGE",
+          "retained_source_group": "174-G01",
+          "source_group_coverage_no_clone": [
+            "174-G01"
+          ]
+        },
+        {
+          "additional_clone_target_groups": [],
+          "legacy_company_id": "188",
+          "legacy_contact_id": "131942",
+          "payment_reference_counts": {
+            "188-G01": 1
+          },
+          "payment_usage_coverage_groups": [
+            "188-G01"
+          ],
+          "reason": "CUSTOMER_PAYMENT_RAW_PARTY_REFERENCE_REQUIRES_DESTINATION_BUSINESSPARTY_COVERAGE",
+          "retained_source_group": "188-G01",
+          "source_group_coverage_no_clone": [
+            "188-G01"
+          ]
+        },
+        {
+          "additional_clone_target_groups": [
+            "195-G05"
+          ],
+          "legacy_company_id": "195",
+          "legacy_contact_id": "131615",
+          "payment_reference_counts": {
+            "195-G05": 1
+          },
+          "payment_usage_coverage_groups": [
+            "195-G05"
+          ],
+          "reason": "CUSTOMER_PAYMENT_RAW_PARTY_REFERENCE_REQUIRES_DESTINATION_BUSINESSPARTY_COVERAGE",
+          "retained_source_group": "195-G01",
+          "source_group_coverage_no_clone": []
+        }
+      ],
+      "source_group_coverage_no_clone_count": 2,
+      "source_group_semantics": "If payment usage requires the retained source group, keep canonical original BusinessParty; no clone."
+    },
+    "orphan_exceptions": [
+      {
+        "branch_policy": "KEEP_NULL",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "1437151",
+        "missing_legacy_transaction_id": "1388333",
+        "retained_group": "174-G01"
+      },
+      {
+        "branch_policy": "KEEP_NULL",
+        "legacy_company_id": "290",
+        "legacy_payment_id": "3376678",
+        "missing_legacy_transaction_id": "3400717",
+        "retained_group": "290-G01"
+      }
+    ],
+    "rules": [
+      "IF sales_invoice.branch EXISTS => ROUTE_WITH_INVOICE_BRANCH",
+      "ELSE READ legacy payment.transaction_id",
+      "READ RAW SOURCE TRANSACTION COLLECTION INCLUDING aliases sales/sale_returns",
+      "ROUTE_WITH_RAW location_id/business_location_id",
+      "IGNORE SAME-NUMERIC-ID ROWS FROM UNRELATED TABLES",
+      "IF SOURCE PARENT TRANSACTION ABSENT AND NO TRANSACTION LEGACY MAP => PRESERVE_ON_RETAINED_SOURCE_COMPANY_WITH branch=NULL",
+      "MULTIPLE_OR_UNRESOLVED DESTINATIONS => SAFETY_STOP"
+    ],
+    "special_legacy_payment_route_count": 412,
+    "special_legacy_payment_route_current_ids": "NOT_STORED_IN_AUTHORITATIVE_MANIFEST",
+    "special_legacy_payment_route_identity": "mhamcloud_v1.transaction_payments:(LEGACY_COMPANY_ID,LEGACY_PAYMENT_ID)",
+    "special_legacy_payment_routes": [
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "753",
+        "legacy_company_id": "88",
+        "legacy_payment_id": "3429984",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "88-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "18656",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "18659",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "18702",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "209",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "18737",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G04"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "209",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "18744",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G04"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "18792",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "18801",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "18825",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "20078",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "210",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "20712",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G05"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "21898",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "22149",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "22150",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "22155",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "22158",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "22159",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "22162",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "22165",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "22286",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "23026",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "23867",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "26332",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "26341",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "26342",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "26898",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "26905",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "26906",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "26909",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "26986",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "27276",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "27277",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "27278",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "27279",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "27280",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "27283",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "27284",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "27285",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "27286",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "27301",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "27358",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "28186",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "28462",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "28463",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "28688",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "28689",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "28692",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "28705",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "28712",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "28753",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "28754",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "28755",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "28838",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "28841",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "29188",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "30320",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "30445",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "30542",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "30545",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "30553",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "30796",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "30797",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "30798",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "32694",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "32695",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "32710",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "32946",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "32947",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "32948",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "32949",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "32950",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "34666",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "34669",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "34674",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "34789",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "34790",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "34791",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "34792",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "34833",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "41399",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "41400",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "41858",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "44550",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "44551",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "44552",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "46916",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "46917",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "46918",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "48831",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "48834",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "48835",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "48836",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "48839",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "48844",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "48845",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "48846",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "48847",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "48850",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "48857",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "48858",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "48859",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "49473",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "50287",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "50292",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "50293",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "50294",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "50295",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "50866",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "52162",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "55195",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "55196",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "55199",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "55200",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "55510",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "55511",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "55512",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "55513",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "55514",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "55515",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "56444",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "66041",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "69078",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "70720",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "70721",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "77749",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "77750",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "77753",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "77754",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "77755",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "77756",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "78682",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "78685",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "78686",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "80691",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "80694",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "80697",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "80700",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "80705",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "80706",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "80707",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "80708",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "80709",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "80710",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "80711",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "80712",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "80713",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "80714",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "85722",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "90683",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "90690",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "90691",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "90698",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "90701",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "92565",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "92566",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "92567",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "92568",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "95029",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "96942",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "105894",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "105903",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "110191",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "110196",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "110197",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "110198",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "110201",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "110202",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "110203",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "110206",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "110211",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "115115",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "115116",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "119363",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "119393",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "119593",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "119594",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "119595",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "127729",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "127732",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "127733",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "127734",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "144786",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "144787",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "144788",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "149527",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "152981",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "152992",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "209",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "162425",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G04"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "162460",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "162463",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "162468",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "162469",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "162474",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "162475",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "162478",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "162495",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "162496",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "162499",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "170340",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "170655",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "170656",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "170659",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "174895",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "174896",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "174897",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "174898",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "178618",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "178915",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "178918",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "178919",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "178920",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "179218",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "179219",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "179222",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "181634",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "181635",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "181636",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "182734",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "182737",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "184014",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "184015",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "186482",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "186485",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "186488",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "186826",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "186827",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "188994",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "190228",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "190229",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "190230",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "190231",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "190234",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "190239",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "191312",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "191313",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "191314",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "193863",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "193864",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "193865",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "193872",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "202911",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "202916",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "203011",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "203018",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "203019",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "203066",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "203069",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "203072",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "203075",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "203078",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "203081",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "207665",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "207666",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "207667",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "207668",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "211407",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "211410",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "211411",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "211412",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "212338",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "212341",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "212344",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "212349",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "212350",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "212351",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "216426",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "216427",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "216430",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "218260",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "218263",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "218274",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "219018",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "219021",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "220217",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "226893",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "226894",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "226903",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "226906",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "226915",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "226918",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "226924",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "226925",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "209",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "228030",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G04"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "230513",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "230770",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "230771",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "230774",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "235596",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "235597",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "235598",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "235599",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "236165",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "236170",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "236171",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "236172",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "238767",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "238770",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "238771",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "240161",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "240250",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "243270",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "243271",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "243343",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "246861",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "246866",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "247075",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "249990",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "250005",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "250008",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "250011",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "250025",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "251019",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "254826",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "254829",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "254830",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "254916",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "254917",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "254918",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "254923",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "254926",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "254929",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "254932",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "254933",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "254946",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "258525",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "258526",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "258527",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "261940",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "261941",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "261946",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "261947",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "261952",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "267530",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "267533",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "272711",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "274860",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "274861",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "279503",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "279504",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "279505",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "279506",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "279507",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "279508",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "279513",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "279520",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "279521",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "279522",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "279523",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "279530",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "279534",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "279539",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "279542",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "279545",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "282049",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "282054",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "283917",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "285896",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "294256",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "294257",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "294258",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "294259",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "209",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "301245",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G04"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "209",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "301246",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G04"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "303444",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "303449",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "303450",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "303451",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "303452",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "306917",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "306920",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "306921",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "306922",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "308208",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "308211",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "308214",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "312336",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "312339",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "312342",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "312343",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "316636",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "318752",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "319403",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "320178",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "321714",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "321715",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "321716",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "330688",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "330689",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "330690",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "330691",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "330692",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "331119",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "331122",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "333802",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "333803",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "354452",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "354453",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "469942",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "207",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "469943",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "208",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "486887",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G03"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "550872",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "550875",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "197",
+        "legacy_company_id": "174",
+        "legacy_payment_id": "550876",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "KEEP_NULL",
+        "legacy_branch_id": null,
+        "legacy_company_id": "174",
+        "legacy_payment_id": "1437151",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "174-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "215",
+        "legacy_company_id": "188",
+        "legacy_payment_id": "22399",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "188-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "228",
+        "legacy_company_id": "195",
+        "legacy_payment_id": "52085",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "195-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "228",
+        "legacy_company_id": "195",
+        "legacy_payment_id": "52086",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "195-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "228",
+        "legacy_company_id": "195",
+        "legacy_payment_id": "52087",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "195-G02"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "231",
+        "legacy_company_id": "195",
+        "legacy_payment_id": "122549",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "195-G05"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "353",
+        "legacy_company_id": "290",
+        "legacy_payment_id": "571990",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "290-G01"
+      },
+      {
+        "branch_policy": "KEEP_NULL",
+        "legacy_branch_id": null,
+        "legacy_company_id": "290",
+        "legacy_payment_id": "3376678",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "290-G01"
+      },
+      {
+        "branch_policy": "ROUTE_TO_LEGACY_BRANCH",
+        "legacy_branch_id": "367",
+        "legacy_company_id": "299",
+        "legacy_payment_id": "720803",
+        "source_system": "mhamcloud_v1",
+        "source_table": "transaction_payments",
+        "target_group": "299-G01"
+      }
+    ],
+    "total_local_snapshot": 320030
+  },
+  "execution_order": [
+    "PRECHECK frozen manifest SHA + source branch delta + HEAD/origin + mutation gate",
+    "CREATE new Companies and write split provenance",
+    "CLONE foundation master graphs for new Companies",
+    "CLONE usage-routed CatalogItem/BusinessParty masters by destination-group usage, including CustomerPayment raw-party coverage from Manifest v2",
+    "CREATE/REHOME memberships and branch access policies",
+    "CLONE current subscriptions for new Companies",
+    "REPARENT Branch rows and normalize one default Branch per output Company",
+    "MOVE branch-routed operational headers to destination Companies",
+    "MOVE child/detail rows to parent destination Companies",
+    "REMAP operational master FKs to destination master clones",
+    "ROUTE CustomerPayments using frozen routing contract",
+    "UPDATE canonical LegacyObjectMap.company for moved canonical objects",
+    "PURGE partial Company 76 excluded branch operations then five excluded-only CatalogItems",
+    "PURGE seven fully excluded Companies in dependency order",
+    "DELETE global Users proven orphaned after purge",
+    "VERIFY strict same-company integrity, branch counts, company counts, memberships, subscriptions, and historical totals",
+    "COMMIT ONLY AFTER full regression and final verification"
+  ],
+  "expected_counts": {
+    "baseline_mapped_branches": 450,
+    "baseline_mapped_companies": 319,
+    "full_excluded_branches": 33,
+    "full_excluded_companies": 7,
+    "new_companies": 39,
+    "partial_excluded_branches": 2,
+    "post_transform_branches": 415,
+    "post_transform_companies": 351,
+    "split_output_companies": 47,
+    "split_source_companies": 8,
+    "total_excluded_branches": 35
+  },
+  "foundation_master_contract": {
+    "clone_to_every_new_company": [
+      "accounting.Account",
+      "accounting.TaxRate",
+      "accounting.AccountingRoutingRule",
+      "accounting.AccountingSettings",
+      "companies.CompanySettings",
+      "catalog.CatalogCategory",
+      "catalog.CatalogUnit",
+      "treasury.TreasuryAccount"
+    ],
+    "estimated_new_rows_local_snapshot": 5524,
+    "internal_remap_order": [
+      "accounting.Account parent graph",
+      "catalog.CatalogCategory parent graph",
+      "catalog.CatalogUnit",
+      "catalog.CatalogItem category/unit remap",
+      "accounting.TaxRate sales/purchase Account remap",
+      "accounting.AccountingSettings TaxRate remap",
+      "accounting.AccountingRoutingRule Account/TaxRate/CostCenter remap",
+      "treasury.TreasuryAccount accounting_account remap"
+    ]
+  },
+  "frozen_inputs": {
+    "a10c_party_clone_amendment_v2": "6E7C18D72AB0D311E854A999C9DBBFE24B61819C0E689FD72AAB545046D09DF6",
+    "a10c_report": "6C682AAD8ACF71B02C6DD1CD78915BA91B75895594E9620A56E373154CEED4F4",
+    "a5b": "CE0A30F6F30F32380F3997C220047F682BC30F7F21B95A08FE6D89C33991480A",
+    "a6e": "97F98DAD8C3AC7CE8D86D6C4D5F8DA6E50ADE70ABED3853DBBD902ADE09F5332",
+    "a7": "CED410C22A5F128B4A039832F9D5839AD2ACAF3A203D7FB0C3D1F325BFBB99BB",
+    "a7b": "0810D2324DC16711A450D0AD1FA7D6D4922430B6D7AE74D1D9B0927103D5843D",
+    "a9": "4CF7A4A0E3E94FF4E16E604C9C1EC2861F5D6033AC4E27A26C4C0945AB168199",
+    "decision_map": "1A1240818B1CD2C24FFC2CB7A8BCB1C50DE2012F06E4EFA8F738492A5E3B39A7",
+    "manifest_v1": "42E39C884EE60EB097EE6BA30DB63628E75CCE1F084CF691EE04C3D9B79B981F"
+  },
+  "full_exclusion_contract": {
+    "future_migration": "SKIP_ENTIRE_COMPANY",
+    "legacy_company_ids": [
+      "75",
+      "113",
+      "119",
+      "307",
+      "429",
+      "431",
+      "473"
+    ],
+    "local_delete_order": [
+      "remove/clear branch policies and memberships",
+      "delete CustomerPayment/SupplierPayment protected rows",
+      "delete TreasuryTransaction rows if present",
+      "delete TreasuryAccount protected rows",
+      "delete other PROTECT children if any current-state audit finds them",
+      "delete Company (CASCADE remaining owned data)",
+      "delete scoped LegacyObjectMaps for purged data",
+      "delete global Users only if no remaining memberships/shared dependencies"
+    ]
+  },
+  "identity_contract": {
+    "authoritative_keys": "LEGACY_IDS_ONLY",
+    "current_primey_ids": "NEVER_AUTHORITATIVE_FOR_PRODUCTION_REPLAY",
+    "source_branch_delta_policy": "SAFETY_STOP"
+  },
+  "legacy_object_map_contract": {
+    "cloned_masters": "DO_NOT_DUPLICATE CANONICAL LegacyObjectMap",
+    "excluded_data": "DELETE MAPS FOR PURGED SOURCE OBJECTS SO LOCAL STATE DOES NOT RETAIN STALE OWNERSHIP",
+    "moved_canonical_objects": "UPDATE LegacyObjectMap.company TO DESTINATION COMPANY; KEEP legacy_company_id UNCHANGED",
+    "new_split_companies": "NO_FAKE_LEGACY_BUSINESS_ID; USE Company.extra_data PROVENANCE",
+    "subscription_clone": "NO_DUPLICATE SUBSCRIPTION MAP",
+    "unique_identity": [
+      "source_system",
+      "source_table",
+      "legacy_id"
+    ],
+    "user_mapping": "KEEP_CANONICAL GLOBAL USER MAP; MEMBERSHIP CLONES DO NOT CREATE USER MAPS"
+  },
+  "manifest_lineage": {
+    "a10c_corrected_amendment_sha256": "6E7C18D72AB0D311E854A999C9DBBFE24B61819C0E689FD72AAB545046D09DF6",
+    "a10c_report_sha256": "6C682AAD8ACF71B02C6DD1CD78915BA91B75895594E9620A56E373154CEED4F4",
+    "a10e_opening_balance_policy_sha256": "213CFD76829D398551C949AE2B51EFD9BFE542DC1BC088B8AC4E09FCEB24B00F",
+    "a10e_report_sha256": "569FD82089BEE49546A03C3173D34A27AD85972CA82059F776D5FFEDC83AEEB5",
+    "amendment_reason": "A10 preflight discovered CustomerPayment.customer_id/counterparty_id are numeric BusinessParty references not represented in A7 FK discovery.",
+    "base_manifest_schema": "primeyacc.company_split_transformation_manifest.v1",
+    "base_manifest_sha256": "42E39C884EE60EB097EE6BA30DB63628E75CCE1F084CF691EE04C3D9B79B981F",
+    "base_manifest_v2_sha256": "B12A3C2916272B6A4D5E8051D7B51533E3FF05369084632685F0BCC809BE24DE",
+    "revised_usage_master_clone_estimate": 43891,
+    "special_customer_payment_route_count": 412,
+    "special_customer_payment_route_identity": "mhamcloud_v1.transaction_payments:(LEGACY_COMPANY_ID,LEGACY_PAYMENT_ID)",
+    "supersedes_usage_master_clone_estimate": 43887
+  },
+  "membership_contract": {
+    "all_mode": "MEMBERSHIP_IN_EVERY_OUTPUT_COMPANY_WITH_BRANCH_ACCESS_ALL",
+    "default_company_policy": "KEEP_SOURCE_IF_USER_RETAINS_SOURCE_MEMBERSHIP; OTHERWISE_SET_SOLE_RESULTING_COMPANY; MULTIPLE_WITHOUT_SOURCE=>NULL_REVIEW",
+    "global_user_delete": "DELETE_ONLY_AFTER_ZERO_REMAINING_MEMBERSHIPS_AND_ZERO_SHARED_DEPENDENCIES",
+    "partial_76": "KEEP_ADMIN_AND_BRANCH92_USERS; REMOVE_BRANCH90_91_ONLY_MEMBERSHIPS",
+    "primary_admin": "ADMIN_MEMBERSHIP_IN_EVERY_OUTPUT_COMPANY_WITH_BRANCH_ACCESS_ALL",
+    "restricted_mode": "ONLY_OUTPUT_COMPANIES_INTERSECTING_ORIGINAL_GRANTED_BRANCHES"
+  },
+  "operational_routing_contract": {
+    "child_company_fields": "UPDATE_TO_PARENT_DESTINATION_COMPANY",
+    "direct_branch_models": [
+      "inventory.Warehouse",
+      "purchases.PurchaseBill",
+      "sales.SalesInvoice",
+      "sales.SalesReturn"
+    ],
+    "parent_branch_models": [
+      "inventory.InventoryLocation via Warehouse.branch",
+      "inventory.StockItem via Warehouse.branch",
+      "inventory.StockMovement via Warehouse.branch",
+      "purchases.PurchaseBillItem via PurchaseBill.branch",
+      "sales.SalesInvoiceItem via SalesInvoice.branch"
+    ],
+    "strict_same_company_after_transform": true
+  },
+  "partial_76_contract": {
+    "catalog_excluded_only_count_local_snapshot": 5,
+    "catalog_shared_keep_count_local_snapshot": 44,
+    "catalog_unreferenced_keep_conservative_count_local_snapshot": 8,
+    "exclude_catalog_source_ids": {
+      "products": [
+        "374553"
+      ],
+      "variations": [
+        "305466",
+        "305477",
+        "305486",
+        "305492",
+        "376285"
+      ]
+    },
+    "exclude_legacy_branch_ids": [
+      "90",
+      "91"
+    ],
+    "keep_business_party_legacy_contact_ids": [
+      "175"
+    ],
+    "keep_business_party_policy": "KEEP_COMPANY_LEVEL_BRANCH_NULL",
+    "keep_legacy_branch_ids": [
+      "92"
+    ]
+  },
+  "schema": "primeyacc.company_split_transformation_manifest.v3",
+  "source_system": "mhamcloud_v1",
+  "subscription_contract": {
+    "clone_fields": [
+      "plan",
+      "status",
+      "action",
+      "billing_cycle",
+      "start_date",
+      "end_date",
+      "price",
+      "discount_amount",
+      "tax_amount",
+      "total_amount",
+      "auto_renew",
+      "promotion_code",
+      "promotion_discount_amount",
+      "manual_discount_amount",
+      "proration_charge_amount",
+      "proration_credit_amount",
+      "commercial_snapshot",
+      "billing_reference",
+      "paid_at",
+      "activated_at",
+      "cancelled_at",
+      "suspended_at"
+    ],
+    "legacy_map_policy": "DO_NOT_DUPLICATE_SOURCE_SUBSCRIPTION_LEGACY_MAP",
+    "new_company": "CLONE_ONE_AUTHORITATIVE_CURRENT_SUBSCRIPTION_AT_CUTOVER",
+    "new_start_date_policy": "NEVER_START_AT_SPLIT_DATE",
+    "provenance": "ADD_SPLIT_CLONE_MARKER_TO_COMMERCIAL_SNAPSHOT_OR_NOTES",
+    "source_company": "KEEP_ORIGINAL_SUBSCRIPTION_HISTORY_AND_CURRENT_ROW"
+  },
+  "usage_master_contract": {
+    "business_party_usage_sources": [
+      "sales.SalesInvoice.customer",
+      "sales.SalesReturn.customer",
+      "purchases.PurchaseBill.supplier",
+      "treasury.CustomerPayment.customer_id",
+      "treasury.CustomerPayment.counterparty_id"
+    ],
+    "estimated_new_clones_local_snapshot": 43891,
+    "models": [
+      "catalog.CatalogItem",
+      "parties.BusinessParty"
+    ],
+    "multi_group": "ONE_CLONE_PER_NON_SOURCE_OUTPUT_GROUP_THAT_REFERENCES_MASTER",
+    "new_companies": "CLONE_ONLY_IF_REFERENCED_BY_DESTINATION_GROUP",
+    "operational_fk_policy": "REMAP_TO_DESTINATION_COMPANY_CLONE",
+    "payment_driven_business_party_clone_actions": 4,
+    "payment_party_identity": "Resolve BusinessParty canonically from legacy contacts; source survivor uses canonical original; clone only into non-source output groups.",
+    "payment_source_group_coverage_no_clone_count": 2,
+    "source_company": "KEEP_CANONICAL_ORIGINAL_MASTER_ROWS",
+    "unreferenced": "KEEP_ONLY_ON_SOURCE_COMPANY"
+  }
+}

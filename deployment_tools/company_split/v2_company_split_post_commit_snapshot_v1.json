@@ -1,0 +1,24 @@
+{
+  "all_v3_markers": 47,
+  "apply_report_sha256": "2E8389AED308FBFB1C90D346876C8422451DCA368862C648198651378EC98632",
+  "branch_count": 415,
+  "canonical_branch_maps": 415,
+  "canonical_business_maps": 312,
+  "database_constraints": "PASS",
+  "full_excluded_companies_absent": true,
+  "global_user_delete_candidates_remaining": 0,
+  "logical_transformed_company_count": 351,
+  "manifest_v3_sha256": "AC5FB974646ACCE3B5AA1237E671AC6ECC068978A4DBAB969A712EAB6AE1D539",
+  "partial_excluded_branches_absent": true,
+  "physical_company_count": 352,
+  "preexisting_unmapped_company": {
+    "company_code": "SYSTEM-WHATSAPP-TEMPLATES",
+    "created_at": "2026-09-16 10:06:10.817299+00:00",
+    "id": 399,
+    "name": "Mhamcloud System WhatsApp Templates"
+  },
+  "remaining_gate_sha256": "59981469A262DD997CF3BC6179A37EA36EC2C737AA4934383B6CFBA3D605C37A",
+  "split_new_companies": 39,
+  "split_source_survivors": 8,
+  "strict_same_company": "PASS"
+}

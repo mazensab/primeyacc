@@ -1,0 +1,4849 @@
+{
+  "a9_sha256": "4CF7A4A0E3E94FF4E16E604C9C1EC2861F5D6033AC4E27A26C4C0945AB168199",
+  "customer_payment_fingerprint": {
+    "frozen_non_invoice_route_count": 412,
+    "orphan_keep_null_count": 2,
+    "row_count": 367272,
+    "sha256": "614E509668B75734609F19E415B4248B46A375E8252FD94188D5C3FB972EE9C5",
+    "target_counts": {
+      "174-G01": 18978,
+      "174-G02": 24140,
+      "174-G03": 24005,
+      "174-G04": 8525,
+      "174-G05": 3485,
+      "188-G01": 6385,
+      "188-G02": 2441,
+      "188-G03": 3905,
+      "188-G04": 2602,
+      "188-G05": 2987,
+      "188-G06": 3438,
+      "195-G01": 5658,
+      "195-G02": 6230,
+      "195-G03": 177,
+      "195-G04": 354,
+      "195-G05": 4262,
+      "195-G06": 400,
+      "195-G07": 777,
+      "290-G01": 7159,
+      "290-G02": 19,
+      "290-G03": 4,
+      "290-G05": 142,
+      "299-G01": 212,
+      "299-G02": 6,
+      "478-G01": 8560,
+      "478-G02": 9311,
+      "478-G03": 9171,
+      "478-G04": 3192,
+      "478-G05": 4510,
+      "478-G06": 1128,
+      "478-G07": 9194,
+      "478-G08": 74554,
+      "478-G09": 180,
+      "478-G10": 1038,
+      "556-G01": 16,
+      "556-G02": 7,
+      "556-G03": 17,
+      "556-G04": 2,
+      "556-G07": 1,
+      "88-G01": 21782,
+      "88-G02": 20759,
+      "88-G03": 17536,
+      "88-G04": 2238,
+      "PURGE_FULL_EXCLUSION": 47242,
+      "PURGE_PARTIAL_76": 8616,
+      "SOURCE_COMPANY_SURVIVES": 1927
+    }
+  },
+  "financial_master_balance_gate": {
+    "policy": "NO_UNEXPLAINED_FINANCIAL_BALANCE_DUPLICATION_ACROSS_SPLIT_COMPANIES",
+    "risks": [
+      "parties.BusinessParty opening_balance nonzero on clone-required masters company=88 rows=1"
+    ]
+  },
+  "foundation_clone_fingerprints": {
+    "accounting.Account": {
+      "clone_action_count": 4095,
+      "per_source_company": {
+        "174": {
+          "expected_clone_count": 420,
+          "source_row_count": 105,
+          "target_group_count": 4
+        },
+        "188": {
+          "expected_clone_count": 525,
+          "source_row_count": 105,
+          "target_group_count": 5
+        },
+        "195": {
+          "expected_clone_count": 630,
+          "source_row_count": 105,
+          "target_group_count": 6
+        },
+        "290": {
+          "expected_clone_count": 424,
+          "source_row_count": 106,
+          "target_group_count": 4
+        },
+        "299": {
+          "expected_clone_count": 212,
+          "source_row_count": 106,
+          "target_group_count": 2
+        },
+        "478": {
+          "expected_clone_count": 936,
+          "source_row_count": 104,
+          "target_group_count": 9
+        },
+        "556": {
+          "expected_clone_count": 630,
+          "source_row_count": 105,
+          "target_group_count": 6
+        },
+        "88": {
+          "expected_clone_count": 318,
+          "source_row_count": 106,
+          "target_group_count": 3
+        }
+      },
+      "sha256": "EDFBF2C056345AAECA58CC7A45F04F5E2DBAB9DB2A52BCFC1E4DE8BDDE19509B"
+    },
+    "accounting.AccountingRoutingRule": {
+      "clone_action_count": 741,
+      "per_source_company": {
+        "174": {
+          "expected_clone_count": 76,
+          "source_row_count": 19,
+          "target_group_count": 4
+        },
+        "188": {
+          "expected_clone_count": 95,
+          "source_row_count": 19,
+          "target_group_count": 5
+        },
+        "195": {
+          "expected_clone_count": 114,
+          "source_row_count": 19,
+          "target_group_count": 6
+        },
+        "290": {
+          "expected_clone_count": 76,
+          "source_row_count": 19,
+          "target_group_count": 4
+        },
+        "299": {
+          "expected_clone_count": 38,
+          "source_row_count": 19,
+          "target_group_count": 2
+        },
+        "478": {
+          "expected_clone_count": 171,
+          "source_row_count": 19,
+          "target_group_count": 9
+        },
+        "556": {
+          "expected_clone_count": 114,
+          "source_row_count": 19,
+          "target_group_count": 6
+        },
+        "88": {
+          "expected_clone_count": 57,
+          "source_row_count": 19,
+          "target_group_count": 3
+        }
+      },
+      "sha256": "4316EECB3ED83FFC3EA73EF27C849D8F80755D20C8B796FACAB6F6A35A8722AB"
+    },
+    "accounting.AccountingSettings": {
+      "clone_action_count": 39,
+      "per_source_company": {
+        "174": {
+          "expected_clone_count": 4,
+          "source_row_count": 1,
+          "target_group_count": 4
+        },
+        "188": {
+          "expected_clone_count": 5,
+          "source_row_count": 1,
+          "target_group_count": 5
+        },
+        "195": {
+          "expected_clone_count": 6,
+          "source_row_count": 1,
+          "target_group_count": 6
+        },
+        "290": {
+          "expected_clone_count": 4,
+          "source_row_count": 1,
+          "target_group_count": 4
+        },
+        "299": {
+          "expected_clone_count": 2,
+          "source_row_count": 1,
+          "target_group_count": 2
+        },
+        "478": {
+          "expected_clone_count": 9,
+          "source_row_count": 1,
+          "target_group_count": 9
+        },
+        "556": {
+          "expected_clone_count": 6,
+          "source_row_count": 1,
+          "target_group_count": 6
+        },
+        "88": {
+          "expected_clone_count": 3,
+          "source_row_count": 1,
+          "target_group_count": 3
+        }
+      },
+      "sha256": "6878669297B412E96A90C9C380AE66F7DFF61AFB29ED985A132A95680B9A1D31"
+    },
+    "accounting.TaxRate": {
+      "clone_action_count": 58,
+      "per_source_company": {
+        "174": {
+          "expected_clone_count": 8,
+          "source_row_count": 2,
+          "target_group_count": 4
+        },
+        "188": {
+          "expected_clone_count": 5,
+          "source_row_count": 1,
+          "target_group_count": 5
+        },
+        "195": {
+          "expected_clone_count": 6,
+          "source_row_count": 1,
+          "target_group_count": 6
+        },
+        "290": {
+          "expected_clone_count": 4,
+          "source_row_count": 1,
+          "target_group_count": 4
+        },
+        "299": {
+          "expected_clone_count": 2,
+          "source_row_count": 1,
+          "target_group_count": 2
+        },
+        "478": {
+          "expected_clone_count": 18,
+          "source_row_count": 2,
+          "target_group_count": 9
+        },
+        "556": {
+          "expected_clone_count": 12,
+          "source_row_count": 2,
+          "target_group_count": 6
+        },
+        "88": {
+          "expected_clone_count": 3,
+          "source_row_count": 1,
+          "target_group_count": 3
+        }
+      },
+      "sha256": "63550773EA1E3C229B6B196E80063E088D6E3F6F3D2292FB4822469E9A79188C"
+    },
+    "catalog.CatalogCategory": {
+      "clone_action_count": 144,
+      "per_source_company": {
+        "174": {
+          "expected_clone_count": 20,
+          "source_row_count": 5,
+          "target_group_count": 4
+        },
+        "188": {
+          "expected_clone_count": 25,
+          "source_row_count": 5,
+          "target_group_count": 5
+        },
+        "195": {
+          "expected_clone_count": 30,
+          "source_row_count": 5,
+          "target_group_count": 6
+        },
+        "290": {
+          "expected_clone_count": 0,
+          "source_row_count": 0,
+          "target_group_count": 4
+        },
+        "299": {
+          "expected_clone_count": 0,
+          "source_row_count": 0,
+          "target_group_count": 2
+        },
+        "478": {
+          "expected_clone_count": 54,
+          "source_row_count": 6,
+          "target_group_count": 9
+        },
+        "556": {
+          "expected_clone_count": 0,
+          "source_row_count": 0,
+          "target_group_count": 6
+        },
+        "88": {
+          "expected_clone_count": 15,
+          "source_row_count": 5,
+          "target_group_count": 3
+        }
+      },
+      "sha256": "30A2200F41EE86437880E268ED1437CF51D8AC293B120DE152AA5E2680DA05AD"
+    },
+    "catalog.CatalogUnit": {
+      "clone_action_count": 330,
+      "per_source_company": {
+        "174": {
+          "expected_clone_count": 48,
+          "source_row_count": 12,
+          "target_group_count": 4
+        },
+        "188": {
+          "expected_clone_count": 60,
+          "source_row_count": 12,
+          "target_group_count": 5
+        },
+        "195": {
+          "expected_clone_count": 72,
+          "source_row_count": 12,
+          "target_group_count": 6
+        },
+        "290": {
+          "expected_clone_count": 48,
+          "source_row_count": 12,
+          "target_group_count": 4
+        },
+        "299": {
+          "expected_clone_count": 30,
+          "source_row_count": 15,
+          "target_group_count": 2
+        },
+        "478": {
+          "expected_clone_count": 18,
+          "source_row_count": 2,
+          "target_group_count": 9
+        },
+        "556": {
+          "expected_clone_count": 18,
+          "source_row_count": 3,
+          "target_group_count": 6
+        },
+        "88": {
+          "expected_clone_count": 36,
+          "source_row_count": 12,
+          "target_group_count": 3
+        }
+      },
+      "sha256": "8F028FE42284F45A75AF43AD12DA5999F492A25DB0A147C22C2EB69685D940C7"
+    },
+    "companies.CompanySettings": {
+      "clone_action_count": 39,
+      "per_source_company": {
+        "174": {
+          "expected_clone_count": 4,
+          "source_row_count": 1,
+          "target_group_count": 4
+        },
+        "188": {
+          "expected_clone_count": 5,
+          "source_row_count": 1,
+          "target_group_count": 5
+        },
+        "195": {
+          "expected_clone_count": 6,
+          "source_row_count": 1,
+          "target_group_count": 6
+        },
+        "290": {
+          "expected_clone_count": 4,
+          "source_row_count": 1,
+          "target_group_count": 4
+        },
+        "299": {
+          "expected_clone_count": 2,
+          "source_row_count": 1,
+          "target_group_count": 2
+        },
+        "478": {
+          "expected_clone_count": 9,
+          "source_row_count": 1,
+          "target_group_count": 9
+        },
+        "556": {
+          "expected_clone_count": 6,
+          "source_row_count": 1,
+          "target_group_count": 6
+        },
+        "88": {
+          "expected_clone_count": 3,
+          "source_row_count": 1,
+          "target_group_count": 3
+        }
+      },
+      "sha256": "25DFC5AF13914F6FA03E09BB3AC2CF7EF678EBB7BCA5D4A7B7E7F37C22CFD1DE"
+    },
+    "treasury.TreasuryAccount": {
+      "clone_action_count": 78,
+      "per_source_company": {
+        "174": {
+          "expected_clone_count": 8,
+          "source_row_count": 2,
+          "target_group_count": 4
+        },
+        "188": {
+          "expected_clone_count": 10,
+          "source_row_count": 2,
+          "target_group_count": 5
+        },
+        "195": {
+          "expected_clone_count": 12,
+          "source_row_count": 2,
+          "target_group_count": 6
+        },
+        "290": {
+          "expected_clone_count": 12,
+          "source_row_count": 3,
+          "target_group_count": 4
+        },
+        "299": {
+          "expected_clone_count": 6,
+          "source_row_count": 3,
+          "target_group_count": 2
+        },
+        "478": {
+          "expected_clone_count": 9,
+          "source_row_count": 1,
+          "target_group_count": 9
+        },
+        "556": {
+          "expected_clone_count": 12,
+          "source_row_count": 2,
+          "target_group_count": 6
+        },
+        "88": {
+          "expected_clone_count": 9,
+          "source_row_count": 3,
+          "target_group_count": 3
+        }
+      },
+      "sha256": "82A304682E82C37A9583CE83667DB20C09AFDE05FB5FB04F5BE520D2F8138D26"
+    }
+  },
+  "full_exclusion": {
+    "current_branch_ids_snapshot": [
+      34,
+      35,
+      36,
+      98,
+      99,
+      100,
+      101,
+      102,
+      103,
+      104,
+      108,
+      109,
+      110,
+      265,
+      266,
+      267,
+      268,
+      269,
+      270,
+      548,
+      549,
+      550,
+      551,
+      558,
+      559,
+      560,
+      563,
+      564,
+      565,
+      566,
+      567,
+      568,
+      569
+    ],
+    "current_company_ids_snapshot": [
+      29,
+      62,
+      66,
+      172,
+      385,
+      390,
+      393
+    ],
+    "explicit_delete_models": [
+      "treasury.CustomerPayment",
+      "treasury.SupplierPayment",
+      "treasury.TreasuryAccount"
+    ],
+    "protected_company_rows": [
+      {
+        "contract": "treasury.TreasuryAccount.company",
+        "on_delete": "PROTECT",
+        "row_count": 17
+      },
+      {
+        "contract": "treasury.CustomerPayment.company",
+        "on_delete": "PROTECT",
+        "row_count": 47242
+      },
+      {
+        "contract": "treasury.SupplierPayment.company",
+        "on_delete": "PROTECT",
+        "row_count": 338
+      }
+    ]
+  },
+  "git": {
+    "branch": "main",
+    "head": "f6267f27e5313b0e01c317db8c1eaa13b8ac5d02",
+    "origin_main": "f6267f27e5313b0e01c317db8c1eaa13b8ac5d02",
+    "v2_26c_stash_hash": "d12fb09d7630750ce911c75875c956a4cdb724c3"
+  },
+  "groups": {
+    "174-G01": {
+      "anchor_branch_legacy_id": "197",
+      "branches": [
+        {
+          "current_branch_id": 138,
+          "is_active": true,
+          "is_default_current": true,
+          "is_default_planned": true,
+          "legacy_branch_id": "197",
+          "name": "شركة سما نجد للذهب والمجوهرات"
+        }
+      ],
+      "company_code": "",
+      "default_branch_legacy_id": "197",
+      "legacy_company_id": "174",
+      "source_company_current_id": 91,
+      "source_company_name": "شركة سما نجد للذهب والمجوهرات",
+      "source_company_survivor": true,
+      "target_company_current_id": 91
+    },
+    "174-G02": {
+      "anchor_branch_legacy_id": "207",
+      "branches": [
+        {
+          "current_branch_id": 139,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "207",
+          "name": "شركة نسمة نجد للذهب والمجوهرات"
+        }
+      ],
+      "company_code": "MHM-SPLIT-174-G02",
+      "default_branch_legacy_id": "207",
+      "legacy_company_id": "174",
+      "source_company_current_id": 91,
+      "source_company_name": "شركة سما نجد للذهب والمجوهرات",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "174-G03": {
+      "anchor_branch_legacy_id": "208",
+      "branches": [
+        {
+          "current_branch_id": 140,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "208",
+          "name": "شركة كنز طيبة للذهب والمجوهرات"
+        }
+      ],
+      "company_code": "MHM-SPLIT-174-G03",
+      "default_branch_legacy_id": "208",
+      "legacy_company_id": "174",
+      "source_company_current_id": 91,
+      "source_company_name": "شركة سما نجد للذهب والمجوهرات",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "174-G04": {
+      "anchor_branch_legacy_id": "209",
+      "branches": [
+        {
+          "current_branch_id": 141,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "209",
+          "name": "شركة بيت الذهب الراقي للذهب والمجوهرات"
+        }
+      ],
+      "company_code": "MHM-SPLIT-174-G04",
+      "default_branch_legacy_id": "209",
+      "legacy_company_id": "174",
+      "source_company_current_id": 91,
+      "source_company_name": "شركة سما نجد للذهب والمجوهرات",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "174-G05": {
+      "anchor_branch_legacy_id": "210",
+      "branches": [
+        {
+          "current_branch_id": 142,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "210",
+          "name": "شركة بيت الذهب الراقي للذهب والمجوهرات"
+        }
+      ],
+      "company_code": "MHM-SPLIT-174-G05",
+      "default_branch_legacy_id": "210",
+      "legacy_company_id": "174",
+      "source_company_current_id": 91,
+      "source_company_name": "شركة سما نجد للذهب والمجوهرات",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "188-G01": {
+      "anchor_branch_legacy_id": "215",
+      "branches": [
+        {
+          "current_branch_id": 2156,
+          "is_active": true,
+          "is_default_current": true,
+          "is_default_planned": true,
+          "legacy_branch_id": "215",
+          "name": "شركة الخير الوفير للذهب و المجوهرات"
+        },
+        {
+          "current_branch_id": 2164,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": false,
+          "legacy_branch_id": "772",
+          "name": "شركة الخير الوفير للذهب و المجوهرات"
+        }
+      ],
+      "company_code": "",
+      "default_branch_legacy_id": "215",
+      "legacy_company_id": "188",
+      "source_company_current_id": 95,
+      "source_company_name": "شركه الوسام الماسي للذهب والمجوهرات",
+      "source_company_survivor": true,
+      "target_company_current_id": 95
+    },
+    "188-G02": {
+      "anchor_branch_legacy_id": "216",
+      "branches": [
+        {
+          "current_branch_id": 2157,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "216",
+          "name": "مجوهرات كنوز طيبة للذهب والمجوهرات"
+        },
+        {
+          "current_branch_id": 2167,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": false,
+          "legacy_branch_id": "775",
+          "name": "شركة كنوز طيبة للذهب والمجوهرات"
+        }
+      ],
+      "company_code": "MHM-SPLIT-188-G02",
+      "default_branch_legacy_id": "216",
+      "legacy_company_id": "188",
+      "source_company_current_id": 95,
+      "source_company_name": "شركه الوسام الماسي للذهب والمجوهرات",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "188-G03": {
+      "anchor_branch_legacy_id": "217",
+      "branches": [
+        {
+          "current_branch_id": 2158,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "217",
+          "name": "مؤسسة الزمردة للذهب والمجوهرات"
+        },
+        {
+          "current_branch_id": 2162,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": false,
+          "legacy_branch_id": "770",
+          "name": "شركة الزمردة الحديثة للذهب و المجوهرات"
+        }
+      ],
+      "company_code": "MHM-SPLIT-188-G03",
+      "default_branch_legacy_id": "217",
+      "legacy_company_id": "188",
+      "source_company_current_id": 95,
+      "source_company_name": "شركه الوسام الماسي للذهب والمجوهرات",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "188-G04": {
+      "anchor_branch_legacy_id": "218",
+      "branches": [
+        {
+          "current_branch_id": 2159,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "218",
+          "name": "شركه الوسام الماسي التجارية"
+        },
+        {
+          "current_branch_id": 2165,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": false,
+          "legacy_branch_id": "773",
+          "name": "شركه الوسام الماسي التجارية"
+        }
+      ],
+      "company_code": "MHM-SPLIT-188-G04",
+      "default_branch_legacy_id": "218",
+      "legacy_company_id": "188",
+      "source_company_current_id": 95,
+      "source_company_name": "شركه الوسام الماسي للذهب والمجوهرات",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "188-G05": {
+      "anchor_branch_legacy_id": "219",
+      "branches": [
+        {
+          "current_branch_id": 2160,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "219",
+          "name": "شركه الوسام الماسي للذهب والمجوهرات"
+        },
+        {
+          "current_branch_id": 2166,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": false,
+          "legacy_branch_id": "774",
+          "name": "شركه الوسام الماسي للذهب والمجوهرات"
+        }
+      ],
+      "company_code": "MHM-SPLIT-188-G05",
+      "default_branch_legacy_id": "219",
+      "legacy_company_id": "188",
+      "source_company_current_id": 95,
+      "source_company_name": "شركه الوسام الماسي للذهب والمجوهرات",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "188-G06": {
+      "anchor_branch_legacy_id": "220",
+      "branches": [
+        {
+          "current_branch_id": 2161,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "220",
+          "name": "جوهرة الخليج للذهب والمجوهرات"
+        },
+        {
+          "current_branch_id": 2163,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": false,
+          "legacy_branch_id": "771",
+          "name": "شركة جوهرة الخليج للذهب و المجوهرات"
+        }
+      ],
+      "company_code": "MHM-SPLIT-188-G06",
+      "default_branch_legacy_id": "220",
+      "legacy_company_id": "188",
+      "source_company_current_id": 95,
+      "source_company_name": "شركه الوسام الماسي للذهب والمجوهرات",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "195-G01": {
+      "anchor_branch_legacy_id": "227",
+      "branches": [
+        {
+          "current_branch_id": 2169,
+          "is_active": true,
+          "is_default_current": true,
+          "is_default_planned": true,
+          "legacy_branch_id": "227",
+          "name": "جوهرة المدينة للذهب و المجوهرات"
+        }
+      ],
+      "company_code": "",
+      "default_branch_legacy_id": "227",
+      "legacy_company_id": "195",
+      "source_company_current_id": 99,
+      "source_company_name": "جوهرة المدينة للذهب و المجوهرات",
+      "source_company_survivor": true,
+      "target_company_current_id": 99
+    },
+    "195-G02": {
+      "anchor_branch_legacy_id": "228",
+      "branches": [
+        {
+          "current_branch_id": 2170,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "228",
+          "name": "جوهرة المدينة للذهب و المجوهرات  سوق الدولي"
+        }
+      ],
+      "company_code": "MHM-SPLIT-195-G02",
+      "default_branch_legacy_id": "228",
+      "legacy_company_id": "195",
+      "source_company_current_id": 99,
+      "source_company_name": "جوهرة المدينة للذهب و المجوهرات",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "195-G03": {
+      "anchor_branch_legacy_id": "229",
+      "branches": [
+        {
+          "current_branch_id": 2171,
+          "is_active": false,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "229",
+          "name": "قلادة نجد للذهب و المجوهرات"
+        }
+      ],
+      "company_code": "MHM-SPLIT-195-G03",
+      "default_branch_legacy_id": "229",
+      "legacy_company_id": "195",
+      "source_company_current_id": 99,
+      "source_company_name": "جوهرة المدينة للذهب و المجوهرات",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "195-G04": {
+      "anchor_branch_legacy_id": "230",
+      "branches": [
+        {
+          "current_branch_id": 2172,
+          "is_active": false,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "230",
+          "name": "سما طيبة للفضيات"
+        }
+      ],
+      "company_code": "MHM-SPLIT-195-G04",
+      "default_branch_legacy_id": "230",
+      "legacy_company_id": "195",
+      "source_company_current_id": 99,
+      "source_company_name": "جوهرة المدينة للذهب و المجوهرات",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "195-G05": {
+      "anchor_branch_legacy_id": "231",
+      "branches": [
+        {
+          "current_branch_id": 2173,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "231",
+          "name": "مؤسسة الجوهرة الراقية للمعادن الثمينة"
+        }
+      ],
+      "company_code": "MHM-SPLIT-195-G05",
+      "default_branch_legacy_id": "231",
+      "legacy_company_id": "195",
+      "source_company_current_id": 99,
+      "source_company_name": "جوهرة المدينة للذهب و المجوهرات",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "195-G06": {
+      "anchor_branch_legacy_id": "232",
+      "branches": [
+        {
+          "current_branch_id": 2174,
+          "is_active": false,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "232",
+          "name": "جوهرة المدينة للفضيات"
+        }
+      ],
+      "company_code": "MHM-SPLIT-195-G06",
+      "default_branch_legacy_id": "232",
+      "legacy_company_id": "195",
+      "source_company_current_id": 99,
+      "source_company_name": "جوهرة المدينة للذهب و المجوهرات",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "195-G07": {
+      "anchor_branch_legacy_id": "416",
+      "branches": [
+        {
+          "current_branch_id": 2175,
+          "is_active": false,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "416",
+          "name": "الجوهرة للعلب"
+        }
+      ],
+      "company_code": "MHM-SPLIT-195-G07",
+      "default_branch_legacy_id": "416",
+      "legacy_company_id": "195",
+      "source_company_current_id": 99,
+      "source_company_name": "جوهرة المدينة للذهب و المجوهرات",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "290-G01": {
+      "anchor_branch_legacy_id": "353",
+      "branches": [
+        {
+          "current_branch_id": 2190,
+          "is_active": true,
+          "is_default_current": true,
+          "is_default_planned": true,
+          "legacy_branch_id": "353",
+          "name": "مؤسسة عروق الجزيرة للخدمات البيئية"
+        }
+      ],
+      "company_code": "",
+      "default_branch_legacy_id": "353",
+      "legacy_company_id": "290",
+      "source_company_current_id": 124,
+      "source_company_name": "مؤسسة عروق الجزيرة للخدمات البيئية",
+      "source_company_survivor": true,
+      "target_company_current_id": 124
+    },
+    "290-G02": {
+      "anchor_branch_legacy_id": "354",
+      "branches": [
+        {
+          "current_branch_id": 2191,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "354",
+          "name": "محل الفيصليه لبيع الغاز - خيبر"
+        }
+      ],
+      "company_code": "MHM-SPLIT-290-G02",
+      "default_branch_legacy_id": "354",
+      "legacy_company_id": "290",
+      "source_company_current_id": 124,
+      "source_company_name": "مؤسسة عروق الجزيرة للخدمات البيئية",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "290-G03": {
+      "anchor_branch_legacy_id": "355",
+      "branches": [
+        {
+          "current_branch_id": 2192,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "355",
+          "name": "محل العيون لبيع الغاز - خيبر"
+        }
+      ],
+      "company_code": "MHM-SPLIT-290-G03",
+      "default_branch_legacy_id": "355",
+      "legacy_company_id": "290",
+      "source_company_current_id": 124,
+      "source_company_name": "مؤسسة عروق الجزيرة للخدمات البيئية",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "290-G04": {
+      "anchor_branch_legacy_id": "356",
+      "branches": [
+        {
+          "current_branch_id": 2193,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "356",
+          "name": "محل العشاش لبيع الغاز - العشاش"
+        }
+      ],
+      "company_code": "MHM-SPLIT-290-G04",
+      "default_branch_legacy_id": "356",
+      "legacy_company_id": "290",
+      "source_company_current_id": 124,
+      "source_company_name": "مؤسسة عروق الجزيرة للخدمات البيئية",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "290-G05": {
+      "anchor_branch_legacy_id": "357",
+      "branches": [
+        {
+          "current_branch_id": 2194,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "357",
+          "name": "بقالة ومخبز الجزيرة"
+        }
+      ],
+      "company_code": "MHM-SPLIT-290-G05",
+      "default_branch_legacy_id": "357",
+      "legacy_company_id": "290",
+      "source_company_current_id": 124,
+      "source_company_name": "مؤسسة عروق الجزيرة للخدمات البيئية",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "299-G01": {
+      "anchor_branch_legacy_id": "367",
+      "branches": [
+        {
+          "current_branch_id": 2197,
+          "is_active": true,
+          "is_default_current": true,
+          "is_default_planned": true,
+          "legacy_branch_id": "367",
+          "name": "محطه افاق الجزيرة للمحروقات _خيبر"
+        }
+      ],
+      "company_code": "",
+      "default_branch_legacy_id": "367",
+      "legacy_company_id": "299",
+      "source_company_current_id": 127,
+      "source_company_name": "محطه افاق الجزيرة للمحروقات _خيبر",
+      "source_company_survivor": true,
+      "target_company_current_id": 127
+    },
+    "299-G02": {
+      "anchor_branch_legacy_id": "368",
+      "branches": [
+        {
+          "current_branch_id": 2198,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "368",
+          "name": "محطة طيبة - خيبر"
+        }
+      ],
+      "company_code": "MHM-SPLIT-299-G02",
+      "default_branch_legacy_id": "368",
+      "legacy_company_id": "299",
+      "source_company_current_id": 127,
+      "source_company_name": "محطه افاق الجزيرة للمحروقات _خيبر",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "299-G03": {
+      "anchor_branch_legacy_id": "369",
+      "branches": [
+        {
+          "current_branch_id": 2199,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "369",
+          "name": "محطة الجزيرة - العشاش"
+        }
+      ],
+      "company_code": "MHM-SPLIT-299-G03",
+      "default_branch_legacy_id": "369",
+      "legacy_company_id": "299",
+      "source_company_current_id": 127,
+      "source_company_name": "محطه افاق الجزيرة للمحروقات _خيبر",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "478-G01": {
+      "anchor_branch_legacy_id": "578",
+      "branches": [
+        {
+          "current_branch_id": 300,
+          "is_active": true,
+          "is_default_current": true,
+          "is_default_planned": true,
+          "legacy_branch_id": "578",
+          "name": "شركة سما نجد للذهب و المجوهرات"
+        }
+      ],
+      "company_code": "",
+      "default_branch_legacy_id": "578",
+      "legacy_company_id": "478",
+      "source_company_current_id": 194,
+      "source_company_name": "شركة سما نجد خاص",
+      "source_company_survivor": true,
+      "target_company_current_id": 194
+    },
+    "478-G02": {
+      "anchor_branch_legacy_id": "579",
+      "branches": [
+        {
+          "current_branch_id": 301,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "579",
+          "name": "شركة كنز طيبة للذهب"
+        }
+      ],
+      "company_code": "MHM-SPLIT-478-G02",
+      "default_branch_legacy_id": "579",
+      "legacy_company_id": "478",
+      "source_company_current_id": 194,
+      "source_company_name": "شركة سما نجد خاص",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "478-G03": {
+      "anchor_branch_legacy_id": "580",
+      "branches": [
+        {
+          "current_branch_id": 302,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "580",
+          "name": "شركة نسمة نجد للذهب"
+        }
+      ],
+      "company_code": "MHM-SPLIT-478-G03",
+      "default_branch_legacy_id": "580",
+      "legacy_company_id": "478",
+      "source_company_current_id": 194,
+      "source_company_name": "شركة سما نجد خاص",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "478-G04": {
+      "anchor_branch_legacy_id": "581",
+      "branches": [
+        {
+          "current_branch_id": 303,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "581",
+          "name": "شركة بيت الذهب الراقي ( سوق المدينة الدولي )"
+        }
+      ],
+      "company_code": "MHM-SPLIT-478-G04",
+      "default_branch_legacy_id": "581",
+      "legacy_company_id": "478",
+      "source_company_current_id": 194,
+      "source_company_name": "شركة سما نجد خاص",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "478-G05": {
+      "anchor_branch_legacy_id": "582",
+      "branches": [
+        {
+          "current_branch_id": 304,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "582",
+          "name": "شركة بيت الذهب الراقي ( سوق بلال )"
+        }
+      ],
+      "company_code": "MHM-SPLIT-478-G05",
+      "default_branch_legacy_id": "582",
+      "legacy_company_id": "478",
+      "source_company_current_id": 194,
+      "source_company_name": "شركة سما نجد خاص",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "478-G06": {
+      "anchor_branch_legacy_id": "583",
+      "branches": [
+        {
+          "current_branch_id": 305,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "583",
+          "name": "شركة بيت الجزيرة للذهب"
+        }
+      ],
+      "company_code": "MHM-SPLIT-478-G06",
+      "default_branch_legacy_id": "583",
+      "legacy_company_id": "478",
+      "source_company_current_id": 194,
+      "source_company_name": "شركة سما نجد خاص",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "478-G07": {
+      "anchor_branch_legacy_id": "584",
+      "branches": [
+        {
+          "current_branch_id": 306,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "584",
+          "name": "شركة الجواهر الطيبة للذهب والمجوهرات"
+        }
+      ],
+      "company_code": "MHM-SPLIT-478-G07",
+      "default_branch_legacy_id": "584",
+      "legacy_company_id": "478",
+      "source_company_current_id": 194,
+      "source_company_name": "شركة سما نجد خاص",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "478-G08": {
+      "anchor_branch_legacy_id": "585",
+      "branches": [
+        {
+          "current_branch_id": 307,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "585",
+          "name": "شركة مطبخ تنور حضرموت للاكلات الشعبية"
+        }
+      ],
+      "company_code": "MHM-SPLIT-478-G08",
+      "default_branch_legacy_id": "585",
+      "legacy_company_id": "478",
+      "source_company_current_id": 194,
+      "source_company_name": "شركة سما نجد خاص",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "478-G09": {
+      "anchor_branch_legacy_id": "717",
+      "branches": [
+        {
+          "current_branch_id": 308,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "717",
+          "name": "شركة سما نجد للذهب و المجوهرات2"
+        }
+      ],
+      "company_code": "MHM-SPLIT-478-G09",
+      "default_branch_legacy_id": "717",
+      "legacy_company_id": "478",
+      "source_company_current_id": 194,
+      "source_company_name": "شركة سما نجد خاص",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "478-G10": {
+      "anchor_branch_legacy_id": "718",
+      "branches": [
+        {
+          "current_branch_id": 309,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "718",
+          "name": "مؤسسة فخامة دبي للذهب والمجوهرات"
+        }
+      ],
+      "company_code": "MHM-SPLIT-478-G10",
+      "default_branch_legacy_id": "718",
+      "legacy_company_id": "478",
+      "source_company_current_id": 194,
+      "source_company_name": "شركة سما نجد خاص",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "556-G01": {
+      "anchor_branch_legacy_id": "676",
+      "branches": [
+        {
+          "current_branch_id": 384,
+          "is_active": true,
+          "is_default_current": true,
+          "is_default_planned": true,
+          "legacy_branch_id": "676",
+          "name": "شركة الاندلس لصيانة و ادارة الفنادق"
+        }
+      ],
+      "company_code": "",
+      "default_branch_legacy_id": "676",
+      "legacy_company_id": "556",
+      "source_company_current_id": 259,
+      "source_company_name": "شركة الاندلس لصيانة و ادارة الفنادق",
+      "source_company_survivor": true,
+      "target_company_current_id": 259
+    },
+    "556-G02": {
+      "anchor_branch_legacy_id": "677",
+      "branches": [
+        {
+          "current_branch_id": 385,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "677",
+          "name": "فندق الاندلس الماسي للايواء"
+        }
+      ],
+      "company_code": "MHM-SPLIT-556-G02",
+      "default_branch_legacy_id": "677",
+      "legacy_company_id": "556",
+      "source_company_current_id": 259,
+      "source_company_name": "شركة الاندلس لصيانة و ادارة الفنادق",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "556-G03": {
+      "anchor_branch_legacy_id": "678",
+      "branches": [
+        {
+          "current_branch_id": 386,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "678",
+          "name": "شركة نقاط ثلاثة الفندقية"
+        }
+      ],
+      "company_code": "MHM-SPLIT-556-G03",
+      "default_branch_legacy_id": "678",
+      "legacy_company_id": "556",
+      "source_company_current_id": 259,
+      "source_company_name": "شركة الاندلس لصيانة و ادارة الفنادق",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "556-G04": {
+      "anchor_branch_legacy_id": "706",
+      "branches": [
+        {
+          "current_branch_id": 387,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "706",
+          "name": "وقف محمد بن علي احمد العمري الخيرية"
+        }
+      ],
+      "company_code": "MHM-SPLIT-556-G04",
+      "default_branch_legacy_id": "706",
+      "legacy_company_id": "556",
+      "source_company_current_id": 259,
+      "source_company_name": "شركة الاندلس لصيانة و ادارة الفنادق",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "556-G05": {
+      "anchor_branch_legacy_id": "778",
+      "branches": [
+        {
+          "current_branch_id": 388,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "778",
+          "name": "عبدالعزيز صالح عقيل العوفي"
+        }
+      ],
+      "company_code": "MHM-SPLIT-556-G05",
+      "default_branch_legacy_id": "778",
+      "legacy_company_id": "556",
+      "source_company_current_id": 259,
+      "source_company_name": "شركة الاندلس لصيانة و ادارة الفنادق",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "556-G06": {
+      "anchor_branch_legacy_id": "779",
+      "branches": [
+        {
+          "current_branch_id": 389,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "779",
+          "name": "فيصل عبدالرحمن البشير"
+        }
+      ],
+      "company_code": "MHM-SPLIT-556-G06",
+      "default_branch_legacy_id": "779",
+      "legacy_company_id": "556",
+      "source_company_current_id": 259,
+      "source_company_name": "شركة الاندلس لصيانة و ادارة الفنادق",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "556-G07": {
+      "anchor_branch_legacy_id": "781",
+      "branches": [
+        {
+          "current_branch_id": 390,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "781",
+          "name": "مطبخ رؤية الاندلس لتقديم الوجبات"
+        }
+      ],
+      "company_code": "MHM-SPLIT-556-G07",
+      "default_branch_legacy_id": "781",
+      "legacy_company_id": "556",
+      "source_company_current_id": 259,
+      "source_company_name": "شركة الاندلس لصيانة و ادارة الفنادق",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "76:SOURCE_COMPANY_SURVIVES": {
+      "anchor_branch_legacy_id": "92",
+      "branches": [
+        {
+          "current_branch_id": 1928,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "92",
+          "name": "مجوهرات خالد الرحيلي للذهب و المجوهرات- معرض 55"
+        }
+      ],
+      "company_code": "LEGACY-76",
+      "default_branch_legacy_id": "92",
+      "legacy_company_id": "76",
+      "source_company_current_id": 34,
+      "source_company_name": "مجوهرات خالد الرحيلي للذهب و المجوهرات",
+      "source_company_survivor": true,
+      "target_company_current_id": 34
+    },
+    "88-G01": {
+      "anchor_branch_legacy_id": "106",
+      "branches": [
+        {
+          "current_branch_id": 2247,
+          "is_active": true,
+          "is_default_current": true,
+          "is_default_planned": true,
+          "legacy_branch_id": "106",
+          "name": "شركة انوار اليمامة للذهب و المجوهرات"
+        },
+        {
+          "current_branch_id": 2253,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": false,
+          "legacy_branch_id": "752",
+          "name": "شركة انوار اليمامة للذهب و المجوهرات"
+        }
+      ],
+      "company_code": "",
+      "default_branch_legacy_id": "106",
+      "legacy_company_id": "88",
+      "source_company_current_id": 45,
+      "source_company_name": "شركة انوار اليمامة للذهب و المجوهرات",
+      "source_company_survivor": true,
+      "target_company_current_id": 45
+    },
+    "88-G02": {
+      "anchor_branch_legacy_id": "107",
+      "branches": [
+        {
+          "current_branch_id": 2248,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "107",
+          "name": "شركة نسمة اليمامة للذهب والمجوهرات"
+        },
+        {
+          "current_branch_id": 2252,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": false,
+          "legacy_branch_id": "751",
+          "name": "شركة نسمة اليمامة للذهب والمجوهرات"
+        }
+      ],
+      "company_code": "MHM-SPLIT-88-G02",
+      "default_branch_legacy_id": "107",
+      "legacy_company_id": "88",
+      "source_company_current_id": 45,
+      "source_company_name": "شركة انوار اليمامة للذهب و المجوهرات",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "88-G03": {
+      "anchor_branch_legacy_id": "108",
+      "branches": [
+        {
+          "current_branch_id": 2249,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "108",
+          "name": "شركة انوار اليمامة للذهب و المجوهرات فرع ( 2 )"
+        },
+        {
+          "current_branch_id": 2254,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": false,
+          "legacy_branch_id": "753",
+          "name": "شركة انوار اليمامة للذهب و المجوهرات فرع ( 2 )"
+        }
+      ],
+      "company_code": "MHM-SPLIT-88-G03",
+      "default_branch_legacy_id": "108",
+      "legacy_company_id": "88",
+      "source_company_current_id": 45,
+      "source_company_name": "شركة انوار اليمامة للذهب و المجوهرات",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    },
+    "88-G04": {
+      "anchor_branch_legacy_id": "735",
+      "branches": [
+        {
+          "current_branch_id": 2250,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": true,
+          "legacy_branch_id": "735",
+          "name": "شركة انوار اليمامة للذهب و المجوهرات فرع ( 3 )"
+        },
+        {
+          "current_branch_id": 2251,
+          "is_active": true,
+          "is_default_current": false,
+          "is_default_planned": false,
+          "legacy_branch_id": "739",
+          "name": "شركة انوار اليمامة للذهب و المجوهرات فرع ( 3 )2"
+        }
+      ],
+      "company_code": "MHM-SPLIT-88-G04",
+      "default_branch_legacy_id": "735",
+      "legacy_company_id": "88",
+      "source_company_current_id": 45,
+      "source_company_name": "شركة انوار اليمامة للذهب و المجوهرات",
+      "source_company_survivor": false,
+      "target_company_current_id": null
+    }
+  },
+  "local_snapshot_contract": {
+    "current_ids_are_non_authoritative": true,
+    "production_replay_must_resolve_from_legacy_ids": true,
+    "source_system": "mhamcloud_v1"
+  },
+  "manifest_sha256": "B12A3C2916272B6A4D5E8051D7B51533E3FF05369084632685F0BCC809BE24DE",
+  "manifest_v2_payment_party_coverage": {
+    "additional_clone_action_count": 4,
+    "authoritative_manifest_sha256": "B12A3C2916272B6A4D5E8051D7B51533E3FF05369084632685F0BCC809BE24DE",
+    "coverage_row_count": 3,
+    "resolved_current_party_count_snapshot": 3,
+    "source_group_coverage_no_clone_count": 2
+  },
+  "membership_actions": [
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "LEGACY_UNRESOLVED",
+      "current_membership_id": 69,
+      "current_user_id": 77,
+      "delete_existing_membership": true,
+      "is_primary": true,
+      "legacy_company_id": "75",
+      "legacy_user_id": "105",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0504340946"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 70,
+      "current_user_id": 78,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "75",
+      "legacy_user_id": "106",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0543438598"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 71,
+      "current_user_id": 79,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "75",
+      "legacy_user_id": "107",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "legacy_75_107"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 72,
+      "current_user_id": 80,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "75",
+      "legacy_user_id": "510",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0594905214"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "LEGACY_UNRESOLVED",
+      "current_membership_id": 80,
+      "current_user_id": 88,
+      "delete_existing_membership": false,
+      "is_primary": true,
+      "legacy_company_id": "76",
+      "legacy_user_id": "108",
+      "reuse_existing_membership_for": "SOURCE_COMPANY_SURVIVES",
+      "role": "ADMIN",
+      "target_access": {
+        "SOURCE_COMPANY_SURVIVES": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        }
+      },
+      "target_groups": [
+        "SOURCE_COMPANY_SURVIVES"
+      ],
+      "username": "0508087255"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 81,
+      "current_user_id": 89,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "76",
+      "legacy_user_id": "132",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0555845556"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 82,
+      "current_user_id": 90,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "76",
+      "legacy_user_id": "133",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0566205557"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 83,
+      "current_user_id": 91,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "76",
+      "legacy_user_id": "142",
+      "reuse_existing_membership_for": "SOURCE_COMPANY_SURVIVES",
+      "role": "ADMIN",
+      "target_access": {
+        "SOURCE_COMPANY_SURVIVES": {
+          "legacy_grant_branch_ids": [
+            "92"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "SOURCE_COMPANY_SURVIVES"
+      ],
+      "username": "0501196572"
+    },
+    {
+      "clone_membership_to": [
+        "88-G02",
+        "88-G03",
+        "88-G04"
+      ],
+      "current_access_mode": "LEGACY_UNRESOLVED",
+      "current_membership_id": 98,
+      "current_user_id": 106,
+      "delete_existing_membership": false,
+      "is_primary": true,
+      "legacy_company_id": "88",
+      "legacy_user_id": "126",
+      "reuse_existing_membership_for": "88-G01",
+      "role": "ADMIN",
+      "target_access": {
+        "88-G01": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "88-G02": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "88-G03": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "88-G04": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        }
+      },
+      "target_groups": [
+        "88-G01",
+        "88-G02",
+        "88-G03",
+        "88-G04"
+      ],
+      "username": "0501267486"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 99,
+      "current_user_id": 107,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "88",
+      "legacy_user_id": "127",
+      "reuse_existing_membership_for": "88-G03",
+      "role": "ADMIN",
+      "target_access": {
+        "88-G03": {
+          "legacy_grant_branch_ids": [
+            "108",
+            "753"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "88-G03"
+      ],
+      "username": "0533697850"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 100,
+      "current_user_id": 108,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "88",
+      "legacy_user_id": "128",
+      "reuse_existing_membership_for": "88-G02",
+      "role": "ADMIN",
+      "target_access": {
+        "88-G02": {
+          "legacy_grant_branch_ids": [
+            "107",
+            "751"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "88-G02"
+      ],
+      "username": "0533923390"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 101,
+      "current_user_id": 109,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "88",
+      "legacy_user_id": "141",
+      "reuse_existing_membership_for": "88-G01",
+      "role": "ADMIN",
+      "target_access": {
+        "88-G01": {
+          "legacy_grant_branch_ids": [
+            "106",
+            "752"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "88-G01"
+      ],
+      "username": "0538373541"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 102,
+      "current_user_id": 110,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "88",
+      "legacy_user_id": "983",
+      "reuse_existing_membership_for": "88-G04",
+      "role": "ADMIN",
+      "target_access": {
+        "88-G04": {
+          "legacy_grant_branch_ids": [
+            "735",
+            "739"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "88-G04"
+      ],
+      "username": "0501156444"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "LEGACY_UNRESOLVED",
+      "current_membership_id": 127,
+      "current_user_id": 135,
+      "delete_existing_membership": true,
+      "is_primary": true,
+      "legacy_company_id": "113",
+      "legacy_user_id": "162",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0560566887"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 128,
+      "current_user_id": 136,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "113",
+      "legacy_user_id": "283",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0545958861"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 129,
+      "current_user_id": 137,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "113",
+      "legacy_user_id": "284",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0563700628"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 130,
+      "current_user_id": 138,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "113",
+      "legacy_user_id": "285",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0560921377"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 131,
+      "current_user_id": 139,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "113",
+      "legacy_user_id": "286",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0543257981"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 132,
+      "current_user_id": 140,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "113",
+      "legacy_user_id": "287",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0595946537"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 133,
+      "current_user_id": 141,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "113",
+      "legacy_user_id": "288",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0509765867"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "ALL",
+      "current_membership_id": 134,
+      "current_user_id": 142,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "113",
+      "legacy_user_id": "289",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0573112507"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "LEGACY_UNRESOLVED",
+      "current_membership_id": 138,
+      "current_user_id": 146,
+      "delete_existing_membership": true,
+      "is_primary": true,
+      "legacy_company_id": "119",
+      "legacy_user_id": "168",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0506332522"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 139,
+      "current_user_id": 147,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "119",
+      "legacy_user_id": "184",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0502519635"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 140,
+      "current_user_id": 148,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "119",
+      "legacy_user_id": "185",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0563640936"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 141,
+      "current_user_id": 149,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "119",
+      "legacy_user_id": "186",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0580700181"
+    },
+    {
+      "clone_membership_to": [
+        "174-G02",
+        "174-G03",
+        "174-G04",
+        "174-G05"
+      ],
+      "current_access_mode": "LEGACY_UNRESOLVED",
+      "current_membership_id": 179,
+      "current_user_id": 187,
+      "delete_existing_membership": false,
+      "is_primary": true,
+      "legacy_company_id": "174",
+      "legacy_user_id": "231",
+      "reuse_existing_membership_for": "174-G01",
+      "role": "ADMIN",
+      "target_access": {
+        "174-G01": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "174-G02": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "174-G03": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "174-G04": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "174-G05": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        }
+      },
+      "target_groups": [
+        "174-G01",
+        "174-G02",
+        "174-G03",
+        "174-G04",
+        "174-G05"
+      ],
+      "username": "0555623669"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 180,
+      "current_user_id": 188,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "174",
+      "legacy_user_id": "241",
+      "reuse_existing_membership_for": "174-G01",
+      "role": "ADMIN",
+      "target_access": {
+        "174-G01": {
+          "legacy_grant_branch_ids": [
+            "197"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "174-G01"
+      ],
+      "username": "0565257531"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 181,
+      "current_user_id": 189,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "174",
+      "legacy_user_id": "242",
+      "reuse_existing_membership_for": "174-G02",
+      "role": "ADMIN",
+      "target_access": {
+        "174-G02": {
+          "legacy_grant_branch_ids": [
+            "207"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "174-G02"
+      ],
+      "username": "0569629014"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 182,
+      "current_user_id": 190,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "174",
+      "legacy_user_id": "243",
+      "reuse_existing_membership_for": "174-G03",
+      "role": "ADMIN",
+      "target_access": {
+        "174-G03": {
+          "legacy_grant_branch_ids": [
+            "208"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "174-G03"
+      ],
+      "username": "0508215939"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 183,
+      "current_user_id": 191,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "174",
+      "legacy_user_id": "244",
+      "reuse_existing_membership_for": "174-G04",
+      "role": "ADMIN",
+      "target_access": {
+        "174-G04": {
+          "legacy_grant_branch_ids": [
+            "209"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "174-G04"
+      ],
+      "username": "0500191828"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 184,
+      "current_user_id": 192,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "174",
+      "legacy_user_id": "245",
+      "reuse_existing_membership_for": "174-G05",
+      "role": "ADMIN",
+      "target_access": {
+        "174-G05": {
+          "legacy_grant_branch_ids": [
+            "210"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "174-G05"
+      ],
+      "username": "0508976407"
+    },
+    {
+      "clone_membership_to": [
+        "188-G02",
+        "188-G03",
+        "188-G04",
+        "188-G05",
+        "188-G06"
+      ],
+      "current_access_mode": "LEGACY_UNRESOLVED",
+      "current_membership_id": 188,
+      "current_user_id": 196,
+      "delete_existing_membership": false,
+      "is_primary": true,
+      "legacy_company_id": "188",
+      "legacy_user_id": "250",
+      "reuse_existing_membership_for": "188-G01",
+      "role": "ADMIN",
+      "target_access": {
+        "188-G01": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "188-G02": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "188-G03": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "188-G04": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "188-G05": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "188-G06": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        }
+      },
+      "target_groups": [
+        "188-G01",
+        "188-G02",
+        "188-G03",
+        "188-G04",
+        "188-G05",
+        "188-G06"
+      ],
+      "username": "0506008607"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 189,
+      "current_user_id": 197,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "188",
+      "legacy_user_id": "252",
+      "reuse_existing_membership_for": "188-G01",
+      "role": "ADMIN",
+      "target_access": {
+        "188-G01": {
+          "legacy_grant_branch_ids": [
+            "215",
+            "772"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "188-G01"
+      ],
+      "username": "0550447953"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 190,
+      "current_user_id": 198,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "188",
+      "legacy_user_id": "260",
+      "reuse_existing_membership_for": "188-G02",
+      "role": "ADMIN",
+      "target_access": {
+        "188-G02": {
+          "legacy_grant_branch_ids": [
+            "216",
+            "775"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "188-G02"
+      ],
+      "username": "0501618450"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 191,
+      "current_user_id": 199,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "188",
+      "legacy_user_id": "261",
+      "reuse_existing_membership_for": "188-G04",
+      "role": "ADMIN",
+      "target_access": {
+        "188-G04": {
+          "legacy_grant_branch_ids": [
+            "218",
+            "773"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "188-G04"
+      ],
+      "username": "0508082839"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 192,
+      "current_user_id": 200,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "188",
+      "legacy_user_id": "262",
+      "reuse_existing_membership_for": "188-G03",
+      "role": "ADMIN",
+      "target_access": {
+        "188-G03": {
+          "legacy_grant_branch_ids": [
+            "217",
+            "770"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "188-G03"
+      ],
+      "username": "0565606851"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 193,
+      "current_user_id": 201,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "188",
+      "legacy_user_id": "263",
+      "reuse_existing_membership_for": "188-G06",
+      "role": "ADMIN",
+      "target_access": {
+        "188-G06": {
+          "legacy_grant_branch_ids": [
+            "220",
+            "771"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "188-G06"
+      ],
+      "username": "0549691823"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 194,
+      "current_user_id": 202,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "188",
+      "legacy_user_id": "264",
+      "reuse_existing_membership_for": "188-G05",
+      "role": "ADMIN",
+      "target_access": {
+        "188-G05": {
+          "legacy_grant_branch_ids": [
+            "219",
+            "774"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "188-G05"
+      ],
+      "username": "0581173355"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 195,
+      "current_user_id": 203,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "188",
+      "legacy_user_id": "999",
+      "reuse_existing_membership_for": "188-G04",
+      "role": "ADMIN",
+      "target_access": {
+        "188-G04": {
+          "legacy_grant_branch_ids": [
+            "218",
+            "773"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "188-G04"
+      ],
+      "username": "0542526266"
+    },
+    {
+      "clone_membership_to": [
+        "195-G02",
+        "195-G03",
+        "195-G04",
+        "195-G05",
+        "195-G06",
+        "195-G07"
+      ],
+      "current_access_mode": "LEGACY_UNRESOLVED",
+      "current_membership_id": 199,
+      "current_user_id": 207,
+      "delete_existing_membership": false,
+      "is_primary": true,
+      "legacy_company_id": "195",
+      "legacy_user_id": "259",
+      "reuse_existing_membership_for": "195-G01",
+      "role": "ADMIN",
+      "target_access": {
+        "195-G01": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "195-G02": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "195-G03": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "195-G04": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "195-G05": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "195-G06": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "195-G07": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        }
+      },
+      "target_groups": [
+        "195-G01",
+        "195-G02",
+        "195-G03",
+        "195-G04",
+        "195-G05",
+        "195-G06",
+        "195-G07"
+      ],
+      "username": "0577840894"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 200,
+      "current_user_id": 208,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "195",
+      "legacy_user_id": "310",
+      "reuse_existing_membership_for": "195-G02",
+      "role": "ADMIN",
+      "target_access": {
+        "195-G02": {
+          "legacy_grant_branch_ids": [
+            "228"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "195-G02"
+      ],
+      "username": "0549875080"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 201,
+      "current_user_id": 209,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "195",
+      "legacy_user_id": "311",
+      "reuse_existing_membership_for": "195-G03",
+      "role": "ADMIN",
+      "target_access": {
+        "195-G03": {
+          "legacy_grant_branch_ids": [
+            "229"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "195-G03"
+      ],
+      "username": "0501071077"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 202,
+      "current_user_id": 210,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "195",
+      "legacy_user_id": "315",
+      "reuse_existing_membership_for": "195-G01",
+      "role": "ADMIN",
+      "target_access": {
+        "195-G01": {
+          "legacy_grant_branch_ids": [
+            "227"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "195-G01"
+      ],
+      "username": "0535334483"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 203,
+      "current_user_id": 211,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "195",
+      "legacy_user_id": "316",
+      "reuse_existing_membership_for": "195-G05",
+      "role": "ADMIN",
+      "target_access": {
+        "195-G05": {
+          "legacy_grant_branch_ids": [
+            "231"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "195-G05"
+      ],
+      "username": "0543839843"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 204,
+      "current_user_id": 212,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "195",
+      "legacy_user_id": "317",
+      "reuse_existing_membership_for": "195-G04",
+      "role": "ADMIN",
+      "target_access": {
+        "195-G04": {
+          "legacy_grant_branch_ids": [
+            "230"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "195-G04"
+      ],
+      "username": "0561656740"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 205,
+      "current_user_id": 213,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "195",
+      "legacy_user_id": "480",
+      "reuse_existing_membership_for": "195-G07",
+      "role": "ADMIN",
+      "target_access": {
+        "195-G07": {
+          "legacy_grant_branch_ids": [
+            "416"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "195-G07"
+      ],
+      "username": "0536653661"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 206,
+      "current_user_id": 214,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "195",
+      "legacy_user_id": "493",
+      "reuse_existing_membership_for": "195-G06",
+      "role": "ADMIN",
+      "target_access": {
+        "195-G06": {
+          "legacy_grant_branch_ids": [
+            "232"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "195-G06"
+      ],
+      "username": "0507716309"
+    },
+    {
+      "clone_membership_to": [
+        "290-G02",
+        "290-G03",
+        "290-G04",
+        "290-G05"
+      ],
+      "current_access_mode": "LEGACY_UNRESOLVED",
+      "current_membership_id": 238,
+      "current_user_id": 246,
+      "delete_existing_membership": false,
+      "is_primary": true,
+      "legacy_company_id": "290",
+      "legacy_user_id": "404",
+      "reuse_existing_membership_for": "290-G01",
+      "role": "ADMIN",
+      "target_access": {
+        "290-G01": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "290-G02": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "290-G03": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "290-G04": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "290-G05": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        }
+      },
+      "target_groups": [
+        "290-G01",
+        "290-G02",
+        "290-G03",
+        "290-G04",
+        "290-G05"
+      ],
+      "username": "0503313594"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 239,
+      "current_user_id": 247,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "290",
+      "legacy_user_id": "405",
+      "reuse_existing_membership_for": "290-G02",
+      "role": "ADMIN",
+      "target_access": {
+        "290-G02": {
+          "legacy_grant_branch_ids": [
+            "354"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "290-G02"
+      ],
+      "username": "0542467556"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 240,
+      "current_user_id": 248,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "290",
+      "legacy_user_id": "406",
+      "reuse_existing_membership_for": "290-G05",
+      "role": "ADMIN",
+      "target_access": {
+        "290-G05": {
+          "legacy_grant_branch_ids": [
+            "357"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "290-G05"
+      ],
+      "username": "0532129769"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 241,
+      "current_user_id": 249,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "290",
+      "legacy_user_id": "407",
+      "reuse_existing_membership_for": "290-G04",
+      "role": "ADMIN",
+      "target_access": {
+        "290-G04": {
+          "legacy_grant_branch_ids": [
+            "356"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "290-G04"
+      ],
+      "username": "0538497568"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 242,
+      "current_user_id": 250,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "290",
+      "legacy_user_id": "408",
+      "reuse_existing_membership_for": "290-G03",
+      "role": "ADMIN",
+      "target_access": {
+        "290-G03": {
+          "legacy_grant_branch_ids": [
+            "355"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "290-G03"
+      ],
+      "username": "0576409268"
+    },
+    {
+      "clone_membership_to": [
+        "290-G02",
+        "290-G03",
+        "290-G04",
+        "290-G05"
+      ],
+      "current_access_mode": "ALL",
+      "current_membership_id": 243,
+      "current_user_id": 251,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "290",
+      "legacy_user_id": "683",
+      "reuse_existing_membership_for": "290-G01",
+      "role": "ADMIN",
+      "target_access": {
+        "290-G01": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "290-G02": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "290-G03": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "290-G04": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "290-G05": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        }
+      },
+      "target_groups": [
+        "290-G01",
+        "290-G02",
+        "290-G03",
+        "290-G04",
+        "290-G05"
+      ],
+      "username": "0594051955"
+    },
+    {
+      "clone_membership_to": [
+        "299-G02",
+        "299-G03"
+      ],
+      "current_access_mode": "LEGACY_UNRESOLVED",
+      "current_membership_id": 249,
+      "current_user_id": 257,
+      "delete_existing_membership": false,
+      "is_primary": true,
+      "legacy_company_id": "299",
+      "legacy_user_id": "425",
+      "reuse_existing_membership_for": "299-G01",
+      "role": "ADMIN",
+      "target_access": {
+        "299-G01": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "299-G02": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "299-G03": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        }
+      },
+      "target_groups": [
+        "299-G01",
+        "299-G02",
+        "299-G03"
+      ],
+      "username": "0537868398"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 250,
+      "current_user_id": 258,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "299",
+      "legacy_user_id": "427",
+      "reuse_existing_membership_for": "299-G01",
+      "role": "ADMIN",
+      "target_access": {
+        "299-G01": {
+          "legacy_grant_branch_ids": [
+            "367"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "299-G01"
+      ],
+      "username": "0582516097"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 251,
+      "current_user_id": 259,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "299",
+      "legacy_user_id": "428",
+      "reuse_existing_membership_for": "299-G02",
+      "role": "ADMIN",
+      "target_access": {
+        "299-G02": {
+          "legacy_grant_branch_ids": [
+            "368"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "299-G02"
+      ],
+      "username": "0552308462"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 252,
+      "current_user_id": 260,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "299",
+      "legacy_user_id": "429",
+      "reuse_existing_membership_for": "299-G03",
+      "role": "ADMIN",
+      "target_access": {
+        "299-G03": {
+          "legacy_grant_branch_ids": [
+            "369"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "299-G03"
+      ],
+      "username": "0531185952"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "ALL",
+      "current_membership_id": 322,
+      "current_user_id": 330,
+      "delete_existing_membership": true,
+      "is_primary": true,
+      "legacy_company_id": "431",
+      "legacy_user_id": "601",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0534055549"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 323,
+      "current_user_id": 331,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "431",
+      "legacy_user_id": "604",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "legacy_431_604"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 324,
+      "current_user_id": 332,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "431",
+      "legacy_user_id": "605",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "legacy_431_605"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 325,
+      "current_user_id": 333,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "431",
+      "legacy_user_id": "606",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "legacy_431_606"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 326,
+      "current_user_id": 334,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "431",
+      "legacy_user_id": "607",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "legacy_431_607"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 327,
+      "current_user_id": 335,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "431",
+      "legacy_user_id": "608",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "legacy_431_608"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "ALL",
+      "current_membership_id": 328,
+      "current_user_id": 336,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "431",
+      "legacy_user_id": "609",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0510859559"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "LEGACY_UNRESOLVED",
+      "current_membership_id": 329,
+      "current_user_id": 337,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "431",
+      "legacy_user_id": "613",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "legacy_431_613"
+    },
+    {
+      "clone_membership_to": [
+        "478-G02",
+        "478-G03",
+        "478-G04",
+        "478-G05",
+        "478-G06",
+        "478-G07",
+        "478-G08",
+        "478-G09",
+        "478-G10"
+      ],
+      "current_access_mode": "LEGACY_UNRESOLVED",
+      "current_membership_id": 378,
+      "current_user_id": 386,
+      "delete_existing_membership": false,
+      "is_primary": true,
+      "legacy_company_id": "478",
+      "legacy_user_id": "699",
+      "reuse_existing_membership_for": "478-G01",
+      "role": "ADMIN",
+      "target_access": {
+        "478-G01": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "478-G02": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "478-G03": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "478-G04": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "478-G05": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "478-G06": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "478-G07": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "478-G08": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "478-G09": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "478-G10": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        }
+      },
+      "target_groups": [
+        "478-G01",
+        "478-G02",
+        "478-G03",
+        "478-G04",
+        "478-G05",
+        "478-G06",
+        "478-G07",
+        "478-G08",
+        "478-G09",
+        "478-G10"
+      ],
+      "username": "0548710147"
+    },
+    {
+      "clone_membership_to": [
+        "556-G02",
+        "556-G03",
+        "556-G04",
+        "556-G05",
+        "556-G06",
+        "556-G07"
+      ],
+      "current_access_mode": "LEGACY_UNRESOLVED",
+      "current_membership_id": 500,
+      "current_user_id": 508,
+      "delete_existing_membership": false,
+      "is_primary": true,
+      "legacy_company_id": "556",
+      "legacy_user_id": "896",
+      "reuse_existing_membership_for": "556-G01",
+      "role": "ADMIN",
+      "target_access": {
+        "556-G01": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "556-G02": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "556-G03": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "556-G04": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "556-G05": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "556-G06": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        },
+        "556-G07": {
+          "legacy_grant_branch_ids": [],
+          "mode": "ALL"
+        }
+      },
+      "target_groups": [
+        "556-G01",
+        "556-G02",
+        "556-G03",
+        "556-G04",
+        "556-G05",
+        "556-G06",
+        "556-G07"
+      ],
+      "username": "0553324332"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 501,
+      "current_user_id": 509,
+      "delete_existing_membership": false,
+      "is_primary": false,
+      "legacy_company_id": "556",
+      "legacy_user_id": "1000",
+      "reuse_existing_membership_for": "556-G07",
+      "role": "ADMIN",
+      "target_access": {
+        "556-G07": {
+          "legacy_grant_branch_ids": [
+            "781"
+          ],
+          "mode": "RESTRICTED"
+        }
+      },
+      "target_groups": [
+        "556-G07"
+      ],
+      "username": "0555325205"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "ALL",
+      "current_membership_id": 695,
+      "current_user_id": 703,
+      "delete_existing_membership": true,
+      "is_primary": true,
+      "legacy_company_id": "307",
+      "legacy_user_id": "438",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "demo2022"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 696,
+      "current_user_id": 704,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "307",
+      "legacy_user_id": "439",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "demo2023"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 697,
+      "current_user_id": 705,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "307",
+      "legacy_user_id": "465",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "legacy_307_465"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "LEGACY_UNRESOLVED",
+      "current_membership_id": 698,
+      "current_user_id": 706,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "307",
+      "legacy_user_id": "557",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "legacy_307_557"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "ALL",
+      "current_membership_id": 699,
+      "current_user_id": 707,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "307",
+      "legacy_user_id": "719",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0502005606"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "LEGACY_UNRESOLVED",
+      "current_membership_id": 700,
+      "current_user_id": 708,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "307",
+      "legacy_user_id": "720",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "legacy_307_720"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "ALL",
+      "current_membership_id": 701,
+      "current_user_id": 709,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "307",
+      "legacy_user_id": "767",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "legacy_307_767"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "ALL",
+      "current_membership_id": 702,
+      "current_user_id": 710,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "307",
+      "legacy_user_id": "768",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "legacy_307_768"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "ALL",
+      "current_membership_id": 703,
+      "current_user_id": 711,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "307",
+      "legacy_user_id": "769",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "legacy_307_769"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "ALL",
+      "current_membership_id": 704,
+      "current_user_id": 712,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "307",
+      "legacy_user_id": "770",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "legacy_307_770"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "ALL",
+      "current_membership_id": 705,
+      "current_user_id": 713,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "307",
+      "legacy_user_id": "771",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "legacy_307_771"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "ALL",
+      "current_membership_id": 706,
+      "current_user_id": 714,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "307",
+      "legacy_user_id": "772",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "legacy_307_772"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "ALL",
+      "current_membership_id": 707,
+      "current_user_id": 715,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "307",
+      "legacy_user_id": "773",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "legacy_307_773"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "ALL",
+      "current_membership_id": 708,
+      "current_user_id": 716,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "307",
+      "legacy_user_id": "774",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "legacy_307_774"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "LEGACY_UNRESOLVED",
+      "current_membership_id": 714,
+      "current_user_id": 722,
+      "delete_existing_membership": true,
+      "is_primary": true,
+      "legacy_company_id": "429",
+      "legacy_user_id": "599",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0532233432"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 715,
+      "current_user_id": 723,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "429",
+      "legacy_user_id": "725",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0548530430"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 716,
+      "current_user_id": 724,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "429",
+      "legacy_user_id": "726",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "0551921194"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 717,
+      "current_user_id": 725,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "429",
+      "legacy_user_id": "921",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "عبدالله مصلح"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "ALL",
+      "current_membership_id": 724,
+      "current_user_id": 732,
+      "delete_existing_membership": true,
+      "is_primary": true,
+      "legacy_company_id": "473",
+      "legacy_user_id": "677",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "demo2024"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 725,
+      "current_user_id": 733,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "473",
+      "legacy_user_id": "682",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "demo2025"
+    },
+    {
+      "clone_membership_to": [],
+      "current_access_mode": "RESTRICTED",
+      "current_membership_id": 726,
+      "current_user_id": 734,
+      "delete_existing_membership": true,
+      "is_primary": false,
+      "legacy_company_id": "473",
+      "legacy_user_id": "704",
+      "reuse_existing_membership_for": null,
+      "role": "ADMIN",
+      "target_access": {},
+      "target_groups": [],
+      "username": "demo2026"
+    }
+  ],
+  "operational_routing_fingerprints": {
+    "inventory.InventoryLocation": {
+      "route_row_count": 93,
+      "sha256": "7C658C8B408C625A7A85C9716464325380433349D51C3DABFA589FB2A3936463",
+      "target_counts": {
+        "174-G01": 1,
+        "174-G02": 1,
+        "174-G03": 1,
+        "174-G04": 1,
+        "174-G05": 1,
+        "188-G01": 2,
+        "188-G02": 2,
+        "188-G03": 2,
+        "188-G04": 2,
+        "188-G05": 2,
+        "188-G06": 2,
+        "195-G01": 1,
+        "195-G02": 1,
+        "195-G03": 1,
+        "195-G04": 1,
+        "195-G05": 1,
+        "195-G06": 1,
+        "195-G07": 1,
+        "290-G01": 1,
+        "290-G02": 1,
+        "290-G03": 1,
+        "290-G04": 1,
+        "290-G05": 1,
+        "299-G01": 1,
+        "299-G02": 1,
+        "299-G03": 1,
+        "478-G01": 1,
+        "478-G02": 1,
+        "478-G03": 1,
+        "478-G04": 1,
+        "478-G05": 1,
+        "478-G06": 1,
+        "478-G07": 1,
+        "478-G08": 1,
+        "478-G09": 1,
+        "478-G10": 1,
+        "556-G01": 1,
+        "556-G02": 1,
+        "556-G03": 1,
+        "556-G04": 1,
+        "556-G05": 1,
+        "556-G06": 1,
+        "556-G07": 1,
+        "88-G01": 2,
+        "88-G02": 2,
+        "88-G03": 2,
+        "88-G04": 2,
+        "PURGE_FULL_EXCLUSION": 33,
+        "PURGE_PARTIAL_76": 2,
+        "SOURCE_COMPANY_SURVIVES": 1
+      }
+    },
+    "inventory.StockItem": {
+      "route_row_count": 30990,
+      "sha256": "5DB41B4E58614F40F7A20C4E670010DC0ACDA88C231AD58EB01846B183B19625",
+      "target_counts": {
+        "195-G04": 19,
+        "195-G05": 19,
+        "195-G07": 81,
+        "290-G04": 32,
+        "290-G05": 29994,
+        "88-G01": 1,
+        "PURGE_FULL_EXCLUSION": 844
+      }
+    },
+    "inventory.StockMovement": {
+      "route_row_count": 31000,
+      "sha256": "5910841ADCF3D5DCA9D1FFFCB04BC69A425E0FC56EA97DCCAA64DD4459CB2D4C",
+      "target_counts": {
+        "195-G04": 19,
+        "195-G05": 19,
+        "195-G07": 81,
+        "290-G04": 32,
+        "290-G05": 29994,
+        "88-G01": 1,
+        "PURGE_FULL_EXCLUSION": 854
+      }
+    },
+    "inventory.Warehouse": {
+      "route_row_count": 93,
+      "sha256": "5C3B8395E384DF8BFF1272A5FDD94E98D4515EB3032BEC0DB1FCFB8AF24AF428",
+      "target_counts": {
+        "174-G01": 1,
+        "174-G02": 1,
+        "174-G03": 1,
+        "174-G04": 1,
+        "174-G05": 1,
+        "188-G01": 2,
+        "188-G02": 2,
+        "188-G03": 2,
+        "188-G04": 2,
+        "188-G05": 2,
+        "188-G06": 2,
+        "195-G01": 1,
+        "195-G02": 1,
+        "195-G03": 1,
+        "195-G04": 1,
+        "195-G05": 1,
+        "195-G06": 1,
+        "195-G07": 1,
+        "290-G01": 1,
+        "290-G02": 1,
+        "290-G03": 1,
+        "290-G04": 1,
+        "290-G05": 1,
+        "299-G01": 1,
+        "299-G02": 1,
+        "299-G03": 1,
+        "478-G01": 1,
+        "478-G02": 1,
+        "478-G03": 1,
+        "478-G04": 1,
+        "478-G05": 1,
+        "478-G06": 1,
+        "478-G07": 1,
+        "478-G08": 1,
+        "478-G09": 1,
+        "478-G10": 1,
+        "556-G01": 1,
+        "556-G02": 1,
+        "556-G03": 1,
+        "556-G04": 1,
+        "556-G05": 1,
+        "556-G06": 1,
+        "556-G07": 1,
+        "88-G01": 2,
+        "88-G02": 2,
+        "88-G03": 2,
+        "88-G04": 2,
+        "PURGE_FULL_EXCLUSION": 33,
+        "PURGE_PARTIAL_76": 2,
+        "SOURCE_COMPANY_SURVIVES": 1
+      }
+    },
+    "purchases.PurchaseBill": {
+      "route_row_count": 908,
+      "sha256": "AC49DC9BC334659852D2DCE744D7CC2EB418679DA453DF2502DD6818EC376AF5",
+      "target_counts": {
+        "478-G01": 119,
+        "478-G02": 118,
+        "478-G03": 118,
+        "478-G04": 122,
+        "478-G05": 114,
+        "478-G06": 6,
+        "PURGE_FULL_EXCLUSION": 311
+      }
+    },
+    "purchases.PurchaseBillItem": {
+      "route_row_count": 1135,
+      "sha256": "32F3A6B41A6F875FA73221ED311BA6FF68AC7206604E219A1C917C180F78219A",
+      "target_counts": {
+        "478-G01": 140,
+        "478-G02": 143,
+        "478-G03": 141,
+        "478-G04": 145,
+        "478-G05": 119,
+        "478-G06": 29,
+        "PURGE_FULL_EXCLUSION": 418
+      }
+    },
+    "sales.SalesInvoice": {
+      "route_row_count": 360820,
+      "sha256": "FE295FE354FDC54708C2EAB12AA0920D0D812D9792181E9BCAD4E291CFEEA073",
+      "target_counts": {
+        "174-G01": 18677,
+        "174-G02": 23809,
+        "174-G03": 23733,
+        "174-G04": 8440,
+        "174-G05": 3472,
+        "188-G01": 6341,
+        "188-G02": 2432,
+        "188-G03": 3819,
+        "188-G04": 2593,
+        "188-G05": 2925,
+        "188-G06": 3273,
+        "195-G01": 5601,
+        "195-G02": 6191,
+        "195-G03": 177,
+        "195-G04": 354,
+        "195-G05": 4267,
+        "195-G06": 398,
+        "195-G07": 778,
+        "290-G01": 7670,
+        "290-G02": 19,
+        "290-G03": 4,
+        "290-G05": 143,
+        "299-G01": 247,
+        "299-G02": 8,
+        "478-G01": 8557,
+        "478-G02": 9311,
+        "478-G03": 9171,
+        "478-G04": 3192,
+        "478-G05": 4510,
+        "478-G06": 1128,
+        "478-G07": 9194,
+        "478-G08": 74554,
+        "478-G09": 180,
+        "478-G10": 1038,
+        "556-G01": 18,
+        "556-G02": 7,
+        "556-G03": 16,
+        "556-G04": 2,
+        "556-G07": 1,
+        "88-G01": 21400,
+        "88-G02": 20072,
+        "88-G03": 16827,
+        "88-G04": 2201,
+        "PURGE_FULL_EXCLUSION": 43607,
+        "PURGE_PARTIAL_76": 8570,
+        "SOURCE_COMPANY_SURVIVES": 1893
+      }
+    },
+    "sales.SalesInvoiceItem": {
+      "route_row_count": 533718,
+      "sha256": "F4B5A48970258D29AD73EAA303A0D14F4826177FD2A399E3FBCFAB086F98BE45",
+      "target_counts": {
+        "174-G01": 20398,
+        "174-G02": 25824,
+        "174-G03": 25882,
+        "174-G04": 9127,
+        "174-G05": 3892,
+        "188-G01": 6898,
+        "188-G02": 2610,
+        "188-G03": 4193,
+        "188-G04": 2791,
+        "188-G05": 3018,
+        "188-G06": 3413,
+        "195-G01": 5762,
+        "195-G02": 6615,
+        "195-G03": 205,
+        "195-G04": 378,
+        "195-G05": 4619,
+        "195-G06": 440,
+        "195-G07": 2339,
+        "290-G01": 7670,
+        "290-G02": 21,
+        "290-G03": 4,
+        "290-G05": 306,
+        "299-G01": 290,
+        "299-G02": 8,
+        "478-G01": 8584,
+        "478-G02": 9339,
+        "478-G03": 9180,
+        "478-G04": 3193,
+        "478-G05": 4513,
+        "478-G06": 1130,
+        "478-G07": 9229,
+        "478-G08": 196236,
+        "478-G09": 180,
+        "478-G10": 1038,
+        "556-G01": 18,
+        "556-G02": 7,
+        "556-G03": 16,
+        "556-G04": 2,
+        "556-G07": 1,
+        "88-G01": 22553,
+        "88-G02": 21543,
+        "88-G03": 18096,
+        "88-G04": 2221,
+        "PURGE_FULL_EXCLUSION": 78286,
+        "PURGE_PARTIAL_76": 9493,
+        "SOURCE_COMPANY_SURVIVES": 2157
+      }
+    },
+    "sales.SalesReturn": {
+      "route_row_count": 2996,
+      "sha256": "44D5C0D58EADA8AB5E1EEAA0BFE81DC2D2B5634EEAFECCBF6C4590F3BB5509C3",
+      "target_counts": {
+        "174-G01": 199,
+        "174-G02": 247,
+        "174-G03": 128,
+        "174-G04": 83,
+        "174-G05": 11,
+        "188-G01": 491,
+        "188-G02": 440,
+        "188-G03": 531,
+        "188-G04": 243,
+        "188-G05": 155,
+        "188-G06": 20,
+        "195-G01": 32,
+        "195-G02": 37,
+        "195-G03": 9,
+        "195-G04": 3,
+        "195-G05": 1,
+        "195-G07": 7,
+        "290-G01": 34,
+        "290-G05": 1,
+        "299-G01": 21,
+        "556-G07": 1,
+        "88-G01": 22,
+        "88-G02": 19,
+        "88-G03": 19,
+        "88-G04": 12,
+        "PURGE_FULL_EXCLUSION": 144,
+        "PURGE_PARTIAL_76": 76,
+        "SOURCE_COMPANY_SURVIVES": 10
+      }
+    }
+  },
+  "partial_76": {
+    "purge_branch_ids_snapshot": [
+      1926,
+      1927
+    ],
+    "purge_catalog_item_ids_snapshot": [
+      1290754,
+      1290765,
+      1290774,
+      1290780,
+      1290788
+    ],
+    "purge_catalog_legacy_keys": [
+      "products:374553",
+      "variations:305466",
+      "variations:305477",
+      "variations:305486",
+      "variations:305492",
+      "variations:376285"
+    ]
+  },
+  "rehearsal_contract": {
+    "advisory_lock": "REQUIRED",
+    "apply_stage_after_rehearsal": "A12_EXACT_APPLY_USING_SAME_PLAN_SHA",
+    "dry_run": "EXECUTE_REAL_MUTATION_CODE_THEN_FORCE_ROLLBACK",
+    "next_stage": "A11_ROLLBACK_REHEARSAL",
+    "permanent_database_change": false,
+    "post_mutation_verification_inside_transaction": true,
+    "transaction": "ONE_POSTGRESQL_ATOMIC_TRANSACTION_ROLLED_BACK_INTENTIONALLY"
+  },
+  "schema": "primeyacc.company_split_local_execution_plan.v1",
+  "subscription_candidates": {
+    "174": {
+      "candidate_billing_cycle": "YEARLY",
+      "candidate_current_subscription_id": 238,
+      "candidate_end_date": "2025-12-04",
+      "candidate_plan_id": 21,
+      "candidate_price": "3000.00",
+      "candidate_start_date": "2024-12-04",
+      "candidate_status": "EXPIRED",
+      "clone_target_groups": [
+        "174-G02",
+        "174-G03",
+        "174-G04",
+        "174-G05"
+      ],
+      "covering_period_row_count": 0,
+      "selection_policy": "LOCAL_REHEARSAL_CANDIDATE_ONLY; PRODUCTION_RESELECT_FROM_FRESHEST_SOURCE_AT_CUTOVER",
+      "source_subscription_row_count": 3,
+      "today_local_snapshot": "2026-09-22"
+    },
+    "188": {
+      "candidate_billing_cycle": "YEARLY",
+      "candidate_current_subscription_id": 3903,
+      "candidate_end_date": "2027-03-11",
+      "candidate_plan_id": 19,
+      "candidate_price": "1000.00",
+      "candidate_start_date": "2026-03-11",
+      "candidate_status": "ACTIVE",
+      "clone_target_groups": [
+        "188-G02",
+        "188-G03",
+        "188-G04",
+        "188-G05",
+        "188-G06"
+      ],
+      "covering_period_row_count": 2,
+      "selection_policy": "LOCAL_REHEARSAL_CANDIDATE_ONLY; PRODUCTION_RESELECT_FROM_FRESHEST_SOURCE_AT_CUTOVER",
+      "source_subscription_row_count": 5,
+      "today_local_snapshot": "2026-09-22"
+    },
+    "195": {
+      "candidate_billing_cycle": "YEARLY",
+      "candidate_current_subscription_id": 3910,
+      "candidate_end_date": "2026-11-30",
+      "candidate_plan_id": 27,
+      "candidate_price": "4200.00",
+      "candidate_start_date": "2025-11-30",
+      "candidate_status": "ACTIVE",
+      "clone_target_groups": [
+        "195-G02",
+        "195-G03",
+        "195-G04",
+        "195-G05",
+        "195-G06",
+        "195-G07"
+      ],
+      "covering_period_row_count": 1,
+      "selection_policy": "LOCAL_REHEARSAL_CANDIDATE_ONLY; PRODUCTION_RESELECT_FROM_FRESHEST_SOURCE_AT_CUTOVER",
+      "source_subscription_row_count": 4,
+      "today_local_snapshot": "2026-09-22"
+    },
+    "290": {
+      "candidate_billing_cycle": "YEARLY",
+      "candidate_current_subscription_id": 3949,
+      "candidate_end_date": "2027-02-27",
+      "candidate_plan_id": 19,
+      "candidate_price": "1000.00",
+      "candidate_start_date": "2026-02-27",
+      "candidate_status": "ACTIVE",
+      "clone_target_groups": [
+        "290-G02",
+        "290-G03",
+        "290-G04",
+        "290-G05"
+      ],
+      "covering_period_row_count": 1,
+      "selection_policy": "LOCAL_REHEARSAL_CANDIDATE_ONLY; PRODUCTION_RESELECT_FROM_FRESHEST_SOURCE_AT_CUTOVER",
+      "source_subscription_row_count": 4,
+      "today_local_snapshot": "2026-09-22"
+    },
+    "299": {
+      "candidate_billing_cycle": "YEARLY",
+      "candidate_current_subscription_id": 3957,
+      "candidate_end_date": "2027-02-27",
+      "candidate_plan_id": 19,
+      "candidate_price": "1000.00",
+      "candidate_start_date": "2026-02-27",
+      "candidate_status": "ACTIVE",
+      "clone_target_groups": [
+        "299-G02",
+        "299-G03"
+      ],
+      "covering_period_row_count": 1,
+      "selection_policy": "LOCAL_REHEARSAL_CANDIDATE_ONLY; PRODUCTION_RESELECT_FROM_FRESHEST_SOURCE_AT_CUTOVER",
+      "source_subscription_row_count": 5,
+      "today_local_snapshot": "2026-09-22"
+    },
+    "478": {
+      "candidate_billing_cycle": "YEARLY",
+      "candidate_current_subscription_id": 570,
+      "candidate_end_date": "2026-09-28",
+      "candidate_plan_id": 29,
+      "candidate_price": "4800.00",
+      "candidate_start_date": "2025-09-28",
+      "candidate_status": "ACTIVE",
+      "clone_target_groups": [
+        "478-G02",
+        "478-G03",
+        "478-G04",
+        "478-G05",
+        "478-G06",
+        "478-G07",
+        "478-G08",
+        "478-G09",
+        "478-G10"
+      ],
+      "covering_period_row_count": 1,
+      "selection_policy": "LOCAL_REHEARSAL_CANDIDATE_ONLY; PRODUCTION_RESELECT_FROM_FRESHEST_SOURCE_AT_CUTOVER",
+      "source_subscription_row_count": 3,
+      "today_local_snapshot": "2026-09-22"
+    },
+    "556": {
+      "candidate_billing_cycle": "YEARLY",
+      "candidate_current_subscription_id": 700,
+      "candidate_end_date": "2027-02-23",
+      "candidate_plan_id": 19,
+      "candidate_price": "1000.00",
+      "candidate_start_date": "2026-02-23",
+      "candidate_status": "ACTIVE",
+      "clone_target_groups": [
+        "556-G02",
+        "556-G03",
+        "556-G04",
+        "556-G05",
+        "556-G06",
+        "556-G07"
+      ],
+      "covering_period_row_count": 1,
+      "selection_policy": "LOCAL_REHEARSAL_CANDIDATE_ONLY; PRODUCTION_RESELECT_FROM_FRESHEST_SOURCE_AT_CUTOVER",
+      "source_subscription_row_count": 2,
+      "today_local_snapshot": "2026-09-22"
+    },
+    "88": {
+      "candidate_billing_cycle": "YEARLY",
+      "candidate_current_subscription_id": 4100,
+      "candidate_end_date": "2026-12-11",
+      "candidate_plan_id": 19,
+      "candidate_price": "1000.00",
+      "candidate_start_date": "2025-12-11",
+      "candidate_status": "ACTIVE",
+      "clone_target_groups": [
+        "88-G02",
+        "88-G03",
+        "88-G04"
+      ],
+      "covering_period_row_count": 4,
+      "selection_policy": "LOCAL_REHEARSAL_CANDIDATE_ONLY; PRODUCTION_RESELECT_FROM_FRESHEST_SOURCE_AT_CUTOVER",
+      "source_subscription_row_count": 7,
+      "today_local_snapshot": "2026-09-22"
+    }
+  },
+  "usage_master_clone_fingerprints": {
+    "catalog.CatalogItem": {
+      "clone_action_count": 31228,
+      "per_source_company": {
+        "174": {
+          "clone_actions": 197,
+          "masters_multi_group": 53,
+          "masters_used": 53
+        },
+        "188": {
+          "clone_actions": 240,
+          "masters_multi_group": 51,
+          "masters_used": 54
+        },
+        "195": {
+          "clone_actions": 232,
+          "masters_multi_group": 51,
+          "masters_used": 193
+        },
+        "290": {
+          "clone_actions": 30044,
+          "masters_multi_group": 4,
+          "masters_used": 30039
+        },
+        "299": {
+          "clone_actions": 2,
+          "masters_multi_group": 2,
+          "masters_used": 5
+        },
+        "478": {
+          "clone_actions": 352,
+          "masters_multi_group": 50,
+          "masters_used": 88
+        },
+        "556": {
+          "clone_actions": 19,
+          "masters_multi_group": 2,
+          "masters_used": 32
+        },
+        "76": {
+          "clone_actions": 0,
+          "masters_used": 44
+        },
+        "88": {
+          "clone_actions": 142,
+          "masters_multi_group": 53,
+          "masters_used": 55
+        }
+      },
+      "sha256": "1B7964E520234496E9D634D28D27A3285FD867D86E86D0A1223615691313B72E"
+    },
+    "parties.BusinessParty": {
+      "clone_action_count": 12663,
+      "per_source_company": {
+        "174": {
+          "clone_actions": 4204,
+          "masters_multi_group": 7,
+          "masters_used": 6727
+        },
+        "188": {
+          "clone_actions": 2328,
+          "masters_multi_group": 3,
+          "masters_used": 2967
+        },
+        "195": {
+          "clone_actions": 3986,
+          "masters_multi_group": 2,
+          "masters_used": 4652
+        },
+        "290": {
+          "clone_actions": 9,
+          "masters_multi_group": 5,
+          "masters_used": 665
+        },
+        "299": {
+          "clone_actions": 2,
+          "masters_multi_group": 2,
+          "masters_used": 11
+        },
+        "478": {
+          "clone_actions": 14,
+          "masters_multi_group": 2,
+          "masters_used": 2
+        },
+        "556": {
+          "clone_actions": 24,
+          "masters_multi_group": 1,
+          "masters_used": 39
+        },
+        "76": {
+          "clone_actions": 0,
+          "masters_used": 158
+        },
+        "88": {
+          "clone_actions": 2096,
+          "masters_multi_group": 1,
+          "masters_used": 3607
+        }
+      },
+      "sha256": "0D3EFA423FBB1A606294C771B2F7BCF1602583E7396F105BF2A3627F93305209"
+    }
+  },
+  "user_deletion": {
+    "candidate_count": 47,
+    "candidate_current_user_ids_snapshot": [
+      77,
+      78,
+      79,
+      80,
+      89,
+      90,
+      135,
+      136,
+      137,
+      138,
+      139,
+      140,
+      141,
+      142,
+      146,
+      147,
+      148,
+      149,
+      330,
+      331,
+      332,
+      333,
+      334,
+      335,
+      336,
+      337,
+      703,
+      704,
+      705,
+      706,
+      707,
+      708,
+      709,
+      710,
+      711,
+      712,
+      713,
+      714,
+      715,
+      716,
+      722,
+      723,
+      724,
+      725,
+      732,
+      733,
+      734
+    ],
+    "must_recheck_after_company_purge": true
+  },
+  "user_profile_actions": [
+    {
+      "current_default_company_id": 29,
+      "current_user_id": 77,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 29,
+      "current_user_id": 78,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 29,
+      "current_user_id": 79,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 29,
+      "current_user_id": 80,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 34,
+      "current_user_id": 88,
+      "policy": "KEEP_SOURCE_DEFAULT_IF_CURRENT_DEFAULT_MATCHES_SOURCE_COMPANY",
+      "target_groups": [
+        "SOURCE_COMPANY_SURVIVES"
+      ]
+    },
+    {
+      "current_default_company_id": 34,
+      "current_user_id": 89,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 34,
+      "current_user_id": 90,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 34,
+      "current_user_id": 91,
+      "policy": "KEEP_SOURCE_DEFAULT_IF_CURRENT_DEFAULT_MATCHES_SOURCE_COMPANY",
+      "target_groups": [
+        "SOURCE_COMPANY_SURVIVES"
+      ]
+    },
+    {
+      "current_default_company_id": 45,
+      "current_user_id": 106,
+      "policy": "KEEP_SOURCE_DEFAULT_IF_CURRENT_DEFAULT_MATCHES_SOURCE_COMPANY",
+      "target_groups": [
+        "88-G01",
+        "88-G02",
+        "88-G03",
+        "88-G04"
+      ]
+    },
+    {
+      "current_default_company_id": 45,
+      "current_user_id": 107,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "88-G03"
+      ]
+    },
+    {
+      "current_default_company_id": 45,
+      "current_user_id": 108,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "88-G02"
+      ]
+    },
+    {
+      "current_default_company_id": 45,
+      "current_user_id": 109,
+      "policy": "KEEP_SOURCE_DEFAULT_IF_CURRENT_DEFAULT_MATCHES_SOURCE_COMPANY",
+      "target_groups": [
+        "88-G01"
+      ]
+    },
+    {
+      "current_default_company_id": 45,
+      "current_user_id": 110,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "88-G04"
+      ]
+    },
+    {
+      "current_default_company_id": 62,
+      "current_user_id": 135,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 62,
+      "current_user_id": 136,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 62,
+      "current_user_id": 137,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 62,
+      "current_user_id": 138,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 62,
+      "current_user_id": 139,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 62,
+      "current_user_id": 140,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 62,
+      "current_user_id": 141,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 62,
+      "current_user_id": 142,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 66,
+      "current_user_id": 146,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 66,
+      "current_user_id": 147,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 66,
+      "current_user_id": 148,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 66,
+      "current_user_id": 149,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 91,
+      "current_user_id": 187,
+      "policy": "KEEP_SOURCE_DEFAULT_IF_CURRENT_DEFAULT_MATCHES_SOURCE_COMPANY",
+      "target_groups": [
+        "174-G01",
+        "174-G02",
+        "174-G03",
+        "174-G04",
+        "174-G05"
+      ]
+    },
+    {
+      "current_default_company_id": 91,
+      "current_user_id": 188,
+      "policy": "KEEP_SOURCE_DEFAULT_IF_CURRENT_DEFAULT_MATCHES_SOURCE_COMPANY",
+      "target_groups": [
+        "174-G01"
+      ]
+    },
+    {
+      "current_default_company_id": 91,
+      "current_user_id": 189,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "174-G02"
+      ]
+    },
+    {
+      "current_default_company_id": 91,
+      "current_user_id": 190,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "174-G03"
+      ]
+    },
+    {
+      "current_default_company_id": 91,
+      "current_user_id": 191,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "174-G04"
+      ]
+    },
+    {
+      "current_default_company_id": 91,
+      "current_user_id": 192,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "174-G05"
+      ]
+    },
+    {
+      "current_default_company_id": 95,
+      "current_user_id": 196,
+      "policy": "KEEP_SOURCE_DEFAULT_IF_CURRENT_DEFAULT_MATCHES_SOURCE_COMPANY",
+      "target_groups": [
+        "188-G01",
+        "188-G02",
+        "188-G03",
+        "188-G04",
+        "188-G05",
+        "188-G06"
+      ]
+    },
+    {
+      "current_default_company_id": 95,
+      "current_user_id": 197,
+      "policy": "KEEP_SOURCE_DEFAULT_IF_CURRENT_DEFAULT_MATCHES_SOURCE_COMPANY",
+      "target_groups": [
+        "188-G01"
+      ]
+    },
+    {
+      "current_default_company_id": 95,
+      "current_user_id": 198,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "188-G02"
+      ]
+    },
+    {
+      "current_default_company_id": 95,
+      "current_user_id": 199,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "188-G04"
+      ]
+    },
+    {
+      "current_default_company_id": 95,
+      "current_user_id": 200,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "188-G03"
+      ]
+    },
+    {
+      "current_default_company_id": 95,
+      "current_user_id": 201,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "188-G06"
+      ]
+    },
+    {
+      "current_default_company_id": 95,
+      "current_user_id": 202,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "188-G05"
+      ]
+    },
+    {
+      "current_default_company_id": 95,
+      "current_user_id": 203,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "188-G04"
+      ]
+    },
+    {
+      "current_default_company_id": 99,
+      "current_user_id": 207,
+      "policy": "KEEP_SOURCE_DEFAULT_IF_CURRENT_DEFAULT_MATCHES_SOURCE_COMPANY",
+      "target_groups": [
+        "195-G01",
+        "195-G02",
+        "195-G03",
+        "195-G04",
+        "195-G05",
+        "195-G06",
+        "195-G07"
+      ]
+    },
+    {
+      "current_default_company_id": 99,
+      "current_user_id": 208,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "195-G02"
+      ]
+    },
+    {
+      "current_default_company_id": 99,
+      "current_user_id": 209,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "195-G03"
+      ]
+    },
+    {
+      "current_default_company_id": 99,
+      "current_user_id": 210,
+      "policy": "KEEP_SOURCE_DEFAULT_IF_CURRENT_DEFAULT_MATCHES_SOURCE_COMPANY",
+      "target_groups": [
+        "195-G01"
+      ]
+    },
+    {
+      "current_default_company_id": 99,
+      "current_user_id": 211,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "195-G05"
+      ]
+    },
+    {
+      "current_default_company_id": 99,
+      "current_user_id": 212,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "195-G04"
+      ]
+    },
+    {
+      "current_default_company_id": 99,
+      "current_user_id": 213,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "195-G07"
+      ]
+    },
+    {
+      "current_default_company_id": 99,
+      "current_user_id": 214,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "195-G06"
+      ]
+    },
+    {
+      "current_default_company_id": 124,
+      "current_user_id": 246,
+      "policy": "KEEP_SOURCE_DEFAULT_IF_CURRENT_DEFAULT_MATCHES_SOURCE_COMPANY",
+      "target_groups": [
+        "290-G01",
+        "290-G02",
+        "290-G03",
+        "290-G04",
+        "290-G05"
+      ]
+    },
+    {
+      "current_default_company_id": 124,
+      "current_user_id": 247,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "290-G02"
+      ]
+    },
+    {
+      "current_default_company_id": 124,
+      "current_user_id": 248,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "290-G05"
+      ]
+    },
+    {
+      "current_default_company_id": 124,
+      "current_user_id": 249,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "290-G04"
+      ]
+    },
+    {
+      "current_default_company_id": 124,
+      "current_user_id": 250,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "290-G03"
+      ]
+    },
+    {
+      "current_default_company_id": 124,
+      "current_user_id": 251,
+      "policy": "KEEP_SOURCE_DEFAULT_IF_CURRENT_DEFAULT_MATCHES_SOURCE_COMPANY",
+      "target_groups": [
+        "290-G01",
+        "290-G02",
+        "290-G03",
+        "290-G04",
+        "290-G05"
+      ]
+    },
+    {
+      "current_default_company_id": 127,
+      "current_user_id": 257,
+      "policy": "KEEP_SOURCE_DEFAULT_IF_CURRENT_DEFAULT_MATCHES_SOURCE_COMPANY",
+      "target_groups": [
+        "299-G01",
+        "299-G02",
+        "299-G03"
+      ]
+    },
+    {
+      "current_default_company_id": 127,
+      "current_user_id": 258,
+      "policy": "KEEP_SOURCE_DEFAULT_IF_CURRENT_DEFAULT_MATCHES_SOURCE_COMPANY",
+      "target_groups": [
+        "299-G01"
+      ]
+    },
+    {
+      "current_default_company_id": 127,
+      "current_user_id": 259,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "299-G02"
+      ]
+    },
+    {
+      "current_default_company_id": 127,
+      "current_user_id": 260,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "299-G03"
+      ]
+    },
+    {
+      "current_default_company_id": 172,
+      "current_user_id": 330,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 172,
+      "current_user_id": 331,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 172,
+      "current_user_id": 332,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 172,
+      "current_user_id": 333,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 172,
+      "current_user_id": 334,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 172,
+      "current_user_id": 335,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 172,
+      "current_user_id": 336,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 172,
+      "current_user_id": 337,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 194,
+      "current_user_id": 386,
+      "policy": "KEEP_SOURCE_DEFAULT_IF_CURRENT_DEFAULT_MATCHES_SOURCE_COMPANY",
+      "target_groups": [
+        "478-G01",
+        "478-G02",
+        "478-G03",
+        "478-G04",
+        "478-G05",
+        "478-G06",
+        "478-G07",
+        "478-G08",
+        "478-G09",
+        "478-G10"
+      ]
+    },
+    {
+      "current_default_company_id": 259,
+      "current_user_id": 508,
+      "policy": "KEEP_SOURCE_DEFAULT_IF_CURRENT_DEFAULT_MATCHES_SOURCE_COMPANY",
+      "target_groups": [
+        "556-G01",
+        "556-G02",
+        "556-G03",
+        "556-G04",
+        "556-G05",
+        "556-G06",
+        "556-G07"
+      ]
+    },
+    {
+      "current_default_company_id": 259,
+      "current_user_id": 509,
+      "policy": "SET_SOLE_RESULTING_TARGET_COMPANY",
+      "target_groups": [
+        "556-G07"
+      ]
+    },
+    {
+      "current_default_company_id": 385,
+      "current_user_id": 703,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 385,
+      "current_user_id": 704,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 385,
+      "current_user_id": 705,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 385,
+      "current_user_id": 706,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 385,
+      "current_user_id": 707,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 385,
+      "current_user_id": 708,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 385,
+      "current_user_id": 709,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 385,
+      "current_user_id": 710,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 385,
+      "current_user_id": 711,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 385,
+      "current_user_id": 712,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 385,
+      "current_user_id": 713,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 385,
+      "current_user_id": 714,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 385,
+      "current_user_id": 715,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 385,
+      "current_user_id": 716,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 390,
+      "current_user_id": 722,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 390,
+      "current_user_id": 723,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 390,
+      "current_user_id": 724,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 390,
+      "current_user_id": 725,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 393,
+      "current_user_id": 732,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 393,
+      "current_user_id": 733,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    },
+    {
+      "current_default_company_id": 393,
+      "current_user_id": 734,
+      "policy": "USER_WILL_BE_DELETED_IF_NO_OTHER_DEPENDENCIES",
+      "target_groups": []
+    }
+  ]
+}

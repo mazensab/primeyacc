@@ -1,0 +1,51 @@
+from pathlib import Path
+import subprocess,sys,hashlib
+R=Path.cwd();OUT=R/"v2_26_b2c_split_partial_approved_c7_audit_v1.txt"
+PAGE=R/"primey_frontend_v2/app/system/companies/[id]/page.tsx";EXPECTED="29E76FC04A0512E8D62CAE9711B95C51E95909EE2C1227DC8E6887528FFB94F7"
+def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest().upper()
+def run(a,t=300):
+ q=subprocess.run(a,cwd=R,text=True,encoding="utf8",errors="replace",stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=t);return q.returncode,q.stdout.rstrip()
+print("===== PRIMEYACC V2-26 B2C SPLIT/PARTIAL APPROVED C7 AUDIT V1 =====",flush=True)
+if sha(PAGE)!=EXPECTED:sys.exit("SAFETY STOP: Company Detail baseline mismatch")
+probe=r"""
+import os,json,collections
+os.environ.setdefault('DJANGO_SETTINGS_MODULE','config.settings')
+import django;django.setup()
+from companies.models import Company,Branch
+from subscriptions.models import CompanySubscription
+from business_controls.models import LegacyObjectMap
+from integrations.mham_legacy.sync_engine import SOURCE_CACHE_DIR
+split={'478':[578,579,580,581,582,583,584,585,717,718],'88':[[106,752],[107,751],[108,753],[735,739]],'195':[227,228,229,230,231,232,416],'556':[676,677,678,706,778,779,781],'174':[197,207,208,209,210],'290':[353,354,355,356,357],'299':[367,368,369]}
+partial={'76':{'keep_branch_legacy':92}}
+maps=list(LegacyObjectMap.objects.filter(source_system='mhamcloud_v1',source_table__in=['business','business_locations','subscriptions']).values('company_id','source_table','legacy_id','target_object_id','metadata').iterator(chunk_size=2000))
+byc=collections.defaultdict(lambda:collections.defaultdict(list))
+for m in maps:byc[m['company_id']][m['source_table']].append(m)
+rows=[];stats=collections.Counter()
+for cid,g in sorted(byc.items()):
+ bm=g.get('business',[])
+ if not bm:continue
+ legacy=str(bm[0]['legacy_id'])
+ if legacy not in split and legacy not in partial:continue
+ cache=SOURCE_CACHE_DIR/f'company_{legacy}.json'
+ if not cache.exists():continue
+ try:p=json.loads(cache.read_text(encoding='utf-8-sig')).get('payload',{})
+ except Exception:continue
+ mapped={str(x['legacy_id']) for x in g.get('subscriptions',[])}
+ current_branches=list(Branch.objects.filter(company_id=cid).values('id','branch_code','name','is_default','is_active'))
+ locmaps=[{'legacy_id':str(x['legacy_id']),'target_object_id':x['target_object_id'],'metadata':x['metadata']} for x in g.get('business_locations',[])]
+ for sub in (p.get('subscriptions') or []):
+  sid=str(sub.get('id') or '')
+  if sid in mapped or str(sub.get('status') or '').lower()!='approved' or not sub.get('start_date') or not sub.get('end_date'):continue
+  stats['approved_split_partial_unmapped']+=1
+  risk='PARTIAL' if legacy in partial else 'SPLIT'
+  rows.append({'current_company_id':cid,'current_company_name':Company.objects.filter(pk=cid).values_list('name',flat=True).first(),'legacy_company_id':legacy,'legacy_subscription_id':sid,'package_id':sub.get('package_id'),'start_date':sub.get('start_date'),'end_date':sub.get('end_date'),'paid_via':sub.get('paid_via'),'transaction_reference':sub.get('payment_transaction_id'),'decision_type':risk,'decision':partial.get(legacy) or split.get(legacy),'current_branches':current_branches,'location_maps':locmaps})
+print('STATS='+json.dumps(dict(stats),ensure_ascii=False))
+print('ROWS_BEGIN')
+for x in rows:print(json.dumps(x,ensure_ascii=False,default=str))
+print('ROWS_END')
+"""
+try:rc,data=run([str(R/"venv/Scripts/python.exe"),"-u","-c",probe],300)
+except subprocess.TimeoutExpired:print("RESULT=TIMEOUT\nMUTATION_PERFORMED=NO");sys.exit(2)
+OUT.write_text("===== PRIMEYACC V2-26 B2C SPLIT/PARTIAL APPROVED C7 AUDIT V1 =====\n"+data+"\nMUTATION_PERFORMED=NO\nRESULT="+("PASS" if rc==0 else "FAIL")+"\n",encoding="utf8")
+print(f"REPORT={OUT.name}");print(f"SIZE={OUT.stat().st_size}");print(f"SHA256={sha(OUT)}");print("MUTATION_PERFORMED=NO");print("RESULT="+("PASS" if rc==0 else "FAIL"))
+if rc:sys.exit(rc)

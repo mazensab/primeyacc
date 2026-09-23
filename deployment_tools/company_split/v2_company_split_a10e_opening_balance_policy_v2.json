@@ -1,0 +1,26 @@
+{
+  "balance_owner_group": "88-G01",
+  "balance_owner_provenance": "EXACT_RAW_OPENING_BALANCE_ROW_LOCATION; GENERAL CONTACT SALES/PAYMENT USAGE DOES_NOT_REALLOCATE_OPENING_BALANCE",
+  "canonical_original_policy": "KEEP canonical original BusinessParty on 88-G01 with opening_balance=24.00",
+  "clone_policy": "Clone BusinessParty to 88-G02 because of operational usage, but set clone opening_balance=0.00",
+  "current_business_party_id_snapshot": 928585,
+  "group_opening_balance_policy": {
+    "88-G01": "24.00",
+    "88-G02": "0.00"
+  },
+  "legacy_company_id": "88",
+  "legacy_contact_id": "122844",
+  "legacy_opening_balance_id": "3357434",
+  "manifest_v2_sha256": "B12A3C2916272B6A4D5E8051D7B51533E3FF05369084632685F0BCC809BE24DE",
+  "no_duplication_rule": "SUM_OF_POST_SPLIT_OPENING_BALANCES_MUST_EQUAL_PRE_SPLIT_OPENING_BALANCE",
+  "opening_balance_snapshot": "24.00",
+  "opening_balance_source_final_total": "24.00",
+  "opening_balance_source_location_id": "106",
+  "opening_balance_source_table": "opening_balances",
+  "operational_clone_required_groups": [
+    "88-G02"
+  ],
+  "post_split_sum_expected": "24.00",
+  "schema": "primeyacc.company_split_business_party_opening_balance_policy.v2",
+  "supersedes_a10d_policy_sha256": "A5B43C939054DAC53623D3E3D9E5DA362246B2D3C10125B44C4BD3FF0C6FDFD3"
+}

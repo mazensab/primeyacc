@@ -32,11 +32,14 @@ from api.permissions import HasAnyCompanyPermission
 from api.company.branch_enforcement import scope_operational_queryset
 from sales.models import (
     SalesInvoice,
+    SalesInvoiceItem,
+    SalesReturn,
     SalesInvoicePaymentStatus,
     SalesInvoiceSource,
     SalesInvoiceStatus,
 )
 from sales.services import serialize_sales_invoice
+from treasury.models import CustomerPayment, PaymentMethod, PaymentStatus
 
 
 class SalesInvoiceAPIError(Exception):
@@ -82,6 +85,77 @@ def _clean_text(value: Any) -> str:
     Normalize query text.
     """
     return str(value or "").strip()
+
+
+def _commercial_page_enrichment(*, company, invoices) -> dict[int, dict[str, Any]]:
+    """Bulk payment-method and tax summaries for the current invoice page."""
+    invoice_ids = [invoice.id for invoice in invoices]
+    if not invoice_ids:
+        return {}
+
+    payment_methods: dict[int, set[str]] = {}
+    for row in CustomerPayment.objects.filter(
+        company=company,
+        sales_invoice_id__in=invoice_ids,
+        status=PaymentStatus.CONFIRMED,
+    ).values("sales_invoice_id", "payment_method"):
+        method = str(row["payment_method"] or "").strip().upper()
+        if method:
+            payment_methods.setdefault(int(row["sales_invoice_id"]), set()).add(method)
+
+    tax_rates: dict[int, set[str]] = {}
+    for row in SalesInvoiceItem.objects.filter(
+        company=company,
+        invoice_id__in=invoice_ids,
+    ).values("invoice_id", "tax_rate"):
+        rate = row["tax_rate"]
+        if rate is not None:
+            normalized = format(rate, "f").rstrip("0").rstrip(".") or "0"
+            tax_rates.setdefault(int(row["invoice_id"]), set()).add(normalized)
+
+    return_summary: dict[int, dict[str, Any]] = {}
+    for row in SalesReturn.objects.filter(company=company, invoice_id__in=invoice_ids).exclude(status__in=["CANCELLED", "REJECTED"]).values("id", "invoice_id", "return_number", "total_amount", "status").order_by("id"):
+        iid = int(row["invoice_id"])
+        summary = return_summary.setdefault(iid, {"return_count": 0, "returned_amount": 0, "returns": []})
+        summary["return_count"] += 1
+        summary["returned_amount"] += row["total_amount"]
+        summary["returns"].append({"id": row["id"], "return_number": row["return_number"], "total_amount": str(row["total_amount"]), "status": row["status"]})
+
+    method_labels = dict(PaymentMethod.choices)
+    result: dict[int, dict[str, Any]] = {}
+    for invoice_id in invoice_ids:
+        methods = sorted(payment_methods.get(invoice_id, set()))
+        rates = sorted(tax_rates.get(invoice_id, set()), key=lambda value: float(value))
+
+        payment_method = methods[0] if len(methods) == 1 else ("MULTIPLE" if len(methods) > 1 else "")
+        payment_method_label = (
+            str(method_labels.get(payment_method, payment_method))
+            if len(methods) == 1
+            else ("Multiple" if len(methods) > 1 else "")
+        )
+        tax_rate = rates[0] if len(rates) == 1 else ("MULTIPLE" if len(rates) > 1 else "")
+        tax_label = f"{tax_rate}%" if len(rates) == 1 else ("Multiple" if len(rates) > 1 else "—")
+
+        rs = return_summary.get(invoice_id, {})
+        rc = int(rs.get("return_count", 0))
+        ra = rs.get("returned_amount", 0)
+        invoice_total = next((x.total_amount for x in invoices if x.id == invoice_id), 0)
+        has_return = rc > 0
+        return_state = "FULL" if has_return and ra >= invoice_total else ("PARTIAL" if has_return else "NONE")
+        result[invoice_id] = {
+            "has_return": has_return,
+            "return_state": return_state,
+            "return_count": rc,
+            "returned_amount": str(ra),
+            "returns": rs.get("returns", []),
+            "payment_method": payment_method,
+            "payment_method_label": payment_method_label,
+            "payment_methods": methods,
+            "tax_rate": tax_rate,
+            "tax_label": tax_label,
+            "tax_rates": rates,
+        }
+    return result
 
 
 def _apply_invoice_filters(queryset, request: Request):
@@ -191,6 +265,10 @@ def serialize_sales_invoice_choices() -> dict[str, Any]:
             {"value": value, "label": label}
             for value, label in SalesInvoiceSource.choices
         ],
+        "payment_methods": [
+            {"value": value, "label": label}
+            for value, label in PaymentMethod.choices
+        ],
         "ordering": [
             {"value": "-invoice_date", "label": "Newest invoice date"},
             {"value": "invoice_date", "label": "Oldest invoice date"},
@@ -276,10 +354,17 @@ def company_sales_invoices_list(request: Request) -> Response:
         except EmptyPage:
             page_obj = paginator.page(paginator.num_pages or 1)
 
-        invoices = [
-            serialize_sales_invoice(invoice, include_items=False)
-            for invoice in page_obj.object_list
-        ]
+        page_invoices = list(page_obj.object_list)
+        commercial = _commercial_page_enrichment(
+            company=company,
+            invoices=page_invoices,
+        )
+
+        invoices = []
+        for invoice in page_invoices:
+            payload = serialize_sales_invoice(invoice, include_items=False)
+            payload.update(commercial.get(invoice.id, {}))
+            invoices.append(payload)
 
         return Response(
             {
