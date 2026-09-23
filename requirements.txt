@@ -1,3 +1,4 @@
+Django==6.0.6
 asgiref==3.11.1
 django-cors-headers==4.9.0
 djangorestframework==3.17.1
@@ -6,7 +7,8 @@ pillow==12.2.0
 python-dotenv==1.2.2
 sqlparse==0.5.5
 tzdata==2026.2
-psycopg[binary]==3.2.9
+psycopg[binary]==3.2.9; python_version < "3.14"
+psycopg==3.2.9; python_version >= "3.14"
 
 # Laravel legacy password compatibility
 bcrypt==5.0.0
