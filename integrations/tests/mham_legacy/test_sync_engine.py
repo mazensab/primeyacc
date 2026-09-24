@@ -60,13 +60,20 @@ class MhamLegacySyncEngineTests(unittest.TestCase):
             self.assertNotIn(marker, source)
 
 
-    def test_actual_v13_existing_company_builder_compiles(self):
-        v13 = sync_engine._load_v13()
-        fn = sync_engine._build_existing_company_apply(v13)
-        self.assertTrue(callable(fn))
-        self.assertEqual(fn.__name__, "apply_company_existing")
+    def test_runtime_source_contract_replaces_v13_compile_gate(self):
+        from integrations.mham_legacy.source_contract import (
+            SNAPSHOT_DOMAINS,
+            discover_companies,
+        )
 
-
+        self.assertEqual(len(SNAPSHOT_DOMAINS), 18)
+        rows = discover_companies(
+            [
+                {"id": 654, "name": "Future company"},
+                {"id": 2, "name": "Existing company"},
+            ]
+        )
+        self.assertEqual([row.business_id for row in rows], ["2", "654"])
     def test_live_company_name_drift_uses_business_id_identity(self):
         source = inspect.getsource(sync_engine.replace_company_from_snapshot)
         self.assertIn("SOURCE_COMPANY_NAME_DRIFT_ACCEPTED=YES", source)
