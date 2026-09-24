@@ -165,6 +165,17 @@ class PrimeyMigrationLiveAdapter:
             seen.add(bid)
         return rows
     def company_domain(self,business_id,domain,*,limit=1000):
-        return parse_page(self._get(_pm_query(company_endpoint(business_id,domain),limit=limit))).rows
+        from integrations.mham_legacy.source_contract import SNAPSHOT_DOMAIN_SET
+        if domain not in SNAPSHOT_DOMAIN_SET:
+            raise LiveSourceError(f"Unknown Primey migration domain: {domain}")
+        payload=self._get(_pm_query(company_endpoint(business_id,domain),limit=limit))
+        if domain in {"company","catalog","permissions"}:
+            if not isinstance(payload, Mapping):
+                raise LiveSourceError(f"Primey migration {domain} domain must be an object.")
+            data=payload.get("data", payload)
+            if not isinstance(data, Mapping):
+                raise LiveSourceError(f"Primey migration {domain} data must be an object.")
+            return dict(data)
+        return parse_page(payload).rows
     def subscriptions(self,business_id,*,limit=1000):
         return self.company_domain(business_id,"subscriptions",limit=limit)
