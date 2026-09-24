@@ -140,6 +140,10 @@ class PrimeyMigrationLiveAdapter:
         self.client=client
     @classmethod
     def from_environment(cls):
+        import os
+        if not os.environ.get("MHAM_LEGACY_API_TOKEN", "").strip():
+            from integrations.mham_legacy.oauth import prepare_runtime_environment
+            prepare_runtime_environment()
         return cls(MhamLegacyClient.from_environment())
     def _get(self,path):
         response=self.client.get_json(path)
