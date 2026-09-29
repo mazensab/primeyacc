@@ -3,7 +3,7 @@ from __future__ import annotations
 from django.core.management.base import BaseCommand, CommandError
 
 from integrations.mham_legacy.management import now_iso, safe_error, update_run
-from integrations.mham_legacy.sync_engine import run_full_background_cycle, sync_business_ids
+from integrations.mham_legacy.sync_engine import run_management_sync
 
 
 class Command(BaseCommand):
@@ -23,14 +23,14 @@ class Command(BaseCommand):
 
         try:
             if options["all_eligible"]:
-                result = run_full_background_cycle(scan_only=options["scan_only"])
+                result = run_management_sync(all_eligible=True, scan_only=options["scan_only"])
             elif business_ids:
-                result = sync_business_ids(business_ids, scan_only=options["scan_only"])
+                result = run_management_sync(business_ids=business_ids, scan_only=options["scan_only"])
             else:
                 raise CommandError("Provide --business-id or --all-eligible.")
 
             rows = result.get("results") if isinstance(result.get("results"), list) else []
-            applied = sum(isinstance(x, dict) and str(x.get("status", "")).upper() == "APPLIED" for x in rows)
+            applied = sum(isinstance(x, dict) and str(x.get("status", "")).upper() in {"APPLIED", "POST_CUTOVER_APPLIED"} for x in rows)
             unchanged = sum(isinstance(x, dict) and str(x.get("status", "")).upper() == "UNCHANGED" for x in rows)
             failures = int(result.get("failure_count") or 0)
 
